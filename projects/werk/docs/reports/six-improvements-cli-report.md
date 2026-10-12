@@ -20,6 +20,7 @@ fixture and release journey. Git/GitHub provide publication and platform/VM CI.
 | Project selection remains shared process-independent state. | Explicit per-command project targeting and batch revision reads; earlier upstream proposals cover these concerns. |
 | Release qualification spans native platforms, Docker and a real cloud-init guest. | A qualification matrix reader showing passed, failed, blocked and not-run distinctly, without treating a valid cloud-init render as a booted VM. |
 | PowerShell and suffixed Dockerfiles require encoding-aware clients in installed v0.1.0. | Apply the existing reviewed upstream text-classification fixes rather than creating duplicate PRs. Clients must still honor read encoding. |
+| Windows Git autocrlf converted authored and generated YAML, triggering strict workflow byte drift. Explicit LF attributes fixed it in a real isolated checkout. | Document or diagnose canonical workflow line endings during setup/sync, while retaining exact drift detection. |
 | Codex login succeeded but execution transport returned HTTP 403. | A secret-safe provider diagnostic reporting endpoint hostname, HTTP status, retry category and credential presence separately, never raw tokens or unreviewed provider output. This belongs in Werk/provider integration rather than generic Forge file operations. |
 
 No newly observed Forge data-loss or mutation failure required an emergency

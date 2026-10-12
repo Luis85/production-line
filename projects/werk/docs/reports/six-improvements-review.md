@@ -75,6 +75,11 @@ assertions, platform-appropriate permission checks and launcher coverage, and
 explicit worker cancellation and execution barriers in asynchronous fixtures.
 The process restart test now checks Windows forced SIGTERM termination and POSIX
 graceful exit separately, retaining its pinned-context and evidence assertions.
+A deterministic logical-clock fixture verifies four renewals while terminal
+upload exceeds the initial lease, then durable completion replay with one
+execution. Disabling renewal in an isolated negative control fails the test.
+YAML checkout is pinned to LF to preserve exact Forge workflow drift checks
+on Windows; an isolated Git autocrlf checkout reproduced and verified the fix.
 Duplicate branch and PR check runs are avoided by limiting push checks to main.
 Exact-head source CI status is recorded on [PR 1](https://github.com/Luis85/production-line/pull/1).
 

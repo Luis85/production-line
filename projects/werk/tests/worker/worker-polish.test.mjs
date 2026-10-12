@@ -1,11 +1,9 @@
 import test from 'node:test';
-import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile, writeFile, mkdir, readdir, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createServer } from 'node:http';
-import { setTimeout as delay } from 'node:timers/promises';
+import { setTimeout as delay, setImmediate as turn } from 'node:timers/promises';
 import { configuration } from '../../src/worker/dist/worker/config.js';
 import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
 import { runWorker, reportWithRetry } from '../../src/worker/dist/worker/runner.js';
@@ -60,49 +58,78 @@ test('report retry is bounded and never retries permanent lease errors',async()=
 });
 
 test('worker renews leases throughout slow terminal upload and replays completion without execution', {timeout:12000}, async t=>{
-  const dir=await mkdtemp(join(tmpdir(),'werk-renew-'));const stop=new AbortController();
-  const cancel=()=>stop.abort();
+  const dir=await mkdtemp(join(tmpdir(),'werk-renew-')),stop=new AbortController();
+  let clock=Date.now(),releaseExecution,releaseUpload;
+  const execution=new Promise(resolve=>{releaseExecution=resolve;}),upload=new Promise(resolve=>{releaseUpload=resolve;});
+  const cancel=()=>{releaseExecution();releaseUpload();stop.abort();};
   t.signal.addEventListener('abort',cancel,{once:true});
-  t.after(()=>{t.signal.removeEventListener('abort',cancel);stop.abort();});
-  let claimed=false,finished=false,completeCalls=0,heartbeatsDuringUpload=0,uploading=false,beforeCount=0;
-  let assigned={...task,expiresAt:Date.now()+450};
-  const uploads=new Map();
-  const server=createServer(async(req,res)=>{
-    let text='';for await(const chunk of req)text+=chunk;const body=text?JSON.parse(text):{};
-    const send=(code,data)=>{res.writeHead(code,{'content-type':'application/json'});res.end(JSON.stringify(data));};
-    if(req.url==='/v1/workers/register')return send(200,{id:'worker-1',project:'demo',token:'secret'});
-    if(req.url==='/v1/worker/assignments/current')return send(200,{tasks:claimed&&!finished?[assigned]:[]});
-    if(req.url==='/v1/worker/assignments/next'){
-      if(claimed)return send(200,{task:null});claimed=true;assigned.expiresAt=Date.now()+450;return send(200,{task:assigned});
+  t.after(()=>{t.signal.removeEventListener('abort',cancel);cancel();});
+  // Only advance lease/retry timers after each observable boundary; filesystem latency consumes no lease time.
+  t.mock.timers.enable({apis:['setTimeout']});
+  let claimed=false,finished=false,completeCalls=0,heartbeats=0,heartbeatsDuringUpload=0,uploading=false,beforeCount=0,executions=0;
+  const assigned={...task,expiresAt:clock+450},uploads=new Map();
+  const client={
+    async currentAssignments(){return claimed&&!finished?[assigned]:[];},
+    async claim(){if(claimed)return null;claimed=true;return assigned;},
+    async heartbeat(){
+      if(assigned.expiresAt<=clock)throw new ApiError(409,'expired');
+      heartbeats++;if(uploading)heartbeatsDuringUpload++;assigned.expiresAt=clock+450;return {...assigned};
+    },
+    async publishSnapshot(snapshot){
+      if(snapshot.phase==='before')beforeCount++;
+      if(snapshot.phase==='after'){uploading=true;await upload;uploading=false;}
+      uploads.set(snapshot.phase,snapshot);
+    },
+    async complete(){
+      completeCalls++;if(completeCalls<=3)throw new ApiError(503,'temporary completion outage');
+      if(assigned.expiresAt<=clock)throw new ApiError(409,'expired');
+      finished=true;stop.abort();
+    },
+    async abandon(){throw Error('Successful fixture execution must not be abandoned');}
+  };
+  const gateway={async register(){return {id:task.workerId,project:task.project,token:'test-identity'};},connect(){return client;}};
+  const adapter={mode:'mock',async run(){executions++;await execution;return {kind:'simulated',summary:'done'};}};
+  let running,runtimeError;
+  const state=async()=>{try{return JSON.parse(await readFile(join(dir,'status.json'),'utf8'));}catch{return null;}};
+  const wait=async(label,predicate)=>{
+    const until=performance.now()+5000;
+    while(performance.now()<until){
+      if(runtimeError)throw runtimeError;
+      if(await predicate())return;
+      t.signal.throwIfAborted();await turn();
     }
-    if(req.url?.endsWith('/heartbeat')){
-      if(assigned.expiresAt<=Date.now())return send(409,{error:'expired'});
-      if(uploading)heartbeatsDuringUpload++;assigned.expiresAt=Date.now()+450;return send(200,assigned);
-    }
-    if(req.url==='/v1/worker/snapshots'){
-      if(body.phase==='before')beforeCount++;
-      if(body.phase==='after'){uploading=true;await delay(750);uploading=false;}
-      uploads.set(body.phase,body);return send(200,{id:body.id,sha256:createHash('sha256').update(JSON.stringify(body)).digest('hex')});
-    }
-    if(req.url?.endsWith('/complete')){
-      completeCalls++;if(completeCalls<=3)return send(503,{error:'temporary completion outage'});
-      if(assigned.expiresAt<=Date.now())return send(409,{error:'expired'});
-      finished=true;send(200,{...assigned,status:'simulated',expiresAt:null});stop.abort();return;
-    }
-    send(404,{error:'not found'});
-  });
-  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-  let running;
+    throw Error(`State transition timed out: ${label}`);
+  };
+  const advance=async milliseconds=>{clock+=milliseconds;t.mock.timers.tick(milliseconds);await turn();};
   try{
-    const c=await configuration({'poll-ms':'100','mock-ms':'80'});
-    running=runWorker({...c,url:'http://127.0.0.1:'+server.address().port,stateDir:dir,enrollmentToken:'enroll',statusHost:'127.0.0.1',statusPort:0},stop.signal);
+    const c=await configuration({'poll-ms':'100'});
+    running=runWorker({...c,url:'http://injected.invalid',stateDir:dir,enrollmentToken:'',statusHost:'127.0.0.1',statusPort:0},stop.signal,{gateway,adapter,now:()=>clock});
+    running.catch(error=>{runtimeError=error;});
+    await wait('execution entered',()=>executions===1);releaseExecution();
+    await wait('terminal upload entered',()=>uploading);
+    const uploadStarted=clock,originalExpiry=assigned.expiresAt;
+    for(let n=0;n<4;n++){
+      const previous=heartbeats;await advance(150);
+      await wait('lease renewed during terminal upload',()=>heartbeats>previous);
+    }
+    assert.ok(clock>originalExpiry,'upload remains blocked beyond the original lease');
+    assert.equal(clock-uploadStarted,600);assert.equal(heartbeatsDuringUpload,4);assert.equal(completeCalls,0);
+    releaseUpload();
+    await wait('first completion failure',()=>completeCalls===1);
+    await advance(100);await wait('second completion failure',()=>completeCalls===2);
+    await advance(200);await wait('third completion failure',()=>completeCalls===3);
+    await wait('failed completion attempt drained',async()=>{
+      const persisted=await state();return persisted?.activeTasks.length===0&&persisted.lastError==='temporary completion outage';
+    });
+    // Retry exhaustion releases the attempt, then polling replays its durable terminal evidence.
+    await advance(350);await wait('completion replay acknowledged',()=>finished);
     await running;
-    assert.equal(finished,true);assert.equal(completeCalls,4);assert.ok(heartbeatsDuringUpload>=2);assert.equal(beforeCount,1);
+    assert.equal(completeCalls,4);assert.equal(executions,1);assert.equal(beforeCount,1);
     assert.equal(uploads.size,2);assert.equal(uploads.get('after').execution.outcome,'simulated');
-    const persisted=JSON.parse(await readFile(join(dir,'status.json'),'utf8'));
-    assert.equal(persisted.state,'stopped');assert.equal(persisted.activeTasks.length,0);assert.equal(persisted.completedSimulations,1);assert.equal(persisted.lastError,'Orchestrator request failed (HTTP 503)');
+    const persisted=await state();
+    assert.equal(persisted.state,'stopped');assert.equal(persisted.activeTasks.length,0);assert.equal(persisted.completedSimulations,1);assert.equal(persisted.lastError,'temporary completion outage');
     await assert.rejects(readFile(join(dir,'worker.lock')),e=>e.code==='ENOENT');
-  }finally{stop.abort();await running?.catch(()=>{});await new Promise(resolve=>server.close(resolve));await rm(dir,{recursive:true,force:true});}
+  }finally{cancel();await running?.catch(()=>{});t.mock.timers.reset();await rm(dir,{recursive:true,force:true});}
 });
 
 test('failed worker startup removes its process lock and writes a stopped state',async()=>{
