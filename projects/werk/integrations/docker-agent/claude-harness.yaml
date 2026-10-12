@@ -1,0 +1,14 @@
+# Docker Agent schema v16. Requires authenticated `claude` on PATH.
+# No model API credential or Docker Agent toolsets are used by this root harness.
+version: 16
+agents:
+  root:
+    description: Werk project collaborator through the locally authenticated Claude CLI
+    instruction: |
+      Work within the selected project repository and its documented conventions.
+      Inspect requirement notes and evidence before proposing changes.
+      Do not claim a Werk task is delivered without its verified review and merge.
+      This standalone session is not automatically a leased Werk worker attempt.
+    harness:
+      type: claude-code
+      # Optional model override belongs here; omitted to preserve CLI defaults.

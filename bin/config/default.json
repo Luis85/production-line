@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "paths": {
+    "projects": "projects"
+  },
+  "settings": {
+    "language": "en",
+    "json": false,
+    "dryRun": false,
+    "events": "changes"
+  },
+  "plugins": {
+    "enabled": [],
+    "disabled": [],
+    "settings": {}
+  }
+}

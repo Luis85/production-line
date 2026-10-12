@@ -1,0 +1,24 @@
+# PowerShell/Docker Desktop keeps private Linux state in an explicitly owned volume.
+services:
+  orchestrator:
+    volumes:
+      - type: volume
+        source: runtime-state
+        target: /state
+  worker:
+    volumes:
+      - type: volume
+        source: runtime-state
+        target: /state
+        volume:
+          subpath: workers/worker-1
+  operator:
+    volumes:
+      - type: volume
+        source: runtime-state
+        target: /state
+        read_only: true
+volumes:
+  runtime-state:
+    external: true
+    name: ${WERK_DOCKER_VOLUME:?Run Docker setup first}

@@ -1,0 +1,35 @@
+{
+  "name": "software-fabrik",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0 <25"
+  },
+  "workspaces": [
+    "src/factory",
+    "src/orchestrator",
+    "src/worker",
+    "src/shared"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node scripts/build.mjs && node --test \"tests/**/*.test.mjs\" \"tests/**/*.test.cjs\"",
+    "dev:fleet": "node scripts/fleet.mjs",
+    "typecheck": "tsc --noEmit",
+    "dev:factory": "node scripts/factory-fleet.mjs",
+    "check": "npm run typecheck && npm test",
+    "audit:dependencies": "npm audit --audit-level=low",
+    "release:package": "node scripts/release/package.mjs",
+    "release:build": "npm run build && npm run release:package"
+  },
+  "devDependencies": {
+    "@types/node": "24.0.0",
+    "typescript": "5.9.3",
+    "tar": "7.5.22",
+    "fflate": "0.8.3"
+  },
+  "dependencies": {
+    "yaml": "2.9.1"
+  }
+}

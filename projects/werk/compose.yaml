@@ -1,0 +1,49 @@
+services:
+  orchestrator:
+    build:
+      context: .
+      dockerfile: src/orchestrator/Dockerfile
+    environment:
+      WERK_ADMIN_TOKEN: ${WERK_ADMIN_TOKEN:?Run node scripts/init-env.mjs first}
+      WERK_ENROLLMENT_TOKEN: ${WERK_ENROLLMENT_TOKEN:?Run node scripts/init-env.mjs first}
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - factory-data:/data
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 20s
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+  worker:
+    build:
+      context: .
+      dockerfile: src/worker/Dockerfile
+    environment:
+      WERK_URL: http://orchestrator:3000
+      WERK_ENROLLMENT_TOKEN: ${WERK_ENROLLMENT_TOKEN:?Run node scripts/init-env.mjs first}
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    ports:
+      - target: 4100
+        host_ip: 127.0.0.1
+    volumes:
+      - /data
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 20s
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+volumes:
+  factory-data:

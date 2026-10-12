@@ -1,0 +1,5 @@
+{
+  "name": "@werk/worker", "version": "0.1.0", "private": true, "type": "module",
+  "bin": { "werk-worker": "dist/worker/cli.js" },
+  "scripts": { "build": "node ../../scripts/build.mjs worker", "start": "node dist/worker/cli.js run" }
+}

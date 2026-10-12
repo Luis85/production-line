@@ -1,0 +1,17 @@
+node_modules/
+**/dist/
+**/.state/
+**/.trash/
+**/.forge/cache/
+**/.forge/server.json
+**/.forge/server.lock
+**/.forge/.server-*.tmp
+**/.agent-cli.lock
+**/.agent-cli-tmp-*
+.env
+.env.*
+*.sqlite*
+backups/
+
+# Local Forge selection is not portable project configuration.
+/bin/data/context.json

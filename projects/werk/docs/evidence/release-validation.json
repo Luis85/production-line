@@ -1,0 +1,73 @@
+{
+  "date": "2026-10-12",
+  "platformExecuted": "Linux/amd64",
+  "version": "0.1.0",
+  "mockExecutionOnly": true,
+  "sourceCommit": null,
+  "projectCheck": {
+    "typecheck": true,
+    "testsPassed": 400,
+    "testsFailed": 0
+  },
+  "dependencyAudit": {
+    "vulnerabilities": 0
+  },
+  "archiveVerification": {
+    "identicalPayloads": true,
+    "filesIncludingManifest": 326,
+    "sourceMatchesCandidate": true
+  },
+  "nativeExtracted": {
+    "singleLine": true,
+    "wholeSystem": true,
+    "logicalFactories": 2,
+    "lines": 2,
+    "workers": 3,
+    "isolatedTasks": true,
+    "restartIdentity": true
+  },
+  "dockerExtracted": {
+    "singleLine": true,
+    "wholeSystem": true,
+    "hostNodeRequired": false,
+    "offlineGit": true,
+    "isolatedTasks": true,
+    "restartIdentity": true,
+    "capturedCredentialLeak": false,
+    "ownedContainersCleaned": true
+  },
+  "dockerNamedVolume": {
+    "platform": "Linux",
+    "stoppedBackupRestore": true
+  },
+  "infrastructure": {
+    "renderedFromExtractedRelease": true,
+    "nodeTests": 7,
+    "pythonRegressions": 9,
+    "officialCloudInitSchema": "24.1",
+    "systemdSyntax": true,
+    "realVmBoot": false
+  },
+  "platformsNotExecuted": [
+    "Windows",
+    "macOS",
+    "Linux/arm64"
+  ],
+  "productReleasePublished": false,
+  "statelessReplicasSupported": false,
+  "forgePRs": [
+    23,
+    27,
+    28
+  ],
+  "artifacts": [
+    {
+      "name": "werk-0.1.0.tar.gz",
+      "sha256": "56fe691a5a37d980a4156fcfd4f40d1d73da4c974b97502ad034fa13cd759669"
+    },
+    {
+      "name": "werk-0.1.0.zip",
+      "sha256": "e4031caf4942360dcb7022a51f419a370eb0a6bc4a64ec6996c3d92a5d4b1435"
+    }
+  ]
+}

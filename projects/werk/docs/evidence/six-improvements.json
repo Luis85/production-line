@@ -1,0 +1,237 @@
+{
+  "schemaVersion": 1,
+  "recordedOn": "2026-10-13",
+  "scope": "Six product readiness improvements",
+  "status": "Local evidence collected; external qualification and final integration results are tracked separately",
+  "interpretation": "Focused test counts overlap with broader suites and must not be added together. Configured CI jobs are not completed qualification. Mock execution is not live-provider evidence.",
+  "qualification": {
+    "local": {
+      "infrastructureTests": {
+        "passed": 7
+      },
+      "syntaxChecks": {
+        "passed": 2
+      }
+    },
+    "configuredCi": {
+      "native": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "docker": [
+        "Linux"
+      ],
+      "cloudInit": "Ubuntu 24.04 x86_64 QEMU guest",
+      "releasePublicationRequires": [
+        "build",
+        "native",
+        "docker",
+        "cloud-init"
+      ]
+    },
+    "pending": [
+      "Actual cloud-init VM boot",
+      "Windows native execution",
+      "macOS native execution",
+      "arm64 VM qualification",
+      "Windows/macOS Docker qualification"
+    ],
+    "localLimit": "This environment has neither KVM nor QEMU available and cannot fetch the required Ubuntu cloud image under its network policy; no policy bypass was attempted."
+  },
+  "recovery": {
+    "maintenanceSafetyTests": {
+      "passed": 8,
+      "coverage": [
+        "Private stopped-state backup and new-directory restore",
+        "Refusal of live or unverified owners and unresolved worker locks",
+        "Checksum mismatch, manifest traversal and existing-destination refusal",
+        "Symlink, hardlink and special-state refusal",
+        "Canonical ancestor aliases preserve containment checks",
+        "Native whole-system Factory and line credential preservation",
+        "Actionable disk-pressure checks without credential output"
+      ]
+    },
+    "replacementStateRestart": {
+      "result": "passed",
+      "services": "Real local orchestrator and worker",
+      "execution": "mock",
+      "observations": [
+        "Completed task identity and status preserved",
+        "Exactly two task snapshots preserved",
+        "Worker identity preserved after restart from restored state"
+      ]
+    },
+    "pendingEvidenceReplay": {
+      "result": "passed",
+      "observations": [
+        "Pending worker evidence survives restoration",
+        "Replayed completion remains idempotent"
+      ]
+    },
+    "limits": [
+      "Automated maintenance supports native state; Docker uses the separate stopped-volume procedure",
+      "External restart automation and manually launched writers must be stopped independently",
+      "No automatic stale-lock deletion or unverified PID signalling",
+      "Checksums establish integrity, not backup authenticity",
+      "This local test does not qualify VM failover or recovery-time objectives",
+      "External Git repositories and provider account credentials are outside runtime-state backups"
+    ]
+  },
+  "onboarding": {
+    "focusedTests": {
+      "passed": 85,
+      "scope": "Onboarding, Factory and orchestrator behavior"
+    },
+    "workerFollowupTests": {
+      "passed": 12,
+      "newRegressionTests": 1
+    },
+    "browser": {
+      "result": "passed",
+      "actualBackends": true,
+      "networkInterception": false,
+      "viewportWidths": [
+        1440,
+        390,
+        320
+      ],
+      "consoleErrors": 0,
+      "observations": [
+        "Factory and orchestrator recover from invalid credentials",
+        "Admin controls remain available",
+        "Viewer controls are read-only and backend mutations return 403",
+        "Desktop, mobile and narrow layouts have no horizontal overflow",
+        "Worker status distinguishes simulation from CLI execution and acknowledged change-set review"
+      ]
+    },
+    "limits": [
+      "Browser fixtures exercise real services and registered worker profiles; they do not establish successful live-provider execution",
+      "Existing visual identity was preserved"
+    ]
+  },
+  "monitoring": {
+    "newTests": {
+      "passed": 8
+    },
+    "combinedFocusedAndRelatedTests": {
+      "passed": 43
+    },
+    "typecheck": "passed",
+    "observations": [
+      "Authenticated Factory/orchestrator monitoring and Prometheus metrics",
+      "Trusted-local worker monitoring and metrics",
+      "Project-scoped queue age, failures, expired leases and connectivity",
+      "Durable worker outbox count and oldest evidence age across restart and delivery failure",
+      "Bounded alerts with static remediation and validated thresholds",
+      "Metric output excludes task bodies, identifiers, URLs and credentials"
+    ],
+    "limits": [
+      "No external metrics history store or notification delivery was installed",
+      "Worker status endpoints remain trusted-local and excluded from public ingress",
+      "Metrics do not remove SQLite single-writer restrictions"
+    ]
+  },
+  "security": {
+    "tlsIntegration": {
+      "result": "passed",
+      "edgeImage": "caddy@sha256:f2a1290d0463aad60660d4ec134943f183ee2a5f6c3eb7bf32dd984f2f020772",
+      "environment": "Generated ingress profile, loopback bind, ephemeral ports and internal test CA",
+      "observations": [
+        "Viewer read over TLS and HSTS",
+        "Viewer mutation denied",
+        "Operator mutation accepted",
+        "Private routes inaccessible at edge",
+        "Unauthenticated access denied"
+      ]
+    },
+    "limits": [
+      "No public DNS or public certificate deployment was performed"
+    ]
+  },
+  "liveExecution": {
+    "configurationTests": {
+      "passed": 6,
+      "coverage": [
+        "Bounded operator-controlled executable, repository and approved file policy",
+        "Worker concurrency and attempts limited to one",
+        "Runtime policy/mode consistency and drift refusal",
+        "Native-only single-worker deployment with honest mixed-fleet planning",
+        "Docker override and cloud-init provisioning refuse incompatible live execution"
+      ]
+    },
+    "actualProviderRun": {
+      "status": "blocked by denied provider transport",
+      "provider": "Codex CLI 0.159.2",
+      "timeoutSeconds": 180,
+      "observations": [
+        "Authenticated CLI was installed and invoked against an isolated committed text repository",
+        "Provider hostname chatgpt.com returned HTTP 403 with websocket/request failures and reconnect/disconnect retries",
+        "Task ended blocked after timeout",
+        "Two durable snapshots were recorded",
+        "Source repository remained unchanged",
+        "No simulation or review result was reported",
+        "No genuine model-generated patch was produced"
+      ],
+      "networkPolicy": "No network or policy bypass was attempted"
+    },
+    "limits": [
+      "Source changes require human review",
+      "Test scaffolding and mock results do not prove external provider completion"
+    ],
+    "controlledSubprocessTests": {
+      "passed": 8,
+      "scope": "Controlled CLI adapter integration, not actual model qualification",
+      "coverage": [
+        "Allowed patch produces human-review state and evidence",
+        "Execution mode matching",
+        "Failed provider exit",
+        "Bounded timeout",
+        "File allowlist enforcement",
+        "Restricted child environment",
+        "Model-written Git attributes cannot execute clean filters during patch collection"
+      ]
+    }
+  },
+  "forge": {
+    "used": [
+      "Revision reads",
+      "Reviewed guarded apply dry-runs",
+      "Atomic guarded apply writes",
+      "Strict vault checks"
+    ],
+    "observedFriction": [
+      "Parallel agents coordinate global project selection manually",
+      "Isolated builds and command-result evidence require external scripts",
+      "Embedded HTML/CSS/JavaScript changes require carefully guarded document edits",
+      "VM and cross-platform qualification require external CI execution"
+    ],
+    "requestedImprovements": [
+      "Explicit per-agent project targeting",
+      "Structured verification/evidence records tied to file revisions",
+      "Browser assertion and accessibility evidence alongside screenshots",
+      "Qualification matrices that distinguish configured, running and completed checks"
+    ]
+  },
+  "sourceValidation": {
+    "typecheck": "passed",
+    "tests": 450,
+    "passed": 450,
+    "failed": 0,
+    "skipped": 0,
+    "dependencyVulnerabilities": 0,
+    "platform": "Linux Node 24.19.0",
+    "workflowDrift": "passed",
+    "strictVault": {
+      "errors": 0,
+      "warnings": 0
+    }
+  },
+  "extractedReleaseValidation": {
+    "nativeSingleLine": "passed; task, two snapshots, restart persistence",
+    "nativeSystem": "passed; two lines, three workers, isolation, drift, restart persistence",
+    "nativeLiveSubprocessFixture": "passed; YAML, HTTP task, review artifact, unchanged repository, restart identity; not a model-backed run",
+    "security": "passed; factory/line viewer reads, mutation denial, monitoring, restart-bound rotation, admin recovery and credential-free logs",
+    "docker": "running; results recorded after completion"
+  }
+}

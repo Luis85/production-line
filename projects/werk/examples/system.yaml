@@ -1,0 +1,30 @@
+# One mock Factory with two independent production lines.
+# Change environment here, or override it explicitly with --environment docker.
+schemaVersion: 1
+id: demo-system
+environment: native
+factory:
+  id: demo-factory
+  name: Demo Factory
+  port: 3100
+  subFactories:
+    - id: delivery-group
+      name: Delivery Group
+productionLines:
+  - id: alpha
+    name: Alpha
+    project: demo-alpha
+    orchestrator:
+      port: 3001
+    workers:
+      count: 1
+      statusPort: 4201
+  - id: beta
+    name: Beta
+    factoryId: delivery-group
+    project: demo-beta
+    orchestrator:
+      port: 3002
+    workers:
+      count: 1
+      statusPort: 4202

@@ -1,0 +1,48 @@
+name: Werk checks
+on:
+  push:
+    paths: ['/**']
+  pull_request:
+    paths: ['/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: werk-checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ${{ env.FORGE_PROJECT_PATH }}/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm run check
+      - run: npm run audit:dependencies
+      - name: Check generated workflow drift
+        working-directory: /
+        run: node bin/forge.js workflows sync --check
+  containers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [factory, orchestrator, worker]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Build independent service image
+        run: docker build --file src/${{ matrix.service }}/Dockerfile --tag werk-${{ matrix.service }}:check .

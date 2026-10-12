@@ -1,0 +1,128 @@
+{
+  "root": "/workspace/work/journey/extracted final/werk-0.1.0",
+  "stateDir": "/workspace/work/journey/ui/package-state-eJruID",
+  "project": "browser-journey",
+  "ports": {
+    "orchestratorPort": 38357,
+    "workerPort": 33583
+  },
+  "taskId": "e0e8f1da-1a0b-4ac7-98d6-22d949ec51a8",
+  "workerId": "015e9be7-2b7e-4601-800b-4291195f9094",
+  "errors": [],
+  "events": [
+    {
+      "ok": true,
+      "event": "starting",
+      "state": "starting",
+      "runId": "06f5d51f80aeecfaa832366a9ca1a4c52ef56d14bde8a48551bee85719b13c50",
+      "project": "browser-journey",
+      "mode": "mock",
+      "url": "http://127.0.0.1:38357/",
+      "workers": [
+        {
+          "index": 1,
+          "url": "http://127.0.0.1:33583/"
+        }
+      ]
+    },
+    {
+      "ok": true,
+      "event": "ready",
+      "state": "running",
+      "runId": "06f5d51f80aeecfaa832366a9ca1a4c52ef56d14bde8a48551bee85719b13c50",
+      "project": "browser-journey",
+      "mode": "mock",
+      "url": "http://127.0.0.1:38357/",
+      "workers": [
+        {
+          "index": 1,
+          "url": "http://127.0.0.1:33583/"
+        }
+      ]
+    },
+    {
+      "ok": true,
+      "event": "stopping",
+      "state": "stopping",
+      "runId": "06f5d51f80aeecfaa832366a9ca1a4c52ef56d14bde8a48551bee85719b13c50",
+      "project": "browser-journey",
+      "mode": "mock",
+      "url": "http://127.0.0.1:38357/",
+      "workers": [
+        {
+          "index": 1,
+          "url": "http://127.0.0.1:33583/"
+        }
+      ]
+    },
+    {
+      "ok": true,
+      "event": "child_exited",
+      "role": "worker",
+      "index": 1,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "ok": true,
+      "event": "child_exited",
+      "role": "orchestrator",
+      "index": 0,
+      "exitCode": 0,
+      "signal": null
+    },
+    {
+      "ok": true,
+      "event": "stopped",
+      "mode": "mock"
+    }
+  ],
+  "status": {
+    "ok": true,
+    "state": "running",
+    "runId": "06f5d51f80aeecfaa832366a9ca1a4c52ef56d14bde8a48551bee85719b13c50",
+    "project": "browser-journey",
+    "mode": "mock",
+    "url": "http://127.0.0.1:38357/",
+    "workers": [
+      {
+        "index": 1,
+        "url": "http://127.0.0.1:33583/"
+      }
+    ]
+  },
+  "doctor": {
+    "ok": true,
+    "state": "running",
+    "checks": [
+      {
+        "name": "release",
+        "ok": true
+      },
+      {
+        "name": "configuration",
+        "ok": true
+      },
+      {
+        "name": "supervisor",
+        "ok": true
+      },
+      {
+        "name": "orchestrator",
+        "ok": true
+      },
+      {
+        "name": "worker-1",
+        "ok": true
+      }
+    ],
+    "next": "Use status or inspect private runtime logs for lifecycle details."
+  },
+  "stopped": {
+    "ok": true,
+    "state": "stopped"
+  },
+  "flow": "Extracted unmodified package: setup -> start -> readiness -> login invalid/retry keyboard -> derived custom project -> Wikilink intake -> worker simulated task -> two scoped snapshots -> worker online -> logout -> status/doctor/stop",
+  "htmlOverride": false,
+  "noRootNpmInstall": true
+}

@@ -1,0 +1,36 @@
+# Native Docker Agent operations client using the OpenAI API.
+# Set WERK_OPS_MODEL to an API model available to your account; set OPENAI_API_KEY.
+# API billing is separate from ChatGPT/Codex subscriptions. WERK_ROOT is the starter path.
+version: 16
+models:
+  operations:
+    provider: openai
+    model: "${env.WERK_OPS_MODEL}"
+agents:
+  root:
+    model: operations
+    description: Inspect Werk factories, production lines and task evidence
+    readonly: true
+    max_iterations: 12
+    instruction: |
+      Use the Werk tools to inspect the selected Factory and orchestrator.
+      Report partial line availability, stale observations and unknown costs explicitly.
+      Simulated attempts are not delivered features. Do not invent test or merge results.
+      The orchestrator endpoint is selected by the operator before startup.
+    toolsets:
+      - type: mcp
+        command: node
+        version: "false"
+        args: [src/factory/dist/factory/cli.js, mcp, serve]
+        working_dir: "${env.WERK_ROOT}"
+        env:
+          WERK_FACTORY_URL: "${env.WERK_FACTORY_URL}"
+          WERK_FACTORY_ADMIN_TOKEN: "${env.WERK_FACTORY_ADMIN_TOKEN}"
+      - type: mcp
+        command: node
+        version: "false"
+        args: [src/orchestrator/dist/orchestrator/cli.js, mcp, serve]
+        working_dir: "${env.WERK_ROOT}"
+        env:
+          WERK_URL: "${env.WERK_URL}"
+          WERK_ADMIN_TOKEN: "${env.WERK_ADMIN_TOKEN}"

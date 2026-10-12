@@ -1,0 +1,5 @@
+{
+  "name": "@werk/orchestrator", "version": "0.1.0", "private": true, "type": "module",
+  "bin": { "werk-orchestrator": "dist/orchestrator/cli.js" },
+  "scripts": { "build": "node ../../scripts/build.mjs orchestrator", "start": "node dist/orchestrator/cli.js serve" }
+}

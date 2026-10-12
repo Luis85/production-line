@@ -1,0 +1,87 @@
+services:
+  orchestrator:
+    image: ${WERK_DOCKER_IMAGE:-werk-release:local}
+    entrypoint: ["node", "/app/scripts/docker/service.mjs", "orchestrator"]
+    user: "${WERK_DOCKER_UID:-1000}:${WERK_DOCKER_GID:-1000}"
+    volumes:
+      - type: bind
+        source: ${WERK_DOCKER_STATE_DIR:?Run the release Docker wrapper}
+        target: /state
+    ports:
+      - "127.0.0.1:${WERK_ORCHESTRATOR_PORT:?Run setup first}:3000"
+    init: true
+    restart: unless-stopped
+    environment:
+      WERK_ALERT_QUEUE_AGE_SECONDS: "${WERK_ALERT_QUEUE_AGE_SECONDS:-300}"
+      WERK_ALERT_FAILURE_WINDOW_SECONDS: "${WERK_ALERT_FAILURE_WINDOW_SECONDS:-900}"
+      WERK_ALERT_FAILED_ATTEMPTS: "${WERK_ALERT_FAILED_ATTEMPTS:-3}"
+      WERK_ALERT_OUTBOX_AGE_SECONDS: "${WERK_ALERT_OUTBOX_AGE_SECONDS:-120}"
+      WERK_ALERT_OUTBOX_PENDING: "${WERK_ALERT_OUTBOX_PENDING:-100}"
+      WERK_ALERT_STALE_OBSERVATION_SECONDS: "${WERK_ALERT_STALE_OBSERVATION_SECONDS:-120}"
+    logging:
+      driver: local
+      options:
+        max-size: "1m"
+        max-file: "2"
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 20s
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz',{signal:AbortSignal.timeout(2000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+  worker:
+    image: ${WERK_DOCKER_IMAGE:-werk-release:local}
+    entrypoint: ["node", "/app/scripts/docker/service.mjs", "worker"]
+    user: "${WERK_DOCKER_UID:-1000}:${WERK_DOCKER_GID:-1000}"
+    volumes:
+      - type: bind
+        source: ${WERK_DOCKER_STATE_DIR:?Run the release Docker wrapper}/workers/worker-1
+        target: /state
+    ports:
+      - "127.0.0.1:${WERK_WORKER_PORT:?Run setup first}:4100"
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+    environment:
+      WERK_ALERT_QUEUE_AGE_SECONDS: "${WERK_ALERT_QUEUE_AGE_SECONDS:-300}"
+      WERK_ALERT_FAILURE_WINDOW_SECONDS: "${WERK_ALERT_FAILURE_WINDOW_SECONDS:-900}"
+      WERK_ALERT_FAILED_ATTEMPTS: "${WERK_ALERT_FAILED_ATTEMPTS:-3}"
+      WERK_ALERT_OUTBOX_AGE_SECONDS: "${WERK_ALERT_OUTBOX_AGE_SECONDS:-120}"
+      WERK_ALERT_OUTBOX_PENDING: "${WERK_ALERT_OUTBOX_PENDING:-100}"
+      WERK_ALERT_STALE_OBSERVATION_SECONDS: "${WERK_ALERT_STALE_OBSERVATION_SECONDS:-120}"
+    logging:
+      driver: local
+      options:
+        max-size: "1m"
+        max-file: "2"
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    stop_grace_period: 20s
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4100/status',{signal:AbortSignal.timeout(2000)}).then(r=>r.json()).then(s=>process.exit(['idle','executing'].includes(s.state)?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+  operator:
+    image: ${WERK_DOCKER_IMAGE:-werk-release:local}
+    profiles: [tools]
+    user: "${WERK_DOCKER_UID:-1000}:${WERK_DOCKER_GID:-1000}"
+    volumes:
+      - type: bind
+        source: ${WERK_DOCKER_STATE_DIR:?Run the release Docker wrapper}
+        target: /state
+        read_only: true
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
