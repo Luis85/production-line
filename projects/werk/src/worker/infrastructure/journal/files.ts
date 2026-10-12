@@ -3,8 +3,34 @@ import { open, rename, unlink, mkdir, lstat } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
+// Filesystem retry progress must not depend on an application's injected or mocked execution clock.
+const fileRetryTimer = setTimeout;
+const waitForFileRetry = (milliseconds: number): Promise<void> => new Promise(resolve => fileRetryTimer(resolve, milliseconds));
+interface AtomicWriteOperations {
+  platform?: NodeJS.Platform;
+  rename?: (source: string, destination: string) => Promise<void>;
+  wait?: (milliseconds: number) => Promise<void>;
+}
+
+async function publish(temporary: string, destination: string, operations: AtomicWriteOperations): Promise<void> {
+  const replace = operations.rename ?? rename;
+  const wait = operations.wait ?? waitForFileRetry;
+  const platform = operations.platform ?? process.platform;
+  for (let attempt = 0; ; attempt++) {
+    try { await replace(temporary, destination); return; }
+    catch (error) {
+      // Windows readers/antivirus can briefly prevent replacement. Never remove the existing destination.
+      const code = (error as NodeJS.ErrnoException)?.code;
+      if (platform !== 'win32' || !['EPERM', 'EACCES', 'EBUSY'].includes(code ?? '') || attempt >= 7) throw error;
+      await wait(Math.min(10 * 2 ** attempt, 100));
+      await assertDirectory(dirname(destination));
+    }
+  }
+}
+
+
 /** Publish complete files atomically and sync their contents before acknowledging persistence. */
-export async function atomicWrite(path: string, body: string, mode = 0o600): Promise<void> {
+export async function atomicWrite(path: string, body: string, mode = 0o600, operations: AtomicWriteOperations = {}): Promise<void> {
   await assertDirectory(dirname(path));
   const temporary = `${path}.${randomUUID()}.tmp`;
   const file = await open(temporary, 'wx', mode);
@@ -12,7 +38,7 @@ export async function atomicWrite(path: string, body: string, mode = 0o600): Pro
     await file.writeFile(body);
     await file.sync();
     await file.close();
-    await rename(temporary, path);
+    await publish(temporary, path, operations);
     await syncDirectory(dirname(path));
   } finally {
     await file.close().catch(() => {});

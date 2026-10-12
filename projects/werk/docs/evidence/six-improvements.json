@@ -197,6 +197,20 @@
       "regressions": 2,
       "before": "Both constructors failed deterministically under an existing database lock before WAL setup",
       "after": "Both wait for the lock, preserve data and complete migrations; busy timeout remains bounded to five seconds"
+    },
+    "windowsAtomicPublication": {
+      "result": "focused tests passed; final CI tracked in PR",
+      "tests": 5,
+      "attemptLimit": 8,
+      "maximumRetryWaitMs": 450,
+      "transientCodes": [
+        "EPERM",
+        "EACCES",
+        "EBUSY"
+      ],
+      "destinationPreservedOnExhaustion": true,
+      "atomicReplacementPreserved": true,
+      "independentReview": "passed"
     }
   },
   "onboarding": {
@@ -336,8 +350,8 @@
   },
   "sourceValidation": {
     "typecheck": "passed",
-    "tests": 458,
-    "passed": 458,
+    "tests": 463,
+    "passed": 463,
     "failed": 0,
     "skipped": 0,
     "dependencyVulnerabilities": 0,
