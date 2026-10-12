@@ -77,7 +77,7 @@ test('event pages retain evidence on failure and reject late responses after sel
   fail=false;await h.get('#event-next').onclick();assert.equal(JSON.parse(h.get('#task-events').textContent).events[0].seq,2);assert.match(h.get('#task-event-state').textContent,/Seite 2/);
   late=deferred();const slow=h.get('#refresh-task-events').onclick();const old=late;late=null;
   await h.run(`showTask(${JSON.stringify(task('two'))})`);old.resolve(response(page('events',[event(999)])));await slow;
-  assert.equal(h.run('selectedTaskId'),'two');assert.doesNotMatch(h.get('#task-events').textContent,/999/);
+  assert.equal(h.run('selectedTaskId'),'two');assert.deepEqual(JSON.parse(h.get('#task-events').textContent).events.map(item=>item.seq),[1]);
 });
 
 test('selected-task snapshots return to their task even after its row leaves the current task page',async()=>{
