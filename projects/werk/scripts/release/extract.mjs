@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { list, extract } from 'tar';
 import { unzipSync } from 'fflate';
-import { verifyRelease } from './verify.mjs';
+import { verifyRelease, isMainScript } from './verify.mjs';
 
 // Maintainer acceptance harness: only extracts a checksum-verified release to a new directory.
 export async function extractRelease(artifacts, destination, format = process.platform === 'win32' ? 'zip' : 'tar.gz') {
@@ -63,7 +63,7 @@ export async function extractRelease(artifacts, destination, format = process.pl
     return { root, ...verified };
   } catch (error) { await rm(destination, { recursive: true, force: true }); throw error; }
 }
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMainScript(import.meta.url)) {
   try {
     if (process.argv.length !== 4) throw Error('Usage: node scripts/release/extract.mjs <artifact-directory> <new-destination>');
     console.log(JSON.stringify(await extractRelease(resolve(process.argv[2]), resolve(process.argv[3]))));

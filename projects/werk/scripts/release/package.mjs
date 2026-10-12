@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { lstat, mkdir, readdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, join, posix, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMainScript } from './verify.mjs';
 import { createArchives } from './archives.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -88,7 +89,7 @@ export async function packageRelease(projectRoot = root, output = join(projectRo
   } finally { await rm(staging, { recursive: true, force: true }); }
   return { version: info.version, output, files: entries.length, artifacts: archives.map(({name,content}) => ({name,bytes:content.length,sha256:hash(content)})), sourceCommit: manifest.sourceCommit };
 }
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMainScript(import.meta.url)) {
   try {
     if (process.argv.length > 2) throw Error('Usage: node scripts/release/package.mjs');
     console.log(JSON.stringify(await packageRelease(), null, 2));

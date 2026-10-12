@@ -48,10 +48,22 @@ qualification uses a private test CA, not a public production certificate.
 
 ## Validation record
 
-**Local source gate:** TypeScript and all 450 tests passed on Linux Node 24.19.0;
+**Local source gate:** TypeScript and all 454 tests passed on Linux Node 24.19.0;
 dependency audit found zero vulnerabilities. Exact extracted native single-line,
 whole-system and role/rotation smoke checks passed. Generated workflow drift and
-strict vault checks passed. Docker and remote qualification are recorded separately.
+strict vault checks passed. Exact extracted Docker single-line and whole-system
+checks also passed, including offline Git, task isolation and restart persistence.
+The [release CI run](https://github.com/Luis85/production-line/actions/runs/38321677042)
+passed native Linux/Windows/macOS, Linux Docker and the actual Ubuntu 24.04
+cloud-init VM at head `8027833c32d6e6496e67bcbca2deac59d0ddf648`.
+The VM used KVM and verified a dedicated user, private state, read-only release,
+loopback ports, two lines, task snapshots and persistence after systemd restart.
+No release was published. ARM64 VM and Windows/macOS Docker remain unqualified.
+
+The first source CI pass exposed missing guide assets in individual-service
+Docker builds and a macOS symlink-path entrypoint bug in development launchers.
+Follow-up changes add the required build input and canonical entrypoint detection;
+exact-head source CI status is recorded on [PR 1](https://github.com/Luis85/production-line/pull/1).
 
 The [sanitized evidence manifest](../evidence/six-improvements.json) records
 executed browser, recovery, security and monitoring checks and explicit pending

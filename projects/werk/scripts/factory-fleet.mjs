@@ -2,8 +2,8 @@ import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, writeFile, unlink, access } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { join, resolve } from 'node:path';
-import { assertFreePort, childEnvironment } from './fleet.mjs';
+import { join } from 'node:path';
+import { assertFreePort, childEnvironment, isMainScript } from './fleet.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const secretKeys=['WERK_FACTORY_ADMIN_TOKEN','WERK_LINE_ALPHA_TOKEN','WERK_LINE_BETA_TOKEN','WERK_ALPHA_ENROLLMENT_TOKEN','WERK_BETA_ENROLLMENT_TOKEN'];
 export function factoryFleetOptions(args,env,previous={}){
@@ -85,4 +85,4 @@ export async function main(args=process.argv.slice(2),env=process.env){
     await Promise.all(children.map(p=>p.done));
   }finally{stop();await Promise.all(children.map(p=>p.done));clearTimeout(forceTimer);process.removeListener('SIGINT',stop);process.removeListener('SIGTERM',stop);await unlink(lock);}
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))main().catch(e=>{console.error(e.message);process.exitCode=1;});
+if(isMainScript(import.meta.url))main().catch(e=>{console.error(e.message);process.exitCode=1;});

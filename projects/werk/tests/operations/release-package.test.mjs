@@ -1,5 +1,5 @@
 import test from 'node:test';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdtemp, mkdir, readFile, writeFile, rm, symlink, truncate, stat } from 'node:fs/promises';
@@ -130,5 +130,32 @@ test('integrity verification rejects symlinks and FIFOs before reading payloads'
   if(process.platform!=='win32') {
     execFileSync('mkfifo',[payload]);
     await assert.rejects(verifyRelease(installed),/nonregular/);
+  }
+});
+
+
+test('release verifier executes through directory aliases and rejects invalid content instead of silently succeeding', { skip: process.platform === 'win32' }, async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'werk-verify-entry-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const actual = join(directory, 'actual'), alias = join(directory, 'alias'), invalid = join(directory, 'invalid-release');
+  await mkdir(actual); await mkdir(invalid); await symlink(actual, alias, 'dir');
+  // Only copy the verifier: cloud-init and extracted releases require it to be standalone.
+  await writeFile(join(actual, 'verify.mjs'), await readFile(new URL('../../scripts/release/verify.mjs', import.meta.url)));
+  await writeFile(join(invalid, 'release-manifest.json'), JSON.stringify({ schemaVersion: 1, name: 'werk', files: [{ path: 'missing.txt', bytes: 0, sha256: '0'.repeat(64) }] }));
+  const result = spawnSync(process.execPath, [join(alias, 'verify.mjs'), invalid], { encoding: 'utf8' });
+  assert.equal(result.status, 1, result.stderr); assert.match(result.stderr, /Missing release entry/); assert.equal(result.stdout, '');
+  await writeFile(join(actual, 'import-only.mjs'), "await import('./verify.mjs'); console.log('imported');\n");
+  const imported = spawnSync(process.execPath, [join(alias, 'import-only.mjs')], { encoding: 'utf8' });
+  assert.equal(imported.status, 0, imported.stderr); assert.equal(imported.stdout.trim(), 'imported'); assert.equal(imported.stderr, '');
+});
+
+test('release package and extraction entrypoints validate arguments through an aliased checkout', { skip: process.platform === 'win32' }, async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'werk-release-alias-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const alias = join(directory, 'project');
+  await symlink(new URL('../../', import.meta.url), alias, 'dir');
+  for (const name of ['package.mjs', 'extract.mjs']) {
+    const result = spawnSync(process.execPath, [join(alias, 'scripts/release', name), '--unexpected'], { encoding: 'utf8' });
+    assert.equal(result.status, 1, result.stderr); assert.match(result.stderr, /Usage:/); assert.equal(result.stdout, '');
   }
 });

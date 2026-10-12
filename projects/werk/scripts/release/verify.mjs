@@ -1,8 +1,15 @@
 import { createHash } from 'node:crypto';
-import { constants } from 'node:fs';
+import { constants, realpathSync } from 'node:fs';
 import { lstat, open, readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+// Keep this verifier standalone: it is also copied into cloud-init installations.
+export function isMainScript(moduleUrl, entry = process.argv[1]) {
+  if (!entry) return false;
+  try { return realpathSync(entry) === realpathSync(fileURLToPath(moduleUrl)); }
+  catch { return false; }
+}
 
 export async function verifyRelease(root) {
   if (!(await lstat(root)).isDirectory()) throw Error('Release root must be a regular directory');
@@ -46,7 +53,7 @@ export async function verifyRelease(root) {
   for (const path of actual) if (!expected.has(path)) throw Error(`Unexpected release entry: ${path}`);
   return { version: manifest.version, files: manifest.files.length, sourceCommit: manifest.sourceCommit };
 }
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMainScript(import.meta.url)) {
   try {
     if (process.argv.length !== 3) throw Error('Usage: node scripts/release/verify.mjs <fresh-extracted-root>');
     console.log(JSON.stringify(await verifyRelease(resolve(process.argv[2]))));

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "recordedOn": "2026-10-13",
   "scope": "Six product readiness improvements",
-  "status": "Local evidence collected; external qualification and final integration results are tracked separately",
+  "status": "Local source and extracted-release checks passed; actual cross-platform native, Linux Docker and Ubuntu VM release qualification passed at the recorded head. Source CI follow-up fixes are tracked in the PR.",
   "interpretation": "Focused test counts overlap with broader suites and must not be added together. Configured CI jobs are not completed qualification. Mock execution is not live-provider evidence.",
   "qualification": {
     "local": {
@@ -31,13 +31,48 @@
       ]
     },
     "pending": [
-      "Actual cloud-init VM boot",
-      "Windows native execution",
-      "macOS native execution",
       "arm64 VM qualification",
       "Windows/macOS Docker qualification"
     ],
-    "localLimit": "This environment has neither KVM nor QEMU available and cannot fetch the required Ubuntu cloud image under its network policy; no policy bypass was attempted."
+    "localLimit": "This environment has neither KVM nor QEMU available and cannot fetch the required Ubuntu cloud image under its network policy; no policy bypass was attempted.",
+    "executedCi": {
+      "headSha": "8027833c32d6e6496e67bcbca2deac59d0ddf648",
+      "runUrl": "https://github.com/Luis85/production-line/actions/runs/38321677042",
+      "native": {
+        "Linux": "passed",
+        "Windows": "passed",
+        "macOS": "passed"
+      },
+      "dockerLinux": "passed",
+      "cloudInit": {
+        "run": 38321677042,
+        "job": 115051166950,
+        "headSha": "8027833c32d6e6496e67bcbca2deac59d0ddf648",
+        "jobUrl": "https://github.com/Luis85/production-line/actions/runs/38321677042/job/115051166950",
+        "artifactUrl": "https://github.com/Luis85/production-line/actions/runs/38321677042/artifacts/11778794603",
+        "result": {
+          "ok": true,
+          "profile": "ubuntu-24.04",
+          "cloudInitBoot": true,
+          "loopbackOnly": true,
+          "serviceUser": "werk",
+          "privateState": true,
+          "readOnlyRelease": true,
+          "simulatedTasks": 1,
+          "persistedSnapshots": 2,
+          "restartPreserved": true,
+          "lines": 2,
+          "accelerator": "kvm",
+          "releaseSha256": "9d458b0ebae0fd4bcef0c3b5a6bf16692b856530e7ff0820dd40a38747af1fe5",
+          "nodeSha256": "14b342e71204f811bde6153be8e04b62aef63c236fef92b55f9c83154b409647",
+          "imageSha256": "6a81c37564db9b1ee84e141922625e1d7c5b389b99bb3c572e0243607d5bb4d2",
+          "imageUrl": "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img",
+          "fixtureTlsVerified": true,
+          "sshHostKeyVerified": true
+        }
+      },
+      "publish": "skipped; no release tag was requested"
+    }
   },
   "recovery": {
     "maintenanceSafetyTests": {
@@ -215,8 +250,8 @@
   },
   "sourceValidation": {
     "typecheck": "passed",
-    "tests": 450,
-    "passed": 450,
+    "tests": 454,
+    "passed": 454,
     "failed": 0,
     "skipped": 0,
     "dependencyVulnerabilities": 0,
@@ -232,6 +267,6 @@
     "nativeSystem": "passed; two lines, three workers, isolation, drift, restart persistence",
     "nativeLiveSubprocessFixture": "passed; YAML, HTTP task, review artifact, unchanged repository, restart identity; not a model-backed run",
     "security": "passed; factory/line viewer reads, mutation denial, monitoring, restart-bound rotation, admin recovery and credential-free logs",
-    "docker": "running; results recorded after completion"
+    "docker": "passed; single-line and two-line/three-worker system; no host Node in launcher PATH; offline Git; task isolation; restart identity/evidence/credentials; no credential output"
   }
 }

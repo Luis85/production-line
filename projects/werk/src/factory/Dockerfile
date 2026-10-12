@@ -4,6 +4,7 @@ COPY package.json package-lock.json ./
 COPY scripts/build.mjs scripts/build.mjs
 COPY src/shared src/shared
 COPY src/factory src/factory
+COPY src/guide src/guide
 RUN node scripts/build.mjs factory
 
 FROM node:24-bookworm-slim

@@ -8,6 +8,7 @@ RUN --mount=type=secret,id=proxy_ca \
 COPY scripts/build.mjs scripts/build.mjs
 COPY src/shared src/shared
 COPY src/orchestrator src/orchestrator
+COPY src/guide src/guide
 RUN node scripts/build.mjs orchestrator
 
 FROM node:24-bookworm-slim

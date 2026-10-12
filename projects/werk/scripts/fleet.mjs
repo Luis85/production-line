@@ -1,10 +1,17 @@
 import { spawn } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, writeFile, unlink, access } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { fileURLToPath } from 'node:url';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 const root=fileURLToPath(new URL('../',import.meta.url));
+/** Node resolves module URLs through aliases such as macOS /var -> /private/var. */
+export function isMainScript(moduleUrl, entry = process.argv[1]) {
+  if (!entry) return false;
+  try { return realpathSync(entry) === realpathSync(fileURLToPath(moduleUrl)); }
+  catch { return false; } // Imported modules remain inert when there is no filesystem entrypoint.
+}
 /** Do not leak another service's Werk credentials through the launching shell. */
 export function childEnvironment(inherited, credentials) {
   const environment = Object.fromEntries(Object.entries(inherited).filter(([name]) => !/^WERK_.*TOKEN$/.test(name)));
@@ -70,4 +77,4 @@ export async function main(args=process.argv.slice(2),env=process.env) {
     await unlink(lock);
   }
 }
-if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url))main().catch(e=>{console.error(e.message);process.exitCode=1;});
+if(isMainScript(import.meta.url))main().catch(e=>{console.error(e.message);process.exitCode=1;});
