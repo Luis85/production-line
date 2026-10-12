@@ -12,6 +12,8 @@ const exec = promisify(execFile);
 const admin = 'process-admin-'.repeat(4), enrollment = 'process-enroll-'.repeat(4);
 const orchestratorCli = resolve('src/orchestrator/dist/orchestrator/cli.js');
 const workerCli = resolve('src/worker/dist/worker/cli.js');
+// Node terminates Windows children forcibly for SIGTERM; POSIX children run their shutdown handler.
+const stoppedProcess = process.platform === 'win32' ? { code: null, signal: 'SIGTERM' } : { code: 0, signal: null };
 
 async function until(predicate, label, milliseconds = 10000) {
   const deadline = Date.now() + milliseconds;
@@ -72,7 +74,7 @@ test('real CLI processes retain pinned context across server restart and execute
   assert.equal(task.context.commit, firstCommit); assert.ok(!JSON.stringify(task).includes(secretSource));
   const pinned = await api(initial.base, `/v1/tasks/${task.id}/context`);
   assert.equal(pinned.sha256, task.context.sha256); assert.ok(JSON.stringify(pinned).includes(secretSource));
-  assert.deepEqual(await initial.server.stop(), { code: 0, signal: null });
+  assert.deepEqual(await initial.server.stop(), stoppedProcess);
   await writeFile(join(repository, 'docs/Feature.md'), note('A later feature'));
   await git('add', '.'); await git('commit', '-qm', 'Move source forward'); const secondCommit = await git('rev-parse', 'HEAD');
   const restarted = await start(secondCommit);
@@ -95,6 +97,6 @@ test('real CLI processes retain pinned context across server restart and execute
   }
   const identity = JSON.parse(await readFile(join(root, 'worker/identity.json'), 'utf8'));
   assert.equal((await fetch(restarted.base + `/v1/tasks/${task.id}/context`, { headers: { Authorization: 'Bearer ' + identity.token } })).status, 401);
-  assert.deepEqual(await worker.stop(), { code: 0, signal: null });
+  assert.deepEqual(await worker.stop(), stoppedProcess);
   assert.ok(!worker.stderr.includes(secretSource)); assert.ok(!worker.stdout.includes(secretSource));
 });

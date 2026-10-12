@@ -60,9 +60,9 @@ dependency audit found zero vulnerabilities. Exact extracted native single-line,
 whole-system and role/rotation smoke checks passed. Generated workflow drift and
 strict vault checks passed. Exact extracted Docker single-line and whole-system
 checks also passed, including offline Git, task isolation and restart persistence.
-The [release CI run](https://github.com/Luis85/production-line/actions/runs/38321677042)
+The [release CI run](https://github.com/Luis85/production-line/actions/runs/38322936007)
 passed native Linux/Windows/macOS, Linux Docker and the actual Ubuntu 24.04
-cloud-init VM at head `8027833c32d6e6496e67bcbca2deac59d0ddf648`.
+cloud-init VM at head `3b5094a64bfff8630df994dd74793556bb4d45a0`.
 The VM used KVM and verified a dedicated user, private state, read-only release,
 loopback ports, two lines, task snapshots and persistence after systemd restart.
 No release was published. ARM64 VM and Windows/macOS Docker remain unqualified.
@@ -73,6 +73,8 @@ Follow-up changes add the required build input and canonical entrypoint detectio
 Windows follow-ups use Git's portable null configuration path, native host-path
 assertions, platform-appropriate permission checks and launcher coverage, and
 explicit worker cancellation and execution barriers in asynchronous fixtures.
+The process restart test now checks Windows forced SIGTERM termination and POSIX
+graceful exit separately, retaining its pinned-context and evidence assertions.
 Duplicate branch and PR check runs are avoided by limiting push checks to main.
 Exact-head source CI status is recorded on [PR 1](https://github.com/Luis85/production-line/pull/1).
 
