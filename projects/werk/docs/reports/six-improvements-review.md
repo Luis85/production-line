@@ -55,7 +55,7 @@ qualification uses a private test CA, not a public production certificate.
 
 ## Validation record
 
-**Local source gate:** TypeScript and all 463 tests passed on Linux Node 24.19.0;
+**Local source gate:** TypeScript and all 464 tests passed on Linux Node 24.19.0;
 dependency audit found zero vulnerabilities. Exact extracted native single-line,
 whole-system and role/rotation smoke checks passed. Generated workflow drift and
 strict vault checks passed. Exact extracted Docker single-line and whole-system
@@ -85,7 +85,11 @@ replacement. Publication now retries only Windows sharing/permission errors,
 with eight attempts and at most 450 ms of waits; it never deletes the existing
 destination. Five regressions verify recovery, bounded exhaustion preserving old
 bytes, immediate nontransient failure, timer independence and concurrent readers.
-Independent review found no blocking integrity issue.
+Sustained Windows reader locks may exhaust the bounded window; tests require
+complete prior data to survive and publication to succeed after readers release.
+Independent review found no blocking integrity issue. Maintenance fixtures now
+reserve ports outside default CI client ranges; they pass with every former
+hardcoded port occupied, and a regression retains real occupied-port refusal.
 Duplicate branch and PR check runs are avoided by limiting push checks to main.
 Exact-head source CI status is recorded on [PR 1](https://github.com/Luis85/production-line/pull/1).
 

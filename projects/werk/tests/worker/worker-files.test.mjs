@@ -65,7 +65,7 @@ test('filesystem retries progress while execution timers are frozen', { timeout:
   assert.equal(calls, 2); assert.equal(await readFile(f.path, 'utf8'), 'published without advancing execution time');
 });
 
-test('concurrent real readers observe complete old or new files during atomic publication', { timeout: 12000 }, async t => {
+test('concurrent readers observe complete files and Windows contention preserves data until release', { timeout: 12000 }, async t => {
   const f = await fixture(t); const payload = 'x'.repeat(8192);
   await atomicWrite(f.path, JSON.stringify({ revision: 0, payload }));
   let stopped = false, observations = 0;
@@ -82,12 +82,27 @@ test('concurrent real readers observe complete old or new files during atomic pu
   });
   // Settle every reader before cleanup, even if another reader or publication fails.
   const joined = Promise.allSettled(readers);
-  try { for (let revision = 1; revision <= 40; revision++) await atomicWrite(f.path, JSON.stringify({ revision, payload })); }
+  let publishedRevision = 0, publicationError;
+  try {
+    for (let revision = 1; revision <= 40; revision++) {
+      await atomicWrite(f.path, JSON.stringify({ revision, payload }));
+      publishedRevision = revision;
+    }
+  } catch (error) { publicationError = error; }
   finally {
     stopped = true;
     const outcomes = await joined;
     for (const outcome of outcomes) if (outcome.status === 'rejected') throw outcome.reason;
   }
-  assert.ok(observations > 0); assert.equal(JSON.parse(await readFile(f.path, 'utf8')).revision, 40);
+  // Windows may retain overlapping reader handles for the whole bounded retry window.
+  // Exhaustion must preserve the last complete version; publication succeeds once every reader closes.
+  if (publicationError) {
+    assert.equal(process.platform, 'win32', 'POSIX publication must succeed with open readers');
+    assert.ok(['EPERM', 'EACCES', 'EBUSY'].includes(publicationError.code), String(publicationError));
+    assert.deepEqual(JSON.parse(await readFile(f.path, 'utf8')), { revision: publishedRevision, payload });
+    assert.deepEqual(await readdir(f.directory), ['status.json']);
+    await atomicWrite(f.path, JSON.stringify({ revision: 40, payload }));
+  }
+  assert.ok(observations > 0); assert.deepEqual(JSON.parse(await readFile(f.path, 'utf8')), { revision: 40, payload });
   assert.deepEqual(await readdir(f.directory), ['status.json']);
 });

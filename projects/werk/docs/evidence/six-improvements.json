@@ -156,7 +156,7 @@
   },
   "recovery": {
     "maintenanceSafetyTests": {
-      "passed": 8,
+      "passed": 9,
       "coverage": [
         "Private stopped-state backup and new-directory restore",
         "Refusal of live or unverified owners and unresolved worker locks",
@@ -164,7 +164,8 @@
         "Symlink, hardlink and special-state refusal",
         "Canonical ancestor aliases preserve containment checks",
         "Native whole-system Factory and line credential preservation",
-        "Actionable disk-pressure checks without credential output"
+        "Actionable disk-pressure checks without credential output",
+        "Occupied configured ports still refuse backup without altering state; fixtures avoid shared ephemeral-port collisions"
       ]
     },
     "replacementStateRestart": {
@@ -350,8 +351,8 @@
   },
   "sourceValidation": {
     "typecheck": "passed",
-    "tests": 463,
-    "passed": 463,
+    "tests": 464,
+    "passed": 464,
     "failed": 0,
     "skipped": 0,
     "dependencyVulnerabilities": 0,

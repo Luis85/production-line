@@ -2,14 +2,39 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, writeFile, rm, symlink, link, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createServer } from 'node:net';
+import { randomInt } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { setup } from '../../scripts/runtime/config.mjs';
 import { backupState, verifyBackup, restoreState, diagnose, diskCheck } from '../../scripts/runtime/maintenance/backup.mjs';
 import { main } from '../../scripts/runtime/maintenance/cli.mjs';
+async function reserveFixturePorts(count) {
+  const listeners = [], ports = [];
+  const release = async () => { await Promise.all(listeners.splice(0).map(server => new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())))); };
+  try {
+    for (let attempt = 0; ports.length < count && attempt < 100; attempt++) {
+      // Avoid both hardcoded shared ports and the ephemeral client-socket ranges
+      // used by Linux/macOS/Windows CI. Reserve the whole batch before setup.
+      const port = randomInt(12000, 29000), server = createServer();
+      try {
+        await new Promise((resolve, reject) => { server.once('error', reject); server.listen({ host: '127.0.0.1', port, exclusive: true }, resolve); });
+        listeners.push(server); ports.push(port);
+      } catch (error) { if (!['EADDRINUSE', 'EACCES'].includes(error.code)) throw error; }
+    }
+    if (ports.length !== count) throw Error('Could not reserve isolated maintenance fixture ports');
+    return { ports, release };
+  } catch (error) { await release(); throw error; }
+}
 const fixture = async operation => {
   const root = await mkdtemp(join(tmpdir(), 'werk-maintenance-'));
-  try { const state = join(root, 'state'); await setup({ stateDir: state, port: 38991, workerPort: 38992 }); await operation({ root, state }); }
-  finally { await rm(root, { recursive: true, force: true }); }
+  let reservation;
+  try {
+    reservation = await reserveFixturePorts(5);
+    const state = join(root, 'state');
+    await setup({ stateDir: state, port: reservation.ports[0], workerPort: reservation.ports[1] });
+    await reservation.release();
+    await operation({ root, state, ports: reservation.ports });
+  } finally { await reservation?.release(); await rm(root, { recursive: true, force: true }); }
 };
 test('stopped native backup verifies and restores credentials, WAL and pending evidence privately into new state', () => fixture(async ({ root, state }) => {
   await mkdir(join(state, 'workers', 'worker-1', 'outbox'), { recursive: true, mode: 0o700 });
@@ -65,11 +90,11 @@ test('disk pressure diagnostics are actionable without revealing credential cont
   assert.equal(output.join('').includes(credentials.WERK_ADMIN_TOKEN), false);
 }));
 
-test('whole-system backup preserves Factory and all line credentials and refuses hidden worker locks', () => fixture(async ({ root }) => {
+test('whole-system backup preserves Factory and all line credentials and refuses hidden worker locks', () => fixture(async ({ root, ports }) => {
   const { setupSystem } = await import('../../scripts/system/state.mjs');
   const { validateDefinition } = await import('../../scripts/system/definition.mjs');
   const state = join(root, 'system');
-  const definition = validateDefinition({ schemaVersion: 1, id: 'restore-system', environment: 'native', factory: { id: 'factory', name: 'Factory', port: 38993 }, productionLines: [{ id: 'line', name: 'Line', project: 'demo', orchestrator: { port: 38994 }, workers: { count: 1, statusPort: 38995 } }] });
+  const definition = validateDefinition({ schemaVersion: 1, id: 'restore-system', environment: 'native', factory: { id: 'factory', name: 'Factory', port: ports[2] }, productionLines: [{ id: 'line', name: 'Line', project: 'demo', orchestrator: { port: ports[3] }, workers: { count: 1, statusPort: ports[4] } }] });
   await setupSystem(definition, { stateDir: state });
   const backup = join(root, 'system-backup'), restored = join(root, 'system-restored');
   await backupState(state, backup); await restoreState(backup, restored);
@@ -99,4 +124,18 @@ test('canonical ancestor aliases retain containment checks and support platform 
   assert.equal((await verifyBackup(backup)).ok, true);
   await assert.rejects(backupState(state, join(alias, 'state/nested-backup')), /separate/);
   await assert.rejects(restoreState(backup, join(alias, 'backup/nested-restore')), /separate/);
+}));
+
+
+test('backup still refuses a configured port owned by another listener and preserves state', () => fixture(async ({ root, state, ports }) => {
+  const listener = createServer();
+  await new Promise((resolve, reject) => { listener.once('error', reject); listener.listen(ports[0], '127.0.0.1', resolve); });
+  const before = await readFile(join(state, 'credentials.json'));
+  try {
+    await assert.rejects(backupState(state, join(root, 'refused')), /Port [0-9]+ is unavailable/);
+    assert.deepEqual(await readFile(join(state, 'credentials.json')), before);
+    assert.equal((await readdir(root)).includes('refused'), false);
+    assert.equal((await readdir(state)).includes('runtime.lock'), false);
+    assert.equal(listener.listening, true);
+  } finally { await new Promise((resolve, reject) => listener.close(error => error ? reject(error) : resolve())); }
 }));
