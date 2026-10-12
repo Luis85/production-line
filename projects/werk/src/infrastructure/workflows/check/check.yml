@@ -1,6 +1,7 @@
 name: Werk checks
 on:
   push:
+    branches: [main]
     paths: ['/**']
   pull_request:
     paths: ['/**']

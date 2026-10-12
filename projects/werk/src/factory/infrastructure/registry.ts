@@ -16,7 +16,8 @@ export class SqliteFactoryRegistry implements FactoryRegistry {
             mkdirSync(dirname(path), { recursive: true });
         this.db = new DatabaseSync(path);
         try {
-            this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON');
+            // Install the bounded busy handler before journal-mode negotiation or schema locks.
+            this.db.exec('PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA foreign_keys=ON');
             this.transaction(() => migrateFactoryRegistry(this.db));
         }
         catch (error) {

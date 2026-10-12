@@ -23,7 +23,7 @@ test('Docker system plan is pure and setup preserves private credentials across 
   const f=await fixture(t); const plan=JSON.parse((await f.run('plan')).stdout); assert.equal(plan.totals.workers,3); assert.equal(plan.totals.factories,2);
   await assert.rejects(readFile(join(f.state,'system.json')),e=>e.code==='ENOENT');
   const first=await f.setup(), credentials=await readFile(join(f.state,'lines/alpha/credentials.json'),'utf8'); const second=await f.setup();
-  assert.equal(await readFile(join(f.state,'lines/alpha/credentials.json'),'utf8'),credentials); assert.equal((await stat(join(f.state,'system.json'))).mode&0o777,0o600);
+  assert.equal(await readFile(join(f.state,'lines/alpha/credentials.json'),'utf8'),credentials); if (process.platform !== 'win32') assert.equal((await stat(join(f.state,'system.json'))).mode&0o777,0o600);
   const loaded=await loadSystem(join(f.state,'factory-input')); const keys=await factoryCredentials(join(f.state,'factory-input'),loaded).catch(()=>null);
   // Factory credentials remain in its separate writable mount, not the input view.
   assert.equal(keys,null); assert.equal(loaded.id,definition().id);
@@ -34,9 +34,9 @@ test('Docker system plan is pure and setup preserves private credentials across 
 test('Docker system generation keeps worker boundaries, loopback ports and installation identity',()=>{
   const value=definition(), compose=composeSystem(value,{hostState:'/private/$state',image:'werk:test',uid:'123',gid:'456'});
   assert.equal(Object.keys(compose.services).length,6);
-  assert.deepEqual(compose.services.factory.volumes.map(v=>v.source),['/private/$$state/factory-input','/private/$$state/factory']);
+  assert.deepEqual(compose.services.factory.volumes.map(v=>v.source),[join('/private/$$state','factory-input'),join('/private/$$state','factory')]);
   for(const service of Object.values(compose.services)) { assert.equal(service.user,'123:456'); assert.ok(service.ports.every(port=>port.startsWith('127.0.0.1:'))); }
-  const worker=compose.services['line-1-worker-1']; assert.equal(worker.volumes.length,1); assert.ok(worker.volumes[0].source.endsWith('/workers/worker-1')); assert.equal(worker.read_only,true);
+  const worker=compose.services['line-1-worker-1']; assert.equal(worker.volumes.length,1); assert.ok(worker.volumes[0].source.endsWith(join('workers','worker-1'))); assert.equal(worker.read_only,true);
   assert.notEqual(systemProject(value,'/one'),systemProject(value,'/two'));
   const named=composeSystem(value,{hostState:'C:\\Werk',image:'werk:test',volume:'owned-state'});
   assert.equal(named.services.factory.volumes[0].volume.subpath,'factory-input'); assert.equal(named.services['line-1-worker-1'].volumes[0].volume.subpath,'lines/alpha/workers/worker-1');
@@ -69,8 +69,22 @@ test('Windows launchers refuse missing volumes for preexisting installation poin
 
 test('Docker start refuses a missing state directory without provisioning or building',async t=>{
   const f=await fixture(t), bin=join(f.root,'bin'), missing=join(f.root,'missing-state'); await mkdir(bin);
-  await writeFile(join(bin,'docker'), '#!/bin/sh\nif [ "$1" = compose ] && [ "$2" = version ]; then exit 0; fi\necho UnexpectedDockerMutation >&2\nexit 99\n',{mode:0o755});
-  await assert.rejects(exec('/bin/bash',[resolve('werk-docker.sh'),'system','start','--state-dir',missing,'--json'],{env:{...process.env,PATH:bin+':'+process.env.PATH}}),error=>/System state missing/.test(error.stderr)&&!error.stderr.includes('UnexpectedDockerMutation'));
+  if (process.platform === 'win32') {
+    const harness=join(bin,'missing-state.ps1');
+    await writeFile(harness,`param([string]$Launcher,[string]$State)
+function global:docker {
+  if ($args.Count -eq 2 -and $args[0] -eq 'compose' -and $args[1] -eq 'version') { $global:LASTEXITCODE=0; return }
+  throw 'UnexpectedDockerMutation'
+}
+& $Launcher start --state-dir $State --json
+exit $LASTEXITCODE
+`);
+    await assert.rejects(exec('pwsh',['-NoProfile','-NonInteractive','-File',harness,'-Launcher',resolve('scripts/docker/system.ps1'),'-State',missing]),error=>
+      error.code===1 && /missing-state/.test(error.stderr) && /does not exist|Cannot find path/.test(error.stderr) && !/UnexpectedDockerMutation/.test(error.stdout+error.stderr));
+  } else {
+    await writeFile(join(bin,'docker'), '#!/bin/sh\nif [ "$1" = compose ] && [ "$2" = version ]; then exit 0; fi\necho UnexpectedDockerMutation >&2\nexit 99\n',{mode:0o755});
+    await assert.rejects(exec('/bin/bash',[resolve('werk-docker.sh'),'system','start','--state-dir',missing,'--json'],{env:{...process.env,PATH:bin+':'+process.env.PATH}}),error=>/System state missing/.test(error.stderr)&&!error.stderr.includes('UnexpectedDockerMutation'));
+  }
   await assert.rejects(stat(missing),error=>error.code==='ENOENT');
   assert.match(await readFile('scripts/docker/system.ps1','utf8'),/\$setup=\$action -in @\('setup','up'\)/);
 });

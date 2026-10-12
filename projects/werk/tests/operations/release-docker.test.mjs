@@ -21,7 +21,7 @@ test('Docker setup is repeatable, mode-separated and never prints or rotates pri
   const config = JSON.parse(await readFile(join(f.state,'config.json'),'utf8')); assert.equal(config.runtime,'docker');
   const second = await f.run('setup','--host-state',f.state); assert.equal(await readFile(join(f.state,'credentials.json'),'utf8'),credentials);
   for (const secret of Object.values(JSON.parse(credentials))) assert.ok(!(first.stdout+first.stderr+second.stdout+second.stderr).includes(secret));
-  assert.equal((await stat(join(f.state,'docker.env'))).mode & 0o777,0o600);
+  if (process.platform !== 'win32') assert.equal((await stat(join(f.state,'docker.env'))).mode & 0o777,0o600);
   await assert.rejects(f.run('setup','--host-state',f.state,'--port','32347'));
   assert.equal(await readFile(join(f.state,'credentials.json'),'utf8'),credentials);
   await writeFile(join(f.state,'config.json'),JSON.stringify({...config,runtime:'native'}),{mode:0o600});

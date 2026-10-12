@@ -4,6 +4,7 @@
 name: Werk checks
 on:
   push:
+    branches: [ main ]
     paths:
       - "**"
       - .github/workflows/werk--check.yml

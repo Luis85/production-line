@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { realpath } from 'node:fs/promises';
-import { devNull } from 'node:os';
+import { immutableGitEnvironment } from '../infrastructure/git-environment.js';
 import { DomainError } from '../../shared/errors.js';
 import { CONTEXT_LIMITS, assertContextActive } from './resolver.js';
 import type { ContextSource, ContextFile } from './resolver.js';
@@ -15,8 +15,7 @@ export async function gitContextSource(repo: string, commit: string, signal?: Ab
     try { repository = await realpath(repo); }
     catch { assertContextActive(signal); throw new DomainError('invalid_input', 'Repository path does not exist'); }
     assertContextActive(signal);
-    const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^GIT_/i.test(name)));
-    Object.assign(env, { GIT_NO_LAZY_FETCH: '1', GIT_ALLOW_PROTOCOL: '', GIT_NO_REPLACE_OBJECTS: '1', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: devNull, GIT_TERMINAL_PROMPT: '0' });
+    const env = immutableGitEnvironment();
     const git = async (args: string[], maxBuffer = 4 * 1024 * 1024): Promise<Buffer> => {
         assertContextActive(signal);
         try {

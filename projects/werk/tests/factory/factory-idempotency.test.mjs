@@ -144,14 +144,28 @@ async function server(t, file = ':memory:', credentials = { [reference]: secret 
 }
 
 test('a lost HTTP create response replays original status/body after server restart and does not create twice', async t => {
-  const file = join(await directory(t), 'registry.sqlite'), first = await server(t, file);
+  const root = await mkdtemp(join(tmpdir(), 'werk-factory-receipts-')), file = join(root, 'registry.sqlite');
+  const instances = [];
+  // Test after-hooks run in registration order. Own both listeners and the directory
+  // together: Windows cannot remove SQLite while a restarted registry remains open.
+  t.after(async () => {
+    const outcomes = await Promise.allSettled(instances.map(instance => instance.close()));
+    const failures = outcomes.filter(outcome => outcome.status === 'rejected').map(outcome => outcome.reason);
+    if (failures.length) throw new AggregateError(failures, 'Factory fixture shutdown failed; state was retained');
+    for (const instance of instances) {
+      assert.equal(instance.server.listening, false);
+      assert.equal(instance.registry.db.isOpen, false, 'registry must close before directory removal');
+    }
+    await rm(root, { recursive: true, force: true });
+  });
+  const first = await server(t, file); instances.push(first);
   let drop = true;
   first.server.prependListener('request', (_request, response) => {
     if (drop) { drop = false; response.end = function () { this.destroy(); return this; }; }
   });
   await assert.rejects(first.call('/v1/factories', 'POST', { name: 'Lost response' }, 'lost-response'));
   const committed = JSON.parse(JSON.stringify(first.application.factories().factories[0])); assert.ok(committed?.id); await first.close();
-  const restarted = await server(t, file);
+  const restarted = await server(t, file); instances.push(restarted);
   assert.deepEqual(await restarted.call('/v1/factories', 'POST', { name: 'Lost response' }, 'lost-response'), { status: 201, body: committed });
   assert.equal(restarted.application.factories().factories.length, 1);
   assert.equal((await restarted.call('/v1/factories', 'POST', { name: 'Different' }, 'lost-response')).status, 409);

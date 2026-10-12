@@ -59,8 +59,11 @@ test('report retry is bounded and never retries permanent lease errors',async()=
   await assert.rejects(reportWithRetry(async()=>{calls++;throw new ApiError(503,'offline at shutdown');},stopped.signal),/offline at shutdown/);assert.equal(calls,1);
 });
 
-test('worker renews leases throughout slow terminal upload and replays completion without execution', {timeout:12000}, async()=>{
+test('worker renews leases throughout slow terminal upload and replays completion without execution', {timeout:12000}, async t=>{
   const dir=await mkdtemp(join(tmpdir(),'werk-renew-'));const stop=new AbortController();
+  const cancel=()=>stop.abort();
+  t.signal.addEventListener('abort',cancel,{once:true});
+  t.after(()=>{t.signal.removeEventListener('abort',cancel);stop.abort();});
   let claimed=false,finished=false,completeCalls=0,heartbeatsDuringUpload=0,uploading=false,beforeCount=0;
   let assigned={...task,expiresAt:Date.now()+450};
   const uploads=new Map();
@@ -113,25 +116,41 @@ test('failed worker startup removes its process lock and writes a stopped state'
 });
 
 
-test('completion cannot conceal an outstanding orchestrator polling failure', {timeout:10000},async()=>{
+test('completion cannot conceal an outstanding orchestrator polling failure', {timeout:10000},async t=>{
   const dir=await mkdtemp(join(tmpdir(),'werk-state-')),stop=new AbortController();
-  let release;const execution=new Promise(resolve=>{release=resolve;});let claimed=false,completed=false;
+  let release;const execution=new Promise(resolve=>{release=resolve;});let claimed=false,completed=false,adapterStarted=false;
+  const cancel=()=>{release();stop.abort();};
+  t.signal.addEventListener('abort',cancel,{once:true});
+  t.after(()=>{t.signal.removeEventListener('abort',cancel);cancel();});
   const assigned={...task,expiresAt:Date.now()+60000};
   const client={
-    async currentAssignments(){if(claimed)throw Error('Polling unavailable');return [];},
+    // Fail polling only after execution actually starts, so a startup failure cannot masquerade as the outage under test.
+    async currentAssignments(){if(adapterStarted)throw Error('Polling unavailable');return [];},
     async claim(){if(claimed)return null;claimed=true;return assigned;},
     async heartbeat(){return assigned;},async publishSnapshot(){},async abandon(){},async complete(){completed=true;}
   };
   const gateway={async register(){return {id:task.workerId,project:task.project,token:'test-identity'};},connect(){return client;}};
-  const adapter={mode:'mock',async run(){await execution;return {kind:'simulated',summary:'done'};}};
-  let running;
+  const adapter={mode:'mock',async run(){adapterStarted=true;await execution;return {kind:'simulated',summary:'done'};}};
+  let running,runtimeError;
   const readState=async()=>{try{return JSON.parse(await readFile(join(dir,'status.json'),'utf8'));}catch{return null;}};
-  const wait=async predicate=>{const until=Date.now()+5000;while(Date.now()<until){if(await predicate())return;await delay(20);}throw Error('State transition timed out');};
+  const wait=async(label,predicate)=>{
+    const until=Date.now()+5000;
+    while(Date.now()<until){
+      if(runtimeError)throw runtimeError;
+      const state=await readState();
+      if(state?.lastError && state.lastError!=='Polling unavailable')throw Error(`${label}: ${state.lastError}`);
+      if(predicate(state))return;
+      t.signal.throwIfAborted();await delay(20);
+    }
+    throw Error(`State transition timed out: ${label}`);
+  };
   try{
     const c=await configuration({'poll-ms':'100'});
     running=runWorker({...c,stateDir:dir,url:'http://injected.invalid',enrollmentToken:'',statusHost:'127.0.0.1',statusPort:0},stop.signal,{gateway,adapter});
-    await wait(async()=> (await readState())?.state==='disconnected');release();
-    await wait(async()=>completed&&(await readState())?.activeTasks.length===0);
+    running.catch(error=>{runtimeError=error;});
+    await wait('adapter entered',()=>adapterStarted);
+    await wait('polling disconnected',state=>state?.state==='disconnected');release();
+    await wait('completion acknowledged and drained',state=>completed&&state?.activeTasks.length===0);
     assert.equal((await readState()).state,'disconnected');
-  }finally{release();stop.abort();await running;await rm(dir,{recursive:true,force:true});}
+  }finally{cancel();try{await running;}finally{await rm(dir,{recursive:true,force:true});}}
 });

@@ -111,7 +111,13 @@
       "Checksums establish integrity, not backup authenticity",
       "This local test does not qualify VM failover or recovery-time objectives",
       "External Git repositories and provider account credentials are outside runtime-state backups"
-    ]
+    ],
+    "sqliteStartupContention": {
+      "result": "passed",
+      "regressions": 2,
+      "before": "Both constructors failed deterministically under an existing database lock before WAL setup",
+      "after": "Both wait for the lock, preserve data and complete migrations; busy timeout remains bounded to five seconds"
+    }
   },
   "onboarding": {
     "focusedTests": {
@@ -250,8 +256,8 @@
   },
   "sourceValidation": {
     "typecheck": "passed",
-    "tests": 454,
-    "passed": 454,
+    "tests": 458,
+    "passed": 458,
     "failed": 0,
     "skipped": 0,
     "dependencyVulnerabilities": 0,

@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { devNull } from 'node:os';
+import { immutableGitEnvironment } from '../infrastructure/git-environment.js';
 import { gitContextSource } from '../context/git-source.js';
 import { vaultRoot } from '../context/resolver.js';
 import { identifier } from '../../shared/contracts.js';
@@ -15,8 +15,7 @@ import type { IterationSource, IterationTaskGateway } from './iteration.js';
 const exec = promisify(execFile);
 
 async function gitSource(repo: string, branch: string): Promise<IterationSource> {
-  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^GIT_/i.test(name)));
-  Object.assign(env, { GIT_NO_LAZY_FETCH: '1', GIT_ALLOW_PROTOCOL: '', GIT_NO_REPLACE_OBJECTS: '1', GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: devNull, GIT_TERMINAL_PROMPT: '0' });
+  const env = immutableGitEnvironment();
   const git = async (...args: string[]) => {
     try { return (await exec('git', ['--no-replace-objects', '--no-optional-locks', '-C', repo, '-c', 'core.fsmonitor=false', ...args], { env, maxBuffer: 4 * 1024 * 1024, timeout: 10000, killSignal: 'SIGKILL' })).stdout; }
     catch {

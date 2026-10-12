@@ -33,6 +33,13 @@ external repository require separate provisioning and backup.
 
 ## SQLite and operational limits
 
+CI exposed a startup contention race: both database constructors configured the
+busy timeout after WAL negotiation. They now install the bounded five-second
+timeout first. Two deterministic process-contention regressions failed before
+the fix and pass afterward, preserving existing data and completing migrations.
+A separate Windows test cleanup now closes every database before deleting its
+directory. These fixes do not expand the supported deployment topology.
+
 SQLite remains an intentional single-writer local backing store, with durable
 worker journals. The recovery work addresses consistent stopped-state backup
 and restoration; it does not add a distributed database, multiple orchestrator
@@ -48,7 +55,7 @@ qualification uses a private test CA, not a public production certificate.
 
 ## Validation record
 
-**Local source gate:** TypeScript and all 454 tests passed on Linux Node 24.19.0;
+**Local source gate:** TypeScript and all 458 tests passed on Linux Node 24.19.0;
 dependency audit found zero vulnerabilities. Exact extracted native single-line,
 whole-system and role/rotation smoke checks passed. Generated workflow drift and
 strict vault checks passed. Exact extracted Docker single-line and whole-system
@@ -63,7 +70,11 @@ No release was published. ARM64 VM and Windows/macOS Docker remain unqualified.
 The first source CI pass exposed missing guide assets in individual-service
 Docker builds and a macOS symlink-path entrypoint bug in development launchers.
 Follow-up changes add the required build input and canonical entrypoint detection;
-exact-head source CI status is recorded on [PR 1](https://github.com/Luis85/production-line/pull/1).
+Windows follow-ups use Git's portable null configuration path, native host-path
+assertions, platform-appropriate permission checks and launcher coverage, and
+explicit worker cancellation and execution barriers in asynchronous fixtures.
+Duplicate branch and PR check runs are avoided by limiting push checks to main.
+Exact-head source CI status is recorded on [PR 1](https://github.com/Luis85/production-line/pull/1).
 
 The [sanitized evidence manifest](../evidence/six-improvements.json) records
 executed browser, recovery, security and monitoring checks and explicit pending
