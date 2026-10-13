@@ -42,6 +42,7 @@ export interface WorkerConfig {
     chatExecutable?: string;
 }
 export interface WorkerDependencies {
+    ready?: (address: { port: number; address: string }) => Promise<void>;
     gateway?: WorkerGateway;
     adapter?: Adapter;
     now?: () => number;
@@ -99,6 +100,8 @@ export async function runWorker(config: WorkerConfig, stop: AbortSignal, depende
         console.error(JSON.stringify({ event: 'status_listening', address: status.address(), mode: adapter.mode, maxParallel: config.policy.maxParallel }));
         try { state.machineId = (await readBoundedFile(join(config.stateDir, 'machine-id'), 128)).trim(); }
         catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; state.machineId = randomUUID(); await atomicWrite(join(config.stateDir, 'machine-id'), state.machineId); }
+        const bound = status.address();
+        if (bound && typeof bound !== 'string') await dependencies.ready?.(bound);
         localTimer = setInterval(() => { workspace.executor.wake(); void workspace.board.tick().catch(() => { serviceEvent('worker', 'state_write_error', 'error'); }); }, 250);
         let session: { url: string; identity: import('./application/ports.js').WorkerIdentity; client: import('./application/ports.js').WorkerClient } | undefined;
         let requestId = randomUUID();

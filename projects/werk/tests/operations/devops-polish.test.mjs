@@ -60,7 +60,7 @@ test('clean standalone build removes stale output and compiles nested shared mod
     await cp(new URL('../../src/shared/ui',import.meta.url),join(root,'src/shared/ui'),{recursive:true});
     await cp(new URL('../../src/worker/webview',import.meta.url),join(root,'src/worker/webview'),{recursive:true,filter:path=>!path.includes('.nuxt-ui')});
     await symlink(fileURLToPath(new URL('../../node_modules',import.meta.url)),join(root,'node_modules'),process.platform==='win32'?'junction':'dir');
-    await exec(process.execPath,[join(root,'scripts/build.mjs'),'worker']);
+    await exec(process.execPath,[join(root,'scripts/build.mjs'),'worker','--dist-only']);
     await assert.rejects(access(join(root,'src/worker/dist/stale.js')));
     const target=join(root,'relocated');await cp(join(root,'src/worker/dist'),target,{recursive:true});
     await rm(join(root,'src'),{recursive:true});

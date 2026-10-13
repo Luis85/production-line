@@ -34,6 +34,22 @@ Alternatively, download a versioned `werk-<version>.zip` or `.tar.gz` asset and 
 
 The runtime archive contains prebuilt applications. It does not require npm installation or a compiler. Choose one runtime for each state directory; do not start native and Docker processes against the same database.
 
+## Add standalone apps to any project
+
+Copy `bin/apps/worker`, `bin/apps/orchestrator` or `bin/apps/factory` from a runtime
+release into your project's `bin/apps/`. Each folder runs independently with Node 24,
+its own webview and an automation CLI. No npm installation is needed.
+
+```sh
+node bin/apps/worker/cli.mjs start --state-dir .werk/worker-a --port 4100
+node bin/apps/worker/cli.mjs schema
+```
+
+Use `run` for foreground operation and `status`/`stop` for lifecycle management.
+The [portable apps reference](docs/reference/portable-apps.md) covers AI-agent task
+submission, multiple workers, Factory intake, routing and copying/upgrading apps.
+Source contributors generate these folders with `npm run build`.
+
 ## A complete system from one YAML file
 
 The supplied [system definition](examples/system.yaml) declares a Factory, one

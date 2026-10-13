@@ -39,6 +39,8 @@ follows [Diátaxis](https://diataxis.fr/).
 
 ## Reference — look up a contract
 
+- [Portable Node apps and automation CLI](reference/portable-apps.md): copy one app into any project.
+
 - [Infrastructure renderer](reference/infrastructure.md)
 
 - [System YAML definition](reference/system-definition.md): topology, IDs, ports,

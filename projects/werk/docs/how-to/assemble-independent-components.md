@@ -13,6 +13,9 @@ without host Node. No npm install or source checkout is required. The examples
 use one machine,
 loopback addresses, separate state directories and distinct ports.
 
+For individually copyable app folders and background lifecycle commands, use the
+[portable Node apps](../reference/portable-apps.md) interface.
+
 ## Start a worker
 
 ```sh

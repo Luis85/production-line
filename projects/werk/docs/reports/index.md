@@ -8,6 +8,7 @@ separately under `docs/handoff`; original source provenance is recorded in the
 
 | Record | Scope |
 | --- | --- |
+| [Portable Node apps](portable-apps-validation.md) | Copyable apps, automation CLI, task sessions, independent lifecycle and later composition |
 | [Worker task sessions and independent systems](worker-system-review.md) | Serial execution, persistent sessions, composable routing, dashboards, reviews and a 34-capture storyboard |
 | [Spatial visualization polish](spatial-polish-review.md) | Correct 3D projection, distinct models, label placement and desktop/mobile confirmation |
 | [Visual system experience](visual-system-review.md) | Live 3D/2D maps, focused editors, navigation, screenshots and browser review |

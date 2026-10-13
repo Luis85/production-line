@@ -3,8 +3,11 @@ import { readdir, readFile, writeFile, mkdir, cp, chmod, rm, rename } from 'node
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 const root = fileURLToPath(new URL('../', import.meta.url));
-const args = process.argv.slice(2);
-if (args.length > 1 || (args[0] && !['factory', 'orchestrator', 'worker'].includes(args[0]))) throw Error('Usage: node scripts/build.mjs [factory|orchestrator|worker]');
+const rawArgs = process.argv.slice(2);
+const distOnly = rawArgs.includes('--dist-only');
+const args = rawArgs.filter(value => value !== '--dist-only');
+if (rawArgs.filter(value => value === '--dist-only').length > 1) throw Error('Duplicate --dist-only');
+if (args.length > 1 || (args[0] && !['factory', 'orchestrator', 'worker'].includes(args[0]))) throw Error('Usage: node scripts/build.mjs [factory|orchestrator|worker] [--dist-only]');
 const apps = args.length ? args : ['factory', 'orchestrator', 'worker'];
 const packageInfo = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
 async function compile(source, destination) {
@@ -59,5 +62,6 @@ for (const app of apps) {
     await rm(dest, { recursive: true, force: true });
     await rename(staging, dest);
     console.log(`Built independent application: src/${app}/dist`);
+    if (!distOnly) { const { packageApp } = await import('./release/apps.mjs'); await packageApp(root, app); }
   } finally { await rm(staging, { recursive: true, force: true }); }
 }

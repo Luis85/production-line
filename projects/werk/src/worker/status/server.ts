@@ -35,6 +35,7 @@ export async function statusServer(get: () => Status, host: string, port: number
       workspace.authenticate(bearerToken(req));
       const origin = req.headers.origin;
       if (origin && origin !== `http://${req.headers.host}` && origin !== `https://${req.headers.host}`) throw new ApiError(403, 'Use the worker webview from its own address.');
+      if (req.method === 'POST' && req.url === '/api/tasks') return json(res, 200, await workspace.task(await readJson(req)));
       if (req.method === 'GET' && req.url === '/api/settings') return json(res, 200, workspace.settings.publicView());
       if (req.method === 'POST' && req.url === '/api/settings') return json(res, 200, await workspace.updateSettings(await readJson(req)));
       if (req.method === 'GET' && req.url === '/api/sessions') return json(res, 200, workspace.sessions.view());

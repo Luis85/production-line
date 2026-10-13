@@ -2,8 +2,8 @@ import { WorkerSettings } from '../infrastructure/settings.js';
 import { WorkerSessions } from '../application/sessions.js';
 import { LocalTaskboard } from '../application/local-tasks.js';
 import { TaskIndex } from '../infrastructure/task-index.js';
-import type { Task } from '../../shared/contracts.js';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { object, text, identifier, type Task } from '../../shared/contracts.js';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { join, resolve, isAbsolute } from 'node:path';
 import { opendir, statfs } from 'node:fs/promises';
 import { availableParallelism, freemem, totalmem, hostname, release, loadavg } from 'node:os';
@@ -27,6 +27,37 @@ export class WorkerWorkspace {
   async startChat(message: unknown) {
     if (this.sessions.chatActive + this.board.active >= this.settings.value.board.queueCapacity) throw new DomainError('conflict', 'Worker task queue is full.');
     return this.sessions.start(message);
+  }
+  private taskRequests = Promise.resolve();
+  private acceptingTasks = true;
+  /** Address sessions directly; automation never changes the browser's selected task. */
+  async task(input: unknown) {
+    const operation = this.taskRequests.catch(() => {}).then(async () => {
+      if (!this.acceptingTasks) throw new DomainError('unavailable', 'Worker is stopping.');
+      const body = object(input, 'Task command', ['action', 'id', 'title', 'provider', 'message']);
+      if (!['create', 'get', 'send', 'cancel'].includes(String(body.action))) throw new DomainError('invalid_input', 'Task action: create|get|send|cancel');
+      const id = body.action === 'create' && body.id === undefined ? randomUUID() : identifier(body.id, 'id');
+      if (body.action === 'get') return this.sessions.detail(id);
+      if (body.action === 'cancel') return this.sessions.cancelTask(id);
+      const message = text(body.message, 'message', 8000);
+      if (body.action === 'create') {
+        const title = text(body.title, 'title', 120), provider = this.settings.provider(String(body.provider));
+        const submissionHash = createHash('sha256').update(JSON.stringify({ title, provider: provider.id, message })).digest('hex');
+        const existing = this.sessions.view().records.find(item => item.id === id);
+        if (existing) {
+          const detail = this.sessions.detail(id);
+          if (existing.kind !== 'chat' || existing.submissionHash !== submissionHash) throw new DomainError('conflict', 'Task id already belongs to different input.');
+          if (detail.chat.messages.length > 0) return detail;
+        }
+        if (this.sessions.chatActive + this.board.active >= this.settings.value.board.queueCapacity) throw new DomainError('conflict', 'Worker task queue is full.');
+        await this.sessions.ensureTask(id, 'chat', title, provider.id, submissionHash);
+      }
+      if (this.sessions.chatActive + this.board.active >= this.settings.value.board.queueCapacity) throw new DomainError('conflict', 'Worker task queue is full.');
+      await this.sessions.start(message, id);
+      return this.sessions.detail(id);
+    });
+    this.taskRequests = operation.then(() => {}, () => {});
+    return operation;
   }
   private token = '';
   private historyCache?: { at: number; value: Awaited<ReturnType<WorkerWorkspace['readHistory']>> };
@@ -57,7 +88,7 @@ export class WorkerWorkspace {
     }
     const result = await this.settings.update(body); if (input?.provider) await this.sessions.reloadProviders(); return result;
   }
-  async close() { await this.board.close(); await this.sessions.close(); }
+  async close() { this.acceptingTasks = false; await this.taskRequests; await this.board.close(); await this.sessions.close(); }
   async rememberTask(task: Task) { await this.taskIndex.remember(task); await this.sessions.ensureTask('remote-' + task.id, 'orchestrator', task.title, task.provider === 'claude' ? 'claude-cli' : 'codex-cli'); this.historyCache = undefined; }
   authenticate(token: string) { const supplied = Buffer.from(token); if (supplied.length !== 64 || !timingSafeEqual(supplied, Buffer.from(this.token))) throw new DomainError('unauthorized', 'Worker access token is incorrect.'); }
   async environment() {

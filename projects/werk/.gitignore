@@ -8,6 +8,7 @@ backups/
 .env.*
 
 /release/
+/bin/apps/
 /.werk/
 /.werk-system/
 

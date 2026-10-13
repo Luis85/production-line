@@ -51,9 +51,9 @@ export class LocalTaskboard {
   }
   async create(input: unknown) {
     if (this.closed) throw new DomainError('unavailable', 'Worker is stopping');
-    const body = object(input, 'Local task', ['title', 'instruction', 'repository', 'paths', 'priority']);
+    const body = object(input, 'Local task', ['title', 'instruction', 'repository', 'paths', 'priority', 'provider']);
     const title = text(body.title, 'Title', 200), instruction = text(body.instruction, 'Instruction', 8000);
-    const provider = this.settings.provider(this.sessions.current.provider);
+    const provider = this.settings.provider(body.provider === undefined ? this.sessions.current.provider : String(body.provider));
     if (!this.model(provider, this.directory)) throw new DomainError('invalid_input', 'Configure this session’s provider before running a task.');
     const config = codexConfiguration({ executable: resolve('provider'), repository: body.repository, allowedPaths: body.paths });
     const repository = await realpath(config.repository), files: TaskFile[] = [];

@@ -4,7 +4,7 @@ import { unlink, readdir } from 'node:fs/promises';
 import { assertNode, privateDirectory, readPrivate, createPrivate, inputError } from './config.mjs';
 
 /** Start exactly one independent service. State and credentials survive every restart. */
-export async function runComponent(kind, argv) {
+export async function runComponent(kind, argv, lifecycle = {}) {
   assertNode();
   const options = {};
   for (let index = 0; index < argv.length; index++) {
@@ -15,7 +15,7 @@ export async function runComponent(kind, argv) {
   }
   const state = resolve(options['--state-dir'] ?? '.werk/' + kind), host = options['--host'] ?? '127.0.0.1';
   const port = Number(options['--port'] ?? (kind === 'factory' ? 3100 : 3000));
-  if (!Number.isInteger(port) || port < 1 || port > 65535) throw inputError('port: integer 1–65535');
+  if (!Number.isInteger(port) || port < 0 || port > 65535) throw inputError('port: integer 0–65535');
   await privateDirectory(state);
   const runId = randomUUID(), lock = join(state, 'runtime.lock');
   try { await createPrivate(lock, { runId, pid: process.pid, kind }); }
@@ -29,7 +29,7 @@ export async function runComponent(kind, argv) {
     try { config = await readPrivate(path); }
     catch (error) {
       if (error.code !== 'ENOENT') throw error;
-      if (entries.some(name => name !== 'runtime.lock')) throw inputError('State exists without component.json. Restore it from backup or use an empty state directory.');
+      if (entries.some(name => !['runtime.lock', 'portable.log'].includes(name))) throw inputError('State exists without component.json. Restore it from backup or use an empty state directory.');
       const project = options['--project'] ?? 'demo';
       if (!/^[A-Za-z0-9_-]{1,100}$/.test(project)) throw inputError('Invalid project identifier');
       config = { schemaVersion: 1, kind, project, adminToken: randomBytes(32).toString('hex'), enrollmentToken: randomBytes(32).toString('hex') };
@@ -44,7 +44,9 @@ export async function runComponent(kind, argv) {
       const { startFactoryServer } = await import('../../src/factory/dist/factory/server.js');
       service = await startFactoryServer({ db: join(state, 'factory.sqlite'), host, port, adminToken: config.adminToken });
     }
-    console.log(JSON.stringify({ service: kind, url: `http://${host.includes(':') ? '[' + host + ']' : host}:${port}`, stateDirectory: state, credentialsFile: path }));
+    const info = { service: kind, url: `http://${host.includes(':') ? '[' + host + ']' : host}:${service.server.address().port}`, stateDirectory: state, credentialsFile: path };
+    if (lifecycle.ready) await lifecycle.ready(info, stop);
+    else console.log(JSON.stringify(info));
     const finish = () => { void stop().catch(() => { console.error('Component shutdown failed. Inspect its state before restarting.'); process.exitCode = 1; }); };
     process.once('SIGINT', finish); process.once('SIGTERM', finish);
   } catch (error) { await stop(); throw error; }

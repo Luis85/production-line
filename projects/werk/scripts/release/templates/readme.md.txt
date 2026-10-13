@@ -16,6 +16,13 @@ This creates or preserves private configuration, starts the Factory and both sim
 
 For automatic download and startup from GitHub, installer options and release verification, see the [release reference](docs/reference/releases.md).
 
+## Portable apps for another project
+
+Copy any complete `bin/apps/factory`, `bin/apps/orchestrator` or `bin/apps/worker`
+folder into your project. Each provides a Node 24 webview and JSON automation CLI.
+Start with `node bin/apps/worker/cli.mjs start`, then inspect `schema` for task and
+management commands. See [portable apps](docs/reference/portable-apps.md).
+
 ## A complete system from one YAML file
 
 The supplied [system definition](examples/system.yaml) declares a Factory, one

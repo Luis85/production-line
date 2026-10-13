@@ -1,5 +1,7 @@
 # Werk runtime documentation
 
+- [Portable Node apps and automation](reference/portable-apps.md)
+
 The release documentation follows [Diátaxis](https://diataxis.fr/): tutorials teach
 one complete flow, how-to guides solve operating tasks, reference describes exact
 contracts, and explanations describe the system and its limits.

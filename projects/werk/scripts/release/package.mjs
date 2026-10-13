@@ -8,8 +8,8 @@ import { createArchives } from './archives.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 export const releaseFiles = ['werk.mjs', 'werk-docker.sh', 'werk-docker.ps1', 'compose.release.yaml', 'compose.windows.yaml', 'Dockerfile.release', 'Dockerfile.release.dockerignore', 'examples/system.yaml', 'schemas/system.schema.json', 'scripts/release/verify.mjs', 'src/guide/public/index.html', 'LICENSE'];
-export const releaseTrees = ['scripts/security', 'scripts/infrastructure', 'scripts/system', 'scripts/runtime', 'scripts/docker', 'src/factory/dist', 'src/orchestrator/dist', 'src/worker/dist'];
-export const releaseDocs = ['how-to/assemble-independent-components', 'how-to/use-worker-webview', 'how-to/run-codex-task', 'how-to/manage-access', 'reference/access-control', 'tutorials/linux-vm-first-task', 'how-to/operate-linux-vm', 'reference/infrastructure', 'explanation/twelve-factor', 'tutorials/system-from-yaml', 'reference/system-definition', 'explanation/core-entities', 'tutorials/local-first-task', 'tutorials/docker-first-task', 'how-to/maintain-runtime', 'how-to/monitor-runtime', 'how-to/upgrade-backup', 'how-to/operate-with-agents', 'reference/runtime-cli', 'reference/observability', 'reference/configuration', 'reference/releases', 'reference/security', 'explanation/runtime-layout', 'explanation/modes'].map(path => `docs/${path}.md`);
+export const releaseTrees = ['bin/apps/factory', 'bin/apps/orchestrator', 'bin/apps/worker', 'scripts/security', 'scripts/infrastructure', 'scripts/system', 'scripts/runtime', 'scripts/docker', 'src/factory/dist', 'src/orchestrator/dist', 'src/worker/dist'];
+export const releaseDocs = ['reference/portable-apps', 'how-to/assemble-independent-components', 'how-to/use-worker-webview', 'how-to/run-codex-task', 'how-to/manage-access', 'reference/access-control', 'tutorials/linux-vm-first-task', 'how-to/operate-linux-vm', 'reference/infrastructure', 'explanation/twelve-factor', 'tutorials/system-from-yaml', 'reference/system-definition', 'explanation/core-entities', 'tutorials/local-first-task', 'tutorials/docker-first-task', 'how-to/maintain-runtime', 'how-to/monitor-runtime', 'how-to/upgrade-backup', 'how-to/operate-with-agents', 'reference/runtime-cli', 'reference/observability', 'reference/configuration', 'reference/releases', 'reference/security', 'explanation/runtime-layout', 'explanation/modes'].map(path => `docs/${path}.md`);
 const releaseTemplates = { 'readme.md.txt': 'README.md', 'agents.md.txt': 'AGENTS.md', 'docs-index.md.txt': 'docs/index.md' };
 const extensions = new Set(['.js', '.mjs', '.cjs', '.json', '.md', '.html', '.css', '.svg', '.png', '.jpg', '.jpeg', '.webp', '.yaml', '.yml', '.sh', '.ps1', '.py', '.txt']);
 const excluded = new Set(['.git', '.state', '.werk', '.env', '.DS_Store', 'backups', 'release']);
@@ -37,13 +37,14 @@ async function collect(projectRoot) {
     totalBytes += stat.size;
     if (totalBytes > 256 * 1024 * 1024 || entries.length >= 10000) throw Error('Release exceeds packaging limits (256 MiB / 10,000 files)');
     const content = await readFile(full);
-    entries.push({ path, content, mode: name.endsWith('.sh') || path === 'werk.mjs' || /\/cli\.js$/.test(path) ? 0o755 : 0o644 });
+    entries.push({ path, content, mode: name.endsWith('.sh') || path === 'werk.mjs' || /\/cli\.m?js$/.test(path) ? 0o755 : 0o644 });
   }
   for (const path of releaseFiles) await visit(path, true);
   for (const path of releaseTrees) await visit(path);
   for (const app of ['factory', 'orchestrator', 'worker']) {
     const cli = `src/${app}/dist/${app}/cli.js`;
     if (!entries.some(entry => entry.path === cli)) throw Error(`Missing built application ${cli}; run npm run build first`);
+    if (!entries.some(entry => entry.path === `bin/apps/${app}/cli.mjs`)) throw Error(`Missing portable application ${app}; run npm run build first`);
   }
   for (const path of releaseDocs) await visit(path, true);
   for (const [template, path] of Object.entries(releaseTemplates)) {
@@ -59,7 +60,7 @@ async function collect(projectRoot) {
   if (totalBytes > 256 * 1024 * 1024) throw Error('Release exceeds packaging limits (256 MiB)');
   standaloneGuide.content = builtGuide.content;
   const paths = new Set(entries.map(entry => entry.path));
-  for (const entry of entries.filter(entry => entry.path.endsWith('.md') && !entry.path.startsWith('src/'))) {
+  for (const entry of entries.filter(entry => entry.path.endsWith('.md') && !entry.path.startsWith('src/') && !/^bin\/apps\/[^/]+\/src\//.test(entry.path))) {
     for (const match of entry.content.toString('utf8').matchAll(/!?\[[^\]]+\]\(([^\s)]+)(?:\s+"[^"]*")?\)/g)) {
       const target = match[1];
       if (/^(?:[a-z][a-z0-9+.-]*:|#)/i.test(target)) continue;

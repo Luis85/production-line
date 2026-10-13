@@ -1,0 +1,23 @@
+import { cp, mkdir, readFile, writeFile, chmod, rm, rename } from 'node:fs/promises';
+import { join } from 'node:path';
+
+/** Each folder includes exactly one compiled application and its operator runtime. */
+export async function packageApp(root, kind) {
+  const destination = join(root, 'bin/apps', kind), staging = join(root, 'bin/apps', `.build-${kind}-${process.pid}`);
+  await mkdir(staging, { recursive: true });
+  try {
+    await cp(join(root, 'src', kind, 'dist'), join(staging, 'src', kind, 'dist'), { recursive: true });
+    await mkdir(join(staging, 'scripts/runtime'), { recursive: true });
+    for (const file of ['config.mjs', 'execution.mjs', 'component.mjs', 'control.mjs']) await cp(join(root, 'scripts/runtime', file), join(staging, 'scripts/runtime', file));
+    await cp(join(root, 'scripts/runtime/portable'), join(staging, 'scripts/runtime/portable'), { recursive: true });
+    const info = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+    await writeFile(join(staging, 'package.json'), JSON.stringify({ name: `@werk/${kind}-portable`, version: info.version, private: true, type: 'module', engines: info.engines, bin: { [`werk-${kind}`]: 'cli.mjs' } }, null, 2) + '\n');
+    await writeFile(join(staging, 'cli.mjs'), `#!/usr/bin/env node\nimport { main } from './scripts/runtime/portable/cli.mjs';\nawait main('${kind}');\n`);
+    await chmod(join(staging, 'cli.mjs'), 0o755);
+    await cp(join(root, 'LICENSE'), join(staging, 'LICENSE'));
+    await cp(join(root, 'docs/reference/portable-apps.md'), join(staging, 'README.md'));
+    await rm(destination, { recursive: true, force: true });
+    await rename(staging, destination);
+    console.log(`Built portable application: bin/apps/${kind}`);
+  } finally { await rm(staging, { recursive: true, force: true }); }
+}

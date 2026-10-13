@@ -22,6 +22,7 @@ async function fixture(t) {
   for (const path of releaseTrees) await mkdir(join(root,path),{recursive:true});
   for (const path of releaseDocs) await put(path);
   for (const app of ['factory','orchestrator','worker']) await put(`src/${app}/dist/${app}/cli.js`, `console.log('${app}');\n`);
+  for (const app of ['factory','orchestrator','worker']) await put(`bin/apps/${app}/cli.mjs`, `console.log('${app}');\n`);
   for (const template of ['readme.md.txt','agents.md.txt','docs-index.md.txt']) await put(`scripts/release/templates/${template}`);
   await put('src/factory/dist/factory/public/guide.html','<!doctype html><title>Composed spatial guide</title>');
   return {root, put};
@@ -30,6 +31,7 @@ test('packages both formats with identical verified payload, normalized modes, c
   const {root,put}=await fixture(t);
   for(const path of ['.env','.werk/credentials.json','.state/db.sqlite','node_modules/dev/index.js','software-fabrik-starter.zip','src/orchestrator/secret.ts','scripts/runtime/.env.local','src/worker/dist/.state/private.json']) await put(path,'SECRET_NEVER_SHIP');
   await put('src/orchestrator/dist/node_modules/yaml/index.js','export default {};');
+  await put('bin/apps/orchestrator/src/orchestrator/dist/node_modules/yaml/README.md','[Upstream contributor guide](docs/CONTRIBUTING.md)');
   const result=await packageRelease(root);
   assert.equal(result.sourceCommit,null);
   const installer = await readFile(join(root, 'release/install.mjs'), 'utf8');

@@ -40,7 +40,7 @@ test('factory distribution builds independently and includes its webview without
     await mkdir(join(root,'src/guide/public'),{recursive:true});await writeFile(join(root,'src/guide/public/index.html'),'<!doctype html><html><head></head><body><h1>System guide</h1></body></html>');
     await cp(new URL('../../src/shared/ui',import.meta.url),join(root,'src/shared/ui'),{recursive:true});
     for(const app of ['factory','guide'])await cp(new URL('../../src/'+app+'/public/experience.js',import.meta.url),join(root,'src/'+app+'/public/experience.js'));
-    await exec(process.execPath,[join(root,'scripts/build.mjs'),'factory']);
+    await exec(process.execPath,[join(root,'scripts/build.mjs'),'factory','--dist-only']);
     const dest=join(root,'src/factory/dist');const manifest=JSON.parse(await readFile(join(dest,'package.json'),'utf8'));assert.equal(manifest.bin['werk-factory'],'factory/cli.js');
     assert.match(await readFile(join(dest,'factory/public/index.html'),'utf8'),/Factory/);
     assert.match(await readFile(join(dest,'factory/public/guide.html'),'utf8'),/System guide/);

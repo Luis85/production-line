@@ -9,7 +9,7 @@ COPY scripts/build.mjs scripts/build.mjs
 COPY src/shared src/shared
 COPY src/orchestrator src/orchestrator
 COPY src/guide src/guide
-RUN node scripts/build.mjs orchestrator
+RUN node scripts/build.mjs orchestrator --dist-only
 
 FROM node:24-bookworm-slim
 ENV NODE_ENV=production

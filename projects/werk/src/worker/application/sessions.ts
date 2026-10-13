@@ -9,7 +9,7 @@ import { atomicWrite, ensureDirectory, readBoundedFile } from '../infrastructure
 import { modelFor, type ProviderId } from '../infrastructure/providers.js';
 import type { WorkerSettings } from '../infrastructure/settings.js';
 export type TaskState = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
-export interface SessionRecord { taskState?: TaskState; taskId: string; kind: 'chat' | 'local' | 'orchestrator'; id: string; title: string; provider: ProviderId; createdAt: string; archived: boolean; }
+export interface SessionRecord { submissionHash?: string; taskState?: TaskState; taskId: string; kind: 'chat' | 'local' | 'orchestrator'; id: string; title: string; provider: ProviderId; createdAt: string; archived: boolean; }
 /** Worker-owned transcripts are provider-independent; native CLI session IDs never cross providers. */
 export class WorkerSessions {
   private directory: string; private settings: WorkerSettings; private model: typeof modelFor;
@@ -48,21 +48,32 @@ export class WorkerSessions {
     const status = this.executor.current === record.id ? 'running' : conversation?.busy ? 'queued' : record.taskState ?? (!last ? 'draft' : last.state === 'error' ? 'failed' : last.state === 'cancelled' ? 'cancelled' : 'completed');
     return { ...record, status, busy: (conversation?.busy ?? false) || ['queued', 'running'].includes(record.taskState ?? ''), messages: conversation?.messages.length ?? 0 };
   }) }; }
-  async start(message: unknown) {
-    const record = this.current, chat = this.chat;
+  detail(id: string) {
+    const record = this.records.find(item => item.id === id);
+    if (!record) throw new DomainError('not_found', 'Task session not found');
+    return { session: this.view().records.find(item => item.id === id)!, chat: this.instances.get(id)!.snapshot() };
+  }
+  async cancelTask(id: string) {
+    const { session } = this.detail(id);
+    if (session.kind !== 'chat' && ['queued', 'running'].includes(session.taskState ?? '')) throw new DomainError('conflict', 'Use the owning taskboard or orchestrator to cancel this assignment.');
+    await this.instances.get(id)!.cancel(); return this.detail(id);
+  }
+  async start(message: unknown, id = this.selected) {
+    this.detail(id);
+    const record = this.records.find(item => item.id === id)!, chat = this.instances.get(id)!;
     if (record.kind !== 'chat' && (['queued', 'running'].includes(record.taskState ?? '') || this.executor.current === record.id)) throw new DomainError('conflict', 'Wait for this task to finish before sending a follow-up.');
     const result = await chat.start(message);
     if (record.kind !== 'chat') { delete record.taskState; await this.persist(); }
-    if (record.title === 'New task' && typeof message === 'string') { record.title = message.trim().slice(0, 120); await this.persist(); }
+    if (id === this.selected && record.title === 'New task' && typeof message === 'string') { record.title = message.trim().slice(0, 120); await this.persist(); }
     return result;
   }
-  async ensureTask(id: string, kind: SessionRecord['kind'], title: string, provider: ProviderId) {
+  async ensureTask(id: string, kind: SessionRecord['kind'], title: string, provider: ProviderId, submissionHash?: string) {
     const found = this.records.find(record => record.id === id); if (found) return found;
     if (this.changing) throw new DomainError('conflict', 'Session change in progress. Retry task preparation.');
     if (this.records.length >= 100) throw new DomainError('conflict', 'Task session limit reached (100). Delete old task history before accepting more.');
     this.changing = true;
     try {
-      const record: SessionRecord = { id: identifier(id, 'task session'), taskId: id, kind, taskState: 'queued', title: title.slice(0, 120), provider, createdAt: new Date().toISOString(), archived: false };
+      const record: SessionRecord = { ...(submissionHash ? { submissionHash } : {}), id: identifier(id, 'task session'), taskId: id, kind, ...(kind === 'chat' ? {} : { taskState: 'queued' as const }), title: title.slice(0, 120), provider, createdAt: new Date().toISOString(), archived: false };
       await this.load(record); this.records.push(record);
       try { await this.persist(); } catch (error) { this.records = this.records.filter(item => item.id !== id); this.instances.delete(id); throw error; }
       return record;
