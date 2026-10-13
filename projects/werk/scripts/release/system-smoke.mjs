@@ -51,7 +51,10 @@ async function command(args, code = 0) {
 async function eventually(probe, label, timeout = 60000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
-    if (launcher && launcher.child.exitCode !== null) throw Error('System exited before ' + label);
+    if (launcher && launcher.child.exitCode !== null) {
+      const result = await launcher.completion;
+      throw Error(`System exited before ${label} (exit ${result.code}): ${result.stdout.trim()}`);
+    }
     try { const result = await probe(); if (result) return result; } catch { /* Retry bounded local readiness. */ }
     await new Promise(ok => setTimeout(ok, 150));
   }

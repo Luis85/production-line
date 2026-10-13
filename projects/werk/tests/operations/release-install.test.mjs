@@ -68,3 +68,12 @@ test('an archive rooted at another version fails before publishing the installat
   await assert.rejects(install(wrong, { directory }, { ...transport, fetcher: () => transport.fetcher('https://github.com/example/werk/releases/download/v0.1.0/werk-0.1.0.tar.gz') }), /Unsafe release archive paths/);
   assert.deepEqual(await readdir(directory), []);
 });
+
+// GNU tar interprets a colon in an absolute archive filename as remote syntax.
+// A colon-bearing parent reproduces Windows drive handling on Unix as well.
+test('installer handles archive parents containing colon syntax', { skip: process.platform === 'win32' }, async t => {
+  const { directory, config, transport } = await fixture(t);
+  const parent = join(directory, 'D: release files');
+  const root = await install(config, { directory: parent }, transport);
+  assert.match(await readFile(join(root, 'werk.mjs'), 'utf8'), /fixture/);
+});

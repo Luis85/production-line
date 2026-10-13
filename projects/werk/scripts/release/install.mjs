@@ -63,11 +63,13 @@ export async function install(config, options, { fetcher = fetch, log = console.
     if (createHash('sha256').update(bytes).digest('hex') !== config.sha256) throw Error('Release checksum mismatch. Nothing was installed or started.');
     const archivePath = join(staging, archive);
     await writeFile(archivePath, bytes, { flag: 'wx' });
+    // Use a relative archive name from its directory: GNU tar treats a Windows
+    // drive colon in an absolute filename as remote-host syntax.
     // Reject paths outside the expected root before invoking the system extractor.
-    const listing = execFileSync('tar', ['-tzf', archivePath], { encoding: 'utf8', maxBuffer: 2 * 1024 * 1024, timeout: 30000 });
+    const listing = execFileSync('tar', ['-tzf', archive], { cwd: staging, encoding: 'utf8', maxBuffer: 2 * 1024 * 1024, timeout: 30000 });
     const paths = listing.trimEnd().split(/\r?\n/);
     if (paths.length > 11000 || paths.some(path => /[:\\\x00-\x1f\x7f]/.test(path) || !path.startsWith(`${name}/`) || path.replace(/\/$/, '').split('/').some(part => !part || part === '.' || part === '..'))) throw Error('Unsafe release archive paths');
-    execFileSync('tar', ['-xzf', archivePath, '-C', staging], { stdio: 'pipe', timeout: 60000 });
+    execFileSync('tar', ['-xzf', archive], { cwd: staging, stdio: 'pipe', timeout: 60000 });
     const extracted = join(staging, name);
     const manifest = JSON.parse(await readFile(join(extracted, 'release-manifest.json'), 'utf8'));
     if (manifest.version !== config.version) throw Error('Release manifest version mismatch');
