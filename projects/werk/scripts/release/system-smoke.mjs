@@ -30,7 +30,7 @@ async function portRange(count = 1) {
   throw Error('Could not allocate smoke ports');
 }
 function cli(command) {
-  const child = spawn(process.execPath, [join(root, 'werk.mjs'), 'system', ...command, '--state-dir', state, '--json'], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+  const child = spawn(process.execPath, [join(root, 'werk.mjs'), ...(command[0] === 'up' ? command : ['system', ...command]), '--state-dir', state, '--json'], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
   let stdout = '', stderr = '';
   child.stdout.on('data', value => { stdout += value; if (stdout.length > 1048576) child.kill(); });
   child.stderr.on('data', value => { stderr += value; if (stderr.length > 1048576) child.kill(); });

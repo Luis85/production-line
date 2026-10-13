@@ -6,7 +6,31 @@ Werk models a Factory with logical subfactories and independent production lines
 
 ## Download and start
 
-Download a versioned `werk-<version>.zip` or `.tar.gz` asset and its `SHA256SUMS` from [GitHub Releases](https://github.com/Luis85/production-line/releases). Verify the checksum and extract the archive into its own directory. Choose the runtime asset rather than GitHub's automatic source-code download. If no release asset is listed, a release has not been published yet; use the development setup below.
+Requires **Node.js 24.x**, `curl` and `tar` on PATH (the download tools are included in current Windows and macOS; install them with your Linux package manager if missing). From the directory where you want to install Werk, download the latest stable release and start it with one command:
+
+Linux/macOS (Bash):
+
+```sh
+curl -fsSL https://github.com/Luis85/production-line/releases/latest/download/install.mjs -o werk-install.mjs && node werk-install.mjs
+```
+
+Windows (PowerShell):
+
+```powershell
+curl.exe -fsSL https://github.com/Luis85/production-line/releases/latest/download/install.mjs -o werk-install.mjs; if ($LASTEXITCODE -eq 0) { node werk-install.mjs }
+```
+
+This runs the installer published by this repository. It pins the version and archive SHA-256, verifies the downloaded archive and extracted files, and installs into `werk-<version>/` in your current directory. It needs no npm, compiler, Git checkout or administrator privileges. An existing version directory is never overwritten. Until the first stable release is published, the download URL returns 404 and nothing starts.
+
+The command starts a local Factory and two **simulated** production lines, opens the Factory page when healthy, and prints the private credential file location. Keep the console open; Ctrl+C shuts the system down. To restart, open the installed version directory and run:
+
+```sh
+node werk.mjs up
+```
+
+For headless startup, append `--no-open` to either Node command. To download without starting, use `node werk-install.mjs --no-start`. Installer options and publishing instructions are in the [release reference](docs/reference/releases.md).
+
+Alternatively, download a versioned `werk-<version>.zip` or `.tar.gz` asset and its `SHA256SUMS` from [GitHub Releases](https://github.com/Luis85/production-line/releases). Verify the checksum and extract the archive into its own directory. Choose the runtime asset rather than GitHub's automatic source-code download. If no release asset is listed, a release has not been published yet; use the development setup below.
 
 The runtime archive contains prebuilt applications. It does not require npm installation or a compiler. Choose one runtime for each state directory; do not start native and Docker processes against the same database.
 

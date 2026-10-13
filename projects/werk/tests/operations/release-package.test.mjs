@@ -16,6 +16,7 @@ async function fixture(t) {
   const root = await mkdtemp(join(tmpdir(), 'werk release test '));
   t.after(() => rm(root, { recursive: true, force: true }));
   const put = async (path, content = 'fixture\n') => { await mkdir(dirname(join(root, path)), {recursive:true}); await writeFile(join(root, path), content); };
+  await put('scripts/release/install.mjs', 'export const release = /* RELEASE_CONFIG */ null;\n');
   await put('package.json', JSON.stringify({version:'0.1.0'}));
   for (const path of releaseFiles) await put(path);
   for (const path of releaseTrees) await mkdir(join(root,path),{recursive:true});
@@ -30,6 +31,9 @@ test('packages both formats with identical verified payload, normalized modes, c
   await put('src/orchestrator/dist/node_modules/yaml/index.js','export default {};');
   const result=await packageRelease(root);
   assert.equal(result.sourceCommit,null);
+  const installer = await readFile(join(root, 'release/install.mjs'), 'utf8');
+  assert.ok(installer.includes(result.artifacts.find(item => item.name.endsWith('.tar.gz')).sha256));
+  assert.ok(!installer.includes('/* RELEASE_CONFIG */ null'));
   const zipBytes=await readFile(join(root,'release/werk-0.1.0.zip'));
   const files=unzipSync(zipBytes);
   assert.ok(Object.keys(files).every(path=>path.startsWith('werk-0.1.0/')));

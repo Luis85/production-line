@@ -33,6 +33,7 @@ jobs:
         name: Verify release version and tag ancestry
         run: |
           VERSION=$(node -p "require('./package.json').version")
+          [[ "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             test "$GITHUB_REF" = "refs/tags/v$VERSION"
             git merge-base --is-ancestor "$GITHUB_SHA" origin/main
@@ -71,8 +72,10 @@ jobs:
       # Dependencies are used only by the source-side integrity/extraction harness.
       # The extracted application has no npm install step and cannot resolve them.
       - run: npm ci --ignore-scripts
-      - name: Verify and extract the exact candidate
-        run: node scripts/release/extract.mjs release "$RUNNER_TEMP/werk release"
+      - name: Verify both archives and test the standalone download installer
+        run: |
+          node scripts/release/extract.mjs release "$RUNNER_TEMP/werk archive check"
+          node scripts/release/install-smoke.mjs release "$RUNNER_TEMP/werk release"
       - name: Start, simulate a task, stop and restart the extracted native runtime
         run: node scripts/release/smoke.mjs --root "$RUNNER_TEMP/werk release/werk-${{ needs.build.outputs.version }}"
       - name: Verify YAML hierarchy, isolated lines and persistent workers
@@ -148,7 +151,7 @@ jobs:
         with:
           name: werk-release-candidate
           path: release
-      - name: Publish the verified immutable tag artifacts
+      - name: Publish all verified assets before making the release visible
         working-directory: /
         env:
           GH_TOKEN: ${{ github.token }}
@@ -156,4 +159,29 @@ jobs:
           RELEASE_VERSION: ${{ needs.build.outputs.version }}
         run: |
           cd "$GITHUB_WORKSPACE"
-          gh release create "v$RELEASE_VERSION" --verify-tag --title "Werk $RELEASE_VERSION" --notes "Prebuilt native Node 24 and Docker mock-runtime distribution. See the bundled README for setup, integrity verification, and limitations." "release/werk-$RELEASE_VERSION.tar.gz" "release/werk-$RELEASE_VERSION.zip" release/SHA256SUMS
+          cat > release-notes.md <<EOF
+          Download a prebuilt archive below, extract it, and run \`node werk.mjs up\` with Node.js 24.
+          Or download and start the latest stable release in Bash:
+
+          \`curl -fsSL https://github.com/$GH_REPO/releases/latest/download/install.mjs -o werk-install.mjs && node werk-install.mjs\`
+
+          PowerShell (Windows):
+
+          \`curl.exe -fsSL https://github.com/$GH_REPO/releases/latest/download/install.mjs -o werk-install.mjs; if (\$LASTEXITCODE -eq 0) { node werk-install.mjs }\`
+
+          The installer requires Node.js 24 and tar. It verifies its pinned archive checksum, preserves existing installations, and starts a local Factory with two simulated production lines. Ctrl+C stops the system. See the bundled README for credentials, Docker startup and operation.
+
+          For this exact version, use the installer from /releases/download/v$RELEASE_VERSION/install.mjs instead of /releases/latest/download/install.mjs. Prereleases do not change latest.
+          EOF
+          # Failed uploads leave a draft; reruns may repair only that unpublished draft.
+          if gh release view "v$RELEASE_VERSION" --json isDraft > existing-release.json 2>/dev/null; then
+            jq -e '.isDraft == true' existing-release.json
+          else
+            gh release create "v$RELEASE_VERSION" --verify-tag --draft --title "Werk $RELEASE_VERSION" --notes-file release-notes.md
+          fi
+          gh release upload "v$RELEASE_VERSION" "release/werk-$RELEASE_VERSION.tar.gz" "release/werk-$RELEASE_VERSION.zip" release/install.mjs release/SHA256SUMS --clobber
+          if [[ "$RELEASE_VERSION" == *-* ]]; then
+            gh release edit "v$RELEASE_VERSION" --draft=false --prerelease --latest=false --notes-file release-notes.md
+          else
+            gh release edit "v$RELEASE_VERSION" --draft=false --prerelease=false --latest --notes-file release-notes.md
+          fi

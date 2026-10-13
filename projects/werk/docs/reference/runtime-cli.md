@@ -6,7 +6,7 @@ Linux [Codex policy](../how-to/run-codex-task.md) launches the configured provid
 for explicitly opted-in trusted tasks.
 
 The [system operator](system-definition.md#operator-actions) starts a complete
-Factory hierarchy from one YAML file. The commands below describe the separate
+Factory hierarchy from one YAML file. `node werk.mjs up` sets up and starts the complete example system in one command; `--file PATH` selects your own YAML. Its state belongs to `.werk-system/`, and it stops with Ctrl+C or `node werk.mjs system stop --file examples/system.yaml`. The commands below describe the separate
 single-line operator and its `.werk` state.
 
 ## Native operator

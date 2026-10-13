@@ -6,7 +6,15 @@ produce code. Trusted operators can [enable native Linux Codex execution](docs/h
 to produce a local patch requiring human review. Git publication and merge remain
 operator actions. Docker and the managed VM profile run simulations.
 
-Verify and extract the release, then open a terminal in this directory.
+Verify and extract the release, then open a terminal in this directory. With Node.js 24 installed, start the complete Factory system in one command:
+
+```sh
+node werk.mjs up
+```
+
+This creates or preserves private configuration, starts the Factory and both simulated production lines, and opens the Factory page when healthy. The console prints the credential file location. Ctrl+C shuts down the system; run the same command to restart. Use `--no-open` on a headless machine. No npm install or build is needed.
+
+For automatic download and startup from GitHub, installer options and release verification, see the [release reference](docs/reference/releases.md).
 
 ## A complete system from one YAML file
 

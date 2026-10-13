@@ -79,15 +79,21 @@ export async function packageRelease(projectRoot = root, output = join(projectRo
   const archiveEntries = entries.map(entry => ({ ...entry, path: `${prefix}/${entry.path}` }));
   const built = await createArchives(archiveEntries);
   const archives = [{ name: `${prefix}.tar.gz`, content: built.tarGzip }, { name: `${prefix}.zip`, content: built.zip }];
+  const repository = process.env.GITHUB_REPOSITORY || 'Luis85/production-line';
+  if (!/^[\w.-]+\/[\w.-]+$/.test(repository)) throw Error('Invalid release repository');
+  const installerTemplate = await readFile(join(projectRoot, 'scripts/release/install.mjs'), 'utf8');
+  if (!installerTemplate.includes('/* RELEASE_CONFIG */ null')) throw Error('Missing installer configuration marker');
+  const installer = { name: 'install.mjs', content: Buffer.from(installerTemplate.replace('/* RELEASE_CONFIG */ null', JSON.stringify({ version: info.version, repository, sha256: hash(built.tarGzip) }))) };
+  const assets = [...archives, installer];
   const staging = join(dirname(output), `.${basename(output)}-${process.pid}-${Date.now()}`);
   await mkdir(staging, { recursive: true });
   try {
-    for (const archive of archives) await writeFile(join(staging, archive.name), archive.content);
-    await writeFile(join(staging, 'SHA256SUMS'), archives.map(archive => `${hash(archive.content)}  ${archive.name}\n`).join(''));
+    for (const archive of assets) await writeFile(join(staging, archive.name), archive.content);
+    await writeFile(join(staging, 'SHA256SUMS'), assets.map(archive => `${hash(archive.content)}  ${archive.name}\n`).join(''));
     await mkdir(output, { recursive: true });
-    for (const name of [...archives.map(archive => archive.name), 'SHA256SUMS']) await rename(join(staging, name), join(output, name));
+    for (const name of [...assets.map(archive => archive.name), 'SHA256SUMS']) await rename(join(staging, name), join(output, name));
   } finally { await rm(staging, { recursive: true, force: true }); }
-  return { version: info.version, output, files: entries.length, artifacts: archives.map(({name,content}) => ({name,bytes:content.length,sha256:hash(content)})), sourceCommit: manifest.sourceCommit };
+  return { version: info.version, output, files: entries.length, artifacts: assets.map(({name,content}) => ({name,bytes:content.length,sha256:hash(content)})), sourceCommit: manifest.sourceCommit };
 }
 if (isMainScript(import.meta.url)) {
   try {

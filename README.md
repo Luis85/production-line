@@ -4,6 +4,24 @@ Werk now includes stopped-state backup and recovery, guided onboarding, operatio
 
 An agent driven software-production-line in a client-server architecture.
 
+## Download the latest release and start
+
+Requires **Node.js 24**, curl and tar. From your chosen installation directory, run:
+
+```sh
+curl -fsSL https://github.com/Luis85/production-line/releases/latest/download/install.mjs -o werk-install.mjs && node werk-install.mjs
+```
+
+Windows PowerShell:
+
+```powershell
+curl.exe -fsSL https://github.com/Luis85/production-line/releases/latest/download/install.mjs -o werk-install.mjs; if ($LASTEXITCODE -eq 0) { node werk-install.mjs }
+```
+
+The installer verifies a version-pinned archive, installs into `werk-<version>/`, and starts a local Factory with two simulated production lines. It prints the credential file location and opens the Factory when healthy. Ctrl+C stops the system. Existing installations are preserved; restart from the installed directory with `node werk.mjs up`. No npm install or source build is needed.
+
+The download URL becomes available after the first stable release is published. See the [release and publishing guide](projects/werk/docs/reference/releases.md) for version tags, qualification gates, installer options and prerequisites, or the [Werk README](projects/werk/README.md) for Docker startup.
+
 The Forge v0.1.0 CLI is installed in `bin/` from the latest published GitHub release, with its release archive SHA-256 verified. The imported Werk starter lives in [projects/werk](projects/werk/README.md). Start with the [concept index](projects/werk/docs/CONCEPT.md) and [implementation backlog](projects/werk/docs/backlog/Product%20Backlog.base).
 
 ## Work with the CLI
