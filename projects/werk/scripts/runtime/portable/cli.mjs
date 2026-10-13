@@ -16,7 +16,7 @@ export async function main(kind, argv = process.argv.slice(2)) {
     if (!cmd || o.help || cmd === 'help' || cmd === 'schema') {
       console.log(JSON.stringify({ schemaVersion: 1, application: kind, node: '24.x', usage: `node bin/apps/${kind}/cli.mjs COMMAND [--state-dir PATH] [--json]`, lifecycle: { run: 'Foreground; Ctrl+C drains and closes', start: 'Detached; returns when ready', status: 'Authenticated process identity and webview URL', stop: 'Graceful authenticated shutdown; preserves state' }, launchOptions: ['state-dir', 'host', 'port', ...(kind === 'worker' ? ['config', 'url', 'project-dir', 'poll-ms', 'mock-ms'] : kind === 'orchestrator' ? ['project'] : [])], clientOptions: ['state-dir', 'url', 'token-file', 'file', 'id', 'key'], input: 'JSON --file PATH or --file - (stdin), maximum 64 KiB. Local credentials resolved privately from state; remote URL requires explicit token-file or WERK_APP_TOKEN.', commands: catalog, api: 'api --path /local/path [--method GET|POST|PUT|PATCH|DELETE] [--file PATH|-] [--key KEY]', exitCodes: { 0: 'success', 1: 'operational failure', 2: 'input/API rejection' } }, null, 2)); return;
     }
-    const state = stateDirectory(kind, root, o['state-dir']);
+    const state = await stateDirectory(kind, root, o['state-dir']);
     if (['run', '_run', 'start'].includes(cmd)) {
       validateOptions(o, ['state-dir', 'host', 'port', ...(kind === 'worker' ? ['config', 'url', 'project-dir', 'poll-ms', 'mock-ms'] : kind === 'orchestrator' ? ['project'] : [])]);
       if (o.port !== undefined) integer(o.port, 'port', 0, 65535);

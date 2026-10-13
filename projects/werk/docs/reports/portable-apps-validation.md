@@ -34,16 +34,23 @@ project, with spaces in its path, no source checkout and no npm install. It veri
 `npm run check` passed: **534 tests, 533 passed, zero failed, one platform skip**.
 This includes TypeScript/Vue checks, all three builds and the copied-app test.
 Dependency audit found zero vulnerabilities. Strict documentation validation,
-workflow drift and whitespace checks passed.
+workflow drift and whitespace checks passed. The final focused portable-app and
+release-packaging suites passed **15/15**, including the directory-alias regression.
 
 Both release formats packaged successfully and checksum/file verification passed
 on extraction. The native extracted-release smoke test completed a simulated task,
 retained both snapshots and preserved identity/evidence through a real restart.
+CI on `604a346` passed all three independent Docker builds and the complete release
+qualification matrix: native Linux/macOS/Windows, Docker and the cloud-init VM.
+The source macOS/Windows runs exposed the alias check and fixture issues described
+below; both were corrected for the follow-up commit.
 Docker build stages retain their existing independent distributions using the
 explicit `--dist-only` build option; source CI still builds all three Docker images.
 
 Validation exposed and corrected an unhandled rejection on conflicting task IDs,
-mutable-title idempotency, and a release documentation check that incorrectly tried
+mutable-title idempotency, a macOS directory-alias bypass in app/state separation,
+a Windows fixture that incorrectly selected a POSIX-only subscription adapter,
+and a release documentation check that incorrectly tried
 to resolve upstream YAML contributor links inside a nested portable dependency.
 
 The worker lifecycle was also exercised separately through its real webviews in

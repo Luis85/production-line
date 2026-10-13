@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cp, mkdtemp, mkdir, readFile, writeFile, rm, stat, chmod } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, writeFile, rm, stat, chmod, symlink, realpath } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
+import { stateDirectory } from '../../scripts/runtime/portable/lifecycle.mjs';
 const project = fileURLToPath(new URL('../../', import.meta.url));
 function invoke(file, cwd, args, body, environment = {}) {
   return new Promise((resolve, reject) => {
@@ -23,6 +24,16 @@ async function until(operation, predicate, timeout = 18000) {
   while (Date.now() < end) { const value = await operation(); if (predicate(value)) return value; await delay(150); }
   throw Error('Expected state did not arrive');
 }
+test('state separation resolves directory aliases and absent descendants', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'werk-path-alias-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const app = join(root, 'app'), alias = join(root, 'alias'); await mkdir(app);
+  try { await symlink(app, alias, process.platform === 'win32' ? 'junction' : 'dir'); }
+  catch (error) { if (process.platform === 'win32' && error.code === 'EPERM') return t.skip('Junction creation unavailable'); throw error; }
+  await assert.rejects(stateDirectory('worker', await realpath(app), join(alias, 'new', 'state')), /outside the copied app/);
+  await assert.rejects(stateDirectory('worker', alias, join(app, 'new', 'state')), /outside the copied app/);
+  assert.equal(await stateDirectory('worker', app, join(root, 'separate-state')), join(root, 'separate-state'));
+});
 test('copied apps operate independently with agent tasks, durable state and later composition', { timeout: 120000 }, async t => {
   const outer = await mkdtemp(join(tmpdir(), 'werk copied apps '));
   const entries = {};
@@ -58,8 +69,10 @@ test('copied apps operate independently with agent tasks, durable state and late
   assert.ok(!JSON.stringify(first).includes(token));
   if (process.platform !== 'win32') assert.equal((await stat(first.credentialsFile)).mode & 0o077, 0);
   assert.equal((await fetch(first.url + '/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 401);
-  await ok('worker', 'settings set', [], { provider: { id: 'codex-cli', executable: process.execPath }, board: { paused: true, queueCapacity: 4 } });
-  const task = { id: 'ci-task-1', title: 'Agent task', provider: 'codex-cli', message: 'Fixture instruction; do not execute.' };
+  // Windows supports API providers; this paused/cancelled fixture must never call one.
+  const queuedProvider = process.platform === 'win32' ? { id: 'openai-api', model: 'test-do-not-execute', apiKey: 'fixture-not-a-real-key' } : { id: 'codex-cli', executable: process.execPath };
+  await ok('worker', 'settings set', [], { provider: queuedProvider, board: { paused: true, queueCapacity: 4 } });
+  const task = { id: 'ci-task-1', title: 'Agent task', provider: queuedProvider.id, message: 'Fixture instruction; do not execute.' };
   const created = await ok('worker', 'task create', [], task); assert.equal(created.session.id, task.id); assert.equal(created.session.status, 'queued');
   assert.equal((await ok('worker', 'task create', [], task)).chat.messages.length, 2);
   assert.equal((await invokeApp('worker', 'task create', [], { ...task, message: 'different input' })).code, 2);
@@ -76,6 +89,7 @@ test('copied apps operate independently with agent tasks, durable state and late
   assert.equal((await readFile(restarted.credentialsFile, 'utf8')).trim(), token);
   assert.equal((await ok('worker', 'environment')).status.machineId, identity);
   const retained = await ok('worker', 'task get', ['--id', task.id]); assert.equal(retained.chat.messages.length, 4); assert.equal(retained.session.status, 'cancelled');
+  assert.equal((await ok('worker', 'task list')).records.some(record => record.busy), false, 'restart cancelled all pending model calls');
   // Protocol fixture only: no provider credentials or live LLM calls.
   if (process.platform === 'linux') {
     const executable = join(entries.worker.cwd, 'model-fixture'), audit = join(outer, 'model-events.jsonl');

@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { open, unlink, lstat } from 'node:fs/promises';
-import { join, resolve, relative, isAbsolute, sep } from 'node:path';
+import { open, unlink, lstat, realpath } from 'node:fs/promises';
+import { join, resolve, relative, isAbsolute, sep, dirname, basename } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { privateDirectory, readPrivate, createPrivate, inputError } from '../config.mjs';
 import { controlRequest, createControl } from '../control.mjs';
@@ -72,9 +72,22 @@ export async function start(kind, state, root, args) {
     });
   } finally { await log.close(); }
 }
-export function stateDirectory(kind, root, value) {
+async function canonicalDestination(path) {
+  try { return await realpath(path); }
+  catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    const parent = dirname(path);
+    if (parent === path) throw error;
+    return join(await canonicalDestination(parent), basename(path));
+  }
+}
+export async function stateDirectory(kind, root, value) {
   const state = resolve(value ?? `.werk/${kind}`);
-  const inside = relative(root, state);
+  // Resolve existing ancestors before comparing a not-yet-created destination.
+  // macOS /var aliases and Windows junctions must not bypass app/state separation.
+  const canonicalRoot = await realpath(root), canonicalState = await canonicalDestination(state);
+  const fold = path => process.platform === 'win32' ? path.toLowerCase() : path;
+  const inside = relative(fold(canonicalRoot), fold(canonicalState));
   if (!inside || (inside !== '..' && !inside.startsWith('..' + sep) && !isAbsolute(inside))) throw inputError('Keep --state-dir outside the copied app folder so upgrades preserve state.');
   return state;
 }
