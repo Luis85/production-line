@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile, rm, readdir, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm, readdir, symlink, realpath } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createServer } from 'node:net';
@@ -82,7 +82,7 @@ test('recovery restores previous snapshot separately and disables updates on the
   await writeFile(join(f.stateDir,'history.txt'),'new tasks after upgrade');
   const destination=join(f.directory,'restored state');
   const result=await recover(f.store,destination);
-  assert.equal(result.version,'0.1.0');assert.equal(result.releaseRoot,f.base);
+  assert.equal(result.version,'0.1.0');assert.equal(result.releaseRoot,await realpath(f.base));
   assert.equal(await readFile(join(destination,'history.txt'),'utf8'),'tasks and worker evidence');
   assert.equal(await readFile(join(f.stateDir,'history.txt'),'utf8'),'new tasks after upgrade');
   assert.equal((await selection(storeFor(f.base,destination))).automatic,false);
