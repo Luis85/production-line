@@ -1,3 +1,4 @@
+import type { FactoryIntake } from './application/intake.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { accessAuthorization, accessView, withAccess, requireWrite, type AccessDocument } from '../shared/http/access.js';
 import { auditMutation, type AuditSink } from '../shared/http/audit.js';
@@ -15,7 +16,7 @@ function requestKey(request: IncomingMessage): string | undefined {
     if (values && values.length !== 1) throw new DomainError('invalid_input', 'A single Idempotency-Key header is required');
     return mutationKey(values?.[0]);
 }
-export function createFactoryHandler(application: FactoryApplication, adminToken: string, view: string, reportError: (error: unknown) => void, guide?: string, access?: AccessDocument, audit?: AuditSink) {
+export function createFactoryHandler(application: FactoryApplication, adminToken: string, view: string, reportError: (error: unknown) => void, guide?: string, access?: AccessDocument, audit?: AuditSink, intake?: FactoryIntake, interaction?: (id: string, input: unknown) => Promise<unknown>) {
     const authenticate = accessAuthorization(adminToken, access);
     return async (request: IncomingMessage, response: ServerResponse) => {
         try {
@@ -39,6 +40,20 @@ export function createFactoryHandler(application: FactoryApplication, adminToken
                 const id = target.searchParams.get('factoryId');
                 return json(response, 200, withAccess(await application.overview(id === null ? undefined : identifier(id, 'factoryId')), principal));
             }
+            const interact = path.match(/^\/v1\/lines\/([^/]+)\/interaction$/);
+            if (interaction && interact && method === 'POST') return json(response, 200, await interaction(identifier(interact[1], 'lineId'), await readJson(request)));
+            if (intake && path === '/v1/intake') {
+                if (method === 'GET') return json(response, 200, intake.list(target.searchParams.has('factoryId') ? identifier(target.searchParams.get('factoryId'), 'factoryId') : undefined));
+                if (method === 'POST') return json(response, 201, intake.create(await readJson(request), requestKey(request) ?? ''));
+            }
+            const routing = path.match(/^\/v1\/factories\/([^/]+)\/routing$/);
+            if (intake && routing) {
+                const id = identifier(routing[1], 'factoryId');
+                if (method === 'GET') return json(response, 200, intake.policy(id));
+                if (method === 'PUT') return json(response, 200, intake.configure(id, await readJson(request)));
+            }
+            const destination = path.match(/^\/v1\/intake\/([^/]+)\/routing$/);
+            if (intake && destination && method === 'PUT') return json(response, 200, intake.route(identifier(destination[1], 'taskId'), await readJson(request)));
             if (path === '/v1/factories') {
                 if (method === 'GET')
                     return json(response, 200, withAccess(application.factories(), principal));

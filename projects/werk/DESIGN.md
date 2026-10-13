@@ -41,10 +41,14 @@ components:
 
 ## Product entry and capability boundary
 
-Factory is the portfolio hierarchy entry; each line opens its independent
-orchestrator with the live line map (`#system`) as the default page after
-authentication. Explicit `#intake`, `#tasks`, `#workers` and `#metrics` links open
-their requested area after connection. Factory has no taskboard. The main journey
+Factory opens an aggregate dashboard for its selected hierarchy scope. Each
+registered line has its own Factory dashboard (`#line=<id>`) and a separate link
+to its independent orchestrator. The orchestrator opens Dashboard (`#system`),
+including the live line map, by default after authentication. Explicit `#intake`, `#tasks`, `#workers` and `#metrics` links open
+their requested area after connection. Factory shows its durable intake delivery
+queue; line execution history and taskboards remain with their orchestrators.
+Workers, orchestrators and Factories can start independently and connect later.
+The main journey
 is connect → understand the line → hand over ready features → follow task
 execution → inspect evidence. Product teams normally
 plan in Obsidian, create an iteration branch/draft PR and import ready features.
@@ -70,8 +74,11 @@ Operational surfaces: background #111b22, text #edf4f7, secondary #b5c4cd,
 borders #3b4b56, action mint #8be0b8; system sans-serif 16px/1.6. Runtime controls
 have a 44px minimum height. At desktop widths of at least 1100px, the shared
 spatial layout expands orchestrator content to 1540px and Factory content to
-1760px. Worker status remains a focused detail surface. Tables scroll when
-necessary instead of compressing identity and evidence beyond readability.
+1760px. The worker has a Vue/Nuxt UI workspace with exactly three pages: Chat
+(default), History and Dashboard. Its Dashboard contains Monitoring & Status;
+`/monitoring-status` redirects to `/dashboard`. Tables scroll when necessary
+instead of compressing identity and evidence beyond readability. The worker
+surface's composition is recorded in `src/worker/webview/DESIGN.md`.
 
 Concept surfaces: background #10191e, panels #17232b, lines #30404a,
 foreground #e8efee, secondary #a1b2bc. Project colors: mint #8be0b8, blue #81b6ee,
@@ -86,9 +93,11 @@ and its project repository. Selection reveals capacity and provider details;
 explicit actions open that line's Intake, spatial architecture or review queue.
 The original 3D canvas remains the detailed view of one production line.
 
-The operational Factory view starts on a canvas map with orthographic 3D and
-2D representations, a contextual inspector and native component-selection
-buttons. Connections and table alternatives retain the same scoped response.
+The operational Factory view starts on an aggregate dashboard with observed
+totals and a canvas map offering orthographic 3D and 2D representations, a
+contextual inspector and native component-selection buttons. A dashboard selector
+opens the selected line's own process map, counts, interaction widget and link to
+the owning orchestrator. Scope and line identity remain explicit. Connections and table alternatives retain the same scoped response.
 The map is bounded to the first 12 lines and 20 factories in the selected scope;
 the scope selector and full registry/table remain available. It shows one
 orchestrator and an aggregate worker pool per line, grouped by the owning Factory path. Do not invent individual workers
@@ -130,17 +139,48 @@ read-only configuration context. Opening a saved task clears
 filters that could hide it. The concept also supports weekly ready-import and
 keeps unsent feature drafts scoped to the selected production line. Factory
 management shows portfolio context; line operations show the selected line.
-Worker status shows process health, current slots and local evidence without
-offering a parallel task-management UI. Its slot display is bounded to the first
-24 configured slots and labels occupancy as a local observation; an unoccupied
-slot is not a promise that work can be scheduled.
+Worker Chat is the primary task-entry surface. New task prepares a dedicated
+session; its first message queues work on that worker, and follow-ups continue
+the same session. Explicit file tasks and remote assignments also have dedicated
+sessions. The Run task editor remains the path for approved local file inputs.
+History owns local task management and retained orchestrator evidence; it does
+not take authority over the orchestrator's task records. Dashboard shows local
+queued/running/review work, sessions, remote assignments, process health, slots,
+host observations and editable provider/enrollment settings. An unoccupied slot
+is not a promise that work can be scheduled. Local file-change tasks produce
+review patches; they do not silently apply changes or run project tests.
+
+One worker has exactly one execution slot shared by Chat, explicit file tasks
+and remote assignments. Queue capacity must never look like parallel execution.
+Pause holds every new start and lets the active task finish; it does not drain
+waiting assignments. Scale parallel work with separate native or Docker worker
+instances. Dashboard readings and task/session states distinguish waiting from
+running. Only the worker prompts an LLM; Factory and orchestrator route work.
 
 Connection, loading, stale data and empty filters are distinct states. Tokens
-stay in page memory and never enter URLs or browser storage. Runtime drafts
-remain in page memory while navigating and reconnecting. Live updates can be
+stay in page memory and never enter URLs or browser storage. Unsent orchestrator
+intake drafts remain in page memory while navigating and reconnecting. Live updates can be
 paused and preserve selection/filter context. User navigation moves focus appropriately; background updates do not.
-Dialogs isolate the background and restore trigger focus. Reduced motion and
+Modal editors and interaction widgets isolate the background and restore trigger
+focus. Guided tours are replayable, non-modal walkthroughs with explicit Back,
+Next, Finish and Close controls; they navigate or disclose UI without submitting
+work. Closing a tour restores its trigger when that control remains present. Reduced motion and
 keyboard-equivalent actions remain requirements for the spatial view.
+
+Factory intake and orchestrator routing expose automatic and manual destinations.
+Manual selections keep compatibility and capacity constraints visible. Factory
+intake distinguishes queued, delivering and delivered: delivery means the line
+accepted a task, not that execution or review succeeded. Once delivery begins,
+retries retain the same destination and idempotency key. Existing worker leases
+also retain their destination when routing policy changes.
+
+Line and orchestrator interaction widgets offer worker-backed New task/Chat and
+a separate routed Submit task action. The widget requests the worker URL and its
+access token, connects to that registered worker's selected task session, and
+keeps credentials in dialog memory. New task's first message queues work on that
+worker; follow-ups keep the same session. Submit task follows line routing and
+may select another eligible worker. Closing the widget clears its connection. Provider settings
+never stand in for evidence of successful authentication, quota or cost.
 
 The concept canvas uses pointer rotation, zoom, pan and equivalent buttons.
 Its state model separates transitions, UI adaptation and spatial rendering;

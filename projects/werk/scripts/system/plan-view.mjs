@@ -14,6 +14,7 @@ export function formatPlan(plan, { stateDir, file = 'system.yaml' } = {}) {
   for (const line of plan.productionLines) {
     lines.push(`  Line ${clean(line.name)} (${line.id}) → ${line.factoryId}`, `    Project: ${line.project} · orchestrator: ${line.orchestrator.url}`, `    Workers: ${line.workers.count} · status ports: ${line.workers.statusPorts.join(', ')} · execution: ${line.workers.execution?.mode ?? 'mock'}`);
     if (line.orchestrator.webviewUrl) lines.push(`    Public webview: ${line.orchestrator.webviewUrl}`);
+    if (line.workers.chat) lines.push(`    Chat: Codex CLI at ${clean(line.workers.chat.codexExecutable)} · operator login · conversation only`);
     if (line.workers.execution) lines.push(`    Live Codex: ${clean(line.workers.execution.codex.repository)} · allowed files: ${line.workers.execution.codex.allowedPaths.map(clean).join(', ')}`, '    Trusted tasks only; local patches require human review. Host file reads are not isolated.');
   }
   lines.push('', 'Execution defaults to simulation. A running worker with a matching profile is required to execute a task.');

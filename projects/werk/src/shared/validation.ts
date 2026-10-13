@@ -2,11 +2,12 @@ import { parseRequirementRef } from './wiki.js';
 import { ValidationError } from './errors.js';
 import type { TaskInput, Provider, Profile, WorkerPolicy } from './domain.js';
 export function workerPolicy(value?: unknown): WorkerPolicy {
-    const p = object(value === undefined ? { maxParallel: 1, order: 'priority', maxAttempts: 3, configHash: 'default' } : value, 'Worker policy', ['maxParallel', 'order', 'maxAttempts', 'configHash']);
+    const p = object(value === undefined ? { maxParallel: 1, order: 'priority', maxAttempts: 3, configHash: 'default' } : value, 'Worker policy', ['maxParallel', 'order', 'maxAttempts', 'configHash', 'queueCapacity']);
     if (!Number.isInteger(p.maxParallel) || (p.maxParallel as number) < 1 || (p.maxParallel as number) > 8 || !['priority', 'fifo'].includes(p.order as string) || !Number.isInteger(p.maxAttempts === undefined ? 3 : p.maxAttempts) || (p.maxAttempts as number) < 1 || (p.maxAttempts as number) > 5) {
         throw new ValidationError('Worker policy: maxParallel 1–8, order priority|fifo, maxAttempts 1–5');
     }
-    return { maxParallel: p.maxParallel as number, order: p.order as WorkerPolicy['order'], maxAttempts: p.maxAttempts === undefined ? 3 : p.maxAttempts as number, configHash: text(p.configHash, 'configHash', 100) };
+    if (p.queueCapacity !== undefined && (!Number.isInteger(p.queueCapacity) || Number(p.queueCapacity) < 0 || Number(p.queueCapacity) > 64)) throw new ValidationError('queueCapacity: 0–64');
+    return { ...(p.queueCapacity === undefined ? {} : { queueCapacity: Number(p.queueCapacity) }), maxParallel: p.maxParallel as number, order: p.order as WorkerPolicy['order'], maxAttempts: p.maxAttempts === undefined ? 3 : p.maxAttempts as number, configHash: text(p.configHash, 'configHash', 100) };
 }
 export function text(value: unknown, name: string, max = 200): string {
     if (typeof value !== 'string' || !value.trim() || value.length > max)

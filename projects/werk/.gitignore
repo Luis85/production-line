@@ -10,3 +10,5 @@ backups/
 /release/
 /.werk/
 /.werk-system/
+
+**/.nuxt-ui/

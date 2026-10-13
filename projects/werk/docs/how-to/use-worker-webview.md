@@ -1,0 +1,232 @@
+# Use the worker webview
+
+A worker can run on its own machine without a Factory or orchestrator. From an
+extracted release, with Node 24 installed, start it with one command:
+
+```sh
+node werk.mjs worker run
+```
+
+Open `http://127.0.0.1:4100`. The release includes the built Vue 3 / Nuxt UI
+webview; no npm install or frontend server is needed. State defaults to
+`.state/worker`. Use `--state-dir /private/worker` and `--status-port 4201` for
+another worker. Keep the process running; Ctrl+C stops it gracefully. Each worker
+executes exactly one task at a time, including Chat, explicit file tasks and
+remote assignments. For parallel work, start separate workers; see the
+[native and Docker examples](assemble-independent-components.md#scale-with-separate-workers).
+
+The worker has exactly three pages: **Chat** (the default), **History** and
+**Dashboard**. Dashboard contains Monitoring & Status; existing
+`/monitoring-status` bookmarks redirect to `/dashboard`. Choose **Tour** in the
+header for a replayable introduction. Back, Next and Close let you explore at
+your own pace; the tour does not send messages, run tasks or change settings.
+
+## Unlock the webview
+
+Read `<worker-state>/webview-token` on the worker machine and paste its value
+into **Worker access token**. In a system deployment, the path is
+`<system-state>/lines/<line-id>/workers/worker-1/webview-token`.
+The token stays in this tab's memory. Reloading or choosing **Lock** requires
+unlocking again. Never put tokens in URLs. Basic status, health and metrics
+remain public; environment, settings, sessions, taskboard and history require
+the worker token. Keep the listener on loopback unless you provide a trusted
+HTTPS access layer. The token grants operator control of this worker.
+
+To rotate access, stop the worker, remove only `webview-token`, and restart.
+
+## Connect Claude or Codex
+
+Open **Dashboard → Provider connections & orchestrator enrollment → Connections**. Four connections are supported:
+
+| Connection | Authentication | Configuration |
+| --- | --- | --- |
+| Codex subscription | Existing Codex CLI login of the worker OS account | Absolute executable path |
+| Claude Code subscription | Existing Claude Code CLI login of the worker OS account | Absolute executable path |
+| OpenAI API | API key and provider billing | Available model ID and API key |
+| Claude API | Anthropic API key and provider billing | Available model ID and API key |
+
+The worker discovers CLI executables on PATH at first startup. Sign in using
+`codex login` or `claude auth login` as the same OS account that runs the worker.
+Subscription adapters currently require Linux or macOS. API connections and the
+webview also run on Windows. A configured connection does not verify login,
+subscription balance or model availability. There is no automatic API fallback
+that could silently change billing.
+
+Use a current Codex CLI supporting `exec --json --ignore-user-config`,
+`--ephemeral`, the read-only sandbox and disabled tool feature flags. Claude
+Code must support `--safe-mode`, `--restricted`, `--tools`, `--strict-mcp-config`
+and `--no-session-persistence` (adapter flags checked against 2.1.296).
+CLI chat uses an empty workspace, with tools disabled. API calls use the official
+OpenAI Responses or Anthropic Messages endpoint, without tools. OpenAI responses
+use `store: false`.
+
+Provider keys and enrollment credentials are saved in the worker's private
+`workspace-settings.json`, with mode 0600 on POSIX. They are never returned to
+the browser. An empty key field preserves an existing key; use **Remove saved
+API key** to clear it. Stop active replies and finish or cancel queued local
+tasks before changing provider settings. Settings apply without reinstalling.
+
+Legacy `chat.codexExecutable` in worker JSON or native system YAML remains a
+first-start seed. Persisted webview settings take precedence on later starts.
+Orchestrator task profiles remain separately configured: connecting a chat/API
+provider does not advertise unsupported orchestrator execution capabilities.
+
+## Give the worker a task in Chat
+
+Choose **New task**, select a provider and describe the work. The first message
+creates queued work with its own worker-managed model session. Follow-up messages
+continue that same task session; choose New task for unrelated work. Chat is a
+task-entry surface, not an independent parallel model process. Requests wait
+while another task occupies the worker or execution is paused.
+
+Every explicit local file task and remote orchestrator assignment also has a
+dedicated session. Sessions retain their transcript and provider affinity across
+restarts and are shared by this worker's operators. Select an existing task
+session to inspect its transcript. Session management supports naming and
+retention; creating or selecting a session does not grant extra execution slots.
+The worker supplies saved successful turns to its model calls. It does not import
+host CLI sessions or transfer native session identifiers between providers.
+Changing selection in another tab makes stale send/stop requests fail rather
+than target the wrong session.
+
+Use the composer or Ctrl/Command + Enter to submit a message. The stop action
+cancels the pending or active reply. Provider execution is bounded to two minutes
+once started; queue waiting is separate. Sessions hold at most 60 messages with
+a 48,000-character input budget; user messages are limited to 8,000 characters
+and replies to 32,000. Up to 100 task sessions are retained. Deleting a task session
+requires confirmation; New task preserves the previous transcript. A failed save
+is shown as unsaved. Interrupted requests
+are marked explicitly after restart rather than silently replayed.
+
+Only the worker prompts the model. A Chat task does not automatically expose
+dashboard telemetry or repository files; use the file-task editor below to
+approve file input and generate a patch.
+
+## Run local coding tasks
+
+Write an instruction in Chat and choose **Run task**. Give it a title, an
+absolute repository directory on the worker machine, and an explicit list of
+relative file paths. The worker captures those files when accepting the task.
+Only those snapshots and your instruction are sent to the chosen provider in
+the new file task's dedicated session. The preceding Chat transcript is not
+included in its task input. File tasks use the same single execution slot as
+Chat and remote assignments.
+
+Local tasks are bounded file-change generation: up to 32 approved text files,
+24 KiB per input file and 48,000 input characters in total. New files are
+supported. Secret-like paths, symlinks and path traversal are rejected. The
+provider returns complete changed file contents; the worker validates them and
+creates a unified patch. It never executes model-generated shell commands.
+Your checkout remains unchanged and tests are **not** run automatically.
+
+In **History → Your taskboard**, inspect a result and choose **Download patch**.
+Review it, then check and apply it from the repository:
+
+```sh
+git apply --check /path/to/download.patch
+git apply /path/to/download.patch
+```
+
+Run your project's tests after applying. Patches use captured input, so a changed
+checkout may no longer accept a patch. **Retry saved input** retains the original
+snapshots; start a new task to capture current files. Terminal results are saved
+locally, with review artifacts under `local-review/`.
+
+## Configure the taskboard and orchestrator queue
+
+History lists Chat tasks and their sessions, then shows file tasks in Queued,
+Running, and Review & finished columns. Inspect file tasks
+to stop, change queued priority, retry failed work, archive or delete. The file
+taskboard retains at most 100 tasks. Configure:
+
+- **Local task capacity:** 1–64 accepted local tasks, counting queued and running
+  work. This limits the queue, not execution concurrency.
+- **Extra orchestrator queue places:** 0–64 accepted assignments beyond the one
+  worker execution slot; defaults to zero.
+- **Start order:** FIFO or high priority first for queued file tasks.
+
+There is always exactly one executing task across Chat, explicit file tasks and
+orchestrator assignments. With two extra orchestrator queue places, a worker can
+accept three remote assignments, but still executes only one task in total.
+Waiting assignments have lease renewal; loss of ownership prevents execution.
+The orchestrator remains the authority for assigned tasks. Its task state calls
+leased assignments `running`, while the worker distinguishes queued from
+executing. Both services must support the queue extension to enable extra places.
+
+**Pause intake** holds all new execution starts, including Chat, file tasks and
+already accepted remote assignments. The active task can finish; waiting work
+remains queued until resumed. Pausing display updates in the header is separate:
+it only pauses refresh of the webview. Reducing queue limits does not discard
+accepted work. To execute more tasks in parallel, run more worker instances
+with separate state and ports; there are no independent chat or local-task
+process budgets that bypass the worker's single execution slot.
+
+Queued file tasks survive restart. Interrupted file execution becomes failed and
+requires an explicit retry. Orchestrator assignments are reconciled from the
+server and existing terminal evidence is not executed again.
+
+## Connect an orchestrator later
+
+In **Dashboard → Provider connections & orchestrator enrollment**, enter its HTTP(S) origin and enrollment token, then
+choose **Save & connect**. The worker registers automatically and retries when
+unavailable; the webview, sessions and local taskboard remain available. Initial
+CLI enrollment also works with `--url` and `WERK_ENROLLMENT_TOKEN`.
+
+Registration supplies the worker's configured execution profiles and policy.
+Existing default profiles are simulations; real orchestrator execution remains
+the explicitly configured native Linux Codex adapter described in
+[Run a Codex task](run-codex-task.md). Local API/Claude patch tasks are separate
+from that established orchestration contract.
+
+Complete accepted assignments before choosing **Go standalone**. Pause holds
+queued assignments as well as new work; if assignments are waiting, resume them
+to finish first. Once no assignments remain, pause intake and disconnect. Identity and evidence are retained for reconnecting to
+the same orchestrator. Switching a registered identity to a different server
+requires a separate worker state directory to preserve assignment ownership.
+
+For independent launch commands, private service credentials and subsequent
+Factory registration, see [Assemble independent components](assemble-independent-components.md).
+
+## Interact from a line or orchestrator dashboard
+
+The line dashboard inside Factory and the independent orchestrator offer an
+**Interaktion öffnen** widget. Its Chat tab connects to a worker already
+registered with that line. Enter the worker webview address reachable from the
+orchestrator and its access token. The widget uses the worker's selected task
+session and shares its transcript with the worker webview. New task followed by
+its first message queues a task on that worker; subsequent messages continue
+the same session and share its single execution slot. Configure providers
+and manage sessions in the worker itself. If another operator changes the
+selected session, reconnect before sending more messages.
+
+The worker token stays in dialog memory and is passed through authenticated
+service requests; it is not saved in URLs or browser storage. Close clears the
+widget connection, but does not delete the worker-owned task session. The widget
+forwards requests; only the worker prompts an LLM.
+
+Use the separate **Submit task** tab when work should enter the line's configured
+router. Supply a requirement link or title and acceptance criteria. That router
+chooses an eligible worker independently of the widget's connected worker.
+This differs from New task/Chat, which queues work directly on the connected
+worker, and from **Run task**, which explicitly captures approved files for a
+review patch. All three paths execute serially on whichever worker owns them.
+
+## Inspect history and Dashboard
+
+Below the taskboard, History shows retained orchestrator before/after snapshots.
+Search and filter attempts, inspect evidence and download local task patches.
+A simulated attempt is never presented as implemented code. Missing or unreadable
+evidence remains explicit. Snapshot history follows retention; the reader
+inspects at most 1,000 directories and discloses when this is only a sample.
+New task titles are kept in a bounded private index.
+
+Dashboard shows local queued/running/review work, active model sessions, waiting
+remote assignments, the connection map, orchestrator slots, delivery backlog,
+profiles, host memory/disk, worker RSS/heap, load, CPUs, OS, Node version and paths.
+Standalone mode is healthy without an orchestrator. Node RSS excludes provider
+subprocesses; container host readings are not quota guarantees. Usage, cost,
+subscription balance and login status remain unknown unless actually measured.
+
+Pages refresh every three seconds while visible; header controls pause readings
+or refresh manually. Failed reads retain the last observation with a stale-data
+warning. No environment-variable values or credentials are shown.

@@ -8,6 +8,7 @@ separately under `docs/handoff`; original source provenance is recorded in the
 
 | Record | Scope |
 | --- | --- |
+| [Worker task sessions and independent systems](worker-system-review.md) | Serial execution, persistent sessions, composable routing, dashboards, reviews and a 34-capture storyboard |
 | [Spatial visualization polish](spatial-polish-review.md) | Correct 3D projection, distinct models, label placement and desktop/mobile confirmation |
 | [Visual system experience](visual-system-review.md) | Live 3D/2D maps, focused editors, navigation, screenshots and browser review |
 | [First release review and polish](first-release-review.md) | Five-perspective review, resolved defects and integrated release qualification |

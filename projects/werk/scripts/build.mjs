@@ -10,7 +10,7 @@ const packageInfo = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'
 async function compile(source, destination) {
   await mkdir(destination, { recursive: true });
   for (const entry of await readdir(source, { withFileTypes: true })) {
-    if (['dist', 'node_modules', 'public'].includes(entry.name) || entry.name.startsWith('.build-')) continue;
+    if (['dist', 'node_modules', 'public', 'webview'].includes(entry.name) || entry.name.startsWith('.build-')) continue;
     if (entry.isDirectory()) await compile(join(source, entry.name), join(destination, entry.name));
     else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.d.ts')) {
       const code = stripTypeScriptTypes(await readFile(join(source, entry.name), 'utf8'), { mode: 'strip' });
@@ -23,8 +23,11 @@ async function composeView(path, experience) {
   const css = await readFile(join(root, 'src/shared/ui/spatial.css'), 'utf8');
   const shared = await readFile(join(root, 'src/shared/ui/spatial.js'), 'utf8');
   const code = await readFile(join(root, experience), 'utf8');
-  html = html.replace('</head>', '<style>' + css + '</style></head>')
-    .replace('</body>', '<script>' + shared + '\n' + code + '</script></body>');
+  const tour = await readFile(join(root, 'src/shared/ui/tour.js'), 'utf8');
+  const tourCss = await readFile(join(root, 'src/shared/ui/tour.css'), 'utf8') + await readFile(join(root, 'src/shared/ui/operations.css'), 'utf8');
+  const interaction = await readFile(join(root, 'src/shared/ui/interaction.js'), 'utf8');
+  html = html.replace('</head>', '<style>' + css + tourCss + '</style></head>')
+    .replace('</body>', '<script>' + shared + '\n' + tour + '\n' + interaction + '\n' + code + '</script></body>');
   await writeFile(path, html);
 }
 for (const app of apps) {
@@ -43,6 +46,10 @@ for (const app of apps) {
     if (['factory', 'orchestrator'].includes(app)) {
       await composeView(join(staging, app, 'public/index.html'), `src/${app}/public/experience.js`);
       await composeView(join(staging, app, 'public/guide.html'), 'src/guide/public/experience.js');
+    }
+    if (app === 'worker') {
+      const { build } = await import('vite');
+      await build({ configFile: join(root, 'src/worker/webview/vite.config.mjs'), build: { outDir: join(staging, 'worker/public') } });
     }
     if (app === 'orchestrator') {
       await mkdir(join(staging,'node_modules'),{recursive:true});

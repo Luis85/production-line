@@ -1,3 +1,7 @@
+import { privateJson } from '../shared/http/bounded-client.js';
+import { FactoryIntake } from './application/intake.js';
+import { SqliteIntakeStore } from './infrastructure/intake-store.js';
+import { HttpLineDelivery } from './infrastructure/delivery.js';
 import { loadAccessFile, accessAuthorization, type AccessDocument } from '../shared/http/access.js';
 import type { AuditSink } from '../shared/http/audit.js';
 import { monitoringThresholds, type MonitoringThresholds } from '../shared/monitoring.js';
@@ -49,34 +53,34 @@ export async function startFactoryServer(config: FactoryServerConfig) {
     const guide = await readFile(new URL('./public/guide.html', import.meta.url), 'utf8');
     const registry = new SqliteFactoryRegistry(config.db), reader = new HttpLineReader(credentials, timeout, concurrency);
     const application = new FactoryApplication(registry, reader, new Set(Object.keys(credentials)), Date.now, monitoring, managed);
-    const server = createServer(observeHttp('factory', createFactoryHandler(application, config.adminToken, view, () => serviceEvent('factory', 'internal_error', 'error'), guide, access, config.audit)));
+    const intakeStore = new SqliteIntakeStore(config.db === ':memory:' ? ':memory:' : config.db + '.intake.sqlite');
+    const intake = new FactoryIntake(registry, reader, intakeStore, new HttpLineDelivery(credentials));
+    application.protectIntake((type, id) => intake.assertRemoval(type, id));
+    const server = createServer(observeHttp('factory', createFactoryHandler(application, config.adminToken, view, () => serviceEvent('factory', 'internal_error', 'error'), guide, access, config.audit, intake, async (id, input) => { const line = registry.line(id); const credential = credentials[line.tokenEnv]; if (!credential) throw new DomainError('unavailable', 'Line credential unavailable'); return privateJson(new URL('/v1/interaction', line.orchestratorUrl), credential, 'POST', input); })));
     server.requestTimeout = 15000;
     server.headersTimeout = 10000;
     try {
         await new Promise<void>((resolve, reject) => { const failed = (error: Error) => reject(error); server.once('error', failed); server.listen(config.port, config.host, () => { server.off('error', failed); resolve(); }); });
     }
     catch (error) {
+        await intake.close(); intakeStore.close();
         reader.close();
         registry.close();
         throw error;
     }
+    const dispatch = setInterval(() => { void intake.tick().catch(() => serviceEvent('factory', 'intake_error', 'error')); }, 2000).unref();
     let closing: Promise<void> | undefined;
-    return { server, registry, application, close: () => {
+    return { server, registry, application, intake, close: () => {
             if (closing)
                 return closing;
+            clearInterval(dispatch);
             reader.close();
-            closing = new Promise<void>((resolve, reject) => {
-                // Stop accepting requests first; a partial upload must not outlive the deployment grace period.
+            const drained = new Promise<void>((resolve, reject) => {
                 const deadline = setTimeout(() => server.closeAllConnections(), 5000).unref();
-                server.close(error => {
-                    clearTimeout(deadline);
-                    try {
-                        registry.close();
-                        error ? reject(error) : resolve();
-                    } catch (closeError) { reject(closeError); }
-                });
+                server.close(error => { clearTimeout(deadline); error ? reject(error) : resolve(); });
                 server.closeIdleConnections();
             });
+            closing = Promise.all([drained, intake.close()]).then(() => { intakeStore.close(); registry.close(); });
             return closing;
         } };
 }

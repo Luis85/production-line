@@ -1,0 +1,306 @@
+{
+  "date": "2026-10-13",
+  "scope": "standalone worker task sessions and composable system",
+  "liveProviderQualified": false,
+  "fullSuite": {
+    "command": "node --test --test-concurrency=1 tests/**/*.test.mjs tests/**/*.test.cjs",
+    "tests": 533,
+    "pass": 532,
+    "fail": 0,
+    "skipped": 1
+  },
+  "earlierConcurrencyTwoRun": {
+    "tests": 533,
+    "pass": 531,
+    "fail": 1,
+    "skipped": 1,
+    "failure": "native two-line doctor readiness deadline",
+    "focusedNativeRerun": {
+      "pass": 8,
+      "fail": 0
+    }
+  },
+  "typecheck": true,
+  "build": true,
+  "dependencyVulnerabilities": 0,
+  "workflowDrift": false,
+  "browser": [
+    {
+      "name": "worker-chat",
+      "width": 1440,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "worker-run-task",
+      "width": 1440,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "worker-history",
+      "width": 1440,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "worker-patch-review",
+      "width": 1440,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "worker-dashboard",
+      "width": 1440,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "worker-connections",
+      "width": 1440,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "worker-tour",
+      "width": 1440,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "orchestrator-dashboard",
+      "width": 1440,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "orchestrator-routing",
+      "width": 1440,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "orchestrator-chat",
+      "width": 1440,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "orchestrator-tour",
+      "width": 1440,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "factory-dashboard",
+      "width": 1440,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "line-dashboard",
+      "width": 1440,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "line-interaction",
+      "width": 1440,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "line-tour",
+      "width": 1440,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "factory-intake",
+      "width": 1440,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "factory-tour",
+      "width": 1440,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "worker-chat",
+      "width": 390,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "worker-run-task",
+      "width": 390,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "worker-history",
+      "width": 390,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "worker-patch-review",
+      "width": 390,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "worker-dashboard",
+      "width": 390,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "worker-connections",
+      "width": 390,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "worker-tour",
+      "width": 390,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "orchestrator-dashboard",
+      "width": 390,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "orchestrator-routing",
+      "width": 390,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "orchestrator-chat",
+      "width": 390,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "orchestrator-tour",
+      "width": 390,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "factory-dashboard",
+      "width": 390,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "line-dashboard",
+      "width": 390,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "line-interaction",
+      "width": 390,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "line-tour",
+      "width": 390,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "factory-intake",
+      "width": 390,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    },
+    {
+      "name": "factory-tour",
+      "width": 390,
+      "overflow": false,
+      "errors": [],
+      "storageEmpty": true
+    }
+  ],
+  "finalMobileConfirmation": {
+    "overflow": false,
+    "canvasTop": 775.859375,
+    "controlsTop": 426.390625
+  },
+  "independentNativeAssembly": {
+    "workers": 2,
+    "initiallyStandalone": true,
+    "orchestratorAddedLater": true,
+    "factoryAddedLater": true,
+    "factoryIntakeCompleted": "simulated",
+    "chatProvider": "labelled protocol fixture"
+  },
+  "extractedNativeRelease": {
+    "passed": true,
+    "task": "simulated",
+    "snapshots": 2,
+    "restartPreserved": true
+  },
+  "extractedDockerWorkers": {
+    "passed": true,
+    "checks": [
+      "two independent Docker workers",
+      "distinct identities and credentials",
+      "standalone webviews",
+      "one execution slot each",
+      "cross-worker token rejected",
+      "identity and token survive restart"
+    ],
+    "liveProvider": false
+  },
+  "dockerWrapperLifecycle": {
+    "passed": false,
+    "stage": "start",
+    "reason": "150-second command timeout while Compose waited for orchestrator health",
+    "imageBuildPassed": true,
+    "timeoutChanged": false
+  },
+  "newReleasePublished": false
+}

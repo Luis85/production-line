@@ -6,7 +6,7 @@ import { assertAssignmentEvidence, assertSameEvidence } from './evidence.js';
 import { reportWithRetry } from './reporting.js';
 
 /** Runs one assigned attempt. A durable terminal snapshot is the execution replay boundary. */
-export async function executeAttempt(task: Task, stop: AbortSignal, dependencies: AttemptDependencies): Promise<void> {
+export async function executeAttempt(task: Task, stop: AbortSignal, dependencies: AttemptDependencies): Promise<Snapshot> {
   const { client, journal, adapter, identity, profiles, state, saveState, timeoutMs } = dependencies;
   const now = dependencies.now ?? Date.now;
   const profile = profiles.find(candidate => candidate.id === task.profile);
@@ -82,6 +82,7 @@ export async function executeAttempt(task: Task, stop: AbortSignal, dependencies
     await lease.close();
     await journal.checkpoint?.(task.lease);
     state.lastContact = new Date(now()).toISOString();
+    return after;
   } finally {
     await lease.close();
   }

@@ -3,7 +3,7 @@ import { ValidationError } from './errors.js';
 import type { WorkerCounts } from './factory.js';
 
 export interface CapabilityProfile { id: string; provider: 'claude' | 'codex'; mode?: 'mock' | 'cli'; }
-export interface RegisteredCapabilities { providers: ('claude' | 'codex')[]; profiles: CapabilityProfile[]; profilesTruncated: boolean; }
+export interface RegisteredCapabilities { eligibleCapacity?: { provider: 'claude' | 'codex'; mode: 'mock' | 'cli'; slotsAvailable: number }[]; providers: ('claude' | 'codex')[]; profiles: CapabilityProfile[]; profilesTruncated: boolean; }
 export interface LineCapabilities extends RegisteredCapabilities {
     schemaVersion: 1;
     project: string;
@@ -14,7 +14,7 @@ export interface LineCapabilities extends RegisteredCapabilities {
 }
 /** Remote capability announcements are bounded allowlisted data, never arbitrary configuration. */
 export function validateLineCapabilities(value: unknown, expectedProject?: string): LineCapabilities {
-    const body = object(value, 'Line capabilities', ['schemaVersion', 'project', 'execution', 'context', 'intake', 'providers', 'profiles', 'profilesTruncated', 'capacity']);
+    const body = object(value, 'Line capabilities', ['schemaVersion', 'project', 'execution', 'context', 'intake', 'providers', 'profiles', 'profilesTruncated', 'capacity', 'eligibleCapacity']);
     const project = identifier(body.project, 'capabilities.project');
     if (body.schemaVersion !== 1 || !['mock', 'cli', 'mixed'].includes(body.execution as string) || !['unbound', 'pinned'].includes(body.context as string) || (expectedProject !== undefined && project !== expectedProject)) throw new ValidationError('Unsupported or mismatched line capabilities');
     const context = body.context as LineCapabilities['context'];
@@ -38,6 +38,16 @@ export function validateLineCapabilities(value: unknown, expectedProject?: strin
     for (const key of keys) if (!Number.isSafeInteger(workers[key]) || Number(workers[key]) < 0) throw new ValidationError('Invalid observed worker counts');
     const counts = Object.fromEntries(keys.map(key => [key, workers[key]])) as unknown as WorkerCounts;
     if (counts.total !== counts.online + counts.offline || counts.slotsBusy + counts.slotsAvailable > counts.slotsTotal) throw new ValidationError('Inconsistent observed worker capacity');
-    return { schemaVersion: 1, project, execution: body.execution as LineCapabilities['execution'], context, intake: [...intake], providers: [...providers], profiles, profilesTruncated: body.profilesTruncated,
+    let eligibleCapacity: RegisteredCapabilities['eligibleCapacity'];
+    if (body.eligibleCapacity !== undefined) {
+        if (!Array.isArray(body.eligibleCapacity) || body.eligibleCapacity.length > 4) throw new ValidationError('Invalid eligible capacity');
+        eligibleCapacity = body.eligibleCapacity.map(value => {
+            const row = object(value, 'Eligible capacity', ['provider', 'mode', 'slotsAvailable']);
+            if (!['codex', 'claude'].includes(row.provider as string) || !['mock', 'cli'].includes(row.mode as string) || !Number.isSafeInteger(row.slotsAvailable) || Number(row.slotsAvailable) < 0) throw new ValidationError('Invalid eligible capacity');
+            return { provider: row.provider as 'codex' | 'claude', mode: row.mode as 'mock' | 'cli', slotsAvailable: Number(row.slotsAvailable) };
+        });
+        if (new Set(eligibleCapacity.map(row => row.provider + ':' + row.mode)).size !== eligibleCapacity.length) throw new ValidationError('Duplicate eligible capacity');
+    }
+    return { ...(eligibleCapacity ? { eligibleCapacity } : {}), schemaVersion: 1, project, execution: body.execution as LineCapabilities['execution'], context, intake: [...intake], providers: [...providers], profiles, profilesTruncated: body.profilesTruncated,
         capacity: { kind: 'observed', observedAt: capacity.observedAt, workers: counts } };
 }

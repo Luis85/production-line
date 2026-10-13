@@ -13,6 +13,9 @@ import type {
 
 /** Transactional operations required by the application, without SQLite or HTTP types. */
 export interface OrchestratorRepository {
+  routing?(project: string): unknown;
+  configureRouting?(project: string, input: unknown): unknown;
+  routeTask?(project: string, id: string, input: unknown): unknown;
   overview(project: string): OrchestratorOverview;
   operationalMetrics(project: string, windowSeconds: number): Record<string, number>;
   registeredCapabilities(project: string): RegisteredCapabilities;
@@ -33,7 +36,7 @@ export interface OrchestratorRepository {
   worker(token: string): WorkerRecord;
   workers(): WorkerSummary[];
   current(worker: WorkerRecord): Task[];
-  claim(worker: WorkerRecord, requestId: string): Task | null;
+  claim(worker: WorkerRecord, requestId: string, queueCapacity?: number): Task | null;
   heartbeat(worker: WorkerRecord, taskId: string, lease: unknown, attempt: unknown): Task;
   finish(worker: WorkerRecord, taskId: string, lease: unknown, attempt: unknown): Task;
   abandon(worker: WorkerRecord, taskId: string, lease: unknown, attempt: unknown): Task;
@@ -63,11 +66,12 @@ export class WorkerOperations {
   }
 
   claim(input: unknown) {
-    const body = object(input, 'Assignment request', ['requestId']);
+    const body = object(input, 'Assignment request', ['requestId', 'queueCapacity']);
     if (typeof body.requestId !== 'string' || !/^[\w-]{1,100}$/.test(body.requestId)) {
       throw new DomainError('invalid_input', 'requestId required: 1–100 letters, digits, _ or -');
     }
-    return { task: this.repository.claim(this.identity, body.requestId) };
+    if (body.queueCapacity !== undefined && (!Number.isInteger(body.queueCapacity) || Number(body.queueCapacity) < 0 || Number(body.queueCapacity) > 64)) throw new DomainError('invalid_input', 'queueCapacity: 0–64');
+    return { task: this.repository.claim(this.identity, body.requestId, body.queueCapacity as number | undefined) };
   }
 
   snapshot(input: unknown) {
@@ -110,6 +114,15 @@ export class OrchestratorApplication {
     this.project = identifier(project, 'project');
   }
 
+  routing() { return this.repository.routing?.(this.project) ?? { mode: 'auto', workerId: null, order: 'worker' }; }
+  configureRouting(input: unknown) {
+    if (!this.repository.configureRouting) throw new DomainError('conflict', 'Routing configuration unavailable');
+    return this.repository.configureRouting(this.project, input);
+  }
+  routeTask(id: string, input: unknown) {
+    if (!this.repository.routeTask) throw new DomainError('conflict', 'Task routing unavailable');
+    return this.repository.routeTask(this.project, identifier(id, 'taskId'), input);
+  }
   register(input: unknown) {
     const body = object(input, 'Worker registration', ['profiles', 'policy']);
     return { ...this.repository.register(this.project, body.profiles, body.policy), project: this.project };

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "scheduler": { "maxParallel": 2, "order": "priority", "pollMs": 1000, "maxAttempts": 3 },
+  "scheduler": { "maxParallel": 1, "order": "priority", "pollMs": 1000, "maxAttempts": 3 },
   "execution": { "mode": "mock", "timeoutMs": 60000, "mockMs": 3000 },
   "systemPrompt": "Implement the assigned feature using the pinned project specifications, designs and acceptance tests. Respect the factory policy. Report missing context and failed checks honestly. Do not merge pull requests.",
   "profiles": [

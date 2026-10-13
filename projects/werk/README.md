@@ -142,3 +142,5 @@ Existing developer launchers remain available: `npm run dev:fleet` for one line,
 Shared contracts remain in `src/shared`. Source and tests are grouped by concern. Runtime application data belongs in a private state directory, not the source tree or release archive.
 
 The complete source check also requires Python 3 on Linux/macOS for the infrastructure safety suite. The downloaded native runtime has no host Python dependency.
+
+The [worker webview](docs/how-to/use-worker-webview.md) provides Vue + Nuxt UI pages for Chat, History, and Monitoring & Status. Optional native Linux Codex chat uses the worker account’s existing login.

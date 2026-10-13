@@ -35,7 +35,7 @@ export async function prepare(options) {
   const artifacts = validateArtifacts(options);
   if (!options.file) throw invalid('--file is required.');
   const definition = await loadDefinition(options.file);
-  if (definition.productionLines.some(line => line.workers.execution)) throw invalid('The VM bootstrap profile provisions mock workers. Configure provider installation and account access separately before opting a native line into live execution.');
+  if (definition.productionLines.some(line => line.workers.execution || line.workers.chat)) throw invalid('The VM bootstrap profile provisions mock workers. Configure provider installation and account access separately before opting a native line into live execution.');
   if (definition.environment !== 'native') throw invalid('The Ubuntu VM profile requires environment: native in the system definition.');
   const ports = [definition.factory.port, ...definition.productionLines.flatMap(line => [line.orchestrator.port, ...Array.from({ length: line.workers.count }, (_, index) => line.workers.statusPort + index)])];
   if (ports.some(port => port < 1024)) throw invalid('The non-root VM profile requires every service port to be at least 1024.');

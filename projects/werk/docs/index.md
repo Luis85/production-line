@@ -19,6 +19,9 @@ follows [Diátaxis](https://diataxis.fr/).
 
 ## How-to guides — accomplish a specific goal
 
+- [Assemble independent workers, orchestrators and Factories](how-to/assemble-independent-components.md)
+- [Use the worker webview](how-to/use-worker-webview.md): Chat, History and Dashboard.
+
 - [Operate, back up and replace a Linux VM](how-to/operate-linux-vm.md)
 
 - [Run an opt-in Codex task and review its patch](how-to/run-codex-task.md)

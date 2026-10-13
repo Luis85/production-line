@@ -1,4 +1,4 @@
-import { normalizeExecution } from './execution.mjs';
+import { normalizeExecution, normalizeChat } from './execution.mjs';
 import { randomBytes } from 'node:crypto';
 import { mkdir, open, lstat, readdir, unlink } from 'node:fs/promises';
 import { constants } from 'node:fs';
@@ -42,14 +42,16 @@ function fields(value, allowed, label) {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !allowed.includes(key))) throw inputError(`Invalid ${label}; use the documented schema.`);
 }
 export function validateConfig(value) {
-  fields(value, ['schemaVersion', 'project', 'orchestratorPort', 'workerPort', 'workers', 'mode', 'runtime', 'execution'], 'runtime configuration');
+  fields(value, ['schemaVersion', 'project', 'orchestratorPort', 'workerPort', 'workers', 'mode', 'runtime', 'execution', 'chat'], 'runtime configuration');
   const execution = normalizeExecution(value.execution);
+  const chat = normalizeChat(value.chat);
+  if (chat && value.runtime !== 'native') throw inputError('Codex chat requires native Linux.');
   if (execution && (value.runtime !== 'native' || value.workers !== 1)) throw inputError('Live execution requires native Linux and exactly one worker per line.');
   if (!['native', 'docker'].includes(value.runtime) || value.schemaVersion !== 1 || value.mode !== (execution ? 'cli' : 'mock') || typeof value.project !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(value.project)) throw inputError('Configuration requires schemaVersion 1, matching execution mode and a valid project identifier.');
   for (const field of ['orchestratorPort', 'workerPort']) if (!Number.isInteger(value[field]) || value[field] < 1 || value[field] > 65535) throw inputError(`${field} must be an integer from 1 to 65535.`);
   if (!Number.isInteger(value.workers) || value.workers < 1 || value.workers > 8 || value.workerPort + value.workers - 1 > 65535) throw inputError('workers must be 1–8 and its status port range must fit below 65536.');
   if (value.orchestratorPort >= value.workerPort && value.orchestratorPort < value.workerPort + value.workers) throw inputError('Orchestrator and worker ports must not overlap.');
-  return { schemaVersion: 1, project: value.project, orchestratorPort: value.orchestratorPort, workerPort: value.workerPort, workers: value.workers, mode: execution ? 'cli' : 'mock', runtime: value.runtime, ...(execution ? { execution } : {}) };
+  return { schemaVersion: 1, project: value.project, orchestratorPort: value.orchestratorPort, workerPort: value.workerPort, workers: value.workers, mode: execution ? 'cli' : 'mock', runtime: value.runtime, ...(execution ? { execution } : {}), ...(chat ? { chat } : {}) };
 }
 export function validateCredentials(value) {
   const keys = ['WERK_ADMIN_TOKEN', 'WERK_ENROLLMENT_TOKEN']; fields(value, keys, 'credentials');
@@ -68,8 +70,9 @@ export async function loadSetup(stateDir) {
   try { return { config, credentials: validateCredentials(await readPrivate(join(stateDir, 'credentials.json'))) }; }
   catch (error) { if (error.code === 'ENOENT') throw inputError('Credentials are missing. Restore credentials.json from backup before starting the runtime.'); throw error; }
 }
-export async function setup({ stateDir = resolveStateDir(), project, port, workerPort, workers, runtime = 'native', execution: rawExecution } = {}) {
+export async function setup({ stateDir = resolveStateDir(), project, port, workerPort, workers, runtime = 'native', execution: rawExecution, chat: rawChat } = {}) {
   const execution = normalizeExecution(rawExecution);
+  const chat = normalizeChat(rawChat);
   await privateDirectory(stateDir);
   const lock = join(stateDir, 'setup.lock');
   try { await createPrivate(lock, { pid: process.pid }); }
@@ -78,12 +81,12 @@ export async function setup({ stateDir = resolveStateDir(), project, port, worke
     let config;
     try { config = validateConfig(await readPrivate(join(stateDir, 'config.json'))); }
     catch (error) { if (error.code !== 'ENOENT') throw error; }
-    const requested = { project, orchestratorPort: port, workerPort, workers, runtime, execution };
+    const requested = { project, orchestratorPort: port, workerPort, workers, runtime, execution, chat };
     if (config) {
       if (Object.entries(requested).some(([key, value]) => value !== undefined && JSON.stringify(value) !== JSON.stringify(config[key]))) throw inputError('Setup already exists with different settings. Existing configuration and credentials were preserved. Stop the runtime before deliberately editing config.json.');
       await loadSetup(stateDir); return { configured: true, created: false, config, stateDir };
     }
-    config = validateConfig({ schemaVersion: 1, project: project ?? 'demo', orchestratorPort: port ?? 3000, workerPort: workerPort ?? 4100, workers: workers ?? 1, mode: execution ? 'cli' : 'mock', runtime, ...(execution ? { execution } : {}) });
+    config = validateConfig({ schemaVersion: 1, project: project ?? 'demo', orchestratorPort: port ?? 3000, workerPort: workerPort ?? 4100, workers: workers ?? 1, mode: execution ? 'cli' : 'mock', runtime, ...(execution ? { execution } : {}), ...(chat ? { chat } : {}) });
     // Only a partial first setup may be completed. Any other state requires restoration,
     // including SQLite sidecars, lifecycle records and Windows Docker-volume markers.
     const entries = await readdir(stateDir);

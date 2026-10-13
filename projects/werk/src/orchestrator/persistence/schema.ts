@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { workerPolicy } from '../../shared/contracts.js';
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 /** Called inside the store's startup transaction; never commits partial upgrades. */
 export function migrateSchema(db: DatabaseSync): void {
     const version = (db.prepare('PRAGMA user_version').get() as any).user_version;
@@ -57,5 +57,7 @@ export function migrateSchema(db: DatabaseSync): void {
         db.exec('ALTER TABLE attempts ADD COLUMN max_attempts INTEGER NOT NULL DEFAULT 3');
         db.exec("UPDATE attempts SET max_attempts=COALESCE((SELECT json_extract(config,'$.maxAttempts') FROM workers WHERE workers.id=attempts.worker),3)");
     }
-    db.exec('PRAGMA user_version=4;');
+    db.exec(`CREATE TABLE IF NOT EXISTS routing_policy(project TEXT PRIMARY KEY,payload TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS task_routing(task TEXT PRIMARY KEY REFERENCES tasks(id),worker TEXT NOT NULL REFERENCES workers(id));
+      PRAGMA user_version=5;`);
 }

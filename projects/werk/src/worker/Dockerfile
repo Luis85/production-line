@@ -4,6 +4,9 @@ COPY package.json package-lock.json ./
 COPY scripts/build.mjs scripts/build.mjs
 COPY src/shared src/shared
 COPY src/worker src/worker
+RUN --mount=type=secret,id=proxy_ca \
+    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
+    npm ci --ignore-scripts --workspaces=false --strict-ssl=true
 RUN node scripts/build.mjs worker
 
 FROM node:24-bookworm-slim

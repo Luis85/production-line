@@ -24,7 +24,10 @@ access for the operating account explicitly. Docker PowerShell exports have a
 separate current-user-only ACL procedure. Platform qualification evidence is
 reported separately; Linux checks do not establish Windows ACL behavior.
 
-Worker status is a read-only local interface without a login. Retain trusted
+Worker basic status, health and metrics remain read-only without a login. The
+Vue worker webview requires its separate private `webview-token` for history,
+environment details and chat. Chat mutations also check browser Origin; tokens
+stay in tab memory. See [worker webview](../how-to/use-worker-webview.md). Retain trusted
 loopback exposure. Remote default access uses private SSH forwarding. An
 optional same-host Caddy profile provides TLS for Factory/orchestrator webviews,
 blocks worker protocol and enrollment routes at that edge, and keeps backends on

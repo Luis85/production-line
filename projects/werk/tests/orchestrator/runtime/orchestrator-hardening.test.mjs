@@ -62,7 +62,7 @@ test('independent SQLite processes claim disjoint assignments and retain fencing
     const source = `import { Store } from ${JSON.stringify(new URL('../../../src/orchestrator/dist/orchestrator/persistence/store.js', import.meta.url).href)};
       const store = new Store(process.argv[1]);
       try { const worker = store.worker(process.argv[2]); const tasks = [];
-        for (let i = 0; i < 8; i++) tasks.push(store.claim(worker, 'claim-' + i));
+        for (let i = 0; i < 400 && tasks.length < 8; i++) { const task = store.claim(worker, 'claim-' + i); if (task) tasks.push(task); else await new Promise(resolve => setTimeout(resolve, 10)); }
         console.log(JSON.stringify(tasks));
       } finally { store.close(); }`;
     const results = await Promise.all(registrations.map(auth => promisify(execFile)(process.execPath, ['--input-type=module', '-e', source, path, auth.token])));

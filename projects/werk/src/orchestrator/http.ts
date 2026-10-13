@@ -1,3 +1,4 @@
+import { interactWithWorker } from './infrastructure/interaction.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { timingSafeEqual } from 'node:crypto';
 import { accessAuthorization, accessView, withAccess, requireWrite, type AccessDocument, type Principal } from '../shared/http/access.js';
@@ -122,6 +123,14 @@ export function createHttpHandler(dependencies: HttpDependencies) {
         if (path === '/v1/monitoring') return json(response, 200, report);
         response.writeHead(200, { 'content-type': 'text/plain; version=0.0.4; charset=utf-8', 'cache-control': 'no-store' }); response.end(prometheus(report)); return;
       }
+      if (method === 'POST' && path === '/v1/interaction') return json(response, 200, await interactWithWorker(await readJson(request), id => { application.workerDetail(id); }));
+      if (path === '/v1/routing') {
+        queryFields(target.searchParams, []);
+        if (method === 'GET') return json(response, 200, application.routing());
+        if (method === 'PUT') return json(response, 200, application.configureRouting(await readJson(request)));
+      }
+      const routingTask = path.match(/^\/v1\/tasks\/([^/]+)\/routing$/);
+      if (method === 'PUT' && routingTask) return json(response, 200, application.routeTask(routingTask[1], await readJson(request)));
       if (method === 'POST' && path === '/v1/iteration/tasks') {
         const key = String(request.headers['idempotency-key'] ?? '');
         return json(response, 201, await application.createIterationTask(await readJson(request), key));

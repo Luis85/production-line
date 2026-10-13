@@ -14,9 +14,9 @@
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node scripts/build.mjs && node --test \"tests/**/*.test.mjs\" \"tests/**/*.test.cjs\"",
+    "test": "node scripts/build.mjs && node --test --test-concurrency=2 \"tests/**/*.test.mjs\" \"tests/**/*.test.cjs\"",
     "dev:fleet": "node scripts/fleet.mjs",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && vue-tsc --noEmit -p src/worker/webview/tsconfig.json",
     "dev:factory": "node scripts/factory-fleet.mjs",
     "check": "npm run typecheck && npm test",
     "audit:dependencies": "npm audit --audit-level=low",
@@ -24,12 +24,23 @@
     "release:build": "npm run build && npm run release:package"
   },
   "devDependencies": {
+    "@iconify-json/lucide": "1.2.143",
+    "@nuxt/ui": "4.11.3",
     "@types/node": "24.0.0",
-    "typescript": "5.9.3",
+    "@vitejs/plugin-vue": "6.0.4",
+    "fflate": "0.8.3",
+    "tailwindcss": "4.2.2",
     "tar": "7.5.22",
-    "fflate": "0.8.3"
+    "typescript": "5.9.3",
+    "vite": "7.3.7",
+    "vue": "3.5.44",
+    "vue-router": "4.6.4",
+    "vue-tsc": "3.2.6"
   },
   "dependencies": {
     "yaml": "2.9.1"
+  },
+  "overrides": {
+    "esbuild": "0.28.2"
   }
 }

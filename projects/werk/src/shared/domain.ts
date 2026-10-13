@@ -41,6 +41,7 @@ export interface Profile {
     maxParallel?: number;
 }
 export interface WorkerPolicy {
+    queueCapacity?: number;
     maxParallel: number;
     order: 'priority' | 'fifo';
     maxAttempts: number;

@@ -1,3 +1,4 @@
+import { chatConfiguration } from './status/workspace.js';
 import { codexConfiguration } from './infrastructure/codex-adapter.js';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -23,7 +24,7 @@ export async function configuration(options: Record<string, string>, document?: 
     try { parsed = JSON.parse(source); }
     catch { throw new ValidationError('Invalid worker configuration JSON'); }
   }
-  const raw = object(parsed, 'Worker configuration', ['schemaVersion', 'scheduler', 'execution', 'systemPrompt', 'profiles', 'journal']);
+  const raw = object(parsed, 'Worker configuration', ['schemaVersion', 'scheduler', 'execution', 'systemPrompt', 'profiles', 'journal', 'chat']);
   if (raw.schemaVersion !== undefined && raw.schemaVersion !== 1) throw new ValidationError('Unknown worker configuration version');
   const scheduler = section(raw, 'scheduler', ['maxParallel', 'order', 'pollMs', 'maxAttempts']);
   const execution = section(raw, 'execution', ['mode', 'timeoutMs', 'mockMs', 'codex']);
@@ -36,6 +37,7 @@ export async function configuration(options: Record<string, string>, document?: 
   if (mode === 'cli' && process.platform !== 'linux') throw new ValidationError('Live Codex execution currently requires native Linux');
   if (mode === 'mock' && execution.codex !== undefined) throw new ValidationError('Codex configuration requires explicit cli mode');
   const codex = mode === 'cli' ? codexConfiguration(execution.codex) : undefined;
+  const chatExecutable = chatConfiguration(raw.chat) ?? codex?.executable;
   const systemPrompt = raw.systemPrompt === undefined ? defaultPrompt : raw.systemPrompt;
   if (typeof systemPrompt !== 'string' || !systemPrompt.trim() || systemPrompt.length > 20000) {
     throw new ValidationError('systemPrompt must contain 1–20000 characters');
@@ -48,9 +50,11 @@ export async function configuration(options: Record<string, string>, document?: 
     ? options.profiles.split(',').map((provider, index) => ({ id: `${provider}-${index + 1}`, provider, mode }))
     : raw.profiles === undefined ? defaults : raw.profiles;
   const ps = profiles(configuredProfiles);
+  if (ps.some(profile => profile.maxParallel !== 1)) throw new ValidationError('Each worker profile must have one execution slot');
   if (ps.some(profile => profile.mode !== mode)) throw new ValidationError('All profiles must match execution mode');
+  if (Number(options.parallel ?? scheduler.maxParallel ?? 1) !== 1) throw new ValidationError('A worker has one profile execution slot at a time; parallel must be 1');
   const policy = workerPolicy({
-    maxParallel: integer(options.parallel ?? String(scheduler.maxParallel ?? 1), 'parallel', 1, 8),
+    maxParallel: integer(options.parallel ?? String(scheduler.maxParallel ?? 1), 'parallel', 1, 1),
     order: scheduler.order ?? 'priority', maxAttempts: scheduler.maxAttempts ?? (mode === 'cli' ? 1 : 3), configHash: hash('pending')
   });
   if (mode === 'cli' && (policy.maxParallel !== 1 || policy.maxAttempts !== 1 || ps.length !== 1 || ps[0].maxParallel !== 1)) throw new ValidationError('Live Codex requires one profile, one slot and one attempt');
@@ -64,5 +68,5 @@ export async function configuration(options: Record<string, string>, document?: 
     profiles: ps, systemPrompt
   };
   policy.configHash = hash(JSON.stringify(normalized));
-  return { ...(codex ? { codex } : {}), profiles: ps, policy, pollMs, mockMs, timeoutMs, retainedPairs, systemPromptHash: hash(systemPrompt), systemPrompt };
+  return { ...(chatExecutable ? { chatExecutable } : {}), ...(codex ? { codex } : {}), profiles: ps, policy, pollMs, mockMs, timeoutMs, retainedPairs, systemPromptHash: hash(systemPrompt), systemPrompt };
 }

@@ -5,11 +5,11 @@ import type { Snapshot } from '../shared/snapshots.js';
 
 /** Machine capacity, subscription capacity and project affinity must all agree. */
 export function eligibleProfile(worker: WorkerRecord, task: Task, active: readonly Task[]): Profile | undefined {
-  if (task.project !== worker.project || active.length >= worker.config.maxParallel) return undefined;
+  if (task.project !== worker.project || active.length >= worker.config.maxParallel + (worker.config.queueCapacity ?? 0)) return undefined;
   return worker.profiles.find(profile => {
     const providerMatches = task.provider === 'auto' || task.provider === profile.provider;
     const occupied = active.filter(item => item.profile === profile.id).length;
-    return providerMatches && profile.mode === (task.executionMode ?? 'mock') && occupied < (profile.maxParallel ?? 1);
+    return providerMatches && profile.mode === (task.executionMode ?? 'mock') && occupied < (profile.maxParallel ?? 1) + (worker.config.queueCapacity ?? 0);
   });
 }
 

@@ -11,6 +11,8 @@ import { identifier } from '../../shared/contracts.js';
 /** Registry commands and portfolio observation, independent of SQLite and HTTP. */
 export class FactoryApplication {
     private readonly registry: FactoryRegistry;
+    private removalGuard?: (type: 'factory' | 'line', id: string) => void;
+    protectIntake(guard: (type: 'factory' | 'line', id: string) => void) { this.removalGuard = guard; }
     private readonly reader: LineReader;
     private readonly configuredCredentials: ReadonlySet<string>;
     private readonly now: () => number;
@@ -47,6 +49,7 @@ export class FactoryApplication {
         id = identifier(id, 'id');
         assertRegistryEditable(this.managed, 'factories', id);
         return this.mutate('factory.delete', id, null, key, () => {
+            this.removalGuard?.('factory', id);
             this.registry.deleteFactory(id);
             return { deleted: true as const, id };
         });
@@ -81,6 +84,7 @@ export class FactoryApplication {
         id = identifier(id, 'id');
         assertRegistryEditable(this.managed, 'lines', id);
         return this.mutate('line.delete', id, null, key, () => {
+            this.removalGuard?.('line', id);
             this.registry.deleteLine(id);
             return { deleted: true as const, id };
         });
