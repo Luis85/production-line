@@ -95,6 +95,16 @@ orchestrator and an aggregate worker pool per line, grouped by the owning Factor
 or repositories from the current summary API. Unknown/stale/partial observations
 remain explicit; changing representation never changes the data timestamp.
 
+Spatial components use world-coordinate geometry: each visible face, detail and
+ground connection is projected through the same orthographic camera. Factories,
+line platforms, orchestrators, worker pools, profiles and evidence use distinct
+schematic forms. Those forms encode component type, never instance counts or
+additional inventory. Depth ordering and consistent face shading communicate
+structure. Labels reserve space outside all model bounds and other labels; short
+leader lines retain association where a label cannot sit immediately adjacent.
+Dense scenes scroll within a bounded viewport instead of shrinking labels away.
+The 2D representation retains the same entities, selection and observations.
+
 The shared runtime and guide map uses native controls, descriptive grouping and
 keyboard alternatives for diagram selection. Pointer dragging rotates the 3D
 projection; named camera buttons rotate, zoom and reset it. Touch gestures and
