@@ -160,10 +160,10 @@ def provision():
     os.chown(state, identity.pw_uid, identity.pw_gid)
     state.chmod(0o700)
     # Provision secrets once as the runtime identity, never in user-data or logs.
-    subprocess.run(['runuser', '-u', 'werk', '--', 'env', '-i', 'PATH=/usr/bin:/bin', 'HOME=/var/lib/werk', str(node / 'bin/node'), str(release / 'werk.mjs'), 'system', 'setup', '--file', '/etc/werk/system.yaml', '--state-dir', str(state), '--json'], check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(['runuser', '-u', 'werk', '--', 'env', '-i', 'PATH=/usr/bin:/bin', 'HOME=/var/lib/werk', 'WERK_UPDATES=external', str(node / 'bin/node'), str(release / 'werk.mjs'), 'system', 'setup', '--file', '/etc/werk/system.yaml', '--state-dir', str(state), '--json'], check=True, stdout=subprocess.DEVNULL)
     subprocess.run(['systemctl', 'daemon-reload'], check=True)
     subprocess.run(['systemctl', 'enable', '--now', 'werk-system.service'], check=True)
-    doctor = ['runuser', '-u', 'werk', '--', 'env', '-i', 'PATH=/usr/bin:/bin', 'HOME=/var/lib/werk', str(node / 'bin/node'), str(release / 'werk.mjs'), 'system', 'doctor', '--file', '/etc/werk/system.yaml', '--state-dir', str(state), '--json']
+    doctor = ['runuser', '-u', 'werk', '--', 'env', '-i', 'PATH=/usr/bin:/bin', 'HOME=/var/lib/werk', 'WERK_UPDATES=external', str(node / 'bin/node'), str(release / 'werk.mjs'), 'system', 'doctor', '--file', '/etc/werk/system.yaml', '--state-dir', str(state), '--json']
     try:
         await_ready(doctor)
     except RuntimeError:

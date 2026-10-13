@@ -31,7 +31,7 @@ test('render produces data-only cloud-init with private state, no build, and bou
   assert.equal(files.get('/etc/werk/system.yaml').owner, 'root:werk');
   assert.equal(files.get('/etc/werk/system.yaml').permissions, '0640');
   assert.equal(files.get('/etc/werk/artifacts.json').permissions, '0600');
-  assert.equal(files.get('/etc/werk/runtime.env').content, 'WERK_STATE_DIR=/var/lib/werk\nWERK_SYSTEM_FILE=/etc/werk/system.yaml\nWERK_LOG_OUTPUT=stream\n');
+  assert.equal(files.get('/etc/werk/runtime.env').content, 'WERK_STATE_DIR=/var/lib/werk\nWERK_SYSTEM_FILE=/etc/werk/system.yaml\nWERK_LOG_OUTPUT=stream\nWERK_UPDATES=external\n');
   const unit = files.get('/etc/systemd/system/werk-system.service').content;
   for (const expected of ['RequiresMountsFor=/var/lib/werk', 'User=werk', 'Group=werk', 'KillMode=mixed', 'TimeoutStopSec=180', 'StartLimitBurst=3', 'ProtectSystem=strict', 'ReadWritePaths=/var/lib/werk', 'Restart=on-failure', 'system start --no-open --json']) assert.ok(unit.includes(expected), expected);
   assert.doesNotMatch(unit, /npm|setup|curl|build|ExecStartPre/);

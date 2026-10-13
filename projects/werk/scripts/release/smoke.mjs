@@ -21,7 +21,7 @@ async function freePort() {
 }
 function cli(command) {
   const child = spawn(process.execPath, [join(root, 'werk.mjs'), ...command, '--state-dir', state, '--json'], {
-    cwd: root, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
+    cwd: root, env: { ...process.env, WERK_AUTO_UPDATE: '0' }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
   });
   let stdout = '', stderr = '';
   child.stdout.on('data', chunk => { stdout += chunk; if (stdout.length > 1024 * 1024) child.kill(); });

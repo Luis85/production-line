@@ -31,6 +31,8 @@ contracts, and explanations describe the system and its limits.
 
 ## Reference
 
+- [Automatic updates](reference/updates.md): stable release selection, backup and recovery.
+
 - [Infrastructure renderer](reference/infrastructure.md)
 
 - [System YAML definition](reference/system-definition.md)

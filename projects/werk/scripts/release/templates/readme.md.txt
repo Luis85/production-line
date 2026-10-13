@@ -14,6 +14,8 @@ node werk.mjs up
 
 This creates or preserves private configuration, starts the Factory and both simulated production lines, and opens the Factory page when healthy. The console prints the credential file location. Ctrl+C shuts down the system; run the same command to restart. Use `--no-open` on a headless machine. No npm install or build is needed.
 
+Subsequent native starts check stable GitHub releases, verify updates and back up existing state before activation. Run `node werk.mjs update check` to inspect releases or `node werk.mjs update disable` to opt out. `--no-update` skips one startup check. See [automatic updates](docs/reference/updates.md) for recovery and adopting state from 0.1.0.
+
 For automatic download and startup from GitHub, installer options and release verification, see the [release reference](docs/reference/releases.md).
 
 ## Portable apps for another project

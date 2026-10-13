@@ -98,3 +98,7 @@ management is optional and is not started by the single-line operator. See
 ## Native maintenance
 
 `node werk.mjs maintenance backup --state-dir PATH --to NEW_BACKUP_DIRECTORY` copies complete stopped native line/system state with private checksummed manifest. `verify --from BACKUP_DIRECTORY` validates it; `restore --from BACKUP_DIRECTORY --to NEW_STATE_DIRECTORY` refuses existing destinations. `diagnose --state-dir PATH` reports ownership and disk pressure without changing locks. All support `--json`; success is 0, failed checks/I/O are 1, invalid input is 2. See [backup and recovery](../how-to/upgrade-backup.md) for limits, shutdown requirements, privacy and Docker procedures.
+
+## Native release updates
+
+Downloaded releases check stable GitHub releases before native up/start. Use `--no-update` for one startup or `WERK_AUTO_UPDATE=0` for automation. `node werk.mjs update check|apply|status|enable|disable` manages this behavior; use `--line` for a single-line state. See [automatic updates](updates.md) for path selection, backups and non-destructive recovery. Source checkouts do not perform update checks.

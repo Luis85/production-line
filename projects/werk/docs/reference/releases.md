@@ -1,7 +1,7 @@
 # Release artifacts and verification
 
-Version 0.1.0 is packaged as `werk-0.1.0.tar.gz` and `werk-0.1.0.zip`. Each archive
-has one top directory, `werk-0.1.0/`. Obtain it and `SHA256SUMS` from a delivery
+Version 0.2.0 is packaged as `werk-0.2.0.tar.gz` and `werk-0.2.0.zip`. Each archive
+has one top directory, `werk-0.2.0/`. Obtain it and `SHA256SUMS` from a delivery
 source you trust. Checksums detect corruption or mismatch; an unsigned checksum
 file does not independently authenticate its publisher.
 
@@ -32,7 +32,7 @@ The installer is executable code from this repository's GitHub release. Review i
 
 For a specific version or prerelease, download `install.mjs` from `/releases/download/v<version>/install.mjs`. Prereleases are excluded from the stable `latest` download. The one-command native path requires tar (provided by current Windows/macOS and most Linux installations); curl is only needed for the initial installer download. Docker-only users can manually download either archive and use its existing Docker launchers without host Node.
 
-After manual extraction or installation, run `node werk.mjs up` from the installed directory. This is shorthand for `node werk.mjs system up --file examples/system.yaml`, resolving the default YAML relative to the installed launcher. `--file` or `WERK_SYSTEM_FILE` overrides that default; existing system options still apply. State defaults to `.werk-system/demo-system/` inside that version, including private Factory and per-line credentials. Startup opens the Factory after health checks; Ctrl+C stops all services. Port conflicts are reported by the runtime. Installation is retained if startup fails, so correct the problem and restart locally. A newer release installs alongside older versions; migrate state explicitly using the backup guide rather than assuming automatic upgrades.
+After manual extraction or installation, run `node werk.mjs up` from the installed directory. This is shorthand for `node werk.mjs system up --file examples/system.yaml`, resolving the default YAML relative to the installed launcher. `--file` or `WERK_SYSTEM_FILE` overrides that default; existing system options still apply. State defaults to `.werk-system/demo-system/` inside that version, including private Factory and per-line credentials. Startup opens the Factory after health checks; Ctrl+C stops all services. Port conflicts are reported by the runtime. Installation is retained if startup fails, so correct the problem and restart locally. New downloaded releases check stable GitHub releases on subsequent native startup; see [automatic updates](updates.md) for policy, backups, recovery and one-time adoption from 0.1.0. The installer itself still creates a separate version directory; select old state explicitly when adopting it.
 
 ## Verify before extraction
 
