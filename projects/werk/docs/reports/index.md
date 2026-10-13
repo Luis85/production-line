@@ -8,6 +8,7 @@ separately under `docs/handoff`; original source provenance is recorded in the
 
 | Record | Scope |
 | --- | --- |
+| [First release review and polish](first-release-review.md) | Five-perspective review, resolved defects and integrated release qualification |
 | [Six improvements review](six-improvements-review.md) | Qualification, recovery, onboarding, monitoring, security and scoped live execution |
 | [Six improvements Forge report](six-improvements-cli-report.md) | Tool use, friction and follow-up recommendations |
 | [Six improvements evidence](../evidence/six-improvements.json) | Sanitized local observations and explicit qualification limits |

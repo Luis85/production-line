@@ -136,11 +136,15 @@ reference. With all three `serve --context-repo`, `--context-commit` and
 `--context-vault-root` flags, the server resolves a ready requirement at that
 operator-owned full commit before inserting a task. The request project must
 match the server project. New bound requests accept only `project`,
-`requirementRef`, and optional `provider` / `priority`; title, criteria, context,
-source and other fields are rejected. Bound requirements must have 1–30 criteria.
+`requirementRef`, and optional `provider`, `priority` and `executionMode`; title,
+criteria, context, source and other fields are rejected. Missing `executionMode`
+means `mock`. Explicit `executionMode: cli` requires `provider: codex`; execution
+waits for an eligible operator-configured native Linux Codex worker. Selecting
+live execution does not bypass context resolution or authorize publication. Bound requirements must have 1–30 criteria.
 Unsupported or missing references fail before task creation. Explicit iteration
 imports use [pinned mode and its dedicated endpoint](../how-to/pinned-iteration-import.md)
-on bound lines; legacy import remains unbound. Execution remains mock in both modes.
+on bound lines; legacy import remains unbound. Both iteration-import modes create
+mock tasks; explicitly live requirement-reference intake uses `POST /v1/tasks`.
 
 Bound task responses add `context: {sha256, commit, featureId, path}`; full source
 content is returned only by the authenticated context endpoints. `task context

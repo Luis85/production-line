@@ -8,7 +8,7 @@ import { logOutputMode } from './service-logs.mjs';
 
 const help = `Werk local release runtime — Node.js 24.x, mock execution only
 
-node werk.mjs setup [--state-dir PATH] [--project demo] [--port 3000]
+node werk.mjs up [--file PATH] [--state-dir PATH] [--no-open] [--json]\n  Start the complete Factory system (defaults to the packaged example YAML).\nnode werk.mjs setup [--state-dir PATH] [--project demo] [--port 3000]
                    [--worker-port 4100] [--workers 1] [--runtime native|docker] [--json]
 node werk.mjs start [--state-dir PATH] [--log-output file|stream|both] [--no-open] [--json]
 node werk.mjs status|doctor|stop|open [--state-dir PATH] [--json]

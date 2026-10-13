@@ -14,7 +14,19 @@ line's webview or CLI for intake and work execution. Its rollup reads registered
 orchestrators and must represent unavailable/unauthorized/unconfigured lines
 explicitly instead of counting an unreachable line as empty or healthy.
 
-## Start the complete local example
+## Installed YAML systems and registry ownership
+
+For a downloaded release, use the [system tutorial](../tutorials/system-from-yaml.md).
+The commands below are the separate source-development fleet workflow.
+
+The managed YAML system owns its declared Factory, subfactory and line IDs.
+Factory identifies these records as YAML-managed and refuses updates/removal with
+HTTP 409, protecting the next restart from registry drift. Extra records created
+independently remain editable. Registering an extra line never starts its server.
+Use a deliberate stopped migration or a distinct new state directory to change
+the declared topology; see [drift and lifecycle](../reference/system-definition.md#drift-and-lifecycle).
+
+## Start the complete local source example
 
 ```text
 npm ci

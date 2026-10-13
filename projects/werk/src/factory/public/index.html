@@ -153,7 +153,7 @@ footer { border-top:1px solid var(--line); font-size:13px; margin-top:var(--spac
 <div class="content">
 <nav aria-label="Brotkrumennavigation"><ol id="breadcrumbs" class="breadcrumbs"></ol></nav>
 <div class="scope-heading"><div><h1 id="scope-title" tabindex="-1">Alle Fabriken</h1><p id="scope-description">Produktionslinien aller Fabriken, einschließlich ihrer Unterfabriken.</p></div><div class="actions"><button id="edit-factory" hidden>Fabrik bearbeiten</button><button id="delete-factory" class="danger" hidden>Fabrik löschen</button></div></div>
-<p id="access-summary"></p>
+<p id="access-summary"></p><p id="managed-registry-note" hidden></p>
 <p id="next-step" role="status"></p>
 <div class="freshness"><p id="freshness" role="status">Noch keine Statusabfrage.</p><button id="refresh">Aktualisieren</button><button id="pause" aria-pressed="false">Live-Updates pausieren</button></div>
 <section aria-labelledby="overview-heading"><h2 id="overview-heading">Ausführung im gewählten Bereich</h2><p id="coverage">Eine nicht erreichbare Linie bedeutet unbekannte Werte, nicht null Arbeit.</p><dl id="overview-facts" class="overview-facts"></dl></section>
@@ -177,7 +177,7 @@ footer { border-top:1px solid var(--line); font-size:13px; margin-top:var(--spac
 <script>
 'use strict';
 const $=selector=>document.querySelector(selector);
-const state={token:'',scope:decodeScope(location.pathname),factories:[],lines:[],cache:new Map(),request:0,session:0,controller:null,connecting:false,saving:false,paused:false,editor:null,deletion:null,returnFocus:null,refreshError:'',lineView:'topology',presentation:null,canWrite:true};
+const state={token:'',scope:decodeScope(location.pathname),factories:[],lines:[],cache:new Map(),request:0,session:0,controller:null,connecting:false,saving:false,paused:false,editor:null,deletion:null,returnFocus:null,refreshError:'',lineView:'topology',presentation:null,canWrite:true,managedRegistry:{factories:[],lines:[]}};
 const statusNames={available:'Erreichbar',unavailable:'Nicht erreichbar',unauthorized:'Zugriff abgelehnt',unconfigured:'Tokenvariable fehlt',invalid:'Ungültige Antwort'};
 const errorMessage=error=>error?.name==='TimeoutError'?'Die Statusabfrage hat zu lange gedauert.':error instanceof Error?error.message:String(error);
 function applyAccess(access){
@@ -186,6 +186,14 @@ function applyAccess(access){
   $('#access-summary').textContent=state.canWrite?'Zugriff: '+(role==='operator'?'Operator':'Administration')+' · Fabrikstruktur verwalten.':'Zugriff: nur lesen · Für Änderungen mit einem Operator- oder Administrationstoken verbinden.';
   for(const id of ['create-factory','register-line','edit-factory','delete-factory','empty-action'])$('#'+id).disabled=!state.canWrite;
 }
+const managedGuidance='Durch Systemdefinition verwaltet. Änderungen an diesen Einträgen benötigen eine explizite Migration der YAML-Topologie: Laufzeit stoppen und Zustand sichern. Ein Neustart übernimmt keine geänderte Topologie. Zusätzliche Einträge bleiben hier verwaltbar.';
+function applyManagedRegistry(value){
+  state.managedRegistry={factories:Array.isArray(value?.factories)?value.factories.filter(id=>typeof id==='string'):[],lines:Array.isArray(value?.lines)?value.lines.filter(id=>typeof id==='string'):[]};
+  const managed=state.managedRegistry.factories.length+state.managedRegistry.lines.length>0;
+  $('#managed-registry-note').hidden=!managed;$('#managed-registry-note').textContent=managed?managedGuidance:'';
+}
+function isManaged(type,id){return Boolean(id&&state.managedRegistry[type==='factory'?'factories':'lines'].includes(id))}
+function managedAction(button,type,id){button.disabled=!state.canWrite||isManaged(type,id);button.title=isManaged(type,id)?'Durch Systemdefinition verwaltet':''}
 function nextStep(lines,observations,{stale=false,loading=false}={}){
   if(loading)return 'Linienstatus wird geprüft. Registrierte Dienste werden dadurch nicht gestartet.';
   if(stale)return 'Status veraltet. Aktualisiere die Ansicht, bevor du die Verfügbarkeit beurteilst.';
@@ -228,8 +236,8 @@ function renderHierarchy(){
   for(const factory of chain){const item=element('li');if(factory.id===state.scope){item.textContent=factory.name;item.setAttribute('aria-current','page')}else item.append(action(factory.name,()=>navigate(factory.id)));breadcrumbs.append(item)}
   if(!state.scope)home.setAttribute('aria-current','page');
   $('#scope-title').textContent=findFactory(state.scope)?.name||'Alle Fabriken';
-  $('#scope-description').textContent=state.scope?'Alle Linien dieser Fabrik und ihrer Unterfabriken.':'Produktionslinien aller Fabriken, einschließlich ihrer Unterfabriken.';
-  $('#edit-factory').hidden=!state.scope;$('#delete-factory').hidden=!state.scope;
+  $('#scope-description').textContent=(isManaged('factory',state.scope)?'Durch Systemdefinition verwaltet · ':'')+(state.scope?'Alle Linien dieser Fabrik und ihrer Unterfabriken.':'Produktionslinien aller Fabriken, einschließlich ihrer Unterfabriken.');
+  $('#edit-factory').hidden=!state.scope;$('#delete-factory').hidden=!state.scope;for(const id of ['edit-factory','delete-factory'])managedAction($('#'+id),'factory',state.scope);
   $('#create-factory').textContent=state.scope?'Unterfabrik anlegen':'Fabrik anlegen';$('#register-line').disabled=!state.canWrite||!state.factories.length;
   document.title='Werk · '+$('#scope-title').textContent;
 }
@@ -279,7 +287,7 @@ function renderTopology(lines,observations,options){
       stations.append(orchestrator,connector,pool);flow.append(stations,capabilityNote(values?.capabilities));
       const footer=element('div');footer.className='flow-footer';footer.append(element('p',observed?'Geprüft '+time(observed.checkedAt):'Noch kein Messzeitpunkt'));
       const actions=element('div');actions.className='actions';const edit=action('Bearbeiten',()=>openLine(line)),remove=action('Abmelden',()=>confirmRemoval('line',line));
-      for(const [button,kind] of [[edit,'edit'],[remove,'remove']]){button.disabled=!state.canWrite;button.dataset.lineId=line.id;button.dataset.lineAction=kind;button.setAttribute('aria-label',line.name+(kind==='edit'?' bearbeiten':' abmelden'))}actions.append(edit,remove);footer.append(actions);flow.append(footer);
+      for(const [button,kind] of [[edit,'edit'],[remove,'remove']]){managedAction(button,'line',line.id);button.dataset.lineId=line.id;button.dataset.lineAction=kind;button.setAttribute('aria-label',line.name+(kind==='edit'?' bearbeiten':' abmelden'))}actions.append(edit,remove);footer.append(actions);flow.append(footer);if(isManaged('line',line.id))flow.append(element('small','Durch Systemdefinition verwaltet'));
       if(observed?.error){const error=element('p',observed.error);error.className='flow-error';flow.append(error)}
       group.append(flow);
     }
@@ -313,7 +321,7 @@ function renderOverview(overview,{stale=false,loading=false}={}){
     const workers=appendCell(row);workers.append(element('div',values?count(values.workers.online)+' / '+count(values.workers.total)+' online':'Unbekannt'));if(values)workers.append(element('p',count(values.workers.slotsBusy)+' / '+count(values.workers.slotsTotal)+' Slots belegt'));
     const controls=appendCell(row),url=safeWebview(line.webviewUrl);if(url){const link=element('a','Intake öffnen');link.href=url;link.target='_blank';link.rel='noopener noreferrer';link.className='line-intake';link.dataset.lineId=line.id;link.dataset.lineAction='intake';link.setAttribute('aria-label','Intake von '+line.name+' öffnen (neuer Tab)');name.append(link)}else name.append(element('p','Keine gültige Webview-URL'));name.append(capabilityNote(values?.capabilities));
     const actions=element('div');actions.className='actions';const edit=action('Bearbeiten',()=>openLine(line)),remove=action('Abmelden',()=>confirmRemoval('line',line));
-    for(const [button,kind] of [[edit,'edit'],[remove,'remove']]){button.disabled=!state.canWrite;button.dataset.lineId=line.id;button.dataset.lineAction=kind;button.setAttribute('aria-label',line.name+(kind==='edit'?' bearbeiten':' abmelden'))}actions.append(edit,remove);controls.append(actions);rows.append(row);
+    for(const [button,kind] of [[edit,'edit'],[remove,'remove']]){managedAction(button,'line',line.id);button.dataset.lineId=line.id;button.dataset.lineAction=kind;button.setAttribute('aria-label',line.name+(kind==='edit'?' bearbeiten':' abmelden'))}actions.append(edit,remove);controls.append(actions);if(isManaged('line',line.id))controls.append(element('p','Durch Systemdefinition verwaltet'));rows.append(row);
   }
   renderTopology(lines,byId,{stale,loading});
   if(focusedScope)Array.from($('#line-topology').querySelectorAll('button')).find(button=>button.dataset.topologyScope===focusedScope)?.focus({preventScroll:true});
@@ -326,7 +334,7 @@ async function refresh({registry=true}={}){
   if(!state.token||state.saving)return;
   const id=++state.request,scope=state.scope;state.controller?.abort();const controller=new AbortController();state.controller=controller;$('#workspace').setAttribute('aria-busy','true');renderCached({loading:true});
   try{
-    if(registry){const [factories,lines]=await Promise.all([api('/v1/factories',{signal:controller.signal}),api('/v1/lines',{signal:controller.signal})]);if(id!==state.request)return;state.factories=factories.factories;state.lines=lines.lines;if(scope&&!findFactory(scope)){state.scope='';history.replaceState(null,'','/');notice('Die gewählte Fabrik existiert nicht mehr. Alle Fabriken werden angezeigt.');renderHierarchy();return refresh({registry:false})}renderHierarchy()}
+    if(registry){const [factories,lines]=await Promise.all([api('/v1/factories',{signal:controller.signal}),api('/v1/lines',{signal:controller.signal})]);if(id!==state.request)return;state.factories=factories.factories;state.lines=lines.lines;applyManagedRegistry(factories.managedRegistry);if(scope&&!findFactory(scope)){state.scope='';history.replaceState(null,'','/');notice('Die gewählte Fabrik existiert nicht mehr. Alle Fabriken werden angezeigt.');renderHierarchy();return refresh({registry:false})}renderHierarchy()}
     const overview=await api('/v1/overview'+(state.scope?'?factoryId='+encodeURIComponent(state.scope):''),{signal:controller.signal});
     if(id!==state.request||scope!==state.scope)return;state.cache.set(scope,{data:overview});renderOverview(overview);if(state.refreshError&&$('#message').textContent===state.refreshError)notice('Verbindung wiederhergestellt. Die Statusdaten sind aktuell.','success');state.refreshError='';
   }catch(error){if(id!==state.request||controller.signal.aborted)return;if(error.status===401&&!state.saving){disconnect({preserveDrafts:true});notice('Zugangstoken nicht mehr gültig. Automatische Abfragen wurden gestoppt. Bitte erneut verbinden; ungespeicherte Eingaben bleiben erhalten.','error');return}renderCached();$('#freshness').textContent='Aktualisierung fehlgeschlagen · angezeigte Werte sind möglicherweise veraltet';state.refreshError=errorMessage(error)+' Über „Aktualisieren“ erneut versuchen.';notice(state.refreshError,'error')}
@@ -336,20 +344,20 @@ function navigate(scope,{push=true}={}){if(state.saving)return;state.scope=scope
 async function connect(event){
   event?.preventDefault();if(state.connecting||state.saving)return;const token=$('#token').value.trim();if(!token){notice('Bitte das Zugangstoken der Fabrikverwaltung eingeben.','error');return}
   state.connecting=true;const session=++state.session;$('#connect').disabled=true;$('#connect').textContent='Verbinde…';
-  try{const result=await api('/v1/factories',{token});if(session!==state.session)return;state.token=token;state.factories=result.factories;applyAccess(result.access);$('#token').value='';$('#login').hidden=true;$('#workspace').hidden=false;$('#disconnect').hidden=false;$('#connection-label').textContent='Verbunden';notice('Verbunden. Wähle eine Fabrik oder lege deine erste an.','success');renderHierarchy();$('#scope-title').focus();await refresh()}
+  try{const result=await api('/v1/factories',{token});if(session!==state.session)return;state.token=token;state.factories=result.factories;applyManagedRegistry(result.managedRegistry);applyAccess(result.access);$('#token').value='';$('#login').hidden=true;$('#workspace').hidden=false;$('#disconnect').hidden=false;$('#connection-label').textContent='Verbunden';notice('Verbunden. Wähle eine Fabrik oder lege deine erste an.','success');renderHierarchy();$('#scope-title').focus();await refresh()}
   catch(error){if(session===state.session)notice(error.status===401?'Token nicht akzeptiert. Verwende das Factory-Zugangstoken; Linien- und Enrollment-Token passen hier nicht.':errorMessage(error)+' Prüfe das Startterminal und die Factory-Adresse; danach erneut verbinden.','error')}
   finally{if(session===state.session){state.connecting=false;$('#connect').disabled=false;$('#connect').textContent='Verbinden'}}
 }
-function disconnect({preserveDrafts=false}={}){if(state.saving)return;++state.session;++state.request;state.controller?.abort();state.controller=null;state.token='';state.canWrite=true;$('#access-summary').textContent='';$('#next-step').textContent='';state.factories=[];state.lines=[];state.cache.clear();state.presentation=null;$('#line-topology').replaceChildren();state.refreshError='';state.returnFocus=null;state.connecting=false;$('#connect').disabled=false;$('#connect').textContent='Verbinden';$('#workspace').removeAttribute('aria-busy');state.deletion=null;$('#confirmation').hidden=true;$('#workspace').hidden=true;$('#login').hidden=false;$('#disconnect').hidden=true;$('#connection-label').textContent='Nicht verbunden';$('#token').value='';$('#factory-tree').replaceChildren();$('#line-rows').replaceChildren();$('#overview-facts').replaceChildren();if(!preserveDrafts){closeEditors();$('#factory-form').reset();$('#line-form').reset()}notice('Verbindung getrennt. Das Zugangstoken wurde aus dem Seitenzustand entfernt.');$('#token').focus()}
-function canEdit(){if(!state.canWrite){notice('Nur Lesezugriff. Verbinde dich für Änderungen mit einem Operator- oder Administrationstoken.');return false}if(state.saving)return false;if(state.editor||state.deletion){notice('Speichere oder verwirf zuerst die geöffnete Bearbeitung. Deine Eingaben bleiben erhalten.');return false}return true}
+function disconnect({preserveDrafts=false}={}){if(state.saving)return;++state.session;++state.request;state.controller?.abort();state.controller=null;state.token='';state.canWrite=true;applyManagedRegistry();$('#access-summary').textContent='';$('#next-step').textContent='';state.factories=[];state.lines=[];state.cache.clear();state.presentation=null;$('#line-topology').replaceChildren();state.refreshError='';state.returnFocus=null;state.connecting=false;$('#connect').disabled=false;$('#connect').textContent='Verbinden';$('#workspace').removeAttribute('aria-busy');state.deletion=null;$('#confirmation').hidden=true;$('#workspace').hidden=true;$('#login').hidden=false;$('#disconnect').hidden=true;$('#connection-label').textContent='Nicht verbunden';$('#token').value='';$('#factory-tree').replaceChildren();$('#line-rows').replaceChildren();$('#overview-facts').replaceChildren();if(!preserveDrafts){closeEditors();$('#factory-form').reset();$('#line-form').reset()}notice('Verbindung getrennt. Das Zugangstoken wurde aus dem Seitenzustand entfernt.');$('#token').focus()}
+function canEdit(type,id){if(isManaged(type,id)){notice(managedGuidance);return false}if(!state.canWrite){notice('Nur Lesezugriff. Verbinde dich für Änderungen mit einem Operator- oder Administrationstoken.');return false}if(state.saving)return false;if(state.editor||state.deletion){notice('Speichere oder verwirf zuerst die geöffnete Bearbeitung. Deine Eingaben bleiben erhalten.');return false}return true}
 function closeEditors(){if(state.saving)return;state.editor=null;state.deletion=null;for(const id of ['factory-editor','line-editor','confirmation'])$('#'+id).hidden=true}
 function openFactory(factory=null){
-  if(!canEdit())return;rememberFocus();clearFormErrors('factory');state.editor={type:'factory',id:factory?.id??null,newId:crypto.randomUUID()};$('#factory-name').value=factory?.name??'';
+  if(!canEdit('factory',factory?.id))return;rememberFocus();clearFormErrors('factory');state.editor={type:'factory',id:factory?.id??null,newId:crypto.randomUUID()};$('#factory-name').value=factory?.name??'';
   const excluded=factory?descendants(factory.id):new Set();selectOptions($('#factory-parent'),state.factories.filter(item=>!excluded.has(item.id)),factory?factory.parentId:state.scope,'Keine · oberste Ebene');
   $('#factory-editor-title').textContent=factory?'Fabrik bearbeiten oder verschieben':'Fabrik anlegen';$('#factory-error').textContent='';$('#factory-editor').hidden=false;$('#factory-editor-title').focus();$('#factory-name').focus();
 }
 function openLine(line=null){
-  if(!canEdit())return;if(!state.factories.length){openFactory();return}
+  if(!canEdit('line',line?.id))return;if(!state.factories.length){openFactory();return}
   rememberFocus();clearFormErrors('line');state.editor={type:'line',id:line?.id??null,newId:crypto.randomUUID()};$('#line-name').value=line?.name??'';selectOptions($('#line-factory'),state.factories,line?.factoryId??state.scope??'',null);if(!$('#line-factory').value)$('#line-factory').value=state.factories[0].id;
   $('#line-api').value=line?.orchestratorUrl??'';$('#line-web').value=line?.webviewUrl??'';$('#line-token-env').value=line?.tokenEnv??'';$('#line-editor-title').textContent=line?'Produktionslinie bearbeiten oder verschieben':'Produktionslinie registrieren';$('#line-error').textContent='';$('#line-editor').hidden=false;$('#line-name').focus();
 }
@@ -379,7 +387,7 @@ async function submitRecord(type,event){
   }catch(error){setFormError(type,errorMessage(error)+' Eingaben bleiben erhalten. Bei unklarer Übertragung unverändert erneut speichern.')}
   finally{setSaving(false)}
 }
-function confirmRemoval(type,item){if(!canEdit())return;rememberFocus();state.deletion={type,id:item.id,name:item.name,key:crypto.randomUUID()};$('#confirmation-title').textContent=type==='line'?'Linie „'+item.name+'“ abmelden?':'Fabrik „'+item.name+'“ löschen?';$('#confirmation-description').textContent=type==='line'?'Dies entfernt nur die Registrierung aus der Fabrikverwaltung. Orchestrator, Worker und laufende Aufträge werden nicht gestoppt oder gelöscht.':'Nur leere Fabriken können gelöscht werden. Verschiebe oder entferne zuvor zugeordnete Linien und Unterfabriken. Die Server anderer Fabriken bleiben unverändert.';$('#confirmation-error').textContent='';$('#confirm-delete').textContent=type==='line'?'Linie abmelden':'Leere Fabrik löschen';$('#confirmation').hidden=false;$('#confirmation-title').focus()}
+function confirmRemoval(type,item){if(!canEdit(type,item.id))return;rememberFocus();state.deletion={type,id:item.id,name:item.name,key:crypto.randomUUID()};$('#confirmation-title').textContent=type==='line'?'Linie „'+item.name+'“ abmelden?':'Fabrik „'+item.name+'“ löschen?';$('#confirmation-description').textContent=type==='line'?'Dies entfernt nur die Registrierung aus der Fabrikverwaltung. Orchestrator, Worker und laufende Aufträge werden nicht gestoppt oder gelöscht.':'Nur leere Fabriken können gelöscht werden. Verschiebe oder entferne zuvor zugeordnete Linien und Unterfabriken. Die Server anderer Fabriken bleiben unverändert.';$('#confirmation-error').textContent='';$('#confirm-delete').textContent=type==='line'?'Linie abmelden':'Leere Fabrik löschen';$('#confirmation').hidden=false;$('#confirmation-title').focus()}
 async function removeConfirmed(){if(state.saving||!state.deletion)return;const deletion={...state.deletion};setSaving(true);$('#confirmation-error').textContent='Wird entfernt…';try{await api('/v1/'+(deletion.type==='factory'?'factories':'lines')+'/'+encodeURIComponent(deletion.id),{method:'DELETE',idempotencyKey:deletion.key});setSaving(false);closeEditors();state.cache.clear();if(deletion.type==='factory'&&state.scope===deletion.id){state.scope='';history.replaceState(null,'','/')}notice(deletion.type==='line'?'Linie abgemeldet. Ihr Orchestrator läuft unverändert weiter.':'Leere Fabrik gelöscht.','success');await refresh();$('#scope-title').focus()}catch(error){$('#confirmation-error').textContent=errorMessage(error)+' Die Registrierung bleibt in dieser Ansicht, bis der Server ihre Entfernung bestätigt.';$('#confirmation-error').dataset.kind='error';$('#confirmation-error').focus()}finally{setSaving(false)}}
 $('#show-topology').onclick=()=>setLineView('topology');$('#show-table').onclick=()=>setLineView('table');
 $('#login-form').onsubmit=connect;$('#disconnect').onclick=disconnect;$('#scope-picker').onchange=()=>navigate($('#scope-picker').value);$('#refresh').onclick=()=>refresh();

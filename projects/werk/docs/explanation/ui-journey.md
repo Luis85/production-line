@@ -5,8 +5,9 @@
 The Factory webview is the portfolio/hierarchy entry point. Selecting a line
 opens its independent orchestrator, which starts on **Intake**. Factory has no
 duplicate taskboard. Partial line availability remains visible in rollups. Its HTTP-backed taskboard and
-portfolio display persisted server state and measurements from actual **mock**
-worker execution. `/concept` is a separate interactive simulation of the target
+portfolio display persisted server state and worker observations. Default **mock**
+attempts end as `simulated`; explicitly configured Codex CLI attempts can produce a
+local change set in `review`, which still requires human validation. `/concept` is a separate interactive simulation of the target
 architecture and delivery lifecycle; its browser state does not update SQLite.
 Keep the distinction visible at entry points and in completion language.
 
@@ -108,9 +109,11 @@ attempts. A missing token, cost or quality measurement stays unknown/not run.
 ## Verification boundary
 
 Source, state transitions, response ordering and rendering contracts have
-functional/static coverage. No browser or screenshot session was available for
-this pass. Visual rhythm, keyboard journeys, responsive tables, zoom and device
-touch behavior still require rendered inspection before a production release.
+functional/static coverage. Dated [review reports](../reports/index.md) record
+which rendered browser journeys and viewport checks were exercised in each pass.
+A historical pass without a browser session is not the current product contract;
+likewise, a screenshot alone does not establish keyboard, zoom or touch behavior.
+Use the evidence for the release candidate being assessed.
 
 ## Factory navigation
 

@@ -54,8 +54,11 @@ Validate the complete YAML, then use `system up`:
 ```sh
 node werk.mjs system plan --file system.yaml --json
 node werk.mjs system up --file system.yaml
-``` Existing state rejects changed definitions;
-configure a new state directory or follow the documented upgrade procedure.
+```
+
+Existing state rejects changed definitions. Configure a new state directory with
+`--state-dir /private/werk-live-state` on both commands, or follow the
+[upgrade procedure](upgrade-backup.md).
 The native launcher passes the effective worker configuration. A standalone
 worker can instead read the equivalent JSON through `--config worker.json`:
 

@@ -9,7 +9,16 @@ import { verifyRelease, isMainScript } from './verify.mjs';
 // Maintainer acceptance harness: only extracts a checksum-verified release to a new directory.
 export async function extractRelease(artifacts, destination, format = process.platform === 'win32' ? 'zip' : 'tar.gz') {
   if (!['zip', 'tar.gz'].includes(format)) throw Error('Unsupported release archive format');
-  const sums = (await readFile(join(artifacts, 'SHA256SUMS'), 'utf8')).trim().split('\n');
+  let sums = (await readFile(join(artifacts, 'SHA256SUMS'), 'utf8')).trim().split('\n');
+  // Older candidates had two archives; current candidates also checksum the installer.
+  const installers = sums.filter(line => /^[a-f0-9]{64}  install\.mjs$/.test(line));
+  if (installers.length > 1) throw Error('Duplicate installer checksum entry');
+  if (installers.length) {
+    const path = join(artifacts, 'install.mjs'), info = await lstat(path);
+    if (!info.isFile() || info.size > 1024 * 1024) throw Error('Invalid release installer');
+    if (createHash('sha256').update(await readFile(path)).digest('hex') !== installers[0].slice(0, 64)) throw Error('Installer checksum mismatch');
+    sums = sums.filter(line => line !== installers[0]);
+  }
   if (sums.length !== 2) throw Error('Expected checksums for exactly two release archives');
   const names = [];
   for (const line of sums) {

@@ -30,7 +30,7 @@ async function portRange(count = 1) {
   throw Error('Could not allocate smoke ports');
 }
 function cli(command) {
-  const child = spawn(process.execPath, [join(root, 'werk.mjs'), 'system', ...command, '--state-dir', state, '--json'], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+  const child = spawn(process.execPath, [join(root, 'werk.mjs'), ...(command[0] === 'up' ? command : ['system', ...command]), '--state-dir', state, '--json'], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
   let stdout = '', stderr = '';
   child.stdout.on('data', value => { stdout += value; if (stdout.length > 1048576) child.kill(); });
   child.stderr.on('data', value => { stderr += value; if (stderr.length > 1048576) child.kill(); });
@@ -51,7 +51,10 @@ async function command(args, code = 0) {
 async function eventually(probe, label, timeout = 60000) {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
-    if (launcher && launcher.child.exitCode !== null) throw Error('System exited before ' + label);
+    if (launcher && launcher.child.exitCode !== null) {
+      const result = await launcher.completion;
+      throw Error(`System exited before ${label} (exit ${result.code}): ${result.stdout.trim()}`);
+    }
     try { const result = await probe(); if (result) return result; } catch { /* Retry bounded local readiness. */ }
     await new Promise(ok => setTimeout(ok, 150));
   }

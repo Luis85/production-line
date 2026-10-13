@@ -1,7 +1,10 @@
 # Architecture and delivery workflow
 
-This document distinguishes the executable mock runtime from the target delivery
-workflow. The [client/server ADR](adr-001-client-server-boundaries.md) records
+This document distinguishes the current runtime from the target delivery
+workflow. Simulation is the default; an opt-in native Linux Codex adapter creates
+a local patch for human review. Git publication, review/rework and merge tracking
+remain operator actions or future integration work. See [execution modes](modes.md)
+for the adapter's scope and qualification limits. The [client/server ADR](adr-001-client-server-boundaries.md) records
 ownership, retry/fencing semantics and deployment tradeoffs. The
 [UI journey](ui-journey.md) maps the same boundaries to user-facing behavior.
 
@@ -32,7 +35,7 @@ SQLite files nor routes their tasks to alternate lines. Current Factory rollups
 are fresh observations, not a persisted cross-line timeseries; only hierarchy
 and line registrations are stored there.
 
-## Source of truth and branch relationship
+## Target source of truth and branch relationship
 
 The product team authors requirements, designs, concepts, specifications and
 acceptance tests in its project repository using Obsidian. Weekly planning
@@ -88,11 +91,13 @@ client. Intake remains the first webview page; repository import is the primary
 workflow and manual submissions are exceptions.
 
 `src/worker` owns polling, the execution adapter boundary, local journals,
-configuration, snapshots and a read-only local HTML status service. In the
-target provider integration it will also own isolated worktrees. Each slot
-must have its own worktree, provider session, cancellation controller and lease.
-The starter implements concurrent mock slots; real worktree and process-group
-isolation remain part of the coding-agent integration.
+configuration, snapshots and a read-only local HTML status service. Mock execution
+supports concurrent slots. The opt-in native Linux Codex adapter uses one slot
+and one attempt, creates a disposable local checkout from a pinned commit and
+manages provider cancellation and process-group cleanup. Its exact file allowlist
+and host-account trust boundary are described in the
+[live workflow](../how-to/run-codex-task.md). Concurrent live providers and the
+target feature-branch/PR lifecycle remain future integration work.
 
 `src/shared` owns versioned contracts and validators. It imports neither server
 nor worker. The build copies shared code into each independent CLI distribution.
@@ -119,9 +124,9 @@ Source folders group application policy, persistence, intake, context, HTTP infr
 | `orchestrator/intake/importer.ts` | CLI composition of local Git reads and the HTTP task gateway |
 | `orchestrator/intake/iteration.ts` | Committed-feature collection and import/revision policy through `IterationSource`/`IterationTaskGateway` ports |
 | `worker/cli.ts` | Parses runtime/status commands, loads configuration and supplies process cancellation |
-| `worker/runner.ts` | Worker composition/lifecycle: concrete HTTP gateway, mock adapter, journal, identity, status service and concurrent slots |
+| `worker/runner.ts` | Worker composition/lifecycle: concrete HTTP gateway, selected mock/Codex adapter, journal, identity, status service and scheduler slots |
 | `worker/application/*` | Attempt execution, lease renewal, reporting and ports; no URL/bearer-token or SQLite ownership |
-| `worker/infrastructure/*` | HTTP operation mapping, pinned-context verification, mock adapter and persisted registration identity |
+| `worker/infrastructure/*` | HTTP operation mapping, pinned-context verification, mock/Codex adapters, review artifacts and persisted registration identity |
 | `worker/infrastructure/journal/{snapshots,files,retention}.ts` | Measurement capture, immutable journal, serialized upload and durable local file operations |
 | `worker/status/server.ts`, `status/view.ts` | Read-only status HTTP server and HTML rendering respectively |
 | `shared/domain.ts`, `context.ts`, `validation.ts`, `snapshots.ts` | Domain data and pure validation of input/evidence |
@@ -222,15 +227,16 @@ check from causing endless automatic rework.
 
 Machine slots, profile sessions and subscription quota are different constraints.
 The starter enforces machine/profile slots, not real subscription limits. It
-records unknown provider/cost fields honestly. Claude and Codex are the first
-real adapters; Cursor can later implement the same transport contract.
+records unavailable provider/cost fields honestly. Only the narrow native Linux
+Codex adapter is implemented for live execution. Claude and further adapters,
+mixed live profiles and shared quota enforcement remain future work.
 
 ## Obsidian context
 
 An intake can now contain only `project` and `requirementRef` (one wikilink).
 Default unbound mock intake derives a label and preserves an unresolved reference.
 Operator-bound intake resolves a ready note at an exact commit and persists an
-immutable manifest. Workers verify the manifest before mock execution; the
+immutable manifest. Workers verify supplied manifests before execution; the
 reference alone remains insufficient proof of readiness. Explicit pinned
 iteration imports validate their source against that same server binding.
 
@@ -256,11 +262,17 @@ remains separate from the runtime.
 | Implemented | Still required for live delivery |
 | --- | --- |
 | Repo-ready importer, server-pinned Markdown context and worker verification | Full Obsidian artifacts, verified remote identity and explicit revisions |
-| SQLite, registration, idempotency, slots, leases | Per-project enrollment grants, user RBAC, quota groups |
-| Configurable mock worker and snapshot journal | Claude/Codex CLI auth, runner, tool/skill policy, worktrees |
-| Repo artifact file writing and telemetry API | Lease-checked Git push, early draft PR, review requests |
-| Snapshot dashboard and local worker status | Git webhook verification, CI/head checks, review/rework loop |
-| Docker/local fleet, CLI interfaces, tests | Container runtime validation and production operations hardening |
+| SQLite, registration, idempotency, slots, leases; viewer/operator/admin tokens | Broader identity integration, per-project enrollment grants and shared quota groups |
+| Mock worker and journal; opt-in single-slot native Linux Codex patch adapter | Additional live providers, mixed live profiles and project-specific tool/skill policy |
+| Verified local review artifacts and telemetry API | Lease-checked Git push, early draft PR and review requests |
+| Snapshot dashboard, worker detail, readiness and operational alerts | Git webhook verification, independent project checks and review/rework loop |
+| Native/Docker launchers, VM profile, qualification gates and stopped-state backup/restore | Environment-specific deployment qualification and high-availability design |
+
+The native, Docker and VM gates validate simulated task journeys. Their existence
+does not establish that a particular release passed: inspect its completed
+[qualification checks](../reference/releases.md#candidate-qualification-gates).
+The authenticated Codex qualification attempt in the managed environment received
+HTTP 403; provider-account and endpoint qualification remains deployment-specific.
 
 ## Source references
 

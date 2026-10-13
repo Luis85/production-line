@@ -1,6 +1,12 @@
 # Werk concept and imported starter
 
-Werk is an agent driven software production line with independently deployable Factory, line orchestrator and worker applications. The imported starter is an executable mock foundation; live provider execution, Git publication, review/rework and merge tracking remain planned work.
+Werk is an agent driven software production line with independently deployable
+Factory, line orchestrator and worker applications. The imported starter was a
+mock foundation. The current product keeps simulation as its default and adds an
+opt-in native Linux Codex adapter that produces a local patch for human review.
+Automated Git publication, review/rework and merge tracking remain planned work.
+Use [execution modes](explanation/modes.md) for the current capability and
+qualification limits; the imported documents below record the original baseline.
 
 ## Source and authority
 

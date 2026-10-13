@@ -5,6 +5,35 @@ has one top directory, `werk-0.1.0/`. Obtain it and `SHA256SUMS` from a delivery
 source you trust. Checksums detect corruption or mismatch; an unsigned checksum
 file does not independently authenticate its publisher.
 
+## Download and start in one command
+
+With Node.js 24, curl and tar on PATH, run in your chosen installation directory:
+
+```sh
+curl -fsSL https://github.com/Luis85/production-line/releases/latest/download/install.mjs -o werk-install.mjs && node werk-install.mjs
+```
+
+In Windows PowerShell:
+
+```powershell
+curl.exe -fsSL https://github.com/Luis85/production-line/releases/latest/download/install.mjs -o werk-install.mjs; if ($LASTEXITCODE -eq 0) { node werk-install.mjs }
+```
+
+The installer is executable code from this repository's GitHub release. Review it before running if needed. It contains the exact version and tar.gz SHA-256 from the candidate build; all subsequent downloads use that immutable version URL. No GitHub API token is required for public release assets. A missing release (404), failed download, wrong checksum or invalid extracted inventory fails before startup. Downloaded bytes and extraction are staged in a temporary directory and removed on failure. An existing `werk-<version>` directory is refused, preserving its files and state.
+
+| Installer option | Behavior |
+| --- | --- |
+| `--directory PATH` | Parent installation directory; defaults to the current directory |
+| `--no-start` | Verify and install without starting services |
+| `--no-open` | Start without opening a browser |
+| `--file PATH` | Start using your system YAML instead of the packaged example |
+| `--state-dir PATH` | Explicit persistent state directory for startup |
+| `--help` | Print options without downloading |
+
+For a specific version or prerelease, download `install.mjs` from `/releases/download/v<version>/install.mjs`. Prereleases are excluded from the stable `latest` download. The one-command native path requires tar (provided by current Windows/macOS and most Linux installations); curl is only needed for the initial installer download. Docker-only users can manually download either archive and use its existing Docker launchers without host Node.
+
+After manual extraction or installation, run `node werk.mjs up` from the installed directory. This is shorthand for `node werk.mjs system up --file examples/system.yaml`, resolving the default YAML relative to the installed launcher. `--file` or `WERK_SYSTEM_FILE` overrides that default; existing system options still apply. State defaults to `.werk-system/demo-system/` inside that version, including private Factory and per-line credentials. Startup opens the Factory after health checks; Ctrl+C stops all services. Port conflicts are reported by the runtime. Installation is retained if startup fails, so correct the problem and restart locally. A newer release installs alongside older versions; migrate state explicitly using the backup guide rather than assuming automatic upgrades.
+
 ## Verify before extraction
 
 Compare the SHA-256 of your chosen archive with its exact entry in `SHA256SUMS`.
@@ -18,8 +47,7 @@ The release includes the [example system definition](../../examples/system.yaml)
 and [system tutorial](../tutorials/system-from-yaml.md) for one-file native/Docker
 Factory deployment. The [infrastructure renderer](infrastructure.md) can prepare
 Ubuntu 24.04 cloud-init for a native VM using explicit artifact URLs and hashes.
-It neither publishes a release nor creates a VM; no Werk release has been
-published yet. Use the qualification evidence for the exact candidate, described below, rather than treating a rendered file as proof of a successful VM boot.
+It neither publishes a release nor creates a VM. The quick-start URL becomes available only after a stable release passes all gates and is published. Use the qualification evidence for the exact candidate, described below, rather than treating a rendered file as proof of a successful VM boot.
 
 ## Contents
 
@@ -32,7 +60,7 @@ Docker/Compose and a shell. Neither path requires building the source project.
 
 `release-manifest.json` records `schemaVersion`, `version`, required Node version,
 `sourceCommit` (null when no repository revision is available), and an inventory of file `path`, byte count, SHA-256 and mode.
-`SHA256SUMS` is a sidecar covering the two archives. Keep the manifest and checksum
+`SHA256SUMS` is a sidecar covering both archives and the standalone `install.mjs` asset. Keep the manifest and checksum
 record with deployment evidence. Source revision and passing package checks do
 not establish live-provider or production deployment qualification.
 
@@ -57,7 +85,7 @@ installation jobs. Publication requires every gate:
 
 | Gate | Environment and acceptance |
 | --- | --- |
-| Native | Linux, macOS and Windows; checksum verification and fresh extraction, first simulated task, isolated multi-line system, graceful stop and persistent restart |
+| Native | Linux, macOS and Windows; both archive formats verified, standalone installer download over a local HTTP fixture, checksum verification and fresh extraction, first simulated task, isolated multi-line system, graceful stop and persistent restart |
 | Docker | Linux; single-line and whole-system launchers without host Node on the launcher PATH, readiness, simulated tasks and persistent restart |
 | Cloud-init | Ubuntu 24.04 x86_64 VM under QEMU; actual cloud-init boot, authenticated readiness, non-root service, private state, read-only release, loopback listeners, guide page, simulated task evidence and systemd stop/restart |
 
@@ -84,3 +112,41 @@ remain enabled. SSH verifies a generated host public key. Fixture keys, guest
 state and user-data are deleted during teardown and are not uploaded as evidence.
 The harness opens SSH only on host loopback, uses a private QEMU guest network,
 and never requests provider credentials or creates a cloud account resource.
+
+## Publish a release
+
+The project-owned workflow is `src/infrastructure/workflows/release/release.yml`;
+Forge generates `.github/workflows/werk--release.yml`. Edit the source, then run
+`node bin/forge.js workflows sync` from the repository root. Pull requests and
+manual branch runs qualify candidates without publishing.
+
+1. Update `projects/werk/package.json` and its lockfile to the desired version in
+   a reviewed change (the initial version is `0.1.0`). Merge to `main` after checks pass.
+2. From a clean checkout of the merged commit, create and push its matching tag:
+
+   ```sh
+   git switch main
+   git pull --ff-only origin main
+   git tag -a v0.1.0 -m "Werk 0.1.0"
+   git push origin v0.1.0
+   ```
+
+3. Watch **Actions → Werk release**. The tag must match `package.json`, use a
+   three-part version (optionally with a prerelease suffix), and point to a
+   commit contained in `main`. Build, full checks, dependency audit, native
+   Linux/macOS/Windows, Docker and cloud-init VM qualification must all pass.
+4. The publishing job uses GitHub's automatic `GITHUB_TOKEN` with `contents: write`.
+   No separate release secret is required. It uploads both archives, `install.mjs`
+   and `SHA256SUMS` to a draft, then publishes it. Stable versions are marked
+   latest; versions such as `0.2.0-rc.1` are prereleases and never replace latest.
+   Release notes include download/start commands.
+
+The latest stable link intentionally does not change on every merge. Only tag a
+stable version that should become the new latest release; use prerelease tags
+for preview builds. GitHub Actions and repository policy must permit the workflow
+token to create releases. Public anonymous downloads also require a public repository.
+
+If qualification fails, inspect and fix it before creating a new version/tag.
+If upload fails, the release remains a draft: rerun the failed publishing job to
+complete it. A rerun refuses to modify an already published release. Do not move
+published tags or replace published assets; ship a new version instead.

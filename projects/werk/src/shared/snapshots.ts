@@ -95,7 +95,7 @@ export function validateSnapshot(value: unknown): Snapshot {
         if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString() !== value)
             invalid(`${name}: UTC ISO timestamp required`);
     };
-    if (root.schemaVersion !== 1 || !['before', 'after'].includes(root.phase as string) || !['mock', 'cli'].includes(String(root.mode)) || !['claude', 'codex'].includes(root.provider as string))
+    if (root.schemaVersion !== 1 || !['before', 'after'].includes(root.phase as string) || !['mock', 'cli'].includes(root.mode as string) || !['claude', 'codex'].includes(root.provider as string))
         invalid('Invalid snapshot envelope');
     for (const name of ['pairId', 'workerId', 'project', 'taskId', 'profileId'])
         if (identifier(root[name], name) !== root[name])
