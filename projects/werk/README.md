@@ -94,13 +94,14 @@ The wrappers configure persistent state, build the runtime image from the prebui
 
 ## Operate and maintain
 
-Native commands include `status`, `doctor`, `stop` and `open`. Use `--json` and `--no-open` for automation; start remains a foreground process. Docker wrappers expose the corresponding container operations. No command silently resets application state or upgrades an installation in place.
+Native commands include `status`, `doctor`, `stop` and `open`. Use `--json` and `--no-open` for automation; start remains a foreground process. Docker wrappers expose the corresponding container operations. Downloaded native releases check for stable GitHub updates before startup, preserve state and take a verified backup before activation. Use `update disable` to opt out, or `--no-update` to skip one check. See [automatic updates](docs/reference/updates.md).
 
 - [Manage roles and TLS ingress](docs/how-to/manage-access.md): viewer/operator credentials, rotation and audit events.
 - [Run a trusted Codex task](docs/how-to/run-codex-task.md): explicit native policy and local patch review.
 - [Monitor a runtime](docs/how-to/monitor-runtime.md): readiness, capability observations, worker detail, request IDs and bounded logs.
 - [Maintain a runtime](docs/how-to/maintain-runtime.md): inspect health, start, stop and recover.
 - [Operate with agents](docs/how-to/operate-with-agents.md): structured commands and safe credential handling.
+- [Automatic updates](docs/reference/updates.md): stable release checks, policy, verified activation and recovery.
 - [Upgrade and back up](docs/how-to/upgrade-backup.md): stop writers, retain state and verify a separate installation.
 - [CLI reference](docs/reference/runtime-cli.md) and [configuration](docs/reference/configuration.md): exact options, outputs and state layout.
 

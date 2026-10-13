@@ -42,6 +42,7 @@ follows [Diátaxis](https://diataxis.fr/).
   environments and drift handling.
 
 - [Observability, capabilities and worker detail](reference/observability.md)
+- [Automatic updates](reference/updates.md): stable releases, backups and recovery.
 - [Runtime operator CLI](reference/runtime-cli.md)
 - [Configuration, environment and state](reference/configuration.md)
 - [Release contents and verification](reference/releases.md)

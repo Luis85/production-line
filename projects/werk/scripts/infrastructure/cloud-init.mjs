@@ -54,7 +54,7 @@ export async function render(prepared) {
     write_files: [
       file('/etc/werk/artifacts.json', `${JSON.stringify(artifacts, null, 2)}\n`),
       file('/etc/werk/system.yaml', `${JSON.stringify(definition, null, 2)}\n`, '0640', 'root:werk'),
-      file('/etc/werk/runtime.env', 'WERK_STATE_DIR=/var/lib/werk\nWERK_SYSTEM_FILE=/etc/werk/system.yaml\nWERK_LOG_OUTPUT=stream\n', '0640', 'root:werk'),
+      file('/etc/werk/runtime.env', 'WERK_STATE_DIR=/var/lib/werk\nWERK_SYSTEM_FILE=/etc/werk/system.yaml\nWERK_LOG_OUTPUT=stream\nWERK_UPDATES=external\n', '0640', 'root:werk'),
       file('/etc/werk/provision.py', provision),
       file('/etc/werk/verify-release.mjs', verifier),
       file('/etc/systemd/system/werk-system.service', serviceUnit(artifacts), '0644'),

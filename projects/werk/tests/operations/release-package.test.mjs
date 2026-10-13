@@ -18,7 +18,7 @@ async function fixture(t) {
   const put = async (path, content = 'fixture\n') => { await mkdir(dirname(join(root, path)), {recursive:true}); await writeFile(join(root, path), content); };
   await put('scripts/release/install.mjs', 'export const release = /* RELEASE_CONFIG */ null;\n');
   await put('package.json', JSON.stringify({version:'0.1.0'}));
-  for (const path of releaseFiles) await put(path);
+  for (const path of releaseFiles) if (path !== 'scripts/release/install.mjs') await put(path);
   for (const path of releaseTrees) await mkdir(join(root,path),{recursive:true});
   for (const path of releaseDocs) await put(path);
   for (const app of ['factory','orchestrator','worker']) await put(`src/${app}/dist/${app}/cli.js`, `console.log('${app}');\n`);

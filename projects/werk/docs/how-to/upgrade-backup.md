@@ -1,11 +1,8 @@
 # Upgrade, back up and restore
 
-Werk does not currently provide an automatic updater. Upgrade by verifying a new
-archive and extracting it separately. The download-and-start installer creates a
-new version directory; it does not discover or migrate an earlier installation's
-state. Use `--no-start` when downloading an upgrade, then explicitly select the
-existing stopped state as described below. Keep a working rollback copy of the old
-release and a stopped-state backup. See [release contents](../reference/releases.md).
+Native downloaded releases from 0.2.0 onward provide [automatic startup updates](../reference/updates.md), with verified downloads, stopped-state backups and retained previous releases. Use `node werk.mjs update check` to inspect availability and `update disable` to opt out. Running systems are not restarted by a background timer.
+
+The procedures below cover manual adoption from 0.1.0, Docker/VM upgrades and backup recovery. The installer creates a new version directory; use `--no-start` and explicitly select existing stopped state when moving from an older installation. Keep a working old release and verified backup. See [release contents](../reference/releases.md).
 
 ## Verified native maintenance commands
 
