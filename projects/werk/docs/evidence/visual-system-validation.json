@@ -1,0 +1,178 @@
+{
+  "date": "2026-10-13",
+  "runtime": "Native mock system: Factory, two independent lines, two workers",
+  "viewports": [
+    1440,
+    390
+  ],
+  "capture": {
+    "errors": [],
+    "report": [
+      {
+        "name": "factory",
+        "width": 1440,
+        "scroll": 1440
+      },
+      {
+        "name": "factory-2d",
+        "width": 1440,
+        "scroll": 1440
+      },
+      {
+        "name": "line",
+        "width": 1440,
+        "scroll": 1440
+      },
+      {
+        "name": "intake",
+        "width": 1440,
+        "scroll": 1440
+      },
+      {
+        "name": "workers",
+        "width": 1440,
+        "scroll": 1440
+      },
+      {
+        "name": "worker-detail",
+        "width": 1440,
+        "scroll": 1440
+      },
+      {
+        "name": "tasks",
+        "width": 1440,
+        "scroll": 1440
+      },
+      {
+        "name": "metrics",
+        "width": 1440,
+        "scroll": 1440
+      },
+      {
+        "name": "snapshot",
+        "width": 1440,
+        "scroll": 1440
+      },
+      {
+        "name": "guide",
+        "width": 1440,
+        "scroll": 1440
+      },
+      {
+        "name": "composer",
+        "width": 1440
+      },
+      {
+        "name": "worker-status",
+        "width": 1440,
+        "scroll": 1440
+      },
+      {
+        "name": "factory",
+        "width": 390,
+        "scroll": 390
+      },
+      {
+        "name": "factory-2d",
+        "width": 390,
+        "scroll": 390
+      },
+      {
+        "name": "line",
+        "width": 390,
+        "scroll": 390
+      },
+      {
+        "name": "intake",
+        "width": 390,
+        "scroll": 390
+      },
+      {
+        "name": "workers",
+        "width": 390,
+        "scroll": 390
+      },
+      {
+        "name": "worker-detail",
+        "width": 390,
+        "scroll": 390
+      },
+      {
+        "name": "tasks",
+        "width": 390,
+        "scroll": 390
+      },
+      {
+        "name": "metrics",
+        "width": 390,
+        "scroll": 390
+      },
+      {
+        "name": "snapshot",
+        "width": 390,
+        "scroll": 390
+      },
+      {
+        "name": "guide",
+        "width": 390,
+        "scroll": 390
+      },
+      {
+        "name": "composer",
+        "width": 390
+      },
+      {
+        "name": "worker-status",
+        "width": 390,
+        "scroll": 390
+      }
+    ]
+  },
+  "behavior": {
+    "checks": [
+      "Direct #workers link after authentication",
+      "Worker-list polling preserves keyboard focus",
+      "Keyboard component selection",
+      "Outage retains labeled stale values; retry recovers",
+      "Disconnect clears all visual entity data",
+      "Viewer map/editor respects read-only access",
+      "Composer rejects invalid IDs, reserved names and overflowing port ranges; actual download succeeds",
+      "320px guide has no page overflow"
+    ],
+    "errors": []
+  },
+  "reviewFixes": {
+    "checks": [
+      {
+        "check": "Mobile Factory geometry in first viewport",
+        "canvasTop": 570.96875
+      },
+      {
+        "check": "3D touch and keyboard pan"
+      },
+      {
+        "check": "2D touch and keyboard pan"
+      },
+      {
+        "check": "Active mobile navigation visible after map action and browser back/forward"
+      },
+      {
+        "check": "Worker detail closes to visual card with subsequent Tab"
+      },
+      {
+        "check": "Task detail closes to visual card"
+      },
+      {
+        "check": "Delayed active-task lookup does not overwrite a newer selection"
+      }
+    ],
+    "errors": []
+  },
+  "reviewDisposition": "ship; all five listed required fixes resolved",
+  "limits": [
+    "Chromium on Linux; no independent Safari/Firefox or physical-device validation",
+    "Default tasks were simulated; no claim of code implementation or merged PR",
+    "Impeccable context/detector launcher unavailable; source and browser review used",
+    "YAML composer prepares a new one-line definition and does not migrate a running deployment"
+  ]
+}

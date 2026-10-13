@@ -51,6 +51,13 @@ async function collect(projectRoot) {
     if (!(await lstat(source)).isFile()) throw Error(`Release template must be a regular file: ${template}`);
     entries.push({ path, content: await readFile(source), mode: 0o644 });
   }
+  // The standalone guide must match the self-contained page served by the runtime.
+  const builtGuide = entries.find(entry => entry.path === 'src/factory/dist/factory/public/guide.html');
+  const standaloneGuide = entries.find(entry => entry.path === 'src/guide/public/index.html');
+  if (!builtGuide || !standaloneGuide) throw Error('Missing composed system guide; run npm run build first');
+  totalBytes += builtGuide.content.length - standaloneGuide.content.length;
+  if (totalBytes > 256 * 1024 * 1024) throw Error('Release exceeds packaging limits (256 MiB)');
+  standaloneGuide.content = builtGuide.content;
   const paths = new Set(entries.map(entry => entry.path));
   for (const entry of entries.filter(entry => entry.path.endsWith('.md') && !entry.path.startsWith('src/'))) {
     for (const match of entry.content.toString('utf8').matchAll(/!?\[[^\]]+\]\(([^\s)]+)(?:\s+"[^"]*")?\)/g)) {

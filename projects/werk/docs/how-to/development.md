@@ -2,7 +2,7 @@
 
 Three independently deployable Node.js / TypeScript CLI applications, a Factory
 hierarchy/line registry, a SQLite orchestrator, configurable workers, a repository importer and measurable mock
-execution. Each orchestrator webview opens on **Intake**. The 3D concept prototype is served
+execution. Each orchestrator webview opens on its live **line map**; choose **Intake** to submit work. The 3D concept prototype is served
 at `/concept`; it deliberately retains separate simulated browser state.
 
 This guide requires the source checkout, Node 24 and npm. For an extracted release with no build step, use the [local first-task tutorial](../tutorials/local-first-task.md) or [Docker tutorial](../tutorials/docker-first-task.md). Developer fleet launchers below retain their separate `.state` directories; release operators use `.werk`.

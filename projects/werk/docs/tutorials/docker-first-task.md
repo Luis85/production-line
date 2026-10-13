@@ -45,7 +45,7 @@ Windows, explicitly export a private copy first:
 The command reports the path `.werk/credential-export/credentials.json` without
 printing secrets. It creates a new directory with access restricted to the current
 user and refuses to overwrite an existing export. Read the token privately there.
-Enter the admin token in the login form. In Intake, verify the project is `demo` and submit
+Enter the admin token in the login form, then choose **Intake**. Verify the project is `demo` and submit
 `[[Features/Customer portal]]`.
 The reference does not need to exist for the default unbound mock workflow.
 

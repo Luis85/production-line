@@ -18,6 +18,15 @@ async function compile(source, destination) {
     }
   }
 }
+async function composeView(path, experience) {
+  let html = await readFile(path, 'utf8');
+  const css = await readFile(join(root, 'src/shared/ui/spatial.css'), 'utf8');
+  const shared = await readFile(join(root, 'src/shared/ui/spatial.js'), 'utf8');
+  const code = await readFile(join(root, experience), 'utf8');
+  html = html.replace('</head>', '<style>' + css + '</style></head>')
+    .replace('</body>', '<script>' + shared + '\n' + code + '</script></body>');
+  await writeFile(path, html);
+}
 for (const app of apps) {
   const dest = join(root, 'src', app, 'dist');
   const staging = join(root, 'src', app, `.build-${process.pid}`);
@@ -30,6 +39,10 @@ for (const app of apps) {
     }
     if (['factory', 'orchestrator'].includes(app)) {
       await cp(join(root, 'src/guide/public/index.html'), join(staging, app, 'public/guide.html'));
+    }
+    if (['factory', 'orchestrator'].includes(app)) {
+      await composeView(join(staging, app, 'public/index.html'), `src/${app}/public/experience.js`);
+      await composeView(join(staging, app, 'public/guide.html'), 'src/guide/public/experience.js');
     }
     if (app === 'orchestrator') {
       await mkdir(join(staging,'node_modules'),{recursive:true});

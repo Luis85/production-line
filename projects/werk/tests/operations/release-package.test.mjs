@@ -23,6 +23,7 @@ async function fixture(t) {
   for (const path of releaseDocs) await put(path);
   for (const app of ['factory','orchestrator','worker']) await put(`src/${app}/dist/${app}/cli.js`, `console.log('${app}');\n`);
   for (const template of ['readme.md.txt','agents.md.txt','docs-index.md.txt']) await put(`scripts/release/templates/${template}`);
+  await put('src/factory/dist/factory/public/guide.html','<!doctype html><title>Composed spatial guide</title>');
   return {root, put};
 }
 test('packages both formats with identical verified payload, normalized modes, checksums and no local state', async t => {
@@ -38,6 +39,7 @@ test('packages both formats with identical verified payload, normalized modes, c
   const files=unzipSync(zipBytes);
   assert.ok(Object.keys(files).every(path=>path.startsWith('werk-0.1.0/')));
   assert.ok(Object.values(files).every(bytes=>!Buffer.from(bytes).includes('SECRET_NEVER_SHIP')));
+  assert.equal(Buffer.from(files['werk-0.1.0/src/guide/public/index.html']).toString(), '<!doctype html><title>Composed spatial guide</title>');
   const extracted=join(root,'fresh extraction with spaces');
   await mkdir(extracted);
   await extract({file:join(root,'release/werk-0.1.0.tar.gz'),cwd:extracted,chmod:true});
