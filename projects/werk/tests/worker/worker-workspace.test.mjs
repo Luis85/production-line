@@ -53,6 +53,9 @@ test('API providers send correct protocols, do not retain OpenAI responses and r
 test('local tasks queue durably, obey concurrency, produce applicable patches and preserve the original checkout', async t => {
   const { directory, settings, sessions } = await fixture(t), repo = join(directory, 'repo'); await mkdir(repo); await writeFile(join(repo, 'hello.txt'), 'before\n');
   const git = promisify(execFile); await git('git', ['init', repo]);
+  // The fixture asserts exact LF patch content, independently of host Git defaults.
+  await git('git', ['config', 'core.autocrlf', 'false'], { cwd: repo });
+  await git('git', ['config', 'core.eol', 'lf'], { cwd: repo });
   await settings.update({ board: { paused: true, maxParallel: 1, queueCapacity: 2 } });
   let active = 0, maximum = 0;
   const model = () => ({ async reply(_, signal) { active++; maximum = Math.max(maximum, active); try { await delay(50); signal.throwIfAborted(); return JSON.stringify({ summary: 'Fixture change; tests not run', files: [{ path: 'hello.txt', content: 'after\n' }] }); } finally { active--; } } });

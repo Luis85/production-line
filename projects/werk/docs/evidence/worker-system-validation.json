@@ -302,5 +302,33 @@
     "imageBuildPassed": true,
     "timeoutChanged": false
   },
-  "newReleasePublished": false
+  "newReleasePublished": false,
+  "initialCi": {
+    "commit": "dd15ab1ff2e26f2b1b23ea7d928d5fdbbb8967ba",
+    "source": {
+      "linux": "passed",
+      "macos": "passed",
+      "windows": "two test fixture failures corrected"
+    },
+    "releaseRun": 38447485957,
+    "nativePlatforms": [
+      "linux",
+      "macos",
+      "windows"
+    ],
+    "dockerRelease": "passed",
+    "dockerFactorySystem": "passed",
+    "ubuntuCloudInit": "passed",
+    "published": false
+  },
+  "fixtureCorrection": {
+    "sqlite": "close before deleting database",
+    "git": "explicit LF configuration in temporary patch repository",
+    "focusedTests": {
+      "tests": 17,
+      "pass": 17,
+      "fail": 0
+    },
+    "applicationSourceChanged": false
+  }
 }

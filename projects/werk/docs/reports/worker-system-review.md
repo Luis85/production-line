@@ -159,6 +159,23 @@ These are scoped engineering/product reviews, not a security certification.
 - Final engineering, security, worker-lifecycle and visual finish findings were
   resolved and rechecked within their stated scopes.
 
+## CI follow-up
+
+The initial implementation commit `dd15ab1` passed Linux/macOS source checks,
+all three independent service builds and the full
+[release qualification workflow](https://github.com/Luis85/production-line/actions/runs/38447485957):
+extracted native releases on Linux, macOS and Windows, both Docker startup
+journeys and the Ubuntu cloud-init VM. This provides successful Docker qualification
+beyond the local timeout recorded above. Publishing was skipped, as intended for a PR.
+
+Windows source CI identified two test-fixture defects: SQLite cleanup ran before
+closing the database, and the patch fixture inherited host Git CRLF conversion.
+Cleanup now closes the database first, including failure paths. The temporary
+patch repository explicitly configures LF; the exact-content assertion remains.
+Both affected suites passed locally after correction (17/17). Application source
+and the photographed UI did not change. The PR checks carry the latest complete
+cross-platform result.
+
 ## Limits
 
 - Subscription/API adapters were checked with protocol fixtures and failure
