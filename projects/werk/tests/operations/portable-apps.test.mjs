@@ -72,7 +72,15 @@ test('copied apps operate independently with agent tasks, durable state and late
   // Windows supports API providers; this paused/cancelled fixture must never call one.
   const queuedProvider = process.platform === 'win32' ? { id: 'openai-api', model: 'test-do-not-execute', apiKey: 'fixture-not-a-real-key' } : { id: 'codex-cli', executable: process.execPath };
   await ok('worker', 'settings set', [], { provider: queuedProvider, board: { paused: true, queueCapacity: 4 } });
-  const task = { id: 'ci-task-1', title: 'Agent task', provider: queuedProvider.id, message: 'Fixture instruction; do not execute.' };
+  const definitionInput = { name: 'Project reviewer', yaml: 'version: "15"\nagents:\n  root:\n    model: openai/fixture-model\n    instruction: Review acceptance criteria before proposing work.\n' };
+  const preview = await ok('worker', 'definition preview', [], { yaml: definitionInput.yaml });
+  assert.equal(preview.agents[0].name, 'root');
+  const imported = await ok('worker', 'definition import', [], definitionInput);
+  const definition = imported.definitions.find(item => item.name === definitionInput.name);
+  assert.ok(definition?.id); assert.match(definition.digest, /^[a-f0-9]{64}$/);
+  assert.equal((await ok('worker', 'definition list')).definitions.length, 1);
+  assert.equal((await ok('worker', 'provider check', ['--id', 'openai-api'])).authentication, 'not-verified');
+  const task = { id: 'ci-task-1', title: 'Agent task', provider: queuedProvider.id, definitionId: definition.id, agent: 'root', message: 'Fixture instruction; do not execute.' };
   const created = await ok('worker', 'task create', [], task); assert.equal(created.session.id, task.id); assert.equal(created.session.status, 'queued');
   assert.equal((await ok('worker', 'task create', [], task)).chat.messages.length, 2);
   assert.equal((await invokeApp('worker', 'task create', [], { ...task, message: 'different input' })).code, 2);
@@ -90,6 +98,8 @@ test('copied apps operate independently with agent tasks, durable state and late
   assert.equal((await ok('worker', 'environment')).status.machineId, identity);
   const retained = await ok('worker', 'task get', ['--id', task.id]); assert.equal(retained.chat.messages.length, 4); assert.equal(retained.session.status, 'cancelled');
   assert.equal((await ok('worker', 'task list')).records.some(record => record.busy), false, 'restart cancelled all pending model calls');
+  assert.equal(retained.session.definition.digest, definition.digest);
+  assert.equal((await ok('worker', 'definition list')).definitions[0].digest, definition.digest);
   // Protocol fixture only: no provider credentials or live LLM calls.
   if (process.platform === 'linux') {
     const executable = join(entries.worker.cwd, 'model-fixture'), audit = join(outer, 'model-events.jsonl');

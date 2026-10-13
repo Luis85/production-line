@@ -1,3 +1,4 @@
+import { WorkerDefinitions, definitionConnection, validateSnapshot, type DefinitionSnapshot } from './definitions.js';
 import { SerialExecutor } from './serial-executor.js';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -9,9 +10,10 @@ import { atomicWrite, ensureDirectory, readBoundedFile } from '../infrastructure
 import { modelFor, type ProviderId } from '../infrastructure/providers.js';
 import type { WorkerSettings } from '../infrastructure/settings.js';
 export type TaskState = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
-export interface SessionRecord { submissionHash?: string; taskState?: TaskState; taskId: string; kind: 'chat' | 'local' | 'orchestrator'; id: string; title: string; provider: ProviderId; createdAt: string; archived: boolean; }
+export interface SessionRecord { definition?: DefinitionSnapshot; submissionHash?: string; taskState?: TaskState; taskId: string; kind: 'chat' | 'local' | 'orchestrator'; id: string; title: string; provider: ProviderId; createdAt: string; archived: boolean; }
 /** Worker-owned transcripts are provider-independent; native CLI session IDs never cross providers. */
 export class WorkerSessions {
+  readonly definitions: WorkerDefinitions;
   private directory: string; private settings: WorkerSettings; private model: typeof modelFor;
   readonly executor: SerialExecutor;
   private writes = Promise.resolve();
@@ -19,11 +21,12 @@ export class WorkerSessions {
   protectTask(id: string, protectedTask: boolean) { if (protectedTask) this.protectedTasks.add(id); else this.protectedTasks.delete(id); }
   private records: SessionRecord[] = []; private selected = 'default';
   private instances = new Map<string, WorkerConversation>(); private changing = false;
-  constructor(directory: string, settings: WorkerSettings, model: typeof modelFor = modelFor) { this.model = model; this.directory = directory; this.settings = settings; this.executor = new SerialExecutor(() => settings.value.board.paused); }
+  constructor(directory: string, settings: WorkerSettings, model: typeof modelFor = modelFor) { this.definitions = new WorkerDefinitions(directory); this.model = model; this.directory = directory; this.settings = settings; this.executor = new SerialExecutor(() => settings.value.board.paused); }
   async init() {
-    try { const value = JSON.parse(await readBoundedFile(join(this.directory, 'sessions.json'), 131072));
+    await this.definitions.init();
+    try { const value = JSON.parse(await readBoundedFile(join(this.directory, 'sessions.json'), 2097152));
       if (!Array.isArray(value.records) || !value.records.length || value.records.length > 100 || new Set(value.records.map((item: SessionRecord) => item.id)).size !== value.records.length) throw Error('Invalid sessions');
-      for (const record of value.records) { identifier(record.id, 'session'); text(record.title, 'Session title', 120); this.settings.provider(record.provider); if (typeof record.archived !== 'boolean' || !Number.isFinite(Date.parse(record.createdAt))) throw Error('Invalid session'); }
+      for (const record of value.records) { identifier(record.id, 'session'); text(record.title, 'Session title', 120); this.settings.provider(record.provider); if (record.definition) { validateSnapshot(record.definition); definitionConnection(this.settings.provider(record.provider), record.definition); } if (typeof record.archived !== 'boolean' || !Number.isFinite(Date.parse(record.createdAt))) throw Error('Invalid session'); }
       if (!value.records.some((record: SessionRecord) => record.id === value.selected && !record.archived)) throw Error('Invalid selected session');
       this.records = value.records.map((record: SessionRecord) => ({ ...record, taskId: record.taskId ?? record.id, kind: record.kind ?? 'chat', taskState: record.kind === 'orchestrator' && ['running', 'queued'].includes(record.taskState ?? '') ? 'failed' : record.taskState })); this.selected = value.selected;
     } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
@@ -34,7 +37,7 @@ export class WorkerSessions {
   private async load(record: SessionRecord) {
     const directory = record.id === 'default' ? this.directory : join(this.directory, 'sessions', record.id);
     await ensureDirectory(directory);
-    const model = this.model(this.settings.provider(record.provider), directory);
+    const model = this.model(definitionConnection(this.settings.provider(record.provider), record.definition), directory);
     const conversation = new WorkerConversation(new FileConversationStore(directory), model, 120000, this.executor, record.id);
     await conversation.init(); this.instances.set(record.id, conversation);
   }
@@ -67,13 +70,14 @@ export class WorkerSessions {
     if (id === this.selected && record.title === 'New task' && typeof message === 'string') { record.title = message.trim().slice(0, 120); await this.persist(); }
     return result;
   }
-  async ensureTask(id: string, kind: SessionRecord['kind'], title: string, provider: ProviderId, submissionHash?: string) {
+  async ensureTask(id: string, kind: SessionRecord['kind'], title: string, provider: ProviderId, submissionHash?: string, definition?: DefinitionSnapshot) {
     const found = this.records.find(record => record.id === id); if (found) return found;
     if (this.changing) throw new DomainError('conflict', 'Session change in progress. Retry task preparation.');
     if (this.records.length >= 100) throw new DomainError('conflict', 'Task session limit reached (100). Delete old task history before accepting more.');
     this.changing = true;
     try {
-      const record: SessionRecord = { ...(submissionHash ? { submissionHash } : {}), id: identifier(id, 'task session'), taskId: id, kind, ...(kind === 'chat' ? {} : { taskState: 'queued' as const }), title: title.slice(0, 120), provider, createdAt: new Date().toISOString(), archived: false };
+      if (definition) definitionConnection(this.settings.provider(provider), definition);
+      const record: SessionRecord = { ...(definition ? { definition: structuredClone(definition) } : {}), ...(submissionHash ? { submissionHash } : {}), id: identifier(id, 'task session'), taskId: id, kind, ...(kind === 'chat' ? {} : { taskState: 'queued' as const }), title: title.slice(0, 120), provider, createdAt: new Date().toISOString(), archived: false };
       await this.load(record); this.records.push(record);
       try { await this.persist(); } catch (error) { this.records = this.records.filter(item => item.id !== id); this.instances.delete(id); throw error; }
       return record;
@@ -88,7 +92,9 @@ export class WorkerSessions {
     record.taskState = state; await this.persist();
   }
   private persist() {
-    const write = this.writes.catch(() => {}).then(() => atomicWrite(join(this.directory, 'sessions.json'), JSON.stringify({ selected: this.selected, records: this.records })));
+    const serialized = JSON.stringify({ selected: this.selected, records: this.records });
+    if (Buffer.byteLength(serialized) > 2097152) throw new DomainError('conflict', 'Task history storage is full. Delete an unused task.');
+    const write = this.writes.catch(() => {}).then(() => atomicWrite(join(this.directory, 'sessions.json'), serialized));
     this.writes = write; return write;
   }
   async reloadProviders() { if (this.busy) throw new DomainError('conflict', 'Stop active replies before changing providers.'); for (const record of this.records) await this.load(record); }
@@ -96,14 +102,16 @@ export class WorkerSessions {
     if (this.changing) throw new DomainError('conflict', 'Session change in progress.');
     this.changing = true; const previous = structuredClone({ records: this.records, selected: this.selected });
     try {
-      const body = object(input, 'Session action', ['action', 'id', 'title', 'provider']);
+      const body = object(input, 'Session action', ['action', 'id', 'title', 'provider', 'definitionId', 'agent', 'useInstructionsOnly']);
       if (body.action === 'create') {
         if (this.records.length >= 100) throw new DomainError('conflict', 'Session limit reached (100). Delete an unused session first.');
         const provider = this.settings.provider(String(body.provider));
+        const definition = this.definitions.select(body); definitionConnection(provider, definition);
         const id = randomUUID();
-        const record: SessionRecord = { id, taskId: id, kind: 'chat', title: text(body.title, 'Session title', 120), provider: provider.id, archived: false, createdAt: new Date().toISOString() };
+        const record: SessionRecord = { ...(definition ? { definition } : {}), id, taskId: id, kind: 'chat', title: text(body.title, 'Session title', 120), provider: provider.id, archived: false, createdAt: new Date().toISOString() };
         await this.load(record); this.records.push(record); this.selected = record.id;
       } else {
+        if (body.definitionId !== undefined || body.agent !== undefined || body.useInstructionsOnly !== undefined) throw new DomainError('invalid_input', 'An agent definition is fixed when a task is created. Create a new task to change it.');
         const record = this.records.find(item => item.id === body.id); if (!record) throw new DomainError('not_found', 'Session not found');
         if (body.action === 'select') { record.archived = false; this.selected = record.id; }
         else if (body.action === 'rename') record.title = text(body.title, 'Session title', 120);

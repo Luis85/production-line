@@ -54,7 +54,7 @@ for (const app of apps) {
       const { build } = await import('vite');
       await build({ configFile: join(root, 'src/worker/webview/vite.config.mjs'), build: { outDir: join(staging, 'worker/public') } });
     }
-    if (app === 'orchestrator') {
+    if (['orchestrator', 'worker'].includes(app)) {
       await mkdir(join(staging,'node_modules'),{recursive:true});
       await cp(join(root,'node_modules/yaml'),join(staging,'node_modules/yaml'),{recursive:true});
     }

@@ -4,6 +4,11 @@ export function commands(kind) {
   const common = { health: op('GET', '/healthz'), monitoring: op('GET', kind === 'worker' ? '/monitoring' : '/v1/monitoring') };
   if (kind === 'worker') return { ...common,
     'settings get': op('GET', '/api/settings'), 'settings set': op('POST', '/api/settings', true, [], { board: { paused: true, queueCapacity: 16 } }),
+    'definition list': op('GET', '/api/definitions'),
+    'definition preview': op('POST', '/api/definitions', true, [], { yaml: 'agents:\n  root:\n    model: openai/gpt-4.1\n    instruction: Review the task and explain the next step.\n' }),
+    'definition import': op('POST', '/api/definitions', true, [], { name: 'Project reviewer', yaml: 'agents:\n  root:\n    model: openai/gpt-4.1\n    instruction: Review the task and explain the next step.\n' }),
+    'definition delete': op('POST', '/api/definitions', false, ['id']),
+    'provider check': op('POST', '/api/providers/check', false, ['id']),
     'task list': op('GET', '/api/sessions'),
     'task create': op('POST', '/api/tasks', true, [], { id: 'ci-task-001', title: 'Plan a search page', provider: 'codex-cli', message: 'Draft acceptance criteria for a search page with filtering.' }),
     'task send': op('POST', '/api/tasks', true, ['id'], { message: 'Explain the next step.' }),

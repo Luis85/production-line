@@ -15,8 +15,9 @@ Operators can submit tasks or maintain the registry. The
 [access-control reference](access-control.md) defines role checks, rotation,
 startup validation and mutation audit records.
 
-Launchers open clean loopback URLs without tokens. Webviews retain their entered
-token in page memory. Read credentials privately and keep values out of prompts,
+Launchers open clean loopback URLs without tokens. Factory/orchestrator webviews
+and interaction widgets retain entered tokens in page memory. The worker exchanges
+its token for a separate HttpOnly browser session and discards the entered token. Read credentials privately and keep values out of prompts,
 stdout, shell history, source control and screenshots. Protect state and backups:
 they contain credentials, task content and potentially repository evidence.
 POSIX state directories/files use 0700/0600. Native Windows inherits ACLs; apply
@@ -26,8 +27,12 @@ reported separately; Linux checks do not establish Windows ACL behavior.
 
 Worker basic status, health and metrics remain read-only without a login. The
 Vue worker webview requires its separate private `webview-token` for history,
-environment details and chat. Chat mutations also check browser Origin; tokens
-stay in tab memory. See [worker webview](../how-to/use-worker-webview.md). Retain trusted
+environment details and chat. Browser sessions expire after 12 hours and are
+revoked on logout or worker restart. Cookie-authenticated API requests require
+a webview header; mutations also require the same Origin. Durable operator tokens
+never enter cookies, URLs or browser storage. Cookies share hostname scope across
+ports, so use trusted local services or separate hostnames. Automation retains
+bearer authentication. See [worker webview](../how-to/use-worker-webview.md). Retain trusted
 loopback exposure. Remote default access uses private SSH forwarding. An
 optional same-host Caddy profile provides TLS for Factory/orchestrator webviews,
 blocks worker protocol and enrollment routes at that edge, and keeps backends on

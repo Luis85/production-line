@@ -31,6 +31,8 @@ contracts, and explanations describe the system and its limits.
 
 ## Reference
 
+- [Docker Agent definition profiles](reference/agent-definitions.md): import, preview and task selection.
+
 - [Automatic updates](reference/updates.md): stable release selection, backup and recovery.
 
 - [Infrastructure renderer](reference/infrastructure.md)

@@ -47,3 +47,24 @@ route history, focus restoration and a delayed response race, and emits a saniti
 JSON result. Worker assignments and delayed responses use browser route fixtures;
 the script does not change persisted tasks. Keep the isolated system running for
 the check and stop it afterward with `system stop --state-dir`.
+
+## Worker access and task-chat browser qualification
+
+After `npm run build`, run [worker/webview-smoke.mjs](worker/webview-smoke.mjs)
+with Playwright Core and Chromium available. This explicit integration check
+is separate from the default Node suite. It starts and cleans up its own worker
+on an allocated loopback port and uses a labelled model protocol fixture.
+
+```sh
+WERK_PLAYWRIGHT_MODULE=/absolute/path/to/playwright-core/index.mjs \
+WERK_CHROMIUM=/usr/bin/chromium \
+WERK_BROWSER_EVIDENCE=/tmp/werk-worker-browser \
+node tests/worker/webview-smoke.mjs
+```
+
+The module path defaults to the workspace browser-runtime installation when
+present. Evidence defaults to a new temporary directory. The script tests unlock,
+reload, provider check, definition preview/import/adaptation, task queueing,
+follow-ups, code copying, inert HTML, responsive overflow, restart recovery and
+Lock. It saves twelve screenshots and a JSON result without credentials. No real
+provider login or model request is performed.

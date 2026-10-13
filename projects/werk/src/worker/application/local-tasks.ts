@@ -1,3 +1,4 @@
+import { definitionConnection, type DefinitionSnapshot } from './definitions.js';
 import { randomUUID, createHash } from 'node:crypto';
 import { join, resolve, relative } from 'node:path';
 import { realpath, lstat } from 'node:fs/promises';
@@ -10,7 +11,7 @@ import type { WorkerSettings } from '../infrastructure/settings.js';
 import type { WorkerSessions } from './sessions.js';
 import type { ConversationModel } from './conversation.js';
 export interface TaskFile { path: string; content: string; existed: boolean; }
-export interface LocalTask { id: string; title: string; instruction: string; sessionId: string; provider: ProviderId; model: string; repository: string; files: TaskFile[]; status: 'queued' | 'running' | 'review' | 'failed' | 'cancelled'; priority: number; createdAt: string; finishedAt: string | null; error: string | null; summary: string | null; patch: string | null; archived: boolean; }
+export interface LocalTask { definition?: DefinitionSnapshot; id: string; title: string; instruction: string; sessionId: string; provider: ProviderId; model: string; repository: string; files: TaskFile[]; status: 'queued' | 'running' | 'review' | 'failed' | 'cancelled'; priority: number; createdAt: string; finishedAt: string | null; error: string | null; summary: string | null; patch: string | null; archived: boolean; }
 const fingerprint = (value: string) => createHash('sha256').update(value).digest('hex');
 function patchFile(file: TaskFile, content: string) {
   if (file.content === content && file.existed) return '';
@@ -33,7 +34,7 @@ export class LocalTaskboard {
       for (const task of this.tasks) {
         task.sessionId = 'local-' + task.id;
         const previous = this.sessions.view().records.find(record => record.id === task.sessionId);
-        await this.sessions.ensureTask(task.sessionId, 'local', task.title, task.provider);
+        await this.sessions.ensureTask(task.sessionId, 'local', task.title, task.provider, undefined, task.definition);
         this.sessions.protectTask(task.sessionId, true);
         if (!previous || previous.taskState !== undefined || task.status === 'queued') await this.sessions.setTaskState(task.sessionId, task.status === 'review' ? 'completed' : task.status);
       }
@@ -51,9 +52,10 @@ export class LocalTaskboard {
   }
   async create(input: unknown) {
     if (this.closed) throw new DomainError('unavailable', 'Worker is stopping');
-    const body = object(input, 'Local task', ['title', 'instruction', 'repository', 'paths', 'priority', 'provider']);
+    const body = object(input, 'Local task', ['title', 'instruction', 'repository', 'paths', 'priority', 'provider', 'definitionId', 'agent', 'useInstructionsOnly']);
     const title = text(body.title, 'Title', 200), instruction = text(body.instruction, 'Instruction', 8000);
-    const provider = this.settings.provider(body.provider === undefined ? this.sessions.current.provider : String(body.provider));
+    const definition = this.sessions.definitions.select(body);
+    const provider = definitionConnection(this.settings.provider(body.provider === undefined ? this.sessions.current.provider : String(body.provider)), definition);
     if (!this.model(provider, this.directory)) throw new DomainError('invalid_input', 'Configure this session’s provider before running a task.');
     const config = codexConfiguration({ executable: resolve('provider'), repository: body.repository, allowedPaths: body.paths });
     const repository = await realpath(config.repository), files: TaskFile[] = [];
@@ -69,8 +71,8 @@ export class LocalTaskboard {
     }
     if (body.priority !== undefined && body.priority !== 1 && body.priority !== 2) throw new DomainError('invalid_input', 'Priority must be 1 or 2');
     const id = randomUUID();
-    const task: LocalTask = { id, title, instruction, sessionId: 'local-' + id, provider: provider.id, model: provider.model, repository, files, status: 'queued', priority: Number(body.priority ?? 1), createdAt: new Date().toISOString(), finishedAt: null, error: null, summary: null, patch: null, archived: false };
-    try { await this.change(async tasks => { if (tasks.length >= 100) throw new DomainError('conflict', 'Taskboard holds 100 tasks. Delete an old task first.'); if (tasks.filter(item => ['queued', 'running'].includes(item.status)).length + this.sessions.chatActive >= this.settings.value.board.queueCapacity) throw new DomainError('conflict', 'Local task queue is full.'); await this.sessions.ensureTask(task.sessionId, 'local', task.title, task.provider); this.sessions.protectTask(task.sessionId, true); await this.sessions.prepareTask(task.sessionId, this.input(task)); tasks.push(task); }); }
+    const task: LocalTask = { ...(definition ? { definition } : {}), id, title, instruction, sessionId: 'local-' + id, provider: provider.id, model: provider.model, repository, files, status: 'queued', priority: Number(body.priority ?? 1), createdAt: new Date().toISOString(), finishedAt: null, error: null, summary: null, patch: null, archived: false };
+    try { await this.change(async tasks => { if (tasks.length >= 100) throw new DomainError('conflict', 'Taskboard holds 100 tasks. Delete an old task first.'); if (tasks.filter(item => ['queued', 'running'].includes(item.status)).length + this.sessions.chatActive >= this.settings.value.board.queueCapacity) throw new DomainError('conflict', 'Local task queue is full.'); await this.sessions.ensureTask(task.sessionId, 'local', task.title, task.provider, undefined, task.definition); this.sessions.protectTask(task.sessionId, true); await this.sessions.prepareTask(task.sessionId, this.input(task)); tasks.push(task); }); }
     catch (error) { if (!this.tasks.some(item => item.id === id)) { this.sessions.protectTask(task.sessionId, false); await this.sessions.setTaskState(task.sessionId, 'failed').catch(() => {}); } throw error; }
     return this.view();
   }
@@ -102,9 +104,9 @@ export class LocalTaskboard {
   private async execute(id: string, controller: AbortController) {
     try {
       await this.change(tasks => { const task = tasks.find(item => item.id === id)!; if (task.status !== 'queued') throw Error('Task no longer queued'); task.status = 'running'; });
-      const task = this.detail(id); await this.sessions.ensureTask(task.sessionId, 'local', task.title, task.provider);
+      const task = this.detail(id); await this.sessions.ensureTask(task.sessionId, 'local', task.title, task.provider, undefined, task.definition);
       const connection = { ...this.settings.provider(task.provider), model: task.model };
-      const model: ConversationModel | undefined = this.model(connection, this.directory); if (!model) throw Error('Provider not configured');
+      const model: ConversationModel | undefined = this.model(definitionConnection(connection, task.definition), this.directory); if (!model) throw Error('Provider not configured');
       const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(120000)]);
       const reply = await model.reply([{ id, role: 'user', state: 'complete', at: task.createdAt, text: `Implement the requested changes to the supplied files. Return ONLY a JSON object {"summary":"...","files":[{"path":"approved path","content":"complete new file content"}]}. Do not execute commands. Only include changed approved files. Do not claim tests were run. This creates a patch for human review.\nTask: ${task.title}\nInstruction: ${task.instruction}\nApproved file snapshots: ${JSON.stringify(task.files)}` }], signal);
       signal.throwIfAborted();

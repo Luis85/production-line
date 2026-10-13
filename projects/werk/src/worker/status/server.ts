@@ -1,5 +1,7 @@
+import { WorkerAccess } from './access.js';
+import { ProviderStatusChecks } from '../infrastructure/provider-status.js';
 import { readFile } from 'node:fs/promises';
-import { bearerToken, readJson, rejectRequest } from '../../shared/http/server.js';
+import { readJson, rejectRequest } from '../../shared/http/server.js';
 import { ApiError, httpStatus, isExpectedError } from '../../shared/http/errors.js';
 import type { WorkerWorkspace } from './workspace.js';
 import { ageSeconds, monitoringThresholds, monitoringReport, operationalAlert, prometheus, type MonitoringThresholds } from '../../shared/monitoring.js';
@@ -29,12 +31,16 @@ export function workerMonitoring(status: Status, thresholds: MonitoringThreshold
   return monitoringReport('worker', now, metrics, alerts, thresholds);
 }
 export async function statusServer(get: () => Status, host: string, port: number, thresholds = monitoringThresholds(process.env), workspace?: WorkerWorkspace) {
+  const access = workspace ? new WorkerAccess(token => workspace.authenticate(token), Date.now, workspace.accessScope) : undefined;
+  const providers = new ProviderStatusChecks();
   const server=createServer(observeHttp('worker', async (req,res) => {
     try {
     if (workspace && req.url?.startsWith('/api/')) {
-      workspace.authenticate(bearerToken(req));
-      const origin = req.headers.origin;
-      if (origin && origin !== `http://${req.headers.host}` && origin !== `https://${req.headers.host}`) throw new ApiError(403, 'Use the worker webview from its own address.');
+      if (await access!.route(req, res)) return;
+      access!.authenticate(req);
+      if (req.method === 'POST' && req.url === '/api/providers/check') { const body = await readJson(req); if (Object.keys(body).some(key => key !== 'id') || typeof body.id !== 'string') throw new ApiError(400, 'Choose a provider to check.'); return json(res, 200, await providers.check(workspace.settings.provider(body.id))); }
+      if (req.method === 'GET' && req.url === '/api/definitions') return json(res, 200, workspace.definitions.view());
+      if (req.method === 'POST' && req.url === '/api/definitions') return json(res, 200, await workspace.definitions.action(await readJson(req)));
       if (req.method === 'POST' && req.url === '/api/tasks') return json(res, 200, await workspace.task(await readJson(req)));
       if (req.method === 'GET' && req.url === '/api/settings') return json(res, 200, workspace.settings.publicView());
       if (req.method === 'POST' && req.url === '/api/settings') return json(res, 200, await workspace.updateSettings(await readJson(req)));

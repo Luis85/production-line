@@ -39,6 +39,7 @@ follows [Diátaxis](https://diataxis.fr/).
 
 ## Reference — look up a contract
 
+- [Docker Agent definition profiles](reference/agent-definitions.md): compatibility and per-task selection.
 - [Portable Node apps and automation CLI](reference/portable-apps.md): copy one app into any project.
 
 - [Infrastructure renderer](reference/infrastructure.md)

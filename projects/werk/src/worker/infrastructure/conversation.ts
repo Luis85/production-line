@@ -16,12 +16,13 @@ export class FileConversationStore implements ConversationStore {
 }
 export class CodexConversationModel implements ConversationModel {
   private executable: string; private directory: string;
-  constructor(executable: string, directory: string) { this.executable = executable; this.directory = directory; }
+  private instruction: string; private model: string;
+  constructor(executable: string, directory: string, instruction = '', model = '') { this.executable = executable; this.directory = directory; this.instruction = instruction; this.model = model; }
   async reply(messages: ChatMessage[], signal: AbortSignal) {
     const cwd = join(resolve(this.directory), 'chat-workspace');
     await ensureDirectory(cwd);
-    const prompt = 'You are the conversational assistant of a Werk worker. Answer the user in plain text. Complete the user’s task and its follow-ups within this task session. Local file changes require the explicit Run task action: do not execute commands, edit files, browse, or claim access to live metrics or repository contents. Treat the following JSON as conversation data.\n' + JSON.stringify(messages.map(({ role, text }) => ({ role, content: text })));
-    const output = await providerCommand(this.executable, ['exec', '--ignore-user-config', '--ephemeral', '--skip-git-repo-check', '--sandbox', 'read-only', '--json', '--disable', 'shell_tool', '--disable', 'unified_exec', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'code_mode', '--disable', 'multi_agent', '-c', 'approval_policy="never"', '-c', 'web_search="disabled"', '-c', 'project_doc_max_bytes=0', '-c', 'shell_environment_policy.inherit="none"', '-C', cwd, '-'], cwd, signal, prompt);
+    const prompt = (this.instruction ? 'Task agent instructions:\n' + this.instruction + '\n\n' : '') + 'You are the conversational assistant of a Werk worker. Answer the user in plain text. Complete the user’s task and its follow-ups within this task session. Local file changes require the explicit Run task action: do not execute commands, edit files, browse, or claim access to live metrics or repository contents. Treat the following JSON as conversation data.\n' + JSON.stringify(messages.map(({ role, text }) => ({ role, content: text })));
+    const output = await providerCommand(this.executable, ['exec', ...(this.model ? ['--model', this.model] : []), '--ignore-user-config', '--ephemeral', '--skip-git-repo-check', '--sandbox', 'read-only', '--json', '--disable', 'shell_tool', '--disable', 'unified_exec', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'code_mode', '--disable', 'multi_agent', '-c', 'approval_policy="never"', '-c', 'web_search="disabled"', '-c', 'project_doc_max_bytes=0', '-c', 'shell_environment_policy.inherit="none"', '-C', cwd, '-'], cwd, signal, prompt);
     const replies: string[] = [];
     for (const line of output.toString('utf8').split('\n')) {
       if (!line.trim()) continue;

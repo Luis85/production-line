@@ -6,9 +6,9 @@ import { CodexConversationModel } from './conversation.js';
 import { providerCommand } from './codex-adapter.js';
 import { ensureDirectory } from './journal/files.js';
 export type ProviderId = 'codex-cli' | 'claude-cli' | 'openai-api' | 'anthropic-api';
-export interface ProviderConnection { id: ProviderId; executable: string; model: string; apiKey: string; }
+export interface ProviderConnection { id: ProviderId; executable: string; model: string; apiKey: string; instruction?: string; }
 export const providerIds: ProviderId[] = ['codex-cli', 'claude-cli', 'openai-api', 'anthropic-api'];
-export const providerLabels: Record<ProviderId, string> = { 'codex-cli': 'Codex · subscription', 'claude-cli': 'Claude Code · subscription', 'openai-api': 'OpenAI · API', 'anthropic-api': 'Claude · API' };
+export const providerLabels: Record<ProviderId, string> = { 'codex-cli': 'Codex CLI', 'claude-cli': 'Claude Code CLI', 'openai-api': 'OpenAI · API', 'anthropic-api': 'Claude · API' };
 export async function findExecutable(name: string) {
   for (const directory of (process.env.PATH ?? '').split(delimiter).filter(Boolean)) {
     const path = join(directory, process.platform === 'win32' ? name + '.exe' : name);
@@ -20,11 +20,11 @@ export async function findExecutable(name: string) {
 export function providerReady(connection: ProviderConnection) { return connection.id.endsWith('-cli') ? !!connection.executable : !!connection.apiKey && !!connection.model; }
 export function modelFor(connection: ProviderConnection, directory: string, transport: typeof fetch = fetch): ConversationModel | undefined {
   if (!providerReady(connection) || (process.platform === 'win32' && connection.id.endsWith('-cli'))) return;
-  if (connection.id === 'codex-cli') return new CodexConversationModel(connection.executable, directory);
+  if (connection.id === 'codex-cli') return new CodexConversationModel(connection.executable, directory, connection.instruction, connection.model);
   if (connection.id === 'claude-cli') return { async reply(messages, signal) {
     if (process.platform === 'win32') throw Error('Subscription CLI requires a POSIX host');
     const cwd = join(directory, 'chat-workspace'); await ensureDirectory(cwd);
-    const result = await providerCommand(connection.executable, ['--print', '--output-format', 'json', '--safe-mode', '--restricted', '--tools', '', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--setting-sources', '', '--no-session-persistence', '--disable-slash-commands', '--system-prompt', 'Answer the supplied conversation in plain text. No tools or live system access are available.'], cwd, signal, JSON.stringify(messages.map(({ role, text }) => ({ role, content: text }))), true, 'claude');
+    const result = await providerCommand(connection.executable, ['--print', '--output-format', 'json', '--safe-mode', '--restricted', '--tools', '', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--setting-sources', '', '--no-session-persistence', '--disable-slash-commands', ...(connection.model ? ['--model', connection.model] : []), '--system-prompt', 'Answer the supplied conversation in plain text. No tools or live system access are available.' + (connection.instruction ? '\nTask agent instructions:\n' + connection.instruction : '')], cwd, signal, JSON.stringify(messages.map(({ role, text }) => ({ role, content: text }))), true, 'claude');
     const value = JSON.parse(result.toString('utf8'));
     if (value.is_error || typeof value.result !== 'string') throw Error('Invalid Claude response');
     return value.result;
@@ -33,7 +33,7 @@ export function modelFor(connection: ProviderConnection, directory: string, tran
     const openai = connection.id === 'openai-api';
     const response = await transport(openai ? 'https://api.openai.com/v1/responses' : 'https://api.anthropic.com/v1/messages', {
       method: 'POST', signal, redirect: 'error', headers: { 'content-type': 'application/json', ...(openai ? { authorization: `Bearer ${connection.apiKey}` } : { 'x-api-key': connection.apiKey, 'anthropic-version': '2023-06-01' }) },
-      body: JSON.stringify(openai ? { model: connection.model, store: false, max_output_tokens: 8192, input: messages.map(({ role, text }) => ({ role, content: text })) } : { model: connection.model, max_tokens: 8192, messages: messages.map(({ role, text }) => ({ role, content: text })) })
+      body: JSON.stringify(openai ? { model: connection.model, ...(connection.instruction ? { instructions: connection.instruction } : {}), store: false, max_output_tokens: 8192, input: messages.map(({ role, text }) => ({ role, content: text })) } : { model: connection.model, ...(connection.instruction ? { system: connection.instruction } : {}), max_tokens: 8192, messages: messages.map(({ role, text }) => ({ role, content: text })) })
     });
     if (!response.ok) { await response.body?.cancel(); throw Error('Provider API request failed'); }
     const reader = response.body?.getReader(); if (!reader) throw Error('Empty provider response');

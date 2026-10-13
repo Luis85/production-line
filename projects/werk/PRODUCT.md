@@ -19,8 +19,21 @@ The user explicitly requested a Vue webview built with Nuxt UI and three pages:
 Chat, History, and Dashboard. Chat is the default page and the primary way to
 give this worker a new task or continue an existing task’s model session. History
 contains the local taskboard and retained orchestrator evidence. Dashboard carries Monitoring & Status: activity, health, environment,
-provider connections and optional orchestrator enrollment. The old
+provider connections and optional orchestrator enrollment. Chat also provides
+provider setup and checks, saved task selection, and Docker Agent definition
+import without leaving the conversation. The old
 `/monitoring-status` route redirects to `/dashboard`; there is no fourth page.
+
+## Worker Access
+
+The worker opens a dedicated unlock screen before showing its workspace. An
+operator enters the private worker access token from the worker's state
+directory. Successful unlock replaces that entry with a separate HttpOnly browser
+session lasting up to 12 hours; reloads preserve access, while Lock, expiry or a
+worker restart requires another unlock. Expired access retains unsent drafts in
+the current tab; explicit Lock clears them. Running tasks continue on the worker.
+The durable token is not saved in a URL, browser storage or the session cookie.
+Workspace access and model-provider authentication are separate steps.
 
 ## Existing Implementation Evidence
 
@@ -45,6 +58,33 @@ file tasks and remote assignments also receive dedicated sessions. Pause holds
 all new execution starts while the active task finishes. The worker is the only
 component that prompts an LLM; Factory and orchestrator own routing, not model
 execution. Chat retains a Run task editor for approved file inputs and patches.
+
+## Worker Provider and Agent Definitions
+
+Provider connections belong to the worker. Chat exposes the same saved connection
+settings as Dashboard, with local Codex or Claude sign-in commands and a check of
+the saved connection. CLI sign-in must belong to the user running the worker;
+Docker workers need access inside their container. API credentials are stored
+privately on the worker and are not returned to the browser. Saving settings does
+not prove successful authentication; a connection check does not establish
+subscription quota or model access.
+
+Operators can preview and import Docker Agent YAML as instruction/model profiles,
+then select a definition and one named agent when creating a new task. The Run
+task file editor has its own definition and agent selection. Import is
+inert: it does not run Docker, tools, hooks or delegated teams. Unsupported
+features are listed and require explicit instructions-only acceptance for that
+task. Supported model selections require a matching worker provider. Each task
+keeps its own definition snapshot, including instructions, model selection and
+accepted omissions; later imports or removal do not change that snapshot. The
+selected instructions and supported model are passed to the worker's provider.
+An omitted or unsupported model uses that connection's configured model.
+
+Chat keeps a searchable task rail and a readable transcript with code-copy
+controls. Operators can draft a follow-up while a task runs, and send it when
+that task finishes. A new task can wait behind the running task in the shared
+single execution slot. Saved tasks and transcripts are shared by this worker's
+operators; they are not personal account histories.
 
 ## Assembly, dashboards and routing
 

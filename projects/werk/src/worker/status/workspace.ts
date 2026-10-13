@@ -1,3 +1,4 @@
+import { definitionConnection } from '../application/definitions.js';
 import { WorkerSettings } from '../infrastructure/settings.js';
 import { WorkerSessions } from '../application/sessions.js';
 import { LocalTaskboard } from '../application/local-tasks.js';
@@ -22,6 +23,8 @@ export function chatConfiguration(value: unknown): string | undefined {
 export class WorkerWorkspace {
   private taskIndex: TaskIndex;
   readonly settings: WorkerSettings; readonly sessions: WorkerSessions; readonly board: LocalTaskboard;
+  get accessScope() { return createHash('sha256').update(this.token).digest('hex').slice(0, 16); }
+  get definitions() { return this.sessions.definitions; }
   get chat() { return this.sessions.chat; }
   get executor() { return this.sessions.executor; }
   async startChat(message: unknown) {
@@ -34,23 +37,27 @@ export class WorkerWorkspace {
   async task(input: unknown) {
     const operation = this.taskRequests.catch(() => {}).then(async () => {
       if (!this.acceptingTasks) throw new DomainError('unavailable', 'Worker is stopping.');
-      const body = object(input, 'Task command', ['action', 'id', 'title', 'provider', 'message']);
+      const body = object(input, 'Task command', ['action', 'id', 'title', 'provider', 'message', 'definitionId', 'agent', 'useInstructionsOnly']);
       if (!['create', 'get', 'send', 'cancel'].includes(String(body.action))) throw new DomainError('invalid_input', 'Task action: create|get|send|cancel');
+      if (body.action !== 'create' && (body.definitionId !== undefined || body.agent !== undefined || body.useInstructionsOnly !== undefined)) throw new DomainError('invalid_input', 'An agent definition is fixed when a task is created.');
       const id = body.action === 'create' && body.id === undefined ? randomUUID() : identifier(body.id, 'id');
       if (body.action === 'get') return this.sessions.detail(id);
       if (body.action === 'cancel') return this.sessions.cancelTask(id);
       const message = text(body.message, 'message', 8000);
       if (body.action === 'create') {
         const title = text(body.title, 'title', 120), provider = this.settings.provider(String(body.provider));
-        const submissionHash = createHash('sha256').update(JSON.stringify({ title, provider: provider.id, message })).digest('hex');
         const existing = this.sessions.view().records.find(item => item.id === id);
+        const savedDefinition = existing?.definition;
+        const definition = savedDefinition && body.definitionId === savedDefinition.definitionId && (body.agent ?? 'root') === savedDefinition.agent && (!savedDefinition.adapted || body.useInstructionsOnly === true) ? savedDefinition : this.definitions.select(body);
+        definitionConnection(provider, definition);
+        const submissionHash = createHash('sha256').update(JSON.stringify({ title, provider: provider.id, message, ...(definition ? { definition } : {}) })).digest('hex');
         if (existing) {
           const detail = this.sessions.detail(id);
           if (existing.kind !== 'chat' || existing.submissionHash !== submissionHash) throw new DomainError('conflict', 'Task id already belongs to different input.');
           if (detail.chat.messages.length > 0) return detail;
         }
         if (this.sessions.chatActive + this.board.active >= this.settings.value.board.queueCapacity) throw new DomainError('conflict', 'Worker task queue is full.');
-        await this.sessions.ensureTask(id, 'chat', title, provider.id, submissionHash);
+        await this.sessions.ensureTask(id, 'chat', title, provider.id, submissionHash, definition);
       }
       if (this.sessions.chatActive + this.board.active >= this.settings.value.board.queueCapacity) throw new DomainError('conflict', 'Worker task queue is full.');
       await this.sessions.start(message, id);
@@ -95,7 +102,7 @@ export class WorkerWorkspace {
     const memory = process.memoryUsage(), disk = await statfs(this.config.stateDir).catch(() => null);
     const connection = this.settings.value.connection;
     const address = connection.url ? new URL(connection.url) : null; if (address) { address.username = ''; address.password = ''; address.search = ''; address.hash = ''; }
-    return { capturedAt: new Date().toISOString(), hostname: hostname(), platform: process.platform, osRelease: release(), architecture: process.arch, nodeVersion: process.version, pid: process.pid, uptimeSeconds: process.uptime(), logicalCpus: availableParallelism(), hostLoad: process.platform === 'win32' ? null : loadavg(), memory: { processRssBytes: memory.rss, heapUsedBytes: memory.heapUsed, heapTotalBytes: memory.heapTotal, hostFreeBytes: freemem(), hostTotalBytes: totalmem() }, disk: disk ? { freeBytes: disk.bavail * disk.bsize, totalBytes: disk.blocks * disk.bsize } : null, stateDirectory: resolve(this.config.stateDir), projectDirectory: this.config.projectDir ? resolve(this.config.projectDir) : null, orchestratorUrl: address?.toString() ?? null, pollMs: this.config.pollMs, taskTimeoutMs: this.config.timeoutMs, retainedPairs: this.config.retainedPairs ?? 1000, chat: { configured: this.chat.snapshot().available, provider: this.sessions.current.provider, authentication: 'Operator CLI login; not checked by monitoring', timeoutSeconds: 120 }, status: this.get() };
+    return { capturedAt: new Date().toISOString(), hostname: hostname(), platform: process.platform, osRelease: release(), architecture: process.arch, nodeVersion: process.version, pid: process.pid, uptimeSeconds: process.uptime(), logicalCpus: availableParallelism(), hostLoad: process.platform === 'win32' ? null : loadavg(), memory: { processRssBytes: memory.rss, heapUsedBytes: memory.heapUsed, heapTotalBytes: memory.heapTotal, hostFreeBytes: freemem(), hostTotalBytes: totalmem() }, disk: disk ? { freeBytes: disk.bavail * disk.bsize, totalBytes: disk.blocks * disk.bsize } : null, stateDirectory: resolve(this.config.stateDir), projectDirectory: this.config.projectDir ? resolve(this.config.projectDir) : null, orchestratorUrl: address?.toString() ?? null, pollMs: this.config.pollMs, taskTimeoutMs: this.config.timeoutMs, retainedPairs: this.config.retainedPairs ?? 1000, chat: { configured: this.chat.snapshot().available, provider: this.sessions.current.provider, authentication: this.sessions.current.provider.endsWith('-cli') ? 'Host CLI sign-in; use Check sign-in to verify' : 'Private API key; use Check connection to verify', timeoutSeconds: 120 }, status: this.get() };
   }
   async history() {
     if (this.historyCache && Date.now() - this.historyCache.at < 5000) return this.historyCache.value;

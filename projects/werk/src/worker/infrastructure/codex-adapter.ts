@@ -19,7 +19,7 @@ export function codexConfiguration(value: unknown): CodexConfiguration {
 }
 
 /** Provider diagnostics never become logs/evidence; operator authentication is inherited, never copied. */
-function environment(provider = 'codex'): NodeJS.ProcessEnv {
+export function providerEnvironment(provider = 'codex'): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = {};
     for (const key of ['PATH', 'HOME', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HTTPS_PROXY', 'HTTP_PROXY', 'ALL_PROXY', 'NO_PROXY', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'NODE_EXTRA_CA_CERTS', 'LANG', 'LC_ALL']) if (process.env[key]) env[key] = process.env[key];
     // Preserve managed-runtime policy/auth routing; never copy these values to task evidence.
@@ -32,7 +32,7 @@ export async function providerCommand(executable: string, args: string[], cwd: s
     return new Promise((resolveResult, reject) => {
         let bytes = 0, failed = false, ended = false, killTimer: ReturnType<typeof setTimeout> | undefined;
         const output: Buffer[] = [];
-        const child = spawn(executable, args, { cwd, env: environment(provider), detached: true, stdio: ['pipe', 'pipe', 'pipe'] });
+        const child = spawn(executable, args, { cwd, env: providerEnvironment(provider), detached: true, stdio: ['pipe', 'pipe', 'pipe'] });
         const kill = (kind: NodeJS.Signals) => { if (child.pid) try { process.kill(-child.pid, kind); } catch {} };
         const interrupt = () => { failed = true; kill('SIGTERM'); killTimer ??= setTimeout(() => kill('SIGKILL'), 1000); };
         const collect = (chunk: Buffer, stdout: boolean) => { bytes += chunk.length; if (bytes > 4 * 1024 * 1024) interrupt(); else if (stdout && capture) output.push(chunk); };

@@ -8,6 +8,8 @@ separately under `docs/handoff`; original source provenance is recorded in the
 
 | Record | Scope |
 | --- | --- |
+| [Worker access, Chat and agent definitions](worker-overhaul-review.md) | Research-led overhaul, independent review, integrated checks and twelve final screenshots |
+| [Worker product research](worker-product-research.md) | Dated provider/Docker research, onboarding and task-chat findings, and product improvement priorities |
 | [Portable Node apps](portable-apps-validation.md) | Copyable apps, automation CLI, task sessions, independent lifecycle and later composition |
 | [Worker task sessions and independent systems](worker-system-review.md) | Serial execution, persistent sessions, composable routing, dashboards, reviews and a 34-capture storyboard |
 | [Spatial visualization polish](spatial-polish-review.md) | Correct 3D projection, distinct models, label placement and desktop/mobile confirmation |

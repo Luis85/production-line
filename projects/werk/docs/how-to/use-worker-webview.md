@@ -23,34 +23,54 @@ your own pace; the tour does not send messages, run tasks or change settings.
 
 ## Unlock the webview
 
-Read `<worker-state>/webview-token` on the worker machine and paste its value
-into **Worker access token**. In a system deployment, the path is
+The dedicated unlock screen protects the workspace until access succeeds. Read
+`<worker-state>/webview-token` on the worker machine and paste it into **Worker
+access token**. Portable `start`/`status` return the private credential file path.
+In a system deployment, use
 `<system-state>/lines/<line-id>/workers/worker-1/webview-token`.
-The token stays in this tab's memory. Reloading or choosing **Lock** requires
-unlocking again. Never put tokens in URLs. Basic status, health and metrics
-remain public; environment, settings, sessions, taskboard and history require
-the worker token. Keep the listener on loopback unless you provide a trusted
-HTTPS access layer. The token grants operator control of this worker.
+
+Unlocking exchanges that token for an HttpOnly, SameSite=Strict browser session.
+Reloading the page keeps access for up to 12 hours; choosing **Lock**, restarting
+the worker or session expiry requires unlocking again. The operator token is not
+stored in the browser, a URL or localStorage. Expired access hides the workspace
+and retains an unsent draft in the current tab. A full page reload cannot restore
+unsent drafts. Choosing **Lock** explicitly clears the tab’s unsent draft.
+Locking the browser does not cancel running tasks.
+
+Basic status, health and metrics remain public. Environment, settings, sessions,
+definitions, taskboard and history require worker access. Keep the listener on
+loopback or provide a trusted HTTPS access layer that preserves the Host header.
+Browsers share cookies across ports of the same host; per-worker cookie names
+prevent collisions, not isolation from other services on that hostname. Use
+separate trusted hostnames where stronger browser separation is needed. The token
+grants operator control of this worker; operators share its tasks and settings.
 
 To rotate access, stop the worker, remove only `webview-token`, and restart.
 
 ## Connect Claude or Codex
 
-Open **Dashboard → Provider connections & orchestrator enrollment → Connections**. Four connections are supported:
+Open the provider connection editor directly from **Chat**, or use
+**Dashboard → Provider connections & orchestrator enrollment → Connections**.
+Worker access and model sign-in are separate: unlocking the webview never signs
+you into a provider. Four connections are supported:
 
 | Connection | Authentication | Configuration |
 | --- | --- | --- |
-| Codex subscription | Existing Codex CLI login of the worker OS account | Absolute executable path |
-| Claude Code subscription | Existing Claude Code CLI login of the worker OS account | Absolute executable path |
+| Codex CLI | Existing Codex CLI login of the worker OS account | Absolute executable path |
+| Claude Code CLI | Existing Claude Code CLI login of the worker OS account | Absolute executable path |
 | OpenAI API | API key and provider billing | Available model ID and API key |
 | Claude API | Anthropic API key and provider billing | Available model ID and API key |
 
 The worker discovers CLI executables on PATH at first startup. Sign in using
 `codex login` or `claude auth login` as the same OS account that runs the worker.
 Subscription adapters currently require Linux or macOS. API connections and the
-webview also run on Windows. A configured connection does not verify login,
-subscription balance or model availability. There is no automatic API fallback
-that could silently change billing.
+webview also run on Windows. Use **Check sign-in** after saving a CLI connection. The worker runs only
+`codex login status` or `claude auth status`, with bounded output and a five-second
+deadline. The result distinguishes signed-in, signed-out, unavailable and unknown;
+it never exposes raw account diagnostics. No model prompt or paid API call is
+made. For API connections, the check confirms saved configuration only: it does
+not verify credentials, quota, billing or model availability. There is no automatic
+API fallback that could silently change billing.
 
 Use a current Codex CLI supporting `exec --json --ignore-user-config`,
 `--ephemeral`, the read-only sandbox and disabled tool feature flags. Claude
@@ -73,7 +93,9 @@ provider does not advertise unsupported orchestrator execution capabilities.
 
 ## Give the worker a task in Chat
 
-Choose **New task**, select a provider and describe the work. The first message
+Choose **New task**, select a provider and optionally an imported Docker Agent
+definition/agent, then describe the work. See [agent definition profiles](../reference/agent-definitions.md)
+for preview, compatibility and instructions-only adaptation. The first message
 creates queued work with its own worker-managed model session. Follow-up messages
 continue that same task session; choose New task for unrelated work. Chat is a
 task-entry surface, not an independent parallel model process. Requests wait
@@ -89,7 +111,10 @@ host CLI sessions or transfer native session identifiers between providers.
 Changing selection in another tab makes stale send/stop requests fail rather
 than target the wrong session.
 
-Use the composer or Ctrl/Command + Enter to submit a message. The stop action
+The task list keeps recent conversations within reach. Replies render readable
+paragraphs, lists and fenced code, with copy actions; model HTML is never executed.
+You can draft a follow-up while work is queued or running and send it when the
+worker finishes. Use the composer or Ctrl/Command + Enter to submit a message. The stop action
 cancels the pending or active reply. Provider execution is bounded to two minutes
 once started; queue waiting is separate. Sessions hold at most 60 messages with
 a 48,000-character input budget; user messages are limited to 8,000 characters

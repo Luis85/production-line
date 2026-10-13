@@ -46,6 +46,12 @@ export async function main(kind, argv = process.argv.slice(2)) {
       if (body && (Object.hasOwn(body, 'action') || (cmd !== 'task create' && Object.hasOwn(body, 'id')))) throw inputError('Task action and target id come from the command.');
       body = { ...body, action: cmd.split(' ')[1], ...(o.id ? { id: o.id } : {}) };
     }
+    if (kind === 'worker' && cmd.startsWith('definition ')) {
+      if (body !== undefined && (!body || typeof body !== 'object' || Array.isArray(body))) throw inputError('Definition input must be a JSON object.');
+      if (body && (Object.hasOwn(body, 'action') || (cmd === 'definition delete' && Object.hasOwn(body, 'id')))) throw inputError('Definition action and target id come from the command.');
+      if (cmd !== 'definition list') body = { ...body, action: cmd.split(' ')[1], ...(o.id ? { id: o.id } : {}) };
+    }
+    if (kind === 'worker' && cmd === 'provider check') body = { id: o.id };
     if (cmd === 'file-task get') body = { id: o.id };
     let base = o.url, token = process.env.WERK_APP_TOKEN ?? '';
     if (base && !o['token-file'] && !token && cmd !== 'health') throw inputError('Remote --url requires --token-file or WERK_APP_TOKEN. Local secrets are never sent to an explicit URL.');

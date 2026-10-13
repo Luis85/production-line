@@ -1,0 +1,24 @@
+{
+  "screenshots": [
+    "login-desktop",
+    "login-mobile",
+    "connection-desktop",
+    "definition-preview-desktop",
+    "new-task-desktop",
+    "queued-desktop",
+    "chat-desktop",
+    "chat-tablet",
+    "chat-mobile",
+    "history-desktop",
+    "dashboard-desktop",
+    "tour-desktop"
+  ],
+  "checks": [
+    "dedicated unlock, invalid token, reload retains session",
+    "definition preview/adaptation, task snapshot, queue, draft while busy, same-session follow-up, escaped HTML, code copy",
+    "restart relocks, transcript/profile persists, unsent draft restored",
+    "explicit lock revokes saved browser access"
+  ],
+  "pageErrors": [],
+  "liveProvider": false
+}

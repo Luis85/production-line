@@ -49,6 +49,7 @@ test('runtime logs rotate while running and refuse oversized records and symlink
 test('current worker and context routes retain useful diagnostics through private runtime log filtering', async () => {
  const events = [], secret = 'private-task-identifier';
  const routes = new Map([
+  ...['/api/access', '/api/providers/check', '/api/definitions'].map(path => [path, path]),
   ['/v1/iteration/tasks', '/v1/iteration/tasks'],
   ['/v1/worker/assignments/next', '/v1/worker/assignments/next'],
   ['/v1/worker/snapshots', '/v1/worker/snapshots'],

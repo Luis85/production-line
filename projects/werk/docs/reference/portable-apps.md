@@ -91,7 +91,7 @@ node bin/apps/worker/cli.mjs task cancel --state-dir .werk/worker-a --id ci-arch
 `followup.json` contains `{"message":"Describe the next step."}`. Each task owns one
 session; follow-ups retain it. Commands address that session directly and do not
 change the conversation selected in the browser. Repeating create with the same
-explicit ID and original title/provider/message returns the existing task; changing
+explicit ID and original title/provider/message/agent profile returns the existing task; changing
 that input conflicts. Omitting ID generates a new task, so do not automatically retry
 an ambiguous create without an explicit ID. Follow-up sends are not idempotent;
 inspect the transcript before retrying an ambiguous response. Task acceptance does
@@ -119,6 +119,35 @@ configures the local queue, provider connections and optional orchestrator:
 Use private files or stdin for secrets, never literal credentials in command arguments.
 An orchestrator's `component.json` contains separate admin and enrollment tokens.
 Only the worker prompts an LLM; higher-level interactions are delegated to a worker.
+
+## Check sign-in and use Docker Agent definitions
+
+`provider check --id codex-cli` (or another provider ID) runs a bounded read-only
+CLI sign-in check without prompting a model. API connections report configured
+or missing configuration; no paid API request is made. Raw account output is not
+returned. Browser access uses its own protected session and is separate from
+provider sign-in; bearer-based automation continues to read the private token.
+
+```sh
+node bin/apps/worker/cli.mjs provider check --id codex-cli
+node bin/apps/worker/cli.mjs definition preview --file preview.json
+node bin/apps/worker/cli.mjs definition import --file definition.json
+node bin/apps/worker/cli.mjs definition list
+node bin/apps/worker/cli.mjs definition delete --id DEFINITION_ID
+```
+
+Preview input is `{"yaml":"YAML_TEXT"}`; import adds `"name":"Project reviewer"`.
+The returned definition ID can be added to `task create` or `file-task create`
+input as `"definitionId":"DEFINITION_ID","agent":"root"`. The task stores an
+immutable instruction/model snapshot. Supported OpenAI/Anthropic model references
+require a matching worker provider; the definition never silently changes billing.
+
+This is an instruction-profile integration. Preview lists unsupported Docker
+runtime features. Only after reviewing them, add `"useInstructionsOnly":true`
+to explicitly omit them for the task. Tools, hooks, harnesses, sub-agents, remote
+resources and parallel execution are not started. Imports do not expand variables
+or load credentials. Each complete JSON request must fit 64 KiB. Definitions stay
+in private worker state and persist across restart; all task execution stays serial.
 
 ## Manage Factory and orchestrator
 

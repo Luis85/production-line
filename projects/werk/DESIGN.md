@@ -157,8 +157,11 @@ waiting assignments. Scale parallel work with separate native or Docker worker
 instances. Dashboard readings and task/session states distinguish waiting from
 running. Only the worker prompts an LLM; Factory and orchestrator route work.
 
-Connection, loading, stale data and empty filters are distinct states. Tokens
-stay in page memory and never enter URLs or browser storage. Unsent orchestrator
+Connection, loading, stale data and empty filters are distinct states. Operator
+tokens never enter URLs or browser storage. Factory/orchestrator views and their
+interaction widgets retain entered tokens in page memory. The worker exchanges
+its entered token for a separate bounded HttpOnly browser session, then discards
+the entered token; its dedicated unlock screen returns after expiry or restart. Unsent orchestrator
 intake drafts remain in page memory while navigating and reconnecting. Live updates can be
 paused and preserve selection/filter context. User navigation moves focus appropriately; background updates do not.
 Modal editors and interaction widgets isolate the background and restore trigger
