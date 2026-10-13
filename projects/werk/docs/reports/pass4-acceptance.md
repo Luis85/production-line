@@ -1,0 +1,10 @@
+# Werk pass 4 acceptance
+
+This pass builds on the verified 272-test foundation and keeps the concern-based source/test organization. The supplied concept and embedded prompts remain source material. Mock execution is still the only enabled adapter.
+
+1. Close the mismatch between iteration import and operator-bound requirement intake. An explicit supported import mode must pin the same server-owned commit and validated feature identity; incompatible source/project/commit data fails before queuing. Preserve idempotency, restart recovery, bounded collection and existing unbound imports. Do not claim a verified remote PR identity without an actual provider check.
+2. Add durable Factory mutation idempotency across HTTP/CLI/MCP where the contract supplies a key. A lost response, process restart or duplicate request must return the original committed result; changed operation/target/payload with the same key conflicts. Keep mutation and receipt atomic, migrate existing registries, and never store credential values in receipts. Define key scope and compatibility explicitly.
+3. Independently review worker recovery, artifact/filesystem boundaries and transport/security behavior; reproduce and fix concrete defects within owned concerns, with meaningful regressions. Keep source snippets and credentials out of telemetry.
+4. Review runtime UI with real browser evidence and improve verified usability/accessibility or recovery defects. Preserve pagination, token isolation, truthful mock status and responsive behavior.
+5. Run integrated TypeScript/build/test and dependency checks plus Forge vault/backlog/workflow gates. Update current documentation and reports, preserving historical reports and imported zip.
+6. Audit Forge usage and upstream PR/main status read-only. Record reproduced friction and useful missing tools in a saved report before dispatching dedicated Forge implementation agents. Choose focused changes based on evidence, validate distribution/showcase and portable behavior, and open a new PR on an appropriate base without merging existing PRs.

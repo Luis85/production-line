@@ -1,0 +1,8 @@
+{
+  "project": "demo",
+  "title": "Export an order as PDF",
+  "criteria": ["The export includes all order lines", "Only project members may export"],
+  "wikilinks": ["[[requirements/Order export#Rules]]", "[[quality/Definition of Done]]"],
+  "provider": "auto",
+  "priority": 1
+}

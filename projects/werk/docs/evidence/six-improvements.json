@@ -1,0 +1,373 @@
+{
+  "schemaVersion": 1,
+  "recordedOn": "2026-10-12",
+  "scope": "Six product readiness improvements",
+  "status": "Local source and extracted-release checks passed; actual cross-platform native, Linux Docker and Ubuntu VM release qualification passed at the recorded head. Source CI follow-up fixes are tracked in the PR.",
+  "interpretation": "Focused test counts overlap with broader suites and must not be added together. Configured CI jobs are not completed qualification. Mock execution is not live-provider evidence.",
+  "qualification": {
+    "local": {
+      "infrastructureTests": {
+        "passed": 7
+      },
+      "syntaxChecks": {
+        "passed": 2
+      }
+    },
+    "configuredCi": {
+      "native": [
+        "Linux",
+        "Windows",
+        "macOS"
+      ],
+      "docker": [
+        "Linux"
+      ],
+      "cloudInit": "Ubuntu 24.04 x86_64 QEMU guest",
+      "releasePublicationRequires": [
+        "build",
+        "native",
+        "docker",
+        "cloud-init"
+      ]
+    },
+    "pending": [
+      "arm64 VM qualification",
+      "Windows/macOS Docker qualification"
+    ],
+    "localLimit": "This environment has neither KVM nor QEMU available and cannot fetch the required Ubuntu cloud image under its network policy; no policy bypass was attempted.",
+    "executedCi": {
+      "headSha": "8027833c32d6e6496e67bcbca2deac59d0ddf648",
+      "runUrl": "https://github.com/Luis85/production-line/actions/runs/38321677042",
+      "native": {
+        "Linux": "passed",
+        "Windows": "passed",
+        "macOS": "passed"
+      },
+      "dockerLinux": "passed",
+      "cloudInit": {
+        "run": 38321677042,
+        "job": 115051166950,
+        "headSha": "8027833c32d6e6496e67bcbca2deac59d0ddf648",
+        "jobUrl": "https://github.com/Luis85/production-line/actions/runs/38321677042/job/115051166950",
+        "artifactUrl": "https://github.com/Luis85/production-line/actions/runs/38321677042/artifacts/11778794603",
+        "result": {
+          "ok": true,
+          "profile": "ubuntu-24.04",
+          "cloudInitBoot": true,
+          "loopbackOnly": true,
+          "serviceUser": "werk",
+          "privateState": true,
+          "readOnlyRelease": true,
+          "simulatedTasks": 1,
+          "persistedSnapshots": 2,
+          "restartPreserved": true,
+          "lines": 2,
+          "accelerator": "kvm",
+          "releaseSha256": "9d458b0ebae0fd4bcef0c3b5a6bf16692b856530e7ff0820dd40a38747af1fe5",
+          "nodeSha256": "14b342e71204f811bde6153be8e04b62aef63c236fef92b55f9c83154b409647",
+          "imageSha256": "6a81c37564db9b1ee84e141922625e1d7c5b389b99bb3c572e0243607d5bb4d2",
+          "imageUrl": "https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img",
+          "fixtureTlsVerified": true,
+          "sshHostKeyVerified": true
+        }
+      },
+      "publish": "skipped; no release tag was requested"
+    },
+    "latestExecutedCi": {
+      "headSha": "3b5094a64bfff8630df994dd74793556bb4d45a0",
+      "runId": 38322936007,
+      "url": "https://github.com/Luis85/production-line/actions/runs/38322936007",
+      "jobs": [
+        {
+          "id": 115054946359,
+          "name": "build",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Luis85/production-line/actions/runs/38322936007/job/115054946359"
+        },
+        {
+          "id": 115055192181,
+          "name": "Ubuntu 24.04 cloud-init VM",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Luis85/production-line/actions/runs/38322936007/job/115055192181"
+        },
+        {
+          "id": 115055192254,
+          "name": "docker",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Luis85/production-line/actions/runs/38322936007/job/115055192254"
+        },
+        {
+          "id": 115055192289,
+          "name": "Native release (windows-latest)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Luis85/production-line/actions/runs/38322936007/job/115055192289"
+        },
+        {
+          "id": 115055192298,
+          "name": "Native release (ubuntu-latest)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Luis85/production-line/actions/runs/38322936007/job/115055192298"
+        },
+        {
+          "id": 115055192336,
+          "name": "Native release (macos-latest)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/Luis85/production-line/actions/runs/38322936007/job/115055192336"
+        },
+        {
+          "id": 115055662518,
+          "name": "publish",
+          "status": "completed",
+          "conclusion": "skipped",
+          "url": "https://github.com/Luis85/production-line/actions/runs/38322936007/job/115055662518"
+        }
+      ],
+      "vm": {
+        "profile": "ubuntu-24.04",
+        "accelerator": "kvm",
+        "cloudInitBoot": true,
+        "loopbackOnly": true,
+        "serviceUser": "werk",
+        "privateState": true,
+        "readOnlyRelease": true,
+        "simulatedTasks": 1,
+        "persistedSnapshots": 2,
+        "restartPreserved": true,
+        "lines": 2,
+        "fixtureTlsVerified": true,
+        "sshHostKeyVerified": true,
+        "releaseSha256": "4d0eb4b02ac066b023a74900caa5aff3ce775369e5e2782665b609ee25ef517d",
+        "nodeSha256": "14b342e71204f811bde6153be8e04b62aef63c236fef92b55f9c83154b409647",
+        "imageSha256": "6a81c37564db9b1ee84e141922625e1d7c5b389b99bb3c572e0243607d5bb4d2",
+        "artifactUrl": "https://github.com/Luis85/production-line/actions/runs/38322936007/artifacts/11779532388"
+      },
+      "limitations": [
+        "Publication intentionally skipped for pull request; no release published",
+        "VM qualification covers Ubuntu24.04 x86_64, not arm64",
+        "Docker runtime qualification is Linux; Windows/macOS native qualification passed"
+      ]
+    }
+  },
+  "recovery": {
+    "maintenanceSafetyTests": {
+      "passed": 9,
+      "coverage": [
+        "Private stopped-state backup and new-directory restore",
+        "Refusal of live or unverified owners and unresolved worker locks",
+        "Checksum mismatch, manifest traversal and existing-destination refusal",
+        "Symlink, hardlink and special-state refusal",
+        "Canonical ancestor aliases preserve containment checks",
+        "Native whole-system Factory and line credential preservation",
+        "Actionable disk-pressure checks without credential output",
+        "Occupied configured ports still refuse backup without altering state; fixtures avoid shared ephemeral-port collisions"
+      ]
+    },
+    "replacementStateRestart": {
+      "result": "passed",
+      "services": "Real local orchestrator and worker",
+      "execution": "mock",
+      "observations": [
+        "Completed task identity and status preserved",
+        "Exactly two task snapshots preserved",
+        "Worker identity preserved after restart from restored state"
+      ]
+    },
+    "pendingEvidenceReplay": {
+      "result": "passed",
+      "observations": [
+        "Pending worker evidence survives restoration",
+        "Replayed completion remains idempotent"
+      ]
+    },
+    "limits": [
+      "Automated maintenance supports native state; Docker uses the separate stopped-volume procedure",
+      "External restart automation and manually launched writers must be stopped independently",
+      "No automatic stale-lock deletion or unverified PID signalling",
+      "Checksums establish integrity, not backup authenticity",
+      "This local test does not qualify VM failover or recovery-time objectives",
+      "External Git repositories and provider account credentials are outside runtime-state backups"
+    ],
+    "sqliteStartupContention": {
+      "result": "passed",
+      "regressions": 2,
+      "before": "Both constructors failed deterministically under an existing database lock before WAL setup",
+      "after": "Both wait for the lock, preserve data and complete migrations; busy timeout remains bounded to five seconds"
+    },
+    "windowsAtomicPublication": {
+      "result": "focused tests passed; final CI tracked in PR",
+      "tests": 5,
+      "attemptLimit": 8,
+      "maximumRetryWaitMs": 450,
+      "transientCodes": [
+        "EPERM",
+        "EACCES",
+        "EBUSY"
+      ],
+      "destinationPreservedOnExhaustion": true,
+      "atomicReplacementPreserved": true,
+      "independentReview": "passed"
+    }
+  },
+  "onboarding": {
+    "focusedTests": {
+      "passed": 85,
+      "scope": "Onboarding, Factory and orchestrator behavior"
+    },
+    "workerFollowupTests": {
+      "passed": 12,
+      "newRegressionTests": 1
+    },
+    "browser": {
+      "result": "passed",
+      "actualBackends": true,
+      "networkInterception": false,
+      "viewportWidths": [
+        1440,
+        390,
+        320
+      ],
+      "consoleErrors": 0,
+      "observations": [
+        "Factory and orchestrator recover from invalid credentials",
+        "Admin controls remain available",
+        "Viewer controls are read-only and backend mutations return 403",
+        "Desktop, mobile and narrow layouts have no horizontal overflow",
+        "Worker status distinguishes simulation from CLI execution and acknowledged change-set review"
+      ]
+    },
+    "limits": [
+      "Browser fixtures exercise real services and registered worker profiles; they do not establish successful live-provider execution",
+      "Existing visual identity was preserved"
+    ]
+  },
+  "monitoring": {
+    "newTests": {
+      "passed": 8
+    },
+    "combinedFocusedAndRelatedTests": {
+      "passed": 43
+    },
+    "typecheck": "passed",
+    "observations": [
+      "Authenticated Factory/orchestrator monitoring and Prometheus metrics",
+      "Trusted-local worker monitoring and metrics",
+      "Project-scoped queue age, failures, expired leases and connectivity",
+      "Durable worker outbox count and oldest evidence age across restart and delivery failure",
+      "Bounded alerts with static remediation and validated thresholds",
+      "Metric output excludes task bodies, identifiers, URLs and credentials"
+    ],
+    "limits": [
+      "No external metrics history store or notification delivery was installed",
+      "Worker status endpoints remain trusted-local and excluded from public ingress",
+      "Metrics do not remove SQLite single-writer restrictions"
+    ]
+  },
+  "security": {
+    "tlsIntegration": {
+      "result": "passed",
+      "edgeImage": "caddy@sha256:f2a1290d0463aad60660d4ec134943f183ee2a5f6c3eb7bf32dd984f2f020772",
+      "environment": "Generated ingress profile, loopback bind, ephemeral ports and internal test CA",
+      "observations": [
+        "Viewer read over TLS and HSTS",
+        "Viewer mutation denied",
+        "Operator mutation accepted",
+        "Private routes inaccessible at edge",
+        "Unauthenticated access denied"
+      ]
+    },
+    "limits": [
+      "No public DNS or public certificate deployment was performed"
+    ]
+  },
+  "liveExecution": {
+    "configurationTests": {
+      "passed": 6,
+      "coverage": [
+        "Bounded operator-controlled executable, repository and approved file policy",
+        "Worker concurrency and attempts limited to one",
+        "Runtime policy/mode consistency and drift refusal",
+        "Native-only single-worker deployment with honest mixed-fleet planning",
+        "Docker override and cloud-init provisioning refuse incompatible live execution"
+      ]
+    },
+    "actualProviderRun": {
+      "status": "blocked by denied provider transport",
+      "provider": "Codex CLI 0.159.2",
+      "timeoutSeconds": 180,
+      "observations": [
+        "Authenticated CLI was installed and invoked against an isolated committed text repository",
+        "Provider hostname chatgpt.com returned HTTP 403 with websocket/request failures and reconnect/disconnect retries",
+        "Task ended blocked after timeout",
+        "Two durable snapshots were recorded",
+        "Source repository remained unchanged",
+        "No simulation or review result was reported",
+        "No genuine model-generated patch was produced"
+      ],
+      "networkPolicy": "No network or policy bypass was attempted"
+    },
+    "limits": [
+      "Source changes require human review",
+      "Test scaffolding and mock results do not prove external provider completion"
+    ],
+    "controlledSubprocessTests": {
+      "passed": 8,
+      "scope": "Controlled CLI adapter integration, not actual model qualification",
+      "coverage": [
+        "Allowed patch produces human-review state and evidence",
+        "Execution mode matching",
+        "Failed provider exit",
+        "Bounded timeout",
+        "File allowlist enforcement",
+        "Restricted child environment",
+        "Model-written Git attributes cannot execute clean filters during patch collection"
+      ]
+    }
+  },
+  "forge": {
+    "used": [
+      "Revision reads",
+      "Reviewed guarded apply dry-runs",
+      "Atomic guarded apply writes",
+      "Strict vault checks"
+    ],
+    "observedFriction": [
+      "Parallel agents coordinate global project selection manually",
+      "Isolated builds and command-result evidence require external scripts",
+      "Embedded HTML/CSS/JavaScript changes require carefully guarded document edits",
+      "VM and cross-platform qualification require external CI execution"
+    ],
+    "requestedImprovements": [
+      "Explicit per-agent project targeting",
+      "Structured verification/evidence records tied to file revisions",
+      "Browser assertion and accessibility evidence alongside screenshots",
+      "Qualification matrices that distinguish configured, running and completed checks"
+    ]
+  },
+  "sourceValidation": {
+    "typecheck": "passed",
+    "tests": 464,
+    "passed": 464,
+    "failed": 0,
+    "skipped": 0,
+    "dependencyVulnerabilities": 0,
+    "platform": "Linux Node 24.19.0",
+    "workflowDrift": "passed",
+    "strictVault": {
+      "errors": 0,
+      "warnings": 0
+    }
+  },
+  "extractedReleaseValidation": {
+    "nativeSingleLine": "passed; task, two snapshots, restart persistence",
+    "nativeSystem": "passed; two lines, three workers, isolation, drift, restart persistence",
+    "nativeLiveSubprocessFixture": "passed; YAML, HTTP task, review artifact, unchanged repository, restart identity; not a model-backed run",
+    "security": "passed; factory/line viewer reads, mutation denial, monitoring, restart-bound rotation, admin recovery and credential-free logs",
+    "docker": "passed; single-line and two-line/three-worker system; no host Node in launcher PATH; offline Git; task isolation; restart identity/evidence/credentials; no credential output"
+  }
+}

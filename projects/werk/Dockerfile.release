@@ -1,0 +1,13 @@
+# Immutable multi-platform Node 24.19.0 images; no package-manager/network build steps.
+FROM node:24.19.0-bookworm@sha256:4196d66a565c6f195728d9952f161f4adfe2ad753052a08b7ec7f1c5a6bda42b AS git-donor
+FROM node:24.19.0-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df
+ENV NODE_ENV=production
+# A single offline layer keeps VFS and overlay storage footprints small.
+RUN --mount=type=bind,source=.,target=/release,readonly \
+    --mount=from=git-donor,target=/git-donor,readonly \
+    node /release/scripts/docker/assemble-runtime.mjs && \
+    mkdir -p /app /state && cp -R /release/src /release/scripts /app/ && \
+    chmod -R a+rX /app && chmod 0700 /state && chown node:node /state
+USER node
+ENTRYPOINT ["node", "/app/scripts/docker/operator.mjs"]
+CMD ["help"]

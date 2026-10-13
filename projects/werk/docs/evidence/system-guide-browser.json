@@ -1,0 +1,19 @@
+{
+  "evidence": [
+    "/workspace/work/system/ui/guide-desktop-after.png",
+    "/workspace/work/system/ui/guide-mobile-after.png",
+    "/workspace/work/system/ui/guide-narrow-after.png"
+  ],
+  "errors": [],
+  "requests": [
+    "/guide"
+  ],
+  "checks": [
+    "1440/390/320 no whole-page overflow",
+    "every entity keyboard activates and only one is pressed",
+    "deployment mode examples switch",
+    "navigation targets at least44px",
+    "no API requests",
+    "served from real Factory /guide route"
+  ]
+}

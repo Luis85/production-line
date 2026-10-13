@@ -1,0 +1,12 @@
+node_modules/
+**/dist/
+.state/
+.env
+backups/
+*.sqlite*
+
+.env.*
+
+/release/
+/.werk/
+/.werk-system/

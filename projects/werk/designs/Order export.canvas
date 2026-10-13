@@ -1,0 +1,14 @@
+{
+  "nodes": [
+    {
+      "id": "example-context",
+      "type": "text",
+      "x": 0,
+      "y": 0,
+      "width": 520,
+      "height": 220,
+      "text": "# Illustrative order-export fixture\n\nReference target for examples/feature.md. The uploaded ZIP did not contain a design canvas. This note records that absence; no product design or implementation is supplied."
+    }
+  ],
+  "edges": []
+}

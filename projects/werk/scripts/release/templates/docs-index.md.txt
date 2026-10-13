@@ -1,0 +1,55 @@
+# Werk runtime documentation
+
+The release documentation follows [Diátaxis](https://diataxis.fr/): tutorials teach
+one complete flow, how-to guides solve operating tasks, reference describes exact
+contracts, and explanations describe the system and its limits.
+
+## Tutorials
+
+- [Prepare a Linux VM deployment](tutorials/linux-vm-first-task.md): Ubuntu cloud-init, verified artifacts and SSH access.
+
+- [Run a Factory system from YAML](tutorials/system-from-yaml.md)
+
+- [Run your first local task](tutorials/local-first-task.md)
+- [Run your first Docker task](tutorials/docker-first-task.md)
+
+## How-to guides
+
+- [Operate, back up and replace a Linux VM](how-to/operate-linux-vm.md)
+
+- [Run an opt-in Codex task and review its patch](how-to/run-codex-task.md)
+- [Manage roles, rotate credentials and configure TLS](how-to/manage-access.md)
+- [Monitor a runtime and diagnose failures](how-to/monitor-runtime.md)
+- [Maintain the runtime](how-to/maintain-runtime.md)
+- [Upgrade, back up and restore](how-to/upgrade-backup.md)
+- [Operate with agents and scripts](how-to/operate-with-agents.md)
+
+## Reference
+
+- [Infrastructure renderer](reference/infrastructure.md)
+
+- [System YAML definition](reference/system-definition.md)
+
+- [Observability, capabilities and worker detail](reference/observability.md)
+- [Runtime operator CLI](reference/runtime-cli.md)
+- [Configuration, environment and state](reference/configuration.md)
+- [Release artifacts and verification](reference/releases.md)
+- [Access roles and audit events](reference/access-control.md)
+- [Security and authority boundaries](reference/security.md)
+
+## Explanation
+
+- [Twelve-factor principles and stateful boundaries](explanation/twelve-factor.md)
+
+- [Core entities and their views](explanation/core-entities.md)
+
+- [Runtime layout and state ownership](explanation/runtime-layout.md)
+- [What a simulated task proves](explanation/modes.md)
+
+A running Factory or orchestrator also serves `/guide`: a standalone public guide
+with no API calls or administrative actions. It explains the model; authenticated
+service webviews show current runtime state.
+
+This is the installed-runtime documentation. Source development, original concept
+material, implementation backlog and dated review evidence belong to the source
+checkout and are not prerequisites for running this release.

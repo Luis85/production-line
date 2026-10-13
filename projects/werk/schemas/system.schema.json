@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Werk system definition",
+  "description": "One secret-free Factory service with a root and up to 31 logical subfactories, and 1\u20138 production lines. Runtime validation also requires globally distinct ports (including worker ranges), unique production-line IDs, and a worker range ending at or below 65535. YAML loading additionally rejects aliases, anchors, explicit tags, duplicate keys, multiple documents and files larger than 64 KiB. Tasks are submitted separately. Runtime validation additionally enforces unique factory IDs, known parent and line factory references, and an acyclic tree reachable from the root.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "environment",
+    "factory",
+    "productionLines"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "type": "integer"
+    },
+    "id": {
+      "$ref": "#/$defs/slug"
+    },
+    "environment": {
+      "type": "string",
+      "enum": [
+        "native",
+        "docker"
+      ]
+    },
+    "factory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "port"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/slug"
+        },
+        "name": {
+          "$ref": "#/$defs/name"
+        },
+        "port": {
+          "$ref": "#/$defs/port"
+        },
+        "subFactories": {
+          "type": "array",
+          "maxItems": 31,
+          "default": [],
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/slug"
+              },
+              "name": {
+                "$ref": "#/$defs/name"
+              },
+              "parentId": {
+                "$ref": "#/$defs/slug",
+                "description": "Defaults to the root factory ID when omitted."
+              }
+            }
+          }
+        }
+      }
+    },
+    "productionLines": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "project",
+          "orchestrator",
+          "workers"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "#/$defs/slug"
+          },
+          "name": {
+            "$ref": "#/$defs/name"
+          },
+          "project": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[A-Za-z0-9_-]+(?![\\s\\S])"
+          },
+          "orchestrator": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "port"
+            ],
+            "properties": {
+              "port": {
+                "$ref": "#/$defs/port"
+              },
+              "webviewUrl": {
+                "type": "string",
+                "maxLength": 2048,
+                "format": "uri",
+                "pattern": "^https://[^\\s/@?#\\\\]+/?$",
+                "description": "Optional public browser HTTPS origin; no credentials, non-root path, query or fragment. Does not change internal API/worker traffic. Normalized with trailing slash."
+              }
+            }
+          },
+          "workers": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "count",
+              "statusPort"
+            ],
+            "properties": {
+              "count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 8
+              },
+              "statusPort": {
+                "$ref": "#/$defs/port"
+              },
+              "execution": {
+                "$ref": "#/$defs/liveExecution"
+              }
+            }
+          },
+          "factoryId": {
+            "$ref": "#/$defs/slug",
+            "description": "Defaults to the root factory ID when omitted."
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "slug": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63,
+      "pattern": "^(?!(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$)[a-z][a-z0-9]*(?:-[a-z0-9]+)*(?![\\s\\S])"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "pattern": "^[^\\u0000-\\u001f\\u007f]+(?![\\s\\S])",
+      "allOf": [
+        {
+          "pattern": "\\S"
+        }
+      ]
+    },
+    "port": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "liveExecution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "codex"
+      ],
+      "properties": {
+        "mode": {
+          "const": "cli"
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 3600000,
+          "default": 300000
+        },
+        "codex": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "executable",
+            "repository",
+            "allowedPaths"
+          ],
+          "properties": {
+            "executable": {
+              "type": "string",
+              "pattern": "^/",
+              "maxLength": 4096
+            },
+            "repository": {
+              "type": "string",
+              "pattern": "^/",
+              "maxLength": 4096
+            },
+            "allowedPaths": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 240
+              }
+            }
+          }
+        }
+      },
+      "description": "Opt-in native Linux only, exactly one worker per line. Runtime additionally rejects traversal, dot paths, credential filenames and binary changes. Tasks must explicitly request cli mode; results require human review."
+    }
+  }
+}

@@ -1,0 +1,14 @@
+# Docker Agent schema v16. Requires authenticated `codex` on PATH.
+# No Docker Agent model/toolsets are attached: the CLI owns its execution tools.
+version: 16
+agents:
+  root:
+    description: Werk project collaborator through the locally authenticated Codex CLI
+    instruction: |
+      Work within the selected project repository and its documented conventions.
+      Inspect requirement notes and evidence before proposing changes.
+      Do not claim a Werk task is delivered without its verified review and merge.
+      This standalone session is not automatically a leased Werk worker attempt.
+    harness:
+      type: codex
+      # Optional CLI model override; omitted to preserve the existing CLI profile.

@@ -1,0 +1,71 @@
+# Use with: docker compose -p werk-hierarchy --env-file .env.factory -f compose.yaml -f compose.factory.yaml up --build -d
+services:
+  factory:
+    build:
+      context: .
+      dockerfile: src/factory/Dockerfile
+    environment:
+      WERK_FACTORY_ADMIN_TOKEN: ${WERK_FACTORY_ADMIN_TOKEN:?Run node scripts/init-factory-env.mjs}
+      WERK_LINE_ALPHA_TOKEN: ${WERK_ADMIN_TOKEN:?Run node scripts/init-factory-env.mjs}
+      WERK_LINE_BETA_TOKEN: ${WERK_LINE_BETA_TOKEN:?Run node scripts/init-factory-env.mjs}
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - factory-hierarchy-data:/data
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 20s
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+  orchestrator:
+    depends_on:
+      factory:
+        condition: service_healthy
+  orchestrator-beta:
+    build:
+      context: .
+      dockerfile: src/orchestrator/Dockerfile
+    environment:
+      WERK_ADMIN_TOKEN: ${WERK_LINE_BETA_TOKEN:?Run node scripts/init-factory-env.mjs}
+      WERK_ENROLLMENT_TOKEN: ${WERK_BETA_ENROLLMENT_TOKEN:?Run node scripts/init-factory-env.mjs}
+    ports:
+      - "127.0.0.1:3002:3000"
+    volumes:
+      - line-beta-data:/data
+    depends_on:
+      factory:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 20s
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+  worker-beta:
+    build:
+      context: .
+      dockerfile: src/worker/Dockerfile
+    environment:
+      WERK_URL: http://orchestrator-beta:3000
+      WERK_ENROLLMENT_TOKEN: ${WERK_BETA_ENROLLMENT_TOKEN:?Run node scripts/init-factory-env.mjs}
+    ports:
+      - target: 4100
+        host_ip: 127.0.0.1
+    volumes:
+      - /data
+    depends_on:
+      orchestrator-beta:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 20s
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+volumes:
+  factory-hierarchy-data:
+  line-beta-data:

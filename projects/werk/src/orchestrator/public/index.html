@@ -1,0 +1,586 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Werk · Intake</title>
+<style>
+:root {
+  color-scheme: dark;
+  font: 16px/1.6 system-ui, sans-serif;
+  background: #111b22;
+  color: #edf4f7;
+  --muted: #b5c4cd;
+  --mint: #8be0b8;
+  --line: #3b4b56;
+  --surface: #15232d;
+  --warning: #edc47e;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-page: var(--space-8);
+  --space-panel: var(--space-6);
+  --space-section: var(--space-8);
+  --space-field: var(--space-4);
+  --space-inline: var(--space-2);
+  scrollbar-color: #667a88 #111b22;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+header, main, footer { max-width: 1180px; margin-inline: auto; padding: var(--space-page); }
+header { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-section); border-bottom: 1px solid var(--line); }
+main { min-height: 70vh; }
+.brand { font-size: 28px; letter-spacing: -.03em; font-weight: 750; }
+.brand span { color: var(--mint); }
+nav, .actions { display: flex; gap: var(--space-inline); align-items: center; flex-wrap: wrap; }
+nav button { white-space: nowrap; }
+nav a, .guide-link { display: inline-flex; align-items: center; min-height: 44px; padding: var(--space-2) var(--space-1); }
+a { color: var(--mint); text-underline-offset: 4px; }
+button, input, textarea, select { font: inherit; }
+button, input, select, summary { min-height: 44px; }
+button { cursor: pointer; background: #23333e; color: #edf4f7; padding: var(--space-2) var(--space-4); border: 1px solid var(--line); border-radius: 8px; transition: background-color .15s; }
+button[aria-current], button.primary { background: var(--mint); color: #102219; border-color: var(--mint); font-weight: 650; }
+button:hover { filter: brightness(1.1); }
+button:active { filter: brightness(.95); }
+button:disabled { opacity: .55; cursor: wait; }
+input, textarea, select { color: #edf4f7; background: var(--surface); border: 1px solid #667a88; padding: var(--space-2) var(--space-3); border-radius: 8px; width: 100%; min-width: 0; caret-color: var(--mint); }
+textarea { resize: vertical; min-height: 120px; }
+::placeholder { color: #a4b5c0; }
+label { display: block; font-weight: 600; margin-bottom: var(--space-1); }
+small { display: block; margin-top: var(--space-1); }
+.field { min-width: 0; }
+small, p, footer { color: var(--muted); }
+small, p, h1, h2, h3, summary { overflow-wrap: anywhere; }
+p { max-width: 75ch; margin: 0 0 var(--space-4); }
+h1 { font-size: 2rem; letter-spacing: -.03em; line-height: 1.15; margin: 0 0 var(--space-3); }
+h2 { font-size: 1.3rem; line-height: 1.3; margin: 0 0 var(--space-4); }
+h3 { font-size: 1.1rem; margin: 0 0 var(--space-3); }
+.lead { max-width: 70ch; margin-bottom: var(--space-section); }
+.layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(250px, 1fr); gap: var(--space-12); }
+.layout > * { min-width: 0; }
+.row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-field); }
+#task-form { display: grid; gap: var(--space-field); align-content: start; }
+#task-form > button { justify-self: start; }
+.intake-fields, .intake-options { display: grid; gap: var(--space-field); }
+.intake-options { padding-top: var(--space-field); }
+#intake-options { border-top: 1px solid var(--line); padding-top: var(--space-inline); }
+#iteration-import { margin-top: var(--space-section); }
+.note { padding-block: var(--space-panel); border-top: 1px solid var(--line); }
+.note > :last-child, .detail > :last-child { margin-bottom: 0; }
+aside .note { padding-block: var(--space-4); }
+aside .note b { display: block; margin-bottom: var(--space-inline); }
+#intake > .note { margin-bottom: var(--space-section); }
+.auth { display: flex; align-items: end; gap: var(--space-3); margin-bottom: var(--space-4); }
+.auth .field { flex: 1; max-width: 480px; }
+.message { min-height: 26px; color: var(--warning); overflow-wrap: anywhere; margin-bottom: var(--space-3); }
+.message[data-kind=error] { color: #ffb8ab; }
+.message[data-kind=success] { color: var(--mint); }
+.journey { list-style: none; display: flex; flex-wrap: wrap; gap: var(--space-3) var(--space-6); padding: 0; margin: 0 0 var(--space-section); color: var(--muted); font-size: 14px; }
+.journey li { display: flex; align-items: center; gap: var(--space-inline); }
+.journey li::before { content: ''; display: block; width: 8px; height: 8px; border: 1px solid var(--muted); border-radius: 50%; }
+.journey li[aria-current=step] { color: var(--mint); }
+.journey li[aria-current=step]::before { background: var(--mint); border-color: var(--mint); }
+.sync { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); border-block: 1px solid var(--line); padding-block: var(--space-3); margin-bottom: var(--space-section); font-size: 14px; }
+.sync span { color: var(--muted); flex: 1; min-width: 160px; }
+.sync button { font-size: 14px; }
+.toolbar { display: flex; gap: var(--space-field); align-items: end; flex-wrap: wrap; margin-block: var(--space-6); }
+.toolbar .field { flex: 1; min-width: 170px; }
+.toolbar button { flex: none; }
+.section-heading { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); flex-wrap: wrap; margin-bottom: var(--space-4); }
+.section-heading h2, .section-heading h3 { margin: 0; }
+.section-start { margin-top: var(--space-section); }
+.metric-filters { display: grid; gap: var(--space-field); margin-block: var(--space-6); }
+.next-step { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-6); }
+.next-step p { margin: 0; }
+.chart { margin: var(--space-6) 0; }
+.chart figcaption { color: var(--muted); margin-bottom: var(--space-inline); }
+.chart-scroll { overflow: auto; max-width: 100%; }
+#metric-chart { display: block; width: 100%; min-width: 720px; background: var(--surface); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+td, th { padding: var(--space-3); text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+td { overflow-wrap: anywhere; }
+th { color: var(--muted); font-size: 14px; }
+td button { text-align: left; max-width: 420px; overflow-wrap: anywhere; }
+caption { text-align: left; color: var(--muted); padding-block: var(--space-3); }
+.table-wrap { overflow: auto; max-width: 100%; }
+.empty { text-align: center; color: var(--muted); padding: var(--space-panel); }
+.detail { margin-top: var(--space-6); padding: var(--space-panel); background: var(--surface); border-radius: 12px; }
+.detail pre { margin: 0; font-size: 13px; max-height: 360px; overflow: auto; padding: var(--space-2); }
+.detail-state { font-size: 14px; margin-bottom: var(--space-3); }
+.scope-context { gap: var(--space-3); margin-bottom: var(--space-field); }
+.scope-context p { margin: 0; flex: 1; min-width: 160px; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); margin: 0 0 var(--space-4); }
+code { overflow-wrap: anywhere; }
+summary { cursor: pointer; padding-block: var(--space-2); }
+details > p { margin-top: var(--space-inline); }
+footer { border-top: 1px solid var(--line); font-size: 13px; margin-top: var(--space-section); }
+.skip { position: absolute; top: -80px; left: var(--space-page); z-index: 5; background: var(--mint); color: #102219; padding: var(--space-3); }
+.skip:focus { top: var(--space-2); }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--mint); outline-offset: 4px; }
+::selection { background: var(--mint); color: #102219; }
+.worker-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--space-4); margin-block:var(--space-6); }
+.worker-facts dt { color:var(--muted); }
+.worker-facts dd { margin:0; overflow-wrap:anywhere; }
+.page-end { margin-top:var(--space-4); }
+@media (max-width: 760px) {
+  .worker-facts { grid-template-columns:minmax(0,1fr); }
+  #tasks th:first-child, #tasks td:first-child, #workers th:first-child, #workers td:first-child { min-width:240px; }
+  :root { --space-page: var(--space-4); --space-panel: var(--space-4); --space-section: var(--space-6); }
+  header { align-items: start; flex-direction: column; gap: var(--space-3); }
+  .layout, .row { grid-template-columns: minmax(0, 1fr); gap: var(--space-field); }
+  .layout { gap: var(--space-section); }
+  .auth { flex-wrap: wrap; }
+  .auth .field { min-width: 100%; max-width: none; }
+  .toolbar { align-items: stretch; }
+  .toolbar .field { min-width: 140px; }
+  .sync { align-items: flex-start; }
+  td, th { min-width: 110px; }
+}
+@media (prefers-reduced-motion: reduce) { button { transition: none; } }
+</style></head><body><a class="skip" href="#main">Zum Inhalt</a>
+<header>
+<div class="brand">werk<span>.</span> Produktionslinie</div><a class="guide-link" href="/guide" target="_blank" rel="noopener noreferrer" aria-label="System verstehen (neuer Tab)">System verstehen</a>
+<nav id="runtime-nav" aria-label="Hauptnavigation" hidden><button data-tab="intake" aria-current="page">Intake</button><button data-tab="tasks">Taskboard</button><button data-tab="workers">Worker</button><button data-tab="metrics">Messwerte der Linie</button><a href="/concept">Konzeptdemo · simuliert</a></nav></header>
+<main id="main">
+<h1 id="heading" tabindex="-1">Auftrag an die Linie übergeben</h1>
+<p class="lead" id="page-lead">Übergib eine Anforderung aus dem Projekt-Vault als Wikilink. Die Details bleiben in Obsidian. Standardmäßig wird simuliert. Echte Codex-Ausführung ist unter den Optionen ausdrücklich wählbar; Änderungssätze benötigen menschliches Review.</p>
+<ol class="journey" id="journey" aria-label="Arbeitsablauf" hidden>
+<li id="journey-connect" aria-current="step">Verbinden</li>
+<li id="journey-intake">Features übergeben</li>
+<li id="journey-tasks">Ausführung verfolgen</li>
+<li id="journey-metrics">Messwerte prüfen</li></ol>
+<section id="connection-guide" aria-label="Mit deiner Produktionslinie verbinden">
+<p>Beim nativen Einzellinienstart: Öffne <code>.werk/credentials.json</code> und kopiere den Wert von <code>WERK_ADMIN_TOKEN</code>. Bei einem anderen Zustandsordner nennt die Startausgabe den genauen Pfad.</p>
+<div class="auth" id="auth-panel">
+<div class="field"><label for="token">Zugangstoken des Orchestrators</label><input id="token" type="password" aria-describedby="token-help" autocomplete="off" placeholder="WERK_ADMIN_TOKEN"><small id="token-help">Nur im Arbeitsspeicher dieser Seite, nicht im Browserspeicher.</small></div><button id="connect">Verbinden</button></div>
+<details class="note"><summary>Systemstart, Docker oder kein Token zur Hand?</summary><p>Beim Systemstart liegt der Token dieser Linie unter <code>.werk-system/&lt;System-ID&gt;/lines/&lt;Linien-ID&gt;/credentials.json</code>. Verwende ihren <code>WERK_ADMIN_TOKEN</code>, nicht den Factory-Token. Bei Windows-Docker exportiert <code>./werk-docker.ps1 system credentials --file system.yaml</code> die geschützten Dateien nach <code>.werk-system/&lt;System-ID&gt;/credential-export/</code>; öffne dort <code>lines/&lt;Linien-ID&gt;/credentials.json</code>. Für eigene Dateinamen oder Zustandsordner gelten deine Startargumente.</p><p>Docker unter Windows: Führe im Release-Ordner <code>./werk-docker.ps1 credentials</code> aus. Der geschützte Export liegt in <code>.werk/credential-export/credentials.json</code>. Beim Bash-Docker-Start liegt die Datei direkt unter <code>.werk/credentials.json</code>.</p><p>Beim Entwicklerstart <code>npm run dev:fleet</code> liegt der Token in <code>.state/fleet/credentials.json</code>. Beim Entwicklerstart <code>npm run dev:factory</code> verwende für eine Linie ihren <code>WERK_LINE_…_TOKEN</code> aus den Factory-Zugangsdaten. Der Factory-Token passt hier nicht.</p><p>Bei einem separat betriebenen Orchestrator erhältst du den Zugangstoken von der Person, die ihn gestartet hat. Kopiere nur den Tokenwert, ohne Anführungszeichen. Das Enrollment-Token ist für Worker bestimmt.</p></details></section>
+<p class="message" role="status" id="message">Verbinde dich, um Aufträge zu speichern und den aktuellen Status zu laden.</p>
+<div class="sync" id="runtime-sync" hidden><span id="sync-state" role="status">Noch nicht verbunden</span><button id="pause-updates" aria-pressed="false" disabled>Live-Updates pausieren</button><button id="disconnect" hidden>Trennen</button></div>
+<p id="access-summary" hidden></p>
+<section id="intake" hidden>
+<div class="note" aria-label="Bereitschaft der Linie"><p id="line-readiness" role="status">Noch kein aktueller Worker-Status geladen.</p><button id="check-readiness" type="button">Bereitschaft prüfen</button><button id="readiness-workers" type="button">Worker prüfen</button></div>
+<div class="note" id="first-task-help" hidden><h2>Dein erster Testlauf</h2><p>Noch kein Auftrag gespeichert. Übergib einen Wikilink oder beschreibe einen Testauftrag manuell. Ein passender Worker führt ihn simuliert aus; anschließend kannst du Ereignisse und Vorher/Nachher-Snapshots prüfen. Die Standardausführung erstellt keinen Code oder PR. Echte Codex-Ausführung aktivierst du bewusst unter den Optionen.</p><button id="first-manual-task" type="button">Testauftrag manuell beschreiben</button></div>
+<h2>Anforderung aus dem Projekt-Vault</h2>
+<p>Wähle das Projekt und füge den Wikilink zur Anforderung ein. Titel, Spezifikation und Akzeptanzkriterien können in der verlinkten Notiz bleiben.</p>
+<div class="layout">
+<form id="task-form">
+<div class="field"><label for="project">Projekt-ID</label><input id="project" value="demo" required pattern="[a-zA-Z0-9_-]+" maxlength="100" aria-describedby="project-help"><small id="project-help">Muss zum Projekt dieser Produktionslinie passen. Nach dem Verbinden wird die Serverkonfiguration übernommen, solange du dieses Feld nicht geändert hast.</small></div>
+<div class="field" id="reference-fields"><label for="requirement-ref">Anforderung als Wikilink</label><input id="requirement-ref" required maxlength="500" aria-describedby="requirement-help requirement-state" placeholder="[[Features/Customer portal]]"><small id="requirement-help">Pfad relativ zum Projekt-Vault. Auch Überschrift, Block oder Alias sind möglich: [[Features/Portal#Anmeldung|Portal]].</small><small id="requirement-state">Der Server kann den Verweis mit einem konfigurierten Vault und fixiertem Git-Commit auflösen. Nach dem Speichern zeigt das Auftragsdetail, ob der Kontext fixiert oder noch ungeklärt ist. Die Ausführung bleibt ein Mock-Testlauf.</small></div>
+<div class="intake-fields" id="manual-fields" hidden>
+<div class="field"><label for="title">Feature</label><input id="title" disabled maxlength="200" placeholder="Was soll das Projektteam erhalten?"></div>
+<div class="field"><label for="criteria">Akzeptanzkriterien</label><textarea id="criteria" disabled placeholder="Ein prüfbares Kriterium pro Zeile"></textarea></div>
+<div class="field"><label for="wikilinks">Zusätzlicher Wiki-Kontext</label><textarea disabled aria-describedby="wiki-help" id="wikilinks" placeholder="[[quality/Definition of Done]]"></textarea><small id="wiki-help">Ein Wikilink pro Zeile. Diese Referenzen werden ebenfalls nur gespeichert.</small></div></div>
+<details id="intake-options"><summary>Optionen und manuelle Eingabe</summary><div class="intake-options">
+<div class="field"><label for="intake-mode">Aufnahmeart</label><select id="intake-mode"><option value="vault">Anforderung aus dem Vault</option><option value="manual">Feature manuell beschreiben</option></select><small>Die manuelle Eingabe benötigt Titel und mindestens ein Akzeptanzkriterium. Beim Wechsel bleiben deine Eingaben erhalten.</small></div>
+<div class="field"><label for="execution-mode">Ausführung</label><select id="execution-mode" aria-describedby="execution-help"><option value="mock">Simulation · Standard</option><option value="cli">Codex CLI · echte Änderungen</option></select><small id="execution-help">Echte Ausführung ist eine bewusste Freigabe für den konfigurierten Codex-Worker. Sie benötigt eine manuelle Beschreibung und erzeugt einen lokalen Änderungssatz zum Review. Build und Tests sind nicht verifiziert. Kein automatischer Push oder Merge.</small></div>
+<div class="row"><div class="field"><label for="provider">Ausführungsprofil</label><select id="provider"><option value="auto">Automatisch</option><option value="claude">Claude</option><option value="codex">Codex</option></select></div>
+<div class="field"><label for="priority">Priorität</label><select id="priority"><option value="1">Normal</option><option value="2">Hoch</option></select></div></div></div></details>
+<button class="primary" type="submit" id="submit">Auftrag speichern</button></form>
+<aside>
+<h2>Dein Auftrag in dieser Linie</h2>
+<div class="note"><b>Aufnahme</b>
+<p>Die API speichert den Auftrag in SQLite. Mit konfiguriertem Vault und fixiertem Git-Commit übernimmt sie Titel und Kriterien aus der Notiz. Ohne diese Bindung bleibt der Verweis ungeklärt; Kriterien werden nicht erfunden. Wiederholte Übertragung erzeugt dank Idempotenz keinen zweiten Auftrag.</p></div>
+<div class="note"><b>Zuweisung</b>
+<p>Ein Worker des passenden Projekts reserviert einen Auftrag. Profilwahl sowie die konfigurierten Profil- und Maschinenslots begrenzen die Vergabe.</p></div>
+<div class="note"><b>Ergebnis prüfen</b>
+<p>Nach dem Speichern öffnet sich das Taskboard. Wähle dort ein Feature für seine Ereignisse und die zugehörigen Snapshots.</p></div>
+<details class="note"><summary>Zielablauf mit menschlichem Review</summary>
+<p>Im Zielsystem öffnet der Worker beim Start einen Draft PR gegen den Iterationsbranch. Nach der Umsetzung fordert er Review an, bearbeitet Feedback im selben PR und beendet den Auftrag erst nach dessen Merge. Diese Git-Integration ist im Starter noch nicht verbunden.</p></details></aside></div>
+<details class="note" id="iteration-import"><summary>Ready-Features einer Iteration importieren</summary>
+<p>Das Produktteam plant in Obsidian, erstellt einen Iterationsbranch mit Draft PR und markiert implementierbare Features. Der Importbefehl übernimmt diese am festgelegten Commit. Das Team kann währenddessen die nächste Iteration vorbereiten.</p>
+<p id="import-state">Verbinden, um importierte Features zu sehen.</p>
+<details><summary>Importbefehl und PR-Beziehung</summary><pre>werk-orchestrator iteration import --repo /path/to/project
+  --branch iteration/2026-W42 --project demo --iteration 2026-W42
+  --iteration-pr https://git.example/project/pull/10</pre>
+<p>Feature-PR: factory/FEATURE → iteration/2026-W42. Iterations-PR: iteration/2026-W42 → main. Live Git-Push/PR-Operationen sind noch nicht angebunden.</p></details>
+</details></section>
+<section id="tasks" hidden>
+<div class="section-heading"><h2>Persistente Aufträge</h2><button id="new-task">Neuer Auftrag</button></div>
+<p>Wähle ein Feature, um seine Ereignisse zu prüfen. „Simuliert“ bestätigt den Testlauf und bedeutet noch keinen umgesetzten oder gemergten PR.</p>
+<div class="toolbar">
+<div class="field"><label for="task-search">Auf dieser Seite suchen</label><input id="task-search" type="search" placeholder="Titel, ID oder Projekt"></div>
+<div class="field"><label for="task-status">Status</label><select id="task-status"><option value="">Alle Status</option><option value="queued">Wartet</option><option value="running">In Ausführung</option><option value="review">Review erforderlich</option><option value="simulated">Simuliert</option><option value="blocked">Klärung erforderlich</option></select></div><button id="refresh-tasks">Neueste laden</button></div>
+<p id="task-count"></p>
+<div class="section-heading"><p id="task-page-state" tabindex="-1">Noch keine Auftragsseite geladen.</p><div class="actions" aria-label="Auftragsseiten"><button id="task-previous" disabled>Zurück</button><button id="task-next" disabled>Weiter</button></div></div>
+<div class="table-wrap" role="region" aria-label="Aufträge – horizontal verschiebbar" tabindex="0">
+<table>
+<thead>
+<tr><th scope="col">Feature</th><th scope="col">Projekt</th><th scope="col">Status</th><th scope="col">Profil</th><th scope="col">Versuch</th></tr></thead>
+<tbody id="task-rows"></tbody></table></div>
+<div class="actions page-end" aria-label="Auftragsseiten am Tabellenende"><button id="task-previous-bottom" disabled>Zurück</button><button id="task-next-bottom" disabled>Weiter</button></div>
+<section class="detail" id="task-detail" hidden aria-labelledby="task-detail-heading">
+<div class="section-heading"><h3 id="task-detail-heading" tabindex="-1">Auftragsereignisse</h3><div class="actions"><button id="refresh-task-events">Ereignisse neu laden</button><button id="close-task-detail">Schließen</button></div></div><p id="task-reference" hidden></p><p class="detail-state" id="task-event-state" role="status"></p><p>Maximal 50 Ereignisse je Seite, älteste zuerst. „Ereignisse neu laden“ beginnt einen neuen Lesestand; spätere Ereignisse erscheinen erst dann.</p><div class="actions" aria-label="Ereignisseiten"><button id="event-previous" disabled>Zurück</button><button id="event-next" disabled>Weiter</button></div><pre id="task-events" tabindex="0" aria-label="Auftragsereignisse als JSON"></pre>
+<div class="next-step">
+<p id="task-next-step"></p><button id="inspect-workers">Worker prüfen</button><p>Vorher/Nachher-Messungen für dieses Feature:</p><button id="inspect-task-snapshots">Snapshots prüfen</button></div></section></section>
+<section id="workers" hidden><div id="worker-list">
+<div class="section-heading">
+<h2>Registrierte Worker</h2><button id="refresh-workers">Neueste laden</button></div>
+<p>Wähle einen Worker für seine gemeldeten Profile, Kapazität und aktiven Aufgaben in dieser Linie. Der eigene lokale Worker-Status bleibt eine separate Ansicht; seine Adresse steht in der Startausgabe.</p>
+<div class="note" id="worker-empty-help" hidden><h3>Ein Worker führt deinen Testlauf aus</h3><p>Der Release-Start startet normalerweise auch einen Mock-Worker. Prüfe das Startterminal auf Fehler. Wenn du den Betrieb neu starten musst, verwende denselben Startweg und Zustandsordner wie zuvor. Bei einem eigenen Setup braucht der Worker die Adresse dieser Linie und das passende Enrollment-Token.</p><p>Ein gespeicherter Auftrag wartet, bis ein erreichbarer Worker mit passendem Projekt und Profil ihn reserviert.</p><button id="worker-help-refresh">Worker erneut prüfen</button></div>
+<div class="section-heading"><p id="worker-page-state" tabindex="-1">Noch keine Worker-Seite geladen.</p><div class="actions" aria-label="Worker-Seiten"><button id="worker-previous" disabled>Zurück</button><button id="worker-next" disabled>Weiter</button></div></div>
+<div class="table-wrap" role="region" aria-label="Registrierte Worker – horizontal verschiebbar" tabindex="0">
+<table>
+<thead>
+<tr><th scope="col">Worker</th><th scope="col">Projekt</th><th scope="col">Kontakt</th><th scope="col">Profile / Parallelität</th></tr></thead>
+<tbody id="worker-rows"></tbody></table></div>
+<div class="actions page-end" aria-label="Worker-Seiten am Tabellenende"><button id="worker-previous-bottom" disabled>Zurück</button><button id="worker-next-bottom" disabled>Weiter</button></div></div>
+<section class="detail" id="worker-detail" hidden aria-labelledby="worker-detail-heading">
+<div class="section-heading"><h2 id="worker-detail-heading" tabindex="-1">Worker-Details</h2><div class="actions"><button id="refresh-worker-detail">Details aktualisieren</button><button id="close-worker-detail">Zur Worker-Liste</button></div></div>
+<p id="worker-detail-state" role="status"></p><p>Vom Orchestrator beobachtete Daten dieser Linie. Der Profilmodus unterscheidet Simulation und echte CLI-Ausführung; der eigene Worker-Status wird nicht ersetzt.</p>
+<div id="worker-detail-content" hidden><dl id="worker-detail-facts" class="worker-facts"></dl>
+<h3>Gemeldete Profile</h3><div class="table-wrap" role="region" aria-label="Worker-Profile – horizontal verschiebbar" tabindex="0"><table><thead><tr><th scope="col">Profil</th><th scope="col">Anbieter</th><th scope="col">Ausführung</th><th scope="col">Profilslots</th></tr></thead><tbody id="worker-profile-rows"></tbody></table></div>
+<h3 class="section-start">Aktive Aufgaben dieses Workers</h3><p id="worker-active-count"></p><div class="table-wrap" role="region" aria-label="Aktive Worker-Aufgaben – horizontal verschiebbar" tabindex="0"><table><thead><tr><th scope="col">Auftrag</th><th scope="col">Profil</th><th scope="col">Versuch</th><th scope="col">Reservierung bis</th></tr></thead><tbody id="worker-active-rows"></tbody></table></div></div>
+</section></section>
+<section id="metrics" hidden>
+<div class="section-heading">
+<h2>Snapshots & Linienzustand</h2><button id="refresh-metrics">Aktualisieren</button></div>
+<p>Vorher/Nachher je Versuch. Beobachtete Laufzeit- und Prozessmessungen; Simulation und CLI-Ausführung bleiben am Ergebnis erkennbar. Anbieter-Kosten und Qualität werden nicht erfunden.</p>
+<div class="metric-filters">
+<div class="row">
+<div class="field"><label for="metric-project">Projekt</label><select id="metric-project"><option value="">Alle Projekte</option></select></div>
+<div class="field"><label for="metric-worker">Worker</label><select id="metric-worker"><option value="">Alle Worker</option></select></div></div>
+<div class="field"><label for="metric-iteration">Iteration</label><select id="metric-iteration"><option value="">Alle Iterationen</option></select></div>
+<div class="row">
+<div class="field"><label for="metric-window">Zeitraum nach Server-Empfang</label><select id="metric-window"><option value="">Alle geladenen Messungen</option><option value="3600000">Letzte Stunde</option><option value="86400000">Letzte 24 Stunden</option><option value="604800000">Letzte 7 Tage</option></select></div>
+<div class="field"><label for="metric-outcome">Ergebnis des Versuchs</label><select id="metric-outcome"><option value="">Alle Ergebnisse</option><option value="simulated">Simuliert</option><option value="change-set">Änderungssatz zum Review</option><option value="failed">Fehlgeschlagen</option><option value="interrupted">Unterbrochen</option></select></div></div></div>
+<div class="actions scope-context" id="task-snapshot-filter" hidden>
+<p id="task-snapshot-label"></p><button id="return-to-task">Zum Auftrag</button><button id="clear-task-filter">Alle Aufträge anzeigen</button></div>
+<p id="metric-summary" role="status" tabindex="-1"></p>
+<figure class="chart"><figcaption>Dauer pro Versuch · Millisekunden · Server-Empfangszeit. Auf schmalen Ansichten horizontal verschiebbar.</figcaption><div class="chart-scroll" role="region" aria-label="Versuchsdauer-Diagramm" tabindex="0"><svg id="metric-chart" viewBox="0 0 900 220" role="img" aria-label="Zeitreihe der gemessenen Versuchsdauer"></svg></div></figure>
+<div class="table-wrap" role="region" aria-label="Kennzahlen dieser Linie – horizontal verschiebbar" tabindex="0">
+<table>
+<thead>
+<tr><th scope="col">Projekt</th><th scope="col">Versuche (nachher)</th><th scope="col">Fehler / Abbruch</th><th scope="col">P50 / P95 Dauer</th><th scope="col">Kostenmessung</th><th scope="col">Qualitätschecks</th></tr></thead>
+<tbody id="portfolio-rows"></tbody></table></div>
+<h2 class="section-start">Messwerte untersuchen</h2>
+<p>Wähle einen Snapshot, um Schema, Konfiguration, Metriken und SHA-256 zu prüfen. CPU und Speicher beziehen sich auf den Worker-Prozess; parallele Werte dürfen nicht als Task-Verbrauch addiert werden.</p>
+<div class="table-wrap" role="region" aria-label="Snapshot-Messwerte – horizontal verschiebbar" tabindex="0">
+<table>
+<thead>
+<tr><th scope="col">Snapshot</th><th scope="col">Worker / Profil</th><th scope="col">Ergebnis</th><th scope="col">RSS</th><th scope="col">Event Loop P95</th></tr></thead>
+<tbody id="snapshot-rows"></tbody></table></div>
+<section class="detail" id="snapshot-inspector" hidden aria-labelledby="snapshot-heading">
+<div class="section-heading"><h3 id="snapshot-heading" tabindex="-1">Snapshot im Detail</h3><button id="close-snapshot">Schließen</button></div><pre id="snapshot-detail" tabindex="0" aria-label="Snapshot-Messwerte als JSON"></pre></section></section></main>
+<footer>Werk 0.1 · Simulation standardmäßig; Codex CLI ausdrücklich optional. Die Konzeptdemo nutzt ihren eigenen Browserzustand.</footer><script>
+const $=selector=>document.querySelector(selector);
+const names={intake:'Auftrag an die Linie übergeben',tasks:'Aufträge im Lauf',workers:'Worker dieser Linie',metrics:'Messwerte dieser Linie'};
+const leads={intake:'Übergib eine Anforderung aus dem Projekt-Vault als Wikilink. Die Details bleiben in Obsidian. Standardmäßig wird simuliert. Echte Codex-Ausführung ist unter den Optionen ausdrücklich wählbar; Änderungssätze benötigen menschliches Review.',tasks:'Verfolge gespeicherte Features vom Wartezustand bis zum Simulationsergebnis oder Änderungssatz zum Review. Wähle einen Auftrag für Ereignisse und seine Snapshots.',workers:'Prüfe, ob Worker erreichbar sind und mit passenden Profilen für dein Projekt arbeiten. Der lokale Worker-Status zeigt aktive Versuche und Prozesszustand.',metrics:'Vergleiche Versuchsdauer, Fehler und Prozesszustand. Grenzen der Messung und fehlende Anbieter- oder Qualitätsdaten bleiben sichtbar.'};
+const statuses={queued:'Wartet',running:'In Ausführung',review:'Review erforderlich',simulated:'Simuliert',blocked:'Klärung erforderlich'};
+let workerDetailId='',workerDetailRequest=0,workerDetailController=null,workerDetailData=null;
+let projectEdited=false;
+let token='',tab='intake',paused=false,requestId=0,controller=null,connectId=0,detailId=0,sessionId=0,submitting=false,connecting=false,canWrite=true;
+let readinessRequest=0,readinessObservation=null;
+let key=crypto.randomUUID(),lastBody='',tasksCache=[],metricRecords=[],metricsTruncated=false,lastRefreshError='',metricTaskId='',selectedTaskId='',selectedSnapshotId='';
+const pageSize=50;
+const firstPage=()=>({cursor:null,previous:[],nextCursor:null,hasMore:false,loaded:false,count:0});
+let taskPage=firstPage(),workerPage=firstPage(),eventPage=firstPage(),selectedTask=null,eventController=null;
+const message=(text,kind='info')=>{ $('#message').textContent=text; $('#message').dataset.kind=kind; };
+const date=value=>Number.isFinite(Date.parse(value))?new Date(value).toLocaleString('de-DE'):'Nicht erfasst';
+const finite=value=>typeof value==='number'&&Number.isFinite(value);
+async function api(path,{method='GET',body,signal,credential=token,idempotencyKey}={}) {
+  const timeout=AbortSignal.timeout(10000),combined=signal?AbortSignal.any([signal,timeout]):timeout;
+  const response=await fetch(path,{method,headers:{Authorization:'Bearer '+credential,...(body?{'Content-Type':'application/json'}:{}),...(idempotencyKey?{'Idempotency-Key':idempotencyKey}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:combined,cache:'no-store'});
+  let result;try{result=await response.json()}catch{const error=Error('Der Server liefert keine lesbare JSON-Antwort (HTTP '+response.status+').');error.status=response.status;throw error}
+  if(!response.ok){const error=Error(result?.error||'HTTP '+response.status);error.status=response.status;throw error}
+  return result;
+}
+function applyAccess(access){
+  canWrite=access===undefined||Boolean(access?.permissions?.write===true&&['admin','operator'].includes(access?.principal?.role));
+  $('#access-summary').hidden=!token;
+  $('#access-summary').textContent=canWrite?'Zugriff: '+(access?.principal?.role==='operator'?'Operator':'Administration')+' · Aufträge lesen und übergeben.':'Zugriff: nur lesen · Taskboard, Worker und Messwerte sind verfügbar. Für neue Aufträge mit einem Operator- oder Administrationstoken verbinden.';
+  $('#task-form').hidden=!canWrite;$('#first-manual-task').hidden=!canWrite;$('#new-task').disabled=!canWrite;
+}
+function renderReadiness(){
+  const observed=readinessObservation;
+  if(!observed){$('#line-readiness').textContent='Worker-Status unbekannt. Prüfe die Bereitschaft vor deinem ersten Auftrag.';return}
+  const workers=observed.overview?.workers,stamp=new Date(observed.at).toLocaleTimeString('de-DE');
+  const stale=Date.now()-observed.at>45000;
+  const online=Number.isSafeInteger(workers?.online)&&workers.online>=0?workers.online:null;
+  $('#line-readiness').textContent=(stale?'Veralteter Stand · ':'Geprüft ')+stamp+' · '+(online===null?'Worker-Status unbekannt. Erneut prüfen.':online===0?'Kein Worker online. Prüfe die Worker-Ansicht und das Startterminal. Gespeicherte Aufträge warten auf einen passenden Worker.':online+' Worker online. Die Ausführung benötigt ein passendes Profil und einen freien Slot; prüfe anschließend Ereignisse und Ergebnisse im Taskboard.');
+}
+async function checkReadiness(){
+  if(!token)return;const id=++readinessRequest,session=sessionId;$('#check-readiness').disabled=true;$('#line-readiness').textContent='Bereitschaft wird geprüft…';
+  try{const overview=await api('/v1/overview');if(id!==readinessRequest||session!==sessionId)return;readinessObservation={overview,at:Date.now()};applyAccess(overview.access);renderReadiness()}
+  catch(error){if(id!==readinessRequest||session!==sessionId)return;if(expireAuthentication(error))return;readinessObservation=null;$('#line-readiness').textContent='Bereitschaft konnte nicht geprüft werden. Prüfe das Startterminal und versuche „Bereitschaft prüfen“ erneut. Gespeicherte Aufträge bleiben erhalten.'}
+  finally{if(id===readinessRequest)$('#check-readiness').disabled=false}
+}
+function expireAuthentication(error){
+  if(error.status!==401||submitting||!token)return false;
+  clearSession();$('#token').value='';message('Zugangstoken nicht mehr gültig. Automatische Abfragen wurden gestoppt. Bitte erneut verbinden; ungespeicherte Intake-Eingaben bleiben erhalten.','error');$('#token').focus();return true;
+}
+function pageUrl(path,page){return path+'?limit='+pageSize+(page.cursor===null?'':'&cursor='+encodeURIComponent(page.cursor))}
+function checkedPage(result,key,page){
+  if(!result||!Array.isArray(result[key])||result[key].length>pageSize||typeof result.hasMore!=='boolean'||
+    (result.hasMore?typeof result.nextCursor!=='string'||!result.nextCursor||result.nextCursor.length>1024||result.nextCursor===page.cursor||!result[key].length:result.nextCursor!==null))throw Error('Ungültige Seitenantwort. Bitte erneut laden.');
+  const record=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
+  if(result[key].some(item=>!record(item)||(key==='tasks'?(typeof item.id!=='string'||typeof item.title!=='string'):key==='workers'?(typeof item.id!=='string'||!Array.isArray(item.profiles)||item.profiles.some(profile=>!record(profile))):!Number.isSafeInteger(item.seq))))throw Error('Ungültige Datensätze auf dieser Seite.');
+  return {...page,previous:[...page.previous],nextCursor:result.nextCursor,hasMore:result.hasMore,loaded:true,count:result[key].length};
+}
+function pageTarget(page,direction){
+  return direction==='next'?{...firstPage(),cursor:page.nextCursor,previous:[...page.previous,page.cursor]}:
+    {...firstPage(),cursor:page.previous.at(-1),previous:page.previous.slice(0,-1)};
+}
+function pageControls(prefix,page,busy=false){
+  $('#'+prefix+'-previous').disabled=!token||busy||!page.previous.length;$('#'+prefix+'-next').disabled=!token||busy||!page.hasMore;
+  if(prefix==='event')return;
+  for(const direction of ['previous','next'])$('#'+prefix+'-'+direction+'-bottom').disabled=$('#'+prefix+'-'+direction).disabled;
+  const text=page.loaded?'Seite '+(page.previous.length+1)+' · '+page.count+' Einträge, maximal '+pageSize+'. '+(page.hasMore?'Weitere Seiten vorhanden.':'Ende dieses Lesestands.')+' „Neueste laden“ beginnt vorn.':'Noch keine Seite geladen.';
+  if($('#'+prefix+'-page-state').textContent!==text)$('#'+prefix+'-page-state').textContent=text;
+}
+function contextState(task){return task.context?.commit?'Kontext am Commit '+task.context.commit+' fixiert · '+(task.executionMode==='cli'?'CLI-Ausführung zum Review':'Ausführung weiterhin simuliert'):'Kontext noch nicht aufgelöst'}
+function cell(row,value){const td=document.createElement('td');td.textContent=value??'—';row.append(td);return td}
+function empty(target,columns,text){const tr=document.createElement('tr'),td=cell(tr,text);td.colSpan=columns;td.className='empty';target.append(tr)}
+function updateJourney(){
+  const step=!token?'connect':tab==='workers'?'tasks':tab;
+  for(const id of ['connect','intake','tasks','metrics']){const node=$('#journey-'+id);if(id===step)node.setAttribute('aria-current','step');else node.removeAttribute('aria-current')}
+  $('#auth-panel').hidden=Boolean(token);$('#connection-guide').hidden=Boolean(token);$('#runtime-nav').hidden=!token;$('#journey').hidden=!token;$('#runtime-sync').hidden=!token;$('#pause-updates').disabled=!token;
+  for(const id of Object.keys(names))$('#'+id).hidden=!token||id!==tab;
+  $('#heading').textContent=token?names[tab]:'Willkommen bei Werk';document.title='Werk · '+$('#heading').textContent;
+  pageControls('task',taskPage,Boolean(controller));pageControls('worker',workerPage,Boolean(controller));pageControls('event',eventPage,Boolean(eventController));
+  $('#page-lead').textContent=token?leads[tab]:'Verbinde dich mit deiner Produktionslinie. Übergib dann einen ersten Auftrag und prüfe den simulierten Lauf. Echte Codex-Ausführung ist optional; Pull Requests und Merges werden nicht automatisch erstellt.';
+  for(const id of ['tasks','workers','metrics'])$('#refresh-'+id).disabled=!token;
+  if(!token){for(const [id,columns] of [['task-rows',5],['worker-rows',4],['portfolio-rows',6],['snapshot-rows',5]]){const target=$('#'+id);target.replaceChildren();empty(target,columns,'Zuerst mit dem Orchestrator verbinden, um diese Daten zu laden.')}}
+}
+function clearSession(){
+  resetWorkerDetail();++readinessRequest;readinessObservation=null;canWrite=true;$('#access-summary').hidden=true;$('#access-summary').textContent='';$('#task-form').hidden=false;$('#first-manual-task').hidden=false;$('#check-readiness').disabled=false;renderReadiness();
+  taskPage=firstPage();workerPage=firstPage();eventPage=firstPage();selectedTask=null;eventController?.abort();eventController=null;
+  ++sessionId;++requestId;++detailId;controller?.abort();controller=null;token='';tasksCache=[];metricRecords=[];metricTaskId='';selectedTaskId='';selectedSnapshotId='';lastRefreshError='';metricsTruncated=false;$('#task-snapshot-filter').hidden=true;
+  for(const id of ['task-rows','worker-rows','portfolio-rows','snapshot-rows','metric-chart'])$('#'+id).replaceChildren();
+  $('#task-detail').hidden=true;$('#snapshot-inspector').hidden=true;
+  for(const id of ['task-detail-heading','snapshot-heading','task-snapshot-label'])$('#'+id).textContent='';
+  for(const [id,label] of [['metric-project','Alle Projekte'],['metric-worker','Alle Worker'],['metric-iteration','Alle Iterationen']])options('#'+id,[],label);
+  for(const id of ['task-search','task-status','metric-window','metric-outcome'])$('#'+id).value='';
+  $('#first-task-help').hidden=true;$('#worker-empty-help').hidden=true;$('#task-next-step').textContent='';$('#inspect-workers').hidden=true;
+  $('#task-events').textContent='';$('#task-event-state').textContent='';$('#task-reference').textContent='';$('#task-reference').hidden=true;$('#snapshot-detail').textContent='';$('#metric-summary').textContent='';$('#task-count').textContent='';
+  $('#import-state').textContent='Verbinden, um importierte Features zu sehen.';$('#sync-state').textContent='Noch nicht verbunden';$('#disconnect').hidden=true;
+  for(const id of Object.keys(names))$('#'+id).removeAttribute('aria-busy');
+  updateJourney();
+}
+function renderTasks(){
+  const latest=tasksCache.find(task=>task.id===selectedTaskId);if(latest){selectedTask=latest;taskGuidance(latest)}
+  const focused=document.activeElement?.dataset?.taskId;const rows=$('#task-rows'),query=$('#task-search').value.trim().toLocaleLowerCase(),status=$('#task-status').value;
+  const tasks=tasksCache.filter(t=>(!status||t.status===status)&&(!query||[t.title,t.id,t.project,t.requirementRef??''].some(v=>String(v).toLocaleLowerCase().includes(query))));
+  rows.replaceChildren();$('#task-count').textContent=tasks.length+' von '+tasksCache.length+' Aufträgen auf dieser Seite. Suche und Status gelten nur für diese Seite.';
+  if(!tasks.length)empty(rows,5,tasksCache.length?'Keine passenden Aufträge auf dieser Seite. Filter ändern oder eine andere Seite öffnen.':taskPage.previous.length?'Keine Aufträge mehr auf dieser Seite. Mit „Neueste laden“ vorn beginnen.':'Noch keine Aufträge. Importiere Ready-Features oder nutze den Intake.');
+  for(const task of tasks){const row=document.createElement('tr'),button=document.createElement('button');button.textContent=task.title;button.dataset.taskId=task.id;button.title='Ereignisse für '+task.id;button.onclick=()=>showTask(task);const label=cell(row,'');label.append(button);if(task.requirementRef){const reference=document.createElement('small');reference.textContent=task.requirementRef+' · '+contextState(task);label.append(reference)}cell(row,task.project);cell(row,statuses[task.status]||task.status);cell(row,task.profile||task.provider);cell(row,task.attempt);rows.append(row);if(focused===task.id)button.focus({preventScroll:true})}
+}
+function taskGuidance(task){
+  const guidance={queued:'Auftrag gespeichert. Er wartet auf einen erreichbaren Worker mit passendem Projekt und Profil. Prüfe die Worker, wenn der Auftrag im Wartezustand bleibt.',running:task.executionMode==='cli'?'Der Codex-Worker bearbeitet den Auftrag. Ein Änderungssatz muss anschließend geprüft werden; laufende Ausführung ist keine erfolgreiche Umsetzung.':'Die Simulation läuft. Nach ihrem Abschluss zeigt das Taskboard „Simuliert“; prüfe dann die Ereignisse und Snapshots.',review:'Änderungssatz zum Review bereit. Prüfe Ereignisse und Snapshots: review enthält Basis-Commit, SHA-256 und den relativen Pfad des Patches im privaten Worker-Zustandsordner. Prüfe Patch und Akzeptanzkriterien vor der Übernahme; nichts wurde automatisch veröffentlicht oder gemergt.',simulated:'Testlauf simuliert. Prüfe die Ereignisse und Vorher/Nachher-Snapshots. Das bestätigt den technischen Testlauf, keine Umsetzung, Abnahme oder Zusammenführung eines PR.',blocked:'Dieser Auftrag braucht Klärung. Prüfe die Ereignisse und den Worker-Status, bevor du einen neuen Versuch startest.'};
+  $('#task-next-step').textContent=guidance[task.status]??'Prüfe die gespeicherten Ereignisse und Snapshots dieses Auftrags.';$('#inspect-workers').hidden=!['queued','blocked'].includes(task.status);
+}
+async function showTask(task,{focus=true,page=firstPage()}={}){
+  taskGuidance(task);
+  const sameTask=selectedTaskId===task.id;selectedTask=task;selectedTaskId=task.id;
+  if(!sameTask){eventPage=firstPage();$('#task-events').textContent='Ereignisse werden geladen…'}
+  $('#task-reference').hidden=!task.requirementRef;$('#task-reference').textContent=task.requirementRef?task.requirementRef+' · '+contextState(task):'';
+  const id=++detailId,currentSession=sessionId;eventController?.abort();const ownController=new AbortController();eventController=ownController;
+  $('#task-detail').hidden=false;$('#task-detail-heading').textContent=task.title+' · Ereignisse';$('#task-event-state').textContent='Lade Ereignisseite '+(page.previous.length+1)+'…';$('#refresh-task-events').disabled=true;pageControls('event',eventPage,true);if(focus)$('#task-detail-heading').focus();
+  try{
+    const result=await api(pageUrl('/v1/tasks/'+encodeURIComponent(task.id)+'/events',page),{signal:ownController.signal});if(id!==detailId||currentSession!==sessionId||tab!=='tasks')return;
+    eventPage=checkedPage(result,'events',page);$('#task-events').textContent=result.events.length?JSON.stringify({events:result.events},null,2):'Für diesen Lesestand liegen keine Ereignisse vor.';
+    $('#task-event-state').textContent='Gelesen '+new Date().toLocaleTimeString('de-DE')+' · Seite '+(eventPage.previous.length+1)+' · '+result.events.length+' Ereignisse. '+(eventPage.hasMore?'Weitere Seiten vorhanden.':'Ende dieses Lesestands.');
+  }catch(error){if(id===detailId&&currentSession===sessionId&&tab==='tasks'&&!ownController.signal.aborted){if(expireAuthentication(error))return;if(!eventPage.loaded)$('#task-events').textContent='Keine Ereignisseite geladen.';$('#task-event-state').textContent='Ereignisseite nicht verfügbar. '+(eventPage.loaded?'Die angezeigte Seite bleibt erhalten. ':'')+'Über die Seitensteuerung oder „Ereignisse neu laden“ erneut versuchen.'}}
+  finally{if(id===detailId){eventController=null;$('#refresh-task-events').disabled=false;pageControls('event',eventPage)}}
+}
+function resetWorkerDetail(){
+  ++workerDetailRequest;workerDetailController?.abort();workerDetailController=null;workerDetailId='';workerDetailData=null;
+  $('#worker-detail').hidden=true;$('#worker-list').hidden=false;$('#worker-detail-content').hidden=true;$('#worker-detail').removeAttribute('aria-busy');$('#refresh-worker-detail').disabled=false;
+  for(const id of ['worker-detail-heading','worker-detail-state','worker-active-count'])$('#'+id).textContent='';
+  for(const id of ['worker-detail-facts','worker-profile-rows','worker-active-rows'])$('#'+id).replaceChildren();
+}
+function checkedWorkerDetail(value,id){
+  const text=v=>typeof v==='string',integer=v=>Number.isSafeInteger(v)&&v>=0,time=v=>Number.isFinite(v)&&Number.isFinite(new Date(v).getTime());
+  if(!value||value.id!==id||!text(value.project)||!time(value.seen)||typeof value.online!=='boolean'||
+    !value.config||!integer(value.config.maxParallel)||!integer(value.config.maxAttempts)||!['priority','fifo'].includes(value.config.order)||
+    !Array.isArray(value.profiles)||value.profiles.length>8||value.profiles.some(p=>!p||!text(p.id)||!['claude','codex'].includes(p.provider)||!['mock','cli'].includes(p.mode)||!integer(p.maxParallel))||
+    !Array.isArray(value.activeTasks)||value.activeTasks.length>8||typeof value.activeTasksTruncated!=='boolean'||value.activeTasks.some(task=>!task||!text(task.id)||task.status!=='running'||!integer(task.attempt)||(task.profile!==null&&!text(task.profile))||(task.expiresAt!==null&&!time(task.expiresAt))))throw Error('Ungültige Worker-Antwort. Bitte erneut laden.');
+  return value;
+}
+function renderWorkerDetail(worker){
+  const facts=$('#worker-detail-facts');facts.replaceChildren();
+  const fields=[['Projekt',worker.project],['Verbindung',worker.online?'Online':'Offline'],['Letzter Kontakt',date(new Date(worker.seen).toISOString())],['Maschinenslots',String(worker.config.maxParallel)],['Vergabereihenfolge',worker.config.order==='fifo'?'Eingangsreihenfolge':'Priorität'],['Maximale Versuche',String(worker.config.maxAttempts)]];
+  for(const[label,value]of fields){const group=document.createElement('div'),term=document.createElement('dt'),description=document.createElement('dd');term.textContent=label;description.textContent=value;group.append(term,description);facts.append(group)}
+  const profiles=$('#worker-profile-rows');profiles.replaceChildren();if(!worker.profiles.length)empty(profiles,4,'Keine Profile gemeldet.');
+  for(const profile of worker.profiles){const row=document.createElement('tr');cell(row,profile.id);cell(row,profile.provider);cell(row,profile.mode==='cli'?'CLI · echte Ausführung':'Simuliert');cell(row,profile.maxParallel);profiles.append(row)}
+  const active=$('#worker-active-rows');active.replaceChildren();$('#worker-active-count').textContent=worker.activeTasks.length+' aktive Aufgaben angezeigt, maximal 8.'+(worker.activeTasksTruncated?' Weitere Aufgaben sind nicht angezeigt; diese Liste ist unvollständig.':' Vollständiger beobachteter Stand.');
+  if(!worker.activeTasks.length)empty(active,4,'Keine aktiven Aufgaben gemeldet.');
+  for(const task of worker.activeTasks){const row=document.createElement('tr');cell(row,task.id);cell(row,task.profile);cell(row,task.attempt);cell(row,task.expiresAt===null?'Nicht gemeldet':date(new Date(task.expiresAt).toISOString()));active.append(row)}
+  $('#worker-detail-content').hidden=false;
+}
+async function showWorker(id,{focus=true}={}){
+  if(!token||tab!=='workers')return;
+  if(workerDetailId!==id){resetWorkerDetail();workerDetailId=id}
+  const request=++workerDetailRequest,currentSession=sessionId;workerDetailController?.abort();const ownController=new AbortController();workerDetailController=ownController;
+  $('#worker-list').hidden=true;$('#worker-detail').hidden=false;$('#worker-detail-heading').textContent='Worker '+id;$('#worker-detail').setAttribute('aria-busy','true');$('#refresh-worker-detail').disabled=true;
+  $('#worker-detail-state').textContent=workerDetailData?'Aktualisierung läuft · der letzte Stand bleibt sichtbar.':'Worker-Details werden geladen…';if(focus)$('#worker-detail-heading').focus();
+  try{
+    const worker=checkedWorkerDetail(await api('/v1/workers/'+encodeURIComponent(id),{signal:ownController.signal}),id);
+    if(request!==workerDetailRequest||currentSession!==sessionId||tab!=='workers')return;
+    workerDetailData=worker;renderWorkerDetail(worker);$('#worker-detail-state').textContent='Gelesen '+new Date().toLocaleTimeString('de-DE')+(paused?' · Live-Updates pausiert':' · Aktualisierung alle 5 Sekunden');
+  }catch(error){
+    if(request!==workerDetailRequest||currentSession!==sessionId||ownController.signal.aborted||tab!=='workers')return;if(expireAuthentication(error))return;
+    $('#worker-detail-state').textContent=(workerDetailData?'Veralteter letzter Stand. ':'Keine Worker-Details geladen. ')+(error.status===404?'Worker in dieser Linie nicht gefunden. Zur Liste zurückkehren oder erneut laden.':'Details nicht verfügbar. Über „Details aktualisieren“ erneut versuchen.');
+  }finally{if(request===workerDetailRequest){workerDetailController=null;$('#worker-detail').removeAttribute('aria-busy');$('#refresh-worker-detail').disabled=false}}
+}
+function renderWorkers(workers){
+  const focused=document.activeElement?.dataset?.workerId;const rows=$('#worker-rows');$('#worker-empty-help').hidden=workers.length>0||workerPage.previous.length>0;rows.replaceChildren();if(!workers.length)empty(rows,4,'Noch keine Worker registriert. Starte einen Worker mit der passenden Projektkonfiguration.');
+  for(const worker of workers){const row=document.createElement('tr'),button=document.createElement('button');button.textContent=worker.id;button.dataset.workerId=worker.id;button.setAttribute('aria-label','Details für Worker '+worker.id);button.onclick=()=>showWorker(worker.id);cell(row,'').append(button);cell(row,worker.project);cell(row,(worker.online?'Online':'Offline')+(Number.isFinite(worker.seen)?' · '+date(new Date(worker.seen).toISOString()):''));cell(row,worker.profiles.map(p=>p.provider+' / '+p.id+' · '+p.maxParallel+' Slots').join(' · ')+' | Maschine: '+(worker.config?.maxParallel??1));rows.append(row);if(focused===worker.id)button.focus({preventScroll:true})}
+}
+async function loadMetrics(signal){
+  const records=[];let before=null,more=false;
+  for(let page=0;page<10;page++){
+    const result=await api('/v1/snapshots?order=desc&limit=1000'+(before===null?'':'&before='+before),{signal});
+    records.push(...result.snapshots);more=result.hasMore??result.snapshots.length===1000;
+    if(!more)break;if(result.nextCursor===null||result.nextCursor===before)throw Error('Snapshot-Paginierung liefert keinen Fortschritt.');before=result.nextCursor;
+  }
+  return {records:records.sort((a,b)=>a.seq-b.seq),truncated:more};
+}
+async function refresh({page=null}={}){
+  if(!token)return;
+  const id=++requestId,currentTab=tab,requestedPage=page??(tab==='tasks'?taskPage:tab==='workers'?workerPage:firstPage());controller?.abort();const ownController=new AbortController();controller=ownController;
+  $('#'+currentTab).setAttribute('aria-busy','true');$('#sync-state').textContent='Lade '+names[currentTab]+'…';
+  if(currentTab==='tasks'||currentTab==='workers'){
+    const prefix=currentTab==='tasks'?'task':'worker',currentPage=currentTab==='tasks'?taskPage:workerPage;pageControls(prefix,currentPage,true);
+    if(!currentPage.loaded){if(prefix==='task')$('#task-count').textContent='';$('#'+prefix+'-rows').replaceChildren();empty($('#'+prefix+'-rows'),prefix==='task'?5:4,'Seite wird geladen…')}
+  }
+  try{
+    const result=currentTab==='metrics'?await loadMetrics(ownController.signal):await api(pageUrl(currentTab==='workers'?'/v1/workers':'/v1/tasks',requestedPage),{signal:ownController.signal});
+    if(id!==requestId||currentTab!==tab)return;
+    if(currentTab==='intake'){
+      renderReadiness();checkedPage(result,'tasks',requestedPage);$('#first-task-help').hidden=result.tasks.length>0||result.hasMore;const imported=result.tasks.filter(t=>t.source);
+      $('#import-state').textContent=imported.length+' importierte Features in der jüngsten geladenen Seite ('+result.tasks.length+' Aufträge, maximal '+pageSize+'). '+(result.hasMore?'Weitere Aufträge sind nicht geladen; dies ist keine Gesamtzahl.':'Keine weitere Seite in diesem Lesestand.')+' Im Taskboard kannst du die Seiten einzeln prüfen.';
+    }else if(currentTab==='tasks'){taskPage=checkedPage(result,'tasks',requestedPage);tasksCache=result.tasks;renderTasks()}
+    else if(currentTab==='workers'){workerPage=checkedPage(result,'workers',requestedPage);renderWorkers(result.workers)}
+    else {metricRecords=result.records;metricsTruncated=result.truncated;renderMetrics()}
+    if(lastRefreshError&&$('#message').textContent===lastRefreshError)message('Verbindung wiederhergestellt. Die angezeigte Seite ist aktuell.','success');lastRefreshError='';
+    $('#sync-state').textContent='Aktualisiert '+new Date().toLocaleTimeString('de-DE')+(paused?' · Live-Updates pausiert':' · angezeigte Seite alle 5 Sekunden');
+  }catch(error){
+    if(id!==requestId||ownController.signal.aborted)return;if(expireAuthentication(error))return;
+    $('#sync-state').textContent='Aktualisierung fehlgeschlagen · angezeigte Daten können veraltet sein';lastRefreshError=error.message+' Die angezeigte Seite bleibt erhalten. '+(currentTab==='metrics'?'Über „Aktualisieren“ erneut versuchen.':currentTab==='intake'?'Im Taskboard über „Neueste laden“ erneut versuchen.':'Über die Seitensteuerung oder „Neueste laden“ erneut versuchen.');message(lastRefreshError,'error');
+    if(currentTab==='tasks'&&!taskPage.loaded){$('#task-rows').replaceChildren();empty($('#task-rows'),5,'Keine Auftragsseite geladen. Mit „Neueste laden“ erneut versuchen.')}
+    if(currentTab==='workers'&&!workerPage.loaded){$('#worker-rows').replaceChildren();empty($('#worker-rows'),4,'Keine Worker-Seite geladen. Mit „Neueste laden“ erneut versuchen.')}
+  }finally{if(id===requestId){controller=null;$('#'+currentTab).removeAttribute('aria-busy');pageControls('task',taskPage);pageControls('worker',workerPage)}}
+}
+function navigate(next){
+  if(!Object.hasOwn(names,next))return;
+  resetWorkerDetail();
+  ++detailId;eventController?.abort();eventController=null;$('#refresh-task-events').disabled=false;$('#'+tab).removeAttribute('aria-busy');tab=next;
+  document.querySelectorAll('[data-tab]').forEach(button=>{if(button.dataset.tab===tab)button.setAttribute('aria-current','page');else button.removeAttribute('aria-current')});
+  for(const id of Object.keys(names))$('#'+id).hidden=id!==tab;
+  $('#heading').textContent=names[tab];document.title='Werk · '+$('#heading').textContent;$('#heading').focus();updateJourney();if(tab==='metrics'&&token)renderMetrics();refresh();
+}
+async function connect(){
+  if(submitting||connecting)return;
+  const candidate=$('#token').value.trim();if(!candidate){message('Bitte ein Zugangstoken eingeben.','error');$('#token').focus();return}
+  const id=++connectId;connecting=true;clearSession();$('#connect').disabled=true;$('#connect').textContent='Verbinde…';
+  try{const overview=await api('/v1/overview',{credential:candidate});if(id!==connectId)return;token=candidate;applyAccess(overview.access);readinessObservation={overview,at:Date.now()};renderReadiness();
+    if(typeof overview?.project==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(overview.project)){if(!projectEdited&&['','demo'].includes($('#project').value))$('#project').value=overview.project;$('#project-help').textContent='Projekt dieser Produktionslinie: '+overview.project+'. Eigene Eingaben bleiben erhalten.'}
+    $('#token').value='';$('#token').removeAttribute('aria-invalid');$('#disconnect').hidden=false;updateJourney();message('Verbunden. Aufträge werden im Orchestrator gespeichert.','success');if(tab==='intake')($('#intake-mode').value==='manual'?$('#title'):$('#requirement-ref')).focus();else $('#heading').focus();refresh()}
+  catch(error){if(id===connectId){const help=error.status===401?'Token nicht akzeptiert. Kopiere WERK_ADMIN_TOKEN aus den Zugangsdaten dieses Orchestrators, ohne Anführungszeichen.':'Verbindung nicht möglich. Prüfe, ob der Orchestrator im Startterminal noch läuft und diese Adresse stimmt. Du kannst danach erneut verbinden.';message(help,'error');$('#token').setAttribute('aria-invalid',String(error.status===401));$('#token').focus()}}
+  finally{if(id===connectId){connecting=false;$('#connect').disabled=false;$('#connect').textContent='Verbinden'}}
+}
+document.querySelectorAll('[data-tab]').forEach(button=>button.onclick=()=>navigate(button.dataset.tab));
+$('#project').oninput=()=>{projectEdited=true};
+$('#connect').onclick=connect;$('#token').onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();connect()}};
+$('#disconnect').onclick=()=>{++connectId;connecting=false;$('#connect').disabled=false;$('#connect').textContent='Verbinden';clearSession();$('#token').value='';message('Verbindung getrennt. Das Token wurde aus dem Seitenzustand entfernt.');$('#token').focus()};
+$('#pause-updates').onclick=()=>{paused=!paused;$('#pause-updates').setAttribute('aria-pressed',String(paused));$('#pause-updates').textContent=paused?'Live-Updates fortsetzen':'Live-Updates pausieren';if(!paused){if(tab==='workers'&&workerDetailId)showWorker(workerDetailId,{focus:false});else refresh()}else $('#sync-state').textContent+=' · Live-Updates pausiert'};
+function updateIntakeMode(){
+  const live=$('#execution-mode').value==='cli';if(live){$('#intake-mode').value='manual';$('#provider').value='codex'}$('#intake-mode').disabled=live||submitting;$('#provider').disabled=live||submitting;
+  const manual=$('#intake-mode').value==='manual';
+  $('#reference-fields').hidden=manual;$('#manual-fields').hidden=!manual;
+  $('#requirement-ref').required=!manual;$('#requirement-ref').disabled=manual||submitting;
+  for(const id of ['title','criteria','wikilinks']){$('#'+id).disabled=!manual||submitting;$('#'+id).required=manual&&id!=='wikilinks'}
+}
+function intakePayload(){
+  const project=$('#project').value.trim(),manual=$('#intake-mode').value==='manual';
+  const body=manual?{project,title:$('#title').value.trim(),criteria:$('#criteria').value.split('\n').map(value=>value.trim()).filter(Boolean),wikilinks:$('#wikilinks').value.split('\n').map(value=>value.trim()).filter(Boolean)}:{project,requirementRef:$('#requirement-ref').value.trim()};
+  if($('#provider').value!=='auto')body.provider=$('#provider').value;
+  if($('#execution-mode').value==='cli'){body.executionMode='cli';body.provider='codex'}
+  if(Number($('#priority').value)!==1)body.priority=Number($('#priority').value);
+  return body;
+}
+$('#execution-mode').onchange=()=>{updateIntakeMode();($('#execution-mode').value==='cli'?$('#title'):$('#execution-mode')).focus()};
+$('#intake-mode').onchange=()=>{updateIntakeMode();($('#intake-mode').value==='manual'?$('#title'):$('#requirement-ref')).focus()};
+updateIntakeMode();
+$('#task-form').onsubmit=async event=>{
+  event.preventDefault();if(submitting)return;if(!canWrite){message('Nur Lesezugriff. Für neue Aufträge mit einem Operator- oder Administrationstoken verbinden.','error');return}if(!token){message('Bitte zuerst mit dem Orchestrator verbinden.','error');$('#token').focus();return}
+  const body=intakePayload(),manual=$('#intake-mode').value==='manual';
+  if(manual&&(!body.title||!body.criteria.length)){message('Feature und mindestens ein Akzeptanzkriterium eingeben.','error');(!body.title?$('#title'):$('#criteria')).focus();return}
+  if(!manual&&!body.requirementRef){message('Bitte einen Wikilink zur Anforderung eingeben, zum Beispiel [[Features/Customer portal]].','error');$('#requirement-ref').focus();return}
+  const encoded=JSON.stringify(body);if(encoded!==lastBody){lastBody=encoded;key=crypto.randomUUID()}
+  const currentSession=sessionId;submitting=true;$('#task-form').querySelectorAll('input,textarea,select,button').forEach(control=>control.disabled=true);$('#connect').disabled=true;$('#disconnect').disabled=true;$('#submit').textContent='Wird gespeichert…';
+  try{const task=await api('/v1/tasks',{method:'POST',body,idempotencyKey:key});if(currentSession!==sessionId)return;message('Gespeichert: '+task.id+(task.requirementRef?' · '+contextState(task):''),'success');$('#title').value='';$('#criteria').value='';$('#wikilinks').value='';$('#requirement-ref').value='';lastBody='';key=crypto.randomUUID();$('#task-search').value='';$('#task-status').value='';$('#task-detail').hidden=true;selectedTaskId='';taskPage=firstPage();navigate('tasks');void showTask(task)}
+  catch(error){if(currentSession===sessionId)message(error.message+' Eingaben bleiben erhalten. Unverändert erneut senden verwendet denselben Idempotenzschlüssel.','error')}
+  finally{submitting=false;$('#task-form').querySelectorAll('input,textarea,select,button').forEach(control=>control.disabled=false);updateIntakeMode();$('#connect').disabled=false;$('#disconnect').disabled=false;$('#submit').textContent='Auftrag speichern'}
+};
+for(const id of ['tasks','workers'])$('#refresh-'+id).onclick=()=>refresh({page:firstPage()});
+$('#refresh-metrics').onclick=()=>refresh();
+for(const [prefix,current] of [['task',()=>taskPage],['worker',()=>workerPage]])for(const direction of ['previous','next'])for(const suffix of ['','-bottom'])$('#'+prefix+'-'+direction+suffix).onclick=async()=>{
+  const page=current();if(controller||!token||(direction==='next'?!page.hasMore:!page.previous.length))return;
+  const navigationSession=sessionId,navigationTab=tab,pending=refresh({page:pageTarget(page,direction)}),navigationRequest=requestId;await pending;
+  // Explicit successful navigation focuses the new page; polls and failed reads never do.
+  if(requestId===navigationRequest&&sessionId===navigationSession&&tab===navigationTab&&current()!==page)$('#'+prefix+'-page-state').focus();
+};
+for(const direction of ['previous','next'])$('#event-'+direction).onclick=()=>{if(eventController||!selectedTask||!token||(direction==='next'?!eventPage.hasMore:!eventPage.previous.length))return;return showTask(selectedTask,{focus:false,page:pageTarget(eventPage,direction)})};
+$('#check-readiness').onclick=checkReadiness;$('#readiness-workers').onclick=()=>navigate('workers');
+$('#first-manual-task').onclick=()=>{if(!token||!canWrite)return;$('#intake-options').open=true;$('#intake-mode').value='manual';updateIntakeMode();$('#title').focus()};
+$('#inspect-workers').onclick=()=>navigate('workers');
+$('#worker-help-refresh').onclick=()=>refresh({page:firstPage()});
+$('#refresh-worker-detail').onclick=()=>showWorker(workerDetailId,{focus:false});
+$('#close-worker-detail').onclick=()=>{const id=workerDetailId;resetWorkerDetail();const button=[...document.querySelectorAll('[data-worker-id]')].find(node=>node.dataset.workerId===id);(button??$('#worker-page-state')).focus()};
+$('#new-task').onclick=()=>{navigate('intake');($('#intake-mode').value==='manual'?$('#title'):$('#requirement-ref')).focus()};
+$('#refresh-task-events').onclick=()=>{const task=selectedTask??tasksCache.find(item=>item.id===selectedTaskId);if(task)return showTask(task,{focus:false})};
+$('#close-task-detail').onclick=()=>{const id=selectedTaskId;++detailId;eventController?.abort();eventController=null;selectedTaskId='';selectedTask=null;eventPage=firstPage();$('#task-detail').hidden=true;$('#refresh-task-events').disabled=false;const button=[...document.querySelectorAll('[data-task-id]')].find(node=>node.dataset.taskId===id);(button??$('#task-search')).focus()};
+$('#close-snapshot').onclick=()=>{selectedSnapshotId='';$('#snapshot-inspector').hidden=true;$('#metric-summary').focus()};
+$('#return-to-task').onclick=()=>{const task=selectedTask?.id===metricTaskId?selectedTask:tasksCache.find(item=>item.id===metricTaskId);navigate('tasks');if(task)void showTask(task)};
+
+$('#inspect-task-snapshots').onclick=()=>{if(!selectedTaskId)return;metricTaskId=selectedTaskId;for(const id of ['metric-project','metric-worker','metric-iteration','metric-window','metric-outcome'])$('#'+id).value='';navigate('metrics')};
+$('#clear-task-filter').onclick=()=>{metricTaskId='';renderMetrics()};
+$('#task-search').oninput=renderTasks;$('#task-status').onchange=renderTasks;
+setInterval(()=>{if(!document.hidden&&!paused&&!controller&&!workerDetailController){if(tab==='workers'&&workerDetailId)showWorker(workerDetailId,{focus:false});else refresh()}},5000);
+function options(id,values,label){const select=$(id),old=select.value;select.replaceChildren();for(const value of ['',...new Set(values)].sort()){const option=document.createElement('option');option.value=value;option.textContent=value||label;select.append(option)}select.value=values.includes(old)?old:''}
+function renderMetrics(){
+  options('#metric-project',metricRecords.map(r=>r.snapshot.project),'Alle Projekte');options('#metric-worker',metricRecords.map(r=>r.snapshot.workerId),'Alle Worker');options('#metric-iteration',metricRecords.map(r=>r.snapshot.provenance.iterationId||'manual'),'Alle Iterationen');
+  const project=$('#metric-project').value,worker=$('#metric-worker').value,iteration=$('#metric-iteration').value,outcome=$('#metric-outcome').value,windowMs=Number($('#metric-window').value),now=Date.now();
+  $('#task-snapshot-filter').hidden=!metricTaskId;$('#task-snapshot-label').textContent=metricTaskId?'Auftrag: '+metricTaskId:'';
+  const matches=metricRecords.filter(r=>(!metricTaskId||r.snapshot.taskId===metricTaskId)&&(!project||r.snapshot.project===project)&&(!worker||r.snapshot.workerId===worker)&&(!iteration||(r.snapshot.provenance.iterationId||'manual')===iteration)&&(!windowMs||Date.parse(r.receivedAt)>=now-windowMs));
+  const terminalPairs=new Set(matches.filter(r=>r.snapshot.phase==='after'&&(!outcome||r.snapshot.execution.outcome===outcome)).map(r=>r.snapshot.pairId));
+  const records=matches.filter(r=>!outcome||terminalPairs.has(r.snapshot.pairId));
+  if(selectedSnapshotId&&!records.some(row=>row.snapshot.id===selectedSnapshotId)){selectedSnapshotId='';$('#snapshot-inspector').hidden=true;$('#snapshot-detail').textContent=''}
+  const after=records.filter(r=>r.snapshot.phase==='after'),pairs=new Map();for(const row of records){const pair=pairs.get(row.snapshot.pairId)||new Set();pair.add(row.snapshot.phase);pairs.set(row.snapshot.pairId,pair)}
+  const complete=[...pairs.values()].filter(x=>x.size===2).length,errors=after.filter(r=>['failed','interrupted'].includes(r.snapshot.execution.outcome)).length;
+  $('#metric-summary').textContent=records.length+' Snapshots · '+complete+'/'+pairs.size+' Paare im Messfenster vollständig · '+errors+' Fehler/Abbrüche. '+(metricsTruncated?'Begrenzte Auswahl: neueste 10.000 Snapshots; ältere Messungen fehlen. ':'Alle derzeit geladenen Snapshots berücksichtigt. ')+'Unvollständige Paare können laufende Versuche oder Filtergrenzen darstellen.';
+  const portfolio=$('#portfolio-rows');portfolio.replaceChildren();
+  for(const project of [...new Set(after.map(r=>r.snapshot.project))].sort()){
+    const rows=after.filter(r=>r.snapshot.project===project),values=rows.map(r=>r.snapshot.execution.durationMs).filter(finite).sort((a,b)=>a-b),pct=q=>values.length?Math.round(values[Math.max(0,Math.ceil(q*values.length)-1)])+' ms':'—',tr=document.createElement('tr');
+    cell(tr,project);cell(tr,rows.length);cell(tr,rows.filter(r=>['failed','interrupted'].includes(r.snapshot.execution.outcome)).length);cell(tr,pct(.5)+' / '+pct(.95)+' (n='+values.length+')');cell(tr,rows.some(r=>r.snapshot.mode==='cli')?'Nicht erfasst':'Unbekannt · Mock-Ausführung');cell(tr,rows.some(r=>r.snapshot.mode==='cli')?'Nicht verifiziert':'Nicht ausgeführt');portfolio.append(tr)
+  }
+  if(!after.length)empty(portfolio,6,'Noch keine abgeschlossenen Versuche in dieser Auswahl.');
+  const focusedSnapshot=document.activeElement?.dataset?.snapshotId;const table=$('#snapshot-rows');table.replaceChildren();
+  for(const row of records.slice(-40).reverse()){
+    const snapshot=row.snapshot,tr=document.createElement('tr'),button=document.createElement('button');button.dataset.snapshotId=snapshot.id;button.textContent=snapshot.phase+' · '+snapshot.taskId.slice(0,8)+' / '+snapshot.attempt;button.title='Snapshot '+snapshot.id+' · '+date(row.receivedAt);
+    button.onclick=()=>{selectedSnapshotId=snapshot.id;$('#snapshot-inspector').hidden=false;$('#snapshot-heading').textContent='Snapshot '+snapshot.id;$('#snapshot-detail').textContent=JSON.stringify(row,null,2);$('#snapshot-heading').focus()};
+    cell(tr,'').append(button);cell(tr,snapshot.workerId.slice(0,8)+' / '+snapshot.profileId);cell(tr,(snapshot.mode==='cli'?'CLI · ':'Simulation · ')+snapshot.execution.outcome);cell(tr,finite(snapshot.resources.rssBytes)?(snapshot.resources.rssBytes/1048576).toFixed(1)+' MiB':'Nicht erfasst');cell(tr,finite(snapshot.health.eventLoopDelayP95Ms)?snapshot.health.eventLoopDelayP95Ms.toFixed(1)+' ms':'Nicht erfasst');table.append(tr);if(focusedSnapshot===snapshot.id)button.focus({preventScroll:true})
+  }
+  if(!records.length)empty(table,5,metricRecords.length?'Keine Messungen für diese Filter. Auswahl erweitern.':'Noch keine Snapshots. Starte einen Worker und übergib ein Feature.');
+  table.closest('table').setAttribute('aria-label','Neueste maximal 40 Snapshots in der Auswahl');drawChart(after);
+}
+function drawChart(after){
+  const chart=$('#metric-chart'),ns='http://www.w3.org/2000/svg';chart.replaceChildren();
+  const svg=(name,attrs,text,parent=chart)=>{const node=document.createElementNS(ns,name);for(const [key,value]of Object.entries(attrs))node.setAttribute(key,String(value));if(text!==undefined)node.textContent=text;parent.append(node);return node};
+  const points=after.filter(r=>finite(r.snapshot.execution.durationMs)&&Number.isFinite(Date.parse(r.receivedAt))).sort((a,b)=>Date.parse(a.receivedAt)-Date.parse(b.receivedAt));
+  if(!points.length){svg('text',{x:30,y:110,fill:'#b5c4cd','font-size':16},'Keine gemessene Versuchsdauer in dieser Auswahl.');chart.setAttribute('aria-label','Keine gemessene Versuchsdauer in dieser Auswahl');return}
+  const times=points.map(r=>Date.parse(r.receivedAt)),min=Math.min(...times),max=Math.max(...times),top=Math.max(1,...points.map(r=>r.snapshot.execution.durationMs));
+  chart.setAttribute('aria-label',points.length+' abgeschlossene Versuche; Dauer von 0 bis '+Math.round(top)+' Millisekunden. Zeitstempel und vollständige Messwerte stehen im Snapshot-Detail.');
+  for(const fraction of [0,.5,1]){const y=175-fraction*140;svg('line',{x1:85,y1:y,x2:875,y2:y,stroke:'#3b4b56'});svg('text',{x:8,y:y+5,fill:'#b5c4cd','font-size':12},Math.round(fraction*top)+' ms')}
+  // Individual attempts form a scatter plot: connecting unrelated workers would imply continuity.
+  const visible=points.length<=500?points:points.filter((_,i)=>i%Math.ceil(points.length/500)===0||i===points.length-1);
+  for(const point of visible){const snapshot=point.snapshot,circle=svg('circle',{cx:min===max?480:85+(Date.parse(point.receivedAt)-min)/(max-min)*785,cy:175-snapshot.execution.durationMs/top*140,r:4,fill:snapshot.execution.outcome==='simulated'?'#8be0b8':'#edc47e'});svg('title',{},snapshot.workerId+' · '+snapshot.execution.durationMs+' ms · '+date(point.receivedAt),circle)}
+  svg('text',{x:85,y:207,fill:'#b5c4cd','font-size':12},date(new Date(min).toISOString()));svg('text',{x:875,y:207,fill:'#b5c4cd','font-size':12,'text-anchor':'end'},date(new Date(max).toISOString()));
+  if(visible.length<points.length)svg('text',{x:875,y:20,fill:'#b5c4cd','font-size':12,'text-anchor':'end'},'Ausgedünnte Ansicht · Kennzahlen nutzen alle '+points.length+' Versuche');
+}
+for(const id of ['metric-project','metric-worker','metric-iteration','metric-window','metric-outcome'])$('#'+id).onchange=()=>{if(token)renderMetrics()};
+
+updateJourney();
+</script></body></html>

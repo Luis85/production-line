@@ -1,0 +1,131 @@
+# Upgrade, back up and restore
+
+Werk does not currently provide an automatic updater. Upgrade by verifying a new
+archive and extracting it separately. Keep a working rollback copy of the old
+release and a stopped-state backup. See [release contents](../reference/releases.md).
+
+## Verified native maintenance commands
+
+For a native line or complete native YAML system, stop its owning launcher first.
+Disable external restart automation for the maintenance window (on the VM, stop
+`werk-system.service`). Run these commands as the account that owns the state:
+
+```text
+node werk.mjs maintenance diagnose --state-dir /private/werk-state --json
+node werk.mjs maintenance backup --state-dir /private/werk-state --to /private/backups/werk-before-upgrade --json
+node werk.mjs maintenance verify --from /private/backups/werk-before-upgrade --json
+node werk.mjs maintenance restore --from /private/backups/werk-before-upgrade --to /private/werk-restored --json
+```
+
+Create the private parent backup directory beforehand. Backup and restore require
+new destinations: they never overwrite existing directories. The backup contains
+`manifest.json` and `state/`, with SHA-256 and size for every regular state file.
+The command holds runtime/setup/worker locks while copying, checks configured
+ports are unused, and refuses unknown owners, symlinks, special files and
+unresolved ownership records. This coordinates supported launchers; stop any
+manually launched writer or external process before running it. A port check
+alone cannot prove that an arbitrary process has closed its database.
+
+Credentials, security principals, identity files, databases, WAL/SHM sidecars,
+snapshots and pending evidence are preserved. Copies use private directories
+(0700) and files (0600); on Windows, also protect the parent directory's ACL.
+Limits are 10,000 files, 32 directory levels, 2 GiB per file and 8 GiB total.
+Larger installations need a verified stopped-volume backup procedure. Empty
+directories are recreated by the runtime as needed. No archive extraction or
+remote upload happens, and no credentials are printed. Checksums detect damage;
+they do not authenticate a backup from an untrusted party. Store the reported
+manifest checksum separately and retain encrypted off-host copies.
+
+Use the matching release to start the restored state, keep the original stopped,
+and run `doctor`. Verify the same task IDs, history, snapshots and worker IDs
+before resuming intake. A tested local fixture restores a completed mock task
+and its worker identity; a separate pending-evidence fixture proves replay does
+not duplicate completion. This is not evidence of VM failover or a measured RTO.
+Automated maintenance commands reject Docker state and volume pointers; use the
+Docker procedure below for both volume contents and matching configuration.
+
+## Diagnose a crash without deleting durable state
+
+`doctor` reports authenticated service/worker checks and available disk space.
+Less than 256 MiB available or less than 5% free fails its storage check. Expand
+storage or remove verified expendable artifacts; never clear SQLite WAL files,
+identities or pending evidence to recover space. For disconnected workers, use
+their status views, verify credentials and connectivity, and restart through the
+owning launcher while preserving worker state.
+
+An unreachable supervisor or leftover lock is **uncertain ownership**, not proof
+that a process is dead. Retry `status` first. Check the service manager, owning
+terminal and process tree; verify all Factory, line and worker writers have
+stopped. Stored PIDs can be reused and must never be blindly signalled. If you
+cannot prove all writers stopped, do not remove locks or copy live state.
+
+After independently verifying shutdown, preserve a private copy for investigation.
+Only then remove the specific stale ownership files: root/line `runtime.lock`
+and `supervisor.json`, an interrupted `setup.lock`, or the affected worker's
+`worker.lock`. Keep every configuration, credential, database and evidence file.
+Rerun `maintenance diagnose`, take a verified backup, and restart through the
+original launcher. Werk deliberately provides no automatic stale-PID kill or
+lock-deletion command. A maintenance crash may itself leave locks containing
+`maintenance: backup`; use the same verified-owner procedure.
+
+## Back up before changing anything
+
+1. Stop the runtime using the launcher and state directory that started it.
+2. Verify the services and workers have stopped. Do not copy a live SQLite file.
+3. For native or Linux Docker bind storage, copy the **complete** state directory, including configuration, credentials,
+   SQLite database/WAL/SHM files, worker identities, snapshots and pending journals.
+   Preserve ownership and restrictive access permissions.
+4. Store the backup privately, separately from the release you are replacing.
+   Backups contain credentials and source/task evidence; do not commit them.
+
+### Windows Docker named volume
+
+Copy the host pointer/configuration directory **and** back up the stopped owned
+volume; `.werk` alone contains no database. Read the volume name from
+`.werk/docker-volume.json` and verify its `dev.werk.installation` label matches the
+pointer before operating on it. Keep the backup directory private because the
+archive includes credentials. With the release operator image available:
+
+```text
+docker run --rm --mount type=volume,source=VOLUME_NAME,target=/state,readonly --mount type=bind,source=PRIVATE_ABSOLUTE_BACKUP_DIRECTORY,target=/backup --entrypoint tar werk-release:local -C /state -czf /backup/werk-state.tar.gz .
+```
+
+Replace both placeholders with the verified volume and a private existing absolute
+host directory. Restore only a trusted backup into an empty, stopped, correctly
+owned volume, preserving file ownership/modes and its matching host pointer. Do
+not extract into a live volume or use a pointer from an unrelated installation.
+The credential export is for login, not a complete backup.
+
+Keep any separately configured Factory/line databases and worker stores together
+with their own credentials. A Factory registry backup alone is not a backup of
+all lines. The default tutorial deployment is one line, without Factory.
+
+## Install an upgrade
+
+1. Verify checksums, then extract the new release into a **new** directory.
+2. For native/Linux bind storage, keep the stopped state outside both release directories and use
+   `--state-dir /absolute/path/to/state`, or deliberately copy the full stopped
+   state into the new release's `.werk`. On Windows Docker, preserve the host
+   state pointer/configuration and the same owned volume. Keep the original backup untouched.
+3. Start the new release with that state and the same runtime mode. Check health,
+   sign in, inspect existing tasks and confirm the worker identities are intact.
+4. Retain the old release and backup until the deployment is accepted.
+
+Do not run two versions against one state directory. Native and Docker state
+modes cannot be switched simply by using another launcher. A runtime migration
+requires a compatible, stopped-state procedure; no automatic migration command
+is provided. Release manifests inventory files but do not prove database-version
+compatibility.
+
+## Restore and roll back
+
+Restore a backup to a new empty state directory using the application version
+that created it. Stop all newer writers first. Restore the server and worker
+state consistently, including pending evidence and credentials, then verify
+health, task history and snapshots before resuming intake.
+
+Do not point an older binary at a database that a newer release has migrated.
+Rollback means restoring a compatible backup with its matching release, not
+just replacing executable files. Keep the original backup read-only while
+rehearsing recovery. A successful local restore does not establish a deployment
+recovery-time objective or qualify a live volume copy.

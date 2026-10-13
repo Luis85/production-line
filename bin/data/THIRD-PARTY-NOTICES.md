@@ -1,0 +1,354 @@
+# Runtime dependency notices
+
+Includes direct and transitive runtime dependencies; unused code may be removed from the executable during bundling.
+
+## @types/debug 4.1.13
+
+License: MIT.
+
+- [LICENSE](licenses/node_modules__@types__debug-LICENSE)
+
+## @types/mdast 4.0.4
+
+License: MIT.
+
+- [LICENSE](licenses/node_modules__@types__mdast-LICENSE)
+
+## @types/ms 2.1.0
+
+License: MIT.
+
+- [LICENSE](licenses/node_modules__@types__ms-LICENSE)
+
+## @types/unist 3.0.3
+
+License: MIT.
+
+- [LICENSE](licenses/node_modules__@types__unist-LICENSE)
+
+## ajv 8.20.0
+
+License: MIT.
+
+- [LICENSE](licenses/node_modules__ajv-LICENSE)
+
+## bail 2.0.2
+
+License: MIT.
+
+- [license](licenses/node_modules__bail-license)
+
+## character-entities 2.0.2
+
+License: MIT.
+
+- [license](licenses/node_modules__character-entities-license)
+
+## commander 15.0.0
+
+License: MIT.
+
+- [LICENSE](licenses/node_modules__commander-LICENSE)
+
+## dayjs 1.11.23
+
+License: MIT.
+
+- [LICENSE](licenses/node_modules__dayjs-LICENSE)
+
+## debug 4.4.3
+
+License: MIT.
+
+- [LICENSE](licenses/node_modules__debug-LICENSE)
+
+## decode-named-character-reference 1.3.0
+
+License: MIT.
+
+- [license](licenses/node_modules__decode-named-character-reference-license)
+
+## dequal 2.0.3
+
+License: MIT.
+
+- [license](licenses/node_modules__dequal-license)
+
+## devlop 1.1.0
+
+License: MIT.
+
+- [license](licenses/node_modules__devlop-license)
+
+## entities 6.0.1
+
+License: BSD-2-Clause.
+
+- [LICENSE](licenses/node_modules__entities-LICENSE)
+
+## extend 3.0.2
+
+License: MIT.
+
+- [LICENSE](licenses/node_modules__extend-LICENSE)
+
+## fast-deep-equal 3.1.3
+
+License: MIT.
+
+- [LICENSE](licenses/node_modules__fast-deep-equal-LICENSE)
+
+## fast-uri 3.1.8
+
+License: BSD-3-Clause.
+
+- [LICENSE](licenses/node_modules__fast-uri-LICENSE)
+
+## is-plain-obj 4.1.0
+
+License: MIT.
+
+- [license](licenses/node_modules__is-plain-obj-license)
+
+## json-schema-traverse 1.0.0
+
+License: MIT.
+
+- [LICENSE](licenses/node_modules__json-schema-traverse-LICENSE)
+
+## mdast-util-from-markdown 2.1.0
+
+License: MIT.
+
+- [license](licenses/node_modules__mdast-util-from-markdown-license)
+
+## mdast-util-to-string 4.0.0
+
+License: MIT.
+
+- [license](licenses/node_modules__mdast-util-to-string-license)
+
+## micromark 4.0.3
+
+License: MIT.
+
+- [license](licenses/node_modules__micromark-license)
+
+## micromark-core-commonmark 2.0.4
+
+License: MIT.
+
+- [license](licenses/node_modules__micromark-core-commonmark-license)
+
+## micromark-factory-destination 2.0.1
+
+License: MIT.
+
+- [license](licenses/node_modules__micromark-factory-destination-license)
+
+## micromark-factory-label 2.0.1
+
+License: MIT.
+
+- [license](licenses/node_modules__micromark-factory-label-license)
+
+## micromark-factory-space 2.1.0
+
+License: MIT.
+
+- [license](licenses/node_modules__micromark-factory-space-license)
+
+## micromark-factory-title 2.0.1
+
+License: MIT.
+
+- [license](licenses/node_modules__micromark-factory-title-license)
+
+## micromark-factory-whitespace 2.0.1
+
+License: MIT.
+
+- [license](licenses/node_modules__micromark-factory-whitespace-license)
+
+## micromark-util-character 2.1.1
+
+License: MIT.
+
+- [license](licenses/node_modules__micromark-util-character-license)
+
+## micromark-util-chunked 2.0.1
+
+License: MIT.
+
+- [license](licenses/node_modules__micromark-util-chunked-license)
+
+## micromark-util-classify-character 2.0.1
+
+License: MIT.
+
+- [license](licenses/node_modules__micromark-util-classify-character-license)
+
+## micromark-util-combine-extensions 2.0.1
+
+License: MIT.
+
+- [license](licenses/node_modules__micromark-util-combine-extensions-license)
+
+## micromark-util-decode-numeric-character-reference 2.0.2
+
+License: MIT.
+
+- [license](licenses/node_modules__micromark-util-decode-numeric-character-reference-license)
+
+## micromark-util-decode-string 2.0.1
+
+License: MIT.
+
+- [license](licenses/node_modules__micromark-util-decode-string-license)
+
+## micromark-util-edit-map 1.0.0
+
+License: MIT.
+
+- [license](licenses/node_modules__micromark-util-edit-map-license)
+
+## micromark-util-encode 2.0.1
+
+License: MIT.
+
+- [license](licenses/node_modules__micromark-util-encode-license)
+
+## micromark-util-html-tag-name 2.0.1
+
+License: MIT.
+
+- [license](licenses/node_modules__micromark-util-html-tag-name-license)
+
+## micromark-util-normalize-identifier 2.0.1
+
+License: MIT.
+
+- [license](licenses/node_modules__micromark-util-normalize-identifier-license)
+
+## micromark-util-resolve-all 2.0.1
+
+License: MIT.
+
+- [license](licenses/node_modules__micromark-util-resolve-all-license)
+
+## micromark-util-sanitize-uri 2.0.1
+
+License: MIT.
+
+- [license](licenses/node_modules__micromark-util-sanitize-uri-license)
+
+## micromark-util-subtokenize 2.1.0
+
+License: MIT.
+
+- [license](licenses/node_modules__micromark-util-subtokenize-license)
+
+## micromark-util-symbol 2.0.1
+
+License: MIT.
+
+- [license](licenses/node_modules__micromark-util-symbol-license)
+
+## micromark-util-types 2.0.3
+
+License: MIT.
+
+- [license](licenses/node_modules__micromark-util-types-license)
+
+## moment 2.31.0
+
+License: MIT.
+
+- [LICENSE](licenses/node_modules__moment-LICENSE)
+
+## ms 2.1.3
+
+License: MIT.
+
+- [license.md](licenses/node_modules__ms-license.md)
+
+## obsidian-bases-expression 0.2.0
+
+License: MIT.
+
+- [LICENSE](licenses/node_modules__obsidian-bases-expression-LICENSE)
+
+## parse5 7.3.0
+
+License: MIT.
+
+- [LICENSE](licenses/node_modules__parse5-LICENSE)
+
+## playwright-core 1.64.0
+
+License: Apache-2.0.
+
+- [LICENSE](licenses/node_modules__playwright-core-LICENSE)
+- [NOTICE](licenses/node_modules__playwright-core-NOTICE)
+
+## remark-parse 11.0.0
+
+License: MIT.
+
+- [license](licenses/node_modules__remark-parse-license)
+
+## require-from-string 2.0.2
+
+License: MIT.
+
+- [license](licenses/node_modules__require-from-string-license)
+
+## trough 2.2.0
+
+License: MIT.
+
+- [license](licenses/node_modules__trough-license)
+
+## unified 11.0.5
+
+License: MIT.
+
+- [license](licenses/node_modules__unified-license)
+
+## unist-util-stringify-position 4.0.0
+
+License: MIT.
+
+- [license](licenses/node_modules__unist-util-stringify-position-license)
+
+## vfile 6.0.3
+
+License: MIT.
+
+- [license](licenses/node_modules__vfile-license)
+
+## vfile-message 4.0.3
+
+License: MIT.
+
+- [license](licenses/node_modules__vfile-message-license)
+
+## yaml 2.9.1
+
+License: ISC.
+
+- [LICENSE](licenses/node_modules__yaml-LICENSE)
+
+## zod 4.6.5
+
+License: MIT.
+
+- [LICENSE](licenses/node_modules__zod-LICENSE)
+
+# Vendored asset notices
+
+## docker-agent agent-schema.json
+
+Copied unchanged from https://github.com/docker/docker-agent at commit cd65d7c776dda80d554735ee20572d09cfe2d791. License: Apache-2.0.
+
+- [LICENSE](licenses/docker-agent-LICENSE)

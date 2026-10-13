@@ -1,0 +1,4 @@
+/server.json
+/server.lock
+/.server-*.tmp
+/.agent-cli-tmp-*

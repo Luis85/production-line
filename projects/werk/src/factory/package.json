@@ -1,0 +1,5 @@
+{
+  "name": "@werk/factory", "version": "0.1.0", "private": true, "type": "module",
+  "bin": { "werk-factory": "dist/factory/cli.js" },
+  "scripts": { "build": "node ../../scripts/build.mjs factory", "start": "node dist/factory/cli.js serve" }
+}

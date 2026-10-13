@@ -1,0 +1,30 @@
+{
+  "evidence": [
+    "/workspace/work/system/ui/factory-desktop-after.png",
+    "/workspace/work/system/ui/factory-mobile-after.png",
+    "/workspace/work/system/ui/factory-capabilities-desktop-after.png",
+    "/workspace/work/system/ui/factory-capabilities-mobile-after.png",
+    "/workspace/work/system/ui/worker-detail-desktop-after.png",
+    "/workspace/work/system/ui/worker-detail-mobile-after.png",
+    "/workspace/work/system/ui/orchestrator-workers-desktop-after.png",
+    "/workspace/work/system/ui/orchestrator-workers-mobile-after.png"
+  ],
+  "errors": [],
+  "detailPaths": [
+    "/v1/workers/d978559c-9203-46ee-b258-7c180086d6e6",
+    "/v1/workers/d978559c-9203-46ee-b258-7c180086d6e6",
+    "/v1/workers/d978559c-9203-46ee-b258-7c180086d6e6",
+    "/v1/workers/d978559c-9203-46ee-b258-7c180086d6e6"
+  ],
+  "checks": [
+    "actual Factory hierarchy root/child scoping and table/topology",
+    "announced mock capabilities and real legacy unknown",
+    "guide opens separately preserving connected runtime",
+    "real mock worker profiles and two active tasks",
+    "keyboard select/back focus",
+    "network failure retains stale detail then retry recovers",
+    "320/375/390/1440 no whole-page overflow",
+    "logout clears private detail and no durable token storage"
+  ],
+  "source": "isolated compilation of current source; all API data from real servers and worker; one deliberate network abort"
+}
