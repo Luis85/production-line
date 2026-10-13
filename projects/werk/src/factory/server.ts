@@ -7,10 +7,12 @@ import { readFile } from 'node:fs/promises';
 import { DomainError } from '../shared/errors.js';
 import { LINE_TOKEN_PATTERN } from '../shared/factory.js';
 import { SqliteFactoryRegistry } from './infrastructure/registry.js';
+import { managedRegistry, type ManagedRegistry } from './application/managed-registry.js';
 import { FactoryApplication } from './application/service.js';
 import { HttpLineReader } from './infrastructure/poller.js';
 import { createFactoryHandler } from './http.js';
 export interface FactoryServerConfig {
+    managedRegistry?: ManagedRegistry;
     db: string;
     host: string;
     port: number;
@@ -24,6 +26,7 @@ export interface FactoryServerConfig {
     pollConcurrency?: number;
 }
 export async function startFactoryServer(config: FactoryServerConfig) {
+    const managed = managedRegistry(config.managedRegistry);
     if (typeof config.adminToken !== 'string' || config.adminToken.length < 24)
         throw new DomainError('invalid_input', 'Set WERK_FACTORY_ADMIN_TOKEN to at least 24 characters');
     if (!Number.isInteger(config.port) || config.port < 0 || config.port > 65535)
@@ -45,7 +48,7 @@ export async function startFactoryServer(config: FactoryServerConfig) {
     const view = await readFile(new URL('./public/index.html', import.meta.url), 'utf8');
     const guide = await readFile(new URL('./public/guide.html', import.meta.url), 'utf8');
     const registry = new SqliteFactoryRegistry(config.db), reader = new HttpLineReader(credentials, timeout, concurrency);
-    const application = new FactoryApplication(registry, reader, new Set(Object.keys(credentials)), Date.now, monitoring);
+    const application = new FactoryApplication(registry, reader, new Set(Object.keys(credentials)), Date.now, monitoring, managed);
     const server = createServer(observeHttp('factory', createFactoryHandler(application, config.adminToken, view, () => serviceEvent('factory', 'internal_error', 'error'), guide, access, config.audit)));
     server.requestTimeout = 15000;
     server.headersTimeout = 10000;

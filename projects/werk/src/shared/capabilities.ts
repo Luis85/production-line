@@ -16,7 +16,7 @@ export interface LineCapabilities extends RegisteredCapabilities {
 export function validateLineCapabilities(value: unknown, expectedProject?: string): LineCapabilities {
     const body = object(value, 'Line capabilities', ['schemaVersion', 'project', 'execution', 'context', 'intake', 'providers', 'profiles', 'profilesTruncated', 'capacity']);
     const project = identifier(body.project, 'capabilities.project');
-    if (body.schemaVersion !== 1 || !['mock', 'cli', 'mixed'].includes(String(body.execution)) || !['unbound', 'pinned'].includes(String(body.context)) || (expectedProject !== undefined && project !== expectedProject)) throw new ValidationError('Unsupported or mismatched line capabilities');
+    if (body.schemaVersion !== 1 || !['mock', 'cli', 'mixed'].includes(body.execution as string) || !['unbound', 'pinned'].includes(body.context as string) || (expectedProject !== undefined && project !== expectedProject)) throw new ValidationError('Unsupported or mismatched line capabilities');
     const context = body.context as LineCapabilities['context'];
     const intake = context === 'pinned' ? ['requirement_ref', 'pinned_iteration'] as const : ['structured_task', 'requirement_ref'] as const;
     if (!Array.isArray(body.intake) || body.intake.length !== intake.length || new Set(body.intake).size !== body.intake.length || body.intake.some(item => !intake.includes(item))) throw new ValidationError('Invalid line intake capabilities');
@@ -25,8 +25,8 @@ export function validateLineCapabilities(value: unknown, expectedProject?: strin
     const providers = body.providers as ('claude' | 'codex')[];
     const profiles = body.profiles.map(value => {
         const profile = object(value, 'Capability profile', ['id', 'provider', 'mode']);
-        if (!['claude', 'codex'].includes(String(profile.provider)) || !providers.includes(profile.provider as 'claude' | 'codex')) throw new ValidationError('Invalid capability profile provider');
-        if (profile.mode !== undefined && (!['mock', 'cli'].includes(String(profile.mode)) || (profile.mode === 'cli' && profile.provider !== 'codex'))) throw new ValidationError('Invalid capability mode');
+        if (!['claude', 'codex'].includes(profile.provider as string) || !providers.includes(profile.provider as 'claude' | 'codex')) throw new ValidationError('Invalid capability profile provider');
+        if (profile.mode !== undefined && (!['mock', 'cli'].includes(profile.mode as string) || (profile.mode === 'cli' && profile.provider !== 'codex'))) throw new ValidationError('Invalid capability mode');
         return { ...(profile.mode === undefined ? {} : { mode: profile.mode as 'mock' | 'cli' }), id: identifier(profile.id, 'capability profile ID'), provider: profile.provider as 'claude' | 'codex' };
     });
     if (new Set(profiles.map(profile => `${profile.id}:${profile.provider}:${profile.mode ?? 'mock'}`)).size !== profiles.length) throw new ValidationError('Duplicate capability profiles');

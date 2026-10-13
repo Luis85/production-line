@@ -110,6 +110,19 @@ test('malformed control authorization cannot crash the supervisor and valid auth
   assert.equal((await controlRequest(record)).state, 'running'); assert.equal((await controlRequest(record, 'stop')).state, 'stopping'); assert.equal(stops, 1);
 });
 
+test('authenticated status and stop preserve mock, live and mixed execution modes', async t => {
+  const runId = 'e'.repeat(64), controlToken = 'f'.repeat(64); let mode = 'mock';
+  const server = await createControl({ runId, controlToken,
+    snapshot: () => ({ runId, state: 'running', project: 'example', mode, url: 'http://127.0.0.1:3000/', workers: [] }), stop() {} });
+  t.after(() => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }));
+  const record = { schemaVersion: 1, runId, controlToken, pid: process.pid, controlPort: server.address().port, children: [] };
+  for (mode of ['mock', 'cli', 'mixed']) {
+    assert.equal((await controlRequest(record)).mode, mode);
+    assert.equal((await controlRequest(record, 'stop')).mode, mode);
+  }
+  for (mode of [undefined, 'unknown', { mode: 'cli' }]) await assert.rejects(controlRequest(record), /Invalid supervisor execution mode/);
+});
+
 test('stale supervisor metadata refuses PID-based stopping and incomplete startup remains actionable', async t => {
   const stateDir = join(await directory(t), 'state'); await setup({ stateDir });
   await createPrivate(join(stateDir, 'runtime.lock'), { pid: process.pid, runId: 'c'.repeat(64) });

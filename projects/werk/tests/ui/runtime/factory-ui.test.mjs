@@ -181,3 +181,19 @@ test('factory next steps distinguish checking, stale, missing worker and ready o
   surface.run(`renderOverview(${JSON.stringify(value)},{stale:true})`);assert.match(surface.get('#next-step').textContent,/veraltet/);
   surface.run('renderOverview(undefined,{loading:true})');assert.match(surface.get('#next-step').textContent,/wird geprüft/);
 });
+
+test('system-managed registry locks named edits in both views while preserving additions and standalone edits',()=>{
+  const surface=ui(async()=>response({}));setup(surface);surface.run("applyManagedRegistry({factories:['child'],lines:['line']});state.scope='child';renderHierarchy()");
+  assert.equal(surface.get('#edit-factory').disabled,true);assert.equal(surface.get('#delete-factory').disabled,true);assert.equal(surface.get('#create-factory').disabled,false);assert.equal(surface.get('#register-line').disabled,false);assert.match(surface.get('#managed-registry-note').textContent,/Systemdefinition.*Migration.*stoppen.*sichern/);assert.match(surface.get('#scope-description').textContent,/Systemdefinition/);
+  surface.run(`renderOverview(${JSON.stringify(overview('child'))})`);assert.equal(surface.run("lineControl('line','edit').disabled"),true);assert.equal(surface.run("lineControl('line','remove').disabled"),true);surface.run("state.lineView='table'");assert.equal(surface.run("lineControl('line','edit').disabled"),true);
+  surface.run("openFactory(findFactory('child'))");assert.equal(surface.run('state.editor'),null);surface.run(`confirmRemoval('line',${JSON.stringify(line)})`);assert.equal(surface.run('state.deletion'),null);
+  surface.run('openFactory()');assert.equal(surface.run('state.editor.id'),null);surface.run("closeEditors();openFactory(findFactory('other'))");assert.equal(surface.run('state.editor.id'),'other');
+  surface.run('closeEditors();applyManagedRegistry();renderHierarchy()');assert.equal(surface.get('#edit-factory').disabled,false);assert.equal(surface.get('#managed-registry-note').hidden,true);
+});
+
+test('factory login and registry refresh consume managed IDs and logout clears their disclosure',async()=>{
+  let managedRegistry={factories:['child'],lines:['line']};const surface=ui(async path=>response(path==='/v1/factories'?{factories,managedRegistry}:path==='/v1/lines'?{lines:[line]}:overview(null)));
+  surface.get('#token').value='admin';await surface.get('#login-form').onsubmit({preventDefault(){}});assert.equal(surface.run("isManaged('line','line')"),true);
+  managedRegistry={factories:[],lines:[]};await surface.run('refresh()');assert.equal(surface.run("isManaged('line','line')"),false);
+  surface.get('#disconnect').onclick();assert.equal(surface.get('#managed-registry-note').textContent,'');assert.equal(surface.get('#managed-registry-note').hidden,true);
+});

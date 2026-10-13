@@ -126,7 +126,7 @@ export class OrchestratorApplication {
     this.contextResolver.assertOpen();
     const existing = this.repository.submission(input, idempotencyKey);
     if (existing) return existing;
-    object(input, 'Bound requirement intake', ['project', 'requirementRef', 'provider', 'priority']);
+    object(input, 'Bound requirement intake', ['project', 'requirementRef', 'provider', 'priority', 'executionMode']);
     if (!data.requirementRef) throw new DomainError('invalid_input', 'Bound intake requires project and requirementRef');
     const manifest = await this.contextResolver.resolve(data.requirementRef);
     this.contextResolver.assertOpen();

@@ -1,0 +1,152 @@
+{
+  "mode": "native simulation",
+  "captureDate": "2026-10-13",
+  "observations": [
+    {
+      "name": "factory-managed-1440",
+      "url": "http://127.0.0.1:7310/factories/commerce-factory",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "pageWidth": 1440,
+      "focus": "scope-title",
+      "path": "first-release-factory-managed-1440.png",
+      "capturedAt": "2026-10-13T10:51:39.891Z"
+    },
+    {
+      "name": "factory-managed-line-1440",
+      "url": "http://127.0.0.1:7310/factories/commerce-factory",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "pageWidth": 1440,
+      "focus": "scope-title",
+      "path": "first-release-factory-managed-line-1440.png",
+      "capturedAt": "2026-10-13T10:51:40.095Z"
+    },
+    {
+      "name": "viewer-taskboard-1440",
+      "url": "http://127.0.0.1:7301/",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "pageWidth": 1440,
+      "focus": "heading",
+      "path": "first-release-viewer-taskboard-1440.png",
+      "capturedAt": "2026-10-13T10:51:40.926Z"
+    },
+    {
+      "name": "iteration-command-1440",
+      "url": "http://127.0.0.1:7301/",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "pageWidth": 1440,
+      "focus": "",
+      "path": "first-release-iteration-command-1440.png",
+      "capturedAt": "2026-10-13T10:51:41.537Z"
+    },
+    {
+      "name": "snapshot-coverage-1440",
+      "url": "http://127.0.0.1:7301/",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "pageWidth": 1440,
+      "focus": "heading",
+      "path": "first-release-snapshot-coverage-1440.png",
+      "capturedAt": "2026-10-13T10:54:13.539Z",
+      "coverage": {
+        "tag": "P",
+        "width": 686.390625,
+        "left": 162,
+        "right": 848.390625,
+        "viewport": 1440,
+        "pageWidth": 1440,
+        "text": "Neueste 20 von 20 Snapshots in dieser Auswahl \u00b7 maximal 40 Zeilen. Die Kennzahlen ber\u00fccksichtigen alle geladenen Snapshots der Auswahl."
+      }
+    },
+    {
+      "width": 1440,
+      "pageErrors": []
+    },
+    {
+      "name": "factory-managed-390",
+      "url": "http://127.0.0.1:7310/factories/commerce-factory",
+      "viewport": {
+        "width": 390,
+        "height": 1000
+      },
+      "pageWidth": 390,
+      "focus": "scope-title",
+      "path": "first-release-factory-managed-390.png",
+      "capturedAt": "2026-10-13T10:51:43.308Z"
+    },
+    {
+      "name": "factory-managed-line-390",
+      "url": "http://127.0.0.1:7310/factories/commerce-factory",
+      "viewport": {
+        "width": 390,
+        "height": 1000
+      },
+      "pageWidth": 390,
+      "focus": "scope-title",
+      "path": "first-release-factory-managed-line-390.png",
+      "capturedAt": "2026-10-13T10:51:43.461Z"
+    },
+    {
+      "name": "viewer-taskboard-390",
+      "url": "http://127.0.0.1:7301/",
+      "viewport": {
+        "width": 390,
+        "height": 1000
+      },
+      "pageWidth": 390,
+      "focus": "heading",
+      "path": "first-release-viewer-taskboard-390.png",
+      "capturedAt": "2026-10-13T10:51:44.013Z"
+    },
+    {
+      "name": "iteration-command-390",
+      "url": "http://127.0.0.1:7301/",
+      "viewport": {
+        "width": 390,
+        "height": 1000
+      },
+      "pageWidth": 390,
+      "focus": "",
+      "path": "first-release-iteration-command-390.png",
+      "capturedAt": "2026-10-13T10:51:44.651Z"
+    },
+    {
+      "name": "snapshot-coverage-390",
+      "url": "http://127.0.0.1:7301/",
+      "viewport": {
+        "width": 390,
+        "height": 1000
+      },
+      "pageWidth": 390,
+      "focus": "heading",
+      "path": "first-release-snapshot-coverage-390.png",
+      "capturedAt": "2026-10-13T10:54:14.818Z",
+      "coverage": {
+        "tag": "P",
+        "width": 358,
+        "left": 16,
+        "right": 374,
+        "viewport": 390,
+        "pageWidth": 390,
+        "text": "Neueste 20 von 20 Snapshots in dieser Auswahl \u00b7 maximal 40 Zeilen. Die Kennzahlen ber\u00fccksichtigen alle geladenen Snapshots der Auswahl."
+      }
+    },
+    {
+      "width": 390,
+      "pageErrors": []
+    }
+  ]
+}

@@ -65,6 +65,42 @@ test('bound HTTP and minimal CLI intake persist ready context without leaking co
   } finally { await app.close(); }
 });
 
+test('bound intake preserves explicit live opt-in, immutable context and mock defaults', async t => {
+  const f = await fixture(t); const app = await startServer({ ...config, context: { repo: f.repo, commit: f.commit, vaultRoot: 'docs' } });
+  try {
+    const api = remote(app), liveInput = { ...input, provider: 'codex', executionMode: 'cli' };
+    for (const invalid of [{ ...liveInput, provider: 'claude' }, { ...liveInput, title: 'Override' }, { ...liveInput, criteria: ['Override'] }]) {
+      const response = await api.post(invalid, 'invalid-live'); assert.equal(response.status, 400); await response.text();
+    }
+    assert.equal(app.store.list().length, 0);
+    const response = await api.post(liveInput, 'pinned-live'); assert.equal(response.status, 201);
+    const live = await response.json();
+    assert.equal(live.executionMode, 'cli'); assert.equal(live.provider, 'codex');
+    assert.equal(live.context.commit, f.commit); assert.equal(live.title, 'Pinned feature');
+    assert.deepEqual(live.criteria, ['Observable success']);
+    const replay = await api.post(liveInput, 'pinned-live'); assert.equal(replay.status, 201); assert.deepEqual(await replay.json(), live);
+    const changedMode = await api.post({ ...liveInput, executionMode: 'mock' }, 'pinned-live');
+    assert.equal(changedMode.status, 409); await changedMode.text();
+    const mockAuth = app.store.register('demo', [{ id: 'codex-mock', provider: 'codex', mode: 'mock', maxParallel: 2 }], { maxParallel: 2, order: 'fifo', maxAttempts: 3, configHash: 'mock' });
+    const mockWorker = app.store.worker(mockAuth.token);
+    assert.equal(app.store.claim(mockWorker, 'mock-cannot-run-live'), null);
+    const liveAuth = app.store.register('demo', [{ id: 'codex-live', provider: 'codex', mode: 'cli' }], { maxParallel: 1, order: 'fifo', maxAttempts: 1, configHash: 'live' });
+    const liveWorker = app.store.worker(liveAuth.token), assignment = app.store.claim(liveWorker, 'live-claim');
+    assert.equal(assignment.id, live.id); assert.equal(assignment.executionMode, 'cli');
+    const contextResponse = await api.get('/v1/worker/tasks/' + live.id + '/context?lease=' + assignment.lease + '&attempt=' + assignment.attempt, liveAuth.token);
+    assert.equal(contextResponse.status, 200); assert.equal((await contextResponse.json()).sha256, live.context.sha256);
+    const defaultResponse = await api.post(input, 'default-mock'); assert.equal(defaultResponse.status, 201);
+    const defaultTask = await defaultResponse.json(); assert.equal(defaultTask.executionMode, undefined);
+    const mockResponse = await api.post({ ...input, executionMode: 'mock' }, 'explicit-mock'); assert.equal(mockResponse.status, 201);
+    const mockTask = await mockResponse.json(); assert.equal(mockTask.executionMode, 'mock');
+    const spareLive = app.store.register('demo', [{ id: 'codex-live', provider: 'codex', mode: 'cli' }]);
+    assert.equal(app.store.claim(app.store.worker(spareLive.token), 'live-cannot-run-mock'), null);
+    const mockAssignments = [app.store.claim(mockWorker, 'mock-one'), app.store.claim(mockWorker, 'mock-two')];
+    assert.deepEqual(new Set(mockAssignments.map(task => task.id)), new Set([defaultTask.id, mockTask.id]));
+    assert.ok(mockAssignments.every(task => task.context.sha256 === live.context.sha256));
+  } finally { await app.close(); }
+});
+
 test('retries preserve the first committed manifest after binding changes and repository loss', async t => {
   const f = await fixture(t); const db = join(f.root, 'state.sqlite');
   let app = await startServer({ ...config, db, context: { repo: f.repo, commit: f.commit, vaultRoot: 'docs' } });

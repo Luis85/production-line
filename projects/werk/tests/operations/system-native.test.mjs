@@ -72,6 +72,14 @@ test('extracted two-line system registers hierarchy, isolates tasks and credenti
   await until(() => first.output.includes('"event":"ready"'), 'system readiness');
   const loaded = validateDefinition(value), credentials = await factoryCredentials(stateDir, loaded);
   const factories = await api(value.factory.port, credentials.adminToken, '/v1/factories'); assert.equal(factories.status, 200); assert.deepEqual(factories.value.factories.map(item => item.id).sort(), ['group', 'root']);
+  assert.deepEqual(factories.value.managedRegistry, { factories: ['root', 'group'], lines: ['alpha', 'beta'] });
+  for (const path of ['/v1/factories/root', '/v1/factories/group', '/v1/lines/alpha', '/v1/lines/beta']) {
+    for (const method of ['PATCH', 'DELETE']) {
+      const response = await fetch(`http://127.0.0.1:${value.factory.port}${path}`, { method, headers: { Authorization: `Bearer ${credentials.adminToken}`, 'Content-Type': 'application/json' }, ...(method === 'PATCH' ? { body: JSON.stringify({ name: 'Would break restart' }) } : {}) });
+      assert.equal(response.status, 409); assert.match((await response.json()).error, /managed by the saved system YAML/);
+    }
+  }
+  assert.equal((await api(value.factory.port, credentials.adminToken, '/v1/factories', { id: 'extra', name: 'User-created', parentId: 'root' }, 'extra-create')).status, 201);
   const registrations = await api(value.factory.port, credentials.adminToken, '/v1/lines'); assert.equal(registrations.value.lines.length, 2); assert.equal(registrations.value.lines.find(line => line.id === 'beta').factoryId, 'group');
   const tasks = [], identities = [];
   for (const [index, line] of value.productionLines.entries()) {
@@ -95,6 +103,12 @@ test('extracted two-line system registers hierarchy, isolates tasks and credenti
   const second = launch(root, ['start', '--file', file, '--state-dir', stateDir, '--json']); processes.push(second); await until(() => second.output.includes('"event":"ready"'), 'restart');
   for (const [index, line] of value.productionLines.entries()) assert.equal(await readFile(join(stateDir, 'lines', line.id, 'workers/worker-1/identity.json'), 'utf8'), identities[index]);
   assert.deepEqual(await factoryCredentials(stateDir, loaded), credentials);
+  const restoredFactories = await api(value.factory.port, credentials.adminToken, '/v1/factories');
+  assert.deepEqual(restoredFactories.value.managedRegistry, { factories: ['root', 'group'], lines: ['alpha', 'beta'] });
+  assert.equal(restoredFactories.value.factories.find(factory => factory.id === 'extra').name, 'User-created');
+  assert.equal(restoredFactories.value.factories.find(factory => factory.id === 'root').name, 'Root');
+  const restoredLines = await api(value.factory.port, credentials.adminToken, '/v1/lines');
+  assert.deepEqual(restoredLines.value.lines, registrations.value.lines);
   assert.equal((await launch(root, ['stop', '--state-dir', stateDir, '--json']).done).code, 0); assert.equal((await second.done).code, 0);
   const logs = await readFile(join(stateDir, 'logs/runtime.jsonl'), 'utf8');
   assert.ok(logs.split('\n').filter(Boolean).map(line => JSON.parse(line)).some(record => record.event === 'service_log' && record.role === 'factory' && record.entry.event === 'request_finished' && record.entry.route === '/v1/lines' && record.entry.status === 200), 'Factory HTTP observations reach the bounded system log');

@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { observeHttp } from '../../../src/orchestrator/dist/shared/http/observability.js';
 import { statusServer } from '../../../src/worker/dist/worker/status/server.js';
-import { captureServiceLogs } from '../../../scripts/runtime/service-logs.mjs';
+import { captureServiceLogs, safeServiceLog } from '../../../scripts/runtime/service-logs.mjs';
 import { logFile } from '../../../scripts/runtime/supervisor.mjs';
 async function listening(handler) { const server=createServer(handler); await new Promise(ok=>server.listen(0,'127.0.0.1',ok)); return {server,url:`http://127.0.0.1:${server.address().port}`}; }
 async function close(server){server.closeAllConnections();await new Promise(ok=>server.close(ok));}
@@ -44,4 +44,29 @@ test('runtime logs rotate while running and refuse oversized records and symlink
   assert.equal((await readFile(join(root,'logs/runtime.jsonl'),'utf8'))[0],'b');
   if(process.platform!=='win32'){await rm(join(root,'logs/runtime.jsonl'));await symlink(join(root,'logs/runtime.jsonl.previous'),join(root,'logs/runtime.jsonl'));await assert.rejects(logFile(root),/private regular/)}
  }finally{await log?.close();await rm(root,{recursive:true,force:true})}
+});
+
+test('current worker and context routes retain useful diagnostics through private runtime log filtering', async () => {
+ const events = [], secret = 'private-task-identifier';
+ const routes = new Map([
+  ['/v1/iteration/tasks', '/v1/iteration/tasks'],
+  ['/v1/worker/assignments/next', '/v1/worker/assignments/next'],
+  ['/v1/worker/snapshots', '/v1/worker/snapshots'],
+  ['/v1/tasks/' + secret + '/context', '/v1/tasks/:id/context'],
+  ...['context', 'heartbeat', 'complete', 'abandon'].map(action => ['/v1/worker/tasks/' + secret + '/' + action, '/v1/worker/tasks/:id/' + action]),
+  ['/v1/worker/tasks/' + secret + '/unknown', 'unmatched'],
+ ]);
+ const {server, url} = await listening(observeHttp('orchestrator', (_req, res) => { res.writeHead(409); res.end('{}'); }, entry => events.push(entry)));
+ try {
+  for (const [path, expected] of routes) {
+   const response = await fetch(url + path + '?lease=' + secret, { headers: { Authorization: 'Bearer ' + secret } });
+   assert.equal(response.status, 409); await response.text();
+   const entry = events.at(-1); assert.equal(entry.route, expected);
+   const retained = safeServiceLog(entry);
+   assert.ok(retained, 'runtime must retain the normalized event');
+   assert.equal(retained.route, expected);
+  }
+  assert.equal(JSON.stringify(events).includes(secret), false);
+  assert.equal(safeServiceLog({ ...events[0], route: '/v1/worker/tasks/' + secret + '/complete' }), null);
+ } finally { await close(server); }
 });

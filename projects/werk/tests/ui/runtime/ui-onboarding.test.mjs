@@ -20,7 +20,7 @@ function harness(fetch){
   }
   const get=id=>{if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id)};
   const document={querySelector:get,querySelectorAll:()=>[],createElement:()=>new Element(),createElementNS:()=>new Element(),activeElement:null,hidden:false};
-  const context=vm.createContext({document,fetch,crypto:{randomUUID},AbortSignal,AbortController,Date,setInterval:fn=>timers.push(fn)});
+  const context=vm.createContext({document,fetch,crypto:{randomUUID},AbortSignal,AbortController,Date,location:{origin:'http://127.0.0.1:7301'},setInterval:fn=>timers.push(fn)});
   vm.runInContext(script,context);return {get,run:source=>vm.runInContext(source,context),tick:()=>timers.forEach(fn=>fn())};
 }
 const response=(body,status=200)=>({ok:status<400,status,json:async()=>body});
@@ -77,7 +77,7 @@ test('logout returns to welcome, removes token and hides operational panels whil
 
 test('viewer login keeps evidence available and prevents task mutation including direct submit',async()=>{
   const paths=[];const h=harness(async path=>{paths.push(path);return response(path==='/v1/overview'?{project:'demo',access:{principal:{id:'reader',role:'viewer'},permissions:{read:true,write:false}},workers:{online:0}}:page('tasks',[]))});h.get('#token').value='reader';await h.get('#connect').onclick();await settle();
-  assert.equal(h.get('#task-form').hidden,true);assert.equal(h.get('#new-task').disabled,true);assert.match(h.get('#access-summary').textContent,/nur lesen/);assert.match(h.get('#line-readiness').textContent,/Kein Worker online/);
+  assert.equal(h.get('#task-form').hidden,true);assert.equal(h.get('#new-task').disabled,true);assert.equal(h.run('tab'),'tasks');assert.equal(h.get('#tasks').hidden,false);assert.equal(h.run('document.activeElement'),h.get('#heading'));assert.match(h.get('#access-summary').textContent,/nur lesen/);assert.match(h.get('#line-readiness').textContent,/Kein Worker online/);
   const count=paths.length;await h.get('#task-form').onsubmit({preventDefault(){}});assert.equal(paths.length,count);assert.match(h.get('#message').textContent,/Nur Lesezugriff/);
   h.get('#disconnect').onclick();assert.equal(h.get('#access-summary').hidden,true);assert.equal(h.run('readinessObservation'),null);
 });
@@ -96,4 +96,20 @@ test('explicit live mode uses Codex manual intake and review never claims accept
 
 test('malformed declared access fails closed without converting missing readiness to healthy',()=>{
   const h=harness(async()=>response({}));h.run("token='test';applyAccess({permissions:{write:true},principal:{role:'unexpected'}});renderReadiness()");assert.equal(h.get('#task-form').hidden,true);assert.match(h.get('#line-readiness').textContent,/unbekannt/);
+});
+
+test('iteration import example uses the shipped entrypoint, current line and project without credentials',async()=>{
+  const h=harness(async path=>response(path==='/v1/overview'?{project:'checkout'}:page('tasks',[])));h.get('#project').value='demo';h.get('#token').value='private-test-token';
+  await h.get('#connect').onclick();await settle();const command=h.get('#iteration-command').textContent;
+  assert.match(command,/^node src\/orchestrator\/dist\/orchestrator\/cli\.js iteration import /);assert.match(command,/--project checkout /);assert.match(command,/--url http:\/\/127\.0\.0\.1:7301$/);assert.doesNotMatch(command,/private-test-token|[\r\n]/);
+  h.get('#project').value='checkout-v2';h.get('#project').oninput();assert.match(h.get('#iteration-command').textContent,/--project checkout-v2 /);
+  h.get('#project').value='bad; command';h.get('#project').oninput();assert.match(h.get('#iteration-command').textContent,/Gültige Projekt-ID/);
+  h.get('#project').value='checkout';h.run("location.origin='https://$(untrusted).invalid';renderImportCommand()");assert.match(h.get('#iteration-command').textContent,/Gültige Projekt-ID/);
+  h.get('#disconnect').onclick();assert.match(h.get('#iteration-command').textContent,/Verbinden/);
+});
+
+test('snapshot coverage visibly distinguishes displayed evidence from all aggregate records',()=>{
+  const h=harness(async()=>response({}));const records=Array.from({length:44},(_,index)=>({receivedAt:new Date(index*1000).toISOString(),snapshot:{id:'snapshot-'+index,pairId:'pair-'+index,project:'demo',workerId:'worker',taskId:'task-'+index,profileId:'mock',attempt:1,phase:'after',mode:'mock',provenance:{},execution:{outcome:'simulated',durationMs:index},resources:{},health:{}}}));
+  h.run('metricRecords='+JSON.stringify(records)+';renderMetrics()');assert.equal(h.get('#snapshot-rows').children.length,40);assert.match(h.get('#snapshot-coverage').textContent,/Neueste 40 von 44.*maximal 40/);assert.match(h.get('#snapshot-coverage').textContent,/Taskboard/);assert.match(h.get('#metric-summary').textContent,/44 Snapshots/);
+  h.run("metricTaskId='task-0';renderMetrics()");assert.equal(h.get('#snapshot-rows').children.length,1);assert.match(h.get('#snapshot-coverage').textContent,/Neueste 1 von 1/);
 });

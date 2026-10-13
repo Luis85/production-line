@@ -153,6 +153,20 @@ silently replacing operator changes.
 
 ## Drift and lifecycle
 
+The YAML owns the Factory, subfactory and line IDs declared in its definition.
+While the managed system is running, Factory rejects `PATCH` and `DELETE` for
+those records with HTTP 409, and its webview identifies them as YAML-managed.
+This prevents a registry edit from making the next system start fail its saved
+configuration checks. Additional records created independently in Factory remain
+editable; registering a line still does not start its orchestrator or workers.
+
+To change the declared topology, stop the owning system and plan a deliberate
+migration, or use an updated YAML with a distinct empty state directory for a
+separate deployment. Editing the YAML alone does not migrate existing state.
+Preserve the original complete state and follow the
+[backup procedure](../how-to/upgrade-backup.md); do not delete a registry record
+or clear state to bypass drift protection.
+
 Setup preserves existing secrets and identities. An existing state is bound to
 its normalized definition and selected environment. Changing that definition is
 not an implicit migration: setup/up/start reject drift. Maintenance uses the saved

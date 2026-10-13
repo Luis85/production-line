@@ -21,8 +21,9 @@ export async function controlRequest(record, action = 'status') {
   } finally { reader?.releaseLock(); }
   const result = JSON.parse(body);
   if (!response.ok || result.runId !== record.runId || !['starting', 'running', 'stopping'].includes(result.state)) throw Error('Supervisor identity could not be verified.');
+  if (!['mock', 'cli', 'mixed'].includes(result.mode)) throw Error('Invalid supervisor execution mode.');
   // Only explicitly supported public fields leave this trust boundary.
-  return { state: result.state, runId: result.runId, project: result.project, mode: 'mock', url: result.url, workers: result.workers };
+  return { state: result.state, runId: result.runId, project: result.project, mode: result.mode, url: result.url, workers: result.workers };
 }
 export async function createControl({ runId, controlToken, snapshot, stop }) {
   const server = createServer((request, response) => {

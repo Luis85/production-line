@@ -82,9 +82,15 @@ Unknown cost/quality stays unknown. Process CPU/RSS may overlap for concurrent
 attempts. Snapshot pair completeness is observed evidence, not fleet-wide proof.
 A mock execution cannot satisfy the target human-review/merge definition of done.
 
-Implementation was inspected in source and through functional/static tests.
-No browser screenshot, Docker or Windows execution was available. Responsive
-spacing, keyboard focus, touch gestures and actual rendered contrast/layout
-still need device/browser verification before release.
+The initial design pass used source inspection and functional/static tests; it
+had no browser, Docker or Windows execution evidence. That is a historical limit,
+not a description of the current release qualification. Later browser captures
+and runtime checks are recorded in the dated [review history](docs/reports/index.md)
+and [first-release review](docs/reports/first-release-review.md). Native platform,
+Docker and VM claims depend on the candidate's completed
+[qualification gates](docs/reference/releases.md#candidate-qualification-gates).
+Screenshots establish the captured layout and state; keyboard focus, zoom, touch
+and contrast require their own checks and should be claimed only when recorded.
 
-Detailed user journey and token rules: `docs/ui-journey.md` in the starter.
+Detailed user journey and token rules: [UI journey](docs/explanation/ui-journey.md).
+Imported visual handoff documents describe their original baseline.

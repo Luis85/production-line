@@ -90,3 +90,8 @@ test('HTTP input requires exact JSON media type; client normalizes malformed err
     assert.deepEqual(await request(base,'/input','','POST',{ok:true}),{ok:true});
   } finally {await new Promise(resolve=>server.close(resolve));}
 });
+
+test('snapshot execution modes reject coerced arrays before accepting evidence', () => {
+  for (const mode of [['mock'], ['cli'], [['mock']], {}, null, true, 1]) invalid(() => validateSnapshot({ ...snapshot(), mode }));
+  assert.equal(validateSnapshot(snapshot()).mode, 'mock');
+});

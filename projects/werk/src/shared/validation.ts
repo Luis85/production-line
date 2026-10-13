@@ -51,7 +51,7 @@ export function taskInput(value: unknown): TaskInput {
     const provider = x.provider === undefined ? 'auto' : x.provider;
     if (typeof provider !== 'string' || !['auto', 'claude', 'codex'].includes(provider))
         throw new ValidationError('Unknown provider');
-    if (x.executionMode !== undefined && !['mock', 'cli'].includes(String(x.executionMode))) throw new ValidationError('executionMode: mock or cli');
+    if (x.executionMode !== undefined && !['mock', 'cli'].includes(x.executionMode as string)) throw new ValidationError('executionMode: mock or cli');
     if (x.executionMode === 'cli' && provider !== 'codex') throw new ValidationError('Live execution requires provider codex');
     const priority = x.priority === undefined ? 1 : x.priority;
     if (priority !== 1 && priority !== 2)
@@ -102,7 +102,7 @@ export function profiles(value: unknown): Profile[] {
         throw new ValidationError('1–8 profiles required');
     const result = value.map(value => {
         const p = object(value, 'Profile', ['id', 'provider', 'mode', 'maxParallel']);
-        if (!['claude', 'codex'].includes(p.provider as string) || !['mock', 'cli'].includes(String(p.mode)) || (p.mode === 'cli' && p.provider !== 'codex'))
+        if (!['claude', 'codex'].includes(p.provider as string) || !['mock', 'cli'].includes(p.mode as string) || (p.mode === 'cli' && p.provider !== 'codex'))
             throw new ValidationError('Profiles support simulated Claude/Codex or live Codex');
         const limit = p.maxParallel === undefined ? 1 : p.maxParallel;
         if (!Number.isInteger(limit) || (limit as number) < 1 || (limit as number) > 8)

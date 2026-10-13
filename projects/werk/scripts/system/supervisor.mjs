@@ -92,7 +92,8 @@ export async function startSystem(stateDir, { noOpen = false, emit = () => {}, o
     control = await createControl({ runId, controlToken, snapshot, stop }); await persist(); event('starting', snapshot());
     // Separate processes preserve each line's existing ownership, journal and credential boundary.
     for (const line of definition.productionLines) await launch('line', line.id, { stateDir: join(stateDir, 'lines', line.id) });
-    const factory = await launch('factory', definition.factory.id, { stateDir, port: definition.factory.port, credentials });
+    const factory = await launch('factory', definition.factory.id, { stateDir, port: definition.factory.port, credentials,
+      managedRegistry: { factories: [definition.factory.id, ...definition.factory.subFactories.map(factory => factory.id)], lines: definition.productionLines.map(line => line.id) } });
     await waitFor(async () => (await factoryRequest(snapshot().url, credentials.adminToken, '/v1/factories', { signal: abort.signal })).status === 200,
       () => !factory.closed, abort.signal, 'Authenticated Factory');
     await bootstrapSystem(definition, credentials, { signal: abort.signal });

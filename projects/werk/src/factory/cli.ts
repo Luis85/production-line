@@ -3,6 +3,7 @@ import { args, validateOptions, integer, input, fail } from '../shared/cli.js';
 import { request } from '../shared/http/client.js';
 import { DomainError } from '../shared/errors.js';
 import { identifier } from '../shared/contracts.js';
+import { managedRegistryEnvironment } from './application/managed-registry.js';
 import { mutationKey } from './application/mutations.js';
 const help = `werk-factory — Factory hierarchy and production line registry
 
@@ -39,7 +40,7 @@ try {
     else if (command === 'serve') {
         validateOptions(options, ['host', 'port', 'db', 'poll-timeout-ms', 'poll-concurrency']);
         const { startFactoryServer } = await import('./server.js');
-        const app = await startFactoryServer({ db: options.db ?? '.state/factories.sqlite', host: options.host ?? '127.0.0.1', port: integer(options.port ?? '3100', 'port', 1, 65535), adminToken: process.env.WERK_FACTORY_ADMIN_TOKEN ?? '', pollTimeoutMs: integer(options['poll-timeout-ms'] ?? '3000', 'poll-timeout-ms', 50, 30000), pollConcurrency: integer(options['poll-concurrency'] ?? '4', 'poll-concurrency', 1, 16) });
+        const app = await startFactoryServer({ managedRegistry: managedRegistryEnvironment(process.env.WERK_FACTORY_MANAGED_REGISTRY), db: options.db ?? '.state/factories.sqlite', host: options.host ?? '127.0.0.1', port: integer(options.port ?? '3100', 'port', 1, 65535), adminToken: process.env.WERK_FACTORY_ADMIN_TOKEN ?? '', pollTimeoutMs: integer(options['poll-timeout-ms'] ?? '3000', 'poll-timeout-ms', 50, 30000), pollConcurrency: integer(options['poll-concurrency'] ?? '4', 'poll-concurrency', 1, 16) });
         console.error(JSON.stringify({ event: 'factory_listening', address: app.server.address() }));
         process.on('SIGTERM', () => void app.close().catch(fail));
         process.on('SIGINT', () => void app.close().catch(fail));

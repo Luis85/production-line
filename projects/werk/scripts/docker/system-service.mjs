@@ -5,13 +5,14 @@ import { loadSetup, readPrivate } from '../runtime/config.mjs';
 import { loadSystem, factoryCredentials } from '../system/state.mjs';
 try {
   const role = process.argv[2], env = { ...process.env };
-  for (const key of Object.keys(env)) if (key === 'WERK_ACCESS_FILE' || key === 'WERK_ADMIN_TOKEN' || key === 'WERK_ENROLLMENT_TOKEN' || key === 'WERK_FACTORY_ADMIN_TOKEN' || /^WERK_LINE_SYSTEM_\d+_TOKEN$/.test(key)) delete env[key];
+  for (const key of Object.keys(env)) if (key === 'WERK_FACTORY_MANAGED_REGISTRY' || key === 'WERK_ACCESS_FILE' || key === 'WERK_ADMIN_TOKEN' || key === 'WERK_ENROLLMENT_TOKEN' || key === 'WERK_FACTORY_ADMIN_TOKEN' || /^WERK_LINE_SYSTEM_\d+_TOKEN$/.test(key)) delete env[key];
   let args;
   if (role === 'factory') {
     const definition = await loadSystem('/state');
     if (definition.environment !== 'docker') throw Error('Docker environment required');
     const credentials = await factoryCredentials('/state', definition);
-    Object.assign(env, credentials.credentials, { WERK_FACTORY_ADMIN_TOKEN: credentials.adminToken });
+    Object.assign(env, credentials.credentials, { WERK_FACTORY_ADMIN_TOKEN: credentials.adminToken,
+      WERK_FACTORY_MANAGED_REGISTRY: JSON.stringify({ factories: [definition.factory.id, ...definition.factory.subFactories.map(factory => factory.id)], lines: definition.productionLines.map(line => line.id) }) });
     await configureAccessFile(env, '/state/factory/access.json');
     args = ['/app/src/factory/dist/factory/cli.js', 'serve', '--host', '0.0.0.0', '--port', '3100', '--db', '/state/factory/registry.sqlite'];
   } else if (role === 'orchestrator') {

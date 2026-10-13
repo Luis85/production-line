@@ -1,12 +1,21 @@
 # Upgrade, back up and restore
 
 Werk does not currently provide an automatic updater. Upgrade by verifying a new
-archive and extracting it separately. Keep a working rollback copy of the old
+archive and extracting it separately. The download-and-start installer creates a
+new version directory; it does not discover or migrate an earlier installation's
+state. Use `--no-start` when downloading an upgrade, then explicitly select the
+existing stopped state as described below. Keep a working rollback copy of the old
 release and a stopped-state backup. See [release contents](../reference/releases.md).
 
 ## Verified native maintenance commands
 
 For a native line or complete native YAML system, stop its owning launcher first.
+The default `node werk.mjs up` system stores its complete state under
+`.werk-system/demo-system` in the installed release; a custom YAML uses its own
+system ID. A single line started with `node werk.mjs start` uses `.werk`. If you
+selected `--state-dir`, use that exact directory instead. The paths below are
+placeholders for the complete state directory, not just its Factory or one line.
+
 Disable external restart automation for the maintenance window (on the VM, stop
 `werk-system.service`). Run these commands as the account that owns the state:
 
@@ -98,18 +107,40 @@ The credential export is for login, not a complete backup.
 
 Keep any separately configured Factory/line databases and worker stores together
 with their own credentials. A Factory registry backup alone is not a backup of
-all lines. The default tutorial deployment is one line, without Factory.
+all lines. The default one-command installation is a complete Factory system;
+back up its entire `.werk-system/<system-id>` directory. The separate single-line
+tutorial uses `.werk` and contains no Factory.
 
 ## Install an upgrade
 
 1. Verify checksums, then extract the new release into a **new** directory.
-2. For native/Linux bind storage, keep the stopped state outside both release directories and use
-   `--state-dir /absolute/path/to/state`, or deliberately copy the full stopped
-   state into the new release's `.werk`. On Windows Docker, preserve the host
-   state pointer/configuration and the same owned volume. Keep the original backup untouched.
+2. For native/Linux bind storage, keep the complete stopped state outside both
+   release directories and select it with `--state-dir /absolute/path/to/state`.
+   A deliberately copied default whole-system directory belongs at
+   `.werk-system/<system-id>`; `.werk` is only for a single-line runtime. On Windows
+   Docker, preserve the host state pointer/configuration and the same owned
+   volume. Keep the original backup untouched.
 3. Start the new release with that state and the same runtime mode. Check health,
    sign in, inspect existing tasks and confirm the worker identities are intact.
 4. Retain the old release and backup until the deployment is accepted.
+
+For a native whole system, run from the new release root with the unchanged
+operator-owned YAML and the complete stopped or restored system state:
+
+```text
+node werk.mjs system up --file /absolute/path/to/system.yaml --state-dir /private/werk-state --no-open
+```
+
+Keep that console running. In a second terminal, verify the same system:
+
+```text
+node werk.mjs system doctor --state-dir /private/werk-state --json
+```
+
+For a native single line, use `node werk.mjs start --state-dir /private/line-state`
+and `node werk.mjs doctor --state-dir /private/line-state --json` instead. Retain
+your custom file and state arguments for every future restart. Do not use bare
+`node werk.mjs up` to reopen a custom deployment.
 
 Do not run two versions against one state directory. Native and Docker state
 modes cannot be switched simply by using another launcher. A runtime migration

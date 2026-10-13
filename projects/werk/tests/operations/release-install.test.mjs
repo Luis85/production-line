@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { install, parse } from '../../scripts/release/install.mjs';
+import { install, parse, restartCommand } from '../../scripts/release/install.mjs';
 import { createArchives } from '../../scripts/release/archives.mjs';
 
 async function fixture(t) {
@@ -76,4 +77,22 @@ test('installer handles archive parents containing colon syntax', { skip: proces
   const parent = join(directory, 'D: release files');
   const root = await install(config, { directory: parent }, transport);
   assert.match(await readFile(join(root, 'werk.mjs'), 'utf8'), /fixture/);
+});
+
+const powerShell = process.platform === 'win32' ? 'powershell.exe' : 'pwsh';
+const hasPowerShell = spawnSync(powerShell, ['-NoProfile', '-NonInteractive', '-Command', 'exit 0']).status === 0;
+for (const platform of ['linux', 'win32']) test(`installer restart guidance preserves selected system and state in ${platform === 'win32' ? 'PowerShell' : 'Bash'}`, {
+  skip: platform === 'win32' ? !hasPowerShell : process.platform === 'win32',
+}, async t => {
+  const { directory } = await fixture(t);
+  const root = join(directory, "release ' $(printf unexpected) `printf unexpected` &");
+  await mkdir(root);
+  await writeFile(join(root, 'werk.mjs'), 'console.log(JSON.stringify(process.argv.slice(2)))');
+  const options = { file: join(directory, "team's $system `definition`.yaml"), stateDir: join(directory, "state ' ; $(printf unexpected) &"), noOpen: true };
+  const command = restartCommand(root, options, platform);
+  const output = platform === 'win32'
+    ? execFileSync(powerShell, ['-NoProfile', '-NonInteractive', '-Command', command], { encoding: 'utf8', cwd: directory })
+    : execFileSync('bash', ['--noprofile', '--norc', '-c', command], { encoding: 'utf8', cwd: directory });
+  assert.deepEqual(JSON.parse(output), ['up', '--file', options.file, '--state-dir', options.stateDir, '--no-open']);
+  assert.match(restartCommand(root, {}, platform), / up$/);
 });

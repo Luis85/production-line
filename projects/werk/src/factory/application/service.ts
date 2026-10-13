@@ -5,6 +5,7 @@ import type { FactoryOverview, LineOverview, ProductionLine } from '../../shared
 import type { FactoryRegistry, LineReader } from './ports.js';
 import { descendantFactories, overviewTotals } from './overview.js';
 import { factoryPatch, linePatch, mutationKey, type MutationOperation, type MutationResult } from './mutations.js';
+import { managedRegistry, assertRegistryEditable, type ManagedRegistry } from './managed-registry.js';
 import { identifier } from '../../shared/contracts.js';
 
 /** Registry commands and portfolio observation, independent of SQLite and HTTP. */
@@ -14,8 +15,10 @@ export class FactoryApplication {
     private readonly configuredCredentials: ReadonlySet<string>;
     private readonly now: () => number;
   private readonly monitoringConfig: MonitoringThresholds;
+    private readonly managed: ManagedRegistry | undefined;
 
-    constructor(registry: FactoryRegistry, reader: LineReader, configuredCredentials: ReadonlySet<string>, now = Date.now, monitoringConfig: MonitoringThresholds = defaultMonitoringThresholds) {
+    constructor(registry: FactoryRegistry, reader: LineReader, configuredCredentials: ReadonlySet<string>, now = Date.now, monitoringConfig: MonitoringThresholds = defaultMonitoringThresholds, managed?: ManagedRegistry) {
+        this.managed = managedRegistry(managed);
         this.registry = registry;
     this.monitoringConfig = monitoringConfig;
         this.reader = reader;
@@ -23,7 +26,7 @@ export class FactoryApplication {
         this.now = now;
     }
 
-    factories() { return { factories: this.registry.factories() }; }
+    factories() { return { factories: this.registry.factories(), ...(this.managed ? { managedRegistry: this.managed } : {}) }; }
     factory(id: string) { return this.registry.factory(id); }
     private mutate<T extends MutationResult>(operation: MutationOperation, target: string | null, payload: unknown, key: string | undefined, action: () => T): T {
         const normalizedKey = mutationKey(key);
@@ -35,12 +38,14 @@ export class FactoryApplication {
     }
     updateFactory(id: string, input: unknown, key?: string) {
         id = identifier(id, 'id');
+        assertRegistryEditable(this.managed, 'factories', id);
         const patch = factoryPatch(input);
         return this.mutate('factory.update', id, patch, key, () =>
             this.registry.updateFactory(id, factoryInput(patch, this.registry.factory(id))));
     }
     deleteFactory(id: string, key?: string) {
         id = identifier(id, 'id');
+        assertRegistryEditable(this.managed, 'factories', id);
         return this.mutate('factory.delete', id, null, key, () => {
             this.registry.deleteFactory(id);
             return { deleted: true as const, id };
@@ -63,6 +68,7 @@ export class FactoryApplication {
     }
     updateLine(id: string, input: unknown, key?: string) {
         id = identifier(id, 'id');
+        assertRegistryEditable(this.managed, 'lines', id);
         const patch = linePatch(input);
         return this.mutate('line.update', id, patch, key, () => {
             const previous = this.registry.line(id), value = lineInput(patch, previous);
@@ -73,6 +79,7 @@ export class FactoryApplication {
     }
     deleteLine(id: string, key?: string) {
         id = identifier(id, 'id');
+        assertRegistryEditable(this.managed, 'lines', id);
         return this.mutate('line.delete', id, null, key, () => {
             this.registry.deleteLine(id);
             return { deleted: true as const, id };

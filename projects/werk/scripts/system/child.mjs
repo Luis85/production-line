@@ -19,7 +19,7 @@ process.on('message', async message => {
       const { startFactoryServer } = await import(new URL('../../src/factory/dist/factory/server.js', import.meta.url));
       const { loadAccessFile } = await import(new URL('../../src/factory/dist/shared/http/access.js', import.meta.url));
       abort.signal.throwIfAborted();
-      factory = await startFactoryServer({ db: join(message.stateDir, 'factory', 'registry.sqlite'), host: '127.0.0.1', port: message.port,
+      factory = await startFactoryServer({ managedRegistry: message.managedRegistry, db: join(message.stateDir, 'factory', 'registry.sqlite'), host: '127.0.0.1', port: message.port,
         access: await loadAccessFile(join(message.stateDir, 'factory', 'access.json'), true), adminToken: message.credentials.adminToken, credentials: message.credentials.credentials });
       if (abort.signal.aborted) stop(); else if (process.connected) process.send({ event: 'ready' });
       return;

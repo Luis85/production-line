@@ -122,7 +122,7 @@ export function lineInput(value: unknown, previous?: ProductionLine): Omit<Produ
 /** Validate remote counters before using them in portfolio arithmetic. */
 export function validateOverview(value: unknown): OrchestratorOverview {
     const body = object(value, 'Orchestrator overview');
-    if (body.schemaVersion !== 1 || !['mock', 'cli', 'mixed'].includes(String(body.mode)) || typeof body.observedAt !== 'string' || !Number.isFinite(Date.parse(body.observedAt))) {
+    if (body.schemaVersion !== 1 || !['mock', 'cli', 'mixed'].includes(body.mode as string) || typeof body.observedAt !== 'string' || !Number.isFinite(Date.parse(body.observedAt))) {
         throw new ValidationError('Unsupported orchestrator overview');
     }
     identifier(body.project, 'overview.project');

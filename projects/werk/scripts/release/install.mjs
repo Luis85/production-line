@@ -90,6 +90,17 @@ export async function start(root, options) {
   return main(args);
 }
 
+export function restartCommand(root, options, platform = process.platform) {
+  // Single-quoted literals prevent expansion of $(), backticks and shell operators.
+  // PowerShell escapes a quote by doubling it; Bash closes/escapes/reopens it.
+  const quote = value => "'" + value.replaceAll("'", platform === 'win32' ? "''" : "'\\''") + "'";
+  const args = [quote(join(root, 'werk.mjs')), 'up'];
+  if (options.file) args.push('--file', quote(options.file));
+  if (options.stateDir) args.push('--state-dir', quote(options.stateDir));
+  if (options.noOpen) args.push('--no-open');
+  return `node ${args.join(' ')}`;
+}
+
 async function main() {
   const options = parse(process.argv.slice(2));
   if (options.help) {
@@ -97,7 +108,7 @@ async function main() {
     return;
   }
   const root = await install(release, options);
-  console.log(`Restart later: cd "${root}" then node werk.mjs up`);
+  console.log(`Restart later (${process.platform === 'win32' ? 'PowerShell' : 'Bash'}): ${restartCommand(root, options)}`);
   if (options.start) process.exitCode = await start(root, options);
 }
 let isMain = false;

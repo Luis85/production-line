@@ -20,7 +20,7 @@ Windows (PowerShell):
 curl.exe -fsSL https://github.com/Luis85/production-line/releases/latest/download/install.mjs -o werk-install.mjs; if ($LASTEXITCODE -eq 0) { node werk-install.mjs }
 ```
 
-This runs the installer published by this repository. It pins the version and archive SHA-256, verifies the downloaded archive and extracted files, and installs into `werk-<version>/` in your current directory. It needs no npm, compiler, Git checkout or administrator privileges. An existing version directory is never overwritten. Until the first stable release is published, the download URL returns 404 and nothing starts.
+This runs the installer published by this repository. It pins the version and archive SHA-256, verifies the downloaded archive and extracted files, and installs into `werk-<version>/` in your current directory. It needs no npm, compiler, Git checkout or administrator privileges. An existing version directory is never overwritten.
 
 The command starts a local Factory and two **simulated** production lines, opens the Factory page when healthy, and prints the private credential file location. Keep the console open; Ctrl+C shuts the system down. To restart, open the installed version directory and run:
 
@@ -137,7 +137,7 @@ Existing developer launchers remain available: `npm run dev:fleet` for one line,
 | --- | --- | --- |
 | Factory | Hierarchy, line registry and read-only portfolio summaries | `src/factory/dist` |
 | Orchestrator | Intake, task state, leases, context and evidence API | `src/orchestrator/dist` |
-| Worker | Mock execution, durable journal and local status | `src/worker/dist` |
+| Worker | Simulated or explicitly enabled native Codex execution, durable journal and local status | `src/worker/dist` |
 
 Shared contracts remain in `src/shared`. Source and tests are grouped by concern. Runtime application data belongs in a private state directory, not the source tree or release archive.
 

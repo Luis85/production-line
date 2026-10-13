@@ -159,7 +159,7 @@ footer { border-top: 1px solid var(--line); font-size: 13px; margin-top: var(--s
 <div class="sync" id="runtime-sync" hidden><span id="sync-state" role="status">Noch nicht verbunden</span><button id="pause-updates" aria-pressed="false" disabled>Live-Updates pausieren</button><button id="disconnect" hidden>Trennen</button></div>
 <p id="access-summary" hidden></p>
 <section id="intake" hidden>
-<div class="note" aria-label="Bereitschaft der Linie"><p id="line-readiness" role="status">Noch kein aktueller Worker-Status geladen.</p><button id="check-readiness" type="button">Bereitschaft prüfen</button><button id="readiness-workers" type="button">Worker prüfen</button></div>
+<div class="note" aria-label="Bereitschaft der Linie"><p id="line-readiness" role="status">Noch kein aktueller Worker-Status geladen.</p><div class="actions"><button id="check-readiness" type="button">Bereitschaft prüfen</button><button id="readiness-workers" type="button">Worker prüfen</button></div></div>
 <div class="note" id="first-task-help" hidden><h2>Dein erster Testlauf</h2><p>Noch kein Auftrag gespeichert. Übergib einen Wikilink oder beschreibe einen Testauftrag manuell. Ein passender Worker führt ihn simuliert aus; anschließend kannst du Ereignisse und Vorher/Nachher-Snapshots prüfen. Die Standardausführung erstellt keinen Code oder PR. Echte Codex-Ausführung aktivierst du bewusst unter den Optionen.</p><button id="first-manual-task" type="button">Testauftrag manuell beschreiben</button></div>
 <h2>Anforderung aus dem Projekt-Vault</h2>
 <p>Wähle das Projekt und füge den Wikilink zur Anforderung ein. Titel, Spezifikation und Akzeptanzkriterien können in der verlinkten Notiz bleiben.</p>
@@ -190,9 +190,7 @@ footer { border-top: 1px solid var(--line); font-size: 13px; margin-top: var(--s
 <details class="note" id="iteration-import"><summary>Ready-Features einer Iteration importieren</summary>
 <p>Das Produktteam plant in Obsidian, erstellt einen Iterationsbranch mit Draft PR und markiert implementierbare Features. Der Importbefehl übernimmt diese am festgelegten Commit. Das Team kann währenddessen die nächste Iteration vorbereiten.</p>
 <p id="import-state">Verbinden, um importierte Features zu sehen.</p>
-<details><summary>Importbefehl und PR-Beziehung</summary><pre>werk-orchestrator iteration import --repo /path/to/project
-  --branch iteration/2026-W42 --project demo --iteration 2026-W42
-  --iteration-pr https://git.example/project/pull/10</pre>
+<details><summary>Importbefehl und PR-Beziehung</summary><p>Im entpackten Release-Ordner ausführen. Setze <code>WERK_ADMIN_TOKEN</code> in deiner Konsole auf den Zugangstoken dieser Linie. Ersetze Repository-Pfad, Branch, Iteration und PR-Adresse durch deine Werte. Der Befehl übernimmt die aktuelle Linienadresse und Projekt-ID; Zugangsdaten werden nicht eingefügt.</p><pre id="iteration-command" tabindex="0" aria-label="Importbefehl für diese Produktionslinie">Verbinden, um den Befehl für diese Linie anzuzeigen.</pre>
 <p>Feature-PR: factory/FEATURE → iteration/2026-W42. Iterations-PR: iteration/2026-W42 → main. Live Git-Push/PR-Operationen sind noch nicht angebunden.</p></details>
 </details></section>
 <section id="tasks" hidden>
@@ -255,7 +253,8 @@ footer { border-top: 1px solid var(--line); font-size: 13px; margin-top: var(--s
 <tbody id="portfolio-rows"></tbody></table></div>
 <h2 class="section-start">Messwerte untersuchen</h2>
 <p>Wähle einen Snapshot, um Schema, Konfiguration, Metriken und SHA-256 zu prüfen. CPU und Speicher beziehen sich auf den Worker-Prozess; parallele Werte dürfen nicht als Task-Verbrauch addiert werden.</p>
-<div class="table-wrap" role="region" aria-label="Snapshot-Messwerte – horizontal verschiebbar" tabindex="0">
+<p id="snapshot-coverage">Noch keine Snapshots geladen.</p>
+<div class="table-wrap" role="region" aria-label="Snapshot-Messwerte – horizontal verschiebbar" aria-describedby="snapshot-coverage" tabindex="0">
 <table>
 <thead>
 <tr><th scope="col">Snapshot</th><th scope="col">Worker / Profil</th><th scope="col">Ergebnis</th><th scope="col">RSS</th><th scope="col">Event Loop P95</th></tr></thead>
@@ -353,7 +352,7 @@ function clearSession(){
   for(const id of ['task-search','task-status','metric-window','metric-outcome'])$('#'+id).value='';
   $('#first-task-help').hidden=true;$('#worker-empty-help').hidden=true;$('#task-next-step').textContent='';$('#inspect-workers').hidden=true;
   $('#task-events').textContent='';$('#task-event-state').textContent='';$('#task-reference').textContent='';$('#task-reference').hidden=true;$('#snapshot-detail').textContent='';$('#metric-summary').textContent='';$('#task-count').textContent='';
-  $('#import-state').textContent='Verbinden, um importierte Features zu sehen.';$('#sync-state').textContent='Noch nicht verbunden';$('#disconnect').hidden=true;
+  $('#import-state').textContent='Verbinden, um importierte Features zu sehen.';$('#iteration-command').textContent='Verbinden, um den Befehl für diese Linie anzuzeigen.';$('#snapshot-coverage').textContent='Noch keine Snapshots geladen.';$('#sync-state').textContent='Noch nicht verbunden';$('#disconnect').hidden=true;
   for(const id of Object.keys(names))$('#'+id).removeAttribute('aria-busy');
   updateJourney();
 }
@@ -476,12 +475,18 @@ async function connect(){
   const id=++connectId;connecting=true;clearSession();$('#connect').disabled=true;$('#connect').textContent='Verbinde…';
   try{const overview=await api('/v1/overview',{credential:candidate});if(id!==connectId)return;token=candidate;applyAccess(overview.access);readinessObservation={overview,at:Date.now()};renderReadiness();
     if(typeof overview?.project==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(overview.project)){if(!projectEdited&&['','demo'].includes($('#project').value))$('#project').value=overview.project;$('#project-help').textContent='Projekt dieser Produktionslinie: '+overview.project+'. Eigene Eingaben bleiben erhalten.'}
-    $('#token').value='';$('#token').removeAttribute('aria-invalid');$('#disconnect').hidden=false;updateJourney();message('Verbunden. Aufträge werden im Orchestrator gespeichert.','success');if(tab==='intake')($('#intake-mode').value==='manual'?$('#title'):$('#requirement-ref')).focus();else $('#heading').focus();refresh()}
+    $('#token').value='';$('#token').removeAttribute('aria-invalid');$('#disconnect').hidden=false;updateJourney();message('Verbunden. Aufträge werden im Orchestrator gespeichert.','success');if(!canWrite&&tab==='intake'){navigate('tasks')}else{if(tab==='intake')($('#intake-mode').value==='manual'?$('#title'):$('#requirement-ref')).focus();else $('#heading').focus();refresh()}renderImportCommand()}
   catch(error){if(id===connectId){const help=error.status===401?'Token nicht akzeptiert. Kopiere WERK_ADMIN_TOKEN aus den Zugangsdaten dieses Orchestrators, ohne Anführungszeichen.':'Verbindung nicht möglich. Prüfe, ob der Orchestrator im Startterminal noch läuft und diese Adresse stimmt. Du kannst danach erneut verbinden.';message(help,'error');$('#token').setAttribute('aria-invalid',String(error.status===401));$('#token').focus()}}
   finally{if(id===connectId){connecting=false;$('#connect').disabled=false;$('#connect').textContent='Verbinden'}}
 }
+function renderImportCommand(){
+  const project=$('#project').value;
+  const origin=typeof location==='object'?location.origin:'';
+  if(!/^[a-zA-Z0-9_-]{1,100}$/.test(project)||!/^https?:\/\/[a-zA-Z0-9.:[\]-]+$/.test(origin)){$('#iteration-command').textContent='Gültige Projekt-ID und HTTP(S)-Linienadresse erforderlich. Die Hilfe im Release-Ordner zeigt den Vertrag: node src/orchestrator/dist/orchestrator/cli.js --help. Gib beim Import --url für diese Linie an.';return}
+  $('#iteration-command').textContent='node src/orchestrator/dist/orchestrator/cli.js iteration import --repo /path/to/project --branch iteration/2026-W42 --project '+project+' --iteration 2026-W42 --iteration-pr https://git.example/project/pull/10 --url '+origin;
+}
 document.querySelectorAll('[data-tab]').forEach(button=>button.onclick=()=>navigate(button.dataset.tab));
-$('#project').oninput=()=>{projectEdited=true};
+$('#project').oninput=()=>{projectEdited=true;renderImportCommand()};
 $('#connect').onclick=connect;$('#token').onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();connect()}};
 $('#disconnect').onclick=()=>{++connectId;connecting=false;$('#connect').disabled=false;$('#connect').textContent='Verbinden';clearSession();$('#token').value='';message('Verbindung getrennt. Das Token wurde aus dem Seitenzustand entfernt.');$('#token').focus()};
 $('#pause-updates').onclick=()=>{paused=!paused;$('#pause-updates').setAttribute('aria-pressed',String(paused));$('#pause-updates').textContent=paused?'Live-Updates fortsetzen':'Live-Updates pausieren';if(!paused){if(tab==='workers'&&workerDetailId)showWorker(workerDetailId,{focus:false});else refresh()}else $('#sync-state').textContent+=' · Live-Updates pausiert'};
@@ -557,6 +562,7 @@ function renderMetrics(){
     cell(tr,project);cell(tr,rows.length);cell(tr,rows.filter(r=>['failed','interrupted'].includes(r.snapshot.execution.outcome)).length);cell(tr,pct(.5)+' / '+pct(.95)+' (n='+values.length+')');cell(tr,rows.some(r=>r.snapshot.mode==='cli')?'Nicht erfasst':'Unbekannt · Mock-Ausführung');cell(tr,rows.some(r=>r.snapshot.mode==='cli')?'Nicht verifiziert':'Nicht ausgeführt');portfolio.append(tr)
   }
   if(!after.length)empty(portfolio,6,'Noch keine abgeschlossenen Versuche in dieser Auswahl.');
+  $('#snapshot-coverage').textContent='Neueste '+Math.min(records.length,40)+' von '+records.length+' Snapshots in dieser Auswahl · maximal 40 Zeilen. '+(records.length>40?'Grenze die Filter ein oder öffne die Snapshots eines Auftrags im Taskboard. ':'')+'Die Kennzahlen berücksichtigen alle geladenen Snapshots der Auswahl.';
   const focusedSnapshot=document.activeElement?.dataset?.snapshotId;const table=$('#snapshot-rows');table.replaceChildren();
   for(const row of records.slice(-40).reverse()){
     const snapshot=row.snapshot,tr=document.createElement('tr'),button=document.createElement('button');button.dataset.snapshotId=snapshot.id;button.textContent=snapshot.phase+' · '+snapshot.taskId.slice(0,8)+' / '+snapshot.attempt;button.title='Snapshot '+snapshot.id+' · '+date(row.receivedAt);
