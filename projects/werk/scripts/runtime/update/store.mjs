@@ -16,7 +16,7 @@ export async function manifest(root) {
 }
 export function storeFor(baseRoot, stateDir) {
   const home = resolve(stateDir) + '.updates';
-  return { baseRoot: realpathSync(resolve(baseRoot)), stateDir: resolve(stateDir), home, path: join(home, 'selection.json'), releases: join(home, 'releases'), backups: join(home, 'backups') };
+  return { baseRoot: realpathSync.native(resolve(baseRoot)), stateDir: resolve(stateDir), home, path: join(home, 'selection.json'), releases: join(home, 'releases'), backups: join(home, 'backups') };
 }
 export async function selection(store) {
   let value;
