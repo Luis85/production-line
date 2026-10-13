@@ -73,7 +73,9 @@ async function command(args, code = 0) {
   const run = cli(args), timer = setTimeout(() => run.child.kill(), 45000);
   try {
     const result = await run.completion;
-    assert.equal(result.code, code, `System ${args[0]} unexpected exit; inspect the command locally`);
+    let diagnostic;
+    try { diagnostic = JSON.parse(result.stdout).error?.message; } catch { /* Only structured runtime diagnostics are safe to surface. */ }
+    assert.equal(result.code, code, `System ${args[0]} unexpected exit: ${diagnostic ?? 'no structured error; inspect locally'}`);
     return JSON.parse(result.stdout);
   } finally { clearTimeout(timer); }
 }

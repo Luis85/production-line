@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile, rm, readdir } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm, readdir, symlink } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createServer } from 'node:net';
@@ -143,4 +143,16 @@ test('explicitly installed prereleases remain runnable without switching onto th
   assert.equal(await runNative(f.base,['start','--state-dir',f.stateDir,'--json'],{fetcher:f.fetcher,stdout:x=>output.push(JSON.parse(x))}),0);
   assert.ok(output.some(x=>x.event==='update_skipped'));
   assert.equal((await selection(f.store)).active,null);
+});
+
+
+test('update selection survives canonical and aliased installation paths used by macOS launchers', {skip:process.platform==='win32'}, async t=>{
+  const f=await fixture(t), alias=join(f.directory,'base alias');
+  await symlink(f.base,alias,'dir');
+  const aliased=storeFor(alias,f.stateDir);
+  await apply(aliased,f.invocation,{fetcher:f.fetcher});
+  assert.equal((await selection(f.store)).active,'0.2.0');
+  const output=[];
+  assert.equal(await runNative(f.base,['stop','--state-dir',f.stateDir,'--json'],{stdout:x=>output.push(JSON.parse(x))}),0);
+  assert.equal(output.at(-1).version,'0.2.0');
 });

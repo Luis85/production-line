@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { realpathSync } from 'node:fs';
 import { lstat, readFile, rename, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { createPrivate, privateDirectory, readPrivate } from '../config.mjs';
@@ -15,7 +16,7 @@ export async function manifest(root) {
 }
 export function storeFor(baseRoot, stateDir) {
   const home = resolve(stateDir) + '.updates';
-  return { baseRoot: resolve(baseRoot), stateDir: resolve(stateDir), home, path: join(home, 'selection.json'), releases: join(home, 'releases'), backups: join(home, 'backups') };
+  return { baseRoot: realpathSync(resolve(baseRoot)), stateDir: resolve(stateDir), home, path: join(home, 'selection.json'), releases: join(home, 'releases'), backups: join(home, 'backups') };
 }
 export async function selection(store) {
   let value;
