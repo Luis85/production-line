@@ -114,6 +114,7 @@ export class WorkerSessions {
         if (body.definitionId !== undefined || body.agent !== undefined || body.useInstructionsOnly !== undefined) throw new DomainError('invalid_input', 'An agent definition is fixed when a task is created. Create a new task to change it.');
         const record = this.records.find(item => item.id === body.id); if (!record) throw new DomainError('not_found', 'Session not found');
         if (body.action === 'select') { record.archived = false; this.selected = record.id; }
+        else if (body.action === 'restore') record.archived = false;
         else if (body.action === 'rename') record.title = text(body.title, 'Session title', 120);
         else if (body.action === 'archive' || body.action === 'delete') {
           if (this.instances.get(record.id)?.snapshot().busy || this.executor.current === record.id || ['queued', 'running'].includes(record.taskState ?? '')) throw new DomainError('conflict', 'Stop the reply first.');

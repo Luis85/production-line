@@ -1,3 +1,4 @@
+import { FeatureDocuments } from './documents.js';
 import { open, readdir, lstat, mkdir, unlink } from 'node:fs/promises';
 import { resolve, join, parse, relative, isAbsolute, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -19,11 +20,13 @@ export async function realDirectory(path: string, create = false) {
 function overlaps(a: string, b: string) { const r = relative(a, b); return !r || (r !== '..' && !r.startsWith('..' + sep) && !isAbsolute(r)); }
 export class MarkdownFeatureFolder implements FeatureFolderPort {
   readonly directory: string;
+  readonly documents: FeatureDocuments;
   private state: string; private lock?: Awaited<ReturnType<typeof open>>;
   private defaultProvider: string;
   constructor(directory: string, state: string, defaultProvider: string, project: string) {
     this.defaultProvider = defaultProvider;
     this.directory = resolve(directory); this.state = resolve(state);
+    this.documents = new FeatureDocuments(this.directory, defaultProvider, () => realDirectory(this.directory));
     if (this.directory === resolve(project) || overlaps(this.directory, this.state) || overlaps(this.state, this.directory) || ['.git', 'node_modules'].some(name => this.directory.split(sep).includes(name))) throw Error('Use a dedicated feature folder separate from project root, private worker state, .git and node_modules.');
   }
   async load(): Promise<FeatureIndex> {
@@ -82,7 +85,7 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
     const current = await readBoundedFile(path, 65536).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
     if (current === null || digest(current) !== file.revision) return false;
     const parsed = parseFeature(current);
-    const next = renderFeature(parsed, record.id, record.status, { source: record.source, taskId: record.taskId, sessionId: record.sessionId, submittedAt: record.createdAt, updatedAt: record.updatedAt, inputHash: record.inputHash, ...(record.attempt !== undefined ? { attempt: record.attempt } : {}), ...(record.error ? { error: record.error } : {}), ...(record.result ? { result: record.result } : {}), ...(record.patch ? { patch: record.patch } : {}), ...(inputChanged ? { inputChanged: true, note: 'Accepted input is frozen. Copy to a new filename and remove id/werk to request different work.' } : {}) });
+    const next = renderFeature(parsed, record.id, record.status, { archived: record.archived ?? false, source: record.source, taskId: record.taskId, sessionId: record.sessionId, submittedAt: record.createdAt, updatedAt: record.updatedAt, inputHash: record.inputHash, ...(record.attempt !== undefined ? { attempt: record.attempt } : {}), ...(record.error ? { error: record.error } : {}), ...(record.result ? { result: record.result } : {}), ...(record.patch ? { patch: record.patch } : {}), ...(inputChanged ? { inputChanged: true, note: 'Accepted input is frozen. Copy to a new filename and remove id/werk to request different work.' } : {}) });
     if (next === current) return true;
     // Optimistic editor protection; a changed observation is retried on the next scan.
     if (await readBoundedFile(path, 65536) !== current) return false;

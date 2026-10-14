@@ -3,6 +3,7 @@ import { readFile, lstat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { assertNode, inputError, readPrivate } from '../config.mjs';
 import { initializeWorker, projectDefaults } from './project.mjs';
+import { workerBody, filterWorkerResult, waitForWorker } from './worker-commands.mjs';
 import { commands } from './commands.mjs';
 import { run, start, status, stop, stateDirectory } from './lifecycle.mjs';
 const root = fileURLToPath(new URL('../../../', import.meta.url));
@@ -40,7 +41,7 @@ export async function main(kind, argv = process.argv.slice(2)) {
     }
     const command = catalog[cmd];
     if (!command && cmd !== 'api') throw inputError('Unknown command. Use help or schema.');
-    const allowed = ['state-dir', 'url', 'token-file', 'key', ...(command?.body || cmd === 'api' ? ['file'] : []), ...(command?.required ?? []), ...(cmd === 'api' ? ['path', 'method'] : [])];
+    const allowed = ['state-dir', 'url', 'token-file', 'key', ...(command?.body || cmd === 'api' ? ['file'] : []), ...(command?.required ?? []), ...(command?.options ?? []), ...(cmd === 'api' ? ['path', 'method'] : [])];
     validateOptions(o, [...new Set(allowed)]);
     for (const key of command?.required ?? []) if (!o[key]) throw inputError(`--${key} required`);
     if (command?.body && !o.file) throw inputError('--file required (use - for stdin).');
@@ -49,7 +50,7 @@ export async function main(kind, argv = process.argv.slice(2)) {
     if (!path || !/^\/(?!\/)/.test(path) || !['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) throw inputError('Use a local API path and supported method.');
     if (path.includes(':id')) path = path.replace(':id', encodeURIComponent(o.id));
     let body = o.file ? await input(o.file) : undefined;
-    if (kind === 'worker' && cmd.startsWith('task ') && cmd !== 'task list') {
+    if (kind === 'worker' && !command?.action && cmd.startsWith('task ') && cmd !== 'task list') {
       if (body !== undefined && (!body || typeof body !== 'object' || Array.isArray(body))) throw inputError('Task input must be a JSON object.');
       if (body && (Object.hasOwn(body, 'action') || (cmd !== 'task create' && Object.hasOwn(body, 'id')))) throw inputError('Task action and target id come from the command.');
       body = { ...body, action: cmd.split(' ')[1], ...(o.id ? { id: o.id } : {}) };
@@ -61,6 +62,7 @@ export async function main(kind, argv = process.argv.slice(2)) {
     }
     if (kind === 'worker' && cmd === 'provider check') body = { id: o.id };
     if (cmd === 'file-task get') body = { id: o.id };
+    if (kind === 'worker' && command) body = await workerBody(command, body, o);
     let base = o.url, token = process.env.WERK_APP_TOKEN ?? '';
     if (base && !o['token-file'] && !token && cmd !== 'health') throw inputError('Remote --url requires --token-file or WERK_APP_TOKEN. Local secrets are never sent to an explicit URL.');
     if (!base) {
@@ -71,7 +73,9 @@ export async function main(kind, argv = process.argv.slice(2)) {
       else token = (await readPrivate(join(state, 'component.json'))).adminToken;
     }
     if (o['token-file']) token = await tokenFile(o['token-file']);
-    console.log(JSON.stringify(await request(base, path, token, method, body, o.key)));
+    const call = () => request(base, path, token, method, body, o.key);
+    const result = command?.wait ? await waitForWorker(call, command.wait, o['timeout-ms']) : await call();
+    console.log(JSON.stringify(kind === 'worker' ? filterWorkerResult(result, o) : result));
   } catch (error) {
     const { DomainError } = await import(new URL(`../../../src/${kind}/dist/shared/errors.js`, import.meta.url));
     const code = error.exitCode === 2 || (error.status >= 400 && error.status < 500) || (error instanceof DomainError && !['internal', 'unavailable'].includes(error.code)) ? 2 : 1;

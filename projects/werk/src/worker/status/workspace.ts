@@ -41,12 +41,18 @@ export class WorkerWorkspace {
     const operation = this.taskRequests.catch(() => {}).then(async () => {
       if (!this.acceptingTasks) throw new DomainError('unavailable', 'Worker is stopping.');
       const body = object(input, 'Task command', ['action', 'id', 'title', 'provider', 'message', 'definitionId', 'agent', 'useInstructionsOnly']);
-      if (!['create', 'get', 'send', 'cancel'].includes(String(body.action))) throw new DomainError('invalid_input', 'Task action: create|get|send|cancel');
+      if (!['create', 'get', 'send', 'cancel', 'retry'].includes(String(body.action))) throw new DomainError('invalid_input', 'Task action: create|get|send|cancel|retry');
       if (body.action !== 'create' && (body.definitionId !== undefined || body.agent !== undefined || body.useInstructionsOnly !== undefined)) throw new DomainError('invalid_input', 'An agent definition is fixed when a task is created.');
       const id = body.action === 'create' && body.id === undefined ? randomUUID() : identifier(body.id, 'id');
       if (body.action === 'get') return this.sessions.detail(id);
       if (body.action === 'cancel') return this.sessions.cancelTask(id);
-      const message = text(body.message, 'message', 8000);
+      let requestMessage = body.message;
+      if (body.action === 'retry') {
+        const detail = this.sessions.detail(id);
+        if (detail.session.kind !== 'chat' || !['failed', 'cancelled'].includes(detail.session.status) || detail.session.busy) throw new DomainError('conflict', 'Only failed or cancelled chat tasks can be retried. Use the owning taskboard or orchestrator for assignments.');
+        requestMessage = detail.chat.messages.filter(item => item.role === 'user').at(-1)?.text;
+      }
+      const message = text(requestMessage, 'message', 8000);
       if (body.action === 'create') {
         const title = text(body.title, 'title', 120), provider = this.settings.provider(String(body.provider));
         const existing = this.sessions.view().records.find(item => item.id === id);
@@ -78,7 +84,7 @@ export class WorkerWorkspace {
     this.config = config; this.journal = journal; this.get = get;
     this.settings = new WorkerSettings(config.stateDir, config.url, config.enrollmentToken, config.chatExecutable);
     this.sessions = new WorkerSessions(config.stateDir, this.settings); this.board = new LocalTaskboard(config.stateDir, this.settings, this.sessions);
-    if (config.features) this.features = new FeatureRequests(new MarkdownFeatureFolder(config.features.directory, config.stateDir, config.features.provider, config.projectDir ?? process.cwd()), { submit: record => this.submitFeature(record), inspect: record => this.inspectFeature(record) }, config.features.pollMs);
+    if (config.features) this.features = new FeatureRequests(new MarkdownFeatureFolder(config.features.directory, config.stateDir, config.features.provider, config.projectDir ?? process.cwd()), { submit: record => this.submitFeature(record), inspect: record => this.inspectFeature(record), control: (record, action) => record.input?.mode === 'patch' ? this.board.action({ id: record.taskId, action }) : this.task({ id: record.sessionId, action }) }, config.features.pollMs);
   }
   async init() {
     await ensureDirectory(this.config.stateDir);

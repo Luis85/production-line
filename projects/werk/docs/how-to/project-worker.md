@@ -139,3 +139,39 @@ written into the same feature folder as frontmatter plus Markdown, with their
 orchestrator task/session IDs and current state. They share the same serial
 execution slot. The orchestrator keeps routing and lease ownership; editing an
 exported file cannot create a second local execution or alter the remote task.
+
+
+## Manage requests from a terminal or AI agent
+
+Start the worker, then prepare a draft outside the watched folder:
+
+```sh
+node bin/apps/worker/cli.mjs feature template > request-draft.md
+# Edit request-draft.md, keeping status: draft.
+node bin/apps/worker/cli.mjs feature create --name search.md --markdown request-draft.md
+node bin/apps/worker/cli.mjs feature validate --name search.md
+node bin/apps/worker/cli.mjs feature get --name search.md
+```
+
+Copy the returned `revision` into the next command:
+
+```sh
+node bin/apps/worker/cli.mjs feature submit --name search.md --if-match REVISION
+node bin/apps/worker/cli.mjs feature wait --name search.md --timeout-ms 60000
+node bin/apps/worker/cli.mjs feature result --name search.md
+```
+
+The JSON record supplies `taskId` and `sessionId` for follow-up commands. Use
+`task send --id SESSION_ID --file follow-up.json` with
+`{"message":"Explain the next step."}` to continue that session. For cancellation,
+retry, archive or deletion, fetch the current feature revision and use the
+corresponding named command. See the [complete management contract](../reference/feature-requests.md#cli-management-contract).
+
+No browser is required for provider setup: `settings set --file provider.json`
+accepts `{"provider":{"id":"codex-cli","executable":"/absolute/path/to/codex"}}`.
+Authenticate that CLI on the worker machine, then run `provider check --id codex-cli`.
+API connections use their provider ID, model and `apiKey` in a private JSON input
+file or stdin; keep credentials out of command arguments and project commits.
+Inspect `settings get` for redacted configuration. `queue pause` stops new
+execution and orchestrator claims while running tasks finish; `queue resume` resumes it. Use
+`queue configure --file queue.json` for capacity and routing intake settings.

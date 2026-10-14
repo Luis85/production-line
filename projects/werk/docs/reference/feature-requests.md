@@ -137,3 +137,47 @@ can contain project information: apply the project's access/retention policy.
 Setup adds ignores for private state, provider home, generated results and watcher
 coordination files while keeping request Markdown/templates available to Git.
 Symlinked request files, feature directories and result directories are refused.
+
+
+## CLI management contract
+
+All feature-management commands use the authenticated worker API and require a
+running worker with a configured feature folder, except `feature template`.
+Use `schema` for command discovery. Output is JSON; `feature template` emits
+Markdown. In Docker, prefix commands with `docker compose -f
+.werk/compose.worker.yaml exec -T worker` and run the same Node CLI inside it.
+
+| Command | Required options and behavior |
+| --- | --- |
+| `feature list` | Includes tracked `records`, current `files` (including drafts), watcher errors and faults. Optional `--status STATUS`, `--archived true\|false`. |
+| `feature create` | `--name NAME.md --markdown PATH\|-`. Imports a validated draft; refuses an existing or retained filename. |
+| `feature get` | `--name NAME.md`. Returns original Markdown, SHA-256 `revision`, and the linked record when accepted. Invalid files remain readable for repair. |
+| `feature validate` | `--name NAME.md`. Validates stored frontmatter/body without submitting. |
+| `feature edit` | `--name NAME.md --markdown PATH\|- --if-match REVISION`. Replaces an unaccepted draft, preserving supplied Markdown bytes. Can repair malformed files. |
+| `feature submit` | `--name NAME.md --if-match REVISION`. Marks the validated draft ready; the watcher reserves and admits it. Inspect `waiting` errors if capacity/provider setup prevents admission. |
+| `feature cancel` | `--name NAME.md --if-match REVISION`. Cancels a waiting reservation or its local chat/patch task. Running cancellation is asynchronous. |
+| `feature retry` | `--name NAME.md --if-match REVISION`. Retries a cancelled reservation or failed/cancelled local task in its existing session. Waiting reservations already retry admission automatically. |
+| `feature result` | `--name NAME.md`. Returns current execution status, text and patch when retained. |
+| `feature wait` | `--name NAME.md [--timeout-ms N]`. Polls until completed/review/failed/cancelled/unavailable. Default 60 seconds, maximum 24 hours. |
+| `feature archive`, `feature restore` | `--name NAME.md --if-match REVISION`. Sets `werk.archived` on a stopped request; does not delete evidence or archive its session. |
+| `feature delete` | `--name NAME.md --if-match REVISION`. Removes a draft, malformed file, or stopped request file. Retains accepted task identity, session and exported results; never deletes active work. |
+
+Read the current revision immediately before an edit or lifecycle mutation. A
+stale revision returns an input/API rejection (exit 2); reread and reconcile.
+These checks coordinate with the watcher and other CLI callers. External editors
+do not participate in that lock: avoid concurrent saves during CLI mutations.
+Accepted input is immutable. To request different work, create a new draft with a
+new filename/ID and no `werk` or `source` fields. Feature files can still be renamed
+in the filesystem: their durable ID preserves identity on the next scan.
+
+`feature wait` returning successfully means a terminal state was observed, not
+that the model succeeded: automation must inspect the returned execution status.
+A wait timeout exits 1 and leaves the task running. Orchestrator-owned feature
+records support inspection, validation and waiting; mutations are rejected with
+instructions to manage the assignment through its orchestrator.
+
+Chat retry resends the last user message in the existing conversation. Patch retry
+uses the original captured files. Neither creates a second session. Archive/delete
+never removes the private deduplication record or frees its 1,000-record limit.
+Use `task delete` and `file-task delete` explicitly to clean retained task history;
+requests whose history has been removed become `unavailable`, without replay.

@@ -1,11 +1,14 @@
+import { manageFeature, type FeatureDocumentPort } from './feature-management.js';
+import { DomainError } from '../../shared/errors.js';
 import { randomUUID, createHash } from 'node:crypto';
 
 export interface FeatureInput { title: string; mode: 'chat' | 'patch'; provider: string; message: string; paths?: string[]; priority: number; definitionId?: string; agent?: string; useInstructionsOnly?: boolean; }
-export interface FeatureRecord { id: string; name: string; source: 'folder' | 'orchestrator'; taskId: string; sessionId: string; input?: FeatureInput; inputHash: string; submitted: boolean; status: string; createdAt: string; updatedAt: string; error?: string; result?: string; patch?: string; attempt?: number; }
+export interface FeatureRecord { id: string; name: string; source: 'folder' | 'orchestrator'; taskId: string; sessionId: string; input?: FeatureInput; inputHash: string; submitted: boolean; status: string; createdAt: string; updatedAt: string; error?: string; result?: string; patch?: string; attempt?: number; archived?: boolean; }
 export interface FeatureIndex { version: 1; owner: string; records: FeatureRecord[]; }
 export interface FeatureFile { name: string; revision: string; id?: string; status?: string; source?: string; input?: FeatureInput; error?: string; }
 export interface FeatureFolderPort {
   directory: string;
+  documents: FeatureDocumentPort;
   load(): Promise<FeatureIndex>;
   open(owner: string): Promise<void>;
   scan(): Promise<FeatureFile[]>;
@@ -17,6 +20,7 @@ export interface FeatureFolderPort {
   close(): Promise<void>;
 }
 export interface FeatureQueuePort {
+  control?(record: FeatureRecord, action: 'cancel' | 'retry'): Promise<unknown>;
   submit(record: FeatureRecord): Promise<void>;
   inspect(record: FeatureRecord): { status: string; text?: string; patch?: string; error?: string } | undefined;
 }
@@ -33,6 +37,20 @@ export class FeatureRequests {
   constructor(folder: FeatureFolderPort, queue: FeatureQueuePort, pollMs = 1000) { this.folder = folder; this.queue = queue; this.pollMs = pollMs; }
   async init() { this.index = await this.folder.load(); this.lastSaved = JSON.stringify(this.index); await this.folder.open(this.index.owner); this.initialized = true; }
   view() { return { enabled: true, directory: this.folder.directory, pollMs: this.pollMs, error: this.fault, errors: structuredClone(this.errors), records: this.index.records.map(({ input: _input, ...record }) => ({ ...record })) }; }
+  async list() { await this.tick(true); return { ...this.view(), files: (await this.folder.scan()).map(({ input, ...file }) => ({ ...file, title: input?.title, mode: input?.mode, provider: input?.provider, archived: this.index.records.find(item => item.name === file.name)?.archived ?? false })) }; }
+  async action(input: unknown) {
+    let result: unknown;
+    await this.exclusive(async () => {
+      if (this.stopped) throw new DomainError('unavailable', 'Worker is stopping.');
+      const body = input as { name: string; action: string };
+      const readOnly = ['get', 'validate', 'result'].includes(body?.action);
+      if (readOnly) await this.reconcile(false);
+      result = await manageFeature(input, { documents: this.folder.documents, index: this.index, queue: this.queue, persist: () => this.persist() });
+      if (!readOnly) await this.reconcile(false);
+      if (body.action !== 'delete' && !['get', 'validate', 'result'].includes(body.action)) result = { ...await this.folder.documents.read(body.name), record: this.index.records.find(item => item.name === body.name) ?? null };
+    });
+    return result;
+  }
   private exclusive(action: () => Promise<void>) {
     const operation = this.work.catch(() => {}).then(action); this.work = operation; return operation;
   }
@@ -73,7 +91,7 @@ export class FeatureRequests {
       }
       record.name = file.name;
       const changed = record.source === 'folder' && !!file.input && fingerprint(file.input) !== record.inputHash;
-      if (!record.submitted && admit) {
+      if (!record.submitted && record.status !== 'cancelled' && admit) {
         // Retry an earlier failed reservation write before any admission or public ID update.
         await this.persist();
         // Publish the durable ID before admitting work; an interrupted save can be retried safely.
