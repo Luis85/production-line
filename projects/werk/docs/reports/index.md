@@ -8,6 +8,8 @@ separately under `docs/handoff`; original source provenance is recorded in the
 
 | Record | Scope |
 | --- | --- |
+| [Worker lifecycle and metrics](worker-lifecycle-review.md) | Downloaded-package installation, Markdown request lifecycle, durable per-run evidence, CLI analysis and native/Docker qualification |
+| [Interactive lifecycle journey](worker-lifecycle-journey.html) | Fifteen embedded desktop/mobile screenshots covering requests, paired observations and many-run analysis |
 | [System journey polish](system-journey-polish.md) | Screenshot-driven worker, Factory, orchestrator and shared interaction improvements; final integrated checks and authenticated task handoff |
 | [Project worker and feature folders](feature-folder-review.md) | Project installation, reusable templates, durable Markdown intake, serial execution and native/Docker qualification |
 | [Worker access, Chat and agent definitions](worker-overhaul-review.md) | Research-led overhaul, independent review, integrated checks and twelve final screenshots |

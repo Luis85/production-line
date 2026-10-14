@@ -1,0 +1,153 @@
+import { DatabaseSync } from 'node:sqlite';
+import { createHash, randomUUID } from 'node:crypto';
+import { join } from 'node:path';
+import { performance } from 'node:perf_hooks';
+import { chmod, lstat, open } from 'node:fs/promises';
+import { DomainError } from '../../../shared/errors.js';
+import { ensureDirectory } from './files.js';
+import { unknownUsage, type ConsumptionTotals, type ProviderUsage, type RunAnalysis, type RunMetadata, type RunOutcome, type RunPage, type RunQuery, type RunResources, type WorkerRun } from '../../application/run-evidence.js';
+const usageColumns = { inputTokens: 'input_tokens', outputTokens: 'output_tokens', cacheReadTokens: 'cache_read_tokens', cacheWriteTokens: 'cache_write_tokens', providerReportedCostUsd: 'cost_usd' } as const;
+const outcomes: RunOutcome[] = ['queued', 'running', 'completed', 'review', 'failed', 'cancelled', 'interrupted'];
+const processInstanceId = randomUUID();
+/** Append-only attempt identities, with bounded query pages; deleting sessions never removes evidence. */
+export class WorkerRunJournal {
+  private db!: DatabaseSync;
+  private initialized = false;
+  private clock = new Map<string, { accepted: number; started?: number }>();
+  private directory: string;
+  constructor(directory: string) { this.directory = directory; }
+  async init() {
+    if (this.initialized) return;
+    await ensureDirectory(this.directory);
+    const file = join(this.directory, 'worker-runs.sqlite');
+    for (const path of [file, file + '-wal', file + '-shm']) {
+      const info = await lstat(path).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
+      if (info && (!info.isFile() || info.isSymbolicLink())) throw Error('Run evidence storage must be a regular file, not a symlink.');
+    }
+    const reserved = await open(file, 'ax', 0o600).catch(error => { if (error.code !== 'EEXIST') throw error; return null; }); await reserved?.close();
+    this.db = new DatabaseSync(file);
+    try {
+    await chmod(file, 0o600);
+    this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;
+      CREATE TABLE IF NOT EXISTS worker_runs (
+        sequence INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, session_id TEXT NOT NULL, task_id TEXT NOT NULL,
+        kind TEXT NOT NULL, provider TEXT NOT NULL, outcome TEXT NOT NULL, created_at TEXT NOT NULL, payload TEXT NOT NULL,
+        finished INTEGER NOT NULL DEFAULT 0, reported INTEGER NOT NULL DEFAULT 0,
+        input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER, cache_write_tokens INTEGER, cost_usd REAL,
+        duration_ms REAL, cpu_user REAL, cpu_system REAL, rss_bytes INTEGER);
+      CREATE INDEX IF NOT EXISTS worker_runs_session ON worker_runs(session_id, sequence);
+      CREATE INDEX IF NOT EXISTS worker_runs_filter ON worker_runs(provider, outcome, sequence);`);
+    this.initialized = true;
+    for (const row of this.db.prepare('SELECT id FROM worker_runs WHERE finished=0 ORDER BY sequence').all()) {
+      await this.complete(String(row.id), 'interrupted', unknownUsage('The worker restarted before terminal usage was saved.'), true);
+    }
+    } catch (error) { this.db.close(); this.initialized = false; throw error; }
+  }
+  close() { if (this.initialized) { this.db.close(); this.initialized = false; } }
+  private resources(): RunResources {
+    const memory = process.memoryUsage(), cpu = process.cpuUsage();
+    return { scope: 'worker_process', processInstanceId, rssBytes: memory.rss, heapUsedBytes: memory.heapUsed, cpuUserMicros: cpu.user, cpuSystemMicros: cpu.system, uptimeSeconds: process.uptime() };
+  }
+  private transaction<T>(operation: () => T): T {
+    this.db.exec('BEGIN IMMEDIATE');
+    try { const value = operation(); this.db.exec('COMMIT'); return value; }
+    catch (error) { this.db.exec('ROLLBACK'); throw error; }
+  }
+  private consumption(where = '1=1', values: (string | number)[] = []): ConsumptionTotals {
+    const fields = Object.entries(usageColumns).map(([name, column]) => `SUM(${column}) AS ${name}, COUNT(${column}) AS ${name}Coverage`).join(', ');
+    const row = this.db.prepare(`SELECT COUNT(*) AS runs, COALESCE(SUM(reported),0) AS reportedRuns, ${fields} FROM worker_runs WHERE finished=1 AND ${where}`).get(...values)!;
+    const coverage = {} as ConsumptionTotals['coverage'], totals = {} as Pick<ConsumptionTotals, keyof typeof usageColumns>;
+    for (const name of Object.keys(usageColumns) as (keyof typeof usageColumns)[]) { coverage[name] = Number(row[name + 'Coverage']); totals[name] = row[name] === null ? null : Number(row[name]); }
+    return { runs: Number(row.runs), reportedRuns: Number(row.reportedRuns), ...totals, coverage };
+  }
+  private save(run: WorkerRun) { this.db.prepare('UPDATE worker_runs SET outcome=?, payload=? WHERE id=?').run(run.outcome, JSON.stringify(run), run.id); }
+  async begin(metadata: RunMetadata): Promise<WorkerRun> {
+    const id = randomUUID();
+    const run = this.transaction(() => {
+      const attempt = Number(this.db.prepare('SELECT COUNT(*) AS count FROM worker_runs WHERE session_id=?').get(metadata.sessionId)!.count) + 1;
+      const acceptedAt = new Date().toISOString();
+      const value: WorkerRun = { ...metadata, title: metadata.title.slice(0, 200), schemaVersion: 1, id, sequence: 0, attempt, outcome: 'queued', acceptedAt, before: null, after: null, startedAt: null, durationMs: null, queueDurationMs: null, usage: unknownUsage(), resourceDelta: { scope: 'worker_process_between_snapshots', cpuUserMicros: null, cpuSystemMicros: null } };
+      const result = this.db.prepare('INSERT INTO worker_runs (id,session_id,task_id,kind,provider,outcome,created_at,payload) VALUES (?,?,?,?,?,?,?,?)').run(id, value.sessionId, value.taskId, value.kind, value.provider, value.outcome, acceptedAt, '{}');
+      value.sequence = Number(result.lastInsertRowid); this.save(value); return value;
+    });
+    this.clock.set(id, { accepted: performance.now() }); return run;
+  }
+  async start(id: string) {
+    const run = this.get(id); if (run.after) throw new DomainError('conflict', 'This execution attempt is already finished.'); if (run.startedAt) return;
+    const timing = this.clock.get(id); if (timing) timing.started = performance.now();
+    run.startedAt = new Date().toISOString(); run.outcome = 'running';
+    run.before = { measurement: 'execution_boundary', capturedAt: run.startedAt, state: 'running', resources: this.resources(), consumption: this.consumption() };
+    run.queueDurationMs = timing?.started === undefined ? null : Math.max(0, timing.started - timing.accepted); this.save(run);
+  }
+  async finish(id: string, outcome: Exclude<RunOutcome, 'queued' | 'running'>, usage = unknownUsage()) { return this.complete(id, outcome, usage); }
+  private async complete(id: string, outcome: Exclude<RunOutcome, 'queued' | 'running'>, usage: ProviderUsage, recovered = false) {
+    const run = this.get(id); if (run.after) return run;
+    // A malformed adapter must never turn unknown consumption into an invented measurement.
+    const normalized = unknownUsage(usage.reason ?? undefined);
+    for (const key of Object.keys(usageColumns) as (keyof typeof usageColumns)[]) {
+      const value = usage[key]; normalized[key] = typeof value === 'number' && Number.isFinite(value) && value >= 0 && (key === 'providerReportedCostUsd' ? value <= 1e9 : Number.isSafeInteger(value) && value <= 1e12) ? value : null;
+    }
+    normalized.source = Object.keys(usageColumns).some(key => normalized[key as keyof typeof usageColumns] !== null) ? 'provider_reported' : 'unavailable';
+    if (normalized.source === 'provider_reported') normalized.reason = null;
+    const timing = this.clock.get(id), resources = this.resources();
+    run.durationMs = !recovered && timing?.started !== undefined ? Math.max(0, performance.now() - timing.started) : null;
+    if (recovered) run.queueDurationMs = null;
+    run.usage = normalized; run.outcome = outcome;
+    if (!recovered && run.before && resources.processInstanceId === run.before.resources.processInstanceId) run.resourceDelta = { scope: 'worker_process_between_snapshots', cpuUserMicros: Math.max(0, resources.cpuUserMicros - run.before.resources.cpuUserMicros), cpuSystemMicros: Math.max(0, resources.cpuSystemMicros - run.before.resources.cpuSystemMicros) };
+    this.transaction(() => {
+      this.db.prepare('UPDATE worker_runs SET finished=1,reported=?,input_tokens=?,output_tokens=?,cache_read_tokens=?,cache_write_tokens=?,cost_usd=?,duration_ms=?,cpu_user=?,cpu_system=?,rss_bytes=? WHERE id=?').run(normalized.source === 'provider_reported' ? 1 : 0, normalized.inputTokens, normalized.outputTokens, normalized.cacheReadTokens, normalized.cacheWriteTokens, normalized.providerReportedCostUsd, run.durationMs, run.resourceDelta.cpuUserMicros, run.resourceDelta.cpuSystemMicros, Math.max(resources.rssBytes, run.before?.resources.rssBytes ?? 0), id);
+      run.after = { measurement: recovered ? 'recovery' : run.before ? 'execution_boundary' : 'cancellation', capturedAt: new Date().toISOString(), state: outcome, resources, consumption: this.consumption() }; this.save(run);
+    });
+    this.clock.delete(id); return run;
+  }
+  get(id: string): WorkerRun {
+    if (typeof id !== 'string' || !/^[a-f0-9-]{36}$/.test(id)) throw new DomainError('invalid_input', 'Choose a valid run ID.');
+    const row = this.db.prepare('SELECT payload FROM worker_runs WHERE id=?').get(id);
+    if (!row) throw new DomainError('not_found', 'Run evidence not found.'); return JSON.parse(String(row.payload));
+  }
+  latest(sessionId: string): WorkerRun | undefined {
+    const row = this.db.prepare('SELECT payload FROM worker_runs WHERE session_id=? ORDER BY sequence DESC LIMIT 1').get(sessionId);
+    return row ? JSON.parse(String(row.payload)) : undefined;
+  }
+  private filter(query: RunQuery) {
+    const values: (string | number)[] = [], clauses: string[] = [];
+    for (const [key, column] of Object.entries({ sessionId: 'session_id', taskId: 'task_id', provider: 'provider', kind: 'kind', outcome: 'outcome' })) {
+      const value = query[key as keyof RunQuery]; if (value === undefined) continue;
+      if (typeof value !== 'string' || !value || value.length > 200) throw new DomainError('invalid_input', `Invalid ${key} filter.`);
+      if (key === 'kind' && !['chat', 'local', 'orchestrator'].includes(value) || key === 'outcome' && !outcomes.includes(value as RunOutcome)) throw new DomainError('invalid_input', `Invalid ${key} filter.`);
+      clauses.push(`${column}=?`); values.push(value);
+    }
+    for (const key of ['since', 'until'] as const) if (query[key] !== undefined) {
+      const value = query[key]; if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(value) || !/(?:Z|[+-]\d{2}:\d{2})$/.test(value) || !Number.isFinite(Date.parse(value))) throw new DomainError('invalid_input', `Invalid ${key}; use an ISO timestamp.`);
+      clauses.push('created_at' + (key === 'since' ? '>=' : '<=') + '?'); values.push(new Date(value).toISOString());
+    }
+    if (query.since && query.until && Date.parse(query.since) > Date.parse(query.until)) throw new DomainError('invalid_input', 'since must be before until.');
+    const asOf = query.asOf ?? Number(this.db.prepare('SELECT COALESCE(MAX(sequence),0) AS maximum FROM worker_runs').get()!.maximum);
+    if (!Number.isSafeInteger(asOf) || asOf < 0) throw new DomainError('invalid_input', 'Invalid evidence boundary.');
+    clauses.push('sequence<=?'); values.push(asOf); return { where: clauses.join(' AND '), values, asOf };
+  }
+  list(query: RunQuery = {}): RunPage {
+    const limit = query.limit ?? 50, offset = query.offset ?? 0;
+    if (!Number.isInteger(limit) || limit < 1 || limit > 100 || !Number.isSafeInteger(offset) || offset < 0) throw new DomainError('invalid_input', 'Use limit 1–100 and a nonnegative offset.');
+    let after = 0;
+    const filters = createHash('sha256').update(JSON.stringify(Object.fromEntries(['sessionId','taskId','provider','kind','outcome','since','until'].map(key => [key, query[key as keyof RunQuery] ?? null])))).digest('hex');
+    if (query.cursor !== undefined) {
+      if (query.offset !== undefined || query.asOf !== undefined) throw new DomainError('invalid_input', 'Use cursor without offset or asOf.');
+      try { if (typeof query.cursor !== 'string' || query.cursor.length > 2048) throw Error(); const value = JSON.parse(Buffer.from(query.cursor, 'base64url').toString()); if (value.filters !== filters || !Number.isSafeInteger(value.after) || value.after < 0 || !Number.isSafeInteger(value.asOf) || value.asOf < value.after) throw Error(); after = value.after; query = { ...query, asOf: value.asOf }; }
+      catch { throw new DomainError('invalid_input', 'Invalid run cursor.'); }
+    }
+    const { where, values, asOf } = this.filter(query);
+    const total = Number(this.db.prepare(`SELECT COUNT(*) AS count FROM worker_runs WHERE ${where}`).get(...values)!.count);
+    const records = this.db.prepare(`SELECT payload FROM worker_runs WHERE ${where} AND sequence>? ORDER BY sequence ASC LIMIT ? OFFSET ?`).all(...values, after, limit + 1, query.cursor ? 0 : offset);
+    const rows = records.slice(0, limit).map(row => JSON.parse(String(row.payload)) as WorkerRun), more = records.length > limit;
+    return { schemaVersion: 1, rows, total, nextOffset: more ? offset + limit : null, nextCursor: more ? Buffer.from(JSON.stringify({ asOf, after: rows.at(-1)!.sequence, filters })).toString('base64url') : null, asOf, scope: 'worker_session_executions' };
+  }
+  analyze(query: RunQuery = {}): RunAnalysis {
+    if (query.cursor !== undefined) throw new DomainError('invalid_input', 'Use asOf, not cursor, for analysis.');
+    const { where, values, asOf } = this.filter(query), outcomes: Record<string, number> = {};
+    for (const row of this.db.prepare(`SELECT outcome,COUNT(*) AS count FROM worker_runs WHERE ${where} GROUP BY outcome`).all(...values)) outcomes[String(row.outcome)] = Number(row.count);
+    const row = this.db.prepare(`SELECT COUNT(*) AS total,COALESCE(SUM(CASE WHEN finished=1 AND json_extract(payload,'$.before') IS NOT NULL THEN 1 ELSE 0 END),0) AS completed,COUNT(duration_ms) AS measured,SUM(duration_ms) AS duration,AVG(duration_ms) AS mean,COUNT(cpu_user) AS cpuMeasured,SUM(cpu_user) AS cpuUser,SUM(cpu_system) AS cpuSystem,MAX(rss_bytes) AS rss FROM worker_runs WHERE ${where}`).get(...values)!;
+    const number = (key: string) => row[key] === null ? null : Number(row[key]);
+    return { schemaVersion: 1, scope: 'worker_session_executions', asOf, total: Number(row.total), completedPairs: Number(row.completed), outcomes, consumption: this.consumption(where, values), duration: { measuredRuns: Number(row.measured), totalMs: number('duration'), meanMs: number('mean') }, resources: { scope: 'worker_process_between_snapshots', measuredRuns: Number(row.cpuMeasured), cpuUserMicros: number('cpuUser'), cpuSystemMicros: number('cpuSystem'), peakObservedRssBytes: number('rss') }, notes: ['Only worker session executions are included; orchestrator lease snapshots remain separate.', 'Token and USD totals sum known provider measurements; null means unavailable. Cache tokens are subsets of input tokens, not additional usage.', 'CPU is the worker Node process between execution snapshots, not the provider subprocess or host. RSS is an observed gauge, not allocated memory or provider process usage.', 'History is durable without automatic eviction. Export pages using nextCursor to exclude newly added runs; already admitted running records may advance state during export.'] };
+  }
+}

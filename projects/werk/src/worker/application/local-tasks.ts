@@ -1,3 +1,4 @@
+import { unknownUsage } from './run-evidence.js';
 import { definitionConnection, type DefinitionSnapshot } from './definitions.js';
 import { randomUUID, createHash } from 'node:crypto';
 import { join, resolve, relative } from 'node:path';
@@ -11,7 +12,7 @@ import type { WorkerSettings } from '../infrastructure/settings.js';
 import type { WorkerSessions } from './sessions.js';
 import type { ConversationModel } from './conversation.js';
 export interface TaskFile { path: string; content: string; existed: boolean; }
-export interface LocalTask { submissionHash?: string; definition?: DefinitionSnapshot; id: string; title: string; instruction: string; sessionId: string; provider: ProviderId; model: string; repository: string; files: TaskFile[]; status: 'queued' | 'running' | 'review' | 'failed' | 'cancelled'; priority: number; createdAt: string; finishedAt: string | null; error: string | null; summary: string | null; patch: string | null; archived: boolean; }
+export interface LocalTask { runId?: string; submissionHash?: string; definition?: DefinitionSnapshot; id: string; title: string; instruction: string; sessionId: string; provider: ProviderId; model: string; repository: string; files: TaskFile[]; status: 'queued' | 'running' | 'review' | 'failed' | 'cancelled'; priority: number; createdAt: string; finishedAt: string | null; error: string | null; summary: string | null; patch: string | null; archived: boolean; }
 const fingerprint = (value: string) => createHash('sha256').update(value).digest('hex');
 function patchFile(file: TaskFile, content: string) {
   if (file.content === content && file.existed) return '';
@@ -23,7 +24,7 @@ function patchFile(file: TaskFile, content: string) {
 /** Explicit tasks generate bounded, reviewable patches; provider output is never executed as shell code. */
 export class LocalTaskboard {
   private directory: string; private settings: WorkerSettings; private sessions: WorkerSessions;
-  private tasks: LocalTask[] = []; private writing = Promise.resolve(); private running = new Map<string, { controller: AbortController; promise: Promise<void> }>(); private closed = false; private persistenceError = false;
+  private tasks: LocalTask[] = []; private writing = Promise.resolve(); private running = new Map<string, { controller: AbortController; promise: Promise<void> }>(); private closed = false; private persistenceError = false; private evidencePersistenceError = false;
   private model: typeof modelFor;
   constructor(directory: string, settings: WorkerSettings, sessions: WorkerSessions, model: typeof modelFor = modelFor) { this.directory = directory; this.settings = settings; this.sessions = sessions; this.model = model; }
   async init() {
@@ -38,13 +39,15 @@ export class LocalTaskboard {
         this.sessions.protectTask(task.sessionId, true);
         if (!previous || previous.taskState !== undefined || task.status === 'queued') await this.sessions.setTaskState(task.sessionId, task.status === 'review' ? 'completed' : task.status);
       }
+      for (const task of this.tasks) if (task.status === 'queued' && (!task.runId || this.sessions.runs.get(task.runId).after)) task.runId = await this.reserveRun(task);
       await this.persist(this.tasks);
     } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
     for (const record of this.sessions.view().records) if (record.kind === 'local' && ['queued', 'running'].includes(record.status) && !this.tasks.some(task => task.sessionId === record.id)) await this.sessions.setTaskState(record.id, 'failed');
   }
+  private async reserveRun(task: LocalTask) { return (await this.sessions.runs.begin({ sessionId: task.sessionId, taskId: task.id, kind: 'local', title: task.title, provider: task.provider, model: task.model })).id; }
   private input(task: LocalTask) { return task.instruction + '\nApproved paths: ' + task.files.map(file => file.path).join(', '); }
   get active() { return this.tasks.filter(task => ['queued', 'running'].includes(task.status)).length; }
-  view() { return { settings: { ...this.settings.value.board }, tasks: this.tasks.map(({ files, instruction, patch, ...task }) => ({ ...task, files: files.map(file => ({ path: file.path, sha256: fingerprint(file.content) })), hasPatch: !!patch })), persistenceError: this.persistenceError, running: this.tasks.filter(task => task.status === 'running').length }; }
+  view() { return { settings: { ...this.settings.value.board }, tasks: this.tasks.map(({ files, instruction, patch, ...task }) => ({ ...task, files: files.map(file => ({ path: file.path, sha256: fingerprint(file.content) })), hasPatch: !!patch })), persistenceError: this.persistenceError || this.evidencePersistenceError, running: this.tasks.filter(task => task.status === 'running').length }; }
   detail(id: string) { const task = this.tasks.find(item => item.id === id); if (!task) throw new DomainError('not_found', 'Task not found'); return structuredClone(task); }
   private async persist(tasks: LocalTask[]) { const body = JSON.stringify(tasks); if (Buffer.byteLength(body) > 16777216) throw new DomainError('conflict', 'Taskboard storage is full. Delete old tasks to free space.'); await atomicWrite(join(this.directory, 'taskboard.json'), body); this.persistenceError = false; }
   private change(operation: (tasks: LocalTask[]) => void | Promise<void>) {
@@ -84,8 +87,8 @@ export class LocalTaskboard {
         if (existing.submissionHash !== submission?.hash) throw new DomainError('conflict', 'Task ID belongs to different input.');
         return;
       }
-      if (tasks.length >= 100) throw new DomainError('conflict', 'Taskboard holds 100 tasks. Delete an old task first.'); if (tasks.filter(item => ['queued', 'running'].includes(item.status)).length + this.sessions.chatActive >= this.settings.value.board.queueCapacity) throw new DomainError('conflict', 'Local task queue is full.'); await this.sessions.ensureTask(task.sessionId, 'local', task.title, task.provider, undefined, task.definition); this.sessions.protectTask(task.sessionId, true); await this.sessions.prepareTask(task.sessionId, this.input(task)); tasks.push(task); }); }
-    catch (error) { if (!this.tasks.some(item => item.id === id)) { this.sessions.protectTask(task.sessionId, false); await this.sessions.setTaskState(task.sessionId, 'failed').catch(() => {}); } throw error; }
+      if (tasks.length >= 100) throw new DomainError('conflict', 'Taskboard holds 100 tasks. Delete an old task first.'); if (tasks.filter(item => ['queued', 'running'].includes(item.status)).length + this.sessions.chatActive >= this.settings.value.board.queueCapacity) throw new DomainError('conflict', 'Local task queue is full.'); await this.sessions.ensureTask(task.sessionId, 'local', task.title, task.provider, undefined, task.definition); this.sessions.protectTask(task.sessionId, true); await this.sessions.prepareTask(task.sessionId, this.input(task)); task.runId = await this.reserveRun(task); tasks.push(task); }); }
+    catch (error) { if (!this.tasks.some(item => item.id === id)) { if (task.runId) await this.sessions.runs.finish(task.runId, 'failed').catch(() => { this.persistenceError = true; }); this.sessions.protectTask(task.sessionId, false); await this.sessions.setTaskState(task.sessionId, 'failed').catch(() => {}); } throw error; }
     return this.view();
   }
   async action(input: unknown) {
@@ -93,9 +96,9 @@ export class LocalTaskboard {
     if (body.action === 'cancel') this.running.get(id)?.controller.abort();
     await this.change(async tasks => {
       const task = tasks.find(item => item.id === id); if (!task) throw new DomainError('not_found', 'Task not found');
-      if (body.action === 'cancel') { if (task.status === 'queued') { task.status = 'cancelled'; task.finishedAt = new Date().toISOString(); await this.sessions.recordTask(task.sessionId, this.input(task), 'Task cancelled before execution.', true); } else if (task.status !== 'running') throw new DomainError('conflict', 'Task is no longer active'); }
+      if (body.action === 'cancel') { if (task.status === 'queued') { task.status = 'cancelled'; task.finishedAt = new Date().toISOString(); await this.sessions.recordTask(task.sessionId, this.input(task), 'Task cancelled before execution.', true); if (task.runId) await this.sessions.runs.finish(task.runId, 'cancelled'); } else if (task.status !== 'running') throw new DomainError('conflict', 'Task is no longer active'); }
       else if (body.action === 'priority') { if (task.status !== 'queued' || ![1, 2].includes(Number(body.priority))) throw new DomainError('invalid_input', 'Only queued tasks can change priority (1 or 2)'); task.priority = Number(body.priority); }
-      else if (body.action === 'retry') { if (!['failed', 'cancelled'].includes(task.status) || this.running.has(id) || this.sessions.view().records.find(record => record.id === task.sessionId)?.busy) throw new DomainError('conflict', 'Only stopped or failed tasks can be retried'); if (tasks.filter(item => ['queued', 'running'].includes(item.status)).length >= this.settings.value.board.queueCapacity) throw new DomainError('conflict', 'Queue is full'); await this.sessions.setTaskState(task.sessionId, 'queued'); task.status = 'queued'; task.error = null; task.finishedAt = null; }
+      else if (body.action === 'retry') { if (!['failed', 'cancelled'].includes(task.status) || this.running.has(id) || this.sessions.view().records.find(record => record.id === task.sessionId)?.busy) throw new DomainError('conflict', 'Only stopped or failed tasks can be retried'); if (tasks.filter(item => ['queued', 'running'].includes(item.status)).length >= this.settings.value.board.queueCapacity) throw new DomainError('conflict', 'Queue is full'); task.runId = await this.reserveRun(task); task.status = 'queued'; task.error = null; task.finishedAt = null; task.summary = null; task.patch = null; }
       else if (body.action === 'archive' || body.action === 'restore' || body.action === 'delete') { if (['running', 'queued'].includes(task.status)) throw new DomainError('conflict', 'Stop the task first'); if (body.action === 'archive' || body.action === 'restore') task.archived = body.action === 'archive'; else tasks.splice(tasks.indexOf(task), 1); }
       else throw new DomainError('invalid_input', 'Unknown task action');
     });
@@ -114,13 +117,19 @@ export class LocalTaskboard {
     }
   }
   private async execute(id: string, controller: AbortController) {
+    let runId: string | undefined, usage = unknownUsage(), persistenceFailed = false;
+    let outcome: 'review' | 'failed' | 'cancelled' = 'failed';
     try {
       await this.change(tasks => { const task = tasks.find(item => item.id === id)!; if (task.status !== 'queued') throw Error('Task no longer queued'); task.status = 'running'; });
       const task = this.detail(id); await this.sessions.ensureTask(task.sessionId, 'local', task.title, task.provider, undefined, task.definition);
+      runId = task.runId; if (!runId) throw Error('Task has no reserved execution evidence.');
       const connection = { ...this.settings.provider(task.provider), model: task.model };
       const model: ConversationModel | undefined = this.model(definitionConnection(connection, task.definition), this.directory); if (!model) throw Error('Provider not configured');
       const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(120000)]);
-      const reply = await model.reply([{ id, role: 'user', state: 'complete', at: task.createdAt, text: `Implement the requested changes to the supplied files. Return ONLY a JSON object {"summary":"...","files":[{"path":"approved path","content":"complete new file content"}]}. Do not execute commands. Only include changed approved files. Do not claim tests were run. This creates a patch for human review.\nTask: ${task.title}\nInstruction: ${task.instruction}\nApproved file snapshots: ${JSON.stringify(task.files)}` }], signal);
+      signal.throwIfAborted();
+      await this.sessions.runs.start(runId);
+      signal.throwIfAborted();
+      const reply = await model.reply([{ id, role: 'user', state: 'complete', at: task.createdAt, text: `Implement the requested changes to the supplied files. Return ONLY a JSON object {"summary":"...","files":[{"path":"approved path","content":"complete new file content"}]}. Do not execute commands. Only include changed approved files. Do not claim tests were run. This creates a patch for human review.\nTask: ${task.title}\nInstruction: ${task.instruction}\nApproved file snapshots: ${JSON.stringify(task.files)}` }], signal, value => { usage = value; });
       signal.throwIfAborted();
       if (reply.length > 64000) throw Error('Reply limit');
       const result = JSON.parse(reply.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, ''));
@@ -133,11 +142,16 @@ export class LocalTaskboard {
       signal.throwIfAborted();
       await this.sessions.recordTask(task.sessionId, this.input(task), reply);
       await this.change(tasks => { Object.assign(tasks.find(item => item.id === id)!, { status: 'review', finishedAt: new Date().toISOString(), summary: result.summary, patch }); });
+      outcome = 'review';
     } catch {
+      outcome = controller.signal.aborted ? 'cancelled' : 'failed';
       const failed = this.tasks.find(task => task.id === id);
-      if (failed?.status === 'running') await this.sessions.recordTask(failed.sessionId, this.input(failed), controller.signal.aborted ? 'Task stopped.' : 'Task could not produce a valid patch. Check provider settings and approved files before retrying.', true).catch(() => { this.persistenceError = true; });
-      await this.change(tasks => { const task = tasks.find(item => item.id === id); if (task && task.status === 'running') Object.assign(task, { status: controller.signal.aborted ? 'cancelled' : 'failed', finishedAt: new Date().toISOString(), error: controller.signal.aborted ? 'Task stopped.' : 'Task could not produce a valid patch. Check provider settings and the approved file list, then retry.' }); }).catch(() => { this.persistenceError = true; /* Persisted running state recovers as interrupted on restart. */ });
+      if (failed?.status === 'running') await this.sessions.recordTask(failed.sessionId, this.input(failed), controller.signal.aborted ? 'Task stopped.' : 'Task could not produce a valid patch. Check provider settings and approved files before retrying.', true).catch(() => { persistenceFailed = true; });
+      await this.change(tasks => { const task = tasks.find(item => item.id === id); if (task && task.status === 'running') Object.assign(task, { status: controller.signal.aborted ? 'cancelled' : 'failed', finishedAt: new Date().toISOString(), error: controller.signal.aborted ? 'Task stopped.' : 'Task could not produce a valid patch. Check provider settings and the approved file list, then retry.' }); }).catch(() => { persistenceFailed = true; /* Persisted running state recovers as interrupted on restart. */ });
     }
+    // A ledger write failure must never relabel a successfully produced patch as failed.
+    if (runId) await this.sessions.runs.finish(runId, outcome, usage).catch(() => { this.evidencePersistenceError = true; });
+    if (persistenceFailed) this.persistenceError = true;
   }
   async close() { this.closed = true; for (const running of this.running.values()) running.controller.abort(); await Promise.allSettled([...this.running.values()].map(item => item.promise)); }
 }

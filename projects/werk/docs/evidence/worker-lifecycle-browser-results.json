@@ -1,0 +1,32 @@
+{
+  "scope": "Project requests are live local files. Run analysis and snapshots use explicit browser fixtures; no genuine provider executed.",
+  "results": [
+    {
+      "width": 1440,
+      "featureDraftLive": true,
+      "longRunEvidenceFixture": true,
+      "exportRows": 120,
+      "queuedSnapshotUnavailable": true,
+      "overflow": 0,
+      "pageErrors": []
+    },
+    {
+      "width": 390,
+      "featureDraftLive": true,
+      "longRunEvidenceFixture": true,
+      "exportRows": 120,
+      "queuedSnapshotUnavailable": true,
+      "overflow": 0,
+      "pageErrors": []
+    },
+    {
+      "width": 320,
+      "featureDraftLive": true,
+      "longRunEvidenceFixture": true,
+      "exportRows": 120,
+      "queuedSnapshotUnavailable": true,
+      "overflow": 0,
+      "pageErrors": []
+    }
+  ]
+}

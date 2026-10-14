@@ -5,6 +5,12 @@ This extracted release contains prebuilt applications; do not run npm install,
 source builds or Forge workspace commands here. Native execution requires Node24;
 Docker execution requires Docker/Compose and Bash or PowerShell.
 
+For a standalone project worker, read docs/tutorials/worker-feature-lifecycle.md
+and docs/reference/worker-run-metrics.md. Discover the installed command catalog
+with `node bin/apps/worker/cli.mjs schema`; use revision-guarded feature commands
+and run list/get/analyze/export. Parse terminal outcomes and coverage explicitly;
+a wait timeout does not cancel work, and unknown usage is not zero.
+
 For a Factory hierarchy, use `node werk.mjs system plan --file examples/system.yaml`
 then `system up` with that file, or the Docker wrapper's `system` actions with
 `--environment docker`. Read docs/reference/system-definition.md first. The YAML

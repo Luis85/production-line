@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-14",
+  "scope": "Portable prebuilt worker CLI lifecycle and attempt evidence",
+  "environment": "Linux, Node 24.19.0",
+  "liveModelCalls": false,
+  "fixture": "Local Codex CLI protocol fixture, intentional first failure and successful explicit retry",
+  "build": "node scripts/build.mjs worker passed",
+  "checks": [
+    "Copied prebuilt app runs independently from source and npm",
+    "Schema discovers feature template, provider operations and readonly run operations",
+    "Provider configure/list/check redacted, fixture authentication successful",
+    "Feature template/draft create/get revision/edit/validate/submit lifecycle",
+    "Paused feature wait exits 1 with stable wait_timeout, work retained",
+    "Failed attempt observed terminal; fresh revision explicit retry succeeds",
+    "Completed feature result labelled fixture, two durable attempts retained",
+    "Run list limit/cursor pages retain admission watermark without duplicate IDs",
+    "Run get preserves original before/after snapshots",
+    "Run analyze all matching rows and unknown cost coverage",
+    "Fixture reported inputTokens=12/outputTokens=7; providerReportedCostUsd remains null",
+    "JSON export includes original snapshots; CSV includes usage/evidence and cursor metadata",
+    "Malformed options rejected exit 2",
+    "Restart preserves exact durable attempt and feature result"
+  ],
+  "tests": {
+    "tests/operations/worker-run-cli-contracts.test.mjs": 4,
+    "tests/operations/worker-run-cli-lifecycle.test.mjs": 1,
+    "tests/operations/worker-management-cli.test.mjs": 1
+  },
+  "limits": [
+    "No live provider authentication/model performance/quota/billing qualified",
+    "Subscription CLI protocol fixture skipped on Windows; platform qualification remains separate",
+    "Explicit project directory tested inside private temporary Git root",
+    "Original orchestrator lease snapshots remain separate from worker-session run ledger",
+    "Polling deadline does not abort a slow already-running bounded HTTP request"
+  ]
+}

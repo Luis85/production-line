@@ -7,6 +7,9 @@ follows [Diátaxis](https://diataxis.fr/).
 
 ## Tutorials — learn by running one task
 
+- [Worker feature lifecycle](tutorials/worker-feature-lifecycle.md): download, install in a project, execute feature requests and analyze run evidence entirely from CLI or webview.
+- [Local worker run metrics](reference/worker-run-metrics.md): paired snapshots, usage coverage, durable history and paginated export.
+
 - [Prepare a Linux VM deployment](tutorials/linux-vm-first-task.md): Ubuntu cloud-init, verified artifacts and SSH access.
 
 - [A complete system from YAML](tutorials/system-from-yaml.md): one Factory, logical

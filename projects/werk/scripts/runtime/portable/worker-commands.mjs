@@ -5,6 +5,25 @@ export function workerCommands(catalog) {
   const action = (path, action, required = ['id'], body = false, options = [], fields = {}) => ({ method: 'POST', path, action, required, body, options, fields });
   for (const name of ['get', 'validate', 'submit', 'cancel', 'retry', 'archive', 'restore', 'delete', 'result']) catalog['feature ' + name] = action('/api/features', name, ['name', ...(['get', 'validate', 'result'].includes(name) ? [] : ['if-match'])], false, [], { name: 'name', 'if-match': 'revision' });
   for (const name of ['create', 'edit']) catalog['feature ' + name] = { ...action('/api/features', name, ['name', 'markdown', ...(name === 'edit' ? ['if-match'] : [])], false, [], { name: 'name', 'if-match': 'revision' }), input: 'Frontmatter + Markdown from --markdown PATH or - (stdin), at most 64 KiB; status: draft.' };
+  catalog['feature template'] = { local: true, required: [], options: [], mutating: false, outputFormat: 'markdown', description: 'Print an editable draft frontmatter + Markdown request without a running worker. Save it to a file, finish it, then feature create/validate/submit.' };
+  catalog['provider list'] = { method: 'GET', path: '/api/settings', view: 'providers', description: 'List redacted provider configuration; keys and sign-in output are never returned.' };
+  catalog['provider configure'] = { method: 'POST', path: '/api/settings', body: true, example: { provider: { id: 'codex-cli', executable: '/absolute/path/to/codex' } }, description: 'Save provider settings from private JSON file/stdin; this does not prove sign-in or prompt a model. Use provider check afterward.' };
+  const runFields = { 'session-id': 'sessionId', 'task-id': 'taskId', provider: 'provider', kind: 'kind', outcome: 'outcome', since: 'since', until: 'until', limit: 'limit', offset: 'offset', cursor: 'cursor', 'as-of': 'asOf' };
+  const runFilters = {
+    'session-id': 'Worker session ID', 'task-id': 'Owning task ID', provider: 'codex-cli|claude-cli|openai-api|anthropic-api', kind: 'chat|local|orchestrator',
+    outcome: 'queued|running|completed|review|failed|cancelled|interrupted', since: 'ISO-8601 timestamp with explicit timezone, inclusive', until: 'ISO-8601 timestamp with explicit timezone, inclusive',
+    limit: 'Integer 1–100; default 50', offset: 'Nonnegative integer; prefer returned nextCursor for stable traversal', cursor: 'Returned nextCursor for the same filters', 'as-of': 'Returned nonnegative admission-sequence watermark; not a timestamp',
+  };
+  for (const name of ['list', 'get', 'analyze', 'export']) {
+    const fields = name === 'analyze' ? Object.fromEntries(Object.entries(runFields).filter(([key]) => !['limit', 'offset', 'cursor'].includes(key))) : runFields;
+    const filters = Object.fromEntries(Object.entries(runFilters).filter(([key]) => key in fields));
+    catalog['run ' + name] = { ...action('/api/runs', name, name === 'get' ? ['id'] : [], false, name === 'get' ? [] : [...Object.keys(fields), ...(name === 'export' ? ['format'] : [])], name === 'get' ? {} : fields), mutating: false,
+      filters: name === 'get' ? { id: 'Attempt ID from run list' } : { ...filters, ...(name === 'export' ? { format: 'json|csv; default json, stdout only' } : {}) },
+      description: name === 'get' ? 'Read one retained worker attempt with its original before/after resource and consumption evidence.' : name === 'analyze' ? 'Analyze matching retained worker attempts and usage measurement coverage; null tokens/cost are unknown, never zero.' : 'Read a bounded page of retained worker attempts; follow nextCursor until null. JSON export preserves original before/after snapshots; CSV includes them as JSON cells.',
+      scope: 'Worker chat, feature/file tasks and worker-managed follow-ups; original orchestrator lease snapshots remain in history.',
+      output: name === 'get' ? 'Attempt record' : name === 'analyze' ? 'Aggregate evidence with sample/measurement coverage' : '{schemaVersion,rows,total,nextOffset,asOf,nextCursor}; no hidden history eviction',
+    };
+  }
   catalog['task retry'] = action('/api/tasks', 'retry');
   for (const name of ['rename', 'archive', 'restore', 'delete']) catalog['task ' + name] = action('/api/sessions', name, ['id', ...(name === 'rename' ? ['title'] : [])], false, [], { title: 'title' });
   catalog['session list'] = { method: 'GET', path: '/api/sessions' };
@@ -20,11 +39,12 @@ export function workerCommands(catalog) {
   catalog['feature wait'] = { ...catalog['feature result'], wait: 'feature', options: ['timeout-ms'] };
   for (const [name, item] of Object.entries(catalog)) {
     if (['task list', 'session list', 'file-task list', 'feature list'].includes(name)) item.options = ['status', 'archived'];
-    if (item.method === 'POST') { item.mutating = !item.wait && !['get', 'validate', 'result'].includes(item.action) && !name.endsWith(' get'); item.destructive = item.action === 'delete'; }
+    if (item.method === 'POST') { item.mutating = item.path !== '/api/runs' && !item.wait && !['get', 'validate', 'result'].includes(item.action) && !name.endsWith(' get'); item.destructive = item.action === 'delete'; }
   }
   return catalog;
 }
 export async function workerBody(command, body, options) {
+  if (command.path === '/api/runs') return workerRunBody(command, options);
   if (command.fixedBody) return command.fixedBody;
   if (command.wait === 'file-task') return { id: options.id };
   if (!command.action) return body;
@@ -58,7 +78,46 @@ export async function waitForWorker(request, kind, timeoutValue = '60000') {
     const result = await request();
     const state = kind === 'task' ? result.session?.status : kind === 'file-task' ? result.status : result.execution?.status ?? result.record?.status;
     if (['completed', 'review', 'failed', 'cancelled', 'unavailable'].includes(state)) return result;
-    if (Date.now() >= deadline) throw Error('Wait timed out; task continues. Inspect it or cancel explicitly.');
+    if (Date.now() >= deadline) throw Object.assign(Error('Wait timed out; task continues. Inspect it or cancel explicitly.'), { code: 'wait_timeout' });
     await new Promise(resolve => setTimeout(resolve, Math.min(1000, deadline - Date.now())));
   }
+}
+
+/** Validate evidence selectors before contacting any instance; command flags never become opaque JSON strings. */
+function workerRunBody(command, options) {
+  const body = { action: command.action, ...(options.id ? { id: options.id } : {}) };
+  for (const [option, field] of Object.entries(command.fields ?? {})) {
+    const value = options[option]; if (value === undefined) continue;
+    if (['limit', 'offset', 'as-of'].includes(option)) {
+      const n = Number(value), minimum = option === 'limit' ? 1 : 0, maximum = option === 'limit' ? 100 : Number.MAX_SAFE_INTEGER;
+      if (!/^\d+$/.test(value) || !Number.isSafeInteger(n) || n < minimum || n > maximum) throw inputError('--' + option + ' must be an integer ' + minimum + '–' + maximum + '.');
+      body[field] = n;
+    } else if (['since', 'until'].includes(option)) {
+      if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) || !Number.isFinite(Date.parse(value))) throw inputError('--' + option + ' must be an ISO timestamp with an explicit timezone.');
+      body[field] = new Date(value).toISOString();
+    } else {
+      const choices = { provider: ['codex-cli', 'claude-cli', 'openai-api', 'anthropic-api'], kind: ['chat', 'local', 'orchestrator'], outcome: ['queued', 'running', 'completed', 'review', 'failed', 'cancelled', 'interrupted'] }[option];
+      if (choices && !choices.includes(value)) throw inputError('--' + option + ' must be ' + choices.join('|') + '.');
+      if (!value || value.length > (option === 'cursor' ? 4096 : 200) || /[\x00-\x1f]/.test(value)) throw inputError('Invalid --' + option + '.');
+      body[field] = value;
+    }
+  }
+  if (body.since && body.until && Date.parse(body.since) > Date.parse(body.until)) throw inputError('--since must not be after --until.');
+  if (options.format !== undefined && !['json', 'csv'].includes(options.format)) throw inputError('--format must be json or csv.');
+  if (options.cursor !== undefined && (options.offset !== undefined || options['as-of'] !== undefined)) throw inputError('--cursor cannot be combined with --offset or --as-of.');
+  return body;
+}
+export function workerOutput(result, options, command) {
+  if (command?.view === 'providers') return JSON.stringify({ providers: result.providers });
+  if (command?.path !== '/api/runs' || command.action !== 'export' || options.format !== 'csv') return JSON.stringify(filterWorkerResult(result, options));
+  if (!Array.isArray(result.rows)) throw Error('Worker returned no readable run export page.');
+  const headers = ['id', 'sessionId', 'taskId', 'kind', 'title', 'provider', 'model', 'attempt', 'sequence', 'outcome', 'acceptedAt', 'startedAt', 'durationMs', 'queueDurationMs', 'usage', 'resourceDelta', 'before', 'after', 'schemaVersion', 'total', 'asOf', 'nextOffset', 'nextCursor'];
+  const cell = value => {
+    if (value == null) return '';
+    if (typeof value === 'number') return String(value);
+    let text = typeof value === 'object' ? JSON.stringify(value) : String(value);
+    if (/^[=+\-@\t\r]/.test(text)) text = "'" + text; // Keep spreadsheet imports from executing formula-like text.
+    return '"' + text.replaceAll('"', '""') + '"';
+  };
+  return [headers.join(','), ...result.rows.map(row => headers.map(header => cell(['total', 'asOf', 'nextOffset', 'nextCursor'].includes(header) ? result[header] : row[header])).join(','))].join('\r\n');
 }

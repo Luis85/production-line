@@ -130,3 +130,21 @@ the same folder while retaining orchestrator lease/routing authority.
 The template and custom request metadata remain editable. One worker state owns
 one folder; setup, native/Docker switching, recovery and copied-app operation
 are documented in [project worker setup](docs/how-to/project-worker.md).
+
+
+## Local execution evidence and analysis
+
+A project worker preserves durable per-invocation run evidence for local chat,
+approved-file tasks and feature requests. Before invoking a provider, it records
+state, worker-process resources and cumulative known consumption after acquiring
+the shared execution slot. A matching terminal observation records the same
+fields, plus per-run reported usage and measured duration. Queued cancellation
+and crash recovery stay explicit; they do not invent execution measurements.
+
+Run history survives session deletion and restart. History exposes project
+requests, run inspection, filtered analysis and export; the portable CLI exposes
+the same records for humans and agents. Bounded pages never imply bounded
+aggregate totals. Unknown usage/cost remains null and totals include per-field
+coverage. Cache tokens are subsets of input; provider-reported USD cost is not a
+price estimate, subscription balance or quality measurement. Remote assignment
+snapshots remain under their existing orchestrator evidence contract.

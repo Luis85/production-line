@@ -3,7 +3,7 @@ import { readFile, lstat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { assertNode, inputError, readPrivate } from '../config.mjs';
 import { initializeWorker, projectDefaults } from './project.mjs';
-import { workerBody, filterWorkerResult, waitForWorker } from './worker-commands.mjs';
+import { workerBody, workerOutput, waitForWorker } from './worker-commands.mjs';
 import { commands } from './commands.mjs';
 import { run, start, status, stop, stateDirectory } from './lifecycle.mjs';
 const root = fileURLToPath(new URL('../../../', import.meta.url));
@@ -80,11 +80,11 @@ export async function main(kind, argv = process.argv.slice(2)) {
     if (o['token-file']) token = await tokenFile(o['token-file']);
     const call = () => request(base, path, token, method, body, o.key);
     const result = command?.wait ? await waitForWorker(call, command.wait, o['timeout-ms']) : await call();
-    console.log(JSON.stringify(kind === 'worker' ? filterWorkerResult(result, o) : result));
+    console.log(kind === 'worker' ? workerOutput(result, o, command) : JSON.stringify(result));
   } catch (error) {
     const { DomainError } = await import(new URL(`../../../src/${kind}/dist/shared/errors.js`, import.meta.url));
     const code = error.exitCode === 2 || (error.status >= 400 && error.status < 500) || (error instanceof DomainError && !['internal', 'unavailable'].includes(error.code)) ? 2 : 1;
-    console.error(JSON.stringify({ error: error.message ?? 'Operation failed', exitCode: code }));
+    console.error(JSON.stringify({ error: error.message ?? 'Operation failed', ...(typeof error.code === 'string' ? { code: error.code } : {}), ...(Number.isInteger(error.status) ? { status: error.status } : {}), exitCode: code }));
     if (process.send) process.send({ ok: false, error: error.message }, () => { if (process.connected) process.disconnect(); });
     process.exitCode = code;
   }

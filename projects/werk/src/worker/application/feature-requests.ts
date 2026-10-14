@@ -1,9 +1,18 @@
+import type { RunSnapshot, ProviderUsage } from './run-evidence.js';
 import { manageFeature, type FeatureDocumentPort } from './feature-management.js';
 import { DomainError } from '../../shared/errors.js';
 import { randomUUID, createHash } from 'node:crypto';
 
+export interface FeatureExecutionEvidence {
+  runId: string; attempt: number; before: RunSnapshot; after?: RunSnapshot;
+  usage?: ProviderUsage; durationMs?: number | null; queueDurationMs?: number | null;
+}
+export interface FeatureExecutionLinks {
+  runId: string; attempt: number; before: string; after?: string; completedAt?: string;
+  result?: string; patch?: string;
+}
 export interface FeatureInput { title: string; mode: 'chat' | 'patch'; provider: string; message: string; paths?: string[]; priority: number; definitionId?: string; agent?: string; useInstructionsOnly?: boolean; }
-export interface FeatureRecord { id: string; name: string; source: 'folder' | 'orchestrator'; taskId: string; sessionId: string; input?: FeatureInput; inputHash: string; submitted: boolean; status: string; createdAt: string; updatedAt: string; error?: string; result?: string; patch?: string; attempt?: number; archived?: boolean; }
+export interface FeatureRecord { id: string; name: string; source: 'folder' | 'orchestrator'; taskId: string; sessionId: string; input?: FeatureInput; inputHash: string; submitted: boolean; status: string; createdAt: string; updatedAt: string; error?: string; result?: string; patch?: string; attempt?: number; archived?: boolean; execution?: FeatureExecutionLinks; executionDirectory?: string; }
 export interface FeatureIndex { version: 1; owner: string; records: FeatureRecord[]; }
 export interface FeatureFile { name: string; revision: string; id?: string; status?: string; source?: string; input?: FeatureInput; error?: string; }
 export interface FeatureFolderPort {
@@ -15,6 +24,7 @@ export interface FeatureFolderPort {
   save(index: FeatureIndex): Promise<void>;
   update(file: FeatureFile, record: FeatureRecord, inputChanged: boolean): Promise<boolean>;
   createRemote(record: FeatureRecord, title: string, markdown: string): Promise<void>;
+  evidence(record: FeatureRecord, evidence: FeatureExecutionEvidence): Promise<FeatureExecutionLinks>;
   result(record: FeatureRecord, text: string, patch?: string): Promise<void>;
   report(value: { records: FeatureRecord[]; errors: { file: string; message: string }[] }): Promise<void>;
   close(): Promise<void>;
@@ -22,7 +32,7 @@ export interface FeatureFolderPort {
 export interface FeatureQueuePort {
   control?(record: FeatureRecord, action: 'cancel' | 'retry'): Promise<unknown>;
   submit(record: FeatureRecord): Promise<void>;
-  inspect(record: FeatureRecord): { status: string; text?: string; patch?: string; error?: string } | undefined;
+  inspect(record: FeatureRecord): { status: string; text?: string; patch?: string; error?: string; evidence?: FeatureExecutionEvidence } | undefined;
 }
 const fingerprint = (input: FeatureInput) => createHash('sha256').update(JSON.stringify(input)).digest('hex');
 const terminal = new Set(['completed', 'review', 'failed', 'cancelled']);
@@ -45,6 +55,12 @@ export class FeatureRequests {
       const body = input as { name: string; action: string };
       const readOnly = ['get', 'validate', 'result'].includes(body?.action);
       if (readOnly) await this.reconcile(false);
+      if (body?.action === 'retry') {
+        // Capture the just-finished run before this management action replaces it.
+        // This does not rewrite the source file/revision used by the caller's guard.
+        const record = this.index.records.find(item => item.name === body.name);
+        if (record?.submitted) { await this.synchronizeExecution(record); await this.persist(); }
+      }
       result = await manageFeature(input, { documents: this.folder.documents, index: this.index, queue: this.queue, persist: () => this.persist() });
       if (!readOnly) await this.reconcile(false);
       if (body.action !== 'delete' && !['get', 'validate', 'result'].includes(body.action)) result = { ...await this.folder.documents.read(body.name), record: this.index.records.find(item => item.name === body.name) ?? null };
@@ -101,17 +117,7 @@ export class FeatureRequests {
         await this.persist();
       }
     }
-    for (const record of this.index.records) {
-      if (!record.submitted) continue;
-      const current = this.queue.inspect(record);
-      if (!current) { this.change(record, 'unavailable', 'Task history is no longer retained. This request will not be submitted again.'); continue; }
-      this.change(record, current.status, current.error);
-      if (terminal.has(record.status) && current.text !== undefined) {
-        await this.folder.result(record, current.text, current.patch);
-        record.result = `_results/${record.id}.md`;
-        if (current.patch) record.patch = `_results/${record.id}.patch`;
-      }
-    }
+    for (const record of this.index.records) if (record.submitted) await this.synchronizeExecution(record);
     await this.persist();
     // Refresh revisions after intake publication. Updates preserve the current Markdown body.
     const fresh = await this.folder.scan();
@@ -122,6 +128,27 @@ export class FeatureRequests {
     }
     await this.folder.report({ records: this.index.records, errors: this.errors });
   }
+  private async synchronizeExecution(record: FeatureRecord) {
+    const current = this.queue.inspect(record);
+    if (!current) { this.change(record, 'unavailable', 'Task history is no longer retained. This request will not be submitted again.'); return; }
+    this.change(record, current.status, current.error);
+    if (current.evidence) {
+      record.execution = await this.folder.evidence(record, current.evidence);
+      record.executionDirectory = `_results/${record.id}/`;
+    } else delete record.execution;
+    // Latest-result pointers must not describe a retry or follow-up that has not finished.
+    // Its earlier immutable execution exports remain available in the execution directory.
+    if (!terminal.has(record.status) || current.text === undefined) { delete record.result; delete record.patch; }
+    if (terminal.has(record.status) && current.text !== undefined) {
+      await this.folder.result(record, current.text, current.patch);
+      record.result = `_results/${record.id}.md`;
+      if (current.patch) record.patch = `_results/${record.id}.patch`; else delete record.patch;
+      if (record.execution?.after) {
+        record.execution.result = `_results/${record.id}/${record.execution.runId}.md`;
+        if (current.patch) record.execution.patch = `_results/${record.id}/${record.execution.runId}.patch`;
+      }
+    }
+  }
   async rememberRemote(task: { id: string; title: string; criteria: string[]; attempt: number; requirementRef?: string; }) {
     await this.exclusive(async () => {
       let record = this.index.records.find(item => item.source === 'orchestrator' && item.taskId === task.id);
@@ -131,6 +158,7 @@ export class FeatureRequests {
         record = { id, name: id + '.md', source: 'orchestrator', taskId: task.id, sessionId: id, submitted: true, inputHash: '', status: 'queued', attempt: task.attempt, createdAt: at, updatedAt: at };
         this.index.records.push(record);
       }
+      if (record.attempt !== task.attempt) { delete record.result; delete record.patch; delete record.execution; this.change(record, 'queued'); }
       record.attempt = task.attempt;
       await this.persist();
       await this.folder.createRemote(record, task.title, `# ${task.title}\n\n## Acceptance criteria\n\n${task.criteria.map(value => '- ' + value).join('\n')}\n${task.requirementRef ? '\n## Requirement\n\n' + task.requirementRef + '\n' : ''}\nThis request is assigned by the orchestrator. Its lease and routing remain orchestrator-owned.\n`);

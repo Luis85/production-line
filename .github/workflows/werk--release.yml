@@ -89,6 +89,12 @@ jobs:
           node scripts/release/install-smoke.mjs release "$RUNNER_TEMP/werk release"
       - name: Start, simulate a task, stop and restart the extracted native runtime
         run: node scripts/release/smoke.mjs --root "$RUNNER_TEMP/werk release/werk-${{ needs.build.outputs.version }}"
+      - name: Verify installed project worker requests and run evidence
+        if: runner.os != 'Windows'
+        env:
+          WERK_EXPECT_RUN_EVIDENCE: 1
+          WERK_PROJECT_WORKER_APP: ${{ runner.temp }}/werk release/werk-${{ needs.build.outputs.version }}/bin/apps/worker
+        run: node scripts/release/project-worker-smoke.mjs --native
       - name: Verify YAML hierarchy, isolated lines and persistent workers
         run: node scripts/release/system-smoke.mjs --root "$RUNNER_TEMP/werk release/werk-${{ needs.build.outputs.version }}" --update-archives release
   docker:

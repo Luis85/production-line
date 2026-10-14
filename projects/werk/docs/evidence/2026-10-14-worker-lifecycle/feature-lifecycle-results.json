@@ -1,0 +1,22 @@
+{
+  "fixture": "Native Node24 real worker workspace, real watched Markdown/private SQLite evidence, scripted local Codex protocol fixture. No external provider/service or paid call.",
+  "states": [
+    "ready",
+    "failed",
+    "queued",
+    "cancelled-before-execution",
+    "queued",
+    "completed"
+  ],
+  "stableFeatureIdentity": true,
+  "distinctReservedAttempts": 3,
+  "actualProviderFixtureExecutions": 2,
+  "completeExecutionPairs": 2,
+  "usageUnavailableRemainsNull": true,
+  "resourceScope": "worker_process",
+  "beforeEvidencePreservedAcrossRetry": true,
+  "restartDidNotReplay": true,
+  "queuedCancellationHasNoExecutionPair": true,
+  "queuedCancellationExportsNoBeforeAfterFiles": true,
+  "ledgerQueuedCancellationObservation": "cancellation"
+}

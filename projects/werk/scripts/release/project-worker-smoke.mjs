@@ -1,3 +1,5 @@
+// Default: Docker journey. --native: prebuilt app installed into a fresh native project.
+if (process.argv.includes('--native')) { await import('./project-worker-native-smoke.mjs'); process.exit(0); }
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -25,14 +27,30 @@ try {
   await until(async () => (await call('/api/features')).records[0]?.result !== undefined);
   const before = (await call('/api/features')).records[0]; assert.match(await readFile(join(project, 'requests', before.result), 'utf8'), /protocol fixture completed/);
   const cli = JSON.parse((await compose('exec', '-T', 'worker', 'node', 'bin/apps/worker/cli.mjs', 'feature', 'list')).stdout); assert.equal(cli.records.length, 1);
+  const schema = JSON.parse((await compose('exec', '-T', 'worker', 'node', 'bin/apps/worker/cli.mjs', 'schema')).stdout);
+  const hasRunEvidence = !!schema.commands['run analyze'];
+  if (process.env.WERK_EXPECT_RUN_EVIDENCE === '1') assert.ok(hasRunEvidence, 'The candidate must expose durable run evidence commands.');
+  let retainedRuns;
+  if (hasRunEvidence) {
+    retainedRuns = JSON.parse((await compose('exec', '-T', 'worker', 'node', 'bin/apps/worker/cli.mjs', 'run', 'list', '--kind', 'chat')).stdout);
+    assert.equal(retainedRuns.total, 1); assert.equal(retainedRuns.rows[0].outcome, 'completed');
+    assert.equal(retainedRuns.rows[0].before.resources.scope, 'worker_process');
+    assert.equal(retainedRuns.rows[0].after.resources.scope, 'worker_process');
+    assert.equal(retainedRuns.rows[0].usage.inputTokens, null);
+    assert.equal(retainedRuns.rows[0].usage.providerReportedCostUsd, null);
+    const analysis = JSON.parse((await compose('exec', '-T', 'worker', 'node', 'bin/apps/worker/cli.mjs', 'run', 'analyze', '--kind', 'chat')).stdout);
+    assert.equal(analysis.total, 1); assert.equal(analysis.completedPairs, 1);
+  }
   await compose('stop');
+  assert.doesNotMatch((await compose('logs', '--no-color', 'worker')).stdout, /database is not open|database.*closed|state_write_error/i);
   const moved = JSON.parse((await compose('run', '--rm', '--no-deps', 'worker', 'node', 'bin/apps/worker/cli.mjs', 'feature', 'folder', 'set', '--path', 'feature-requests')).stdout);
   assert.equal(moved.path, 'feature-requests');
   assert.match(await readFile(join(project, 'feature-requests', before.result), 'utf8'), /protocol fixture completed/);
   await compose('up', '-d', '--wait', '--wait-timeout', '90');
   await until(async () => (await call('/api/features')).records[0]?.result !== undefined);
   assert.equal((await call('/api/features')).records[0].taskId, before.taskId); assert.equal((await call('/api/sessions')).records.length, 2);
-  console.log(JSON.stringify({ ok: true, journey: 'project-worker-docker', setupInsideContainer: true, mountedFeatureIntake: true, templateInstalled: true, folderReconfigured: true, resultExported: true, restartPreserved: true, duplicateTasks: false, liveProvider: false }));
+  if (hasRunEvidence) assert.deepEqual(JSON.parse((await compose('exec', '-T', 'worker', 'node', 'bin/apps/worker/cli.mjs', 'run', 'list', '--kind', 'chat')).stdout).rows, retainedRuns.rows);
+  console.log(JSON.stringify({ ok: true, journey: 'project-worker-docker', setupInsideContainer: true, mountedFeatureIntake: true, templateInstalled: true, folderReconfigured: true, resultExported: true, restartPreserved: true, duplicateTasks: false, durableRunEvidence: hasRunEvidence, liveProvider: false }));
 } finally {
   if (configured) await compose('down', '--remove-orphans').catch(() => {});
   await rm(project, { recursive: true, force: true });

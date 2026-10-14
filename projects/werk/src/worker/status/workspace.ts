@@ -1,3 +1,4 @@
+import type { RunQuery } from '../application/run-evidence.js';
 import { FeatureRequests, type FeatureRecord } from '../application/feature-requests.js';
 import { MarkdownFeatureFolder } from '../infrastructure/features/folder.js';
 import { definitionConnection } from '../application/definitions.js';
@@ -33,6 +34,15 @@ export class WorkerWorkspace {
   async startChat(message: unknown) {
     if (this.sessions.chatActive + this.board.active >= this.settings.value.board.queueCapacity) throw new DomainError('conflict', 'Worker task queue is full.');
     return this.sessions.start(message);
+  }
+  runEvidence(input: unknown) {
+    const body = object(input, 'Run evidence query', ['action', 'id', 'sessionId', 'taskId', 'provider', 'kind', 'outcome', 'since', 'until', 'limit', 'offset', 'cursor', 'asOf']);
+    const { action, id, ...query } = body;
+    if (action === 'get') return this.sessions.runs.get(String(id ?? ''));
+    if (id !== undefined) throw new DomainError('invalid_input', 'A run ID is only used with get.');
+    if (action === 'list' || action === 'export') return this.sessions.runs.list(query as RunQuery);
+    if (action === 'analyze') return this.sessions.runs.analyze(query as RunQuery);
+    throw new DomainError('invalid_input', 'Run action: list|get|analyze|export');
   }
   private taskRequests = Promise.resolve();
   private acceptingTasks = true;
@@ -106,7 +116,9 @@ export class WorkerWorkspace {
     if (input?.provider) return this.sessions.updateProviders(() => this.settings.update(body));
     return this.settings.update(body);
   }
-  async close() { await this.features?.stopIntake(); this.acceptingTasks = false; await this.taskRequests; await this.board.close(); await this.sessions.close(); }
+  async close(options: { deferEvidence?: boolean } = {}) { await this.features?.stopIntake(); this.acceptingTasks = false; await this.taskRequests; await this.board.close(); await this.sessions.close({ retainEvidence: true }); if (!options.deferEvidence) await this.closeEvidence(); }
+  /** Runner calls this after remote assignments have also drained their final session writes. */
+  async closeEvidence() { try { await this.features?.close(); } finally { this.sessions.runs.close(); } }
   async rememberTask(task: Task) { await this.taskIndex.remember(task); await this.features?.rememberRemote(task); await this.sessions.ensureTask('remote-' + task.id, 'orchestrator', task.title, task.provider === 'claude' ? 'claude-cli' : 'codex-cli'); this.historyCache = undefined; }
   private async submitFeature(record: FeatureRecord) {
     const input = record.input!;
@@ -114,15 +126,19 @@ export class WorkerWorkspace {
       await this.board.create({ title: input.title, instruction: input.message, provider: input.provider, repository: resolve(this.config.projectDir ?? process.cwd()), paths: input.paths, priority: input.priority, definitionId: input.definitionId, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly }, { id: record.taskId, hash: record.inputHash });
     } else await this.task({ action: 'create', id: record.taskId, title: input.title, provider: input.provider, message: input.message, definitionId: input.definitionId, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly });
   }
+  private executionEvidence(sessionId: string, runId?: string) {
+    const run = runId ? this.sessions.runs.get(runId) : this.sessions.runs.latest(sessionId);
+    return run?.before ? { runId: run.id, attempt: run.attempt, before: run.before, ...(run.after ? { after: run.after } : {}), usage: run.usage, durationMs: run.durationMs, queueDurationMs: run.queueDurationMs } : undefined;
+  }
   private inspectFeature(record: FeatureRecord) {
     try {
-      if (record.input?.mode === 'patch') { const task = this.board.detail(record.taskId); return { status: this.board.view().persistenceError ? 'unsaved' : task.status, text: task.summary ?? task.error ?? undefined, patch: task.patch ?? undefined, error: task.error ?? undefined }; }
+      if (record.input?.mode === 'patch') { const task = this.board.detail(record.taskId); return { evidence: task.runId ? this.executionEvidence(task.sessionId, task.runId) : undefined, status: this.board.view().persistenceError ? 'unsaved' : task.status, text: task.summary ?? task.error ?? undefined, patch: task.patch ?? undefined, error: task.error ?? undefined }; }
       const detail = this.sessions.detail(record.sessionId), reply = detail.chat.messages.filter(message => message.role === 'assistant').at(-1);
       let text = reply?.state !== 'pending' ? reply?.text : undefined;
       if (record.source === 'orchestrator' && text) {
         try { const value = JSON.parse(text); if (value.execution && value.quality) text = JSON.stringify({ execution: value.execution, quality: value.quality, review: value.review ? { baseCommit: value.review.baseCommit, patchSha256: value.review.patchSha256, patchBytes: value.review.patchBytes } : null, note: 'Full attempt and artifact details remain in the private worker history.' }, null, 2); } catch { /* Cancellation messages and follow-ups are plain text. */ }
       }
-      return { status: detail.chat.persistenceError ? 'unsaved' : detail.session.status, text, ...(reply?.state === 'error' ? { error: reply.text } : {}) };
+      return { evidence: this.executionEvidence(record.sessionId), status: detail.chat.persistenceError ? 'unsaved' : detail.session.status, text, ...(reply?.state === 'error' ? { error: reply.text } : {}) };
     } catch (error) { if (error instanceof DomainError && error.code === 'not_found') return; throw error; }
   }
   authenticate(token: string) { const supplied = Buffer.from(token); if (supplied.length !== 64 || !timingSafeEqual(supplied, Buffer.from(this.token))) throw new DomainError('unauthorized', 'Worker access token is incorrect.'); }

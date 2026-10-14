@@ -108,6 +108,54 @@ errors. The files show the last synchronized observation; stop/restart and polli
 can delay updates. `feature list` (authenticated `GET /api/features`) additionally
 reports watcher faults. Protected environment data includes the same watcher view.
 
+## Per-execution evidence
+
+Once a task starts executing, `werk.execution` identifies that specific run and
+links its before snapshot. When execution finishes, it also links its after
+snapshot and immutable result. The stable request ID, task ID and session ID do
+not change on retry; `runId` changes and `attempt` increments for each reserved
+execution in that session. A request waiting for provider setup or capacity has
+no execution snapshot. Queued work cancelled before execution exports no
+before/after execution pair. Its private run ledger can retain a terminal
+observation labeled `cancellation`; this does not represent model execution.
+
+`werk.executionDirectory` points to `_results/<feature-id>/`. This directory
+retains artifacts for executions observed by the feature watcher:
+
+| Artifact | Contents |
+| --- | --- |
+| `<run-id>.before.json` | Run/request identity and the worker-process resource and cumulative-consumption snapshot taken at execution start. |
+| `<run-id>.after.json` | The same snapshot schema at completion or recovery, plus reported usage, execution duration and queue duration when available. |
+| `<run-id>.md` | The immutable readable result for a completed execution pair. |
+| `<run-id>.patch` | The patch produced by that run, when present. |
+
+A cancelled or interrupted execution can have incomplete measurements. Inspect
+snapshot state and resource measurement scope before comparing runs. Resource
+samples describe the Node worker process; they do not measure the provider
+subprocess, model service or project test runner. Cumulative consumption includes
+field-level coverage. Missing token counts, cost or duration remain `null`, rather
+than zero. Provider-reported cost is recorded only when the provider reports it;
+configured subscriptions do not establish cost or quota.
+
+The existing `_results/<feature-id>.md` and `.patch` paths remain convenience
+exports for the latest finished result. On retry or follow-up, current result and
+patch pointers are removed until new work finishes. Previously exported run artifacts remain
+in the execution directory. Archive/restore and watcher polling do not rewrite
+those immutable run artifacts. Conflicting evidence is reported as a watcher
+fault and remains available for inspection.
+
+The JSON exports contain execution identity, status, resources and usage. They
+exclude request bodies, model replies, approved-file content and credentials.
+Readable result/patch files can contain project content and retain their existing
+access and retention requirements. A fast direct task retry can finish and start again between watcher polls.
+Feature retry captures the finished run before resubmitting when it is still
+available, but folder exports are an observed lifecycle view. The durable run
+ledger is authoritative for all admitted executions; use its run export commands
+for complete history. For comparisons over many runs, use the worker's
+execution evidence and analysis commands described in the
+[portable apps reference](portable-apps.md); orchestrator snapshot history remains
+a separate evidence scope.
+
 Changing or deleting an accepted file does not change/cancel its captured task.
 Renames retain identity through `id`. Changed input is flagged with
 `werk.inputChanged`; create a new filename, remove `id`/`werk`, and use `status:

@@ -202,10 +202,10 @@ export async function runWorker(config: WorkerConfig, stop: AbortSignal, depende
         shutdown.abort();
         state.state = 'stopping';
         if (localTimer) clearInterval(localTimer);
-        await workspace.close();
+        await workspace.close({ deferEvidence: true });
         await Promise.allSettled([...waiting.values()].map(async entry => { await entry.lease.close(); await cancelSession(entry.task, 'The worker stopped before this queued assignment executed.'); }));
         await Promise.allSettled([...running.values()].map(x => x.promise));
-        await workspace.features?.close().catch(() => { serviceEvent('worker', 'state_write_error', 'error'); });
+        await workspace.closeEvidence().catch(() => { serviceEvent('worker', 'state_write_error', 'error'); });
         journal.close();
         state.state = 'stopped';
         try {

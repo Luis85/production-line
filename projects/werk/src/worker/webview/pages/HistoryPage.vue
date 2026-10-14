@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import RunEvidencePanel from '../components/RunEvidencePanel.vue';
+import FeatureRequestsPanel from '../components/FeatureRequestsPanel.vue';
 import { useRoute, useRouter } from 'vue-router';
 import Taskboard from '../components/Taskboard.vue';
 import { computed, nextTick, ref, watch, onActivated } from 'vue';
@@ -71,6 +73,14 @@ watch(pages, value => { page.value = Math.min(page.value, value); });
         {{ state.history?.rows.length ?? 0 }} orchestrator attempts
       </UBadge>
     </div>
+    <nav class="history-views actions" aria-label="History views">
+      <UButton to="/history" color="neutral" :variant="!route.query.view ? 'solid' : 'outline'">Task history</UButton>
+      <UButton to="/history?view=features" color="neutral" :variant="route.query.view === 'features' ? 'solid' : 'outline'">Project requests</UButton>
+      <UButton to="/history?view=runs" color="neutral" :variant="route.query.view === 'runs' ? 'solid' : 'outline'">Execution evidence</UButton>
+    </nav>
+    <RunEvidencePanel v-if="state.unlocked && (route.query.view === 'runs' || route.query.runSession)" />
+    <FeatureRequestsPanel v-if="state.unlocked && route.query.view === 'features'" />
+    <div v-show="route.query.view !== 'runs' && route.query.view !== 'features'">
     <section v-if="state.unlocked" class="monitor-section" aria-labelledby="chat-history-title">
       <div class="section-heading">
         <h2 id="chat-history-title" tabindex="-1">Task conversations</h2>
@@ -417,5 +427,6 @@ watch(pages, value => { page.value = Math.min(page.value, value); });
       acknowledged pairs). Older attempts may have been pruned. Snapshot measurements describe the
       worker process. This worker executes one task at a time.
     </p>
+    </div>
   </section>
 </template>

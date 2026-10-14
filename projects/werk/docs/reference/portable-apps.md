@@ -264,3 +264,88 @@ management is documented in the [feature-request reference](https://github.com/L
 Input/API rejection exits 2; operational failure exits 1. CLI commands never
 prompt. A successful `wait` means the task stopped, so callers must check the
 returned status before treating its output as successful work.
+
+
+## Worker attempt evidence and export
+
+Every worker-managed model attempt receives a durable run ID. Use `run list` to
+inspect attempts independently of the current webview session. Feature Chat and
+approved-file requests use the same ledger; follow-ups and retries add new attempts.
+Original orchestrator lease snapshots remain separate under `history`.
+
+```sh
+node bin/apps/worker/cli.mjs run list --session-id SESSION_ID --limit 50
+node bin/apps/worker/cli.mjs run get --id RUN_ID
+node bin/apps/worker/cli.mjs run analyze --provider codex-cli --since 2026-10-14T00:00:00Z
+node bin/apps/worker/cli.mjs run export --session-id SESSION_ID --format json
+node bin/apps/worker/cli.mjs run export --session-id SESSION_ID --format csv
+```
+
+`list`, `analyze` and `export` accept `--session-id`, `--task-id`, `--provider`,
+`--kind chat|local|orchestrator`, `--outcome queued|running|completed|review|failed|cancelled|interrupted`,
+and inclusive `--since`/`--until` ISO timestamps with explicit timezones.
+`list` and `export` return bounded pages: `rows`, `total`, `nextOffset`, `asOf`
+and `nextCursor`, with `schemaVersion: 1`. Runs are ordered by admission sequence,
+oldest first. `--limit` is 1–100, default 50.
+For stable traversal, repeat the same filters and supply the returned `--cursor`
+until `nextCursor` is null. New admissions are excluded by the first page's sequence
+watermark. Existing running attempts may finish while you traverse; this is not a
+historical replay of their earlier state. Numeric `--offset` is also available;
+`--as-of` accepts a returned admission-sequence watermark, not a time. Do not
+combine `--cursor` with `--offset` or `--as-of`.
+
+`run analyze` summarizes all matching retained attempts and accepts `--as-of`
+to reuse a list watermark. It does not accept pagination flags (`--limit`,
+`--offset`, `--cursor`), because the aggregate covers all matching records. It reports measurement/sample coverage alongside durations,
+worker-process resources and provider consumption. Missing token or cost evidence
+is `null`, not zero. Resource observations belong to the worker process; they do
+not establish isolated model CPU or system-wide billing.
+
+JSON export is the default and preserves original run metadata and before/after
+snapshots. A queued run has no execution-boundary `before` snapshot until it starts;
+`after` remains null until terminal evidence is captured. Recovery/cancellation
+measurements are labelled separately. CSV includes ID, session/task identity, kind,
+title, provider, model, attempt, sequence, outcome and timing, plus per-attempt
+usage, resource deltas and complete before/after JSON in quoted cells. Page metadata
+(`schemaVersion`, `total`, `asOf`, `nextOffset`, `nextCursor`) repeats on each row
+so CSV consumers can traverse pages with the same cursor contract. Nullable snapshots become empty CSV cells. Formula-like text is escaped for
+spreadsheet import. Each export contains one selected page; use JSON with cursor
+traversal for a complete matching set. Commands write to stdout and never overwrite
+an export file themselves. Explicit shell redirection is your choice.
+
+`provider list` returns only redacted provider configuration. `provider configure
+--file PATH|-` is a discoverable alias for the existing provider settings document;
+follow it with `provider check --id PROVIDER_ID`. Configuration is not proof of
+sign-in, available quota or task completion.
+
+## Feature requests without a browser
+
+Use the same named commands for a human terminal session or AI automation:
+
+```sh
+node bin/apps/worker/cli.mjs feature template
+node bin/apps/worker/cli.mjs feature create --name request.md --markdown draft.md
+node bin/apps/worker/cli.mjs feature get --name request.md
+node bin/apps/worker/cli.mjs feature validate --name request.md
+node bin/apps/worker/cli.mjs feature submit --name request.md --if-match REVISION
+node bin/apps/worker/cli.mjs feature wait --name request.md --timeout-ms 60000
+node bin/apps/worker/cli.mjs feature result --name request.md
+```
+
+`feature template` prints Markdown and needs no running instance. Save and edit
+that draft before creating the watched request. `get` returns the current revision;
+`edit --markdown PATH|- --if-match REVISION` safely replaces it while it is still a
+draft. `submit` also requires that revision. On a conflict, reread and reconcile;
+do not replace another actor's changes. Accepted input is immutable. A successful
+`wait` means terminal status was observed, including failure or cancellation;
+inspect the returned execution/record status and result before treating it as work
+success. A deadline exits 1 with stderr JSON `code: "wait_timeout"` and leaves the
+task running. API/input rejection exits 2. Polling requests remain bounded by the
+normal HTTP timeout; a slow in-flight request may outlast a short polling deadline.
+
+For failed/cancelled features, inspect `feature result`, then use `feature retry
+--name NAME --if-match REVISION` with a freshly read revision. Use `run list
+--session-id SESSION_ID` and `run get --id RUN_ID` to compare retained attempts.
+Retries and follow-up requests are not idempotent: inspect results after an
+uncertain response before repeating them. Queue pause retains waiting work and
+lets the current attempt finish; queue resume starts the retained queue.

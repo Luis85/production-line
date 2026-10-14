@@ -77,6 +77,18 @@ recovery, folder ownership, malformed input, preserved Markdown, serial executio
 project installation and actual native CLI restart. Native provider execution uses
 a labelled protocol fixture, not an authenticated model.
 
+For the complete native installed-project journey on Linux/macOS, after a build:
+
+```sh
+node scripts/release/project-worker-smoke.mjs --native
+```
+
+Set `WERK_PROJECT_WORKER_APP` to an extracted release's `bin/apps/worker` to qualify
+the package. This uses a labelled CLI protocol fixture, project-local setup,
+revision-guarded feature commands, chat/patch execution, durable before/after
+evidence, run analysis and restart. No npm step runs in the test project. The
+fixture executable is POSIX-only; it does not qualify Windows provider execution.
+
 With Docker available, run the explicit installed-project journey after a build:
 
 ```sh

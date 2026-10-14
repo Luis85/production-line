@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import RunEvidencePanel from '../components/RunEvidencePanel.vue';
+import FeatureRequestsPanel from '../components/FeatureRequestsPanel.vue';
 import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import UButton from '@nuxt/ui/components/Button.vue';
@@ -105,6 +107,8 @@ async function openRunning() {
       </section>
     </div>
 
+    <RunEvidencePanel v-if="state.unlocked" compact />
+    <FeatureRequestsPanel v-if="state.unlocked" compact />
     <details class="monitor-section dashboard-disclosure">
       <summary>Provider connections &amp; orchestrator enrollment</summary>
       <SettingsPanel />

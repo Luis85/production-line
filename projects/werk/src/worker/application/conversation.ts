@@ -1,10 +1,11 @@
+import { unknownUsage, type ProviderUsage, type RunEvidence, type RunMetadata } from './run-evidence.js';
 import type { SerialExecutor } from './serial-executor.js';
 import { randomUUID } from 'node:crypto';
 import { DomainError } from '../../shared/errors.js';
 export interface ChatMessage { id: string; role: 'user' | 'assistant'; text: string; at: string; state: 'complete' | 'pending' | 'error' | 'cancelled'; }
 export interface Conversation { messages: ChatMessage[]; }
 export interface ConversationStore { read(): Promise<Conversation>; write(value: Conversation): Promise<void>; }
-export interface ConversationModel { reply(messages: ChatMessage[], signal: AbortSignal): Promise<string>; }
+export interface ConversationModel { reply(messages: ChatMessage[], signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void): Promise<string>; }
 /** One local conversation; accepting a turn is durable before the model is invoked. */
 export class WorkerConversation {
   private value: Conversation = { messages: [] };
@@ -16,7 +17,8 @@ export class WorkerConversation {
   private accepting?: Promise<void>; private closed = false;
   private phase: 'idle' | 'queued' | 'running' = 'idle';
   private executor?: SerialExecutor; private sessionId: string;
-  constructor(store: ConversationStore, model?: ConversationModel, timeoutMs = 120000, executor?: SerialExecutor, sessionId = 'default') { this.store = store; this.model = model; this.timeoutMs = timeoutMs; this.executor = executor; this.sessionId = sessionId; }
+  private evidence?: { journal: RunEvidence; metadata: () => RunMetadata };
+  constructor(store: ConversationStore, model?: ConversationModel, timeoutMs = 120000, executor?: SerialExecutor, sessionId = 'default', evidence?: { journal: RunEvidence; metadata: () => RunMetadata }) { this.store = store; this.model = model; this.timeoutMs = timeoutMs; this.executor = executor; this.sessionId = sessionId; this.evidence = evidence; }
   async init() {
     this.value = await this.store.read();
     if (this.value.messages.some(message => message.state === 'pending')) {
@@ -42,12 +44,16 @@ export class WorkerConversation {
     let signal = controller.signal;
     const input = structuredClone(this.value.messages.filter(item => item.state === 'complete'));
     this.pending = (async () => {
-      let release: (() => void) | undefined;
+      let release: (() => void) | undefined, runId: string | undefined, evidenceError = false;
+      let usage = unknownUsage();
       try {
+        if (this.evidence) { try { runId = (await this.evidence.journal.begin(this.evidence.metadata())).id; } catch (error) { evidenceError = true; throw error; } }
         release = await this.executor?.acquire(this.sessionId, controller.signal);
         signal = AbortSignal.any([controller.signal, AbortSignal.timeout(this.timeoutMs)]);
         this.phase = 'running';
-        const reply = await this.model!.reply(input, signal);
+        if (runId) { try { await this.evidence!.journal.start(runId); } catch (error) { evidenceError = true; throw error; } }
+        signal.throwIfAborted();
+        const reply = await this.model!.reply(input, signal, value => { usage = value; });
         signal.throwIfAborted();
         if (!reply.trim() || reply.length > 32000) throw Error('Invalid reply');
         answer.text = reply; answer.state = 'complete';
@@ -55,7 +61,8 @@ export class WorkerConversation {
         answer.state = controller.signal.aborted ? 'cancelled' : 'error';
         answer.text = controller.signal.aborted ? 'Reply stopped.' : signal.aborted ? 'The model took longer than two minutes. Try a shorter message.' : 'The model could not reply. Check this session’s provider connection and authentication, then try again.';
       }
-      try { await this.store.write(this.value); this.persistenceError = false; } catch { this.persistenceError = true; }
+      if (runId) { try { await this.evidence!.journal.finish(runId, answer.state === 'complete' ? 'completed' : answer.state === 'cancelled' ? 'cancelled' : 'failed', usage); } catch { evidenceError = true; } }
+      try { await this.store.write(this.value); this.persistenceError = evidenceError; } catch { this.persistenceError = true; }
       finally { this.changing = false; this.phase = 'idle'; this.controller = undefined; release?.(); }
     })();
     return this.snapshot();

@@ -1,3 +1,4 @@
+import { WorkerRunJournal } from '../infrastructure/journal/local-runs.js';
 import { WorkerDefinitions, definitionConnection, validateSnapshot, type DefinitionSnapshot } from './definitions.js';
 import { SerialExecutor } from './serial-executor.js';
 import { randomUUID } from 'node:crypto';
@@ -14,6 +15,7 @@ export interface SessionRecord { definition?: DefinitionSnapshot; submissionHash
 /** Worker-owned transcripts are provider-independent; native CLI session IDs never cross providers. */
 export class WorkerSessions {
   readonly definitions: WorkerDefinitions;
+  readonly runs: WorkerRunJournal;
   private directory: string; private settings: WorkerSettings; private model: typeof modelFor;
   readonly executor: SerialExecutor;
   private writes = Promise.resolve();
@@ -21,8 +23,9 @@ export class WorkerSessions {
   protectTask(id: string, protectedTask: boolean) { if (protectedTask) this.protectedTasks.add(id); else this.protectedTasks.delete(id); }
   private records: SessionRecord[] = []; private selected = 'default';
   private instances = new Map<string, WorkerConversation>(); private changing = false; private changingProviders = false;
-  constructor(directory: string, settings: WorkerSettings, model: typeof modelFor = modelFor) { this.definitions = new WorkerDefinitions(directory); this.model = model; this.directory = directory; this.settings = settings; this.executor = new SerialExecutor(() => settings.value.board.paused); }
+  constructor(directory: string, settings: WorkerSettings, model: typeof modelFor = modelFor) { this.runs = new WorkerRunJournal(directory); this.definitions = new WorkerDefinitions(directory); this.model = model; this.directory = directory; this.settings = settings; this.executor = new SerialExecutor(() => settings.value.board.paused); }
   async init() {
+    await this.runs.init();
     await this.definitions.init();
     try { const value = JSON.parse(await readBoundedFile(join(this.directory, 'sessions.json'), 2097152));
       if (!Array.isArray(value.records) || !value.records.length || value.records.length > 100 || new Set(value.records.map((item: SessionRecord) => item.id)).size !== value.records.length) throw Error('Invalid sessions');
@@ -38,7 +41,7 @@ export class WorkerSessions {
     const directory = record.id === 'default' ? this.directory : join(this.directory, 'sessions', record.id);
     await ensureDirectory(directory);
     const model = this.model(definitionConnection(this.settings.provider(record.provider), record.definition), directory);
-    const conversation = new WorkerConversation(new FileConversationStore(directory), model, 120000, this.executor, record.id);
+    const conversation = new WorkerConversation(new FileConversationStore(directory), model, 120000, this.executor, record.id, { journal: this.runs, metadata: () => ({ sessionId: record.id, taskId: record.taskId, kind: record.kind, title: record.title, provider: record.provider, model: record.definition?.model || this.settings.provider(record.provider).model }) });
     await conversation.init(); this.instances.set(record.id, conversation);
   }
   assertSelected(id: unknown) { if (id !== undefined && id !== this.selected) throw new DomainError('conflict', 'The selected session changed. Refresh before sending.'); }
@@ -162,5 +165,5 @@ export class WorkerSessions {
     }
     finally { this.changing = false; }
   }
-  async close() { await Promise.all([...this.instances.values()].map(item => item.close())); }
+  async close(options: { retainEvidence?: boolean } = {}) { await Promise.all([...this.instances.values()].map(item => item.close())); if (!options.retainEvidence) this.runs.close(); }
 }

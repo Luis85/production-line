@@ -27,7 +27,7 @@ export function providerEnvironment(provider = 'codex'): NodeJS.ProcessEnv {
     return { ...env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0' };
 }
 /** Kill the process group, including descendants, before resolving an interrupted operation. */
-export async function providerCommand(executable: string, args: string[], cwd: string, signal: AbortSignal, input?: string, capture = true, provider = 'codex'): Promise<Buffer> {
+export async function providerCommand(executable: string, args: string[], cwd: string, signal: AbortSignal, input?: string, capture = true, provider = 'codex', observeOutput?: (output: Buffer) => void): Promise<Buffer> {
     signal.throwIfAborted();
     return new Promise((resolveResult, reject) => {
         let bytes = 0, failed = false, ended = false, killTimer: ReturnType<typeof setTimeout> | undefined;
@@ -45,8 +45,11 @@ export async function providerCommand(executable: string, args: string[], cwd: s
             signal.removeEventListener('abort', interrupt); if (killTimer) clearTimeout(killTimer);
             // A child must not leave a detached command running after its own exit.
             kill('SIGKILL');
+            const captured = Buffer.concat(output);
+            // Numeric telemetry may exist even when execution fails; diagnostics never leave this callback.
+            try { observeOutput?.(captured); } catch { /* Telemetry must not mask process cleanup or outcome. */ }
             if (failed || signal.aborted || code !== 0) reject(Error(signal.aborted ? 'Provider execution interrupted or timed out' : 'Provider command failed; inspect CLI installation and authentication with operator diagnostics'));
-            else resolveResult(Buffer.concat(output));
+            else resolveResult(captured);
         });
     });
 }

@@ -110,3 +110,77 @@ test('feature patch submission is idempotent and shares the serial executor with
   for (let n = 0; n < 200; n++) { await board.tick(); if (board.detail(submission.id).status === 'review' && !sessions.busy) break; await new Promise(r => setTimeout(r, 10)); }
   assert.equal(board.detail(submission.id).status, 'review'); assert.equal(maximum, 1); assert.equal(calls, 2); await assert.rejects(readFile(join(f.project, 'new.txt')), { code: 'ENOENT' });
 });
+
+function executionEvidence(runId, attempt, outcome = 'failed') {
+  const consumption = { runs: attempt - 1, reportedRuns: 0, inputTokens: null, outputTokens: null, cacheReadTokens: null, cacheWriteTokens: null, providerReportedCostUsd: null, coverage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, providerReportedCostUsd: 0 } };
+  const resources = { scope: 'worker_process', processInstanceId: 'fixture-process', rssBytes: 100, heapUsedBytes: 50, cpuUserMicros: 20, cpuSystemMicros: 5, uptimeSeconds: 1 };
+  const before = { capturedAt: '2026-10-14T10:00:00.000Z', state: 'running', resources, consumption };
+  const after = { ...before, capturedAt: '2026-10-14T10:00:01.000Z', state: outcome, resources: { ...resources, cpuUserMicros: 30 }, consumption: { ...consumption, runs: attempt } };
+  return { runId, attempt, before, after, durationMs: 1000, queueDurationMs: 100, usage: { inputTokens: null, outputTokens: null, cacheReadTokens: null, cacheWriteTokens: null, providerReportedCostUsd: null, source: 'unavailable', reason: 'No provider used by fixture.' } };
+}
+
+test('feature retries export immutable before/after pairs and retain earlier run results across restart', async t => {
+  const f = await fixture(t); f.queue.control = async (record, action) => { f.tasks.set(record.taskId, { status: action === 'retry' ? 'queued' : 'cancelled' }); };
+  await f.put('a.md', source()); await scan(f.service); const accepted = f.submissions[0];
+  const first = executionEvidence('run-fixture-one', 1);
+  f.tasks.set(accepted.taskId, { status: 'running', evidence: { ...first, after: undefined } }); await f.service.tick(true);
+  let parsed = await f.read('a.md'); assert.equal(parsed.data.status, 'running'); assert.equal(parsed.data.werk.execution.after, undefined); assert.equal(parsed.data.werk.result, undefined);
+  f.tasks.set(accepted.taskId, { status: 'failed', text: 'First failed fixture result.', error: 'Fixture failure', evidence: first }); await f.service.tick(true);
+  parsed = await f.read('a.md'); const firstLinks = parsed.data.werk.execution;
+  const beforeBytes = await readFile(join(f.directory, firstLinks.before), 'utf8'), afterBytes = await readFile(join(f.directory, firstLinks.after), 'utf8');
+  const before = JSON.parse(beforeBytes), after = JSON.parse(afterBytes);
+  assert.equal(before.runId, after.runId); assert.equal(before.phase, 'before'); assert.equal(after.phase, 'after'); assert.equal(after.usage.inputTokens, null); assert.equal(after.durationMs, 1000);
+  assert.match(await readFile(join(f.directory, firstLinks.result), 'utf8'), /First failed fixture result/);
+  const file = await f.service.action({ action: 'get', name: 'a.md' }); await f.service.action({ action: 'retry', name: 'a.md', revision: file.revision });
+  parsed = await f.read('a.md'); assert.equal(parsed.data.status, 'queued'); assert.equal(parsed.data.werk.result, undefined); assert.equal(parsed.data.werk.execution, undefined); assert.ok(parsed.data.werk.executionDirectory);
+  const second = executionEvidence('run-fixture-two', 2, 'completed'); f.tasks.set(accepted.taskId, { status: 'completed', text: 'Second completed fixture result.', evidence: second }); await scan(f.service);
+  parsed = await f.read('a.md'); assert.equal(parsed.data.werk.execution.runId, second.runId); assert.equal(parsed.data.werk.execution.attempt, 2);
+  assert.equal(await readFile(join(f.directory, firstLinks.before), 'utf8'), beforeBytes); assert.equal(await readFile(join(f.directory, firstLinks.after), 'utf8'), afterBytes);
+  assert.match(await readFile(join(f.directory, firstLinks.result), 'utf8'), /First failed fixture result/);
+  assert.match(await readFile(join(f.directory, parsed.data.werk.result), 'utf8'), /Second completed fixture result/);
+  let managed = await f.service.action({ action: 'get', name: 'a.md' });
+  managed = await f.service.action({ action: 'archive', name: 'a.md', revision: managed.revision });
+  assert.equal(managed.record.archived, true);
+  await f.service.action({ action: 'restore', name: 'a.md', revision: managed.revision });
+  await f.service.close(); const recovered = new FeatureRequests(new MarkdownFeatureFolder(f.directory, f.state, 'codex-cli', f.project), f.queue, 0); await recovered.init();
+  try { await scan(recovered); assert.equal(recovered.view().error, null); assert.equal(f.submissions.length, 1); assert.equal((await f.read('a.md')).data.werk.execution.runId, second.runId); } finally { await recovered.close(); }
+});
+
+test('feature terminal result waits for complete evidence before freezing a per-run export', async t => {
+  const f = await fixture(t); await f.put('a.md', source()); await scan(f.service); const accepted=f.submissions[0], evidence=executionEvidence('run-late-after',1,'completed');
+  f.tasks.set(accepted.taskId,{status:'completed',text:'Fixture result before after export.',evidence:{...evidence,after:undefined}});await f.service.tick(true);
+  let parsed=await f.read('a.md');assert.ok(parsed.data.werk.result);assert.equal(parsed.data.werk.execution.result,undefined);
+  f.tasks.set(accepted.taskId,{status:'completed',text:'Fixture result before after export.',evidence});await scan(f.service);
+  parsed=await f.read('a.md');assert.equal(f.service.view().error,null);assert.ok(parsed.data.werk.execution.after);assert.ok(parsed.data.werk.execution.result);
+});
+
+test('feature evidence refuses traversal IDs and never overwrites a conflicting immutable snapshot', async t => {
+  const f = await fixture(t); await f.put('a.md',source());await scan(f.service);const accepted=f.submissions[0];
+  await assert.rejects(f.folder.evidence(accepted,executionEvidence('../escape',1)),/identity/);
+  const evidence=executionEvidence('run-conflict',1);const links=await f.folder.evidence(accepted,evidence);
+  await assert.rejects(f.folder.evidence(accepted,{...evidence,before:{...evidence.before,capturedAt:'2026-10-14T11:00:00.000Z'}}),/changed/);
+  assert.equal(JSON.parse(await readFile(join(f.directory,links.before),'utf8')).snapshot.capturedAt,evidence.before.capturedAt);
+});
+
+
+test('fast pre-execution cancellation clears old execution pointers without rewriting an earlier run result', async t => {
+  const f=await fixture(t);await f.put('a.md',source());await scan(f.service);const accepted=f.submissions[0],evidence=executionEvidence('run-before-fast-cancel',1);
+  f.tasks.set(accepted.taskId,{status:'failed',text:'Prior immutable result.',error:'Fixture failure',evidence});await f.service.tick(true);const prior=(await f.read('a.md')).data.werk.execution;
+  // A direct task retry/cancel can finish before the watcher ever sees its queued state.
+  f.tasks.set(accepted.taskId,{status:'cancelled',text:'Cancelled before execution.'});await f.service.tick(true);
+  const parsed=await f.read('a.md');assert.equal(f.service.view().error,null);assert.equal(parsed.data.status,'cancelled');assert.equal(parsed.data.werk.execution,undefined);assert.ok(parsed.data.werk.executionDirectory);
+  assert.match(await readFile(join(f.directory,prior.result),'utf8'),/Prior immutable result/);
+  assert.match(await readFile(join(f.directory,parsed.data.werk.result),'utf8'),/Cancelled before execution/);
+  f.tasks.set(accepted.taskId,{status:'cancelled'});await f.service.tick(true);
+  const noText=await f.read('a.md');assert.equal(noText.data.werk.result,undefined);assert.equal(noText.data.werk.patch,undefined);assert.equal(f.service.view().error,null);
+});
+
+test('feature retry captures a terminal run that finished since the last watcher observation', async t => {
+  const f=await fixture(t);await f.put('a.md',source());await scan(f.service);const accepted=f.submissions[0];
+  const revision=(await f.service.action({action:'get',name:'a.md'})).revision;
+  f.tasks.set(accepted.taskId,{status:'failed',text:'Finished between polls.',error:'Fixture failure',evidence:executionEvidence('run-between-polls',1)});
+  f.queue.control=async record=>f.tasks.set(record.taskId,{status:'queued'});
+  await f.service.action({action:'retry',name:'a.md',revision});
+  assert.match(await readFile(join(f.directory,'_results',accepted.id,'run-between-polls.md'),'utf8'),/Finished between polls/);
+  const parsed=await f.read('a.md');assert.equal(parsed.data.status,'queued');assert.equal(parsed.data.werk.execution,undefined);
+});

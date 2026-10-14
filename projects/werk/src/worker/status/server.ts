@@ -43,6 +43,7 @@ export async function statusServer(get: () => Status, host: string, port: number
       if (req.method === 'POST' && req.url === '/api/features') { if (!workspace.features) throw new ApiError(409, 'Configure a feature folder first.'); return json(res, 200, await workspace.features.action(await readJson(req))); }
       if (req.method === 'GET' && req.url === '/api/definitions') return json(res, 200, workspace.definitions.view());
       if (req.method === 'POST' && req.url === '/api/definitions') return json(res, 200, await workspace.definitions.action(await readJson(req)));
+      if (req.method === 'POST' && req.url === '/api/runs') return json(res, 200, workspace.runEvidence(await readJson(req)));
       if (req.method === 'POST' && req.url === '/api/tasks') return json(res, 200, await workspace.task(await readJson(req)));
       if (req.method === 'GET' && req.url === '/api/settings') return json(res, 200, workspace.settings.publicView());
       if (req.method === 'POST' && req.url === '/api/settings') return json(res, 200, await workspace.updateSettings(await readJson(req)));

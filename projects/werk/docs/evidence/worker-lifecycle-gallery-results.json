@@ -1,0 +1,13 @@
+{
+  "stages": 5,
+  "embeddedScreenshots": 15,
+  "screenSelectors": [
+    1440,
+    390,
+    320
+  ],
+  "fullscreenEscape": true,
+  "exportRows": 120,
+  "mobileOverflow": false,
+  "pageErrors": []
+}

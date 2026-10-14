@@ -257,6 +257,13 @@ review patch. All three paths execute serially on whichever worker owns them.
 
 ## Inspect history and Dashboard
 
+History also exposes **Project requests** from the configured feature folder and
+**Execution evidence** for local Chat/file/feature executions. Inspect the current
+request state, paired run observations and provider-reported consumption; use
+filters, aggregate coverage and export to compare many runs. Missing usage is
+unknown, not zero. See the [run metrics contract](../reference/worker-run-metrics.md)
+and [complete worker lifecycle](../tutorials/worker-feature-lifecycle.md).
+
 Below the taskboard, History shows retained orchestrator before/after snapshots.
 Search and filter attempts, inspect evidence and download local task patches.
 A simulated attempt is never presented as implemented code. Missing or unreadable

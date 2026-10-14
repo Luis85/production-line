@@ -18,6 +18,8 @@ Subsequent native starts check stable GitHub releases, verify updates and back u
 
 For automatic download and startup from GitHub, installer options and release verification, see the [release reference](docs/reference/releases.md).
 
+For a standalone project worker, follow the [feature lifecycle tutorial](docs/tutorials/worker-feature-lifecycle.md): install, configure a watched folder, submit requests and inspect before/after consumption through the CLI or webview.
+
 ## Portable apps for another project
 
 Copy any complete `bin/apps/factory`, `bin/apps/orchestrator` or `bin/apps/worker`
