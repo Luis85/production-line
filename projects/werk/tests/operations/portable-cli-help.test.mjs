@@ -2,9 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { fileURLToPath } from 'node:url';
 const execute = promisify(execFile);
-const cli = fileURLToPath(new URL('../../scripts/runtime/portable/cli.mjs', import.meta.url));
+const cli = new URL('../../scripts/runtime/portable/cli.mjs', import.meta.url).href;
 // Exercise shipped dispatch code, without a running app, credentials or inference.
 async function help(kind) {
   const { stdout, stderr } = await execute(process.execPath, ['--input-type=module', '-e',
