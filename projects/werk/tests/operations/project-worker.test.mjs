@@ -1,0 +1,56 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { mkdtemp, rm, readFile, writeFile, realpath, mkdir } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { parse } from 'yaml';
+const exec = promisify(execFile), installer = resolve('bin/apps/worker/cli.mjs');
+async function project(t, cleanup = true) { const path = await realpath(await mkdtemp(join(tmpdir(), 'werk project worker '))); if (cleanup) t.after(() => rm(path, { recursive: true, force: true })); return path; }
+async function cli(entry, cwd, ...args) { const result = await exec(process.execPath, [entry, ...args], { cwd, timeout: 45000, maxBuffer: 1048576 }); return JSON.parse(result.stdout); }
+async function eventually(check) { for (let n = 0; n < 200; n++) { if (await check()) return; await new Promise(r => setTimeout(r, 100)); } throw Error('Timed out waiting for feature workflow'); }
+const front = raw => parse(/^---\n([\s\S]*?)\n---\n/.exec(raw)[1]);
+test('project init installs a self-contained worker, configurable template and Docker launch without overwriting edits', async t => {
+  const cwd = await project(t), initial = await cli(installer, cwd, 'init', '--features-dir', 'requests/features', '--provider', 'openai-api', '--port', '4207');
+  const entry = join(cwd, 'bin/apps/worker/cli.mjs'); assert.equal(initial.featuresDirectory, join(cwd, 'requests/features'));
+  assert.equal((await cli(entry, cwd, 'feature', 'folder', 'get')).path, 'requests/features');
+  assert.equal((await cli(entry, cwd, 'feature', 'folder', 'plan', '--path', 'new-requests')).changed, true);
+  const template = join(initial.featuresDirectory, '_templates/feature-request.md'); assert.equal(front(await readFile(template, 'utf8')).status, 'draft');
+  await writeFile(template, '# User template\n'); await cli(entry, cwd, 'init'); assert.equal(await readFile(template, 'utf8'), '# User template\n');
+  const compose = parse(await readFile(join(cwd, '.werk/compose.worker.yaml'), 'utf8')); assert.match(compose.services.worker.image, /node:24/); assert.equal(compose.services.worker.working_dir, '/project'); assert.equal(compose.services.worker.volumes[0].source, '..'); assert.match(compose.services.worker.ports[0], /4207/);
+  assert.match(await readFile(join(cwd, '.werk/.gitignore'), 'utf8'), /worker\//);
+  const output = await exec(process.execPath, [entry, 'feature', 'template'], { cwd }); assert.equal(front(output.stdout).status, 'draft');
+  await assert.rejects(cli(installer, cwd, 'init'), /worker app already exists/);
+  await assert.rejects(cli(entry, cwd, 'init', '--features-dir', '../outside'), /inside the project/);
+  await assert.rejects(cli(entry, cwd, 'init', '--port', '4210'), /Existing project port differs/);
+  assert.equal(JSON.parse(await readFile(join(cwd, '.werk/worker-project.json'), 'utf8')).port, 4207);
+});
+test('installed native worker consumes files, exports review patches and keeps task identity across restart', { skip: process.platform === 'win32', timeout: 120000 }, async t => {
+  const cwd = await project(t, false), entry = join(cwd, 'bin/apps/worker/cli.mjs'); let running = false;
+  t.after(async () => { try { if (running) await cli(entry, cwd, 'stop'); } finally { await rm(cwd, { recursive: true, force: true }); } });
+  await cli(installer, cwd, 'init');
+  const configPath = join(cwd, '.werk/worker.json'), config = JSON.parse(await readFile(configPath, 'utf8')); config.features.pollMs = 250; await writeFile(configPath, JSON.stringify(config), { mode: 0o600 });
+  const provider = join(cwd, 'provider-fixture'); await writeFile(provider, `#!${process.execPath}\nlet input='';for await(const p of process.stdin)input+=p;const text=input.includes('Implement the requested changes')?JSON.stringify({summary:'Review fixture patch',files:[{path:'approved.txt',content:'changed\\n'}]}):'Feature protocol fixture completed.';console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text}}));\n`, { mode: 0o700 });
+  let started = await cli(entry, cwd, 'start', '--port', '0'); running = true;
+  const token = (await readFile(join(cwd, '.werk/worker/webview-token'), 'utf8')).trim();
+  const api = async (path, body) => { const r = await fetch(started.url + path, { method: body ? 'POST' : 'GET', headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) }); const value = await r.json(); assert.ok(r.ok, value.error); return value; };
+  await api('/api/settings', { provider: { id: 'codex-cli', executable: provider } });
+  let features = join(cwd, 'features'); await writeFile(join(features, 'chat.md'), '---\nschemaVersion: 1\ntitle: Native file intake\nstatus: ready\n---\nDescribe the next step.\n');
+  await writeFile(join(cwd, 'approved.txt'), 'original\n'); await writeFile(join(features, 'patch.md'), '---\nschemaVersion: 1\ntitle: Approved patch\nstatus: ready\nmode: patch\npaths: [approved.txt]\n---\nChange the approved file.\n');
+  await eventually(async () => { const view = await api('/api/features'); return view.records.length === 2 && view.records.every(r => ['completed', 'review'].includes(r.status) && r.result) && (await readFile(join(features, 'chat.md'), 'utf8')).includes('status: completed') && (await readFile(join(features, 'patch.md'), 'utf8')).includes('status: review'); });
+  const before = await api('/api/features'); assert.equal(before.error, null); assert.equal(before.errors.length, 0);
+  const chat = front(await readFile(join(features, 'chat.md'), 'utf8')), patch = front(await readFile(join(features, 'patch.md'), 'utf8'));
+  assert.equal(chat.status, 'completed'); assert.equal(patch.status, 'review'); assert.match(await readFile(join(features, patch.werk.patch), 'utf8'), /\+changed/); assert.equal(await readFile(join(cwd, 'approved.txt'), 'utf8'), 'original\n');
+  await cli(entry, cwd, 'stop'); running = false; await assert.rejects(readFile(join(features, '_worker.lock')), { code: 'ENOENT' });
+  const relocated = await cli(entry, cwd, 'feature', 'folder', 'set', '--path', 'requests/features');
+  features = relocated.directory;
+  assert.equal((await cli(entry, cwd, 'feature', 'folder', 'get')).path, 'requests/features');
+  assert.equal(front(await readFile(join(features, 'chat.md'), 'utf8')).id, chat.id);
+  started = await cli(entry, cwd, 'start', '--port', '0'); running = true;
+  await eventually(async () => (await api('/api/features')).records.length === 2);
+  assert.deepEqual((await api('/api/features')).records.map(r => r.taskId).sort(), before.records.map(r => r.taskId).sort());
+  assert.equal((await api('/api/sessions')).records.length, 3);
+  assert.equal((await cli(entry, cwd, 'feature', 'list')).records.length, 2);
+  await cli(entry, cwd, 'stop'); running = false;
+});

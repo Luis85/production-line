@@ -44,7 +44,10 @@ without producing verified quality evidence.
 ## Deployment and qualification
 
 Native deployment runs packaged Node applications directly; Docker runs them in
-containers. The shipped Docker profile remains simulated. Docker Agent's
+containers. Orchestrator execution in the shipped Docker profile remains simulated.
+A [project-local worker](../how-to/project-worker.md) can independently run Chat
+and approved-file patch tasks using configured API providers in either deployment.
+Those tasks use the worker session/taskboard path, with explicit patch review. Docker Agent's
 optional MCP integration is also separate from the live worker adapter.
 
 The live adapter's process, patch, lease, journal and failure paths have automated

@@ -1,8 +1,10 @@
+import { workerCommands } from './worker-commands.mjs';
 // This catalog is both the command dispatcher and the automation discovery contract.
 const op = (method, path, body = false, required = [], example) => ({ method, path, body, required, ...(example ? { example } : {}) });
 export function commands(kind) {
   const common = { health: op('GET', '/healthz'), monitoring: op('GET', kind === 'worker' ? '/monitoring' : '/v1/monitoring') };
-  if (kind === 'worker') return { ...common,
+  if (kind === 'worker') return workerCommands({ ...common,
+    'feature list': op('GET', '/api/features'),
     'settings get': op('GET', '/api/settings'), 'settings set': op('POST', '/api/settings', true, [], { board: { paused: true, queueCapacity: 16 } }),
     'definition list': op('GET', '/api/definitions'),
     'definition preview': op('POST', '/api/definitions', true, [], { yaml: 'agents:\n  root:\n    model: openai/gpt-4.1\n    instruction: Review the task and explain the next step.\n' }),
@@ -16,7 +18,7 @@ export function commands(kind) {
     'session action': op('POST', '/api/sessions', true, [], { action: 'rename', id: 'ci-task-001', title: 'Architecture overview' }),
     'file-task create': op('POST', '/api/taskboard', true, [], { title: 'Explain a rule', instruction: 'Add a comment explaining the rule.', provider: 'codex-cli', repository: '/absolute/project', paths: ['acceptance.txt'] }), 'file-task list': op('GET', '/api/taskboard'),
     'file-task get': op('POST', '/api/taskboard/detail', false, ['id']), 'file-task action': op('POST', '/api/taskboard/action', true),
-    environment: op('GET', '/api/environment'), history: op('GET', '/api/history') };
+    environment: op('GET', '/api/environment'), history: op('GET', '/api/history') });
   const catalog = { ...common, overview: op('GET', '/v1/overview'),
     'routing get': op('GET', kind === 'factory' ? '/v1/factories/:id/routing' : '/v1/routing', false, kind === 'factory' ? ['id'] : []),
     'routing set': op('PUT', kind === 'factory' ? '/v1/factories/:id/routing' : '/v1/routing', true, kind === 'factory' ? ['id'] : []) };

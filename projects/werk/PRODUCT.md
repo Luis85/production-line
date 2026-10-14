@@ -113,3 +113,18 @@ prompts the model. Browser access tokens stay in memory.
 Configured providers, profiles and subscriptions do not establish verified login,
 available quota or measured cost. Simulation, local patches requiring review and
 accepted/merged work must remain distinct.
+
+## Project-local feature requests
+
+A worker can be initialized inside a project and started as a portable Node app
+or a standalone Docker service. Setup provides a configurable feature folder and
+an editable frontmatter-plus-Markdown request template. Drafts remain inactive;
+ready files enter the existing serial queue after stable-save detection. Durable
+IDs, immutable accepted input and admission replay prevent duplicate execution.
+Lifecycle frontmatter, a queue summary and readable result/patch files support
+operators who do not open the webview. Orchestrator assignments are mirrored into
+the same folder while retaining orchestrator lease/routing authority.
+
+The template and custom request metadata remain editable. One worker state owns
+one folder; setup, native/Docker switching, recovery and copied-app operation
+are documented in [project worker setup](docs/how-to/project-worker.md).

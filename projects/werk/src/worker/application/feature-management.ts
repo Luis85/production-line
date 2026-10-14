@@ -1,0 +1,76 @@
+import { DomainError } from '../../shared/errors.js';
+import { object, text } from '../../shared/validation.js';
+import type { FeatureInput, FeatureIndex, FeatureQueuePort, FeatureRecord } from './feature-requests.js';
+export interface FeatureDocumentPort {
+  read(name: string): Promise<{ name: string; markdown: string; revision: string }>;
+  validate(markdown: string): { input: FeatureInput; id: unknown; status: unknown; managed: boolean };
+  ready(markdown: string): string;
+  write(name: string, markdown: string, revision?: string): Promise<{ name: string; markdown: string; revision: string }>;
+  remove(name: string, revision: string): Promise<void>;
+}
+export interface FeatureManagementContext {
+  documents: FeatureDocumentPort; index: FeatureIndex; queue: FeatureQueuePort;
+  persist(): Promise<void>;
+}
+const stopped = new Set(['completed', 'review', 'failed', 'cancelled', 'unavailable']);
+export async function manageFeature(input: unknown, context: FeatureManagementContext) {
+  const body = object(input, 'Feature command', ['action', 'name', 'markdown', 'revision']);
+  const action = String(body.action), name = text(body.name, 'name', 200), { documents, index, queue } = context;
+  if (!['get', 'validate', 'create', 'edit', 'submit', 'cancel', 'retry', 'archive', 'restore', 'delete', 'result'].includes(action)) throw new DomainError('invalid_input', 'Unknown feature action.');
+  let atName = index.records.find(item => item.name === name);
+  if (action === 'create') {
+    if (atName) throw new DomainError('conflict', 'Filename belongs to a retained request. Choose a new filename.');
+    const markdown = draft(body.markdown, documents);
+    if (index.records.some(record => record.id === documents.validate(markdown).id)) throw new DomainError('conflict', 'Feature ID is already retained. Use a new ID or omit it.');
+    return documents.write(name, markdown);
+  }
+  const file = await documents.read(name);
+  // A filesystem rename can precede the watcher's next observation.
+  if (!atName) {
+    let id: unknown; try { id = documents.validate(file.markdown).id; } catch { /* Malformed drafts remain repairable. */ }
+    if (id) atName = index.records.find(record => record.id === id);
+  }
+  if (action === 'get') return { ...file, record: atName ?? null };
+  if (action === 'validate') return { name, revision: file.revision, valid: true, ...documents.validate(file.markdown) };
+  if (action === 'result') {
+    if (!atName) return { name, record: null, execution: { status: documents.validate(file.markdown).status ?? 'ready' } };
+    return { name, record: atName, execution: queue.inspect(atName) ?? null };
+  }
+  if (body.revision !== file.revision) throw new DomainError('conflict', 'Supply the current revision from feature get with --if-match.');
+  if (atName?.source === 'orchestrator') throw new DomainError('conflict', 'This request is orchestrator-owned. Manage its assignment at the orchestrator.');
+  if (action === 'edit' || action === 'submit') {
+    if (atName) throw new DomainError('conflict', 'Accepted input is frozen. Create a new draft for different work.');
+    const markdown = action === 'edit' ? draft(body.markdown, documents) : documents.ready(draft(file.markdown, documents));
+    if (index.records.some(record => record.id === documents.validate(markdown).id)) throw new DomainError('conflict', 'Feature ID is already retained. Use a new ID or omit it.');
+    return documents.write(name, markdown, file.revision);
+  }
+  if (action === 'delete') {
+    if (atName && !stopped.has(queue.inspect(atName)?.status ?? atName.status)) throw new DomainError('conflict', 'Cancel or finish the task before deleting its file.');
+    await documents.remove(name, file.revision);
+    return { name, deleted: true, retainedTaskId: atName?.taskId ?? null };
+  }
+  if (!atName) throw new DomainError('conflict', 'Submit this draft before managing its task.');
+  const record: FeatureRecord = atName;
+  // Admission may have succeeded before its acknowledgement was persisted.
+  if (!record.submitted && queue.inspect(record)) record.submitted = true;
+  if (action === 'archive' || action === 'restore') {
+    if (!stopped.has(queue.inspect(record)?.status ?? record.status)) throw new DomainError('conflict', 'Cancel or finish the task before archiving.');
+    record.archived = action === 'archive';
+  } else if (action === 'cancel' && !record.submitted) { record.status = 'cancelled'; record.error = undefined; }
+  else if (action === 'retry' && !record.submitted) {
+    if (record.status !== 'cancelled') throw new DomainError('conflict', 'Waiting requests retry admission automatically.');
+    record.status = 'waiting'; record.archived = false;
+  } else {
+    if (!queue.control) throw new DomainError('unavailable', 'Task controls are unavailable.');
+    await queue.control(record, action as 'cancel' | 'retry');
+    record.archived = false;
+  }
+  record.updatedAt = new Date().toISOString(); await context.persist();
+  return { name, record: structuredClone(record) };
+}
+function draft(value: unknown, documents: FeatureDocumentPort) {
+  text(value, 'markdown', 65536);
+  const markdown = value as string, parsed = documents.validate(markdown);
+  if (parsed.status !== 'draft' || parsed.managed) throw new DomainError('invalid_input', 'Create or edit status: draft requests without source/werk metadata. Use submit to queue them.');
+  return markdown;
+}

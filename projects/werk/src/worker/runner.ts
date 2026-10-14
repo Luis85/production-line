@@ -37,6 +37,7 @@ export interface WorkerConfig {
     systemPromptHash: string;
     systemPrompt: string;
     projectDir?: string;
+    features?: { directory: string; provider: string; pollMs: number };
     retainedPairs?: number;
     codex?: CodexConfiguration;
     chatExecutable?: string;
@@ -102,7 +103,7 @@ export async function runWorker(config: WorkerConfig, stop: AbortSignal, depende
         catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; state.machineId = randomUUID(); await atomicWrite(join(config.stateDir, 'machine-id'), state.machineId); }
         const bound = status.address();
         if (bound && typeof bound !== 'string') await dependencies.ready?.(bound);
-        localTimer = setInterval(() => { workspace.executor.wake(); void workspace.board.tick().catch(() => { serviceEvent('worker', 'state_write_error', 'error'); }); }, 250);
+        localTimer = setInterval(() => { void workspace.features?.tick(); workspace.executor.wake(); void workspace.board.tick().catch(() => { serviceEvent('worker', 'state_write_error', 'error'); }); }, 250);
         let session: { url: string; identity: import('./application/ports.js').WorkerIdentity; client: import('./application/ports.js').WorkerClient } | undefined;
         let requestId = randomUUID();
         while (!stopping.aborted) {
@@ -204,6 +205,7 @@ export async function runWorker(config: WorkerConfig, stop: AbortSignal, depende
         await workspace.close();
         await Promise.allSettled([...waiting.values()].map(async entry => { await entry.lease.close(); await cancelSession(entry.task, 'The worker stopped before this queued assignment executed.'); }));
         await Promise.allSettled([...running.values()].map(x => x.promise));
+        await workspace.features?.close().catch(() => { serviceEvent('worker', 'state_write_error', 'error'); });
         journal.close();
         state.state = 'stopped';
         try {

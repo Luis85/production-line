@@ -39,6 +39,8 @@ export async function statusServer(get: () => Status, host: string, port: number
       if (await access!.route(req, res)) return;
       access!.authenticate(req);
       if (req.method === 'POST' && req.url === '/api/providers/check') { const body = await readJson(req); if (Object.keys(body).some(key => key !== 'id') || typeof body.id !== 'string') throw new ApiError(400, 'Choose a provider to check.'); return json(res, 200, await providers.check(workspace.settings.provider(body.id))); }
+      if (req.method === 'GET' && req.url === '/api/features') return json(res, 200, await workspace.features?.list() ?? { enabled: false });
+      if (req.method === 'POST' && req.url === '/api/features') { if (!workspace.features) throw new ApiError(409, 'Configure a feature folder first.'); return json(res, 200, await workspace.features.action(await readJson(req))); }
       if (req.method === 'GET' && req.url === '/api/definitions') return json(res, 200, workspace.definitions.view());
       if (req.method === 'POST' && req.url === '/api/definitions') return json(res, 200, await workspace.definitions.action(await readJson(req)));
       if (req.method === 'POST' && req.url === '/api/tasks') return json(res, 200, await workspace.task(await readJson(req)));

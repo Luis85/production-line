@@ -8,6 +8,7 @@ separately under `docs/handoff`; original source provenance is recorded in the
 
 | Record | Scope |
 | --- | --- |
+| [Project worker and feature folders](feature-folder-review.md) | Project installation, reusable templates, durable Markdown intake, serial execution and native/Docker qualification |
 | [Worker access, Chat and agent definitions](worker-overhaul-review.md) | Research-led overhaul, independent review, integrated checks and twelve final screenshots |
 | [Worker product research](worker-product-research.md) | Dated provider/Docker research, onboarding and task-chat findings, and product improvement priorities |
 | [Portable Node apps](portable-apps-validation.md) | Copyable apps, automation CLI, task sessions, independent lifecycle and later composition |

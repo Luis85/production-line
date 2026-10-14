@@ -26,6 +26,22 @@ returned URL and unlock the webview using that file locally. The CLI reads local
 credentials itself. Workers may enroll later through `settings set`; Factory can
 register an already running orchestrator as a line.
 
+## Initialize a project worker
+
+Run the release worker's `cli.mjs init --project-dir /absolute/project` to install
+the app into that project's `bin/apps/worker`, create `.werk/worker.json`, a draft
+feature-request template and `.werk/compose.worker.yaml`. Use `--features-dir` to
+choose a project-relative folder and `--provider` to choose its default connection.
+Run or start from the project directory; the installed worker discovers its project
+configuration. `feature template` prints a fresh Markdown template without a running
+worker; `feature list` reads the authenticated watcher state. Template output is
+Markdown, an intentional exception to JSON CLI output.
+
+See the [project worker guide](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/project-worker.md)
+and [feature request contract](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/feature-requests.md).
+Each watched folder belongs to one worker state; choose separate feature folders,
+state directories and ports for additional workers.
+
 ## Lifecycle and automation contract
 
 Every app supports `help`, `schema`, `run`, `start`, `status`, `stop`, `health`,
@@ -213,3 +229,38 @@ in runtime release archives. The packaging integration test copies apps to unrel
 projects, starts independent instances on available ports, uses authenticated commands,
 checks private state/restart and exercises worker task sessions with a labelled model
 fixture. Fixture success does not qualify authenticated live provider execution.
+
+
+## Worker task and queue maintenance
+
+The worker exposes named commands for users, CI and AI agents. They operate on
+explicit IDs and do not change the webview selection, except `session select`.
+
+| Commands | Options / input |
+| --- | --- |
+| `task list`, `session list`, `file-task list` | Optional `--status STATUS`, `--archived true\|false`; outputs retained tasks and executor/board state. |
+| `task get`, `session get` | `--id SESSION_ID`; includes conversation and status. |
+| `task create` | `--file PATH\|-`; title, provider, message, optional stable id and definition. Replaying an identical create ID is idempotent. |
+| `task send` | `--id SESSION_ID --file PATH\|-`; `{"message":"Follow-up"}` in the existing session. Follow-up/retry requests are not idempotent; inspect history after an uncertain response. |
+| `task cancel`, `task retry` | `--id SESSION_ID`; retry only a failed/cancelled chat task, using its last user message. |
+| `task rename`, `session rename` | `--id SESSION_ID --title TITLE`. |
+| `task archive\|restore\|delete`, `session archive\|restore\|delete` | `--id SESSION_ID`; archive/restore set a state explicitly. Active tasks cannot be archived/deleted. Delete a linked file-task before deleting its protected session. |
+| `session select` | `--id SESSION_ID`; explicitly changes the selected webview session. |
+| `file-task create` | `--file PATH\|-`; approved-file input contract shown by `schema`. |
+| `file-task get\|cancel\|retry\|archive\|restore\|delete` | `--id TASK_ID`; retry uses captured input/files; archive/restore are explicit, repeatable states. |
+| `file-task priority` | `--id TASK_ID --priority 1\|2`; queued tasks only. |
+| `task wait`, `file-task wait` | `--id ID [--timeout-ms N]`; terminal-state polling, default 60 seconds, maximum 24 hours. Inspect the status to distinguish success from failure/cancellation; timeout exits 1 without cancelling. |
+| `queue get`, `queue settings` | Executor/session state or redacted configuration. |
+| `queue pause`, `queue resume` | Pause/resume execution and new orchestrator claims. Running work finishes; queued work is retained. |
+| `queue configure` | `--file PATH\|-`; e.g. `{"board":{"queueCapacity":16,"orchestratorQueue":4,"order":"fifo"}}`. |
+
+Workers always execute serially. Local capacity is 1–64; orchestrator queue
+capacity is 0–64. Setting the latter to zero disables remote queuing beyond the
+worker's existing immediate capacity behavior. Pausing does not delete queued work.
+Existing `session action`, `file-task action`, settings, provider checks, agent
+definitions, environment, monitoring and history remain available. Feature-file
+management is documented in the [feature-request reference](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/feature-requests.md#cli-management-contract).
+
+Input/API rejection exits 2; operational failure exits 1. CLI commands never
+prompt. A successful `wait` means the task stopped, so callers must check the
+returned status before treating its output as successful work.

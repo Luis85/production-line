@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, lstat } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, lstat, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { configuration } from '../../src/worker/dist/worker/config.js';
@@ -80,4 +80,23 @@ test('failed initial lease renewal cancels the prepared session when the assignm
   assert.match(conversation.messages[1].text, /No execution started/); assert.equal(conversation.messages[1].state, 'error');
   await assert.rejects(lstat(join(directory, 'snapshots/withdrawn-lease')), { code: 'ENOENT' });
   stop.abort(); await run;
+});
+
+test('runner mirrors orchestrator assignments into the feature folder without local redispatch', { timeout: 30000 }, async t => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'werk-remote-features-'))), stateDir = join(root, 'state'), featureDir = join(root, 'features');
+  const stop = new AbortController(); let run, claimed = false, completed = false, executions = 0;
+  t.after(async () => { stop.abort(); await run; await rm(root, { recursive: true, force: true }); });
+  const config = await configuration({ profiles: 'codex', 'poll-ms': '100' }, { features: { directory: featureDir, provider: 'openai-api', pollMs: 250 } });
+  const task = { id: 'folder-assignment', project: 'alpha', title: 'Orchestrator feature', criteria: ['Keep one authoritative assignment'], wikilinks: [], provider: 'codex', priority: 1, status: 'running', attempt: 1, workerId: 'worker-one', lease: 'private-lease-fixture', expiresAt: Date.now() + 60000, createdAt: Date.now(), profile: config.profiles[0].id };
+  const client = { async currentAssignments() { return claimed && !completed ? [task] : []; }, async claim() { if (claimed) return null; claimed = true; return task; }, async heartbeat() { task.expiresAt = Date.now() + 60000; return task; }, async publishSnapshot() {}, async complete() { completed = true; }, async abandon() { completed = true; } };
+  const gateway = { async register() { return { id: 'worker-one', token: 'fixture-token', project: 'alpha' }; }, connect() { return client; } };
+  const adapter = { mode: 'mock', async run() { executions++; return { kind: 'simulated', summary: 'Remote fixture evidence' }; } };
+  run = runWorker({ ...config, stateDir, url: 'http://orchestrator.invalid', enrollmentToken: 'fixture-enrollment', statusHost: '127.0.0.1', statusPort: 0 }, stop.signal, { gateway, adapter });
+  const path = join(featureDir, 'remote-folder-assignment.md'); let body;
+  await until(async () => { body = await readFile(path, 'utf8').catch(() => ''); return body.includes('status: completed'); });
+  assert.equal(executions, 1); assert.match(body, /source: orchestrator/); assert.match(body, /Keep one authoritative assignment/); assert.ok(!body.includes(task.lease));
+  const index = JSON.parse(await readFile(join(stateDir, 'feature-index.json'), 'utf8')); assert.equal(index.records.length, 1); assert.equal(index.records[0].taskId, task.id);
+  const result = await readFile(join(featureDir, index.records[0].result), 'utf8'); assert.match(result, /simulated/); assert.ok(!result.includes(task.lease));
+  assert.equal(JSON.parse(await readFile(join(stateDir, 'sessions.json'), 'utf8')).records.length, 2);
+  stop.abort(); await run; await assert.rejects(lstat(join(featureDir, '_worker.lock')), { code: 'ENOENT' });
 });

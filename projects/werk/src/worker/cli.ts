@@ -10,7 +10,7 @@ const help = `werk-worker — standalone worker with optional orchestrator conne
 run [--url http://127.0.0.1:3000] [--state-dir .state/worker]
     [--config worker.json] [--parallel 1] [--profiles claude,codex]
     [--poll-ms 1000] [--mock-ms 3000] [--timeout-ms 60000] [--project-dir /checkout]
-    [--status-host 127.0.0.1] [--status-port 4100] [--retain-acknowledged-pairs 1000]
+    [--features-dir features] [--status-host 127.0.0.1] [--status-port 4100] [--retain-acknowledged-pairs 1000]
 status [--url http://127.0.0.1:4100] [--format json|html]
 --help
 
@@ -27,7 +27,7 @@ try {
     if (o.help || !cmd)
         console.log(help);
     else if (cmd === 'run') {
-        validateOptions(o, ['url', 'state-dir', 'profiles', 'poll-ms', 'mock-ms', 'status-host', 'status-port', 'config', 'parallel', 'timeout-ms', 'project-dir', 'retain-acknowledged-pairs']);
+        validateOptions(o, ['url', 'state-dir', 'profiles', 'poll-ms', 'mock-ms', 'status-host', 'status-port', 'config', 'parallel', 'timeout-ms', 'project-dir', 'features-dir', 'retain-acknowledged-pairs']);
         const effective = await configuration(o);
         const stop = new AbortController();
         process.once('SIGINT', () => stop.abort());
