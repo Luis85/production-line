@@ -5,10 +5,24 @@ import type { RegisteredCapabilities } from '../../shared/capabilities.js';
 import type { WorkerDetail } from '../../shared/protocol.js';
 
 /** Use bounded projections; neither registry size nor task payloads determine response size. */
-export function registeredCapabilities(db: DatabaseSync, project: string): RegisteredCapabilities {
+export function registeredCapabilities(db: DatabaseSync, project: string, now = Date.now(), ttl = 60000): RegisteredCapabilities {
     const rows = db.prepare("SELECT DISTINCT json_extract(p.value,'$.id') AS id,json_extract(p.value,'$.provider') AS provider,COALESCE(json_extract(p.value,'$.mode'),'mock') AS mode FROM workers w,json_each(w.profiles) p WHERE w.project=? ORDER BY id,provider,mode LIMIT 65").all(project) as { id: string; provider: 'claude' | 'codex'; mode: 'mock' | 'cli' }[];
     const providers = db.prepare("SELECT DISTINCT json_extract(p.value,'$.provider') AS provider FROM workers w,json_each(w.profiles) p WHERE w.project=? ORDER BY provider LIMIT 3").all(project) as { provider: 'claude' | 'codex' }[];
-    return { providers: providers.map(row => row.provider), profiles: rows.slice(0, 64).map(row => ({ id: row.id, provider: row.provider, mode: row.mode })), profilesTruncated: rows.length > 64 };
+    const capacity = new Map<string, { provider: 'claude' | 'codex'; mode: 'mock' | 'cli'; slotsAvailable: number }>();
+    for (const row of db.prepare('SELECT id,profiles,config FROM workers WHERE project=? AND seen>?').iterate(project, now - ttl)) {
+        const workerProfiles = profiles(JSON.parse(String(row.profiles))), config = workerPolicy(JSON.parse(String(row.config)));
+        const active = db.prepare("SELECT profile,COUNT(*) AS busy FROM tasks WHERE worker=? AND status='running' GROUP BY profile").all(row.id);
+        const machineFree = Math.max(0, config.maxParallel - active.reduce((sum, entry) => sum + Number(entry.busy), 0));
+        const grouped = new Map<string, number>();
+        for (const profile of workerProfiles) {
+            const key = profile.provider + ':' + profile.mode;
+            const free = Math.max(0, (profile.maxParallel ?? 1) - Number(active.find(entry => entry.profile === profile.id)?.busy ?? 0));
+            grouped.set(key, (grouped.get(key) ?? 0) + free);
+            if (!capacity.has(key)) capacity.set(key, { provider: profile.provider, mode: profile.mode, slotsAvailable: 0 });
+        }
+        for (const [key, free] of grouped) capacity.get(key)!.slotsAvailable += Math.min(machineFree, free);
+    }
+    return { eligibleCapacity: [...capacity.values()], providers: providers.map(row => row.provider), profiles: rows.slice(0, 64).map(row => ({ id: row.id, provider: row.provider, mode: row.mode })), profilesTruncated: rows.length > 64 };
 }
 export function workerDetail(db: DatabaseSync, project: string, id: string, now: number, ttl: number): WorkerDetail {
     const row = db.prepare('SELECT id,project,profiles,seen,config FROM workers WHERE id=? AND project=?').get(identifier(id, 'worker ID'), project) as { id: string; project: string; profiles: string; seen: number; config: string } | undefined;

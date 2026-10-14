@@ -2,8 +2,10 @@
 
 Werk models a Factory as a collection of production lines. Each line has one
 orchestrator and one or more workers. A task belongs to one line's orchestrator;
-a worker receives a leased attempt to execute it. The current execution mode is
-mock, so completed attempts produce a `simulated` task and evidence.
+a worker receives a leased attempt to execute it. Mock execution is the default:
+completed attempts produce a `simulated` task and evidence. Explicitly enabled
+native Linux Codex execution can produce a local change set in `review`; human
+validation, publication and merge remain separate operator actions.
 
 ```mermaid
 flowchart TD
@@ -37,7 +39,7 @@ by that line. Factory identity and project identity serve different purposes.
 | --- | --- | --- |
 | Factory/root and subfactory | One Factory registry/database owns hierarchy and line registrations | Dedicated Factory webview, including its hierarchy and portfolio summaries |
 | Production line | Stable Factory registration points to its independent orchestrator | Factory line entry opens that line's webview; line data remains local to its orchestrator |
-| Orchestrator | Its own SQLite database owns tasks, claims, leases, context and accepted evidence | Dedicated line Intake/taskboard and task/worker inspectors |
+| Orchestrator | Its own SQLite database owns tasks, claims, leases, context and accepted evidence | Dedicated line map, Intake/taskboard and task/worker inspectors |
 | Worker | Own enrollment identity and local journal; line owns accepted worker/task records | Worker's local status webview and the orchestrator's worker view |
 | Task/attempt | One orchestrator owns task state/history; worker supplies lease-scoped evidence | That line's task detail, events and snapshots |
 
@@ -50,6 +52,13 @@ with active tasks; the worker's own status remains its local diagnostic view. Se
 
 Factory and orchestrator also serve a public, standalone `/guide` explaining
 these entities; it makes no live API calls and performs no administrative actions.
+Its 3D/2D topology is illustrative. A local composer can download a definition for
+one line with one to eight mock worker processes; it cannot apply the file or
+migrate running state. The standard native startup still supplies two independent
+lines. Factory's live map, in contrast, uses registry and summary observations;
+its aggregate worker pools do not invent individual identities. The line map
+(`#system`) is the default authenticated entry, with direct routes to Intake,
+tasks, workers and metrics.
 
 Inspect service health, task events and worker evidence together when diagnosing a
 failure. Each surface reports the state owned by its service; a portfolio summary
@@ -90,8 +99,9 @@ runtime through that line's Intake or API. They are not seeded by system YAML.
 A stable submission key makes retries of the same intent idempotent within the
 line.
 
-Task states are `queued`, `running`, `simulated` and `blocked`. An attempt records
-which worker held which lease and its before/after evidence. A retry is another
+Task states are `queued`, `running`, `review`, `simulated` and `blocked`.
+`review` records a change set pending human validation, not acceptance or merge.
+An attempt records which worker held which lease and its before/after evidence. A retry is another
 attempt on the same task; it is not a second global Factory task. Lease expiry or
 failure can requeue work or block it at its attempt ceiling.
 

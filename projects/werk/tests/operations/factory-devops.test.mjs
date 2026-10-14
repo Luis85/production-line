@@ -36,12 +36,15 @@ test('factory distribution builds independently and includes its webview without
     await writeFile(join(root,'package.json'),JSON.stringify({version:'0.1.0',engines:{node:'>=24 <25'}}));
     await mkdir(join(root,'src/factory/public'),{recursive:true});await mkdir(join(root,'src/shared'));
     await writeFile(join(root,'src/factory/cli.ts'),'#!/usr/bin/env node\nconsole.log("factory");');
-    await writeFile(join(root,'src/factory/public/index.html'),'<h1>Factory</h1>');
-    await mkdir(join(root,'src/guide/public'),{recursive:true});await writeFile(join(root,'src/guide/public/index.html'),'<h1>System guide</h1>');
-    await exec(process.execPath,[join(root,'scripts/build.mjs'),'factory']);
+    await writeFile(join(root,'src/factory/public/index.html'),'<!doctype html><html><head></head><body><h1>Factory</h1></body></html>');
+    await mkdir(join(root,'src/guide/public'),{recursive:true});await writeFile(join(root,'src/guide/public/index.html'),'<!doctype html><html><head></head><body><h1>System guide</h1></body></html>');
+    await cp(new URL('../../src/shared/ui',import.meta.url),join(root,'src/shared/ui'),{recursive:true});
+    for(const app of ['factory','guide'])await cp(new URL('../../src/'+app+'/public/experience.js',import.meta.url),join(root,'src/'+app+'/public/experience.js'));
+    await exec(process.execPath,[join(root,'scripts/build.mjs'),'factory','--dist-only']);
     const dest=join(root,'src/factory/dist');const manifest=JSON.parse(await readFile(join(dest,'package.json'),'utf8'));assert.equal(manifest.bin['werk-factory'],'factory/cli.js');
     assert.match(await readFile(join(dest,'factory/public/index.html'),'utf8'),/Factory/);
     assert.match(await readFile(join(dest,'factory/public/guide.html'),'utf8'),/System guide/);
+    for(const file of ['index.html','guide.html']){const page=await readFile(join(dest,'factory/public',file),'utf8');assert.match(page,/class SpatialMap/);for(const [,script]of page.matchAll(/<script>([\s\S]*?)<\/script>/g))new (await import('node:vm')).Script(script);}
     assert.equal((await exec(process.execPath,[join(dest,'factory/cli.js')])).stdout.trim(),'factory');
   }finally{await rm(root,{recursive:true,force:true});}
 });

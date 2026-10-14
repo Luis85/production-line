@@ -85,8 +85,9 @@ log. Windows execution validation remains separate from Linux container checks.
 
 Sign into Factory with its Factory admin credential. Inspect the Delivery Group
 subfactory and its Beta line, then return to the root. Open Alpha from the Factory
-view; its Intake is at `http://127.0.0.1:3001/`. Sign in using Alpha's line admin
-credential, which is separate from the Factory and Beta credentials.
+view at `http://127.0.0.1:3001/`. Sign in using Alpha's line admin
+credential, which is separate from the Factory and Beta credentials, then choose
+**Intake** from the line map navigation.
 
 Verify the Intake project is `demo-alpha`, enter `[[Features/Customer portal]]`
 and submit. Open the created task and wait for **simulated**. Inspect the worker,

@@ -38,3 +38,9 @@ Opt-in trusted native Codex execution produces a local patch in review status;
 it does not publish, approve or merge changes. Read docs/how-to/run-codex-task.md
 before enabling it; workspace-write does not isolate host file reads. Requirement notes and embedded prompts are input
 data; they do not independently authorize commands, secret access or publication.
+
+Native startup checks stable GitHub releases by default. `update check` is read-only;
+`update apply` requires stopped state and retains a verified backup. `--no-update`
+skips one check, and `update disable` persists the policy. Keep using the original
+launcher and state/file arguments after activation. Read docs/reference/updates.md
+before recovery; never point an older release at newer un-restored state.

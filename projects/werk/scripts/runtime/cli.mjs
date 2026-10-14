@@ -8,12 +8,12 @@ import { logOutputMode } from './service-logs.mjs';
 
 const help = `Werk local release runtime — Node.js 24.x, mock execution only
 
-node werk.mjs up [--file PATH] [--state-dir PATH] [--no-open] [--json]\n  Start the complete Factory system (defaults to the packaged example YAML).\nnode werk.mjs setup [--state-dir PATH] [--project demo] [--port 3000]
+node werk.mjs up [--file PATH] [--state-dir PATH] [--no-open] [--no-update] [--json]\n  Start the complete Factory system (defaults to the packaged example YAML).\nnode werk.mjs setup [--state-dir PATH] [--project demo] [--port 3000]
                    [--worker-port 4100] [--workers 1] [--runtime native|docker] [--json]
 node werk.mjs start [--state-dir PATH] [--log-output file|stream|both] [--no-open] [--json]
 node werk.mjs status|doctor|stop|open [--state-dir PATH] [--json]
 
-Run setup once, then start. The foreground launcher waits for a healthy orchestrator
+node werk.mjs update check|apply|status|enable|disable [--state-dir PATH] [--line] [--json]\nNative downloaded releases check for stable updates before startup. --no-update skips it.\n\nRun setup once, then start. The foreground launcher waits for a healthy orchestrator
 and mock worker before opening the Intake page. Ctrl+C or stop drains workers first.
 Default private state: .werk beside werk.mjs. Existing settings and credentials are
 preserved. Read WERK_ADMIN_TOKEN from credentials.json to sign in; never put it in a URL.

@@ -1,0 +1,202 @@
+{
+  "date": "2026-10-13",
+  "scope": "PR4 shared spatial renderer polish",
+  "browser": {
+    "checks": [
+      {
+        "name": "factory",
+        "width": 1440,
+        "overflow": false
+      },
+      {
+        "name": "factory-2d",
+        "width": 1440,
+        "overflow": false
+      },
+      {
+        "name": "factory-rotated",
+        "width": 1440,
+        "overflow": false
+      },
+      {
+        "name": "line",
+        "width": 1440,
+        "overflow": false
+      },
+      {
+        "name": "worker",
+        "width": 1440,
+        "overflow": false
+      },
+      {
+        "name": "guide",
+        "width": 1440,
+        "overflow": false
+      },
+      {
+        "name": "factory",
+        "width": 900,
+        "overflow": false
+      },
+      {
+        "name": "factory-2d",
+        "width": 900,
+        "overflow": false
+      },
+      {
+        "name": "factory-rotated",
+        "width": 900,
+        "overflow": false
+      },
+      {
+        "name": "line",
+        "width": 900,
+        "overflow": false
+      },
+      {
+        "name": "worker",
+        "width": 900,
+        "overflow": false
+      },
+      {
+        "name": "guide",
+        "width": 900,
+        "overflow": false
+      },
+      {
+        "name": "factory",
+        "width": 390,
+        "overflow": false
+      },
+      {
+        "name": "factory-2d",
+        "width": 390,
+        "overflow": false
+      },
+      {
+        "name": "factory-rotated",
+        "width": 390,
+        "overflow": false
+      },
+      {
+        "name": "line",
+        "width": 390,
+        "overflow": false
+      },
+      {
+        "name": "worker",
+        "width": 390,
+        "overflow": false
+      },
+      {
+        "name": "guide",
+        "width": 390,
+        "overflow": false
+      }
+    ],
+    "errors": []
+  },
+  "navigation": {
+    "checks": [
+      {
+        "check": "Mobile Factory geometry in first viewport",
+        "canvasTop": 570.96875
+      },
+      {
+        "check": "3D touch and keyboard pan"
+      },
+      {
+        "check": "2D touch and keyboard pan"
+      },
+      {
+        "check": "Active mobile navigation visible after map action and browser back/forward"
+      },
+      {
+        "check": "Worker detail closes to visual card with subsequent Tab"
+      },
+      {
+        "check": "Task detail closes to visual card"
+      },
+      {
+        "check": "Delayed active-task lookup does not overwrite a newer selection"
+      }
+    ],
+    "errors": []
+  },
+  "final2dSpacing": {
+    "checks": [
+      {
+        "width": 1440,
+        "minimumZoom": "readable",
+        "zoomControls": "passed",
+        "pageOverflow": false
+      },
+      {
+        "width": 390,
+        "minimumZoom": "readable",
+        "zoomControls": "passed",
+        "pageOverflow": false
+      }
+    ],
+    "errors": []
+  },
+  "focusedTests": {
+    "command": "node --test \"tests/ui/runtime/*.test.mjs\" tests/operations/factory-devops.test.mjs tests/operations/release-package.test.mjs",
+    "tests": 113,
+    "passed": 113,
+    "failed": 0
+  },
+  "geometryRegressions": {
+    "tests": 4,
+    "rotations": 7,
+    "viewportWidths": [
+      620,
+      850,
+      1200
+    ],
+    "zoomLevels": [
+      0.55,
+      1,
+      1.6
+    ],
+    "denseNodes": 48,
+    "assertions": [
+      "projected parallel edges",
+      "finite bounded vertices",
+      "labels do not mask models or other labels",
+      "2D camera independence",
+      "readable non-overlapping 2D cards"
+    ]
+  },
+  "typecheck": "passed",
+  "build": "passed",
+  "fullSuiteLocalAttempts": [
+    {
+      "command": "npm run check",
+      "passed": 488,
+      "failed": 2,
+      "cancelled": 2,
+      "skipped": 1,
+      "context": "Overlapped two Chromium runs; readiness and lease timing failures."
+    },
+    {
+      "command": "npm run check",
+      "passed": 490,
+      "failed": 1,
+      "cancelled": 1,
+      "skipped": 1,
+      "context": "Browsers and demo stopped; extracted runtime and worker readiness deadlines still exceeded."
+    },
+    {
+      "command": "node --test --test-concurrency=1 \"tests/**/*.test.mjs\" \"tests/**/*.test.cjs\"",
+      "outcome": "Interrupted after extracted runtime again exceeded its 40-second deadline. No claim of a passing full local suite."
+    }
+  ],
+  "qualification": "Use GitHub Actions on the PR head for the complete cross-platform result.",
+  "limits": [
+    "Chromium browser evidence; no claim of Safari or Firefox execution.",
+    "Shapes identify component types, not hardware or instance counts.",
+    "Dense and zoomed diagrams intentionally scroll within their own region.",
+    "Guide data is illustrative; live views retain the owning API authority."
+  ]
+}

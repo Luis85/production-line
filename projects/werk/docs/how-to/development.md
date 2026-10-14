@@ -2,7 +2,7 @@
 
 Three independently deployable Node.js / TypeScript CLI applications, a Factory
 hierarchy/line registry, a SQLite orchestrator, configurable workers, a repository importer and measurable mock
-execution. Each orchestrator webview opens on **Intake**. The 3D concept prototype is served
+execution. Each orchestrator webview opens on its live **line map**; choose **Intake** to submit work. The 3D concept prototype is served
 at `/concept`; it deliberately retains separate simulated browser state.
 
 This guide requires the source checkout, Node 24 and npm. For an extracted release with no build step, use the [local first-task tutorial](../tutorials/local-first-task.md) or [Docker tutorial](../tutorials/docker-first-task.md). Developer fleet launchers below retain their separate `.state` directories; release operators use `.werk`.
@@ -167,11 +167,12 @@ node src/worker/dist/worker/cli.js run \
 
 Set `WERK_ENROLLMENT_TOKEN` and optionally `WERK_URL` first. Configuration covers:
 
-- Machine concurrency (`maxParallel`, 1–8), per-profile session limits, priority
-  or FIFO order, polling interval, and a 1–5 attempt ceiling.
+- Serial execution (`maxParallel: 1`) across chat, local file tasks and remote
+  assignments; priority or FIFO order, polling interval, and a 1–5 attempt ceiling.
 - Execution timeout and mock duration.
 - A worker system prompt. In mock mode its hash is recorded; no model consumes it.
-- Multiple Claude/Codex profiles. Profile limits are separate from machine slots.
+- Multiple Claude/Codex profiles, each with a limit of one. Profiles share the
+  worker’s single execution slot; start separate workers for parallel work.
 
 Flags override config values where available (`--parallel`, `--profiles`,
 `--poll-ms`, `--mock-ms`, `--timeout-ms`). The effective configuration is hashed

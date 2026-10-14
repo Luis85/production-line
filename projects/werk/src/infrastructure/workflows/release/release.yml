@@ -79,7 +79,7 @@ jobs:
       - name: Start, simulate a task, stop and restart the extracted native runtime
         run: node scripts/release/smoke.mjs --root "$RUNNER_TEMP/werk release/werk-${{ needs.build.outputs.version }}"
       - name: Verify YAML hierarchy, isolated lines and persistent workers
-        run: node scripts/release/system-smoke.mjs --root "$RUNNER_TEMP/werk release/werk-${{ needs.build.outputs.version }}"
+        run: node scripts/release/system-smoke.mjs --root "$RUNNER_TEMP/werk release/werk-${{ needs.build.outputs.version }}" --update-archives release
   docker:
     needs: build
     runs-on: ubuntu-latest

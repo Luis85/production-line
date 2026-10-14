@@ -36,7 +36,7 @@ The enrollment token is for the worker, not the browser.
 
 ## Submit one requirement
 
-In Intake, verify the project is `demo`, enter `[[Features/Customer portal]]`, and submit.
+After signing in, choose **Intake**. Verify the project is `demo`, enter `[[Features/Customer portal]]`, and submit.
 This default unbound mock line preserves the reference without reading a vault;
 no note or Git repository is required for this exercise.
 

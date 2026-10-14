@@ -51,8 +51,8 @@ export class HttpWorkerGateway implements WorkerGateway {
         if (!Array.isArray(response.tasks)) throw Error('Invalid orchestrator assignments response');
         return response.tasks.map(assignment);
       },
-      async claim(requestId: string) {
-        const response = record(await call('/v1/worker/assignments/next', 'POST', { requestId }));
+      async claim(requestId: string, queueCapacity?: number) {
+        const response = record(await call('/v1/worker/assignments/next', 'POST', { requestId, ...(queueCapacity === undefined ? {} : { queueCapacity }) }));
         return response.task === null ? null : assignment(response.task);
       },
       async heartbeat(task: Task) {

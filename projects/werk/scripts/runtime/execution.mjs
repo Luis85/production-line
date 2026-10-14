@@ -14,7 +14,16 @@ export function normalizeExecution(value) {
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 3600000) fail();
   return { mode: 'cli', timeoutMs, codex: { executable: codex.executable, repository: codex.repository, allowedPaths: [...paths] } };
 }
-export function workerDocument(execution) {
+export function workerDocument(execution, chat) {
   const normalized = normalizeExecution(execution);
-  return normalized ? { schemaVersion: 1, execution: normalized, scheduler: { maxParallel: 1, maxAttempts: 1 }, profiles: [{ id: 'codex-live', provider: 'codex', mode: 'cli', maxParallel: 1 }] } : undefined;
+  const conversation = normalizeChat(chat);
+  const document = normalized ? { schemaVersion: 1, execution: normalized, scheduler: { maxParallel: 1, maxAttempts: 1 }, profiles: [{ id: 'codex-live', provider: 'codex', mode: 'cli', maxParallel: 1 }] } : undefined;
+  return conversation ? { ...document, chat: conversation } : document;
+}
+
+/** Chat can use a real model while task execution remains simulated. */
+export function normalizeChat(value) {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length !== 1 || typeof value.codexExecutable !== 'string' || !posix.isAbsolute(value.codexExecutable) || value.codexExecutable.length > 4096 || /[\x00-\x1f\x7f]/.test(value.codexExecutable)) throw Object.assign(Error('chat.codexExecutable must be an absolute Linux path.'), { exitCode: 2 });
+  return { codexExecutable: value.codexExecutable };
 }

@@ -112,7 +112,7 @@ export async function startRuntime(stateDir, { noOpen = false, emit = () => {}, 
   async function launch(role, index = 0) {
     abort.signal.throwIfAborted();
     const child = spawn(process.execPath, [join(releaseRoot, 'scripts/runtime/child.mjs')], { cwd: releaseRoot, detached: process.platform !== 'win32', windowsHide: true,
-      env: runtimeEnvironment(environment, { liveProvider: role === 'worker' && config.mode === 'cli' }), stdio: ['ignore', 'ignore', 'pipe', 'ipc'] });
+      env: runtimeEnvironment(environment, { liveProvider: role === 'worker' && (config.mode === 'cli' || !!config.chat) }), stdio: ['ignore', 'ignore', 'pipe', 'ipc'] });
     const item = { child, role, index, closed: false, completion: undefined };
     // Child diagnostics may contain provider/repository text. Only allowlisted lifecycle events
     // enter runtime output/logs; never relay arbitrary child stdout/stderr to public reports.

@@ -54,13 +54,17 @@ test('HTML status snapshot escapes hostile values and is independent of the work
   const output=statusHtml({workerId:'</script><img src=x>',project:'demo'});
   assert.ok(!output.includes('</script><img'));assert.ok(output.includes('Exported snapshot'));assert.ok(!output.includes('setInterval(refresh,3000)'));
 });
-test('configuration is hashed; server enforces both machine and profile parallelism',async()=>{
-  const c=await configuration({config:'examples/worker.json'});assert.equal(c.policy.maxParallel,2);assert.equal(c.policy.configHash.length,64);
-  const changed=await configuration({config:'examples/worker.json',parallel:'3'});assert.notEqual(changed.policy.configHash,c.policy.configHash);
+test('serial worker configuration is hashed; server retains machine and profile capacity enforcement',async()=>{
+  const c=await configuration({});assert.equal(c.policy.maxParallel,1);assert.ok(c.profiles.every(profile=>profile.maxParallel===1));assert.equal(c.policy.configHash.length,64);
+  const changed=await configuration({'poll-ms':'2000'});assert.notEqual(changed.policy.configHash,c.policy.configHash);
+  await assert.rejects(configuration({parallel:'3'}),/parallel must be 1/);
+  // Legacy or synthetic registrations still exercise the server's general capacity contract.
   const s=new Store(':memory:');try{
     const w=s.worker(s.register('demo',c.profiles,{...c.policy,maxParallel:3}).token);
     s.submit(task({provider:'claude'}),'a');s.submit(task({provider:'claude'}),'b');s.submit(task({provider:'codex'}),'c');
     const a=s.claim(w,'r1'),b=s.claim(w,'r2');assert.notEqual(a.profile,b.profile);assert.equal(s.claim(w,'r1').id,a.id);assert.equal(s.claim(w,'r3'),null);assert.equal(s.current(w).length,2);
+    const serial=s.worker(s.register('demo',c.profiles,c.policy).token);s.submit(task({provider:'codex'}),'d');
+    assert.ok(s.claim(serial,'s1'));assert.equal(s.claim(serial,'s2'),null);assert.equal(s.current(serial).length,1);
   }finally{s.close();}
 });
 test('journal recovers an incomplete attempt and preserves unknown timing; late telemetry cannot finish it',async()=>{
@@ -119,7 +123,7 @@ test('HTTP intake, stdin CLI and three real worker processes complete a mock fle
     assert.ok(app.store.list().every(t=>t.attempt===1));
     const line=children[0].getLog().split('\n').find(l=>l.includes('status_listening'));const port=JSON.parse(line).address.port;
     const statusUrl='http://127.0.0.1:'+port;
-    assert.ok((await(await fetch(statusUrl)).text()).includes('Worker status'));
+    assert.match(await (await fetch(statusUrl)).text(), /id="app"/);
     const snapshot=await cli(wc,['status','--url',statusUrl,'--format','html'],{});assert.equal(snapshot.code,0,snapshot.stderr);assert.ok(snapshot.stdout.includes('Exported snapshot'));
     const list=await cli(oc,['task','list'],env);assert.equal(JSON.parse(list.stdout).tasks.length,9);
     const events=await cli(oc,['task','events','--id',id],env);assert.equal(JSON.parse(events.stdout).events.at(-1).kind,'simulation_finished');

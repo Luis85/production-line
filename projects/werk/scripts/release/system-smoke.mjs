@@ -1,15 +1,24 @@
 /** Independent release gate: one definition, Factory, two isolated lines, three workers. */
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp, readFile, writeFile, rm, access } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm, access, cp } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { randomUUID, createHash } from 'node:crypto';
 const args = process.argv.slice(2);
-if (args.length !== 2 || args[0] !== '--root') throw Error('Usage: node scripts/release/system-smoke.mjs --root EXTRACTED_RELEASE');
-const root = resolve(args[1]);
+if (![2, 4].includes(args.length) || args[0] !== '--root' || (args.length === 4 && args[2] !== '--update-archives')) throw Error('Usage: node scripts/release/system-smoke.mjs --root EXTRACTED_RELEASE [--update-archives ARCHIVES]');
+let root = resolve(args[1]);
+const updateArchives = args[3] ? resolve(args[3]) : undefined;
 const scratch = await mkdtemp(join(tmpdir(), 'werk system smoke '));
+if (updateArchives) {
+  const original = root; root = join(scratch, 'previous release');
+  await cp(original, root, { recursive: true });
+  const manifestPath = join(root, 'release-manifest.json');
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  manifest.version = '0.0.0'; // Previous protocol-compatible version fixture.
+  await writeFile(manifestPath, JSON.stringify(manifest));
+}
 const state = join(scratch, 'private system');
 const file = join(scratch, 'system definition.yaml');
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -30,7 +39,27 @@ async function portRange(count = 1) {
   throw Error('Could not allocate smoke ports');
 }
 function cli(command) {
-  const child = spawn(process.execPath, [join(root, 'werk.mjs'), ...(command[0] === 'up' ? command : ['system', ...command]), '--state-dir', state, '--json'], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+  const forwarded = [...(command[0] === 'up' ? command : ['system', ...command]), '--state-dir', state, '--json'];
+  // Substitute only GitHub transport. Startup, selection, extraction, preflight,
+  // state backup and the upgraded services execute the actual packaged code.
+  const driver = `
+    import {readFile} from 'node:fs/promises'; import {join} from 'node:path'; import {pathToFileURL} from 'node:url';
+    const [root, archives, encoded] = process.argv.slice(1);
+    const {runNative}=await import(pathToFileURL(join(root,'scripts/runtime/update/launcher.mjs')));
+    const sums=await readFile(join(archives,'SHA256SUMS'));
+    const name=sums.toString().split('\\n').map(x=>x.split('  ')[1]).find(x=>x?.endsWith('.tar.gz'));
+    const version=name.slice(5,-7);
+    const fetcher=async url=>{
+      if(url==='https://github.com/Luis85/production-line/releases/latest/download/SHA256SUMS') return new Response(sums);
+      if(url!=='https://github.com/Luis85/production-line/releases/download/v'+version+'/'+name) throw Error('Unexpected update URL');
+      return new Response(await readFile(join(archives,name)));
+    };
+    process.exitCode=await runNative(root,JSON.parse(encoded),{fetcher,environment:{...process.env,WERK_AUTO_UPDATE:'1'}});
+  `;
+  const entry = updateArchives && command[0] === 'start'
+    ? ['--input-type=module', '-e', driver, root, updateArchives, JSON.stringify(forwarded)]
+    : [join(root, 'werk.mjs'), ...forwarded];
+  const child = spawn(process.execPath, entry, { cwd: root, env: { ...process.env, WERK_AUTO_UPDATE: '0' }, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
   let stdout = '', stderr = '';
   child.stdout.on('data', value => { stdout += value; if (stdout.length > 1048576) child.kill(); });
   child.stderr.on('data', value => { stderr += value; if (stderr.length > 1048576) child.kill(); });
@@ -44,7 +73,9 @@ async function command(args, code = 0) {
   const run = cli(args), timer = setTimeout(() => run.child.kill(), 45000);
   try {
     const result = await run.completion;
-    assert.equal(result.code, code, `System ${args[0]} unexpected exit; inspect the command locally`);
+    let diagnostic;
+    try { diagnostic = JSON.parse(result.stdout).error?.message; } catch { /* Only structured runtime diagnostics are safe to surface. */ }
+    assert.equal(result.code, code, `System ${args[0]} unexpected exit: ${diagnostic ?? 'no structured error; inspect locally'}`);
     return JSON.parse(result.stdout);
   } finally { clearTimeout(timer); }
 }
@@ -139,8 +170,16 @@ try {
     assert.deepEqual((await lineCall(index, '/v1/workers?limit=100')).workers.map(worker => worker.id).sort(), workerIds[index]);
   }
   await stop();
+  if (updateArchives) {
+    const selected = JSON.parse(await readFile(state + '.updates/selection.json', 'utf8'));
+    assert.notEqual(selected.active, '0.0.0');
+    assert.equal(selected.previous, '0.0.0');
+    assert.ok(selected.backup);
+    assert.ok(output.some(value => value.includes('\"event\":\"updated\"')));
+    assert.deepEqual(await Promise.all(credentialFiles.map(async path => hash(await readFile(path)))), before);
+  }
   for (const record of credentials) for (const secret of Object.values(record)) assert.ok(output.every(value => !value.includes(secret)), 'Runtime output exposed a credential');
-  console.log(JSON.stringify({ ok: true, runtime: 'native-system', extractedRelease: root, factoryServices: 1, logicalFactories: 2, lines: 2, workers: 3, isolatedSimulatedTasks: 2, restartPreserved: true, planReadOnly: true, driftRejected: true }));
+  console.log(JSON.stringify({ ok: true, runtime: 'native-system', extractedRelease: root, factoryServices: 1, logicalFactories: 2, lines: 2, workers: 3, isolatedSimulatedTasks: 2, restartPreserved: true, automaticUpgradeVerified: Boolean(updateArchives), planReadOnly: true, driftRejected: true }));
 } finally {
   if (launcher) { await stop().catch(() => launcher?.child.kill()); await launcher?.completion; }
   await rm(scratch, { recursive: true, force: true });

@@ -23,3 +23,48 @@ Test filenames retain their history; choose a directory by the behavior under te
 For a focused run after `npm run build`, use `node --test "tests/worker/*.test.mjs"` or `node --test "tests/orchestrator/context/*.test.mjs"`. Run commands from the project root: subprocess integration tests intentionally launch the built application CLIs there. File imports and source fixtures resolve relative to each test module. Temporary runtime fixtures use isolated directories and are cleaned up by their tests.
 
 Keep new tests named `*.test.mjs` or `*.test.cjs` so recursive discovery includes them. Preserve real assertions and cleanup when moving tests; do not replace behavioral checks with directory-shape assertions. Mock execution tests do not demonstrate live provider execution.
+
+
+## Spatial navigation browser regression
+
+`ui/browser/visual-navigation.mjs` is an explicit Chromium integration check,
+separate from the default Node suite. Start an isolated native demo system from
+`examples/system.yaml` on its default ports (Factory 3100, Alpha 3001), and save
+at least two simulated tasks in Alpha using Intake. Do not use a production state
+directory. Install Playwright Core outside the project or provide its module path:
+
+```sh
+WERK_PLAYWRIGHT_MODULE=/absolute/path/to/playwright-core/index.mjs \
+WERK_CHROMIUM=/usr/bin/chromium \
+WERK_VISUAL_STATE=/absolute/path/to/demo-state \
+WERK_VISUAL_REPORT=/tmp/werk-visual-report.json \
+node tests/ui/browser/visual-navigation.mjs
+```
+
+If `playwright-core` is resolvable, its module override can be omitted. The script
+reads generated credentials into memory, tests mobile touch/keyboard panning,
+route history, focus restoration and a delayed response race, and emits a sanitized
+JSON result. Worker assignments and delayed responses use browser route fixtures;
+the script does not change persisted tasks. Keep the isolated system running for
+the check and stop it afterward with `system stop --state-dir`.
+
+## Worker access and task-chat browser qualification
+
+After `npm run build`, run [worker/webview-smoke.mjs](worker/webview-smoke.mjs)
+with Playwright Core and Chromium available. This explicit integration check
+is separate from the default Node suite. It starts and cleans up its own worker
+on an allocated loopback port and uses a labelled model protocol fixture.
+
+```sh
+WERK_PLAYWRIGHT_MODULE=/absolute/path/to/playwright-core/index.mjs \
+WERK_CHROMIUM=/usr/bin/chromium \
+WERK_BROWSER_EVIDENCE=/tmp/werk-worker-browser \
+node tests/worker/webview-smoke.mjs
+```
+
+The module path defaults to the workspace browser-runtime installation when
+present. Evidence defaults to a new temporary directory. The script tests unlock,
+reload, provider check, definition preview/import/adaptation, task queueing,
+follow-ups, code copying, inert HTML, responsive overflow, restart recovery and
+Lock. It saves twelve screenshots and a JSON result without credentials. No real
+provider login or model request is performed.

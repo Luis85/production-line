@@ -3,6 +3,8 @@ import type { Profile, WorkerPolicy } from '../../shared/contracts.js';
 import type { WorkerGateway, WorkerIdentity } from '../application/ports.js';
 import { atomicWrite, readBoundedFile } from './journal/files.js';
 
+export class IdentityConfigurationError extends Error {}
+
 export async function loadOrRegisterIdentity(
   stateDir: string, url: string, profiles: Profile[], policy: WorkerPolicy,
   gateway: WorkerGateway, stop: AbortSignal
@@ -18,7 +20,7 @@ export async function loadOrRegisterIdentity(
     await atomicWrite(join(stateDir, 'identity.json'), JSON.stringify(identity));
   }
   if (identity.url !== url || identity.configHash !== policy.configHash) {
-    throw Error('Identity is bound to server and configuration. Drain this worker and use a new state directory for changed configuration.');
+    throw new IdentityConfigurationError('Identity is bound to server and configuration. Drain this worker and use a new state directory for changed configuration.');
   }
   return identity;
 }

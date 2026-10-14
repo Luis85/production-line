@@ -18,17 +18,20 @@ async function fixture(t) {
   const put = async (path, content = 'fixture\n') => { await mkdir(dirname(join(root, path)), {recursive:true}); await writeFile(join(root, path), content); };
   await put('scripts/release/install.mjs', 'export const release = /* RELEASE_CONFIG */ null;\n');
   await put('package.json', JSON.stringify({version:'0.1.0'}));
-  for (const path of releaseFiles) await put(path);
+  for (const path of releaseFiles) if (path !== 'scripts/release/install.mjs') await put(path);
   for (const path of releaseTrees) await mkdir(join(root,path),{recursive:true});
   for (const path of releaseDocs) await put(path);
   for (const app of ['factory','orchestrator','worker']) await put(`src/${app}/dist/${app}/cli.js`, `console.log('${app}');\n`);
+  for (const app of ['factory','orchestrator','worker']) await put(`bin/apps/${app}/cli.mjs`, `console.log('${app}');\n`);
   for (const template of ['readme.md.txt','agents.md.txt','docs-index.md.txt']) await put(`scripts/release/templates/${template}`);
+  await put('src/factory/dist/factory/public/guide.html','<!doctype html><title>Composed spatial guide</title>');
   return {root, put};
 }
 test('packages both formats with identical verified payload, normalized modes, checksums and no local state', async t => {
   const {root,put}=await fixture(t);
   for(const path of ['.env','.werk/credentials.json','.state/db.sqlite','node_modules/dev/index.js','software-fabrik-starter.zip','src/orchestrator/secret.ts','scripts/runtime/.env.local','src/worker/dist/.state/private.json']) await put(path,'SECRET_NEVER_SHIP');
   await put('src/orchestrator/dist/node_modules/yaml/index.js','export default {};');
+  await put('bin/apps/orchestrator/src/orchestrator/dist/node_modules/yaml/README.md','[Upstream contributor guide](docs/CONTRIBUTING.md)');
   const result=await packageRelease(root);
   assert.equal(result.sourceCommit,null);
   const installer = await readFile(join(root, 'release/install.mjs'), 'utf8');
@@ -38,6 +41,7 @@ test('packages both formats with identical verified payload, normalized modes, c
   const files=unzipSync(zipBytes);
   assert.ok(Object.keys(files).every(path=>path.startsWith('werk-0.1.0/')));
   assert.ok(Object.values(files).every(bytes=>!Buffer.from(bytes).includes('SECRET_NEVER_SHIP')));
+  assert.equal(Buffer.from(files['werk-0.1.0/src/guide/public/index.html']).toString(), '<!doctype html><title>Composed spatial guide</title>');
   const extracted=join(root,'fresh extraction with spaces');
   await mkdir(extracted);
   await extract({file:join(root,'release/werk-0.1.0.tar.gz'),cwd:extracted,chmod:true});

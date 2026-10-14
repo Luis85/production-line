@@ -1,3 +1,4 @@
+import { WorkerRouter } from './routing.js';
 import { registeredCapabilities, workerDetail, operationalMetrics } from './monitoring.js';
 import { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
@@ -49,12 +50,13 @@ export class Store implements OrchestratorRepository {
                 tasks.total += row.count;
             }
             const now = this.clock();
-            const workers = { total: 0, online: 0, offline: 0, slotsTotal: 0, slotsBusy: tasks.running, slotsAvailable: 0 };
+            const workers = { total: 0, online: 0, offline: 0, slotsTotal: 0, slotsBusy: 0, slotsAvailable: 0 };
             for (const row of this.db.prepare("SELECT w.id,w.seen,w.config,w.profiles,COUNT(t.id) AS busy FROM workers w LEFT JOIN tasks t ON t.worker=w.id AND t.status='running' AND json_extract(t.payload,'$.project')=? WHERE w.project=? GROUP BY w.id").all(project, project) as {id:string;seen:number;config:string;profiles:string;busy:number}[]) {
                 const capacity = Math.min(JSON.parse(row.config).maxParallel ?? 1, JSON.parse(row.profiles).reduce((total:number,profile:{maxParallel?:number})=>total+(profile.maxParallel??1),0));
                 const busy = Number(row.busy);
                 workers.total++;
                 workers.slotsTotal += capacity;
+                workers.slotsBusy += Math.min(capacity, busy);
                 if (now - row.seen < this.ttl) { workers.online++; workers.slotsAvailable += Math.max(0,capacity-busy); }
                 else workers.offline++;
             }
@@ -68,9 +70,18 @@ export class Store implements OrchestratorRepository {
         const modes = this.db.prepare("SELECT DISTINCT json_extract(p.value,'$.mode') AS mode FROM workers w,json_each(w.profiles) p WHERE w.project=? LIMIT 3").all(project) as { mode: string }[];
         return modes.some(item => item.mode === 'cli') ? modes.some(item => item.mode === 'mock') ? 'mixed' : 'cli' : 'mock';
     }
-    registeredCapabilities(project: string) { return registeredCapabilities(this.db, project); }
+    registeredCapabilities(project: string) { return registeredCapabilities(this.db, project, this.clock(), this.ttl); }
     workerDetail(project: string, id: string) { this.reapExpired(); return workerDetail(this.db, project, id, this.clock(), this.ttl); }
     operationalMetrics(project: string, windowSeconds: number) { return operationalMetrics(this.db, project, this.clock(), this.ttl, windowSeconds); }
+    routing(project: string) { return new WorkerRouter(this.db).policy(project); }
+    configureRouting(project: string, input: unknown) { return this.transaction(() => new WorkerRouter(this.db).configure(project, input)); }
+    routeTask(project: string, id: string, input: unknown) { return this.transaction(() => {
+        const task = this.get(id);
+        if (task.project !== project) throw new DomainError('not_found', 'Task not found in this project');
+        const result = new WorkerRouter(this.db).assign(task, input);
+        this.event(id, 'routing_changed', result);
+        return result;
+    }); }
     close() { this.db.close(); }
     transaction<T>(fn: () => T): T {
         this.db.exec('BEGIN IMMEDIATE');
@@ -189,7 +200,7 @@ export class Store implements OrchestratorRepository {
         this.reapExpired();
         return this.db.prepare('SELECT id, project, profiles, seen, config FROM workers ORDER BY seen DESC').all().map((w: any) => ({ ...w, profiles: JSON.parse(w.profiles), config: JSON.parse(w.config), online: this.clock() - w.seen < this.ttl }));
     }
-    claim(w: WorkerRecord, claimKey: string = randomUUID()): Task | null {
+    claim(w: WorkerRecord, claimKey: string = randomUUID(), queueCapacity?: number): Task | null {
         if (typeof claimKey !== 'string' || !/^[\w-]{1,100}$/.test(claimKey))
             throw new DomainError('invalid_input', 'requestId required: 1–100 letters, digits, _ or -');
         return this.transaction(() => {
@@ -201,24 +212,39 @@ export class Store implements OrchestratorRepository {
                 const t = this.get(prior.task);
                 return t.lease === prior.lease && t.status === 'running' ? t : null;
             }
+            if (queueCapacity !== undefined) {
+                if (!Number.isInteger(queueCapacity) || queueCapacity < 0 || queueCapacity > 64) throw new DomainError('invalid_input', 'queueCapacity: 0–64');
+                w = { ...w, config: { ...w.config, queueCapacity } };
+                this.db.prepare('UPDATE workers SET config=? WHERE id=?').run(JSON.stringify(w.config), w.id);
+            }
             const active = this.db.prepare("SELECT * FROM tasks WHERE worker=? AND status='running'").all(w.id) as any[];
             const activeTasks = active.map(row => this.decode(row));
-            if (activeTasks.length >= w.config.maxParallel)
+            if (activeTasks.length >= w.config.maxParallel + (w.config.queueCapacity ?? 0))
                 return null;
             const availableProviders = [...new Set(w.profiles.filter(profile =>
-                activeTasks.filter(task => task.profile === profile.id).length < (profile.maxParallel ?? 1)
+                activeTasks.filter(task => task.profile === profile.id).length < (profile.maxParallel ?? 1) + (w.config.queueCapacity ?? 0)
             ).map(profile => profile.provider))];
             if (!availableProviders.length)
                 return null;
-            const order = w.config.order === 'fifo' ? 'created,id' : 'priority DESC,created,id';
+            const router = new WorkerRouter(this.db), policy = router.policy(w.project);
+            const order = (policy.order === 'worker' ? w.config.order : policy.order) === 'fifo' ? 'created,id' : 'priority DESC,created,id';
             // Filter affinity in SQLite and fetch one row; queue size must not determine JS heap usage.
-            const eligible = w.profiles.filter(profile => activeTasks.filter(task => task.profile === profile.id).length < (profile.maxParallel ?? 1));
+            const eligible = w.profiles.filter(profile => activeTasks.filter(task => task.profile === profile.id).length < (profile.maxParallel ?? 1) + (w.config.queueCapacity ?? 0));
             const predicates = eligible.map(() => "(COALESCE(json_extract(payload,'$.executionMode'),'mock')=? AND (json_extract(payload,'$.provider')='auto' OR json_extract(payload,'$.provider')=?))").join(' OR ');
-            const candidate = this.db.prepare("SELECT * FROM tasks WHERE status='queued' AND json_extract(payload,'$.project')=? AND (" + predicates + ') ORDER BY ' + order + ' LIMIT 1')
-                .get(w.project, ...eligible.flatMap(profile => [profile.mode, profile.provider]));
+            const workers = this.db.prepare('SELECT * FROM workers WHERE project=? AND seen>?').all(w.project, now - this.ttl).map((row: any) => ({
+                worker: { ...row, profiles: JSON.parse(row.profiles), config: JSON.parse(row.config) } as WorkerRecord,
+                active: (this.db.prepare("SELECT * FROM tasks WHERE worker=? AND status='running'").all(row.id) as any[]).map(item => this.decode(item)),
+            }));
+            // Iterate the indexed queue without loading the whole backlog into memory.
+            let candidate: Task | undefined;
+            for (const row of this.db.prepare("SELECT * FROM tasks WHERE status='queued' AND json_extract(payload,'$.project')=? AND (" + predicates + ') ORDER BY ' + order)
+                .iterate(w.project, ...eligible.flatMap(profile => [profile.mode, profile.provider]))) {
+                const task = this.decode(row);
+                if (router.permits(task, w, workers, policy)) { candidate = task; break; }
+            }
             if (!candidate)
                 return null;
-            const t = this.decode(candidate), profile = eligibleProfile(w, t, activeTasks)!;
+            const t = candidate, profile = eligibleProfile(w, t, activeTasks)!;
             this.db.prepare("UPDATE tasks SET status='running',worker=?,lease=?,expires=?,attempt=attempt+1,profile=? WHERE id=?").run(w.id, randomUUID(), now + this.ttl, profile.id, t.id);
             this.event(t.id, 'claimed', { workerId: w.id, profile: profile.id, mode: profile.mode, attempt: t.attempt + 1 });
             const assigned = this.get(t.id);

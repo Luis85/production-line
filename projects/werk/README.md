@@ -34,6 +34,22 @@ Alternatively, download a versioned `werk-<version>.zip` or `.tar.gz` asset and 
 
 The runtime archive contains prebuilt applications. It does not require npm installation or a compiler. Choose one runtime for each state directory; do not start native and Docker processes against the same database.
 
+## Add standalone apps to any project
+
+Copy `bin/apps/worker`, `bin/apps/orchestrator` or `bin/apps/factory` from a runtime
+release into your project's `bin/apps/`. Each folder runs independently with Node 24,
+its own webview and an automation CLI. No npm installation is needed.
+
+```sh
+node bin/apps/worker/cli.mjs start --state-dir .werk/worker-a --port 4100
+node bin/apps/worker/cli.mjs schema
+```
+
+Use `run` for foreground operation and `status`/`stop` for lifecycle management.
+The [portable apps reference](docs/reference/portable-apps.md) covers AI-agent task
+submission, multiple workers, Factory intake, routing and copying/upgrading apps.
+Source contributors generate these folders with `npm run build`.
+
 ## A complete system from one YAML file
 
 The supplied [system definition](examples/system.yaml) declares a Factory, one
@@ -94,13 +110,14 @@ The wrappers configure persistent state, build the runtime image from the prebui
 
 ## Operate and maintain
 
-Native commands include `status`, `doctor`, `stop` and `open`. Use `--json` and `--no-open` for automation; start remains a foreground process. Docker wrappers expose the corresponding container operations. No command silently resets application state or upgrades an installation in place.
+Native commands include `status`, `doctor`, `stop` and `open`. Use `--json` and `--no-open` for automation; start remains a foreground process. Docker wrappers expose the corresponding container operations. Downloaded native releases check for stable GitHub updates before startup, preserve state and take a verified backup before activation. Use `update disable` to opt out, or `--no-update` to skip one check. See [automatic updates](docs/reference/updates.md).
 
 - [Manage roles and TLS ingress](docs/how-to/manage-access.md): viewer/operator credentials, rotation and audit events.
 - [Run a trusted Codex task](docs/how-to/run-codex-task.md): explicit native policy and local patch review.
 - [Monitor a runtime](docs/how-to/monitor-runtime.md): readiness, capability observations, worker detail, request IDs and bounded logs.
 - [Maintain a runtime](docs/how-to/maintain-runtime.md): inspect health, start, stop and recover.
 - [Operate with agents](docs/how-to/operate-with-agents.md): structured commands and safe credential handling.
+- [Automatic updates](docs/reference/updates.md): stable release checks, policy, verified activation and recovery.
 - [Upgrade and back up](docs/how-to/upgrade-backup.md): stop writers, retain state and verify a separate installation.
 - [CLI reference](docs/reference/runtime-cli.md) and [configuration](docs/reference/configuration.md): exact options, outputs and state layout.
 
@@ -142,3 +159,5 @@ Existing developer launchers remain available: `npm run dev:fleet` for one line,
 Shared contracts remain in `src/shared`. Source and tests are grouped by concern. Runtime application data belongs in a private state directory, not the source tree or release archive.
 
 The complete source check also requires Python 3 on Linux/macOS for the infrastructure safety suite. The downloaded native runtime has no host Python dependency.
+
+The [worker webview](docs/how-to/use-worker-webview.md) provides Vue + Nuxt UI pages for Chat, History, and Monitoring & Status. Optional native Linux Codex chat uses the worker account’s existing login.

@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-13T12:35:35.269621+00:00",
+  "title": "Werk shared spatial components",
+  "extensions": {
+    "breakpoints": [
+      {
+        "name": "spatial-inspector-stacked",
+        "value": "1100px"
+      },
+      {
+        "name": "spatial-mobile",
+        "value": "760px"
+      }
+    ],
+    "motion": [
+      {
+        "name": "reduced-motion",
+        "value": "prefers-reduced-motion: reduce",
+        "purpose": "Shared spatial descendants disable transitions and animations."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Selected spatial control",
+      "kind": "button",
+      "refersTo": "spatial-selection",
+      "description": "Native selected representation control; border and aria-pressed communicate state alongside color.",
+      "html": "<button class=\"ds-spatial-selection\" type=\"button\" aria-pressed=\"true\">3D</button>",
+      "css": ".ds-spatial-selection{font:14px/1.6 system-ui,sans-serif;padding:8px 12px;min-height:44px;border:1px solid #8be0b8;border-radius:8px;background:#213d35;color:#8be0b8;cursor:pointer}.ds-spatial-selection:hover{background:#213d35}.ds-spatial-selection:focus-visible{outline:2px solid #8be0b8;outline-offset:4px}"
+    },
+    {
+      "name": "Spatial inspector",
+      "kind": "custom",
+      "refersTo": "spatial-inspector",
+      "description": "HTML facts alongside the canvas; content below is an explicitly illustrative preview.",
+      "html": "<aside class=\"ds-spatial-inspector\" aria-label=\"Illustrative selected component\"><h2>Orchestrator</h2><p class=\"ds-spatial-kind\">Coordination</p><p>Owns one line’s tasks, leases and evidence.</p><dl><div><dt>Data</dt><dd>Illustrative preview</dd></div></dl></aside>",
+      "css": ".ds-spatial-inspector{font:14px/1.6 system-ui,sans-serif;background:#17262f;color:#edf4f7;padding:24px;border-left:1px solid #3b4b56;min-width:0}.ds-spatial-inspector h2{font-size:21px;margin:0 0 8px;overflow-wrap:anywhere}.ds-spatial-kind{color:#8be0b8}.ds-spatial-inspector dl{margin:24px 0}.ds-spatial-inspector dl>div{padding:10px 0;border-bottom:1px solid #3b4b56}.ds-spatial-inspector dt{font-size:13px;color:#b5c4cd}.ds-spatial-inspector dd{margin:4px 0 0;font-size:15px;overflow-wrap:anywhere}"
+    }
+  ]
+}

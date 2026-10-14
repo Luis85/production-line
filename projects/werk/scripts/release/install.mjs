@@ -83,11 +83,11 @@ export async function install(config, options, { fetcher = fetch, log = console.
 }
 
 export async function start(root, options) {
-  const { main } = await import(pathToFileURL(join(root, 'scripts/system/cli.mjs')).href);
-  const args = ['up', '--file', options.file ?? join(root, 'examples/system.yaml')];
+  const { runNative } = await import(pathToFileURL(join(root, 'scripts/runtime/update/launcher.mjs')).href);
+  const args = ['up', '--no-update', '--file', options.file ?? join(root, 'examples/system.yaml')];
   if (options.stateDir) args.push('--state-dir', options.stateDir);
   if (options.noOpen) args.push('--no-open');
-  return main(args);
+  return runNative(root, args);
 }
 
 export function restartCommand(root, options, platform = process.platform) {

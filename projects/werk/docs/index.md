@@ -19,6 +19,9 @@ follows [Diátaxis](https://diataxis.fr/).
 
 ## How-to guides — accomplish a specific goal
 
+- [Assemble independent workers, orchestrators and Factories](how-to/assemble-independent-components.md)
+- [Use the worker webview](how-to/use-worker-webview.md): Chat, History and Dashboard.
+
 - [Operate, back up and replace a Linux VM](how-to/operate-linux-vm.md)
 
 - [Run an opt-in Codex task and review its patch](how-to/run-codex-task.md)
@@ -36,12 +39,16 @@ follows [Diátaxis](https://diataxis.fr/).
 
 ## Reference — look up a contract
 
+- [Docker Agent definition profiles](reference/agent-definitions.md): compatibility and per-task selection.
+- [Portable Node apps and automation CLI](reference/portable-apps.md): copy one app into any project.
+
 - [Infrastructure renderer](reference/infrastructure.md)
 
 - [System YAML definition](reference/system-definition.md): topology, IDs, ports,
   environments and drift handling.
 
 - [Observability, capabilities and worker detail](reference/observability.md)
+- [Automatic updates](reference/updates.md): stable releases, backups and recovery.
 - [Runtime operator CLI](reference/runtime-cli.md)
 - [Configuration, environment and state](reference/configuration.md)
 - [Release contents and verification](reference/releases.md)

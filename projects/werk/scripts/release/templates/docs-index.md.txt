@@ -1,5 +1,7 @@
 # Werk runtime documentation
 
+- [Portable Node apps and automation](reference/portable-apps.md)
+
 The release documentation follows [Diátaxis](https://diataxis.fr/): tutorials teach
 one complete flow, how-to guides solve operating tasks, reference describes exact
 contracts, and explanations describe the system and its limits.
@@ -15,6 +17,9 @@ contracts, and explanations describe the system and its limits.
 
 ## How-to guides
 
+- [Assemble independent workers, orchestrators and Factories](how-to/assemble-independent-components.md)
+- [Use the worker webview](how-to/use-worker-webview.md): Chat, History and Dashboard.
+
 - [Operate, back up and replace a Linux VM](how-to/operate-linux-vm.md)
 
 - [Run an opt-in Codex task and review its patch](how-to/run-codex-task.md)
@@ -25,6 +30,10 @@ contracts, and explanations describe the system and its limits.
 - [Operate with agents and scripts](how-to/operate-with-agents.md)
 
 ## Reference
+
+- [Docker Agent definition profiles](reference/agent-definitions.md): import, preview and task selection.
+
+- [Automatic updates](reference/updates.md): stable release selection, backup and recovery.
 
 - [Infrastructure renderer](reference/infrastructure.md)
 

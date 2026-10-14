@@ -5,7 +5,7 @@ import { runWorker } from './runner.js';
 import { statusHtml } from './status/server.js';
 import { configuration } from './config.js';
 import { ValidationError } from '../shared/errors.js';
-const help = `werk-worker — project-bound worker, simulated or opt-in Codex execution
+const help = `werk-worker — standalone worker with optional orchestrator connection
 
 run [--url http://127.0.0.1:3000] [--state-dir .state/worker]
     [--config worker.json] [--parallel 1] [--profiles claude,codex]
@@ -14,6 +14,7 @@ run [--url http://127.0.0.1:3000] [--state-dir .state/worker]
 status [--url http://127.0.0.1:4100] [--format json|html]
 --help
 
+Omit --url to start standalone. Connect later from Monitoring & Status.
 Set WERK_ENROLLMENT_TOKEN on first registration; identity is persisted privately.
 Project assignment comes from the server enrollment grant. Machine and profile concurrency are configurable; server enforces limits.
 Each worker needs its own state directory and status port (0 selects a free port).
@@ -31,7 +32,7 @@ try {
         const stop = new AbortController();
         process.once('SIGINT', () => stop.abort());
         process.once('SIGTERM', () => stop.abort());
-        await runWorker({ url: o.url ?? process.env.WERK_URL ?? 'http://127.0.0.1:3000', stateDir: o['state-dir'] ?? '.state/worker', enrollmentToken: process.env.WERK_ENROLLMENT_TOKEN ?? '', ...effective, projectDir: o['project-dir'], statusHost: o['status-host'] ?? '127.0.0.1', statusPort: integer(o['status-port'] ?? '4100', 'status-port', 0, 65535) }, stop.signal);
+        await runWorker({ url: o.url ?? process.env.WERK_URL, stateDir: o['state-dir'] ?? '.state/worker', enrollmentToken: process.env.WERK_ENROLLMENT_TOKEN ?? '', ...effective, projectDir: o['project-dir'], statusHost: o['status-host'] ?? '127.0.0.1', statusPort: integer(o['status-port'] ?? '4100', 'status-port', 0, 65535) }, stop.signal);
     }
     else if (cmd === 'status') {
         validateOptions(o, ['url', 'format']);

@@ -135,6 +135,22 @@
               },
               "execution": {
                 "$ref": "#/$defs/liveExecution"
+              },
+              "chat": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "codexExecutable"
+                ],
+                "properties": {
+                  "codexExecutable": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096,
+                    "pattern": "^/",
+                    "description": "Absolute Codex CLI path on native Linux; uses the operator login. Independent of task execution mode."
+                  }
+                }
               }
             }
           },
