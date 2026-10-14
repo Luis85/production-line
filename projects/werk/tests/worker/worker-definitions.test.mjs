@@ -1,3 +1,4 @@
+import { cleanup } from './fixture-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile, mkdir, writeFile } from 'node:fs/promises';
@@ -25,7 +26,7 @@ agents:
     model: anthropic/claude-test
     instruction: Write clear documentation.
 `;
-async function directory(t) { const path = await mkdtemp(join(tmpdir(), 'werk-definitions-')); t.after(() => rm(path, { recursive: true, force: true })); return path; }
+async function directory(t) { const path = await mkdtemp(join(tmpdir(), 'werk-definitions-')); cleanup(t, () => rm(path, { recursive: true, force: true })); return path; }
 async function idle(sessions) { for (let n = 0; n < 200 && sessions.busy; n++) await new Promise(resolve => setTimeout(resolve, 10)); assert.equal(sessions.busy, false); }
 test('Docker Agent schema 16 instructions and named/inline models are parsed without execution', () => {
   const value = previewDefinition(source); assert.equal(value.compatibility, 'instruction-profile'); assert.equal(value.agents[0].instruction, 'Give a concise answer.\n\nExplain tradeoffs.'); assert.equal(value.agents[0].model, 'gpt-test'); assert.equal(value.agents[0].requiresAdaptation, false); assert.equal(value.agents[1].provider, 'anthropic');
@@ -57,14 +58,14 @@ test('malformed, ambiguous, deeply nested or credential-bearing YAML is rejected
 test('definition snapshots survive deletion, task followups and worker restart, and reach injected model', async t => {
   const path = await directory(t), settings = new WorkerSettings(path); await settings.init();
   const seen = []; const model = connection => ({ async reply(messages) { seen.push({ connection, messages }); return 'Reviewed.'; } });
-  const sessions = new WorkerSessions(path, settings, model); await sessions.init(); t.after(() => sessions.close());
+  const sessions = new WorkerSessions(path, settings, model); await sessions.init(); cleanup(t, () => sessions.close());
   const result = await sessions.definitions.action({ action: 'import', name: 'Reviewer', yaml: source }); const id = result.definitions[0].id;
   await sessions.action({ action: 'create', title: 'Review task', provider: 'openai-api', definitionId: id, agent: 'root' }); const sessionId = sessions.current.id;
   await sessions.start('Review this plan'); await idle(sessions);
   await sessions.definitions.action({ action: 'delete', id });
   await sessions.start('Explain the alternatives'); await idle(sessions);
   assert.equal(seen.length, 2); assert.equal(seen[1].connection.instruction, 'Give a concise answer.\n\nExplain tradeoffs.'); assert.equal(seen[1].connection.model, 'gpt-test'); assert.equal(seen[1].messages.length, 3);
-  const recovered = new WorkerSessions(path, settings, model); await recovered.init(); t.after(() => recovered.close()); assert.equal(recovered.current.id, sessionId); assert.equal(recovered.current.definition.name, 'Reviewer');
+  const recovered = new WorkerSessions(path, settings, model); await recovered.init(); cleanup(t, () => recovered.close()); assert.equal(recovered.current.id, sessionId); assert.equal(recovered.current.definition.name, 'Reviewer');
   await recovered.start('Continue'); await idle(recovered); assert.equal(seen[2].connection.model, 'gpt-test');
 });
 test('definition selection cannot silently switch provider families or credentials', async t => {
@@ -77,21 +78,21 @@ test('actual API requests use immutable definition instruction and model in prov
   for (const id of ['openai-api', 'anthropic-api']) {
     let body;
     const model = modelFor({ id, apiKey: 'private', executable: '', model: 'definition-model', instruction: 'Explain design decisions.' }, '/tmp', async (_url, options) => { body = JSON.parse(options.body); return Response.json(id === 'openai-api' ? { status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: 'Done' }] }] } : { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Done' }] }); });
-    assert.equal(await model.reply([{ role: 'user', text: 'Help' }], new AbortController().signal), 'Done'); assert.equal(body.model, 'definition-model'); assert.equal(id === 'openai-api' ? body.instructions : body.system, 'Explain design decisions.');
+    assert.equal(await model.reply([{ role: 'user', text: 'Help' }], new AbortController().signal), 'Done'); assert.equal(body.model, 'definition-model'); assert.match(id === 'openai-api' ? body.instructions : body.system, /Explain design decisions\./); assert.match(id === 'openai-api' ? body.instructions : body.system, /Werk interaction protocol version 1/);
   }
 });
 test('large definition task snapshots remain restartable beyond the old 128 KiB catalog limit', async t => {
-  const path = await directory(t), settings = new WorkerSettings(path); await settings.init(); const sessions = new WorkerSessions(path, settings, () => undefined); await sessions.init(); t.after(() => sessions.close());
+  const path = await directory(t), settings = new WorkerSettings(path); await settings.init(); const sessions = new WorkerSessions(path, settings, () => undefined); await sessions.init(); cleanup(t, () => sessions.close());
   const { definitions: [entry] } = await sessions.definitions.action({ action: 'import', name: 'Large', yaml: 'agents:\n  root:\n    instruction: ' + 'x'.repeat(15000) });
   for (let n = 0; n < 10; n++) await sessions.action({ action: 'create', title: 'Task ' + n, provider: 'openai-api', definitionId: entry.id });
   assert.ok((await readFile(join(path, 'sessions.json'))).length > 131072);
-  const recovered = new WorkerSessions(path, settings, () => undefined); await recovered.init(); t.after(() => recovered.close()); assert.equal(recovered.view().records.length, 11);
+  const recovered = new WorkerSessions(path, settings, () => undefined); await recovered.init(); cleanup(t, () => recovered.close()); assert.equal(recovered.view().records.length, 11);
 });
 test('explicit file tasks preserve their definition for execution and retries without editing files', async t => {
   const path = await directory(t), repo = join(path, 'repo'); await mkdir(repo); await writeFile(join(repo, 'a.txt'), 'old');
-  const settings = new WorkerSettings(path); await settings.init(); const sessions = new WorkerSessions(path, settings, () => undefined); await sessions.init(); t.after(() => sessions.close());
+  const settings = new WorkerSettings(path); await settings.init(); const sessions = new WorkerSessions(path, settings, () => undefined); await sessions.init(); cleanup(t, () => sessions.close());
   const { definitions: [entry] } = await sessions.definitions.action({ action: 'import', name: 'Reviewer', yaml: source }); let used;
-  const board = new LocalTaskboard(path, settings, sessions, connection => ({ async reply() { used = connection; return JSON.stringify({ summary: 'Proposed edit', files: [{ path: 'a.txt', content: 'new' }] }); } })); await board.init(); t.after(() => board.close());
+  const board = new LocalTaskboard(path, settings, sessions, connection => ({ async reply() { used = connection; return JSON.stringify({ summary: 'Proposed edit', files: [{ path: 'a.txt', content: 'new' }] }); } })); await board.init(); cleanup(t, () => board.close());
   await board.create({ title: 'Edit', instruction: 'Change file', repository: repo, paths: ['a.txt'], provider: 'openai-api', definitionId: entry.id }); await sessions.definitions.action({ action: 'delete', id: entry.id }); await board.tick();
   for (let n = 0; n < 100 && board.active; n++) await new Promise(resolve => setTimeout(resolve, 10));
   assert.equal(board.view().tasks[0].status, 'review'); assert.equal(used.instruction, 'Give a concise answer.\n\nExplain tradeoffs.'); assert.equal(used.model, 'gpt-test'); assert.equal(await readFile(join(repo, 'a.txt'), 'utf8'), 'old'); assert.equal(sessions.detail(board.view().tasks[0].sessionId).session.definition.name, 'Reviewer');
@@ -110,7 +111,7 @@ test('subscription CLIs receive the chosen definition model and instructions wit
 test('automation idempotency survives definition deletion without changing the frozen task profile', async t => {
   const path = await directory(t);
   const workspace = new WorkerWorkspace({ stateDir: path, pollMs: 1000, timeoutMs: 1000 }, {}, () => ({ activeTasks: [], queuedTasks: [] }));
-  await workspace.init(); t.after(() => workspace.close());
+  await workspace.init(); cleanup(t, () => workspace.close());
   await workspace.updateSettings({ provider: { id: 'openai-api', apiKey: 'fixture-only', model: 'fixture-model' }, board: { paused: true } });
   const { definitions: [entry] } = await workspace.definitions.action({ action: 'import', name: 'Profile', yaml: source });
   const command = { action: 'create', id: 'same-task', title: 'Review', provider: 'openai-api', message: 'Review this', definitionId: entry.id, agent: 'root' };

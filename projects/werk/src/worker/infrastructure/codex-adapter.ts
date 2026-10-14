@@ -1,3 +1,5 @@
+import { verifyReviewArtifact } from './review-artifact.js';
+import { ProviderModelError } from '../application/model-contract.js';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { access, cp, lstat, mkdir, realpath, rename, rm } from 'node:fs/promises';
@@ -27,7 +29,7 @@ export function providerEnvironment(provider = 'codex'): NodeJS.ProcessEnv {
     return { ...env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0' };
 }
 /** Kill the process group, including descendants, before resolving an interrupted operation. */
-export async function providerCommand(executable: string, args: string[], cwd: string, signal: AbortSignal, input?: string, capture = true, provider = 'codex'): Promise<Buffer> {
+export async function providerCommand(executable: string, args: string[], cwd: string, signal: AbortSignal, input?: string, capture = true, provider = 'codex', observeOutput?: (output: Buffer) => void): Promise<Buffer> {
     signal.throwIfAborted();
     return new Promise((resolveResult, reject) => {
         let bytes = 0, failed = false, ended = false, killTimer: ReturnType<typeof setTimeout> | undefined;
@@ -45,8 +47,11 @@ export async function providerCommand(executable: string, args: string[], cwd: s
             signal.removeEventListener('abort', interrupt); if (killTimer) clearTimeout(killTimer);
             // A child must not leave a detached command running after its own exit.
             kill('SIGKILL');
-            if (failed || signal.aborted || code !== 0) reject(Error(signal.aborted ? 'Provider execution interrupted or timed out' : 'Provider command failed; inspect CLI installation and authentication with operator diagnostics'));
-            else resolveResult(Buffer.concat(output));
+            const captured = Buffer.concat(output);
+            // Numeric telemetry may exist even when execution fails; diagnostics never leave this callback.
+            try { observeOutput?.(captured); } catch { /* Telemetry must not mask process cleanup or outcome. */ }
+            if (failed || signal.aborted || code !== 0) reject(new ProviderModelError(signal.aborted ? 'cancelled' : 'unavailable'));
+            else resolveResult(captured);
         });
     });
 }
@@ -57,16 +62,15 @@ export class CodexAdapter implements Adapter {
     private config: CodexConfiguration; private stateDir: string; private systemPrompt: string;
     constructor(config: CodexConfiguration, stateDir: string, systemPrompt: string) { this.config = config; this.stateDir = stateDir; this.systemPrompt = systemPrompt; }
     async verifyReview(task: Task, review: NonNullable<Awaited<ReturnType<Adapter['run']>>['review']>) {
-        if (!task.lease || review.artifactPath !== `review/${task.lease}/change.patch`) throw Error('Review artifact identity mismatch');
-        const patch = await readBoundedFile(join(this.stateDir, review.artifactPath), 1048576);
-        if (Buffer.byteLength(patch) !== review.patchBytes || createHash('sha256').update(patch).digest('hex') !== review.patchSha256) throw Error('Review artifact is missing or changed; restore evidence before completing');
+        await verifyReviewArtifact(this.stateDir,task.lease,review);
     }
     async run(task: Task, signal: AbortSignal) {
         if (process.platform !== 'linux') throw Error('Live Codex execution currently requires native Linux');
         if (task.executionMode !== 'cli' || task.provider !== 'codex' || !task.lease || !/^[a-zA-Z0-9_-]{1,100}$/.test(task.lease)) throw Error('Live Codex requires an explicit Codex task and lease');
         await access(this.config.executable, constants.X_OK).catch(() => { throw Error('Configured Codex executable is unavailable'); });
         const source = await realpath(this.config.repository);
-        const bounded = AbortSignal.any([signal, AbortSignal.timeout(3600000)]);
+        // The runner owns the frozen attempt deadline; no shorter hidden adapter cap.
+        const bounded = signal;
         const git = (args: string[], cwd = source) => providerCommand('git', ['-c', 'core.hooksPath=/dev/null', ...args], cwd, bounded);
         const baseCommit = (await git(['rev-parse', '--verify', `${task.context?.commit ?? task.source?.commit ?? 'HEAD'}^{commit}`])).toString('utf8').trim();
         if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(baseCommit)) throw Error('Repository base commit is invalid');

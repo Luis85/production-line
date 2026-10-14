@@ -1,3 +1,4 @@
+import { cleanup } from './fixture-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, rm, mkdir, stat } from 'node:fs/promises';
@@ -14,7 +15,7 @@ import { configuration } from '../../src/worker/dist/worker/config.js';
 import { Store } from '../../src/orchestrator/dist/orchestrator/persistence/store.js';
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(predicate, timeout = 10000) { const end = Date.now() + timeout; while (Date.now() < end) { const result = await predicate(); if (result) return result; await delay(25); } throw Error('Condition timed out'); }
-async function fixture(t) { const directory = await mkdtemp(join(tmpdir(), 'werk-workspace-')); t.after(() => rm(directory, { recursive: true, force: true })); const settings = new WorkerSettings(directory); await settings.init(); const sessions = new WorkerSessions(directory, settings); await sessions.init(); t.after(() => sessions.close()); return { directory, settings, sessions }; }
+async function fixture(t) { const directory = await mkdtemp(join(tmpdir(), 'werk-workspace-')); cleanup(t, () => rm(directory, { recursive: true, force: true })); const settings = new WorkerSettings(directory); await settings.init(); const sessions = new WorkerSessions(directory, settings); await sessions.init(); cleanup(t, () => sessions.close()); return { directory, settings, sessions }; }
 test('provider credentials are private, write-only and retained across settings edits and restart', async t => {
   const { directory, settings } = await fixture(t);
   await settings.update({ provider: { id: 'openai-api', apiKey: 'private-api-key', model: 'model-example' } });
@@ -33,7 +34,7 @@ test('worker sessions keep independent transcripts, names and provider affinity 
   await sessions.action({ action: 'create', title: 'Architecture', provider: 'anthropic-api' }); const id = sessions.current.id;
   await sessions.action({ action: 'rename', id, title: 'Architecture decisions' });
   await sessions.action({ action: 'select', id: 'default' }); await sessions.action({ action: 'archive', id });
-  const recovered = new WorkerSessions(directory, settings); await recovered.init(); t.after(() => recovered.close());
+  const recovered = new WorkerSessions(directory, settings); await recovered.init(); cleanup(t, () => recovered.close());
   assert.equal(recovered.view().records.find(item => item.id === id).archived, true);
   await recovered.action({ action: 'select', id }); assert.equal(recovered.current.provider, 'anthropic-api'); assert.equal(recovered.current.title, 'Architecture decisions'); assert.equal(recovered.current.archived, false);
   assert.throws(() => recovered.assertSelected('default'), /session changed/);
@@ -59,7 +60,7 @@ test('local tasks queue durably, obey concurrency, produce applicable patches an
   await settings.update({ board: { paused: true, maxParallel: 1, queueCapacity: 2 } });
   let active = 0, maximum = 0;
   const model = () => ({ async reply(_, signal) { active++; maximum = Math.max(maximum, active); try { await delay(50); signal.throwIfAborted(); return JSON.stringify({ summary: 'Fixture change; tests not run', files: [{ path: 'hello.txt', content: 'after\n' }] }); } finally { active--; } } });
-  const board = new LocalTaskboard(directory, settings, sessions, model); await board.init(); t.after(() => board.close());
+  const board = new LocalTaskboard(directory, settings, sessions, model); await board.init(); cleanup(t, () => board.close());
   for (let n = 0; n < 2; n++) await board.create({ title: `Task ${n}`, instruction: 'Change hello', repository: repo, paths: ['hello.txt'] });
   await assert.rejects(board.create({ title: 'Overflow', instruction: 'Change', repository: repo, paths: ['hello.txt'] }), /full/);
   await board.tick(); assert.equal(board.view().running, 0);
@@ -68,7 +69,7 @@ test('local tasks queue durably, obey concurrency, produce applicable patches an
   assert.equal(await readFile(join(repo, 'hello.txt'), 'utf8'), 'before\n');
   const task = board.detail(board.view().tasks[0].id), patch = join(directory, 'change.patch'); await writeFile(patch, task.patch);
   await git('git', ['apply', '--check', patch], { cwd: repo }); await git('git', ['apply', patch], { cwd: repo }); assert.equal(await readFile(join(repo, 'hello.txt'), 'utf8'), 'after\n');
-  const restarted = new LocalTaskboard(directory, settings, sessions, model); await restarted.init(); t.after(() => restarted.close()); assert.equal(restarted.detail(task.id).status, 'review');
+  const restarted = new LocalTaskboard(directory, settings, sessions, model); await restarted.init(); cleanup(t, () => restarted.close()); assert.equal(restarted.detail(task.id).status, 'review');
   await assert.rejects(board.create({ title: 'Unsafe', instruction: 'Read outside', repository: repo, paths: ['../outside'] }), /safe relative/);
 });
 test('queued task cancellation, priority and interrupted task recovery do not replay execution', async t => {
@@ -94,7 +95,7 @@ test('orchestrator accepts bounded queued assignments beyond execution slots wit
 });
 test('worker starts standalone and connects later while renewing queued leases without extra execution', { timeout: 20000 }, async t => {
   const directory = await mkdtemp(join(tmpdir(), 'werk-standalone-')); const stop = new AbortController(); let run;
-  t.after(async () => { stop.abort(); await run; await rm(directory, { recursive: true, force: true }); });
+  cleanup(t, async () => { stop.abort(); await run; await rm(directory, { recursive: true, force: true }); });
   const config = await configuration({ 'poll-ms': '100', 'mock-ms': '1', profiles: 'codex' });
   const assigned = [], finished = new Set(); let executed = 0, active = 0, maxActive = 0, renewedWaiting = 0;
   const client = { async currentAssignments() { return assigned.filter(task => !finished.has(task.id)); }, async claim(_, extra) { assert.equal(extra, 2); if (assigned.length === 3) return null; const i = assigned.length; const task = { id: 'task-' + i, project: 'alpha', title: 'Task ' + i, criteria: ['done'], wikilinks: [], provider: 'codex', priority: 1, executionMode: 'mock', status: 'running', attempt: 1, workerId: 'remote-worker', lease: 'lease-' + i, expiresAt: Date.now() + 1500, createdAt: Date.now(), profile: config.profiles[0].id }; assigned.push(task); return task; }, async heartbeat(task) { if (task.id !== 'task-0') renewedWaiting++; task.expiresAt = Date.now() + 1500; return task; }, async publishSnapshot() {}, async complete(task) { finished.add(task.id); }, async abandon(task) { finished.add(task.id); } };

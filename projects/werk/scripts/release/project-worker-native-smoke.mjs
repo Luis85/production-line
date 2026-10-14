@@ -1,0 +1,144 @@
+import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { mkdir, mkdtemp, readFile, writeFile, rm, realpath } from 'node:fs/promises';
+import { resolve, join } from 'node:path';
+import { tmpdir } from 'node:os';
+const exec = promisify(execFile), source = resolve(process.env.WERK_PROJECT_WORKER_APP ?? 'bin/apps/worker');
+const requestedProject = process.env.WERK_PROJECT_WORKER_PROJECT ? resolve(process.env.WERK_PROJECT_WORKER_PROJECT) : await mkdtemp(join(tmpdir(), 'werk-native-project-'));
+await mkdir(requestedProject, { recursive: true });
+const project = await realpath(requestedProject);
+const entry = join(project, 'bin/apps/worker/cli.mjs');
+async function command(path, ...args) { const out = await exec(process.execPath, [path, ...args], { cwd: project, timeout: 45000, maxBuffer: 1048576 }); return JSON.parse(out.stdout); }
+const cli = (...args) => command(entry, ...args);
+let started = false;
+try {
+  const setup = await command(join(source, 'cli.mjs'), 'init', '--features-dir', 'requests/features');
+  assert.equal(setup.featuresDirectory, join(project, 'requests/features'));
+  await assert.rejects(readFile(join(project, 'package.json')), { code: 'ENOENT' });
+  await assert.rejects(readFile(join(project, '.git/config')), { code: 'ENOENT' });
+  const fixture = join(project, 'provider-fixture'), invocations = join(project, 'fixture-model-invocations');
+  await writeFile(fixture, `#!${process.execPath}\nimport { appendFileSync } from 'node:fs';if(process.argv.includes('login')){console.log('Logged in using fixture');process.exit(0)}appendFileSync(${JSON.stringify(invocations)},'invoked\\n');let text='';for await(const p of process.stdin)text+=p;const reply=text.includes('QUESTION_FLOW')&&!text.includes('ANSWER_COMPLETE')?JSON.stringify({werkInteraction:{schemaVersion:1,kind:'question',message:'Which layout should the fixture retain?',choices:[{id:'existing',label:'Keep the existing layout'}]}}):text.includes('ESCALATION_FLOW')&&!text.includes('RESUME_COMPLETE')?JSON.stringify({werkInteraction:{schemaVersion:1,kind:'escalation',message:'The fixture requires an operator decision.',reason:'No authority to choose a new layout.'}}):text.includes('Implement the requested changes')?JSON.stringify({summary:'Fixture review',files:[{path:'approved.txt',content:'changed\\n'}]}):'Packaged feature protocol fixture completed.';console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:reply}}));\n`, { mode: 0o700 });
+  await writeFile(join(project, 'provider.json'), JSON.stringify({ provider: { id: 'codex-cli', executable: fixture } }), { mode: 0o600 });
+  const schema = await cli('schema');
+  const hasRunEvidence = !!schema.commands['run analyze'];
+  const hasInteractions = !!schema.commands['interaction answer'];
+  if (process.env.WERK_EXPECT_INTERACTIONS === '1') assert.ok(hasInteractions, 'The candidate must expose guarded model interactions.');
+  if (process.env.WERK_EXPECT_RUN_EVIDENCE === '1') assert.ok(hasRunEvidence, 'The candidate must expose durable run evidence commands.');
+  await cli('start', '--port', '0'); started = true;
+  await cli('settings', 'set', '--file', 'provider.json');
+  const checked = await cli('provider', 'check', '--id', 'codex-cli');
+  assert.equal(checked.authentication, 'authenticated');
+  await cli('queue', 'pause');
+  await writeFile(join(project, 'draft.md'), '---\nschemaVersion: 1\ntitle: Packaged request\nstatus: draft\n---\nDescribe the next step.\n');
+  const created = await cli('feature', 'create', '--name', 'example.md', '--markdown', 'draft.md');
+  assert.equal(created.record, null);
+  assert.match(created.markdown, /status: draft/);
+  await cli('feature', 'validate', '--name', 'example.md');
+  const current = await cli('feature', 'get', '--name', 'example.md');
+  await cli('feature', 'submit', '--name', 'example.md', '--if-match', current.revision);
+  const queued = await cli('feature', 'get', '--name', 'example.md');
+  // Pausing execution does not pause intake: a polling tick may already adopt ready work.
+  assert.match(queued.markdown, /status: (?:ready|queued)\n/);
+  if (queued.record) assert.equal(queued.record.status, 'queued');
+  if (queued.execution) assert.equal(queued.execution.status, 'queued');
+  await assert.rejects(readFile(invocations), { code: 'ENOENT' });
+  await cli('queue', 'resume');
+  const completed = await cli('feature', 'wait', '--name', 'example.md', '--timeout-ms', '30000');
+  assert.equal(completed.record.status, 'completed');
+  assert.match(completed.execution.text, /protocol fixture completed/);
+  const result = await cli('feature', 'result', '--name', 'example.md');
+  assert.match(await readFile(join(setup.featuresDirectory, completed.record.result), 'utf8'), /protocol fixture completed/);
+  await writeFile(join(project, 'approved.txt'), 'original\n');
+  await writeFile(join(project, 'patch-draft.md'), '---\nschemaVersion: 1\ntitle: Packaged patch\nstatus: draft\nmode: patch\npaths: [approved.txt]\n---\nChange the approved file.\n');
+  const patchDraft = await cli('feature', 'create', '--name', 'patch.md', '--markdown', 'patch-draft.md');
+  await cli('feature', 'submit', '--name', 'patch.md', '--if-match', patchDraft.revision);
+  const patch = await cli('feature', 'wait', '--name', 'patch.md', '--timeout-ms', '30000');
+  assert.equal(patch.record.status, 'review');
+  assert.match(await readFile(join(setup.featuresDirectory, patch.record.patch), 'utf8'), /\+changed/);
+  assert.equal(await readFile(join(project, 'approved.txt'), 'utf8'), 'original\n');
+  let retainedRuns;
+  if (hasRunEvidence) {
+    retainedRuns = await cli('run', 'list');
+    assert.equal(retainedRuns.total, 2);
+    assert.deepEqual(retainedRuns.rows.map(run => run.kind).sort(), ['chat', 'local']);
+    assert.deepEqual(retainedRuns.rows.map(run => run.outcome).sort(), ['completed', 'review']);
+    for (const run of retainedRuns.rows) {
+      assert.equal(run.before.state, 'running'); assert.equal(run.after.state, run.outcome);
+      assert.equal(run.before.resources.scope, 'worker_process');
+      assert.equal(run.after.resources.scope, 'worker_process');
+      assert.equal(run.usage.inputTokens, null); assert.equal(run.usage.providerReportedCostUsd, null);
+    }
+    const analysis = await cli('run', 'analyze');
+    assert.equal(analysis.total, 2); assert.equal(analysis.completedPairs, 2);
+    assert.equal(analysis.consumption.inputTokens, null);
+    assert.equal(analysis.consumption.providerReportedCostUsd, null);
+  }
+  let interactionEvidence = null;
+  if (hasInteractions) {
+    const capabilities = await cli('capabilities');
+    await writeFile(join(project, 'question-draft.md'), '---\nschemaVersion: 1\ntitle: Retained fixture question\nstatus: draft\n---\nQUESTION_FLOW: Ask before selecting a layout.\n');
+    const questionDraft = await cli('feature', 'create', '--name', 'question.md', '--markdown', 'question-draft.md');
+    await cli('feature', 'submit', '--name', 'question.md', '--if-match', questionDraft.revision);
+    const waiting = await cli('feature', 'wait', '--name', 'question.md', '--timeout-ms', '30000');
+    assert.equal(waiting.execution.status, 'waiting_input');
+    const sessionId = waiting.record.sessionId;
+    const question = await cli('interaction', 'get', '--id', sessionId);
+    assert.equal(question.phase, 'waiting_input'); assert.equal(question.pending.kind, 'question');
+    await cli('stop'); started = false;
+    await cli('start', '--port', '0'); started = true;
+    assert.deepEqual(await cli('interaction', 'get', '--id', sessionId), question);
+    const answerPath = join(project, 'answer.json');
+    await writeFile(answerPath, JSON.stringify({ answer: 'ANSWER_COMPLETE: Keep the existing layout.' }));
+    await assert.rejects(cli('interaction', 'answer', '--id', sessionId, '--question-id', question.pending.id, '--if-match', String(question.revision + 1), '--key', 'stale-answer-001', '--file', answerPath), error => error.code === 2);
+    const answerArgs = ['interaction', 'answer', '--id', sessionId, '--question-id', question.pending.id, '--if-match', String(question.revision), '--key', 'retained-answer-001', '--file', answerPath];
+    const accepted = await cli(...answerArgs);
+    const replayed = await cli(...answerArgs);
+    assert.equal(replayed.latestTurn.id, accepted.latestTurn.id);
+    assert.equal(replayed.totalTurns, question.totalTurns + 1);
+    await writeFile(answerPath, JSON.stringify({ answer: 'A changed answer cannot reuse the accepted operation.' }));
+    await assert.rejects(cli(...answerArgs), error => error.code === 2);
+    assert.equal((await cli('feature', 'wait', '--name', 'question.md', '--timeout-ms', '30000')).execution.status, 'completed');
+    const answered = await cli('interaction', 'turn', '--id', sessionId, '--turn-id', accepted.latestTurn.id);
+    assert.equal(answered.kind, 'answer'); assert.ok(answered.dispatch && answered.dispatchDigest);
+    assert.match(JSON.stringify(answered.dispatch), /ANSWER_COMPLETE/);
+    assert.equal(answered.dispatch.policy.continuation, 'worker_context_replay');
+    await writeFile(join(project, 'escalation.json'), JSON.stringify({ id: 'packaged-escalation', title: 'Fixture escalation', provider: 'codex-cli', message: 'ESCALATION_FLOW: Wait for operator authority.' }));
+    await cli('task', 'create', '--file', 'escalation.json');
+    assert.equal((await cli('task', 'wait', '--id', 'packaged-escalation', '--timeout-ms', '30000')).session.status, 'escalated');
+    const escalated = await cli('interaction', 'get', '--id', 'packaged-escalation');
+    assert.equal(escalated.pending.kind, 'escalation');
+    const cancelled = await cli('interaction', 'cancel', '--id', 'packaged-escalation', '--question-id', escalated.pending.id, '--if-match', String(escalated.revision), '--key', 'decline-escalation-001');
+    assert.equal(cancelled.phase, 'cancelled');
+    const resumed = await cli('interaction', 'resume', '--id', 'packaged-escalation', '--turn-id', cancelled.latestTurn.id, '--if-match', String(cancelled.revision), '--key', 'resume-escalation-001', '--message', 'RESUME_COMPLETE: Continue with the existing layout.');
+    assert.equal((await cli('task', 'wait', '--id', 'packaged-escalation', '--timeout-ms', '30000')).session.status, 'completed');
+    const resumedTurn = await cli('interaction', 'turn', '--id', 'packaged-escalation', '--turn-id', resumed.latestTurn.id);
+    assert.equal(resumedTurn.kind, 'resume'); assert.equal(resumedTurn.priorTurnId, escalated.latestTurn.id);
+    assert.ok(resumedTurn.dispatch && resumedTurn.dispatchDigest);
+    assert.equal(resumedTurn.dispatch.policy.continuation, 'worker_context_replay');
+    const eventPage = await cli('interaction', 'events', '--id', sessionId, '--after', '0', '--limit', '2');
+    assert.equal(eventPage.schemaVersion, 1); assert.ok(eventPage.events.length > 0);
+    let eventAfter = eventPage.nextAfter, eventRecords = [...eventPage.events], hasMore = eventPage.hasMore;
+    while (hasMore) {
+      const page = await cli('interaction', 'events', '--id', sessionId, '--after', String(eventAfter), '--limit', '2');
+      assert.ok(page.nextAfter > eventAfter); eventAfter = page.nextAfter; hasMore = page.hasMore; eventRecords.push(...page.events);
+    }
+    assert.equal(new Set(eventRecords.map(event => event.id)).size, eventRecords.length);
+    assert.ok(eventRecords.some(event => event.type === 'input_requested'));
+    assert.ok(eventRecords.some(event => event.type === 'completed'));
+    assert.ok(eventRecords.every(event => event.sessionId === sessionId));
+    const emptyEvents = await cli('interaction', 'events', '--id', sessionId, '--after', String(eventAfter));
+    assert.equal(emptyEvents.events.length, 0); assert.equal(emptyEvents.nextAfter, eventAfter);
+
+    interactionEvidence = { questionRestartPreserved: true, revisionGuarded: true, answerReplaySafe: true, changedReplayRejected: true, actualDispatchRetained: true, guardedEscalationCancelResume: true, contextMode: 'worker_context_replay', nativeProviderSessionResumed: false, capabilityDiscovery: !!capabilities, durableEventPagination: true };
+    if (hasRunEvidence) retainedRuns = await cli('run', 'list');
+  }
+  await cli('stop'); started = false;
+  assert.doesNotMatch(await readFile(join(project, '.werk/worker/portable.log'), 'utf8'), /database is not open|database.*closed|state_write_error/i);
+  await cli('start', '--port', '0'); started = true;
+  const restored = await cli('feature', 'get', '--name', 'example.md');
+  assert.equal(restored.record.taskId, completed.record.taskId);
+  assert.equal((await cli('feature', 'list')).records.length, hasInteractions ? 3 : 2);
+  if (hasRunEvidence) assert.deepEqual((await cli('run', 'list')).rows, retainedRuns.rows);
+  console.log(JSON.stringify({ ok: true, journey: 'packaged-native-project-worker', source, installedWithoutNpm: true, projectGitRequired: false, configurableFolder: true, providerProtocolFixture: true, resultExported: !!result, patchRequiresReview: true, restartPreserved: true, durableRunEvidence: hasRunEvidence, interactionEvidence, liveProvider: false }));
+} finally { if(started) await cli('stop').catch(()=>{}); if(process.env.WERK_PROJECT_WORKER_KEEP !== '1') await rm(project,{recursive:true,force:true}); }

@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-15",
+  "timezone": "Europe/Berlin",
+  "scope": "Local working-tree qualification before final hosted CI",
+  "suite": {
+    "tests": 858,
+    "passed": 857,
+    "skipped": 1,
+    "failed": 0
+  },
+  "typecheck": "passed",
+  "vulnerabilities": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "archive": {
+    "name": "werk-0.2.0.tar.gz",
+    "bytes": 4878941,
+    "sha256": "15d91d80f99595bc1f1e922a4354e29578f52c75d09d0516d8999fd2b0d22963"
+  },
+  "manifestFiles": 1504,
+  "sourceCommit": null,
+  "cleanServiceBuilds": {
+    "factory": {
+      "exitCode": 0,
+      "seconds": 22.45
+    },
+    "orchestrator": {
+      "exitCode": 0,
+      "seconds": 45.68
+    },
+    "worker": {
+      "exitCode": 0,
+      "seconds": 24.89
+    }
+  },
+  "imageRuntimeChecks": {
+    "factory": "health and Vue assets passed; build dependencies excluded",
+    "orchestrator": "health and Vue assets passed; build dependencies excluded",
+    "worker": "health and Vue assets passed; build dependencies excluded"
+  },
+  "journeys": [
+    {
+      "name": "native runtime",
+      "passed": true
+    },
+    {
+      "name": "native project worker",
+      "passed": true
+    },
+    {
+      "name": "Docker runtime",
+      "passed": true
+    },
+    {
+      "name": "Docker project worker",
+      "passed": true
+    }
+  ],
+  "browser": "ci-recovery-browser.json",
+  "initialFailingRuns": [
+    38645239320,
+    38645239431
+  ],
+  "limitations": [
+    "Windows/macOS and VM qualification must be established by final hosted CI.",
+    "No paid provider calls or hours-long soak.",
+    "No source overlays in extracted package journeys."
+  ],
+  "journeyArchive": {
+    "name": "werk-0.2.0.tar.gz",
+    "bytes": 4878742,
+    "sha256": "12ffe6fd969d95d58ae21c61e79f161435a9747a63d8f152fc276683270f8489"
+  },
+  "uiFollowup": {
+    "typecheck": "passed",
+    "focusedChecks": 17,
+    "comparison": {
+      "changed": [
+        "bin/apps/orchestrator/src/orchestrator/dist/orchestrator/public/assets/DashboardPage-CX5h8FZK.js",
+        "bin/apps/orchestrator/src/orchestrator/dist/orchestrator/public/assets/IntakePage-Ch0Guj4o.js",
+        "bin/apps/orchestrator/src/orchestrator/dist/orchestrator/public/assets/MetricsPage-C3J0znQ4.js",
+        "bin/apps/orchestrator/src/orchestrator/dist/orchestrator/public/assets/Pagination.vue_vue_type_script_setup_true_lang-Bts6Nt2U.js",
+        "bin/apps/orchestrator/src/orchestrator/dist/orchestrator/public/assets/SpatialMap.vue_vue_type_script_setup_true_lang-BL1wGtbb.js",
+        "bin/apps/orchestrator/src/orchestrator/dist/orchestrator/public/assets/TasksPage-4GQ9ub9_.js",
+        "bin/apps/orchestrator/src/orchestrator/dist/orchestrator/public/assets/TasksPage-BwjmFx7X.css",
+        "bin/apps/orchestrator/src/orchestrator/dist/orchestrator/public/assets/WorkersPage-CVHSqgJJ.js",
+        "bin/apps/orchestrator/src/orchestrator/dist/orchestrator/public/assets/index-C6ZiSDfc.js",
+        "bin/apps/orchestrator/src/orchestrator/dist/orchestrator/public/index.html",
+        "src/orchestrator/dist/orchestrator/public/assets/DashboardPage-CX5h8FZK.js",
+        "src/orchestrator/dist/orchestrator/public/assets/IntakePage-Ch0Guj4o.js",
+        "src/orchestrator/dist/orchestrator/public/assets/MetricsPage-C3J0znQ4.js",
+        "src/orchestrator/dist/orchestrator/public/assets/Pagination.vue_vue_type_script_setup_true_lang-Bts6Nt2U.js",
+        "src/orchestrator/dist/orchestrator/public/assets/SpatialMap.vue_vue_type_script_setup_true_lang-BL1wGtbb.js",
+        "src/orchestrator/dist/orchestrator/public/assets/TasksPage-4GQ9ub9_.js",
+        "src/orchestrator/dist/orchestrator/public/assets/TasksPage-BwjmFx7X.css",
+        "src/orchestrator/dist/orchestrator/public/assets/WorkersPage-CVHSqgJJ.js",
+        "src/orchestrator/dist/orchestrator/public/assets/index-C6ZiSDfc.js",
+        "src/orchestrator/dist/orchestrator/public/index.html",
+        "bin/apps/orchestrator/src/orchestrator/dist/orchestrator/public/assets/DashboardPage-DF51W5vB.js",
+        "bin/apps/orchestrator/src/orchestrator/dist/orchestrator/public/assets/IntakePage-BB_7PjQL.js",
+        "bin/apps/orchestrator/src/orchestrator/dist/orchestrator/public/assets/MetricsPage-CviTOAPv.js",
+        "bin/apps/orchestrator/src/orchestrator/dist/orchestrator/public/assets/Pagination.vue_vue_type_script_setup_true_lang-CvJIOdP_.js",
+        "bin/apps/orchestrator/src/orchestrator/dist/orchestrator/public/assets/SpatialMap.vue_vue_type_script_setup_true_lang-CTnBzqK5.js",
+        "bin/apps/orchestrator/src/orchestrator/dist/orchestrator/public/assets/TasksPage-B1cfKvqO.js",
+        "bin/apps/orchestrator/src/orchestrator/dist/orchestrator/public/assets/TasksPage-CEJ6MxRF.css",
+        "bin/apps/orchestrator/src/orchestrator/dist/orchestrator/public/assets/WorkersPage-GxJCPaAs.js",
+        "bin/apps/orchestrator/src/orchestrator/dist/orchestrator/public/assets/index-CQGbtgVm.js",
+        "src/orchestrator/dist/orchestrator/public/assets/DashboardPage-DF51W5vB.js",
+        "src/orchestrator/dist/orchestrator/public/assets/IntakePage-BB_7PjQL.js",
+        "src/orchestrator/dist/orchestrator/public/assets/MetricsPage-CviTOAPv.js",
+        "src/orchestrator/dist/orchestrator/public/assets/Pagination.vue_vue_type_script_setup_true_lang-CvJIOdP_.js",
+        "src/orchestrator/dist/orchestrator/public/assets/SpatialMap.vue_vue_type_script_setup_true_lang-CTnBzqK5.js",
+        "src/orchestrator/dist/orchestrator/public/assets/TasksPage-B1cfKvqO.js",
+        "src/orchestrator/dist/orchestrator/public/assets/TasksPage-CEJ6MxRF.css",
+        "src/orchestrator/dist/orchestrator/public/assets/WorkersPage-GxJCPaAs.js",
+        "src/orchestrator/dist/orchestrator/public/assets/index-CQGbtgVm.js"
+      ],
+      "unexpected": []
+    },
+    "scope": "Scoped loaded-task-table containment; only orchestrator browser assets changed. Original archive retains native/Docker journey evidence."
+  }
+}

@@ -1,3 +1,4 @@
+import type { RequestGateEvidence } from '../../shared/request-gate.js';
 import type { Adapter, Profile, Task, WorkerPolicy } from '../../shared/contracts.js';
 import type { Snapshot } from '../../shared/snapshots.js';
 
@@ -19,6 +20,9 @@ export interface WorkerClient {
   publishSnapshot(snapshot: Snapshot): Promise<void>;
   complete(task: Task): Promise<void>;
   abandon(task: Task): Promise<void>;
+  /** A gate refusal releases the lease without automatic failure retry. */
+  hold?(task: Task, gate: RequestGateEvidence): Promise<void>;
+  resolveHold?(task: Pick<Task, "id" | "lease" | "attempt">, heldEvaluationId: string, gate: RequestGateEvidence): Promise<void>;
 }
 
 export interface WorkerGateway {
@@ -49,7 +53,15 @@ export interface AttemptJournal {
   checkpoint?(pairId: string): Promise<void>;
 }
 
+export interface AttemptRequestGates {
+  ready(task: Task): Promise<RequestGateEvidence>;
+  recover(task: Task): Promise<Awaited<ReturnType<Adapter['run']>> | null>;
+  start(task: Task): Promise<void>;
+  completed(task: Task, result: Awaited<ReturnType<Adapter['run']>>): Promise<RequestGateEvidence>;
+  failed(task: Task, outcome: 'failed' | 'interrupted'): Promise<void>;
+}
 export interface AttemptDependencies {
+  gates?: AttemptRequestGates;
   client: WorkerClient;
   journal: AttemptJournal;
   adapter: Adapter;

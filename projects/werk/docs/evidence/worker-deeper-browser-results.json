@@ -1,0 +1,89 @@
+{
+  "date": "2026-10-14",
+  "browser": "Chromium, desktop with viewport emulation",
+  "liveProviderExecution": false,
+  "viewportChecks": [
+    {
+      "width": 1440,
+      "composerTop": 408.09375,
+      "overflow": 0,
+      "panelFocus": true,
+      "escapeFocus": true,
+      "reviewFocus": "taskboard-title",
+      "failedFocus": "",
+      "unknownFallback": true,
+      "errors": []
+    },
+    {
+      "width": 768,
+      "composerTop": 670.609375,
+      "overflow": 0,
+      "panelFocus": true,
+      "escapeFocus": true,
+      "reviewFocus": "taskboard-title",
+      "failedFocus": "",
+      "unknownFallback": true,
+      "errors": []
+    },
+    {
+      "width": 390,
+      "composerTop": 773.40625,
+      "overflow": 0,
+      "panelFocus": true,
+      "escapeFocus": true,
+      "reviewFocus": "taskboard-title",
+      "failedFocus": "",
+      "unknownFallback": true,
+      "errors": []
+    },
+    {
+      "width": 320,
+      "composerTop": 843.625,
+      "overflow": 0,
+      "panelFocus": true,
+      "escapeFocus": true,
+      "reviewFocus": "taskboard-title",
+      "failedFocus": "",
+      "unknownFallback": true,
+      "errors": []
+    }
+  ],
+  "mockedPatchChecks": [
+    {
+      "width": 1440,
+      "mockedResponses": true,
+      "providerCalls": 0,
+      "evidenceErrorRetry": true,
+      "patchVisible": true,
+      "closeFocus": true,
+      "conversationNavigation": true,
+      "archivedAllKindFixturesPresent": true
+    },
+    {
+      "width": 390,
+      "mockedResponses": true,
+      "providerCalls": 0,
+      "evidenceErrorRetry": true,
+      "patchVisible": true,
+      "closeFocus": true,
+      "conversationNavigation": true,
+      "archivedAllKindFixturesPresent": true
+    }
+  ],
+  "finalDeepLinkChecks": {
+    "reloadFocus": "",
+    "viewport": 390,
+    "directFailedQueryFocus": "chat-history-title",
+    "directQueryHttpStatus": 200,
+    "reloadFilteredHistory": true,
+    "reloadFocusLimitation": "Page heading receives initial authenticated reload focus",
+    "keepAliveReturnFocus": "chat-history-title",
+    "passed": true,
+    "providerCalls": 0
+  },
+  "notes": [
+    "viewportChecks were captured before the final failed-section focus correction; finalDeepLinkChecks supersede that focus observation.",
+    "Patch and archived-task population used explicitly mocked API responses.",
+    "Software keyboard and other browser engines were not tested."
+  ]
+}

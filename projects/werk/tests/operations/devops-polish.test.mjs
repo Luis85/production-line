@@ -51,13 +51,13 @@ test('fleet port preflight refuses an occupied listener',async()=>{
 test('clean standalone build removes stale output and compiles nested shared modules',async()=>{
   const root=await mkdtemp(join(tmpdir(),'werk-build-'));
   try {
-    await mkdir(join(root,'scripts'));await cp(new URL('../../scripts/build.mjs',import.meta.url),join(root,'scripts/build.mjs'));
+    await mkdir(join(root,'scripts'));await cp(new URL('../../scripts/build.mjs',import.meta.url),join(root,'scripts/build.mjs'));await cp(new URL('../../scripts/webviews.mjs',import.meta.url),join(root,'scripts/webviews.mjs'));
     await writeFile(join(root,'package.json'),JSON.stringify({version:'0.1.0',engines:{node:'>=24.0.0 <25'}}));
     await mkdir(join(root,'src/worker/dist'),{recursive:true});await mkdir(join(root,'src/shared/nested'),{recursive:true});
     await writeFile(join(root,'src/worker/cli.ts'),'#!/usr/bin/env node\nimport { value } from "../shared/nested/value.js"; console.log(value);\n');
     await writeFile(join(root,'src/shared/nested/value.ts'),'export const value: string = "portable";\n');
     await writeFile(join(root,'src/worker/dist/stale.js'),'old build');
-    await cp(new URL('../../src/shared/ui',import.meta.url),join(root,'src/shared/ui'),{recursive:true});
+    await cp(new URL('../../src/shared/webview',import.meta.url),join(root,'src/shared/webview'),{recursive:true});
     await cp(new URL('../../src/worker/webview',import.meta.url),join(root,'src/worker/webview'),{recursive:true,filter:path=>!path.includes('.nuxt-ui')});
     await symlink(fileURLToPath(new URL('../../node_modules',import.meta.url)),join(root,'node_modules'),process.platform==='win32'?'junction':'dir');
     await exec(process.execPath,[join(root,'scripts/build.mjs'),'worker','--dist-only']);
@@ -100,4 +100,26 @@ test('fleet reuses credentials, exports custom URL and drains workers before ser
     assert.deepEqual(validateCredentials(JSON.parse(await readFile(join(state,'credentials.json'),'utf8'))),preserved);
     await assert.rejects(access(join(state,'fleet.lock')));
   } finally {if(child?.exitCode===null)child.kill('SIGKILL');await rm(root,{recursive:true,force:true});}
+});
+
+// Exercise the same root alias mismatch as Windows short-name temp paths.
+test('standalone webview resolves a directory alias before Vite emits HTML', async () => {
+  const { buildStandaloneWebview } = await import('../../scripts/webviews.mjs');
+  const root = await mkdtemp(join(tmpdir(), 'werk-vite-alias-'));
+  try {
+    const actual = join(root, 'canonical project'), alias = join(root, 'alias');
+    await mkdir(join(actual, 'view'), { recursive: true });
+    await writeFile(join(actual, 'view/index.html'), '<div id="app"></div><script type="module" src="./entry.js"></script>');
+    await writeFile(join(actual, 'view/entry.js'), 'document.querySelector("#app").textContent = "alias-safe";');
+    await symlink(actual, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    const output = join(root, 'export.html');
+    await buildStandaloneWebview(alias, 'view', output, join(root, 'scratch'));
+    const html = await readFile(output, 'utf8');
+    assert.match(html, /alias-safe/);
+    assert.match(html, /<script type="module">/);
+    assert.doesNotMatch(html, /src="[^"]+\.js"/);
+    await assert.rejects(access(join(root, 'scratch')));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

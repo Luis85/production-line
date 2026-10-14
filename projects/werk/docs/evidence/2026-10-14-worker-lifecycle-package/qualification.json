@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-14",
+  "qualification": "downloaded published release and separately built unpublished candidate",
+  "platform": {
+    "native": "Linux",
+    "node": "24.19.0",
+    "dockerServer": "28.4.0"
+  },
+  "published": {
+    "url": "https://github.com/Luis85/production-line/releases/tag/v0.2.0",
+    "version": "0.2.0",
+    "sourceCommit": "5edfb8a3afc3fb4f97de1b827cb14bb007c816a2",
+    "manifestFiles": 1057,
+    "tarSha256": "027960d5770b25cd563ea9c3ceb39e42244adeb2ee1fab7f446903823cf5807f",
+    "installerSha256": "ed94e63d5953340bb751463a06926acb67f5fac1ba29d08115afa8e268ef2643",
+    "checksumAndManifestVerified": true,
+    "installerNoStart": "Passed with NODE_USE_ENV_PROXY=1; direct Node fetch failed under this managed proxy. No default fleet launched.",
+    "nativeProject": {
+      "ok": true,
+      "journey": "packaged-native-project-worker",
+      "installedWithoutNpm": true,
+      "projectGitRequired": false,
+      "configurableFolder": true,
+      "providerProtocolFixture": true,
+      "resultExported": true,
+      "patchRequiresReview": true,
+      "restartPreserved": true,
+      "durableRunEvidence": false,
+      "liveProvider": false
+    },
+    "dockerProject": {
+      "ok": true,
+      "journey": "project-worker-docker",
+      "setupInsideContainer": true,
+      "mountedFeatureIntake": true,
+      "templateInstalled": true,
+      "folderReconfigured": true,
+      "resultExported": true,
+      "restartPreserved": true,
+      "duplicateTasks": false,
+      "liveProvider": false
+    },
+    "newRunLedgerAvailable": false
+  },
+  "candidate": {
+    "version": "0.2.0",
+    "published": false,
+    "sourceCommit": null,
+    "sourceCommitReason": "Local uncommitted candidate; no release provenance commit asserted.",
+    "artifacts": [
+      {
+        "name": "werk-0.2.0.tar.gz",
+        "bytes": 2048685,
+        "sha256": "56fdc45ab3c3d418b4349acd4eb32eaf2a6ff20403d0692b673ad13f6492ada2"
+      },
+      {
+        "name": "werk-0.2.0.zip",
+        "bytes": 2631721,
+        "sha256": "df69cf053c7cb0b0dc3200dde5709de93bc32b6f600f9b2b26998b6e7677bd62"
+      },
+      {
+        "name": "install.mjs",
+        "bytes": 6994,
+        "sha256": "cc109a03c86cd9288286990ccc8c0b116a9d40405840756c9c1ab6949f8917d3"
+      }
+    ],
+    "tarAndZipManifestVerified": true,
+    "manifestFiles": 1079,
+    "smokeQualifiedTarSha256": "5ea650358b92b1d25bd4833a25ef84a1a9aea4c877d8a932b8c936479ca60a68",
+    "finalArchiveDelta": [
+      "docs/reference/feature-requests.md"
+    ],
+    "finalRuntimeBytesIdenticalToSmokeQualifiedArchive": true,
+    "projectNative": {
+      "ok": true,
+      "journey": "packaged-native-project-worker",
+      "installedWithoutNpm": true,
+      "projectGitRequired": false,
+      "configurableFolder": true,
+      "providerProtocolFixture": true,
+      "resultExported": true,
+      "patchRequiresReview": true,
+      "restartPreserved": true,
+      "durableRunEvidence": true,
+      "liveProvider": false
+    },
+    "projectDocker": {
+      "ok": true,
+      "journey": "project-worker-docker",
+      "setupInsideContainer": true,
+      "mountedFeatureIntake": true,
+      "templateInstalled": true,
+      "folderReconfigured": true,
+      "resultExported": true,
+      "restartPreserved": true,
+      "duplicateTasks": false,
+      "durableRunEvidence": true,
+      "liveProvider": false
+    },
+    "runtimeNative": {
+      "ok": true,
+      "runtime": "native",
+      "task": "simulated",
+      "snapshots": 2,
+      "restartPreserved": true
+    },
+    "runtimeDocker": {
+      "ok": true,
+      "journey": "docker-release",
+      "hostNodeInWrapperPath": false,
+      "setupRepeated": true,
+      "healthy": true,
+      "taskPersisted": true,
+      "workerIdentityPreserved": true,
+      "credentialOutput": false
+    }
+  },
+  "assertions": [
+    "Fresh installed project has no package.json or Git metadata; worker uses prebuilt bundled runtime dependencies.",
+    "Configurable feature folder, CLI provider configuration/check, draft create/validate/guarded submit/wait/result.",
+    "Chat-mode feature and approved-file patch produce distinct chat/local run kinds with completed/review outcomes.",
+    "Review patch export leaves original approved file untouched.",
+    "Before/after snapshots measure worker process only; fixture input tokens and reported USD remain null when unavailable.",
+    "Analysis totals match durable execution pairs; exact run rows and task IDs survive native/container restart.",
+    "Docker setup inside pinned Node container, mounted intake/results, persistent folder relocation, no duplicate task sessions.",
+    "Known-clean shutdown logs contain no database-is-not-open, database-closed or state_write_error event.",
+    "Generic native/Docker runtime smokes retain simulated task/evidence and worker identity; Docker wrapper PATH excludes host Node."
+  ],
+  "limitations": [
+    "Protocol fixtures only; no paid or real provider/model inference requests, quota/cost validation or subscription authentication claims.",
+    "Native executable fixture exercised on Linux; POSIX fixture is gated off Windows; Windows execution and PowerShell are not qualified here.",
+    "Published archive does not include candidate durable run evidence; candidate artifact is not published.",
+    "Final archive differs from smoke-qualified artifact only by clarified feature-request documentation; every other manifest entry is byte-identical."
+  ],
+  "commands": [
+    "node scripts/release/project-worker-smoke.mjs --native",
+    "node scripts/release/project-worker-smoke.mjs",
+    "node scripts/release/smoke.mjs --root EXTRACTED_RELEASE",
+    "WERK_DOCKER_RELEASE_ROOT=EXTRACTED_RELEASE node scripts/release/docker-smoke.mjs",
+    "Candidate project smokes used WERK_EXPECT_RUN_EVIDENCE=1 and WERK_PROJECT_WORKER_APP=EXTRACTED_RELEASE/bin/apps/worker."
+  ],
+  "localTests": {
+    "projectWorkerTests": {
+      "pass": 2,
+      "fail": 0
+    },
+    "syntaxChecks": "project-worker-native-smoke.mjs, project-worker-smoke.mjs and portable/project.mjs passed node --check"
+  }
+}

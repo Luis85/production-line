@@ -5,6 +5,25 @@ This extracted release contains prebuilt applications; do not run npm install,
 source builds or Forge workspace commands here. Native execution requires Node24;
 Docker execution requires Docker/Compose and Bash or PowerShell.
 
+For a standalone project worker, read docs/tutorials/worker-feature-lifecycle.md
+and docs/reference/worker-run-metrics.md. Discover the installed command catalog
+with `node bin/apps/worker/cli.mjs schema`; use revision-guarded feature commands
+and run list/get/analyze/export. Parse terminal outcomes and coverage explicitly;
+a wait timeout does not cancel work, and unknown usage is not zero.
+
+Read docs/reference/model-interaction.md and docs/how-to/answer-and-resume-worker.md
+for model capabilities, questions, event replay and checkpoint recovery. Waiting
+for input is not completion. Answers/cancellation/resume need the current
+interaction revision and a stable operation key; retry lost acknowledgements with
+identical arguments. Resume replays worker-owned context in a new invocation.
+
+Read docs/reference/request-gates.md and docs/how-to/rework-worker-requests.md
+for deterministic Ready/Done checks and rework. Discover `request schema` and
+inspect the current request before guarded commands. Keep policy, input and
+output revisions distinct; a model finding cannot attest an operator fact.
+A saved command receipt does not prove execution was admitted. Inspect dispatch
+state and the request before issuing a new guarded execute operation.
+
 For a Factory hierarchy, use `node werk.mjs system plan --file examples/system.yaml`
 then `system up` with that file, or the Docker wrapper's `system` actions with
 `--environment docker`. Read docs/reference/system-definition.md first. The YAML

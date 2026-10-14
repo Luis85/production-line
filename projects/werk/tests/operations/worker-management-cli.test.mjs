@@ -24,6 +24,18 @@ test('copied worker CLI manages drafts, tasks, queues and history without a brow
   await cli('feature', 'validate', '--name', 'example.md'); await cli('feature', 'submit', '--name', 'example.md', '--if-match', file.revision);
   for (let i = 0; i < 30; i++) { await cli('feature', 'list'); file = await cli('feature', 'get', '--name', 'example.md'); if (file.record?.submitted) break; await new Promise(r => setTimeout(r, 100)); }
   assert.equal(file.record.status, 'queued'); const id = file.record.sessionId;
+  assert.equal(file.record.gates.phase, 'ready', 'Readiness is separate from the paused execution queue.');
+  assert.equal(file.record.gates.ready, 'pass');
+  assert.equal(file.record.gates.done, 'not_evaluated');
+  assert.equal(file.record.executionStatus, 'queued');
+  assert.equal(file.record.execution, undefined, 'A paused attempt has no before/after measurement.');
+  const queuedRuns = (await cli('run', 'list', '--session-id', id)).rows;
+  assert.equal(queuedRuns.length, 1);
+  assert.equal(queuedRuns[0].outcome, 'queued');
+  assert.equal(queuedRuns[0].startedAt, null);
+  assert.equal(queuedRuns[0].before, null);
+  assert.equal(queuedRuns[0].after, null);
+  assert.equal(queuedRuns[0].usage.source, 'unavailable');
   await cli('task', 'rename', '--id', id, '--title', 'Renamed from CLI');
   assert.equal((await cli('task', 'get', '--id', id)).session.title, 'Renamed from CLI');
   await assert.rejects(cli('task', 'wait', '--id', id, '--timeout-ms', '1'), error => error.code === 1 && /continues/.test(error.stderr));

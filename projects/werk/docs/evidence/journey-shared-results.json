@@ -1,0 +1,46 @@
+{
+  "surface": "Actual shared Werk interaction/tour assets in explicit browser fixture",
+  "limits": "Controlled responses; no provider or live worker request. Host hidden and border-box resets mirror Factory/orchestrator. Screenshots cover 1280x900 desktop and 390x844 mobile. No full accessibility conformance claim.",
+  "baseline": {
+    "connectFocus": "",
+    "sendDuringRead": 0,
+    "failedDraft": "Retained on failed send",
+    "requiredAfterReference": false,
+    "closeFocus": "launch",
+    "reopenDraft": "",
+    "asyncTourHighlighted": false,
+    "mobileTourBounds": {
+      "left": 16,
+      "right": 374,
+      "width": 390
+    },
+    "tourFocus": "tour-launch"
+  },
+  "final": {
+    "connectFocus": "interaction-message",
+    "sendDuringRead": 1,
+    "failedDraft": "Retained on failed send",
+    "requiredAfterReference": true,
+    "closeFocus": "launch",
+    "reopenDraft": "",
+    "asyncTourHighlighted": true,
+    "mobileTourBounds": {
+      "left": 16,
+      "right": 374,
+      "width": 390
+    },
+    "tourFocus": "tour-launch"
+  },
+  "focusedTests": {
+    "passed": 13,
+    "command": "node --test tests/ui/runtime/interaction-widget.test.mjs tests/ui/runtime/tour-navigation.test.mjs"
+  },
+  "captures": [
+    "docs/evidence/journey-shared-before-chat.png",
+    "docs/evidence/journey-shared-before-submission.png",
+    "docs/evidence/journey-shared-before-tour-mobile.png",
+    "docs/evidence/journey-shared-after-chat.png",
+    "docs/evidence/journey-shared-after-submission.png",
+    "docs/evidence/journey-shared-after-tour-mobile.png"
+  ]
+}

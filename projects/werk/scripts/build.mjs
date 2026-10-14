@@ -2,6 +2,7 @@ import { stripTypeScriptTypes } from 'node:module';
 import { readdir, readFile, writeFile, mkdir, cp, chmod, rm, rename } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
+import { buildWebview, buildStandaloneWebview } from './webviews.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const rawArgs = process.argv.slice(2);
 const distOnly = rawArgs.includes('--dist-only');
@@ -21,18 +22,6 @@ async function compile(source, destination) {
     }
   }
 }
-async function composeView(path, experience) {
-  let html = await readFile(path, 'utf8');
-  const css = await readFile(join(root, 'src/shared/ui/spatial.css'), 'utf8');
-  const shared = await readFile(join(root, 'src/shared/ui/spatial.js'), 'utf8');
-  const code = await readFile(join(root, experience), 'utf8');
-  const tour = await readFile(join(root, 'src/shared/ui/tour.js'), 'utf8');
-  const tourCss = await readFile(join(root, 'src/shared/ui/tour.css'), 'utf8') + await readFile(join(root, 'src/shared/ui/operations.css'), 'utf8');
-  const interaction = await readFile(join(root, 'src/shared/ui/interaction.js'), 'utf8');
-  html = html.replace('</head>', '<style>' + css + tourCss + '</style></head>')
-    .replace('</body>', '<script>' + shared + '\n' + tour + '\n' + interaction + '\n' + code + '</script></body>');
-  await writeFile(path, html);
-}
 for (const app of apps) {
   const dest = join(root, 'src', app, 'dist');
   const staging = join(root, 'src', app, `.build-${process.pid}`);
@@ -40,23 +29,17 @@ for (const app of apps) {
     for (const module of [app, 'shared']) await compile(join(root, 'src', module), join(staging, module));
     await writeFile(join(staging, 'package.json'), JSON.stringify({name:`@werk/${app}`,version:packageInfo.version,private:true,type:'module',engines:packageInfo.engines,bin:{[`werk-${app}`]:`${app}/cli.js`}},null,2)+'\n');
     await chmod(join(staging, app, 'cli.js'), 0o755);
+    const publicDirectory = join(staging, app, 'public');
+    await buildWebview(root, 'src/' + app + '/webview', publicDirectory);
     if (['factory', 'orchestrator'].includes(app)) {
-      await cp(join(root, 'src', app, 'public'), join(staging, app, 'public'), { recursive: true });
+      await buildStandaloneWebview(root, 'src/guide/webview', join(publicDirectory, 'guide.html'), join(staging, '.guide-view'));
     }
-    if (['factory', 'orchestrator'].includes(app)) {
-      await cp(join(root, 'src/guide/public/index.html'), join(staging, app, 'public/guide.html'));
-    }
-    if (['factory', 'orchestrator'].includes(app)) {
-      await composeView(join(staging, app, 'public/index.html'), `src/${app}/public/experience.js`);
-      await composeView(join(staging, app, 'public/guide.html'), 'src/guide/public/experience.js');
-    }
-    if (app === 'worker') {
-      const { build } = await import('vite');
-      await build({ configFile: join(root, 'src/worker/webview/vite.config.mjs'), build: { outDir: join(staging, 'worker/public') } });
-    }
+    if (app === 'orchestrator') await buildStandaloneWebview(root, 'src/orchestrator/webview/concept', join(publicDirectory, 'concept.html'), join(staging, '.concept-view'));
+    if (app === 'worker') await buildStandaloneWebview(root, 'src/worker/webview/status', join(publicDirectory, 'status.html'), join(staging, '.status-view'));
     if (['orchestrator', 'worker'].includes(app)) {
       await mkdir(join(staging,'node_modules'),{recursive:true});
       await cp(join(root,'node_modules/yaml'),join(staging,'node_modules/yaml'),{recursive:true});
+      if (app === 'worker') await cp(join(root,'node_modules/undici'),join(staging,'node_modules/undici'),{recursive:true});
     }
     // Replace only this generated distribution, so removed source files cannot survive a rebuild.
     await rm(dest, { recursive: true, force: true });

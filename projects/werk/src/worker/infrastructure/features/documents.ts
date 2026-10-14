@@ -16,7 +16,7 @@ export class FeatureDocuments implements FeatureDocumentPort {
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new DomainError('not_found', 'Feature file not found.'); throw error; }
   }
   validate(markdown: string) {
-    try { const parsed = parseFeature(markdown); return { input: featureInput(parsed, this.provider), id: parsed.data.id, status: parsed.data.status, managed: parsed.data.werk !== undefined || parsed.data.source !== undefined }; }
+    try { const parsed = parseFeature(markdown); return { input: featureInput(parsed, this.provider), id: parsed.data.id, status: parsed.data.status, managed: parsed.data.werk !== undefined || parsed.data.source !== undefined, gates: (parsed.data.werk as { gates?: import('../../application/feature-requests.js').FeatureGateProjection } | undefined)?.gates }; }
     catch (error) { throw new DomainError('invalid_input', error instanceof Error ? error.message : 'Invalid feature document.'); }
   }
   ready(markdown: string) { const parsed = parseFeature(markdown); parsed.document.set('status', 'ready'); return '---\n' + parsed.document.toString({ lineWidth: 0 }) + '---\n' + parsed.body; }

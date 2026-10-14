@@ -1,0 +1,39 @@
+{
+  "fixture": "Isolated local mock Factory, one orchestrator and one worker. All task submissions explicitly simulation; no provider execution or publication.",
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 900,
+      "aggregateCountersBeforeMap": true,
+      "lineCountersBeforeMap": true,
+      "intakeEntryVisible": true,
+      "referenceSuccessRestoresManualValidation": true,
+      "expiryPreservesIntakeDraft": true,
+      "explicitDisconnectClearsIntakeDraft": true,
+      "deliveredTaskHandoff": true,
+      "lineRegistryOpenAndCancel": true,
+      "manualRoutingTargetEnabled": true,
+      "routingEditsSurviveRegistryRefresh": true,
+      "crossAppAuthenticatedExactTaskHandoff": true,
+      "pageErrors": [],
+      "documentOverflow": false
+    },
+    {
+      "width": 390,
+      "height": 900,
+      "aggregateCountersBeforeMap": true,
+      "lineCountersBeforeMap": true,
+      "intakeEntryVisible": true,
+      "referenceSuccessRestoresManualValidation": true,
+      "expiryPreservesIntakeDraft": true,
+      "explicitDisconnectClearsIntakeDraft": true,
+      "deliveredTaskHandoff": true,
+      "lineRegistryOpenAndCancel": true,
+      "manualRoutingTargetEnabled": true,
+      "routingEditsSurviveRegistryRefresh": true,
+      "crossAppAuthenticatedExactTaskHandoff": "covered at1440",
+      "pageErrors": [],
+      "documentOverflow": false
+    }
+  ]
+}

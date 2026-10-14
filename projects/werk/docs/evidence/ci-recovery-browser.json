@@ -1,0 +1,1744 @@
+{
+  "schemaVersion": 1,
+  "reviewDate": "2026-10-15",
+  "timezone": "Europe/Berlin",
+  "candidateArchiveSha256": "15d91d80f99595bc1f1e922a4354e29578f52c75d09d0516d8999fd2b0d22963",
+  "views": 31,
+  "images": 73,
+  "baselineCandidate": "focus-candidate5 \u00b7 compiled head d5d642a UI",
+  "finalCandidate": "work/ci-green/polished-candidate/werk-0.2.0",
+  "captureProvenance": "Recovery, boards and gates captured from initial finalcandidate12ffe6fd; only Orchestrator public assets changed in polishedcandidate15d91d80. Affected table screenshots and keyboard checks recaptured from polishedcandidate; other UI/backend byte-identical per root receipt.",
+  "findings": [
+    {
+      "id": "non-json-401",
+      "impact": "Private Worker and Factory UI remained visible when a401 response body was not validJSON.",
+      "status": "fixed_and_browser_verified",
+      "before": {
+        "workerPrivateVisible": true,
+        "factoryPrivateVisible": true
+      },
+      "after": {
+        "workerPrivateVisible": false,
+        "factoryPrivateVisible": false,
+        "draftsRecovered": true,
+        "newWorkerLifetimeUsable": true
+      }
+    },
+    {
+      "id": "loaded-table-overflow",
+      "impact": "Loaded Orchestrator table min-content width expanded page by248px at390 and318px at320.",
+      "status": "fixed_and_browser_verified",
+      "after": "Document overflow0 at1440/390/320,620px table remains within a keyboard-scrollable container."
+    }
+  ],
+  "matrix": {
+    "baseline-access-results.json": {
+      "candidate": "work/request-gates/focus-candidate/werk-0.2.0",
+      "expectedFixed": false,
+      "worker": {
+        "privateChatVisible": true,
+        "accessVisible": false
+      },
+      "factory": {
+        "privateWorkspaceVisible": true,
+        "accessVisible": false
+      },
+      "checks": [],
+      "shots": [
+        {
+          "id": "worker-nonjson401",
+          "title": "Before: non-JSON401 retains private workspace",
+          "group": "Worker",
+          "width": 390,
+          "file": "worker-nonjson401-390.jpg",
+          "evidence": "Explicit text/plain401 HTTP response fixture",
+          "overflow": 0
+        },
+        {
+          "id": "factory-nonjson401",
+          "title": "Before: non-JSON401 retains private Factory",
+          "group": "Factory",
+          "width": 390,
+          "file": "factory-nonjson401-390.jpg",
+          "evidence": "Explicit text/html401 HTTP response fixture",
+          "overflow": 0
+        }
+      ],
+      "pageErrors": [],
+      "providerCalls": false
+    },
+    "baseline-table-before-results.json": {
+      "shots": [
+        {
+          "id": "orchestrator-loaded-table",
+          "title": "Before: loaded table expands the mobile page",
+          "group": "Orchestrator",
+          "width": 390,
+          "file": "before-table-390.jpg",
+          "overflow": 248,
+          "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider"
+        },
+        {
+          "id": "orchestrator-loaded-table",
+          "title": "Before: loaded table expands the mobile page",
+          "group": "Orchestrator",
+          "width": 320,
+          "file": "before-table-320.jpg",
+          "overflow": 318,
+          "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider"
+        }
+      ],
+      "candidate": "12ffe6fd969d95d58ae21c61e79f161435a9747a63d8f152fc276683270f8489"
+    },
+    "final-results.json": {
+      "candidate": "work/ci-green/candidate/werk-0.2.0",
+      "shots": [
+        {
+          "id": "worker-access",
+          "title": "Worker unlock and first use",
+          "group": "Worker",
+          "width": 1440,
+          "file": "worker-access-1440.jpg",
+          "evidence": "Extracted release UI, real isolated mock-only system",
+          "overflow": 0,
+          "height": 1000,
+          "focus": "access-title"
+        },
+        {
+          "id": "worker-access",
+          "title": "Worker unlock and first use",
+          "group": "Worker",
+          "width": 390,
+          "file": "worker-access-390.jpg",
+          "evidence": "Extracted release UI, real isolated mock-only system",
+          "overflow": 0,
+          "height": 848,
+          "focus": "access-title"
+        },
+        {
+          "id": "worker-access",
+          "title": "Worker unlock and first use",
+          "group": "Worker",
+          "width": 320,
+          "file": "worker-access-320.jpg",
+          "evidence": "Extracted release UI, real isolated mock-only system",
+          "overflow": 0,
+          "height": 916,
+          "focus": "access-title"
+        },
+        {
+          "id": "worker-create",
+          "title": "Create a task before provider verification",
+          "group": "Worker",
+          "width": 1440,
+          "file": "worker-create-1440.jpg",
+          "evidence": "Extracted release UI, real isolated mock-only system",
+          "overflow": 0,
+          "height": 1000,
+          "focus": "session-provider"
+        },
+        {
+          "id": "worker-create",
+          "title": "Create a task before provider verification",
+          "group": "Worker",
+          "width": 390,
+          "file": "worker-create-390.jpg",
+          "evidence": "Extracted release UI, real isolated mock-only system",
+          "overflow": 0,
+          "height": 1167,
+          "focus": "session-provider"
+        },
+        {
+          "id": "worker-create",
+          "title": "Create a task before provider verification",
+          "group": "Worker",
+          "width": 320,
+          "file": "worker-create-320.jpg",
+          "evidence": "Extracted release UI, real isolated mock-only system",
+          "overflow": 0,
+          "height": 1269,
+          "focus": "session-provider"
+        },
+        {
+          "id": "worker-draft-unconfigured",
+          "title": "Draft retained before provider verification",
+          "group": "Worker",
+          "width": 1440,
+          "file": "worker-draft-unconfigured-1440.jpg",
+          "evidence": "Extracted release UI, real isolated mock-only system",
+          "overflow": 0,
+          "height": 1000,
+          "focus": "BODY"
+        },
+        {
+          "id": "worker-draft-unconfigured",
+          "title": "Draft retained before provider verification",
+          "group": "Worker",
+          "width": 390,
+          "file": "worker-draft-unconfigured-390.jpg",
+          "evidence": "Extracted release UI, real isolated mock-only system",
+          "overflow": 0,
+          "height": 1197,
+          "focus": "BODY"
+        },
+        {
+          "id": "worker-draft-unconfigured",
+          "title": "Draft retained before provider verification",
+          "group": "Worker",
+          "width": 320,
+          "file": "worker-draft-unconfigured-320.jpg",
+          "evidence": "Extracted release UI, real isolated mock-only system",
+          "overflow": 0,
+          "height": 1314,
+          "focus": "BODY"
+        },
+        {
+          "id": "worker-history-empty",
+          "title": "Empty file taskboard with Chat recovery",
+          "group": "Worker",
+          "width": 1440,
+          "file": "worker-history-empty-1440.jpg",
+          "evidence": "Extracted release UI, real isolated mock-only system",
+          "overflow": 0,
+          "height": 1308,
+          "focus": "H1"
+        },
+        {
+          "id": "worker-history-empty",
+          "title": "Empty file taskboard with Chat recovery",
+          "group": "Worker",
+          "width": 390,
+          "file": "worker-history-empty-390.jpg",
+          "evidence": "Extracted release UI, real isolated mock-only system",
+          "overflow": 0,
+          "height": 1943,
+          "focus": "H1"
+        },
+        {
+          "id": "worker-history-empty",
+          "title": "Empty file taskboard with Chat recovery",
+          "group": "Worker",
+          "width": 320,
+          "file": "worker-history-empty-320.jpg",
+          "evidence": "Extracted release UI, real isolated mock-only system",
+          "overflow": 0,
+          "height": 2039,
+          "focus": "H1"
+        },
+        {
+          "id": "worker-one-result",
+          "title": "One review patch in shared Kanban",
+          "group": "Worker",
+          "width": 1440,
+          "file": "worker-one-result-1440.jpg",
+          "evidence": "Explicit API fixture: one synthetic review patch plus archived task, no provider calls",
+          "overflow": 0,
+          "height": 1762,
+          "focus": "BODY"
+        },
+        {
+          "id": "worker-one-result",
+          "title": "One review patch in shared Kanban",
+          "group": "Worker",
+          "width": 390,
+          "file": "worker-one-result-390.jpg",
+          "evidence": "Explicit API fixture: one synthetic review patch plus archived task, no provider calls",
+          "overflow": 0,
+          "height": 2554,
+          "focus": "BODY"
+        },
+        {
+          "id": "worker-one-result",
+          "title": "One review patch in shared Kanban",
+          "group": "Worker",
+          "width": 320,
+          "file": "worker-one-result-320.jpg",
+          "evidence": "Explicit API fixture: one synthetic review patch plus archived task, no provider calls",
+          "overflow": 0,
+          "height": 2643,
+          "focus": "BODY"
+        },
+        {
+          "id": "worker-filter-empty",
+          "title": "Recover from file task filters",
+          "group": "Worker",
+          "width": 1440,
+          "file": "worker-filter-empty-1440.jpg",
+          "evidence": "Explicit synthetic task API fixture",
+          "overflow": 0,
+          "height": 1488,
+          "focus": "file-task-search"
+        },
+        {
+          "id": "worker-filter-empty",
+          "title": "Recover from file task filters",
+          "group": "Worker",
+          "width": 390,
+          "file": "worker-filter-empty-390.jpg",
+          "evidence": "Explicit synthetic task API fixture",
+          "overflow": 0,
+          "height": 2189,
+          "focus": "file-task-search"
+        },
+        {
+          "id": "worker-filter-empty",
+          "title": "Recover from file task filters",
+          "group": "Worker",
+          "width": 320,
+          "file": "worker-filter-empty-320.jpg",
+          "evidence": "Explicit synthetic task API fixture",
+          "overflow": 0,
+          "height": 2259,
+          "focus": "file-task-search"
+        },
+        {
+          "id": "worker-detail-error",
+          "title": "Recover a failed evidence read",
+          "group": "Worker",
+          "width": 1440,
+          "file": "worker-detail-error-1440.jpg",
+          "evidence": "Explicit503 response fixture; no provider calls",
+          "overflow": 0,
+          "height": 2198,
+          "focus": "BUTTON"
+        },
+        {
+          "id": "worker-detail-error",
+          "title": "Recover a failed evidence read",
+          "group": "Worker",
+          "width": 390,
+          "file": "worker-detail-error-390.jpg",
+          "evidence": "Explicit503 response fixture; no provider calls",
+          "overflow": 0,
+          "height": 3025,
+          "focus": "BUTTON"
+        },
+        {
+          "id": "worker-detail-error",
+          "title": "Recover a failed evidence read",
+          "group": "Worker",
+          "width": 320,
+          "file": "worker-detail-error-320.jpg",
+          "evidence": "Explicit503 response fixture; no provider calls",
+          "overflow": 0,
+          "height": 3115,
+          "focus": "BUTTON"
+        },
+        {
+          "id": "worker-review-detail",
+          "title": "Inspect a patch without applying it",
+          "group": "Worker",
+          "width": 1440,
+          "file": "worker-review-detail-1440.jpg",
+          "evidence": "Synthetic task and patch API fixture",
+          "overflow": 0,
+          "height": 2601,
+          "focus": "SUMMARY"
+        },
+        {
+          "id": "worker-review-detail",
+          "title": "Inspect a patch without applying it",
+          "group": "Worker",
+          "width": 390,
+          "file": "worker-review-detail-390.jpg",
+          "evidence": "Synthetic task and patch API fixture",
+          "overflow": 0,
+          "height": 3657,
+          "focus": "SUMMARY"
+        },
+        {
+          "id": "worker-review-detail",
+          "title": "Inspect a patch without applying it",
+          "group": "Worker",
+          "width": 320,
+          "file": "worker-review-detail-320.jpg",
+          "evidence": "Synthetic task and patch API fixture",
+          "overflow": 0,
+          "height": 3921,
+          "focus": "SUMMARY"
+        },
+        {
+          "id": "worker-detail-loading",
+          "title": "Evidence is visibly loading",
+          "group": "Worker",
+          "width": 1440,
+          "file": "worker-detail-loading-1440.jpg",
+          "evidence": "Explicit delayed API read fixture",
+          "overflow": 0,
+          "height": 2130,
+          "focus": "BUTTON"
+        },
+        {
+          "id": "worker-detail-loading",
+          "title": "Evidence is visibly loading",
+          "group": "Worker",
+          "width": 390,
+          "file": "worker-detail-loading-390.jpg",
+          "evidence": "Explicit delayed API read fixture",
+          "overflow": 0,
+          "height": 2931,
+          "focus": "BUTTON"
+        },
+        {
+          "id": "worker-detail-loading",
+          "title": "Evidence is visibly loading",
+          "group": "Worker",
+          "width": 320,
+          "file": "worker-detail-loading-320.jpg",
+          "evidence": "Explicit delayed API read fixture",
+          "overflow": 0,
+          "height": 3021,
+          "focus": "BUTTON"
+        },
+        {
+          "id": "worker-expired",
+          "title": "Expired access with retained draft",
+          "group": "Worker",
+          "width": 1440,
+          "file": "worker-expired-1440.jpg",
+          "evidence": "Explicit401 API fixture; actual authenticated reconnect",
+          "overflow": 0,
+          "height": 1000,
+          "focus": "worker-token"
+        },
+        {
+          "id": "worker-expired",
+          "title": "Expired access with retained draft",
+          "group": "Worker",
+          "width": 390,
+          "file": "worker-expired-390.jpg",
+          "evidence": "Explicit401 API fixture; actual authenticated reconnect",
+          "overflow": 0,
+          "height": 927,
+          "focus": "worker-token"
+        },
+        {
+          "id": "worker-expired",
+          "title": "Expired access with retained draft",
+          "group": "Worker",
+          "width": 320,
+          "file": "worker-expired-320.jpg",
+          "evidence": "Explicit401 API fixture; actual authenticated reconnect",
+          "overflow": 0,
+          "height": 996,
+          "focus": "worker-token"
+        },
+        {
+          "id": "orchestrator-empty",
+          "title": "Empty line taskboard and intake guidance",
+          "group": "Orchestrator",
+          "width": 1440,
+          "file": "orchestrator-empty-1440.jpg",
+          "evidence": "Extracted release UI, real isolated mock-only system",
+          "overflow": 0,
+          "height": 1000,
+          "focus": "H1"
+        },
+        {
+          "id": "orchestrator-empty",
+          "title": "Empty line taskboard and intake guidance",
+          "group": "Orchestrator",
+          "width": 390,
+          "file": "orchestrator-empty-390.jpg",
+          "evidence": "Extracted release UI, real isolated mock-only system",
+          "overflow": 0,
+          "height": 1430,
+          "focus": "H1"
+        },
+        {
+          "id": "orchestrator-empty",
+          "title": "Empty line taskboard and intake guidance",
+          "group": "Orchestrator",
+          "width": 320,
+          "file": "orchestrator-empty-320.jpg",
+          "evidence": "Extracted release UI, real isolated mock-only system",
+          "overflow": 0,
+          "height": 1530,
+          "focus": "H1"
+        },
+        {
+          "id": "orchestrator-empty-table",
+          "title": "Empty table representation",
+          "group": "Orchestrator",
+          "width": 1440,
+          "file": "orchestrator-empty-table-1440.jpg",
+          "evidence": "Extracted release UI, real isolated mock-only system",
+          "overflow": 0,
+          "height": 1000,
+          "focus": "BUTTON"
+        },
+        {
+          "id": "orchestrator-empty-table",
+          "title": "Empty table representation",
+          "group": "Orchestrator",
+          "width": 390,
+          "file": "orchestrator-empty-table-390.jpg",
+          "evidence": "Extracted release UI, real isolated mock-only system",
+          "overflow": 0,
+          "height": 1430,
+          "focus": "BUTTON"
+        },
+        {
+          "id": "orchestrator-empty-table",
+          "title": "Empty table representation",
+          "group": "Orchestrator",
+          "width": 320,
+          "file": "orchestrator-empty-table-320.jpg",
+          "evidence": "Extracted release UI, real isolated mock-only system",
+          "overflow": 0,
+          "height": 1530,
+          "focus": "BUTTON"
+        },
+        {
+          "id": "factory-empty",
+          "title": "Aggregate empty board and source freshness",
+          "group": "Factory",
+          "width": 1440,
+          "file": "factory-empty-1440.jpg",
+          "evidence": "Extracted release UI, real isolated mock-only system",
+          "overflow": 0,
+          "height": 3120,
+          "focus": "H1"
+        },
+        {
+          "id": "factory-empty",
+          "title": "Aggregate empty board and source freshness",
+          "group": "Factory",
+          "width": 390,
+          "file": "factory-empty-390.jpg",
+          "evidence": "Extracted release UI, real isolated mock-only system",
+          "overflow": 0,
+          "height": 4305,
+          "focus": "H1"
+        },
+        {
+          "id": "factory-empty",
+          "title": "Aggregate empty board and source freshness",
+          "group": "Factory",
+          "width": 320,
+          "file": "factory-empty-320.jpg",
+          "evidence": "Extracted release UI, real isolated mock-only system",
+          "overflow": 0,
+          "height": 4641,
+          "focus": "H1"
+        },
+        {
+          "id": "concept-board",
+          "title": "Shared conceptual Kanban",
+          "group": "Concept",
+          "width": 1440,
+          "file": "concept-board-1440.jpg",
+          "evidence": "Local browser simulation; no provider, Git or live API connection",
+          "overflow": 0,
+          "height": 1255,
+          "focus": "BODY"
+        },
+        {
+          "id": "concept-board",
+          "title": "Shared conceptual Kanban",
+          "group": "Concept",
+          "width": 390,
+          "file": "concept-board-390.jpg",
+          "evidence": "Local browser simulation; no provider, Git or live API connection",
+          "overflow": 0,
+          "height": 1959,
+          "focus": "BODY"
+        },
+        {
+          "id": "concept-board",
+          "title": "Shared conceptual Kanban",
+          "group": "Concept",
+          "width": 320,
+          "file": "concept-board-320.jpg",
+          "evidence": "Local browser simulation; no provider, Git or live API connection",
+          "overflow": 0,
+          "height": 2227,
+          "focus": "BODY"
+        }
+      ],
+      "checks": [
+        "Draft survives real header refresh",
+        "Keyboard status jump focuses column heading",
+        "Filtered-empty recovery reveals archived file tasks",
+        "Evidence retry clears error; Escape restores exact task card focus",
+        "Explicit401 retains draft through authenticated reconnect",
+        "Concept keyboard status jump focuses heading"
+      ],
+      "observations": [
+        {
+          "case": "mobile-first-nonempty",
+          "scrollLeft": 0,
+          "clientWidth": 358,
+          "scrollWidth": 1048,
+          "firstVisible": [
+            {
+              "id": "attention",
+              "left": 16,
+              "right": 266
+            },
+            {
+              "id": "queued",
+              "left": 282,
+              "right": 532
+            }
+          ]
+        }
+      ],
+      "pageErrors": [],
+      "externalRequests": [],
+      "overflowFailures": [],
+      "providerCalls": false
+    },
+    "final-access-results.json": {
+      "candidate": "work/ci-green/candidate/werk-0.2.0",
+      "expectedFixed": true,
+      "worker": {
+        "privateChatVisible": false,
+        "accessVisible": true
+      },
+      "factory": {
+        "privateWorkspaceVisible": false,
+        "accessVisible": true
+      },
+      "checks": [
+        "Worker non-JSON401 hides private UI, reconnect preserves draft and newest lifetime accepts refresh",
+        "Factory non-JSON401 hides private UI and reconnect preserves editor draft"
+      ],
+      "shots": [
+        {
+          "id": "worker-nonjson401",
+          "title": "Worker safely returns to unlock",
+          "group": "Worker",
+          "width": 390,
+          "file": "worker-nonjson401-390.jpg",
+          "evidence": "Explicit text/plain401 HTTP response fixture",
+          "overflow": 0
+        },
+        {
+          "id": "worker-nonjson401-recovered",
+          "title": "After: worker draft recovered and refresh usable",
+          "group": "Worker",
+          "width": 390,
+          "file": "worker-nonjson401-recovered-390.jpg",
+          "evidence": "Real authenticated reconnect after explicit text/plain401 fixture",
+          "overflow": 0
+        },
+        {
+          "id": "factory-nonjson401",
+          "title": "Factory safely returns to access screen",
+          "group": "Factory",
+          "width": 390,
+          "file": "factory-nonjson401-390.jpg",
+          "evidence": "Explicit text/html401 HTTP response fixture",
+          "overflow": 0
+        },
+        {
+          "id": "factory-nonjson401-recovered",
+          "title": "After: Factory editor draft recovered",
+          "group": "Factory",
+          "width": 390,
+          "file": "factory-nonjson401-recovered-390.jpg",
+          "evidence": "Real authenticated reconnect after explicit text/html401 fixture",
+          "overflow": 0
+        }
+      ],
+      "pageErrors": [],
+      "providerCalls": false
+    },
+    "final-mobile-board-results.json": {
+      "freshMobileFirstNonempty": {
+        "scrollLeft": 690,
+        "viewportWidth": 390,
+        "overflow": 0,
+        "column": {
+          "x": 124,
+          "y": 1888.015625,
+          "width": 250,
+          "height": 275,
+          "top": 1888.015625,
+          "right": 374,
+          "bottom": 2163.015625,
+          "left": 124
+        }
+      },
+      "keyboardJump": true,
+      "pageErrors": [],
+      "shots": [
+        {
+          "id": "worker-mobile-first-review",
+          "title": "Fresh mobile view starts at the populated review column",
+          "group": "Worker",
+          "width": 390,
+          "file": "worker-mobile-first-review-390.jpg",
+          "overflow": 0,
+          "evidence": "Explicit one-task API fixture; actual390px initial mount and keyboard navigation"
+        }
+      ]
+    },
+    "final-loaded-boards-results.json": {
+      "shots": [
+        {
+          "id": "orchestrator-loaded",
+          "title": "Persisted mock tasks in line Kanban",
+          "group": "Orchestrator",
+          "width": 1440,
+          "file": "orchestrator-loaded-1440.jpg",
+          "overflow": 0,
+          "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider"
+        },
+        {
+          "id": "orchestrator-loaded",
+          "title": "Persisted mock tasks in line Kanban",
+          "group": "Orchestrator",
+          "width": 390,
+          "file": "orchestrator-loaded-390.jpg",
+          "overflow": 0,
+          "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider"
+        },
+        {
+          "id": "orchestrator-loaded",
+          "title": "Persisted mock tasks in line Kanban",
+          "group": "Orchestrator",
+          "width": 320,
+          "file": "orchestrator-loaded-320.jpg",
+          "overflow": 0,
+          "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider"
+        },
+        {
+          "id": "orchestrator-detail",
+          "title": "Task events and honest simulated result",
+          "group": "Orchestrator",
+          "width": 1440,
+          "file": "orchestrator-detail-1440.jpg",
+          "overflow": 0,
+          "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider"
+        },
+        {
+          "id": "orchestrator-detail",
+          "title": "Task events and honest simulated result",
+          "group": "Orchestrator",
+          "width": 390,
+          "file": "orchestrator-detail-390.jpg",
+          "overflow": 0,
+          "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider"
+        },
+        {
+          "id": "orchestrator-detail",
+          "title": "Task events and honest simulated result",
+          "group": "Orchestrator",
+          "width": 320,
+          "file": "orchestrator-detail-320.jpg",
+          "overflow": 0,
+          "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider"
+        },
+        {
+          "id": "orchestrator-loaded-table",
+          "title": "Switch to bounded task table",
+          "group": "Orchestrator",
+          "width": 1440,
+          "file": "orchestrator-loaded-table-1440.jpg",
+          "overflow": 0,
+          "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider"
+        },
+        {
+          "id": "orchestrator-loaded-table",
+          "title": "Switch to bounded task table",
+          "group": "Orchestrator",
+          "width": 390,
+          "file": "orchestrator-loaded-table-390.jpg",
+          "overflow": 248,
+          "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider"
+        },
+        {
+          "id": "orchestrator-loaded-table",
+          "title": "Switch to bounded task table",
+          "group": "Orchestrator",
+          "width": 320,
+          "file": "orchestrator-loaded-table-320.jpg",
+          "overflow": 318,
+          "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider"
+        },
+        {
+          "id": "factory-loaded",
+          "title": "Aggregate source-aware readonly tasks",
+          "group": "Factory",
+          "width": 1440,
+          "file": "factory-loaded-1440.jpg",
+          "overflow": 0,
+          "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider"
+        },
+        {
+          "id": "factory-loaded",
+          "title": "Aggregate source-aware readonly tasks",
+          "group": "Factory",
+          "width": 390,
+          "file": "factory-loaded-390.jpg",
+          "overflow": 0,
+          "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider"
+        },
+        {
+          "id": "factory-loaded",
+          "title": "Aggregate source-aware readonly tasks",
+          "group": "Factory",
+          "width": 320,
+          "file": "factory-loaded-320.jpg",
+          "overflow": 0,
+          "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider"
+        }
+      ],
+      "checks": [
+        "Keyboard task open focuses heading, close restores exact card",
+        "Board/table toggle accessible pressed state matches rendered view",
+        "Factory aggregate cards are readonly; exact task IDs carried in independent Orchestrator handoffs"
+      ],
+      "pageErrors": [],
+      "taskIds": [
+        "9bba4c1d-ba1e-4c06-a3fb-cf37657e305b",
+        "1c914586-601f-4469-8fbf-e310e7f02ff8"
+      ],
+      "mode": "actual_native_mock",
+      "handoffLinks": [
+        {
+          "label": "Im Orchestrator \u00f6ffnen",
+          "href": "http://127.0.0.1:37161/#/tasks?task=1c914586-601f-4469-8fbf-e310e7f02ff8",
+          "context": "Im Orchestrator \u00f6ffnen"
+        },
+        {
+          "label": "Im Orchestrator \u00f6ffnen",
+          "href": "http://127.0.0.1:37161/#/tasks?task=9bba4c1d-ba1e-4c06-a3fb-cf37657e305b",
+          "context": "Im Orchestrator \u00f6ffnen"
+        }
+      ],
+      "providerCalls": false,
+      "tableCaptureQualification": "Table shots in this earlier batch are before the scoped grid fix; final-table-results supersedes their mobile overflow values."
+    },
+    "final-table-results": {
+      "shots": [
+        {
+          "id": "orchestrator-loaded-table",
+          "title": "Bounded loaded task table",
+          "group": "Orchestrator",
+          "width": 1440,
+          "file": "orchestrator-loaded-table-1440.jpg",
+          "overflow": 0,
+          "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider"
+        },
+        {
+          "id": "orchestrator-loaded-table",
+          "title": "Bounded loaded task table",
+          "group": "Orchestrator",
+          "width": 390,
+          "file": "orchestrator-loaded-table-390.jpg",
+          "overflow": 0,
+          "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider"
+        },
+        {
+          "id": "orchestrator-loaded-table",
+          "title": "Bounded loaded task table",
+          "group": "Orchestrator",
+          "width": 320,
+          "file": "orchestrator-loaded-table-320.jpg",
+          "overflow": 0,
+          "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider"
+        }
+      ],
+      "checks": [
+        "Actual packaged table constrained at1440/390/320; native keyboard scroll works at390/320"
+      ],
+      "metrics": [
+        {
+          "viewport": 390,
+          "container": 356,
+          "content": 620,
+          "scrollLeft": 40,
+          "documentOverflow": 0
+        },
+        {
+          "viewport": 320,
+          "container": 286,
+          "content": 620,
+          "scrollLeft": 80,
+          "documentOverflow": 0
+        }
+      ],
+      "pageErrors": [],
+      "candidate": "work/ci-green/polished-candidate/werk-0.2.0",
+      "archiveSha256": "15d91d80f99595bc1f1e922a4354e29578f52c75d09d0516d8999fd2b0d22963",
+      "providerCalls": false
+    },
+    "gates": {
+      "root": "/workspace/production-line/projects/werk/work/ci-green/candidate/werk-0.2.0",
+      "checks": [
+        "Dirty policy survives inspect; lost acknowledgement retries same operation ID",
+        "Readiness holds primary and one automatic reviewer surfaces a typed question",
+        "Explicit candidate acceptance executes primary once despite lost acknowledgement",
+        "Known completed output stays held until explicit input/output-bound operator attestation",
+        "Explicit browser lock removes private panels and clears unsaved policy drafts before unlock"
+      ],
+      "errors": [],
+      "primaryCalls": 1,
+      "reviewCalls": 3,
+      "evidence": "Immutable extracted release HTTP/session/gate journals and shipped UI; injected no-network fixture models and explicit lost-response browser fixtures."
+    }
+  },
+  "captures": [
+    {
+      "id": "before-worker-nonjson401",
+      "title": "Before: non-JSON401 retains private workspace",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-nonjson401-390.jpg",
+      "evidence": "Explicit text/plain401 HTTP response fixture",
+      "overflow": 0,
+      "phase": "baseline"
+    },
+    {
+      "id": "before-factory-nonjson401",
+      "title": "Before: non-JSON401 retains private Factory",
+      "group": "Factory",
+      "width": 390,
+      "file": "factory-nonjson401-390.jpg",
+      "evidence": "Explicit text/html401 HTTP response fixture",
+      "overflow": 0,
+      "phase": "baseline"
+    },
+    {
+      "id": "before-orchestrator-loaded-table",
+      "title": "Before: loaded table expands the mobile page",
+      "group": "Orchestrator",
+      "width": 390,
+      "file": "before-table-390.jpg",
+      "overflow": 248,
+      "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider",
+      "phase": "baseline"
+    },
+    {
+      "id": "before-orchestrator-loaded-table",
+      "title": "Before: loaded table expands the mobile page",
+      "group": "Orchestrator",
+      "width": 320,
+      "file": "before-table-320.jpg",
+      "overflow": 318,
+      "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider",
+      "phase": "baseline"
+    },
+    {
+      "id": "worker-access",
+      "title": "Worker unlock and first use",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-access-1440.jpg",
+      "evidence": "Extracted release UI, real isolated mock-only system",
+      "overflow": 0,
+      "height": 1000,
+      "focus": "access-title",
+      "phase": "final"
+    },
+    {
+      "id": "worker-access",
+      "title": "Worker unlock and first use",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-access-390.jpg",
+      "evidence": "Extracted release UI, real isolated mock-only system",
+      "overflow": 0,
+      "height": 848,
+      "focus": "access-title",
+      "phase": "final"
+    },
+    {
+      "id": "worker-access",
+      "title": "Worker unlock and first use",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-access-320.jpg",
+      "evidence": "Extracted release UI, real isolated mock-only system",
+      "overflow": 0,
+      "height": 916,
+      "focus": "access-title",
+      "phase": "final"
+    },
+    {
+      "id": "worker-create",
+      "title": "Create a task before provider verification",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-create-1440.jpg",
+      "evidence": "Extracted release UI, real isolated mock-only system",
+      "overflow": 0,
+      "height": 1000,
+      "focus": "session-provider",
+      "phase": "final"
+    },
+    {
+      "id": "worker-create",
+      "title": "Create a task before provider verification",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-create-390.jpg",
+      "evidence": "Extracted release UI, real isolated mock-only system",
+      "overflow": 0,
+      "height": 1167,
+      "focus": "session-provider",
+      "phase": "final"
+    },
+    {
+      "id": "worker-create",
+      "title": "Create a task before provider verification",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-create-320.jpg",
+      "evidence": "Extracted release UI, real isolated mock-only system",
+      "overflow": 0,
+      "height": 1269,
+      "focus": "session-provider",
+      "phase": "final"
+    },
+    {
+      "id": "worker-draft-unconfigured",
+      "title": "Draft retained before provider verification",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-draft-unconfigured-1440.jpg",
+      "evidence": "Extracted release UI, real isolated mock-only system",
+      "overflow": 0,
+      "height": 1000,
+      "focus": "BODY",
+      "phase": "final"
+    },
+    {
+      "id": "worker-draft-unconfigured",
+      "title": "Draft retained before provider verification",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-draft-unconfigured-390.jpg",
+      "evidence": "Extracted release UI, real isolated mock-only system",
+      "overflow": 0,
+      "height": 1197,
+      "focus": "BODY",
+      "phase": "final"
+    },
+    {
+      "id": "worker-draft-unconfigured",
+      "title": "Draft retained before provider verification",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-draft-unconfigured-320.jpg",
+      "evidence": "Extracted release UI, real isolated mock-only system",
+      "overflow": 0,
+      "height": 1314,
+      "focus": "BODY",
+      "phase": "final"
+    },
+    {
+      "id": "worker-history-empty",
+      "title": "Empty file taskboard with Chat recovery",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-history-empty-1440.jpg",
+      "evidence": "Extracted release UI, real isolated mock-only system",
+      "overflow": 0,
+      "height": 1308,
+      "focus": "H1",
+      "phase": "final"
+    },
+    {
+      "id": "worker-history-empty",
+      "title": "Empty file taskboard with Chat recovery",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-history-empty-390.jpg",
+      "evidence": "Extracted release UI, real isolated mock-only system",
+      "overflow": 0,
+      "height": 1943,
+      "focus": "H1",
+      "phase": "final"
+    },
+    {
+      "id": "worker-history-empty",
+      "title": "Empty file taskboard with Chat recovery",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-history-empty-320.jpg",
+      "evidence": "Extracted release UI, real isolated mock-only system",
+      "overflow": 0,
+      "height": 2039,
+      "focus": "H1",
+      "phase": "final"
+    },
+    {
+      "id": "worker-one-result",
+      "title": "One review patch in shared Kanban",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-one-result-1440.jpg",
+      "evidence": "Explicit API fixture: one synthetic review patch plus archived task, no provider calls",
+      "overflow": 0,
+      "height": 1762,
+      "focus": "BODY",
+      "phase": "final"
+    },
+    {
+      "id": "worker-one-result",
+      "title": "One review patch in shared Kanban",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-one-result-390.jpg",
+      "evidence": "Explicit API fixture: one synthetic review patch plus archived task, no provider calls",
+      "overflow": 0,
+      "height": 2554,
+      "focus": "BODY",
+      "phase": "final"
+    },
+    {
+      "id": "worker-one-result",
+      "title": "One review patch in shared Kanban",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-one-result-320.jpg",
+      "evidence": "Explicit API fixture: one synthetic review patch plus archived task, no provider calls",
+      "overflow": 0,
+      "height": 2643,
+      "focus": "BODY",
+      "phase": "final"
+    },
+    {
+      "id": "worker-filter-empty",
+      "title": "Recover from file task filters",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-filter-empty-1440.jpg",
+      "evidence": "Explicit synthetic task API fixture",
+      "overflow": 0,
+      "height": 1488,
+      "focus": "file-task-search",
+      "phase": "final"
+    },
+    {
+      "id": "worker-filter-empty",
+      "title": "Recover from file task filters",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-filter-empty-390.jpg",
+      "evidence": "Explicit synthetic task API fixture",
+      "overflow": 0,
+      "height": 2189,
+      "focus": "file-task-search",
+      "phase": "final"
+    },
+    {
+      "id": "worker-filter-empty",
+      "title": "Recover from file task filters",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-filter-empty-320.jpg",
+      "evidence": "Explicit synthetic task API fixture",
+      "overflow": 0,
+      "height": 2259,
+      "focus": "file-task-search",
+      "phase": "final"
+    },
+    {
+      "id": "worker-detail-error",
+      "title": "Recover a failed evidence read",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-detail-error-1440.jpg",
+      "evidence": "Explicit503 response fixture; no provider calls",
+      "overflow": 0,
+      "height": 2198,
+      "focus": "BUTTON",
+      "phase": "final"
+    },
+    {
+      "id": "worker-detail-error",
+      "title": "Recover a failed evidence read",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-detail-error-390.jpg",
+      "evidence": "Explicit503 response fixture; no provider calls",
+      "overflow": 0,
+      "height": 3025,
+      "focus": "BUTTON",
+      "phase": "final"
+    },
+    {
+      "id": "worker-detail-error",
+      "title": "Recover a failed evidence read",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-detail-error-320.jpg",
+      "evidence": "Explicit503 response fixture; no provider calls",
+      "overflow": 0,
+      "height": 3115,
+      "focus": "BUTTON",
+      "phase": "final"
+    },
+    {
+      "id": "worker-review-detail",
+      "title": "Inspect a patch without applying it",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-review-detail-1440.jpg",
+      "evidence": "Synthetic task and patch API fixture",
+      "overflow": 0,
+      "height": 2601,
+      "focus": "SUMMARY",
+      "phase": "final"
+    },
+    {
+      "id": "worker-review-detail",
+      "title": "Inspect a patch without applying it",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-review-detail-390.jpg",
+      "evidence": "Synthetic task and patch API fixture",
+      "overflow": 0,
+      "height": 3657,
+      "focus": "SUMMARY",
+      "phase": "final"
+    },
+    {
+      "id": "worker-review-detail",
+      "title": "Inspect a patch without applying it",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-review-detail-320.jpg",
+      "evidence": "Synthetic task and patch API fixture",
+      "overflow": 0,
+      "height": 3921,
+      "focus": "SUMMARY",
+      "phase": "final"
+    },
+    {
+      "id": "worker-detail-loading",
+      "title": "Evidence is visibly loading",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-detail-loading-1440.jpg",
+      "evidence": "Explicit delayed API read fixture",
+      "overflow": 0,
+      "height": 2130,
+      "focus": "BUTTON",
+      "phase": "final"
+    },
+    {
+      "id": "worker-detail-loading",
+      "title": "Evidence is visibly loading",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-detail-loading-390.jpg",
+      "evidence": "Explicit delayed API read fixture",
+      "overflow": 0,
+      "height": 2931,
+      "focus": "BUTTON",
+      "phase": "final"
+    },
+    {
+      "id": "worker-detail-loading",
+      "title": "Evidence is visibly loading",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-detail-loading-320.jpg",
+      "evidence": "Explicit delayed API read fixture",
+      "overflow": 0,
+      "height": 3021,
+      "focus": "BUTTON",
+      "phase": "final"
+    },
+    {
+      "id": "worker-expired",
+      "title": "Expired access with retained draft",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-expired-1440.jpg",
+      "evidence": "Explicit401 API fixture; actual authenticated reconnect",
+      "overflow": 0,
+      "height": 1000,
+      "focus": "worker-token",
+      "phase": "final"
+    },
+    {
+      "id": "worker-expired",
+      "title": "Expired access with retained draft",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-expired-390.jpg",
+      "evidence": "Explicit401 API fixture; actual authenticated reconnect",
+      "overflow": 0,
+      "height": 927,
+      "focus": "worker-token",
+      "phase": "final"
+    },
+    {
+      "id": "worker-expired",
+      "title": "Expired access with retained draft",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-expired-320.jpg",
+      "evidence": "Explicit401 API fixture; actual authenticated reconnect",
+      "overflow": 0,
+      "height": 996,
+      "focus": "worker-token",
+      "phase": "final"
+    },
+    {
+      "id": "orchestrator-empty",
+      "title": "Empty line taskboard and intake guidance",
+      "group": "Orchestrator",
+      "width": 1440,
+      "file": "orchestrator-empty-1440.jpg",
+      "evidence": "Extracted release UI, real isolated mock-only system",
+      "overflow": 0,
+      "height": 1000,
+      "focus": "H1",
+      "phase": "final"
+    },
+    {
+      "id": "orchestrator-empty",
+      "title": "Empty line taskboard and intake guidance",
+      "group": "Orchestrator",
+      "width": 390,
+      "file": "orchestrator-empty-390.jpg",
+      "evidence": "Extracted release UI, real isolated mock-only system",
+      "overflow": 0,
+      "height": 1430,
+      "focus": "H1",
+      "phase": "final"
+    },
+    {
+      "id": "orchestrator-empty",
+      "title": "Empty line taskboard and intake guidance",
+      "group": "Orchestrator",
+      "width": 320,
+      "file": "orchestrator-empty-320.jpg",
+      "evidence": "Extracted release UI, real isolated mock-only system",
+      "overflow": 0,
+      "height": 1530,
+      "focus": "H1",
+      "phase": "final"
+    },
+    {
+      "id": "orchestrator-empty-table",
+      "title": "Empty table representation",
+      "group": "Orchestrator",
+      "width": 1440,
+      "file": "orchestrator-empty-table-1440.jpg",
+      "evidence": "Extracted release UI, real isolated mock-only system",
+      "overflow": 0,
+      "height": 1000,
+      "focus": "BUTTON",
+      "phase": "final"
+    },
+    {
+      "id": "orchestrator-empty-table",
+      "title": "Empty table representation",
+      "group": "Orchestrator",
+      "width": 390,
+      "file": "orchestrator-empty-table-390.jpg",
+      "evidence": "Extracted release UI, real isolated mock-only system",
+      "overflow": 0,
+      "height": 1430,
+      "focus": "BUTTON",
+      "phase": "final"
+    },
+    {
+      "id": "orchestrator-empty-table",
+      "title": "Empty table representation",
+      "group": "Orchestrator",
+      "width": 320,
+      "file": "orchestrator-empty-table-320.jpg",
+      "evidence": "Extracted release UI, real isolated mock-only system",
+      "overflow": 0,
+      "height": 1530,
+      "focus": "BUTTON",
+      "phase": "final"
+    },
+    {
+      "id": "factory-empty",
+      "title": "Aggregate empty board and source freshness",
+      "group": "Factory",
+      "width": 1440,
+      "file": "factory-empty-1440.jpg",
+      "evidence": "Extracted release UI, real isolated mock-only system",
+      "overflow": 0,
+      "height": 3120,
+      "focus": "H1",
+      "phase": "final"
+    },
+    {
+      "id": "factory-empty",
+      "title": "Aggregate empty board and source freshness",
+      "group": "Factory",
+      "width": 390,
+      "file": "factory-empty-390.jpg",
+      "evidence": "Extracted release UI, real isolated mock-only system",
+      "overflow": 0,
+      "height": 4305,
+      "focus": "H1",
+      "phase": "final"
+    },
+    {
+      "id": "factory-empty",
+      "title": "Aggregate empty board and source freshness",
+      "group": "Factory",
+      "width": 320,
+      "file": "factory-empty-320.jpg",
+      "evidence": "Extracted release UI, real isolated mock-only system",
+      "overflow": 0,
+      "height": 4641,
+      "focus": "H1",
+      "phase": "final"
+    },
+    {
+      "id": "concept-board",
+      "title": "Shared conceptual Kanban",
+      "group": "Concept",
+      "width": 1440,
+      "file": "concept-board-1440.jpg",
+      "evidence": "Local browser simulation; no provider, Git or live API connection",
+      "overflow": 0,
+      "height": 1255,
+      "focus": "BODY",
+      "phase": "final"
+    },
+    {
+      "id": "concept-board",
+      "title": "Shared conceptual Kanban",
+      "group": "Concept",
+      "width": 390,
+      "file": "concept-board-390.jpg",
+      "evidence": "Local browser simulation; no provider, Git or live API connection",
+      "overflow": 0,
+      "height": 1959,
+      "focus": "BODY",
+      "phase": "final"
+    },
+    {
+      "id": "concept-board",
+      "title": "Shared conceptual Kanban",
+      "group": "Concept",
+      "width": 320,
+      "file": "concept-board-320.jpg",
+      "evidence": "Local browser simulation; no provider, Git or live API connection",
+      "overflow": 0,
+      "height": 2227,
+      "focus": "BODY",
+      "phase": "final"
+    },
+    {
+      "id": "worker-nonjson401",
+      "title": "Worker safely returns to unlock",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-nonjson401-390.jpg",
+      "evidence": "Explicit text/plain401 HTTP response fixture",
+      "overflow": 0,
+      "phase": "final"
+    },
+    {
+      "id": "worker-nonjson401-recovered",
+      "title": "After: worker draft recovered and refresh usable",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-nonjson401-recovered-390.jpg",
+      "evidence": "Real authenticated reconnect after explicit text/plain401 fixture",
+      "overflow": 0,
+      "phase": "final"
+    },
+    {
+      "id": "factory-nonjson401",
+      "title": "Factory safely returns to access screen",
+      "group": "Factory",
+      "width": 390,
+      "file": "factory-nonjson401-390.jpg",
+      "evidence": "Explicit text/html401 HTTP response fixture",
+      "overflow": 0,
+      "phase": "final"
+    },
+    {
+      "id": "factory-nonjson401-recovered",
+      "title": "After: Factory editor draft recovered",
+      "group": "Factory",
+      "width": 390,
+      "file": "factory-nonjson401-recovered-390.jpg",
+      "evidence": "Real authenticated reconnect after explicit text/html401 fixture",
+      "overflow": 0,
+      "phase": "final"
+    },
+    {
+      "id": "worker-mobile-first-review",
+      "title": "Fresh mobile view starts at the populated review column",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-mobile-first-review-390.jpg",
+      "overflow": 0,
+      "evidence": "Explicit one-task API fixture; actual390px initial mount and keyboard navigation",
+      "phase": "final"
+    },
+    {
+      "id": "orchestrator-loaded",
+      "title": "Persisted mock tasks in line Kanban",
+      "group": "Orchestrator",
+      "width": 1440,
+      "file": "orchestrator-loaded-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider",
+      "phase": "final"
+    },
+    {
+      "id": "orchestrator-loaded",
+      "title": "Persisted mock tasks in line Kanban",
+      "group": "Orchestrator",
+      "width": 390,
+      "file": "orchestrator-loaded-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider",
+      "phase": "final"
+    },
+    {
+      "id": "orchestrator-loaded",
+      "title": "Persisted mock tasks in line Kanban",
+      "group": "Orchestrator",
+      "width": 320,
+      "file": "orchestrator-loaded-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider",
+      "phase": "final"
+    },
+    {
+      "id": "orchestrator-detail",
+      "title": "Task events and honest simulated result",
+      "group": "Orchestrator",
+      "width": 1440,
+      "file": "orchestrator-detail-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider",
+      "phase": "final"
+    },
+    {
+      "id": "orchestrator-detail",
+      "title": "Task events and honest simulated result",
+      "group": "Orchestrator",
+      "width": 390,
+      "file": "orchestrator-detail-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider",
+      "phase": "final"
+    },
+    {
+      "id": "orchestrator-detail",
+      "title": "Task events and honest simulated result",
+      "group": "Orchestrator",
+      "width": 320,
+      "file": "orchestrator-detail-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider",
+      "phase": "final"
+    },
+    {
+      "id": "factory-loaded",
+      "title": "Aggregate source-aware readonly tasks",
+      "group": "Factory",
+      "width": 1440,
+      "file": "factory-loaded-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider",
+      "phase": "final"
+    },
+    {
+      "id": "factory-loaded",
+      "title": "Aggregate source-aware readonly tasks",
+      "group": "Factory",
+      "width": 390,
+      "file": "factory-loaded-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider",
+      "phase": "final"
+    },
+    {
+      "id": "factory-loaded",
+      "title": "Aggregate source-aware readonly tasks",
+      "group": "Factory",
+      "width": 320,
+      "file": "factory-loaded-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider",
+      "phase": "final"
+    },
+    {
+      "id": "orchestrator-loaded-table",
+      "title": "Bounded loaded task table",
+      "group": "Orchestrator",
+      "width": 1440,
+      "file": "orchestrator-loaded-table-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider",
+      "phase": "final"
+    },
+    {
+      "id": "orchestrator-loaded-table",
+      "title": "Bounded loaded task table",
+      "group": "Orchestrator",
+      "width": 390,
+      "file": "orchestrator-loaded-table-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider",
+      "phase": "final"
+    },
+    {
+      "id": "orchestrator-loaded-table",
+      "title": "Bounded loaded task table",
+      "group": "Orchestrator",
+      "width": 320,
+      "file": "orchestrator-loaded-table-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider",
+      "phase": "final"
+    },
+    {
+      "id": "gate-policy",
+      "title": "Future admission gate policy",
+      "group": "Worker lifecycle",
+      "phase": "final",
+      "width": 1440,
+      "file": "gate-policy-desktop.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate HTTP/API/journals, explicitly injected no-network model fixtures and lost-response transport fixtures."
+    },
+    {
+      "id": "gate-policy",
+      "title": "Future admission gate policy",
+      "group": "Worker lifecycle",
+      "phase": "final",
+      "width": 390,
+      "file": "gate-policy-mobile.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate HTTP/API/journals, explicitly injected no-network model fixtures and lost-response transport fixtures."
+    },
+    {
+      "id": "gate-readiness-question",
+      "title": "Readiness hold and reviewer question",
+      "group": "Worker lifecycle",
+      "phase": "final",
+      "width": 1440,
+      "file": "gate-readiness-question-desktop.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate HTTP/API/journals, explicitly injected no-network model fixtures and lost-response transport fixtures."
+    },
+    {
+      "id": "gate-readiness-question",
+      "title": "Readiness hold and reviewer question",
+      "group": "Worker lifecycle",
+      "phase": "final",
+      "width": 390,
+      "file": "gate-readiness-question-mobile.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate HTTP/API/journals, explicitly injected no-network model fixtures and lost-response transport fixtures."
+    },
+    {
+      "id": "gate-rework-candidate",
+      "title": "Advisory rework candidate awaiting acceptance",
+      "group": "Worker lifecycle",
+      "phase": "final",
+      "width": 1440,
+      "file": "gate-rework-candidate-desktop.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate HTTP/API/journals, explicitly injected no-network model fixtures and lost-response transport fixtures."
+    },
+    {
+      "id": "gate-rework-candidate",
+      "title": "Advisory rework candidate awaiting acceptance",
+      "group": "Worker lifecycle",
+      "phase": "final",
+      "width": 390,
+      "file": "gate-rework-candidate-mobile.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate HTTP/API/journals, explicitly injected no-network model fixtures and lost-response transport fixtures."
+    },
+    {
+      "id": "gate-completion-held",
+      "title": "Known result awaiting operator attestation",
+      "group": "Worker lifecycle",
+      "phase": "final",
+      "width": 1440,
+      "file": "gate-completion-held-desktop.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate HTTP/API/journals, explicitly injected no-network model fixtures and lost-response transport fixtures."
+    },
+    {
+      "id": "gate-completion-held",
+      "title": "Known result awaiting operator attestation",
+      "group": "Worker lifecycle",
+      "phase": "final",
+      "width": 390,
+      "file": "gate-completion-held-mobile.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate HTTP/API/journals, explicitly injected no-network model fixtures and lost-response transport fixtures."
+    },
+    {
+      "id": "gate-done",
+      "title": "Request completed with recorded operator attestation",
+      "group": "Worker lifecycle",
+      "phase": "final",
+      "width": 1440,
+      "file": "gate-done-desktop.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate HTTP/API/journals, explicitly injected no-network model fixtures and lost-response transport fixtures."
+    },
+    {
+      "id": "gate-done",
+      "title": "Request completed with recorded operator attestation",
+      "group": "Worker lifecycle",
+      "phase": "final",
+      "width": 390,
+      "file": "gate-done-mobile.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate HTTP/API/journals, explicitly injected no-network model fixtures and lost-response transport fixtures."
+    }
+  ],
+  "documentOverflowFailures": [],
+  "baselineOverflowFailures": [
+    {
+      "id": "before-orchestrator-loaded-table",
+      "title": "Before: loaded table expands the mobile page",
+      "group": "Orchestrator",
+      "width": 390,
+      "file": "before-table-390.jpg",
+      "overflow": 248,
+      "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider",
+      "phase": "baseline",
+      "source": "work/ci-green/browser/baseline/screens/before-table-390.jpg"
+    },
+    {
+      "id": "before-orchestrator-loaded-table",
+      "title": "Before: loaded table expands the mobile page",
+      "group": "Orchestrator",
+      "width": 320,
+      "file": "before-table-320.jpg",
+      "overflow": 318,
+      "evidence": "Actual extracted candidate, real persisted native mock-task routing and evidence; no genuine provider",
+      "phase": "baseline",
+      "source": "work/ci-green/browser/baseline/screens/before-table-320.jpg"
+    }
+  ],
+  "limits": [
+    "No genuine or paid provider calls. Typed worker responses and file patch/task fixtures explicitly synthetic.",
+    "Native mock tasks exercise actual routing, state and UI, but do not demonstrate feature implementation or testing.",
+    "Software keyboard, assistive technology and hours-long endurance were not tested.",
+    "Desktop\u2192mobile resize preserves operator scroll intentionally; freshmobile load and keyboard jumps verified separately."
+  ],
+  "gallerySelfTest": {
+    "views": 31,
+    "imagesDecoded": 73,
+    "search": true,
+    "groupFilter": true,
+    "beforeAfterFilter": true,
+    "viewportSelector": true,
+    "zoomEscape": true,
+    "evidenceDownload": true,
+    "mobileOverflow": 0,
+    "pageErrors": [],
+    "externalRequests": []
+  }
+}

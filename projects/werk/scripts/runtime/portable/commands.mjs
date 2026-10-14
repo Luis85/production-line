@@ -28,7 +28,7 @@ export function commands(kind) {
       Object.assign(catalog, { [`${entity} list`]: op('GET', path), [`${entity} get`]: op('GET', path + '/:id', false, ['id']), [`${entity} create`]: op('POST', path, true, ['key']), [`${entity} update`]: op('PATCH', path + '/:id', true, ['id', 'key']), [`${entity} delete`]: op('DELETE', path + '/:id', false, ['id', 'key']) });
     }
     Object.assign(catalog, { 'intake list': op('GET', '/v1/intake'), 'intake create': op('POST', '/v1/intake', true, ['key']), 'intake route': op('PUT', '/v1/intake/:id/routing', true, ['id']), 'line interact': op('POST', '/v1/lines/:id/interaction', true, ['id']) });
-  } else Object.assign(catalog, { 'task create': op('POST', '/v1/tasks', true, ['key']), 'task list': op('GET', '/v1/tasks'), 'task get': op('GET', '/v1/tasks/:id', false, ['id']), 'task events': op('GET', '/v1/tasks/:id/events', false, ['id']), 'task route': op('PUT', '/v1/tasks/:id/routing', true, ['id']), 'workers list': op('GET', '/v1/workers'), interact: op('POST', '/v1/interaction', true) });
+  } else Object.assign(catalog, { 'task successor': op('POST', '/v1/tasks/:id/successor', true, ['id']), 'task create': op('POST', '/v1/tasks', true, ['key']), 'task list': op('GET', '/v1/tasks'), 'task get': op('GET', '/v1/tasks/:id', false, ['id']), 'task events': op('GET', '/v1/tasks/:id/events', false, ['id']), 'task route': op('PUT', '/v1/tasks/:id/routing', true, ['id']), 'workers list': op('GET', '/v1/workers'), interact: op('POST', '/v1/interaction', true) });
   const task = { project: 'demo', title: 'Implement the requirement', criteria: ['Record evidence'], wikilinks: [], provider: 'codex' };
   catalog['routing set'].example = kind === 'factory' ? { mode: 'auto', lineId: null, paused: false } : { mode: 'auto', workerId: null, order: 'fifo' };
   if (kind === 'factory') {
@@ -36,6 +36,6 @@ export function commands(kind) {
     catalog['line create'].example = { id: 'alpha', name: 'Alpha', factoryId: 'main', orchestratorUrl: 'http://127.0.0.1:3000', webviewUrl: 'http://127.0.0.1:3000', tokenEnv: 'WERK_LINE_ALPHA_TOKEN' };
     catalog['intake create'].example = { factoryId: 'main', task, lineId: null };
     catalog['intake route'].example = { lineId: 'alpha' };
-  } else { catalog['task create'].example = task; catalog['task route'].example = { workerId: null }; }
+  } else { catalog['task successor'].example = { expectedAttempt: 1, evaluationId: 'GATE_EVALUATION_ID', operationId: 'rework-1', input: task }; catalog['task create'].example = task; catalog['task route'].example = { workerId: null }; }
   return catalog;
 }

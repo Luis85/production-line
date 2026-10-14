@@ -6,6 +6,7 @@ import { mkdtemp, rm, readFile, writeFile, realpath, mkdir } from 'node:fs/promi
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { parse } from 'yaml';
+import { initializeWorker } from '../../scripts/runtime/portable/project.mjs';
 const exec = promisify(execFile), installer = resolve('bin/apps/worker/cli.mjs');
 async function project(t, cleanup = true) { const path = await realpath(await mkdtemp(join(tmpdir(), 'werk project worker '))); if (cleanup) t.after(() => rm(path, { recursive: true, force: true })); return path; }
 async function cli(entry, cwd, ...args) { const result = await exec(process.execPath, [entry, ...args], { cwd, timeout: 45000, maxBuffer: 1048576 }); return JSON.parse(result.stdout); }
@@ -20,6 +21,7 @@ test('project init installs a self-contained worker, configurable template and D
   await writeFile(template, '# User template\n'); await cli(entry, cwd, 'init'); assert.equal(await readFile(template, 'utf8'), '# User template\n');
   const compose = parse(await readFile(join(cwd, '.werk/compose.worker.yaml'), 'utf8')); assert.match(compose.services.worker.image, /node:24/); assert.equal(compose.services.worker.working_dir, '/project'); assert.equal(compose.services.worker.volumes[0].source, '..'); assert.match(compose.services.worker.ports[0], /4207/);
   assert.match(await readFile(join(cwd, '.werk/.gitignore'), 'utf8'), /worker\//);
+  assert.match(await readFile(join(initial.featuresDirectory, '.gitignore'), 'utf8'), /^_questions\/$/m);
   const output = await exec(process.execPath, [entry, 'feature', 'template'], { cwd }); assert.equal(front(output.stdout).status, 'draft');
   await assert.rejects(cli(installer, cwd, 'init'), /worker app already exists/);
   await assert.rejects(cli(entry, cwd, 'init', '--features-dir', '../outside'), /inside the project/);
@@ -53,4 +55,19 @@ test('installed native worker consumes files, exports review patches and keeps t
   assert.equal((await api('/api/sessions')).records.length, 3);
   assert.equal((await cli(entry, cwd, 'feature', 'list')).records.length, 2);
   await cli(entry, cwd, 'stop'); running = false;
+});
+
+test('generated private question and gate ignores preserve operator rules and remain idempotent on repeat init', async t => {
+  const cwd = await project(t);
+  const setup = await initializeWorker(resolve('bin/apps/worker'), { 'project-dir': cwd, 'features-dir': 'requests/features' });
+  const ignorePath = join(setup.featuresDirectory, '.gitignore');
+  assert.match(await readFile(ignorePath, 'utf8'), /^_questions\/$/m);
+  assert.match(await readFile(ignorePath, 'utf8'), /^_gates\/$/m);
+  await writeFile(ignorePath, '# Operator-owned ignore rules\n_results/\ncustom-private.txt\n');
+  await initializeWorker(setup.application, { 'project-dir': cwd });
+  const first = await readFile(ignorePath, 'utf8');
+  assert.match(first, /^custom-private\.txt$/m); assert.match(first, /^_results\/$/m); assert.match(first, /^_questions\/$/m); assert.match(first, /^_gates\/$/m);
+  assert.equal(first.split('\n').filter(line => line === '_gates/').length, 1);
+  await initializeWorker(setup.application, { 'project-dir': cwd });
+  assert.equal(await readFile(ignorePath, 'utf8'), first);
 });

@@ -1,3 +1,7 @@
+import { exportFeatureGates, validateFeatureGates } from './gates.js';
+import type { WorkerRequest } from '../../application/request-gates.js';
+import type { InteractionView } from '../../application/interactions.js';
+import { exportFeatureEvidence, writeImmutableFeatureArtifact, validateFeatureExecution } from './evidence.js';
 import { FeatureDocuments } from './documents.js';
 import { open, readdir, lstat, mkdir, unlink } from 'node:fs/promises';
 import { resolve, join, parse, relative, isAbsolute, sep } from 'node:path';
@@ -5,7 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { stringify } from 'yaml';
 import { atomicWrite, readBoundedFile } from '../journal/files.js';
 import { parseFeature, featureInput, renderFeature, featureId, requestName, digest, featureTemplate } from './document.js';
-import type { FeatureFolderPort, FeatureFile, FeatureRecord, FeatureIndex } from '../../application/feature-requests.js';
+import type { FeatureFolderPort, FeatureFile, FeatureRecord, FeatureIndex, FeatureExecutionEvidence } from '../../application/feature-requests.js';
 
 export async function realDirectory(path: string, create = false) {
   const absolute = resolve(path), root = parse(absolute).root;
@@ -34,6 +38,11 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
       const index = JSON.parse(await readBoundedFile(join(this.state, 'feature-index.json'), 16777216));
       if (index.version !== 1 || typeof index.owner !== 'string' || !featureId.test(index.owner) || !Array.isArray(index.records) || index.records.length > 1000 || new Set(index.records.map((r: FeatureRecord) => r.id)).size !== index.records.length) throw Error('Invalid feature index.');
       for (const record of index.records) if (!record || !featureId.test(record.id) || !requestName(record.name) || !['folder', 'orchestrator'].includes(record.source) || typeof record.submitted !== 'boolean' || typeof record.inputHash !== 'string' || typeof record.taskId !== 'string' || typeof record.sessionId !== 'string' || !record.submitted && !record.input) throw Error('Invalid feature index record.');
+      for (const record of index.records) {
+        validateFeatureExecution(record);
+        validateFeatureGates(record);
+        if (record.interaction && (!Number.isSafeInteger(record.interaction.revision) || record.interaction.revision < 0 || typeof record.interaction.phase !== 'string' || (record.interaction.pendingId && !featureId.test(record.interaction.pendingId)) || (record.interaction.link && record.interaction.link !== `_questions/${record.id}/${record.interaction.pendingId}.md`))) throw Error('Invalid feature interaction projection.');
+      }
       return index;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
@@ -85,7 +94,7 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
     const current = await readBoundedFile(path, 65536).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
     if (current === null || digest(current) !== file.revision) return false;
     const parsed = parseFeature(current);
-    const next = renderFeature(parsed, record.id, record.status, { archived: record.archived ?? false, source: record.source, taskId: record.taskId, sessionId: record.sessionId, submittedAt: record.createdAt, updatedAt: record.updatedAt, inputHash: record.inputHash, ...(record.attempt !== undefined ? { attempt: record.attempt } : {}), ...(record.error ? { error: record.error } : {}), ...(record.result ? { result: record.result } : {}), ...(record.patch ? { patch: record.patch } : {}), ...(inputChanged ? { inputChanged: true, note: 'Accepted input is frozen. Copy to a new filename and remove id/werk to request different work.' } : {}) });
+    const next = renderFeature(parsed, record.id, record.status, { archived: record.archived ?? false, source: record.source, taskId: record.taskId, sessionId: record.sessionId, submittedAt: record.createdAt, updatedAt: record.updatedAt, inputHash: record.inputHash, ...(record.attempt !== undefined ? { attempt: record.attempt } : {}), ...(record.error ? { error: record.error } : {}), ...(record.result ? { result: record.result } : {}), ...(record.patch ? { patch: record.patch } : {}), ...(record.execution ? { execution: record.execution } : {}), ...(record.executionDirectory ? { executionDirectory: record.executionDirectory } : {}), ...(record.interaction ? { interaction: record.interaction } : {}), ...(record.gates ? { gates: record.gates, requestPhase: record.gates.phase, executionStatus: record.executionStatus } : {}), ...(inputChanged ? { inputChanged: true, note: 'Accepted input is frozen. Copy to a new filename and remove id/werk to request different work.' } : {}) });
     if (next === current) return true;
     // Optimistic editor protection; a changed observation is retried on the next scan.
     if (await readBoundedFile(path, 65536) !== current) return false;
@@ -103,12 +112,36 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
     const raw = '---\n' + stringify({ schemaVersion: 1, id: record.id, title, source: 'orchestrator', status: record.status, werk: { taskId: record.taskId, sessionId: record.sessionId, attempt: record.attempt } }) + '---\n' + markdown;
     const file = await open(path, 'wx', 0o600); try { await file.writeFile(raw); await file.sync(); } finally { await file.close(); }
   }
+  async gates(record: FeatureRecord, request: WorkerRequest) {
+    return exportFeatureGates(this.directory, record, request, path => realDirectory(path, true));
+  }
+  async question(record: FeatureRecord, view: InteractionView) {
+    const pending = view.pending;
+    if (!pending) return;
+    if (!featureId.test(record.id) || !featureId.test(pending.id)) throw Error('Invalid question projection identity.');
+    const directory = join(this.directory, '_questions', record.id);
+    await realDirectory(directory, true);
+    const metadata = { schemaVersion: 1, featureId: record.id, sessionId: record.sessionId, phase: view.phase, revision: view.revision, pendingId: pending.id, turnId: pending.turnId };
+    const raw = '---\n' + stringify(metadata) + '---\n# Operator input checkpoint\n\n' + pending.message + '\n' + (pending.choices?.length ? '\n## Choices\n\n' + pending.choices.map(choice => '- ' + choice.id + ': ' + choice.label).join('\n') + '\n' : '') + (pending.reason ? '\n## Escalation reason\n\n' + pending.reason + '\n' : '') + '\nThis worker-generated question snapshot may already have been answered or cancelled. Consult the request’s current werk.interaction metadata or the worker interaction controls for its current state. Editing this file does not answer or resume the task. Use the worker interaction controls with this pending ID and current revision. The accepted request body and approved files remain frozen.\n';
+    await this.writeChanged(join(directory, pending.id + '.md'), raw);
+  }
+  async evidence(record: FeatureRecord, evidence: FeatureExecutionEvidence) {
+    return exportFeatureEvidence(this.directory, record, evidence, path => realDirectory(path, true));
+  }
   async result(record: FeatureRecord, text: string, patch?: string) {
     if (!featureId.test(record.id)) throw Error('Invalid feature ID.');
+    validateFeatureExecution(record);
     const directory = join(this.directory, '_results'); await realDirectory(directory);
-    const raw = '---\n' + stringify({ schemaVersion: 1, featureId: record.id, source: record.source, status: record.status, taskId: record.taskId, sessionId: record.sessionId, updatedAt: record.updatedAt }) + '---\n# Worker result\n\n' + text + '\n';
+    const raw = '---\n' + stringify({ schemaVersion: 1, featureId: record.id, source: record.source, status: record.executionStatus ?? record.status, taskId: record.taskId, sessionId: record.sessionId, updatedAt: record.execution?.completedAt ?? record.updatedAt, ...(record.execution ? { execution: record.execution } : {}) }) + '---\n# Worker result\n\n' + text + '\n';
+    if (record.execution?.after) {
+      const executionDirectory = join(directory, record.id); await realDirectory(executionDirectory, true);
+      // The mutable latest result is a convenience; each run keeps its own original result.
+      await writeImmutableFeatureArtifact(join(executionDirectory, record.execution.runId + '.md'), raw);
+      if (patch) await writeImmutableFeatureArtifact(join(executionDirectory, record.execution.runId + '.patch'), patch);
+    }
     await this.writeChanged(join(directory, record.id + '.md'), raw);
     if (patch) await this.writeChanged(join(directory, record.id + '.patch'), patch);
+    else await unlink(join(directory, record.id + '.patch')).catch(error => { if (error.code !== 'ENOENT') throw error; });
   }
   private async writeChanged(path: string, text: string) {
     const previous = await readBoundedFile(path, 524288).catch(error => { if (error.code !== 'ENOENT') throw error; return undefined; });
@@ -117,8 +150,8 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
   async report(value: { records: FeatureRecord[]; errors: { file: string; message: string }[] }) {
     const escape = (s: string) => s.replace(/[\r\n|]/g, ' ');
     const missing = new Set((await readdir(this.directory)).filter(requestName));
-    const rows = value.records.map(record => `| ${escape(record.name)} | ${record.status} | ${record.source} | ${missing.has(record.name) ? escape(record.error ?? '') : 'File missing; accepted work is not cancelled.'} |`);
-    const text = '# Worker feature queue\n\nGenerated by the worker. Underscore-prefixed files and folders are not ingested.\n\n| Request | State | Source | Note |\n| --- | --- | --- | --- |\n' + rows.join('\n') + '\n\n## Intake errors\n\n' + (value.errors.length ? value.errors.map(error => '- ' + escape(error.file) + ': ' + escape(error.message)).join('\n') : 'None.') + '\n';
+    const rows = value.records.map(record => `| ${escape(record.name)} | ${record.status} | ${record.source} | ${record.execution ? `[Run ${record.execution.attempt}](${encodeURI(record.execution.before)})` + (record.execution.after ? ` · [after](${encodeURI(record.execution.after)})` : ' · after not recorded') : 'Not recorded'} | ${missing.has(record.name) ? escape(record.error ?? '') : 'File missing; accepted work is not cancelled.'} |`);
+    const text = '# Worker feature queue\n\nGenerated by the worker. Underscore-prefixed files and folders are not ingested.\n\n| Request | State | Source | Execution evidence | Note |\n| --- | --- | --- | --- | --- |\n' + rows.join('\n') + '\n\n## Intake errors\n\n' + (value.errors.length ? value.errors.map(error => '- ' + escape(error.file) + ': ' + escape(error.message)).join('\n') : 'None.') + '\n';
     await realDirectory(this.directory); await this.writeChanged(join(this.directory, '_worker-status.md'), text);
   }
   async close() { if (!this.lock) return; const handle = this.lock; this.lock = undefined; await handle.close(); await unlink(join(this.directory, '_worker.lock')); }

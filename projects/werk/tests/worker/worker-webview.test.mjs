@@ -37,7 +37,14 @@ test('interrupted replies recover honestly; provider errors and timeouts never e
   const store=memoryStore();store.value.messages=[{id:'old',role:'assistant',text:'',state:'pending',at:new Date().toISOString()}];
   const chat=new WorkerConversation(store,{async reply(){throw Error('secret-provider-credential');}});await chat.init();assert.equal(chat.snapshot().messages[0].state,'error');
   await chat.start('Retry');await waitFor(()=>!chat.snapshot().busy);assert.doesNotMatch(JSON.stringify(chat.snapshot()),/secret-provider/);
-  const timed=new WorkerConversation(memoryStore(),{async reply(_,signal){await once(signal,'abort');throw Error('timed out');}},20);await timed.init();await timed.start('Slow');await waitFor(()=>!timed.snapshot().busy);assert.match(timed.snapshot().messages.at(-1).text,/longer than/);
+  const timeoutStore=memoryStore();let attempts=0;
+  const timed=new WorkerConversation(timeoutStore,{async reply(_,signal){attempts++;await once(signal,'abort');throw Error('timed out');}},20);
+  await timed.init();await timed.start('Slow');await waitFor(()=>!timed.snapshot().busy);
+  const failed=timed.snapshot().messages.at(-1);assert.equal(failed.state,'error');
+  assert.match(failed.text,/configured execution time limit/);assert.match(failed.text,/saved context is retained; resume explicitly/);
+  assert.deepEqual((await timeoutStore.read()).messages,timed.snapshot().messages);
+  assert.equal(timeoutStore.value.messages[0].text,'Slow');assert.equal(attempts,1);
+  await timed.close();
 });
 test('failed acceptance never invokes a model; shutdown during acceptance cannot start a model', async()=>{
   let calls=0;const failing=memoryStore();failing.write=async()=>{throw Error('disk full');};const chat=new WorkerConversation(failing,{async reply(){calls++;return 'reply';}});await chat.init();await assert.rejects(chat.start('Hello'),/disk full/);assert.equal(calls,0);assert.equal(chat.snapshot().messages.length,0);
@@ -45,14 +52,29 @@ test('failed acceptance never invokes a model; shutdown during acceptance cannot
   const closing=new WorkerConversation(blocked,{async reply(_,signal){signal.throwIfAborted();calls++;return 'reply';}});await closing.init();const accepted=closing.start('Hello'),stop=closing.close();release();await accepted;await stop;assert.equal(calls,0);assert.equal(closing.snapshot().busy,false);
 });
 test('history and private environment use worker-scoped auth, preserve snapshots, and serve built Vue routes', async t => {
-  const directory=await mkdtemp(join(tmpdir(),'werk-webview-'));t.after(()=>rm(directory,{recursive:true,force:true}));
-  const current=status(),journal=new SnapshotJournal(directory,'a'.repeat(64),'b'.repeat(64));await journal.init();t.after(()=>journal.close());
+  const directory=await mkdtemp(join(tmpdir(),'werk-webview-'));
+  let journal, workspace, restarted, server;
+  t.after(async () => {
+    const errors = [];
+    // Stop traffic and every workspace sampler before closing journals and deleting files.
+    for (const cleanup of [
+      async () => { if (server) { server.closeAllConnections(); await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())); } },
+      () => restarted?.close(),
+      () => workspace?.close(),
+      () => journal?.close(),
+      () => rm(directory, { recursive: true, force: true }),
+    ]) {
+      try { await cleanup(); } catch (error) { errors.push(error); }
+    }
+    if (errors.length) throw new AggregateError(errors, 'Webview fixture cleanup failed');
+  });
+  const current=status();journal=new SnapshotJournal(directory,'a'.repeat(64),'b'.repeat(64));await journal.init();
   const task={id:'task-one',project:'alpha',attempt:1,lease:'lease-one',profile:'codex-1'};
   const before=journal.capture(task,current.workerId,current.profiles[0],current,'before');await journal.persist(before);await journal.persist(journal.capture(task,current.workerId,current.profiles[0],current,'after',before,'simulated'));
   const cfg={stateDir:directory,url:'http://localhost:3000',pollMs:1000,timeoutMs:60000};
-  const workspace=new WorkerWorkspace(cfg,journal,()=>current);await workspace.init();await workspace.updateSettings({provider:{id:'codex-cli',executable:''}});await workspace.rememberTask({...task,title:'Improve worker navigation'});
-  const token=(await readFile(join(directory,'webview-token'),'utf8')).trim();const restarted=new WorkerWorkspace(cfg,journal,()=>current);await restarted.init();assert.equal((await readFile(join(directory,'webview-token'),'utf8')).trim(),token);
-  const server=await statusServer(()=>current,'127.0.0.1',0,undefined,workspace);t.after(async()=>{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));});
+  workspace=new WorkerWorkspace(cfg,journal,()=>current);await workspace.init();await workspace.updateSettings({provider:{id:'codex-cli',executable:''}});await workspace.rememberTask({...task,title:'Improve worker navigation'});
+  const token=(await readFile(join(directory,'webview-token'),'utf8')).trim();restarted=new WorkerWorkspace(cfg,journal,()=>current);await restarted.init();assert.equal((await readFile(join(directory,'webview-token'),'utf8')).trim(),token);
+  server=await statusServer(()=>current,'127.0.0.1',0,undefined,workspace);
   const base=`http://127.0.0.1:${server.address().port}`,headers={Authorization:`Bearer ${token}`};
   assert.equal((await fetch(base+'/api/history')).status,401);assert.equal((await fetch(base+'/api/environment',{headers:{Authorization:'Bearer wrong'}})).status,401);
   const environment=await(await fetch(base+'/api/environment',{headers})).json();assert.equal(environment.stateDirectory,directory);assert.doesNotMatch(JSON.stringify(environment),/secret|hidden|webview-token/);assert.equal(environment.chat.configured,false);
@@ -61,8 +83,12 @@ test('history and private environment use worker-scoped auth, preserve snapshots
   assert.equal((await fetch(base+'/api/chat',{...post,headers:{...post.headers,Origin:'https://evil.invalid'}})).status,403);
   assert.equal((await fetch(base+'/api/chat',post)).status,503);
   assert.equal((await fetch(base+'/api/chat',{...post,body:'x'.repeat(70000)})).status,413);
-  for(const path of ['/','/chat','/history','/monitoring-status']) {const response=await fetch(base+path);assert.equal(response.status,200);const html=await response.text();assert.match(html,/id="app"/);assert.match(html,/assets\/.*\.js/);assert.doesNotMatch(html,new RegExp(token));}
+  for(const path of ['/','/chat','/history','/dashboard','/monitoring-status','/history?taskState=failed','/history?taskState=queued&kind=local','/chat?task=saved']) {const response=await fetch(base+path);assert.equal(response.status,200);const html=await response.text();assert.match(html,/id="app"/);assert.match(html,/assets\/.*\.js/);assert.doesNotMatch(html,new RegExp(token));}
   const html=await(await fetch(base+'/chat')).text();const asset=/src="([^"]+\.js)"/.exec(html)[1];const js=await fetch(base+asset);assert.equal(js.status,200);assert.match(js.headers.get('content-type'),/javascript/);assert.ok((await js.text()).length>1000);
+  assert.equal((await fetch(base+'/unknown?taskState=failed')).status,404);
+  assert.equal((await fetch(base+'/api/history?taskState=failed',{headers})).status,404);
+  assert.equal((await fetch(base+'/api/history?taskState=failed')).status,401);
+  assert.equal((await fetch(base+'/history?taskState=failed',{method:'POST'})).status,405);
   assert.equal((await fetch(base+'/assets/missing.js')).status,404);assert.equal((await fetch(base+'/healthz')).status,200);assert.equal((await fetch(base+'/status',{method:'POST'})).status,405);
 });
 test('Codex chat configuration is explicit and does not change task execution mode',async()=>{

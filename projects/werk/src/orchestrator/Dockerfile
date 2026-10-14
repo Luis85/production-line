@@ -4,8 +4,8 @@ COPY package.json package-lock.json ./
 # Optional BuildKit CA for trusted enterprise proxies; never retained in an image layer.
 RUN --mount=type=secret,id=proxy_ca \
     if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
-    npm ci --ignore-scripts --omit=dev --workspaces=false --strict-ssl=true
-COPY scripts/build.mjs scripts/build.mjs
+    npm ci --ignore-scripts --workspaces=false --strict-ssl=true
+COPY scripts/build.mjs scripts/webviews.mjs scripts/
 COPY src/shared src/shared
 COPY src/orchestrator src/orchestrator
 COPY src/guide src/guide

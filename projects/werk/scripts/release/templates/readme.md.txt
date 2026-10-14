@@ -18,6 +18,8 @@ Subsequent native starts check stable GitHub releases, verify updates and back u
 
 For automatic download and startup from GitHub, installer options and release verification, see the [release reference](docs/reference/releases.md).
 
+For a standalone project worker, follow the [feature lifecycle tutorial](docs/tutorials/worker-feature-lifecycle.md): install, configure a watched folder, submit requests and inspect before/after consumption through the CLI or webview.
+
 ## Portable apps for another project
 
 Copy any complete `bin/apps/factory`, `bin/apps/orchestrator` or `bin/apps/worker`
@@ -92,3 +94,8 @@ For automation, use the [agent guide](docs/how-to/operate-with-agents.md). For
 upgrades and recovery, preserve state and follow the
 [backup guide](docs/how-to/upgrade-backup.md). The
 [documentation hub](docs/index.md) routes all runtime guides and references.
+
+For model questions, escalation and stopped requests, use the
+[answer and resume guide](docs/how-to/answer-and-resume-worker.md).
+The [interaction contract](docs/reference/model-interaction.md) describes durable
+checkpoints, provider capabilities and replayable lifecycle events.

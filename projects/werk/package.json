@@ -16,7 +16,7 @@
     "build": "node scripts/build.mjs",
     "test": "node scripts/build.mjs && node --test --test-concurrency=2 \"tests/**/*.test.mjs\" \"tests/**/*.test.cjs\"",
     "dev:fleet": "node scripts/fleet.mjs",
-    "typecheck": "tsc --noEmit && vue-tsc --noEmit -p src/worker/webview/tsconfig.json",
+    "typecheck": "tsc --noEmit && vue-tsc --noEmit -p tsconfig.webviews.json",
     "dev:factory": "node scripts/factory-fleet.mjs",
     "check": "npm run typecheck && npm test",
     "audit:dependencies": "npm audit --audit-level=low",
@@ -38,6 +38,7 @@
     "vue-tsc": "3.2.6"
   },
   "dependencies": {
+    "undici": "8.11.2",
     "yaml": "2.9.1"
   },
   "overrides": {

@@ -5,6 +5,11 @@ need npm dependencies or a Git checkout. Native operation requires Node 24; Dock
 operation requires Docker Engine/Desktop with Compose. Use one runtime at a time
 for the same worker state.
 
+Download without starting the default Factory fleet by adding `--no-start` to the
+release installer: `node werk-install.mjs --no-start`. Then use the verified
+extracted release's worker app below. Downloading the source-code archive is not
+this prebuilt installation path.
+
 ## Set up with Node
 
 From your project directory, point at the worker in the extracted release:
@@ -20,6 +25,11 @@ This copies the self-contained app to `bin/apps/worker` and creates:
 - `.werk/compose.worker.yaml`: a standalone Docker worker.
 - `features/_templates/feature-request.md`: an editable draft template.
 - Private `.werk/worker` state and `.werk/provider-home`, with Git ignore entries.
+- Project agent skills for Claude Code and Codex, plus the Codex supporting guide,
+  where those files are missing. Existing edits are preserved and reported.
+
+See [project agent integrations](project-agent-integrations.md) for invocation,
+inspection and guarded synchronization. These skills do not start work automatically.
 
 Choose another folder/provider/port at setup:
 
@@ -93,7 +103,9 @@ watcher's directory.
 
 ## Drop your first request
 
-Copy `features/_templates/feature-request.md` to `features/search.md`. Fill in its
+The examples below use the default `features` folder. Substitute your saved
+folder when setup used `--features-dir`. Copy
+`features/_templates/feature-request.md` to `features/search.md`. Fill in its
 title, goal and acceptance criteria, then change `status: draft` to `status: ready`.
 The worker detects the stable save and writes the request's ID and queue state
 back into frontmatter. Open `_worker-status.md` to inspect intake errors and the
@@ -199,7 +211,8 @@ node bin/apps/worker/cli.mjs feature wait --name search.md --timeout-ms 60000
 node bin/apps/worker/cli.mjs feature result --name search.md
 ```
 
-The JSON record supplies `taskId` and `sessionId` for follow-up commands. Use
+A newly created draft has no accepted execution record yet. After submission and
+stable-save admission, the JSON record supplies `taskId` and `sessionId` for follow-up commands. Use
 `task send --id SESSION_ID --file follow-up.json` with
 `{"message":"Explain the next step."}` to continue that session. For cancellation,
 retry, archive or deletion, fetch the current feature revision and use the

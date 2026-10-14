@@ -53,3 +53,14 @@ test('Codex negative status wins even with exit zero; changed configuration wait
   assert.equal((await first).authentication, 'signed-out');
   assert.equal((await second).authentication, 'authenticated');
 });
+
+test('Claude saved-connection preflight reports minimum version without a model request', { skip: process.platform === 'win32' }, async t => {
+  for (const [version, compatibility] of [['2.1.247', 'unsupported'], ['2.1.248', 'minimum_met'], ['3.0.0', 'minimum_met']]) {
+    const cli = await executable(t, `const args=process.argv.slice(2);if(args.join(' ')==='--version'){console.log(${JSON.stringify(version)}+' (Claude Code)')}else if(args.join(' ')==='auth status'){console.log(JSON.stringify({loggedIn:true,email:'private-account'}))}else{process.exit(99)}`);
+    const result = await new ProviderStatusChecks().check(provider('claude-cli', { executable: cli }));
+    assert.equal(result.version, version); assert.equal(result.minimumVersion, '2.1.248'); assert.equal(result.compatibility, compatibility);
+    assert.equal(result.available, compatibility === 'minimum_met');
+    assert.equal(result.authentication, compatibility === 'minimum_met' ? 'authenticated' : 'unknown');
+    assert.doesNotMatch(JSON.stringify(result), /private-account/);
+  }
+});

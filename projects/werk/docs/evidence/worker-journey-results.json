@@ -1,0 +1,66 @@
+{
+  "scope": "Fresh local worker journeys; running task and review patch use explicit browser fixtures; protocol smoke uses a local executable fixture. No live providers.",
+  "viewports": [
+    1440,
+    390,
+    320
+  ],
+  "runningTaskLayout": [
+    {
+      "width": 1440,
+      "beforeTextWidth": 920.921875,
+      "afterTextWidth": 920.921875,
+      "ctaMovesBelowAtNarrowWidth": false,
+      "horizontalOverflow": 0
+    },
+    {
+      "width": 390,
+      "beforeTextWidth": 118.921875,
+      "afterTextWidth": 318,
+      "ctaMovesBelowAtNarrowWidth": true,
+      "horizontalOverflow": 0
+    },
+    {
+      "width": 320,
+      "beforeTextWidth": 48.921875,
+      "afterTextWidth": 248,
+      "ctaMovesBelowAtNarrowWidth": true,
+      "horizontalOverflow": 0
+    }
+  ],
+  "patchEvidenceKeyboard": {
+    "viewport": 390,
+    "fixture": true,
+    "providerCalls": 0,
+    "escapeClosesEvidence": true,
+    "focusReturnsToReviewAction": true,
+    "filteredReviewColumns": 1
+  },
+  "protocolSmoke": {
+    "screenshots": [
+      "login-desktop",
+      "login-mobile",
+      "connection-desktop",
+      "definition-preview-desktop",
+      "new-task-desktop",
+      "queued-desktop",
+      "chat-desktop",
+      "chat-tablet",
+      "chat-mobile",
+      "history-desktop",
+      "dashboard-desktop",
+      "tour-desktop"
+    ],
+    "checks": [
+      "dedicated unlock, invalid token, reload retains session",
+      "definition preview/adaptation, task snapshot, queue, draft while busy, same-session follow-up, escaped HTML, code copy",
+      "restart relocks, transcript/profile persists, unsent draft restored",
+      "explicit lock revokes saved browser access"
+    ],
+    "pageErrors": [],
+    "liveProvider": false
+  },
+  "limitations": [
+    "Desktop Chromium viewport emulation; software keyboard and assistive technology were not tested."
+  ]
+}

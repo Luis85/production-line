@@ -1,0 +1,156 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile, writeFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { join } from 'node:path';
+import ts from 'typescript';
+const root = fileURLToPath(new URL('../../', import.meta.url));
+async function store(t) {
+  await mkdir(join(root, 'work'), { recursive: true });
+  const directory = await mkdtemp(join(root, 'work/webview-refresh-'));
+  const source = await readFile(join(root, 'src/worker/webview/store.ts'), 'utf8');
+  const output = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+  const modulePath = join(directory, 'store.mjs'); await writeFile(modulePath, output);
+  const originalFetch = globalThis.fetch;
+  t.after(async () => { globalThis.fetch = originalFetch; await rm(directory, { recursive: true, force: true }); });
+  return import(pathToFileURL(modulePath).href);
+}
+function payloads() {
+  return {
+    '/status': { state: 'standalone', updatedAt: '2026-10-14T12:00:00.000Z' },
+    '/monitoring': { alerts: [] }, '/api/environment': { fixture: 'environment' },
+    '/api/history': { rows: [{ id: 'fresh-history' }] },
+    '/api/chat/session': { sessions: { selected: 'fresh-session', records: [] }, chat: { messages: [{ text: 'Fresh answer' }], busy: false } },
+    '/api/settings': { providers: [] }, '/api/taskboard': { tasks: [] },
+    '/api/definitions': { definitions: [{ id: 'fresh-definition' }] },
+  };
+}
+const response = (data, status = 200) => ({ ok: status >= 200 && status < 300, status, async json() { return data; } });
+test('failed optional history read preserves history while adopting healthy chat and status, then recovers', async t => {
+  const { state, refresh } = await store(t), data = payloads();
+  state.unlocked = true; state.history = { rows: [{ id: 'previous-history' }] }; state.lastRead = 'previous-read';
+  globalThis.fetch = async path => path === '/api/history' ? response({ error: 'History unavailable' }, 500) : response(data[path]);
+  await refresh();
+  assert.equal(state.status.updatedAt, data['/status'].updatedAt);
+  assert.equal(state.chat.messages[0].text, 'Fresh answer');
+  assert.equal(state.sessions.selected, 'fresh-session');
+  assert.equal(state.history.rows[0].id, 'previous-history');
+  assert.equal(state.error, ''); assert.match(state.partialError, /History.*stale/);
+  assert.equal(state.lastRead, 'previous-read'); assert.equal(state.loading, false);
+  globalThis.fetch = async path => response(data[path]); await refresh();
+  assert.equal(state.history.rows[0].id, 'fresh-history');
+  assert.equal(state.partialError, ''); assert.notEqual(state.lastRead, 'previous-read');
+});
+test('expired access prevents late successful refresh responses from restoring private data', async t => {
+  const { state, refresh } = await store(t), data = payloads(), pending = new Map();
+  state.unlocked = true; state.sessions = { selected: 'old-session', records: [] }; state.draft = 'Unsent message';
+  state.chat = { messages: [{ text: 'Private old answer' }] }; state.history = { rows: [{ id: 'old-history' }] };
+  globalThis.fetch = path => new Promise(resolve => pending.set(path, resolve));
+  const read = refresh();
+  pending.get('/api/settings')(response({ error: 'Expired access' }, 401));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(state.unlocked, false); assert.equal(state.chat, null);
+  for (const [path, resolve] of pending) if (path !== '/api/settings') resolve(response(data[path]));
+  await read;
+  assert.equal(state.unlocked, false); assert.equal(state.chat, null); assert.equal(state.sessions, null);
+  assert.equal(state.environment, null); assert.equal(state.history, null); assert.equal(state.settings, null);
+  assert.equal(state.board, null); assert.deepEqual([...state.definitions], []);
+  assert.equal(state.draft, 'Unsent message'); assert.match(state.accessMessage, /expired/);
+  assert.equal(state.loading, false);
+});
+
+function deferred() {
+  let resolve;
+  const promise = new Promise(done => { resolve = done; });
+  return { promise, resolve };
+}
+test('accepted file task remains acknowledged when selecting another task during submission', async t => {
+  const { state, workspaceAction } = await store(t), data = payloads(), admission = deferred();
+  state.unlocked = true; state.sessions = { selected: 'previous-session', records: [] };
+  const accepted = { tasks: [{ id: 'accepted-file-task' }] };
+  globalThis.fetch = async (path, options) => {
+    if (path === '/api/taskboard' && options.method === 'POST') return admission.promise;
+    return response(data[path] ?? {});
+  };
+  const submission = workspaceAction('/api/taskboard', { title: 'Accepted file task' });
+  await workspaceAction('/api/sessions', { action: 'select', id: 'fresh-session' });
+  data['/api/taskboard'] = accepted; admission.resolve(response(accepted));
+  assert.deepEqual(await submission, accepted);
+  assert.equal(state.sessions.selected, 'fresh-session');
+  assert.equal(state.actionError, '');
+});
+test('saved session action is acknowledged when the follow-up conversation read fails', async t => {
+  const { state, workspaceAction } = await store(t), data = payloads();
+  state.unlocked = true;
+  const accepted = { selected: 'created-session', records: [] };
+  globalThis.fetch = async path => path === '/api/sessions' ? response(accepted)
+    : path === '/api/chat/session' ? response({ error: 'Read unavailable' }, 500) : response(data[path]);
+  assert.deepEqual(await workspaceAction('/api/sessions', { action: 'create' }), accepted);
+  assert.equal(state.actionError, '');
+  assert.match(state.partialError, /conversation/i);
+});
+test('accepted chat clears its submitted draft after an unrelated settings mutation', async t => {
+  const { state, chatAction, workspaceAction } = await store(t), data = payloads(), admission = deferred();
+  state.unlocked = true; state.sessions = data['/api/chat/session'].sessions; state.draft = 'Send exactly once';
+  globalThis.fetch = async path => path === '/api/chat' ? admission.promise : response(data[path] ?? {});
+  const sending = chatAction('send');
+  await workspaceAction('/api/settings', { board: { paused: true } });
+  admission.resolve(response({ messages: [{ text: 'Send exactly once' }], busy: true }));
+  await sending;
+  assert.equal(state.draft, ''); assert.equal(state.actionError, '');
+});
+test('late admitted mutation cannot return private data or restore drafts after explicit lock', async t => {
+  const { state, workspaceAction, lock } = await store(t), admission = deferred();
+  state.unlocked = true; state.sessions = { selected: 'private-session', records: [] }; state.draft = 'Clear me';
+  globalThis.fetch = async path => path === '/api/taskboard' ? admission.promise : response({});
+  const submitting = workspaceAction('/api/taskboard', { instruction: 'Private instruction' });
+  await lock();
+  admission.resolve(response({ tasks: [{ instruction: 'Private instruction' }] }));
+  assert.equal(await submitting, undefined);
+  assert.equal(state.unlocked, false); assert.equal(state.board, null); assert.equal(state.draft, '');
+  assert.equal(state.draftEpoch, 1);
+});
+
+test('an expired request from an older access lifetime cannot relock a newly unlocked browser', async t => {
+  const { state, request, unlock } = await store(t), data = payloads(), oldRead = deferred();
+  state.unlocked = true;
+  globalThis.fetch = async path => path === '/api/old-read' ? oldRead.promise : response(data[path] ?? {});
+  const obsolete = request('/api/old-read');
+  await unlock('new-access');
+  oldRead.resolve(response({ error: 'Old access expired' }, 401));
+  await assert.rejects(obsolete, /Old access expired/);
+  assert.equal(state.unlocked, true);
+  assert.equal(state.sessions.selected, 'fresh-session');
+});
+
+
+test('non-JSON expired access clears private projections and preserves the unsent draft', async t => {
+  const { state, request } = await store(t);
+  state.unlocked = true;
+  state.sessions = { selected: 'private-session', records: [] };
+  state.chat = { messages: [{ text: 'Private answer' }] };
+  state.settings = { providers: [] };
+  state.board = { tasks: [{ id: 'private-task' }] };
+  state.history = { rows: [{ id: 'private-history' }] };
+  state.draft = 'Keep this unsent message';
+  globalThis.fetch = async () => new Response('Access expired', { status: 401 });
+  await assert.rejects(request('/api/taskboard'), error => error.status === 401);
+  assert.equal(state.unlocked, false);
+  for (const key of ['sessions', 'chat', 'settings', 'board', 'history']) assert.equal(state[key], null);
+  assert.equal(state.draft, 'Keep this unsent message');
+  assert.equal(state.draftEpoch, 0);
+  assert.match(state.accessMessage, /Unlock/);
+});
+
+test('a non-JSON 401 from an older access lifetime leaves the new private session intact', async t => {
+  const { state, request, unlock } = await store(t), data = payloads(), oldRead = deferred();
+  state.unlocked = true;
+  globalThis.fetch = async path => path === '/api/old-read' ? oldRead.promise : response(data[path] ?? {});
+  const obsolete = request('/api/old-read');
+  await unlock('new-access');
+  oldRead.resolve(new Response('Expired old access', { status: 401 }));
+  await assert.rejects(obsolete, error => error.status === 401);
+  assert.equal(state.unlocked, true);
+  assert.equal(state.sessions.selected, 'fresh-session');
+  assert.equal(state.chat.messages[0].text, 'Fresh answer');
+});

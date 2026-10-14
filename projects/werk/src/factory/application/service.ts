@@ -57,6 +57,11 @@ export class FactoryApplication {
 
     lines() { return { lines: this.registry.lines() }; }
     line(id: string) { return this.registry.line(id); }
+    async taskPage(id: string, query: { limit: number; cursor?: string }) {
+        const line = this.registry.line(identifier(id, 'lineId'));
+        if (!this.reader.tasks) throw new DomainError('unavailable', 'Line task pages are unavailable.');
+        return { lineId: line.id, ...await this.reader.tasks(line, query), checkedAt: new Date(this.now()).toISOString() };
+    }
     private requireConfiguredCredential(reference: string): void {
         if (!this.configuredCredentials.has(reference)) {
             throw new DomainError('invalid_input', 'tokenEnv must reference a configured WERK_LINE_<NAME>_TOKEN credential');

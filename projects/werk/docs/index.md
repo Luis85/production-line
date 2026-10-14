@@ -7,6 +7,9 @@ follows [Diátaxis](https://diataxis.fr/).
 
 ## Tutorials — learn by running one task
 
+- [Worker feature lifecycle](tutorials/worker-feature-lifecycle.md): download, install in a project, execute feature requests and analyze run evidence entirely from CLI or webview.
+- [Local worker run metrics](reference/worker-run-metrics.md): paired snapshots, usage coverage, durable history and paginated export.
+
 - [Prepare a Linux VM deployment](tutorials/linux-vm-first-task.md): Ubuntu cloud-init, verified artifacts and SSH access.
 
 - [A complete system from YAML](tutorials/system-from-yaml.md): one Factory, logical
@@ -21,6 +24,12 @@ follows [Diátaxis](https://diataxis.fr/).
 
 - [Assemble independent workers, orchestrators and Factories](how-to/assemble-independent-components.md)
 - [Install a project worker and use its feature folder](how-to/project-worker.md)
+- [Integrate with Claude and Codex](how-to/project-agent-integrations.md): reviewed project skills and guarded synchronization.
+- [Monitor long-running workers](how-to/monitor-long-running-worker.md): duration budgets, resource warnings and durable alert history.
+- [Define readiness, completion and rework](how-to/rework-worker-requests.md): deterministic rules, human findings and bounded model review.
+- [Request gates and state machine](reference/request-gates.md): frozen policy, command guards and durable evidence.
+- [Answer questions and resume requests](how-to/answer-and-resume-worker.md): guarded answers, cancellation, checkpoints and event replay.
+- [Worker–model interaction contract](reference/model-interaction.md): capabilities, typed results, durable events and recovery.
 - [Markdown feature-request contract](reference/feature-requests.md)
 - [Use the worker webview](how-to/use-worker-webview.md): Chat, History and Dashboard.
 
@@ -40,6 +49,8 @@ follows [Diátaxis](https://diataxis.fr/).
 - [Use Docker Agent harnesses and MCP](how-to/docker-agent.md)
 
 ## Reference — look up a contract
+
+- [Shared Vue webview architecture](reference/webview-architecture.md): reusable Nuxt UI layouts/components, state boundaries and independent builds.
 
 - [Docker Agent definition profiles](reference/agent-definitions.md): compatibility and per-task selection.
 - [Portable Node apps and automation CLI](reference/portable-apps.md): copy one app into any project.

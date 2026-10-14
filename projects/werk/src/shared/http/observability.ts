@@ -8,7 +8,7 @@ export interface ServiceEvent {
   requestId?: string; method?: string; route?: string; status?: number; durationMs?: number;
 }
 export type LogSink = (entry: ServiceEvent) => void;
-const allowedEvents = new Set(['request_finished', 'internal_error', 'lease_reaper_error', 'intake_error', 'attempt_error', 'state_write_error', 'connection_lost', 'connection_restored', 'service_listening']);
+const allowedEvents = new Set(['request_finished', 'internal_error', 'lease_reaper_error', 'intake_error', 'attempt_error', 'state_write_error', 'connection_lost', 'connection_restored', 'service_listening', 'resource_alert_opened', 'resource_alert_resolved', 'resource_sample_error']);
 /** No arbitrary messages, request values, URLs, headers, paths or credentials enter this schema. */
 export function serviceEvent(service: ServiceName, event: string, level: ServiceEvent['level'] = 'info', sink?: LogSink): void {
   if (!allowedEvents.has(event)) return;
@@ -19,12 +19,12 @@ function writeLog(entry: ServiceEvent): void { console.error(JSON.stringify(entr
 function routeName(raw: string | undefined): string {
   let path: string;
   try { path = new URL(raw ?? '/', 'http://localhost').pathname; } catch { return 'unmatched'; }
-  const staticPaths = ['/api/access', '/api/providers/check', '/api/features', '/api/definitions', '/api/tasks', '/api/chat/session', '/v1/intake', '/v1/interaction', '/v1/routing', '/dashboard', '/api/settings', '/api/sessions', '/api/taskboard', '/api/taskboard/action', '/api/taskboard/detail', '/chat', '/history', '/monitoring-status', '/api/chat', '/api/chat/cancel', '/api/chat/clear', '/api/history', '/api/environment', '/v1/access', '/v1/monitoring', '/monitoring', '/metrics', '/', '/intake', '/concept', '/guide', '/healthz', '/status', '/v1/overview', '/v1/capabilities', '/v1/tasks', '/v1/workers', '/v1/workers/register', '/v1/snapshots', '/v1/factories', '/v1/lines', '/v1/iteration/tasks', '/v1/worker/assignments/current', '/v1/worker/assignments/next', '/v1/worker/snapshots'];
+  const staticPaths = ['/api/requests', '/api/resources', '/api/integrations', '/api/interactions', '/api/runs', '/api/capabilities', '/api/access', '/api/providers/check', '/api/features', '/api/definitions', '/api/tasks', '/api/chat/session', '/v1/intake', '/v1/interaction', '/v1/routing', '/dashboard', '/api/settings', '/api/sessions', '/api/taskboard', '/api/taskboard/action', '/api/taskboard/detail', '/chat', '/history', '/monitoring-status', '/api/chat', '/api/chat/cancel', '/api/chat/clear', '/api/history', '/api/environment', '/v1/access', '/v1/monitoring', '/monitoring', '/metrics', '/', '/intake', '/concept', '/guide', '/healthz', '/status', '/v1/overview', '/v1/capabilities', '/v1/tasks', '/v1/workers', '/v1/workers/register', '/v1/snapshots', '/v1/factories', '/v1/lines', '/v1/iteration/tasks', '/v1/worker/assignments/current', '/v1/worker/assignments/next', '/v1/worker/snapshots'];
   if (staticPaths.includes(path)) return path;
   if (/^\/v1\/(tasks|workers|factories|lines)\/[^/]+$/.test(path)) return path.replace(/\/[^/]+$/, '/:id');
-  const taskDetail = /^\/v1\/tasks\/[^/]+\/(events|context)$/.exec(path);
+  const taskDetail = /^\/v1\/tasks\/[^/]+\/(events|context|successor)$/.exec(path);
   if (taskDetail) return '/v1/tasks/:id/' + taskDetail[1];
-  const workerTask = /^\/v1\/worker\/tasks\/[^/]+\/(context|heartbeat|complete|abandon)$/.exec(path);
+  const workerTask = /^\/v1\/worker\/tasks\/[^/]+\/(context|heartbeat|complete|abandon|hold|resolve-hold)$/.exec(path);
   if (workerTask) return '/v1/worker/tasks/:id/' + workerTask[1];
   if (/^\/factories\/[^/]+$/.test(path)) return '/factories/:id';
   return 'unmatched';

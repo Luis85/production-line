@@ -3,7 +3,7 @@ import { readFile, lstat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { assertNode, inputError, readPrivate } from '../config.mjs';
 import { initializeWorker, projectDefaults } from './project.mjs';
-import { workerBody, filterWorkerResult, waitForWorker } from './worker-commands.mjs';
+import { workerBody, workerOutput, waitForWorker } from './worker-commands.mjs';
 import { commands } from './commands.mjs';
 import { run, start, status, stop, stateDirectory } from './lifecycle.mjs';
 const root = fileURLToPath(new URL('../../../', import.meta.url));
@@ -13,11 +13,21 @@ export async function main(kind, argv = process.argv.slice(2)) {
   try {
     assertNode();
     // JSON is the default; accept a familiar explicit flag without a value.
-    const parsed = args(argv.filter(value => value !== '--json')), cmd = parsed.commands.join(' ');
+    const dryRun = argv.includes('--dry-run');
+    if (argv.filter(value => value === '--dry-run').length > 1) throw inputError('--dry-run must occur once.');
+    const parsed = args(argv.filter(value => value !== '--json' && value !== '--dry-run')), cmd = parsed.commands.join(' ');
     let o = parsed.options;
     const catalog = commands(kind);
+    if (dryRun && !(kind === 'worker' && cmd === 'integrations sync')) throw inputError('--dry-run is supported only by integrations sync.');
     if (!cmd || o.help || cmd === 'help' || cmd === 'schema') {
-      console.log(JSON.stringify({ schemaVersion: 1, application: kind, node: '24.x', usage: `node bin/apps/${kind}/cli.mjs COMMAND [--state-dir PATH] [--json]`, lifecycle: { run: 'Foreground; Ctrl+C drains and closes', start: 'Detached; returns when ready', status: 'Authenticated process identity and webview URL', stop: 'Graceful authenticated shutdown; preserves state' }, launchOptions: ['state-dir', 'host', 'port', ...(kind === 'worker' ? ['config', 'url', 'project-dir', 'features-dir', 'poll-ms', 'mock-ms'] : kind === 'orchestrator' ? ['project'] : [])], clientOptions: ['state-dir', 'url', 'token-file', 'file', 'id', 'key'], input: 'JSON --file PATH or --file - (stdin), maximum 64 KiB. Local credentials resolved privately from state; remote URL requires explicit token-file or WERK_APP_TOKEN.', commands: catalog, ...(kind === 'worker' ? { projectSetup: { command: 'init [--project-dir PATH] [--features-dir features] [--provider codex-cli] [--port 4100]', featureFolder: 'feature folder get | plan --path requests/features | set --path requests/features', template: 'feature template (prints Markdown without a running worker)', behavior: 'Installs a project-local app, config, draft template and Docker Compose file; preserves existing files.' } } : {}), api: 'api --path /local/path [--method GET|POST|PUT|PATCH|DELETE] [--file PATH|-] [--key KEY]', exitCodes: { 0: 'success', 1: 'operational failure', 2: 'input/API rejection' } }, null, 2)); return;
+      console.log(JSON.stringify({ schemaVersion: 1, application: kind, node: '24.x', usage: `node bin/apps/${kind}/cli.mjs COMMAND [--state-dir PATH] [--json]`, lifecycle: { run: 'Foreground; Ctrl+C drains and closes', start: 'Detached; returns when ready', status: 'Authenticated process identity and webview URL', stop: 'Graceful authenticated shutdown; preserves state' }, launchOptions: ['state-dir', 'host', 'port', ...(kind === 'worker' ? ['config', 'url', 'project-dir', 'features-dir', 'poll-ms', 'mock-ms'] : kind === 'orchestrator' ? ['project'] : [])], clientOptions: ['state-dir', 'url', 'token-file', 'file', 'id', 'key'], input: 'JSON --file PATH or --file - (stdin), maximum 64 KiB. Local credentials resolved privately from state; remote URL requires explicit token-file or WERK_APP_TOKEN.', commands: catalog, ...(kind === 'worker' ? { executionPolicy: { environment: 'WERK_WORKER_MAX_RUNTIME_MS', scope: 'Local model invocations; frozen per dispatch, not total session age or polling timeout', defaultMs: 21600000, minimumMs: 1000, maximumMs: 86400000, precedence: 'Validated environment override, then saved private settings, then default', inspect: 'settings get: execution and executionSource; resource status: admission policy', update: 'settings set with execution; rejected while environment override is active' }, requestGates: { inspect: 'request get and request events', completion: 'Model completion, Request Done and applied/merged changes are distinct', dispatch: 'Inspect current-generation dispatch state; identical command receipt replay never admits new work', recovery: 'If not admitted and still ready, read current revision and issue a new guarded execute with a new key', guide: 'docs/how-to/rework-worker-requests.md' }, projectSetup: { command: 'init [--project-dir PATH] [--features-dir features] [--provider codex-cli] [--port 4100]', featureFolder: 'feature folder get | plan --path requests/features | set --path requests/features', template: 'feature template (prints Markdown without a running worker)', behavior: 'Installs a project-local app, config, draft template and Docker Compose file; preserves existing files.' } } : {}), api: 'api --path /local/path [--method GET|POST|PUT|PATCH|DELETE] [--file PATH|-] [--key KEY]', exitCodes: { 0: 'success', 1: 'operational failure', 2: 'input/API rejection' } }, null, 2)); return;
+    }
+    if (kind === 'worker' && ['integrations status', 'integrations plan', 'integrations sync'].includes(cmd)) {
+      validateOptions(o, ['project-dir', ...(cmd.endsWith('sync') ? ['if-match'] : [])]);
+      const { planProjectIntegrations, syncProjectIntegrations } = await import(new URL('../../../src/worker/dist/worker/infrastructure/project-integrations.js', import.meta.url));
+      const project = o['project-dir'] ?? process.cwd();
+      if (cmd.endsWith('sync') && !dryRun && !o['if-match']) throw inputError('--if-match PLAN_ID required; inspect integrations plan first.');
+      console.log(JSON.stringify(cmd.endsWith('sync') && !dryRun ? await syncProjectIntegrations(project, o['if-match']) : await planProjectIntegrations(project))); return;
     }
     if (kind === 'worker' && ['feature folder get', 'feature folder plan', 'feature folder set'].includes(cmd)) {
       validateOptions(o, ['project-dir', ...(cmd.endsWith('get') ? [] : ['path'])]);
@@ -49,7 +59,7 @@ export async function main(kind, argv = process.argv.slice(2)) {
     const allowed = ['state-dir', 'url', 'token-file', 'key', ...(command?.body || cmd === 'api' ? ['file'] : []), ...(command?.required ?? []), ...(command?.options ?? []), ...(cmd === 'api' ? ['path', 'method'] : [])];
     validateOptions(o, [...new Set(allowed)]);
     for (const key of command?.required ?? []) if (!o[key]) throw inputError(`--${key} required`);
-    if (command?.body && !o.file) throw inputError('--file required (use - for stdin).');
+    if (command?.body && !command.inputBodyOptional && !o.file) throw inputError('--file required (use - for stdin).');
     const method = command?.method ?? o.method ?? 'GET';
     let path = command?.path ?? o.path;
     if (!path || !/^\/(?!\/)/.test(path) || !['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) throw inputError('Use a local API path and supported method.');
@@ -80,11 +90,11 @@ export async function main(kind, argv = process.argv.slice(2)) {
     if (o['token-file']) token = await tokenFile(o['token-file']);
     const call = () => request(base, path, token, method, body, o.key);
     const result = command?.wait ? await waitForWorker(call, command.wait, o['timeout-ms']) : await call();
-    console.log(JSON.stringify(kind === 'worker' ? filterWorkerResult(result, o) : result));
+    console.log(kind === 'worker' ? workerOutput(result, o, command) : JSON.stringify(result));
   } catch (error) {
     const { DomainError } = await import(new URL(`../../../src/${kind}/dist/shared/errors.js`, import.meta.url));
     const code = error.exitCode === 2 || (error.status >= 400 && error.status < 500) || (error instanceof DomainError && !['internal', 'unavailable'].includes(error.code)) ? 2 : 1;
-    console.error(JSON.stringify({ error: error.message ?? 'Operation failed', exitCode: code }));
+    console.error(JSON.stringify({ error: error.message ?? 'Operation failed', ...(typeof error.code === 'string' ? { code: error.code } : {}), ...(Number.isInteger(error.status) ? { status: error.status } : {}), exitCode: code }));
     if (process.send) process.send({ ok: false, error: error.message }, () => { if (process.connected) process.disconnect(); });
     process.exitCode = code;
   }

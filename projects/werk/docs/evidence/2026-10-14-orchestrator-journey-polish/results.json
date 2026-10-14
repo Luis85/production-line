@@ -1,0 +1,253 @@
+{
+  "date": "2026-10-14",
+  "surface": "Orchestrator runtime journey",
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "browser": "Chromium on Linux",
+  "reducedMotion": true,
+  "execution": "Isolated orchestrator and mock worker; real API persistence, simulated execution only; no model calls",
+  "journey": [
+    "Connect",
+    "Dashboard",
+    "Manual Intake",
+    "Submit simulated task",
+    "Taskboard and event detail",
+    "Scoped snapshots and snapshot detail",
+    "Worker list/detail",
+    "Routing disclosure"
+  ],
+  "evidence": [
+    "before-task-detail-mobile.png",
+    "before-intake-desktop.png",
+    "before-snapshot-detail-mobile.png",
+    "after-task-detail-mobile.png",
+    "after-intake-desktop.png",
+    "after-snapshot-detail-mobile.png"
+  ],
+  "results": {
+    "before": {
+      "screenshotsCaptured": 18,
+      "pageErrors": [],
+      "checks": [
+        {
+          "screen": "connect",
+          "viewport": "desktop",
+          "overflow": false
+        },
+        {
+          "screen": "connect",
+          "viewport": "mobile",
+          "overflow": false
+        },
+        {
+          "screen": "dashboard",
+          "viewport": "desktop",
+          "overflow": false
+        },
+        {
+          "screen": "dashboard",
+          "viewport": "mobile",
+          "overflow": false
+        },
+        {
+          "screen": "intake",
+          "viewport": "desktop",
+          "overflow": false
+        },
+        {
+          "screen": "intake",
+          "viewport": "mobile",
+          "overflow": false
+        },
+        {
+          "screen": "task-detail",
+          "viewport": "desktop",
+          "overflow": false
+        },
+        {
+          "screen": "task-detail",
+          "viewport": "mobile",
+          "overflow": false
+        },
+        {
+          "screen": "snapshots",
+          "viewport": "desktop",
+          "overflow": false
+        },
+        {
+          "screen": "snapshots",
+          "viewport": "mobile",
+          "overflow": false
+        },
+        {
+          "screen": "snapshot-detail",
+          "viewport": "desktop",
+          "overflow": false
+        },
+        {
+          "screen": "snapshot-detail",
+          "viewport": "mobile",
+          "overflow": false
+        },
+        {
+          "screen": "workers",
+          "viewport": "desktop",
+          "overflow": false
+        },
+        {
+          "screen": "workers",
+          "viewport": "mobile",
+          "overflow": false
+        },
+        {
+          "screen": "worker-detail",
+          "viewport": "desktop",
+          "overflow": false
+        },
+        {
+          "screen": "worker-detail",
+          "viewport": "mobile",
+          "overflow": false
+        },
+        {
+          "screen": "routing",
+          "viewport": "desktop",
+          "overflow": false
+        },
+        {
+          "screen": "routing",
+          "viewport": "mobile",
+          "overflow": false
+        },
+        {
+          "simulationOnly": true,
+          "taskStatus": "simulated"
+        }
+      ]
+    },
+    "after": {
+      "screenshotsCaptured": 18,
+      "pageErrors": [],
+      "checks": [
+        {
+          "screen": "connect",
+          "viewport": "desktop",
+          "overflow": false
+        },
+        {
+          "screen": "connect",
+          "viewport": "mobile",
+          "overflow": false
+        },
+        {
+          "screen": "dashboard",
+          "viewport": "desktop",
+          "overflow": false
+        },
+        {
+          "screen": "dashboard",
+          "viewport": "mobile",
+          "overflow": false
+        },
+        {
+          "screen": "intake",
+          "viewport": "desktop",
+          "overflow": false
+        },
+        {
+          "screen": "intake",
+          "viewport": "mobile",
+          "overflow": false
+        },
+        {
+          "screen": "task-detail",
+          "viewport": "desktop",
+          "overflow": false
+        },
+        {
+          "screen": "task-detail",
+          "viewport": "mobile",
+          "overflow": false
+        },
+        {
+          "screen": "snapshots",
+          "viewport": "desktop",
+          "overflow": false
+        },
+        {
+          "screen": "snapshots",
+          "viewport": "mobile",
+          "overflow": false
+        },
+        {
+          "screen": "snapshot-detail",
+          "viewport": "desktop",
+          "overflow": false
+        },
+        {
+          "screen": "snapshot-detail",
+          "viewport": "mobile",
+          "overflow": false
+        },
+        {
+          "screen": "workers",
+          "viewport": "desktop",
+          "overflow": false
+        },
+        {
+          "screen": "workers",
+          "viewport": "mobile",
+          "overflow": false
+        },
+        {
+          "screen": "worker-detail",
+          "viewport": "desktop",
+          "overflow": false
+        },
+        {
+          "screen": "worker-detail",
+          "viewport": "mobile",
+          "overflow": false
+        },
+        {
+          "screen": "routing",
+          "viewport": "desktop",
+          "overflow": false
+        },
+        {
+          "screen": "routing",
+          "viewport": "mobile",
+          "overflow": false
+        },
+        {
+          "simulationOnly": true,
+          "taskStatus": "simulated"
+        }
+      ]
+    }
+  },
+  "behaviorTests": {
+    "file": "tests/ui/runtime/orchestrator-journey-polish.test.mjs",
+    "passed": 3,
+    "coverage": [
+      "Task routing edit preservation and stale task error fencing",
+      "Line routing loading/save freeze and retry values",
+      "Authenticated task hash navigation and reversed concurrent deep-link responses"
+    ]
+  },
+  "limits": [
+    "Screenshots served current source composed with the same shared assets as the build; final built-distribution checks belong to the integrated root pass.",
+    "No real model, Codex execution, publication, or merge performed.",
+    "Native Windows/macOS, Docker, screen-reader and full keyboard-only qualification not run.",
+    "Per-task routing API has no readable current override; its editor explicitly describes a new destination change rather than displaying a saved target.",
+    "Cross-application task hash was behavior-tested; full Factory-to-orchestrator browser handoff requires integrated owner verification."
+  ]
+}

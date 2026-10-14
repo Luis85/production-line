@@ -1,0 +1,1778 @@
+{
+  "date": "2026-10-14",
+  "coverage": "All three routes and their distinct panels are represented, including access, task creation, provider forms, agent definitions, file input, history, review, queue controls, diagnostics and the five-step tour. Representative loading, error and lifecycle states are included. Ordinary dropdown permutations, every content variant and raw diagnostic endpoints are not separate views.",
+  "views": [
+    {
+      "id": "access",
+      "title": "Unlock worker",
+      "group": "Access",
+      "route": "/chat",
+      "parent": null,
+      "pathSteps": [
+        "Open worker"
+      ],
+      "description": "Private worker token entry.",
+      "evidenceKind": "live",
+      "state": "access",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "access",
+      "desktop": {
+        "width": 1440,
+        "height": 1000,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 848,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "access-help",
+      "title": "Find the access token",
+      "group": "Access",
+      "route": "/chat",
+      "parent": "access",
+      "pathSteps": [
+        "Open worker",
+        "Where do I find my token?"
+      ],
+      "description": "Expanded help explains the private token file.",
+      "evidenceKind": "live",
+      "state": "access-help",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "access-help",
+      "desktop": {
+        "width": 1440,
+        "height": 1000,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1014,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "access-invalid",
+      "title": "Invalid token",
+      "group": "Access",
+      "route": "/chat",
+      "parent": "access",
+      "pathSteps": [
+        "Open worker",
+        "Enter invalid example token",
+        "Unlock worker"
+      ],
+      "description": "Rejected example token; credential field cleared for capture.",
+      "evidenceKind": "live",
+      "state": "access-invalid",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "access-invalid",
+      "desktop": {
+        "width": 1440,
+        "height": 1017,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1052,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "access-expired",
+      "title": "Access expired \u00b7 draft retained",
+      "group": "Access",
+      "route": "/chat",
+      "parent": "access",
+      "pathSteps": [
+        "Unlock worker",
+        "Write unsent draft",
+        "Expire browser cookie",
+        "Refresh worker"
+      ],
+      "description": "Live local cookie expiry retains the unsent tab draft.",
+      "evidenceKind": "live",
+      "state": "access-expired",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "access-expired",
+      "desktop": {
+        "width": 1440,
+        "height": 1000,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 927,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "access-locked",
+      "title": "Browser locked \u00b7 drafts cleared",
+      "group": "Access",
+      "route": "/chat",
+      "parent": "access",
+      "pathSteps": [
+        "Unlock worker",
+        "Write unsent draft",
+        "Lock"
+      ],
+      "description": "Explicit Lock clears unsent drafts; running tasks continue on the worker.",
+      "evidenceKind": "live",
+      "state": "locked",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "locked",
+      "desktop": {
+        "width": 1440,
+        "height": 1000,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 905,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-empty",
+      "title": "Task instructions",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": null,
+      "pathSteps": [
+        "Unlock worker",
+        "Chat"
+      ],
+      "description": "First-message composer; worker has not executed a provider.",
+      "evidenceKind": "live",
+      "state": "chat-empty",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-empty",
+      "desktop": {
+        "width": 1440,
+        "height": 1000,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1347,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-new",
+      "title": "New task",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-empty",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat",
+        "New task"
+      ],
+      "description": "Task creation choices: provider, definition, and optional name.",
+      "evidenceKind": "live",
+      "state": "chat-new",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-new",
+      "desktop": {
+        "width": 1440,
+        "height": 1000,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1167,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-task-settings",
+      "title": "Task settings",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-empty",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat",
+        "Switch task (mobile)",
+        "Task settings"
+      ],
+      "description": "Rename, archive and delete controls for the selected task.",
+      "evidenceKind": "live",
+      "state": "chat-task-settings",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-task-settings",
+      "desktop": {
+        "width": 1440,
+        "height": 1033,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1965,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-delete-confirm",
+      "title": "Delete task confirmation",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-task-settings",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat",
+        "Switch task (mobile)",
+        "Task settings",
+        "Delete"
+      ],
+      "description": "Destructive task deletion requires confirmation; no deletion submitted.",
+      "evidenceKind": "live",
+      "state": "chat-delete-confirm",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-delete-confirm",
+      "desktop": {
+        "width": 1440,
+        "height": 1234,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 2096,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-provider-0",
+      "title": "Codex CLI connection",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-empty",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat",
+        "Connections",
+        "Codex CLI connection"
+      ],
+      "description": "Provider form. No connection check or save performed.",
+      "evidenceKind": "live",
+      "state": "chat-provider-0",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-provider-0",
+      "desktop": {
+        "width": 1440,
+        "height": 1699,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 2226,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-provider-1",
+      "title": "Claude Code CLI connection",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-empty",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat",
+        "Connections",
+        "Claude Code CLI connection"
+      ],
+      "description": "Provider form. No connection check or save performed.",
+      "evidenceKind": "live",
+      "state": "chat-provider-1",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-provider-1",
+      "desktop": {
+        "width": 1440,
+        "height": 1699,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 2226,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-provider-2",
+      "title": "OpenAI \u00b7 API connection",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-empty",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat",
+        "Connections",
+        "OpenAI \u00b7 API connection"
+      ],
+      "description": "Provider form. No connection check or save performed.",
+      "evidenceKind": "live",
+      "state": "chat-provider-2",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-provider-2",
+      "desktop": {
+        "width": 1440,
+        "height": 1642,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 2104,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-provider-3",
+      "title": "Claude \u00b7 API connection",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-empty",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat",
+        "Connections",
+        "Claude \u00b7 API connection"
+      ],
+      "description": "Provider form. No connection check or save performed.",
+      "evidenceKind": "live",
+      "state": "chat-provider-3",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-provider-3",
+      "desktop": {
+        "width": 1440,
+        "height": 1642,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 2104,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-definition-import",
+      "title": "Import agent definition",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-empty",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat",
+        "Agent definitions"
+      ],
+      "description": "Docker Agent YAML file or paste entry.",
+      "evidenceKind": "live",
+      "state": "chat-definition-import",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-definition-import",
+      "desktop": {
+        "width": 1440,
+        "height": 1594,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 2140,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-definition-preview",
+      "title": "Preview agent definition",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-definition-import",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat",
+        "Agent definitions",
+        "Preview definition"
+      ],
+      "description": "Live local YAML preview; importing does not execute the model.",
+      "evidenceKind": "live",
+      "state": "chat-definition-preview",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-definition-preview",
+      "desktop": {
+        "width": 1440,
+        "height": 1950,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 2564,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-definition-saved",
+      "title": "Saved agent definitions",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-definition-import",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat",
+        "Agent definitions",
+        "Preview definition",
+        "Import definition"
+      ],
+      "description": "Locally imported reviewer definition available for new tasks.",
+      "evidenceKind": "live",
+      "state": "chat-definition-saved",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-definition-saved",
+      "desktop": {
+        "width": 1440,
+        "height": 1743,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 2292,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-file-editor",
+      "title": "Prepare a local change",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-empty",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat",
+        "Run task"
+      ],
+      "description": "Dedicated instructions, provider and approved files; no task submitted.",
+      "evidenceKind": "live",
+      "state": "chat-file-editor",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-file-editor",
+      "desktop": {
+        "width": 1440,
+        "height": 1816,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 2410,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-file-definition",
+      "title": "File task with agent definition",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-file-editor",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat",
+        "Run task",
+        "Choose definition",
+        "Review agent instructions & model"
+      ],
+      "description": "Reviewer instructions and explicitly approved sample file paths.",
+      "evidenceKind": "live",
+      "state": "chat-file-definition",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-file-definition",
+      "desktop": {
+        "width": 1440,
+        "height": 2099,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 2717,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-transcript",
+      "title": "Task conversation",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-empty",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat",
+        "Select task conversation"
+      ],
+      "description": "Representative formatted transcript supplied by explicit browser fixtures.",
+      "evidenceKind": "fixture",
+      "state": "chat-transcript",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-transcript",
+      "desktop": {
+        "width": 1440,
+        "height": 1292,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1762,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-snapshot",
+      "title": "Saved task definition",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-transcript",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat",
+        "Select saved task",
+        "Expand saved agent instructions"
+      ],
+      "description": "Task keeps selected model and agent instructions; browser fixture.",
+      "evidenceKind": "fixture",
+      "state": "chat-snapshot",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-snapshot",
+      "desktop": {
+        "width": 1440,
+        "height": 1549,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 2063,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-provider-missing",
+      "title": "Provider setup required",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-empty",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat"
+      ],
+      "description": "Missing-provider guidance shown with explicit availability fixture.",
+      "evidenceKind": "fixture",
+      "state": "chat-provider-missing",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-provider-missing",
+      "desktop": {
+        "width": 1440,
+        "height": 1000,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1521,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-task-switcher",
+      "title": "Switch saved task",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-empty",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat",
+        "Switch task"
+      ],
+      "description": "Mobile saved-task disclosure with search and selected-task controls.",
+      "evidenceKind": "live",
+      "state": "chat-task-switcher",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-task-switcher",
+      "desktop": null,
+      "mobile": {
+        "width": 390,
+        "height": 1729,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-queued",
+      "title": "Task queued",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-transcript",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat",
+        "Select task conversation"
+      ],
+      "description": "Explicit browser fixture; no provider task executed.",
+      "evidenceKind": "fixture",
+      "state": "chat-queued",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-queued",
+      "desktop": {
+        "width": 1440,
+        "height": 1028,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1525,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-running",
+      "title": "Task running",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-transcript",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat",
+        "Select task conversation"
+      ],
+      "description": "Explicit browser fixture; no provider task executed.",
+      "evidenceKind": "fixture",
+      "state": "chat-running",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-running",
+      "desktop": {
+        "width": 1440,
+        "height": 1028,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1451,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-failed",
+      "title": "Failed reply and follow-up",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-transcript",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat",
+        "Select task conversation"
+      ],
+      "description": "Explicit browser fixture; no provider task executed.",
+      "evidenceKind": "fixture",
+      "state": "chat-failed",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-failed",
+      "desktop": {
+        "width": 1440,
+        "height": 1021,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1464,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-new-definition",
+      "title": "New task with agent definition",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-new",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat",
+        "New task",
+        "Choose agent definition"
+      ],
+      "description": "Locally imported definition selected with instruction preview.",
+      "evidenceKind": "live",
+      "state": "chat-new-definition",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-new-definition",
+      "desktop": {
+        "width": 1440,
+        "height": 1028,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1470,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-file-validation",
+      "title": "File task validation error",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-file-editor",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat",
+        "Run task",
+        "Fill approved inputs",
+        "Queue file task"
+      ],
+      "description": "Intercepted rejection displays retained inputs; no file task reaches backend.",
+      "evidenceKind": "fixture",
+      "state": "chat-file-validation",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-file-validation",
+      "desktop": {
+        "width": 1440,
+        "height": 1903,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 2549,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-partial-refresh",
+      "title": "Partial refresh warning",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-empty",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat",
+        "Refresh worker"
+      ],
+      "description": "Environment endpoint is deliberately rejected in this browser only.",
+      "evidenceKind": "fixture",
+      "state": "chat-partial-refresh",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-partial-refresh",
+      "desktop": {
+        "width": 1440,
+        "height": 1020,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1530,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-offline",
+      "title": "Worker unreachable",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-empty",
+      "pathSteps": [
+        "Unlock worker",
+        "Chat",
+        "Refresh worker"
+      ],
+      "description": "Browser offline state shows stale-data warning.",
+      "evidenceKind": "fixture",
+      "state": "chat-offline",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "chat-offline",
+      "desktop": {
+        "width": 1440,
+        "height": 1020,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1570,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "chat-agent-adaptation",
+      "title": "Agent compatibility consent",
+      "group": "Chat",
+      "route": "/chat",
+      "parent": "chat-new-definition",
+      "pathSteps": [
+        "Chat",
+        "New task",
+        "Choose Checkout reviewer",
+        "Review omitted features"
+      ],
+      "description": "Explicit browser fixture demonstrates instructions-only acceptance for unsupported Docker Agent features. No task created.",
+      "evidenceKind": "fixture",
+      "state": "instructions-only consent",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "instructions-only consent",
+      "desktop": {
+        "width": 1440,
+        "height": 1116,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1557,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "history-empty",
+      "title": "History \u00b7 empty worker",
+      "group": "History",
+      "route": "/history",
+      "pathSteps": [
+        "Unlock worker",
+        "History"
+      ],
+      "description": "Fresh isolated worker: initial draft conversation, no file tasks or retained orchestrator attempts.",
+      "evidenceKind": "live",
+      "parent": null,
+      "state": "empty: true",
+      "captureState": {
+        "empty": true
+      },
+      "desktop": {
+        "width": 1440,
+        "height": 1192,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1728,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "history-populated",
+      "title": "History \u00b7 conversations and file board",
+      "group": "History",
+      "route": "/history",
+      "pathSteps": [
+        "History"
+      ],
+      "description": "Browser fixture with chat, file and assigned conversations, plus queued/running/review/failed file tasks. These states do not represent executed work.",
+      "evidenceKind": "fixture",
+      "parent": "history-empty",
+      "state": "Interface view",
+      "captureState": {
+        "taskTypes": [
+          "chat",
+          "local",
+          "orchestrator"
+        ],
+        "fileStates": [
+          "queued",
+          "running",
+          "review",
+          "failed"
+        ]
+      },
+      "desktop": {
+        "width": 1440,
+        "height": 1890,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 3109,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "history-archived",
+      "title": "History \u00b7 archived conversations",
+      "group": "History",
+      "route": "/history",
+      "pathSteps": [
+        "History",
+        "Archive \u2192 Archived tasks"
+      ],
+      "description": "Archived file and assigned conversations remain discoverable with Restore and open actions.",
+      "evidenceKind": "fixture",
+      "parent": "history-populated",
+      "state": "archive: archived",
+      "captureState": {
+        "archive": "archived"
+      },
+      "desktop": {
+        "width": 1440,
+        "height": 1276,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1867,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "history-patch",
+      "title": "History \u00b7 patch review",
+      "group": "History",
+      "route": "/history?fileState=review",
+      "pathSteps": [
+        "History",
+        "State \u2192 Needs review",
+        "Review patch",
+        "Inspect patch"
+      ],
+      "description": "Review task details, captured files, patch download, conversation link and expanded diff. Patch content is an explicit browser fixture.",
+      "evidenceKind": "fixture",
+      "parent": "history-populated",
+      "state": "fileState: review \u00b7 detail: checkout-patch \u00b7 patchExpanded: true",
+      "captureState": {
+        "fileState": "review",
+        "detail": "checkout-patch",
+        "patchExpanded": true
+      },
+      "desktop": {
+        "width": 1440,
+        "height": 2268,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 3279,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "history-delete",
+      "title": "History \u00b7 delete confirmation",
+      "group": "History",
+      "route": "/history?fileState=review",
+      "pathSteps": [
+        "History",
+        "Review patch",
+        "Delete"
+      ],
+      "description": "Deletion confirmation with Confirm deletion and Keep task. No deletion submitted.",
+      "evidenceKind": "fixture",
+      "parent": "history-patch",
+      "state": "deleteConfirmation: true",
+      "captureState": {
+        "deleteConfirmation": true
+      },
+      "desktop": {
+        "width": 1440,
+        "height": 2384,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 3421,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "history-failed",
+      "title": "History \u00b7 failed file-task recovery",
+      "group": "History",
+      "route": "/history?fileState=failed",
+      "pathSteps": [
+        "History",
+        "State \u2192 Failed",
+        "Inspect task"
+      ],
+      "description": "Failed task details and Retry saved input action. Retry is not submitted.",
+      "evidenceKind": "fixture",
+      "parent": "history-populated",
+      "state": "fileState: failed",
+      "captureState": {
+        "fileState": "failed"
+      },
+      "desktop": {
+        "width": 1440,
+        "height": 1889,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 2788,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "history-evidence-error",
+      "title": "History \u00b7 evidence unavailable",
+      "group": "History",
+      "route": "/history",
+      "pathSteps": [
+        "History",
+        "Review patch",
+        "Evidence request fails"
+      ],
+      "description": "Recoverable evidence error keeps the task context and exposes Retry loading evidence.",
+      "evidenceKind": "fixture",
+      "parent": "history-patch",
+      "state": "evidence: error",
+      "captureState": {
+        "evidence": "error"
+      },
+      "desktop": {
+        "width": 1440,
+        "height": 1694,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 2489,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "history-evidence-loading",
+      "title": "History \u00b7 evidence loading",
+      "group": "History",
+      "route": "/history",
+      "pathSteps": [
+        "History",
+        "Review patch",
+        "Retry loading evidence"
+      ],
+      "description": "Pending evidence request with close control available. Delayed response is a browser fixture.",
+      "evidenceKind": "fixture",
+      "parent": "history-evidence-error",
+      "state": "evidence: loading",
+      "captureState": {
+        "evidence": "loading"
+      },
+      "desktop": {
+        "width": 1440,
+        "height": 1626,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 2370,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "history-queue",
+      "title": "History \u00b7 queue configuration",
+      "group": "History",
+      "route": "/history",
+      "pathSteps": [
+        "History",
+        "Configure worker queue"
+      ],
+      "description": "Paused queue notice and editable local capacity, orchestrator queue places and file-task start order. No settings submitted.",
+      "evidenceKind": "fixture",
+      "parent": "history-empty",
+      "state": "queuePaused: true \u00b7 queueConfiguration: true",
+      "captureState": {
+        "queuePaused": true,
+        "queueConfiguration": true
+      },
+      "desktop": {
+        "width": 1440,
+        "height": 1795,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 2618,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "history-orchestrator",
+      "title": "History \u00b7 orchestrator attempt evidence",
+      "group": "History",
+      "route": "/history",
+      "pathSteps": [
+        "History",
+        "Orchestrator attempt history",
+        "Inspect",
+        "Full recorded evidence"
+      ],
+      "description": "Attempt table/cards, before/after evidence timeline, simulated outcome and expanded recorded JSON. Explicit fixture; not a real execution.",
+      "evidenceKind": "fixture",
+      "parent": "history-empty",
+      "state": "orchestratorEvidence: true \u00b7 recordedJson: true",
+      "captureState": {
+        "orchestratorEvidence": true,
+        "recordedJson": true
+      },
+      "desktop": {
+        "width": 1440,
+        "height": 2351,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 3363,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "history-queued-detail",
+      "title": "History \u00b7 queued file-task controls",
+      "group": "History",
+      "route": "/history",
+      "pathSteps": [
+        "History",
+        "Queued file task",
+        "Inspect task"
+      ],
+      "description": "Queued task details expose Cancel queued task and Raise priority while the worker queue is paused. No mutation submitted.",
+      "evidenceKind": "fixture",
+      "parent": "history-populated",
+      "state": "fileState: queued \u00b7 detail: checkout-next",
+      "captureState": {
+        "fileState": "queued",
+        "detail": "checkout-next"
+      },
+      "desktop": {
+        "width": 1440,
+        "height": 1901,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 2825,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "history-running-detail",
+      "title": "History \u00b7 running file-task controls",
+      "group": "History",
+      "route": "/history",
+      "pathSteps": [
+        "History",
+        "Running file task",
+        "Inspect task"
+      ],
+      "description": "Running task details expose Stop task and Open conversation; queued-priority and completed-task controls are absent. No task stopped.",
+      "evidenceKind": "fixture",
+      "parent": "history-populated",
+      "state": "fileState: running \u00b7 detail: checkout-running",
+      "captureState": {
+        "fileState": "running",
+        "detail": "checkout-running"
+      },
+      "desktop": {
+        "width": 1440,
+        "height": 1851,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 2669,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "history-failed-no-match",
+      "title": "History \u00b7 filtered conversation empty state",
+      "group": "History",
+      "route": "/history?taskState=failed",
+      "pathSteps": [
+        "Dashboard",
+        "Failed tasks",
+        "History \u2192 Failed state"
+      ],
+      "description": "Dashboard failure link opens the conversation filter and focuses its heading. The fixture contains completed work only, so the view shows No conversations match these filters and Show all conversations.",
+      "evidenceKind": "fixture",
+      "parent": "dashboard-default",
+      "state": "taskState: failed \u00b7 noMatch: true",
+      "captureState": {
+        "taskState": "failed",
+        "noMatch": true
+      },
+      "desktop": {
+        "width": 1440,
+        "height": 1158,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1646,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "dashboard-default",
+      "title": "Dashboard \u00b7 standalone",
+      "group": "Dashboard",
+      "route": "/dashboard",
+      "pathSteps": [
+        "Dashboard"
+      ],
+      "description": "Actual isolated standalone worker with idle activity and collapsed configuration disclosures.",
+      "evidenceKind": "live",
+      "parent": null,
+      "state": "Interface view",
+      "captureState": {},
+      "desktop": {
+        "width": 1440,
+        "height": 1204,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1813,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "dashboard-standalone-map",
+      "title": "Dashboard \u00b7 standalone connections",
+      "group": "Dashboard",
+      "route": "/dashboard",
+      "pathSteps": [
+        "Dashboard",
+        "Connections & delivery"
+      ],
+      "description": "Standalone topology and delivery counters. Orchestrator remains optional.",
+      "evidenceKind": "live",
+      "parent": "dashboard-default",
+      "state": "Interface view",
+      "captureState": {},
+      "desktop": {
+        "width": 1440,
+        "height": 1596,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 2541,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "dashboard-enrollment",
+      "title": "Dashboard \u00b7 provider and enrollment settings",
+      "group": "Dashboard",
+      "route": "/dashboard",
+      "pathSteps": [
+        "Dashboard",
+        "Provider connections & orchestrator enrollment"
+      ],
+      "description": "Expanded saved-provider configuration and optional orchestrator address/enrollment form. No secrets entered or connections submitted.",
+      "evidenceKind": "live",
+      "parent": "dashboard-default",
+      "state": "Interface view",
+      "captureState": {},
+      "desktop": {
+        "width": 1440,
+        "height": 1938,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 3083,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "dashboard-runtime",
+      "title": "Dashboard \u00b7 runtime and diagnostics",
+      "group": "Dashboard",
+      "route": "/dashboard",
+      "pathSteps": [
+        "Dashboard",
+        "Runtime, storage & execution profiles",
+        "Diagnostics & evidence identifiers"
+      ],
+      "description": "Actual process/host resources, storage, execution profiles and diagnostic identifiers.",
+      "evidenceKind": "live",
+      "parent": "dashboard-default",
+      "state": "Interface view",
+      "captureState": {},
+      "desktop": {
+        "width": 1440,
+        "height": 2372,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 3156,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "dashboard-paused",
+      "title": "Dashboard \u00b7 queue paused",
+      "group": "Dashboard",
+      "route": "/dashboard",
+      "pathSteps": [
+        "Dashboard",
+        "Queue paused"
+      ],
+      "description": "Paused execution summary, Resume queue action, and waiting-task totals from a browser fixture.",
+      "evidenceKind": "fixture",
+      "parent": "dashboard-default",
+      "state": "queuePaused: true",
+      "captureState": {
+        "queuePaused": true
+      },
+      "desktop": {
+        "width": 1440,
+        "height": 1204,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1813,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "dashboard-running",
+      "title": "Dashboard \u00b7 running and connected",
+      "group": "Dashboard",
+      "route": "/dashboard",
+      "pathSteps": [
+        "Dashboard",
+        "Connections & delivery"
+      ],
+      "description": "Running task with Open running task, review/failure actions, waiting assignments and connected topology. All activity is a browser fixture.",
+      "evidenceKind": "fixture",
+      "parent": "dashboard-default",
+      "state": "running: true \u00b7 connected: true",
+      "captureState": {
+        "running": true,
+        "connected": true
+      },
+      "desktop": {
+        "width": 1440,
+        "height": 1600,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 2631,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "tour-1",
+      "title": "Worker tour \u00b7 step 1",
+      "group": "Tour",
+      "route": "/chat",
+      "parent": "chat-empty",
+      "pathSteps": [
+        "Unlock worker",
+        "Tour"
+      ],
+      "description": "Guided product tour showing the active step and highlighted target.",
+      "evidenceKind": "live",
+      "state": "tour-1",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "tour-1",
+      "desktop": {
+        "width": 1440,
+        "height": 1000,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1347,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "tour-2",
+      "title": "Worker tour \u00b7 step 2",
+      "group": "Tour",
+      "route": "/chat",
+      "parent": "chat-empty",
+      "pathSteps": [
+        "Unlock worker",
+        "Tour",
+        "Next"
+      ],
+      "description": "Guided product tour showing the active step and highlighted target.",
+      "evidenceKind": "live",
+      "state": "tour-2",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "tour-2",
+      "desktop": {
+        "width": 1440,
+        "height": 1000,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1347,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "tour-3",
+      "title": "Worker tour \u00b7 step 3",
+      "group": "Tour",
+      "route": "/chat",
+      "parent": "chat-empty",
+      "pathSteps": [
+        "Unlock worker",
+        "Tour",
+        "Next",
+        "Next"
+      ],
+      "description": "Guided product tour showing the active step and highlighted target.",
+      "evidenceKind": "live",
+      "state": "tour-3",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "tour-3",
+      "desktop": {
+        "width": 1440,
+        "height": 1000,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1347,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "tour-4",
+      "title": "Worker tour \u00b7 step 4",
+      "group": "Tour",
+      "route": "/history",
+      "parent": "chat-empty",
+      "pathSteps": [
+        "Unlock worker",
+        "Tour",
+        "Next",
+        "Next",
+        "Next"
+      ],
+      "description": "Guided product tour showing the active step and highlighted target.",
+      "evidenceKind": "live",
+      "state": "tour-4",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "tour-4",
+      "desktop": {
+        "width": 1440,
+        "height": 1276,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 2006,
+        "ext": "webp"
+      }
+    },
+    {
+      "id": "tour-5",
+      "title": "Worker tour \u00b7 step 5",
+      "group": "Tour",
+      "route": "/dashboard",
+      "parent": "chat-empty",
+      "pathSteps": [
+        "Unlock worker",
+        "Tour",
+        "Next",
+        "Next",
+        "Next",
+        "Next"
+      ],
+      "description": "Guided product tour showing the active step and highlighted target.",
+      "evidenceKind": "live",
+      "state": "tour-5",
+      "inspected": true,
+      "viewportDesktop": {
+        "width": 1440,
+        "height": 1000
+      },
+      "viewportMobile": {
+        "width": 390,
+        "height": 844
+      },
+      "captureState": "tour-5",
+      "desktop": {
+        "width": 1440,
+        "height": 1204,
+        "ext": "webp"
+      },
+      "mobile": {
+        "width": 390,
+        "height": 1813,
+        "ext": "webp"
+      }
+    }
+  ]
+}

@@ -38,16 +38,17 @@ by that line. Factory identity and project identity serve different purposes.
 | Entity | Authoritative state | Where to inspect it |
 | --- | --- | --- |
 | Factory/root and subfactory | One Factory registry/database owns hierarchy and line registrations | Dedicated Factory webview, including its hierarchy and portfolio summaries |
-| Production line | Stable Factory registration points to its independent orchestrator | Factory line entry opens that line's webview; line data remains local to its orchestrator |
+| Production line | Stable Factory registration points to its independent orchestrator | Factory line Dashboard links to its independent orchestrator; line data remains local to that orchestrator |
 | Orchestrator | Its own SQLite database owns tasks, claims, leases, context and accepted evidence | Dedicated line map, Intake/taskboard and task/worker inspectors |
-| Worker | Own enrollment identity and local journal; line owns accepted worker/task records | Worker's local status webview and the orchestrator's worker view |
+| Worker | Own local tasks, sessions, enrollment identity and journal; line owns accepted assignment records | Worker's Chat, History and Dashboard, plus the orchestrator's worker view |
 | Task/attempt | One orchestrator owns task state/history; worker supplies lease-scoped evidence | That line's task detail, events and snapshots |
 
 Each line announces a versioned capability object with its project, intake/context
 support, registered mock profiles and observed capacity. System bootstrap checks
 those capabilities before registering the hierarchy. Factory preserves missing
 capability data as unknown. The orchestrator exposes a bounded worker-detail view
-with active tasks; the worker's own status remains its local diagnostic view. See
+with active tasks; the worker Dashboard presents local health and queue controls.
+Its local tasks and parent assignments share one execution slot. See
 [observability](../reference/observability.md) for exact fields and limits.
 
 Factory and orchestrator also serve a public, standalone `/guide` explaining

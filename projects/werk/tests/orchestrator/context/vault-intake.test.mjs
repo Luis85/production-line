@@ -1,10 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { randomUUID } from 'node:crypto';
-import vm from 'node:vm';
+import { line, task } from '../../ui/helpers/runtime-harness.mjs';
 import { taskInput } from '../../../src/orchestrator/dist/shared/validation.js';
 import { parseRequirementRef } from '../../../src/orchestrator/dist/shared/wiki.js';
 import { Store } from '../../../src/orchestrator/dist/orchestrator/persistence/store.js';
@@ -46,46 +45,13 @@ test('vault reference survives SQLite reopen and equivalent syntax reuses idempo
   } finally {store?.close();await rm(dir,{recursive:true,force:true});}
 });
 
-const html=await readFile(new URL('../../../src/orchestrator/public/index.html',import.meta.url),'utf8');
-function harness(fetch) {
-  const nodes=new Map();
-  class Element {
-    constructor(){this.value='';this.children=[];this.dataset={};this.textContent='';this.attributes={};this.hidden=false;this.disabled=false;this.required=false;}
-    append(...values){this.children.push(...values)}replaceChildren(...values){this.children=values}
-    setAttribute(key,value){this.attributes[key]=value}removeAttribute(key){delete this.attributes[key]}
-    focus(){document.activeElement=this}querySelectorAll(){return []}get firstElementChild(){return this.children[0]}
-  }
-  const get=id=>{if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id)};
-  for(const [id,value] of Object.entries({'#project':'demo','#intake-mode':'vault','#provider':'auto','#priority':'1'}))get(id).value=value;
-  const document={querySelector:get,querySelectorAll:()=>[],getElementById:id=>get('#'+id),createElement:()=>new Element(),createElementNS:()=>new Element(),hidden:false,activeElement:null};
-  const context=vm.createContext({document,fetch,crypto:{randomUUID},AbortSignal,AbortController,Date,console,setInterval:()=>{},URLSearchParams});
-  vm.runInContext(html.split('<script>')[1].split('</script>')[0],context);
-  return {get,run:code=>vm.runInContext(code,context)};
-}
-const response=body=>({ok:true,status:200,json:async()=>body});
+
 test('runtime defaults to one vault link and sends no manufactured manual fields',async()=>{
-  const payloads=[];const ui=harness(async(_url,options)=>{if(options.method==='POST'){payloads.push(JSON.parse(options.body));return response({id:'created',requirementRef:minimal.requirementRef})}return response({tasks:[]})});
-  ui.run("token='admin'");ui.get('#requirement-ref').value=minimal.requirementRef;
-  assert.equal(ui.get('#manual-fields').hidden,true);assert.equal(ui.get('#title').disabled,true);assert.equal(ui.get('#requirement-ref').required,true);
-  await ui.get('#task-form').onsubmit({preventDefault(){}});
-  assert.deepEqual(payloads,[minimal]);assert.equal(ui.get('#requirement-ref').value,'');assert.match(ui.get('#message').textContent,/Kontext noch nicht aufgelöst/);
-  assert.match(html,/id="intake-options"/);assert.match(html,/Optionen und manuelle Eingabe/);
+ const ui=line((_path,init)=>init.method==='POST'?task('created',{requirementRef:minimal.requirementRef}):undefined);ui.state.intake.requirementRef=minimal.requirementRef;assert.equal(ui.state.intake.mode,'vault');await ui.submitTask();assert.deepEqual(ui.calls.find(c=>c.method==='POST').body,minimal);assert.equal(ui.state.intake.requirementRef,'');assert.equal(ui.state.selectedTask.requirementRef,minimal.requirementRef);
 });
-test('runtime preserves ref drafts across mode changes and reuses failed request keys',async()=>{
-  const requests=[];let failed=true;
-  const ui=harness(async(_url,options)=>{if(options.method==='POST'){requests.push({body:JSON.parse(options.body),key:options.headers['Idempotency-Key']});if(failed){failed=false;throw Error('network timeout')}return response({id:'created'})}return response({tasks:[]})});
-  ui.run("token='admin'");ui.get('#requirement-ref').value=minimal.requirementRef;
-  ui.get('#intake-mode').value='manual';ui.get('#intake-mode').onchange();ui.get('#title').value='Manual draft';ui.get('#criteria').value='Accepted';
-  assert.equal(ui.get('#requirement-ref').disabled,true);assert.equal(ui.get('#title').required,true);
-  ui.get('#intake-mode').value='vault';ui.get('#intake-mode').onchange();assert.equal(ui.get('#requirement-ref').value,minimal.requirementRef);assert.equal(ui.get('#title').value,'Manual draft');
-  await ui.get('#task-form').onsubmit({preventDefault(){}});assert.equal(ui.get('#requirement-ref').value,minimal.requirementRef);
-  await ui.get('#task-form').onsubmit({preventDefault(){}});assert.equal(requests.length,2);assert.equal(requests[0].key,requests[1].key);assert.deepEqual(requests[0].body,minimal);
+test('runtime preserves reference drafts across modes and reuses failed request keys',async()=>{
+ let failed=true;const ui=line((_path,init)=>{if(init.method==='POST'){if(failed){failed=false;throw Error('Lost reply');}return task('created');}});ui.state.intake.requirementRef=minimal.requirementRef;Object.assign(ui.state.intake,{mode:'manual',title:'Manual draft',criteria:'Accepted'});ui.state.intake.mode='vault';await ui.submitTask();assert.equal(ui.state.intake.requirementRef,minimal.requirementRef);assert.equal(ui.state.intake.title,'Manual draft');await ui.submitTask();const requests=ui.calls.filter(c=>c.method==='POST');assert.equal(requests[0].headers['Idempotency-Key'],requests[1].headers['Idempotency-Key']);assert.deepEqual(requests[0].body,minimal);
 });
-test('runtime manual mode remains explicit and edits after a failed request get a new key',async()=>{
-  const requests=[];const ui=harness(async(_url,options)=>{if(options.method==='POST'){requests.push({body:JSON.parse(options.body),key:options.headers['Idempotency-Key']});throw Error('offline')}return response({tasks:[]})});
-  ui.run("token='admin'");ui.get('#intake-mode').value='manual';ui.get('#intake-mode').onchange();ui.get('#title').value='Manual';ui.get('#criteria').value='Accepted';
-  await ui.get('#task-form').onsubmit({preventDefault(){}});
-  assert.equal(requests[0].body.requirementRef,undefined);assert.deepEqual(requests[0].body.criteria,['Accepted']);
-  ui.get('#intake-mode').value='vault';ui.get('#intake-mode').onchange();ui.get('#requirement-ref').value=minimal.requirementRef;
-  await ui.get('#task-form').onsubmit({preventDefault(){}});assert.notEqual(requests[0].key,requests[1].key);assert.deepEqual(requests[1].body,minimal);
+test('runtime manual intake stays explicit and body edits rotate failed request key',async()=>{
+ const ui=line((_path,init)=>{if(init.method==='POST')throw Error('Offline');});Object.assign(ui.state.intake,{mode:'manual',title:'Manual',criteria:'Accepted'});await ui.submitTask();Object.assign(ui.state.intake,{mode:'vault',requirementRef:minimal.requirementRef});await ui.submitTask();const requests=ui.calls.filter(c=>c.method==='POST');assert.equal(requests[0].body.requirementRef,undefined);assert.deepEqual(requests[0].body.criteria,['Accepted']);assert.notEqual(requests[0].headers['Idempotency-Key'],requests[1].headers['Idempotency-Key']);assert.deepEqual(requests[1].body,minimal);
 });

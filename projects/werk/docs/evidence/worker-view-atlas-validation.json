@@ -1,0 +1,29 @@
+{
+  "checks": [
+    {
+      "name": "all embedded screenshot dimensions match",
+      "passed": true,
+      "images": 107
+    },
+    {
+      "name": "view navigation, mobile toggle, zoom, actual size and Escape",
+      "passed": true
+    },
+    {
+      "name": "search, reset, gallery and capture-type filters",
+      "passed": true
+    },
+    {
+      "name": "atlas viewport 1440",
+      "passed": true,
+      "overflow": 0
+    },
+    {
+      "name": "atlas viewport 390",
+      "passed": true,
+      "overflow": 0
+    }
+  ],
+  "pageErrors": [],
+  "views": 54
+}

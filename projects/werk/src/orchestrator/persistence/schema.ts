@@ -1,12 +1,12 @@
-import type { DatabaseSync } from 'node:sqlite';
-import { workerPolicy } from '../../shared/contracts.js';
-export const SCHEMA_VERSION = 5;
+import type { DatabaseSync } from "node:sqlite";
+import { workerPolicy } from "../../shared/contracts.js";
+export const SCHEMA_VERSION = 6;
 /** Called inside the store's startup transaction; never commits partial upgrades. */
 export function migrateSchema(db: DatabaseSync): void {
-    const version = (db.prepare('PRAGMA user_version').get() as any).user_version;
-    if (version > SCHEMA_VERSION)
-        throw Error('Database schema is newer than this application');
-    db.exec(`
+  const version = (db.prepare("PRAGMA user_version").get() as any).user_version;
+  if (version > SCHEMA_VERSION)
+    throw Error("Database schema is newer than this application");
+  db.exec(`
       CREATE TABLE IF NOT EXISTS tasks (
         id TEXT PRIMARY KEY, payload TEXT NOT NULL, status TEXT NOT NULL,
         priority INTEGER NOT NULL, created INTEGER NOT NULL, idem TEXT UNIQUE NOT NULL,
@@ -48,16 +48,31 @@ export function migrateSchema(db: DatabaseSync): void {
       );
       CREATE INDEX IF NOT EXISTS snapshot_timeseries ON snapshots(project,received);
       `);
-    // Inspect columns so an interrupted legacy migration can be safely resumed.
-    const columns = (table: string) => db.prepare('PRAGMA table_info(' + table + ')').all().map((c: any) => c.name);
-    if (!columns('workers').includes('config'))
-        db.exec("ALTER TABLE workers ADD COLUMN config TEXT NOT NULL DEFAULT '{}'");
-    db.prepare("UPDATE workers SET config=? WHERE config='{}'").run(JSON.stringify(workerPolicy()));
-    if (!columns('attempts').includes('max_attempts')) {
-        db.exec('ALTER TABLE attempts ADD COLUMN max_attempts INTEGER NOT NULL DEFAULT 3');
-        db.exec("UPDATE attempts SET max_attempts=COALESCE((SELECT json_extract(config,'$.maxAttempts') FROM workers WHERE workers.id=attempts.worker),3)");
-    }
-    db.exec(`CREATE TABLE IF NOT EXISTS routing_policy(project TEXT PRIMARY KEY,payload TEXT NOT NULL);
+  // Inspect columns so an interrupted legacy migration can be safely resumed.
+  const columns = (table: string) =>
+    db
+      .prepare("PRAGMA table_info(" + table + ")")
+      .all()
+      .map((c: any) => c.name);
+  if (!columns("workers").includes("config"))
+    db.exec("ALTER TABLE workers ADD COLUMN config TEXT NOT NULL DEFAULT '{}'");
+  db.prepare("UPDATE workers SET config=? WHERE config='{}'").run(
+    JSON.stringify(workerPolicy()),
+  );
+  if (!columns("attempts").includes("max_attempts")) {
+    db.exec(
+      "ALTER TABLE attempts ADD COLUMN max_attempts INTEGER NOT NULL DEFAULT 3",
+    );
+    db.exec(
+      "UPDATE attempts SET max_attempts=COALESCE((SELECT json_extract(config,'$.maxAttempts') FROM workers WHERE workers.id=attempts.worker),3)",
+    );
+  }
+  db.exec(`CREATE TABLE IF NOT EXISTS routing_policy(project TEXT PRIMARY KEY,payload TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS task_routing(task TEXT PRIMARY KEY REFERENCES tasks(id),worker TEXT NOT NULL REFERENCES workers(id));
-      PRAGMA user_version=5;`);
+      CREATE TABLE IF NOT EXISTS task_successors (
+        parent TEXT NOT NULL REFERENCES tasks(id), attempt INTEGER NOT NULL, evaluation TEXT NOT NULL,
+        operation_id TEXT NOT NULL, digest TEXT NOT NULL, child TEXT NOT NULL UNIQUE REFERENCES tasks(id),
+        PRIMARY KEY(parent,operation_id), UNIQUE(parent,attempt,evaluation)
+      );
+      PRAGMA user_version=6;`);
 }

@@ -87,13 +87,16 @@ the scheduler must not assume that independent-looking features cannot conflict.
 
 `src/orchestrator` owns the task state, HTTP API, webview, SQLite store, scheduling
 and analysis index. Its CLI is both a server entry point and a headless HTTP
-client. Intake remains the first webview page; repository import is the primary
-workflow and manual submissions are exceptions.
+client. Dashboard (`#system`) is the default webview page; direct Intake links
+retain their destination. Repository import is the primary team workflow and
+manual submissions are an explicit alternative.
 
 `src/worker` owns polling, the execution adapter boundary, local journals,
-configuration, snapshots and a read-only local HTML status service. Mock execution
-supports concurrent slots. The opt-in native Linux Codex adapter uses one slot
-and one attempt, creates a disposable local checkout from a pinned commit and
+configuration, snapshots and an authenticated Vue workspace with Chat, History
+and Dashboard. Local chat, file tasks and parent assignments share one execution
+slot. Basic status, health and metrics remain public read-only endpoints. The
+opt-in native Linux Codex assignment adapter creates a disposable local checkout
+from a pinned commit and
 manages provider cancellation and process-group cleanup. Its exact file allowlist
 and host-account trust boundary are described in the
 [live workflow](../how-to/run-codex-task.md). Concurrent live providers and the
@@ -124,11 +127,11 @@ Source folders group application policy, persistence, intake, context, HTTP infr
 | `orchestrator/intake/importer.ts` | CLI composition of local Git reads and the HTTP task gateway |
 | `orchestrator/intake/iteration.ts` | Committed-feature collection and import/revision policy through `IterationSource`/`IterationTaskGateway` ports |
 | `worker/cli.ts` | Parses runtime/status commands, loads configuration and supplies process cancellation |
-| `worker/runner.ts` | Worker composition/lifecycle: concrete HTTP gateway, selected mock/Codex adapter, journal, identity, status service and scheduler slots |
+| `worker/runner.ts` | Worker composition/lifecycle: concrete HTTP gateway, selected mock/Codex adapter, journal, identity, workspace/status service and the shared single-slot scheduler |
 | `worker/application/*` | Attempt execution, lease renewal, reporting and ports; no URL/bearer-token or SQLite ownership |
 | `worker/infrastructure/*` | HTTP operation mapping, pinned-context verification, mock/Codex adapters, review artifacts and persisted registration identity |
 | `worker/infrastructure/journal/{snapshots,files,retention}.ts` | Measurement capture, immutable journal, serialized upload and durable local file operations |
-| `worker/status/server.ts`, `status/view.ts` | Read-only status HTTP server and HTML rendering respectively |
+| `worker/status/server.ts`, `status/workspace.ts`, `worker/webview/*` | Public health/status, authenticated workspace API and Vue UI; workspace composes local task, session and settings services |
 | `shared/domain.ts`, `context.ts`, `validation.ts`, `snapshots.ts` | Domain data and pure validation of input/evidence |
 | `shared/protocol.ts`, `factory.ts` | Typed request/response DTOs, Factory records and overview validation |
 | `shared/wiki.ts` | Pure vault-reference syntax parser; no repository resolution |

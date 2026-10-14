@@ -18,7 +18,7 @@ visual navigation, dedicated dashboards, focused editors and a replayable tour.
 The user explicitly requested a Vue webview built with Nuxt UI and three pages:
 Chat, History, and Dashboard. Chat is the default page and the primary way to
 give this worker a new task or continue an existing task’s model session. History
-contains the local taskboard and retained orchestrator evidence. Dashboard carries Monitoring & Status: activity, health, environment,
+contains conversations of every task type, the local taskboard and retained orchestrator evidence. Dashboard carries Monitoring & Status: activity, health, environment,
 provider connections and optional orchestrator enrollment. Chat also provides
 provider setup and checks, saved task selection, and Docker Agent definition
 import without leaving the conversation. The old
@@ -81,7 +81,9 @@ selected instructions and supported model are passed to the worker's provider.
 An omitted or unsupported model uses that connection's configured model.
 
 Chat keeps a searchable task rail and a readable transcript with code-copy
-controls. Operators can draft a follow-up while a task runs, and send it when
+controls. On narrow screens, saved tasks collapse into a switcher above the
+conversation. Dashboard links current work, failed tasks and review patches
+directly to their action surfaces, with administration in disclosures. Operators can draft a follow-up while a task runs, and send it when
 that task finishes. A new task can wait behind the running task in the shared
 single execution slot. Saved tasks and transcripts are shared by this worker's
 operators; they are not personal account histories.
@@ -128,3 +130,38 @@ the same folder while retaining orchestrator lease/routing authority.
 The template and custom request metadata remain editable. One worker state owns
 one folder; setup, native/Docker switching, recovery and copied-app operation
 are documented in [project worker setup](docs/how-to/project-worker.md).
+
+
+## Local execution evidence and analysis
+
+A project worker preserves durable per-invocation run evidence for local chat,
+approved-file tasks and feature requests. Before invoking a provider, it records
+state, worker-process resources and cumulative known consumption after acquiring
+the shared execution slot. A matching terminal observation records the same
+fields, plus per-run reported usage and measured duration. Queued cancellation
+and crash recovery stay explicit; they do not invent execution measurements.
+
+Run history survives session deletion and restart. History exposes project
+requests, run inspection, filtered analysis and export; the portable CLI exposes
+the same records for humans and agents. Bounded pages never imply bounded
+aggregate totals. Unknown usage/cost remains null and totals include per-field
+coverage. Cache tokens are subsets of input; provider-reported USD includes cost
+provenance and can be an estimate. It is not a subscription balance or quality
+measurement. Remote assignment
+snapshots remain under their existing orchestrator evidence contract.
+
+## Durable worker–model interactions
+
+The local worker saves an immutable semantic dispatch before invoking a provider.
+Adapters expose one versioned request/result/capability contract. Structured
+questions and escalations release the execution slot and remain on the owning
+request until answered or cancelled through revision-guarded operations. Stable
+operation keys deduplicate accepted commands after lost acknowledgements.
+
+Chat and CLI expose checkpoint inspection and explicit continuation. Current
+adapters use saved worker context in a fresh invocation; native provider session
+resume and live token streaming are not advertised. A durably saved result is
+reconciled after restart without another model call; ambiguous in-flight work
+stays interrupted. A content-free durable event feed lets clients replay lifecycle
+changes independently of provider formats. See the
+[interaction contract](docs/reference/model-interaction.md).

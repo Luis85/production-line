@@ -50,6 +50,9 @@ The [portable apps reference](docs/reference/portable-apps.md) covers AI-agent t
 submission, multiple workers, Factory intake, routing and copying/upgrading apps.
 Source contributors generate these folders with `npm run build`.
 
+For the complete download → project setup → feature execution → metrics journey,
+follow the [worker lifecycle tutorial](docs/tutorials/worker-feature-lifecycle.md).
+
 ## Project-local worker and Markdown queue
 
 From your project, run the worker initializer from a verified release:

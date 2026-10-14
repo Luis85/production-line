@@ -4,6 +4,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import ts from 'typescript';
+import { parse as parseVue } from '@vue/compiler-sfc';
 import { DomainError, ValidationError } from '../../src/orchestrator/dist/shared/errors.js';
 import { ApiError, httpStatus, isExpectedError } from '../../src/orchestrator/dist/shared/http/errors.js';
 import { taskInput } from '../../src/orchestrator/dist/shared/validation.js';
@@ -16,11 +17,12 @@ async function sourceFiles(directory) {
     if (['dist','node_modules','public'].includes(entry.name) || entry.name.startsWith('.')) continue;
     const path = join(directory,entry.name);
     if(entry.isDirectory()) files.push(...await sourceFiles(path));
-    else if(entry.name.endsWith('.ts')) files.push(path);
+    else if(/\.(?:ts|m?js|vue)$/.test(entry.name)) files.push(path);
   }
   return files;
 }
 function references(file, contents) {
+  if(file.endsWith('.vue')) { const parsed=parseVue(contents,{filename:file});assert.deepEqual(parsed.errors,[],file);contents=[parsed.descriptor.script?.content,parsed.descriptor.scriptSetup?.content].filter(Boolean).join('\n'); }
   const tree=ts.createSourceFile(file,contents,ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
   const values=[];
   const visit=node=>{
@@ -47,6 +49,8 @@ test('source packages do not import sibling application internals',async()=>{
     for(const dependency of dependencies) {
       const target=localTarget(file,dependency);
       if(!target)continue;
+      // The build entry may call the repository's shared bundler, never sibling runtime code.
+      if(file === join(src,'worker','webview','vite.config.mjs') && target === resolve(src,'../scripts/webviews.mjs')) continue;
       const targetOwner=relative(src,target).split(sep)[0];
       const allowed=owner==='shared'?['shared']:[owner,'shared'];
       assert.ok(allowed.includes(targetOwner),`${relative(src,file)} imports forbidden ${dependency}`);
@@ -55,7 +59,7 @@ test('source packages do not import sibling application internals',async()=>{
 });
 test('pure shared contracts have no direct or transitive transport/runtime dependency',async()=>{
   const graph=await dependencyGraph();
-  const pure=new Set(['domain.ts','context.ts','contracts.ts','validation.ts','errors.ts','snapshots.ts','protocol.ts','html.ts','wiki.ts','factory.ts','capabilities.ts'].map(name=>join(src,'shared',name)));
+  const pure=new Set(['domain.ts','context.ts','contracts.ts','validation.ts','errors.ts','snapshots.ts','request-gate.ts','protocol.ts','html.ts','wiki.ts','factory.ts','capabilities.ts'].map(name=>join(src,'shared',name)));
   for(const root of pure) {
     const pending=[root],visited=new Set();
     while(pending.length) {
@@ -90,4 +94,9 @@ test('CLI maps semantic input failures and remote HTTP failures to documented ex
     for(const error of [new DomainError('unavailable','Unavailable'),new DomainError('internal','Internal'),new ApiError(502,'Remote failure'),new Error('Unexpected')]){fail(error);assert.equal(process.exitCode,1);}
     assert.equal(messages.length,7);assert.deepEqual(messages[0],{error:'Bad task'});
   } finally {console.error=originalError;process.exitCode=originalExit;}
+});
+
+test('Vue setup and ordinary scripts both participate in application dependency boundaries',()=>{
+  const source='<script lang="ts">import {a} from "../factory/private.js";<'+ '/script><script setup lang="ts">import type {B} from "../worker/private.js";<'+ '/script><template><p>View</p></template>';
+  assert.deepEqual(references('Fixture.vue',source),['../factory/private.js','../worker/private.js']);
 });
