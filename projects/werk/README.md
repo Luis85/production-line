@@ -2,7 +2,7 @@
 
 Werk models a Factory with logical subfactories and independent production lines. Each line has its own orchestrator, workers and task history. Run the hierarchy from one YAML definition, or start a single line for a smaller deployment.
 
-**Simulation is the default.** Workers record mock attempts and evidence, ending tasks as `simulated`. Trusted operators can opt into [native Linux Codex execution](docs/how-to/run-codex-task.md), which produces a local patch and a `review` task. Human review, publication and merge remain explicit operator actions. Docker and the managed VM profile remain simulation deployments.
+**Simulation is the default.** Workers record mock attempts and evidence, ending tasks as `simulated`. Trusted operators can opt into [native Linux Codex execution](docs/how-to/run-codex-task.md), which produces a local patch and a `review` task. Human review, publication and merge remain explicit operator actions. Orchestrator execution in the supplied Docker and managed VM profiles remains simulated. Standalone worker Chat and approved-file tasks can use configured API providers, including in Docker.
 
 ## Download and start
 
@@ -49,6 +49,21 @@ Use `run` for foreground operation and `status`/`stop` for lifecycle management.
 The [portable apps reference](docs/reference/portable-apps.md) covers AI-agent task
 submission, multiple workers, Factory intake, routing and copying/upgrading apps.
 Source contributors generate these folders with `npm run build`.
+
+## Project-local worker and Markdown queue
+
+From your project, run the worker initializer from a verified release:
+
+```sh
+node /path/to/werk-release/bin/apps/worker/cli.mjs init
+node bin/apps/worker/cli.mjs run
+```
+
+Setup installs the app, a configurable watched feature folder, a draft request
+template and Docker Compose configuration. Copy the template, fill in the request
+and set `status: ready`; frontmatter tracks the worker queue and links to results.
+Orchestrator assignments appear in the same folder. See [project worker setup](docs/how-to/project-worker.md)
+for Docker startup and [the request contract](docs/reference/feature-requests.md).
 
 ## A complete system from one YAML file
 

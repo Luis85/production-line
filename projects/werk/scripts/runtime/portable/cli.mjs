@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { readFile, lstat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { assertNode, inputError, readPrivate } from '../config.mjs';
+import { initializeWorker, projectDefaults } from './project.mjs';
 import { commands } from './commands.mjs';
 import { run, start, status, stop, stateDirectory } from './lifecycle.mjs';
 const root = fileURLToPath(new URL('../../../', import.meta.url));
@@ -11,14 +12,21 @@ export async function main(kind, argv = process.argv.slice(2)) {
   try {
     assertNode();
     // JSON is the default; accept a familiar explicit flag without a value.
-    const parsed = args(argv.filter(value => value !== '--json')), o = parsed.options, cmd = parsed.commands.join(' ');
+    const parsed = args(argv.filter(value => value !== '--json')), cmd = parsed.commands.join(' ');
+    let o = parsed.options;
     const catalog = commands(kind);
     if (!cmd || o.help || cmd === 'help' || cmd === 'schema') {
-      console.log(JSON.stringify({ schemaVersion: 1, application: kind, node: '24.x', usage: `node bin/apps/${kind}/cli.mjs COMMAND [--state-dir PATH] [--json]`, lifecycle: { run: 'Foreground; Ctrl+C drains and closes', start: 'Detached; returns when ready', status: 'Authenticated process identity and webview URL', stop: 'Graceful authenticated shutdown; preserves state' }, launchOptions: ['state-dir', 'host', 'port', ...(kind === 'worker' ? ['config', 'url', 'project-dir', 'poll-ms', 'mock-ms'] : kind === 'orchestrator' ? ['project'] : [])], clientOptions: ['state-dir', 'url', 'token-file', 'file', 'id', 'key'], input: 'JSON --file PATH or --file - (stdin), maximum 64 KiB. Local credentials resolved privately from state; remote URL requires explicit token-file or WERK_APP_TOKEN.', commands: catalog, api: 'api --path /local/path [--method GET|POST|PUT|PATCH|DELETE] [--file PATH|-] [--key KEY]', exitCodes: { 0: 'success', 1: 'operational failure', 2: 'input/API rejection' } }, null, 2)); return;
+      console.log(JSON.stringify({ schemaVersion: 1, application: kind, node: '24.x', usage: `node bin/apps/${kind}/cli.mjs COMMAND [--state-dir PATH] [--json]`, lifecycle: { run: 'Foreground; Ctrl+C drains and closes', start: 'Detached; returns when ready', status: 'Authenticated process identity and webview URL', stop: 'Graceful authenticated shutdown; preserves state' }, launchOptions: ['state-dir', 'host', 'port', ...(kind === 'worker' ? ['config', 'url', 'project-dir', 'features-dir', 'poll-ms', 'mock-ms'] : kind === 'orchestrator' ? ['project'] : [])], clientOptions: ['state-dir', 'url', 'token-file', 'file', 'id', 'key'], input: 'JSON --file PATH or --file - (stdin), maximum 64 KiB. Local credentials resolved privately from state; remote URL requires explicit token-file or WERK_APP_TOKEN.', commands: catalog, ...(kind === 'worker' ? { projectSetup: { command: 'init [--project-dir PATH] [--features-dir features] [--provider codex-cli] [--port 4100]', template: 'feature template (prints Markdown without a running worker)', behavior: 'Installs a project-local app, config, draft template and Docker Compose file; preserves existing files.' } } : {}), api: 'api --path /local/path [--method GET|POST|PUT|PATCH|DELETE] [--file PATH|-] [--key KEY]', exitCodes: { 0: 'success', 1: 'operational failure', 2: 'input/API rejection' } }, null, 2)); return;
+    }
+    if (kind === 'worker' && cmd === 'init') { validateOptions(o, ['project-dir', 'features-dir', 'provider', 'port']); console.log(JSON.stringify(await initializeWorker(root, o))); return; }
+    if (kind === 'worker' && cmd === 'feature template') { validateOptions(o, []); const { featureTemplate } = await import(new URL('../../../src/worker/dist/worker/infrastructure/features/document.js', import.meta.url)); process.stdout.write(featureTemplate); return; }
+    if (kind === 'worker' && ['run', '_run', 'start', 'status', 'stop'].includes(cmd)) {
+      const defaults = await projectDefaults(o);
+      o = ['status', 'stop'].includes(cmd) ? { ...o, 'state-dir': defaults['state-dir'] ?? o['state-dir'] } : defaults;
     }
     const state = await stateDirectory(kind, root, o['state-dir']);
     if (['run', '_run', 'start'].includes(cmd)) {
-      validateOptions(o, ['state-dir', 'host', 'port', ...(kind === 'worker' ? ['config', 'url', 'project-dir', 'poll-ms', 'mock-ms'] : kind === 'orchestrator' ? ['project'] : [])]);
+      validateOptions(o, ['state-dir', 'host', 'port', ...(kind === 'worker' ? ['config', 'url', 'project-dir', 'features-dir', 'poll-ms', 'mock-ms'] : kind === 'orchestrator' ? ['project'] : [])]);
       if (o.port !== undefined) integer(o.port, 'port', 0, 65535);
       if (cmd === '_run' && !process.send) throw inputError('Internal launch requires an IPC parent. Use run or start.');
       if (cmd === 'start') console.log(JSON.stringify(await start(kind, state, root, argv.slice(1))));

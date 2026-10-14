@@ -1,3 +1,5 @@
+import { FeatureRequests, type FeatureRecord } from '../application/feature-requests.js';
+import { MarkdownFeatureFolder } from '../infrastructure/features/folder.js';
 import { definitionConnection } from '../application/definitions.js';
 import { WorkerSettings } from '../infrastructure/settings.js';
 import { WorkerSessions } from '../application/sessions.js';
@@ -22,6 +24,7 @@ export function chatConfiguration(value: unknown): string | undefined {
 }
 export class WorkerWorkspace {
   private taskIndex: TaskIndex;
+  readonly features?: FeatureRequests;
   readonly settings: WorkerSettings; readonly sessions: WorkerSessions; readonly board: LocalTaskboard;
   get accessScope() { return createHash('sha256').update(this.token).digest('hex').slice(0, 16); }
   get definitions() { return this.sessions.definitions; }
@@ -69,19 +72,20 @@ export class WorkerWorkspace {
   private token = '';
   private historyCache?: { at: number; value: Awaited<ReturnType<WorkerWorkspace['readHistory']>> };
   private historyReading?: ReturnType<WorkerWorkspace['readHistory']>;
-  private config: { stateDir: string; url?: string; enrollmentToken?: string; projectDir?: string; chatExecutable?: string; retainedPairs?: number; pollMs: number; timeoutMs: number }; private journal: SnapshotJournal; private get: () => Status;
-  constructor(config: { stateDir: string; url?: string; enrollmentToken?: string; projectDir?: string; chatExecutable?: string; retainedPairs?: number; pollMs: number; timeoutMs: number }, journal: SnapshotJournal, get: () => Status) {
+  private config: { stateDir: string; url?: string; enrollmentToken?: string; projectDir?: string; features?: { directory: string; provider: string; pollMs: number }; chatExecutable?: string; retainedPairs?: number; pollMs: number; timeoutMs: number }; private journal: SnapshotJournal; private get: () => Status;
+  constructor(config: { stateDir: string; url?: string; enrollmentToken?: string; projectDir?: string; features?: { directory: string; provider: string; pollMs: number }; chatExecutable?: string; retainedPairs?: number; pollMs: number; timeoutMs: number }, journal: SnapshotJournal, get: () => Status) {
     this.taskIndex = new TaskIndex(config.stateDir);
     this.config = config; this.journal = journal; this.get = get;
     this.settings = new WorkerSettings(config.stateDir, config.url, config.enrollmentToken, config.chatExecutable);
     this.sessions = new WorkerSessions(config.stateDir, this.settings); this.board = new LocalTaskboard(config.stateDir, this.settings, this.sessions);
+    if (config.features) this.features = new FeatureRequests(new MarkdownFeatureFolder(config.features.directory, config.stateDir, config.features.provider, config.projectDir ?? process.cwd()), { submit: record => this.submitFeature(record), inspect: record => this.inspectFeature(record) }, config.features.pollMs);
   }
   async init() {
     await ensureDirectory(this.config.stateDir);
     try { this.token = (await readBoundedFile(join(this.config.stateDir, 'webview-token'), 128)).trim(); if (!/^[a-f0-9]{64}$/.test(this.token)) throw Error('Invalid worker webview token'); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; this.token = randomBytes(32).toString('hex'); await atomicWrite(join(this.config.stateDir, 'webview-token'), this.token + '\n'); }
     await this.settings.init(); await this.sessions.init(); await this.board.init();
-    await this.taskIndex.init();
+    await this.taskIndex.init(); await this.features?.init();
   }
   async updateSettings(body: unknown) {
     const input = body as Record<string, unknown>;
@@ -95,14 +99,31 @@ export class WorkerWorkspace {
     }
     const result = await this.settings.update(body); if (input?.provider) await this.sessions.reloadProviders(); return result;
   }
-  async close() { this.acceptingTasks = false; await this.taskRequests; await this.board.close(); await this.sessions.close(); }
-  async rememberTask(task: Task) { await this.taskIndex.remember(task); await this.sessions.ensureTask('remote-' + task.id, 'orchestrator', task.title, task.provider === 'claude' ? 'claude-cli' : 'codex-cli'); this.historyCache = undefined; }
+  async close() { await this.features?.stopIntake(); this.acceptingTasks = false; await this.taskRequests; await this.board.close(); await this.sessions.close(); }
+  async rememberTask(task: Task) { await this.taskIndex.remember(task); await this.features?.rememberRemote(task); await this.sessions.ensureTask('remote-' + task.id, 'orchestrator', task.title, task.provider === 'claude' ? 'claude-cli' : 'codex-cli'); this.historyCache = undefined; }
+  private async submitFeature(record: FeatureRecord) {
+    const input = record.input!;
+    if (input.mode === 'patch') {
+      await this.board.create({ title: input.title, instruction: input.message, provider: input.provider, repository: resolve(this.config.projectDir ?? process.cwd()), paths: input.paths, priority: input.priority, definitionId: input.definitionId, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly }, { id: record.taskId, hash: record.inputHash });
+    } else await this.task({ action: 'create', id: record.taskId, title: input.title, provider: input.provider, message: input.message, definitionId: input.definitionId, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly });
+  }
+  private inspectFeature(record: FeatureRecord) {
+    try {
+      if (record.input?.mode === 'patch') { const task = this.board.detail(record.taskId); return { status: this.board.view().persistenceError ? 'unsaved' : task.status, text: task.summary ?? task.error ?? undefined, patch: task.patch ?? undefined, error: task.error ?? undefined }; }
+      const detail = this.sessions.detail(record.sessionId), reply = detail.chat.messages.filter(message => message.role === 'assistant').at(-1);
+      let text = reply?.state !== 'pending' ? reply?.text : undefined;
+      if (record.source === 'orchestrator' && text) {
+        try { const value = JSON.parse(text); if (value.execution && value.quality) text = JSON.stringify({ execution: value.execution, quality: value.quality, review: value.review ? { baseCommit: value.review.baseCommit, patchSha256: value.review.patchSha256, patchBytes: value.review.patchBytes } : null, note: 'Full attempt and artifact details remain in the private worker history.' }, null, 2); } catch { /* Cancellation messages and follow-ups are plain text. */ }
+      }
+      return { status: detail.chat.persistenceError ? 'unsaved' : detail.session.status, text, ...(reply?.state === 'error' ? { error: reply.text } : {}) };
+    } catch (error) { if (error instanceof DomainError && error.code === 'not_found') return; throw error; }
+  }
   authenticate(token: string) { const supplied = Buffer.from(token); if (supplied.length !== 64 || !timingSafeEqual(supplied, Buffer.from(this.token))) throw new DomainError('unauthorized', 'Worker access token is incorrect.'); }
   async environment() {
     const memory = process.memoryUsage(), disk = await statfs(this.config.stateDir).catch(() => null);
     const connection = this.settings.value.connection;
     const address = connection.url ? new URL(connection.url) : null; if (address) { address.username = ''; address.password = ''; address.search = ''; address.hash = ''; }
-    return { capturedAt: new Date().toISOString(), hostname: hostname(), platform: process.platform, osRelease: release(), architecture: process.arch, nodeVersion: process.version, pid: process.pid, uptimeSeconds: process.uptime(), logicalCpus: availableParallelism(), hostLoad: process.platform === 'win32' ? null : loadavg(), memory: { processRssBytes: memory.rss, heapUsedBytes: memory.heapUsed, heapTotalBytes: memory.heapTotal, hostFreeBytes: freemem(), hostTotalBytes: totalmem() }, disk: disk ? { freeBytes: disk.bavail * disk.bsize, totalBytes: disk.blocks * disk.bsize } : null, stateDirectory: resolve(this.config.stateDir), projectDirectory: this.config.projectDir ? resolve(this.config.projectDir) : null, orchestratorUrl: address?.toString() ?? null, pollMs: this.config.pollMs, taskTimeoutMs: this.config.timeoutMs, retainedPairs: this.config.retainedPairs ?? 1000, chat: { configured: this.chat.snapshot().available, provider: this.sessions.current.provider, authentication: this.sessions.current.provider.endsWith('-cli') ? 'Host CLI sign-in; use Check sign-in to verify' : 'Private API key; use Check connection to verify', timeoutSeconds: 120 }, status: this.get() };
+    return { capturedAt: new Date().toISOString(), hostname: hostname(), platform: process.platform, osRelease: release(), architecture: process.arch, nodeVersion: process.version, pid: process.pid, uptimeSeconds: process.uptime(), logicalCpus: availableParallelism(), hostLoad: process.platform === 'win32' ? null : loadavg(), memory: { processRssBytes: memory.rss, heapUsedBytes: memory.heapUsed, heapTotalBytes: memory.heapTotal, hostFreeBytes: freemem(), hostTotalBytes: totalmem() }, disk: disk ? { freeBytes: disk.bavail * disk.bsize, totalBytes: disk.blocks * disk.bsize } : null, features: this.features?.view() ?? { enabled: false }, stateDirectory: resolve(this.config.stateDir), projectDirectory: this.config.projectDir ? resolve(this.config.projectDir) : null, orchestratorUrl: address?.toString() ?? null, pollMs: this.config.pollMs, taskTimeoutMs: this.config.timeoutMs, retainedPairs: this.config.retainedPairs ?? 1000, chat: { configured: this.chat.snapshot().available, provider: this.sessions.current.provider, authentication: this.sessions.current.provider.endsWith('-cli') ? 'Host CLI sign-in; use Check sign-in to verify' : 'Private API key; use Check connection to verify', timeoutSeconds: 120 }, status: this.get() };
   }
   async history() {
     if (this.historyCache && Date.now() - this.historyCache.at < 5000) return this.historyCache.value;

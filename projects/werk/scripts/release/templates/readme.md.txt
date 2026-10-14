@@ -4,7 +4,7 @@ Run a local software-factory line, submit requirement references and inspect wor
 attempts and evidence. **Simulation is the default**: a simulated task does not
 produce code. Trusted operators can [enable native Linux Codex execution](docs/how-to/run-codex-task.md)
 to produce a local patch requiring human review. Git publication and merge remain
-operator actions. Docker and the managed VM profile run simulations.
+operator actions. Orchestrator execution in the supplied Docker and managed VM profiles remains simulated. Standalone worker Chat and approved-file tasks can use configured API providers, including in Docker. See [project worker setup](docs/how-to/project-worker.md) for terminal and Docker installation.
 
 Verify and extract the release, then open a terminal in this directory. With Node.js 24 installed, start the complete Factory system in one command:
 

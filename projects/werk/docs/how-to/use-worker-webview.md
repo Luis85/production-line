@@ -21,6 +21,13 @@ The worker has exactly three pages: **Chat** (the default), **History** and
 header for a replayable introduction. Back, Next and Close let you explore at
 your own pace; the tour does not send messages, run tasks or change settings.
 
+## Use requests from project files
+
+A worker can also ingest frontmatter-plus-Markdown requests from a watched folder.
+[Project setup](project-worker.md) provides the app, configuration, request template
+and Docker launch. Requests use the same task sessions and serial execution slot;
+frontmatter and adjacent result files expose their lifecycle without the webview.
+
 ## Unlock the webview
 
 The dedicated unlock screen protects the workspace until access succeeds. Read

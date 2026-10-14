@@ -68,3 +68,24 @@ reload, provider check, definition preview/import/adaptation, task queueing,
 follow-ups, code copying, inert HTML, responsive overflow, restart recovery and
 Lock. It saves twelve screenshots and a JSON result without credentials. No real
 provider login or model request is performed.
+
+## Project worker and feature-folder qualification
+
+The default suite includes `worker/feature-requests.test.mjs` and
+`operations/project-worker.test.mjs`: stable saves, drafts, duplicate IDs, admission
+recovery, folder ownership, malformed input, preserved Markdown, serial execution,
+project installation and actual native CLI restart. Native provider execution uses
+a labelled protocol fixture, not an authenticated model.
+
+With Docker available, run the explicit installed-project journey after a build:
+
+```sh
+node scripts/release/project-worker-smoke.mjs
+```
+
+Set `WERK_PROJECT_WORKER_APP` to an extracted release's `bin/apps/worker` to test
+the downloaded payload. The script runs setup inside a Node container (no host
+Node used by the installation commands), starts generated Compose, ingests a
+bind-mounted Markdown request, checks its exported result and restarts to verify
+identity/no duplicate execution. It removes its own Compose services and scratch
+project. It uses a provider protocol fixture and does not qualify live inference.

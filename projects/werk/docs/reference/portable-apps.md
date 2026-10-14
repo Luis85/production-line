@@ -26,6 +26,22 @@ returned URL and unlock the webview using that file locally. The CLI reads local
 credentials itself. Workers may enroll later through `settings set`; Factory can
 register an already running orchestrator as a line.
 
+## Initialize a project worker
+
+Run the release worker's `cli.mjs init --project-dir /absolute/project` to install
+the app into that project's `bin/apps/worker`, create `.werk/worker.json`, a draft
+feature-request template and `.werk/compose.worker.yaml`. Use `--features-dir` to
+choose a project-relative folder and `--provider` to choose its default connection.
+Run or start from the project directory; the installed worker discovers its project
+configuration. `feature template` prints a fresh Markdown template without a running
+worker; `feature list` reads the authenticated watcher state. Template output is
+Markdown, an intentional exception to JSON CLI output.
+
+See the [project worker guide](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/project-worker.md)
+and [feature request contract](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/feature-requests.md).
+Each watched folder belongs to one worker state; choose separate feature folders,
+state directories and ports for additional workers.
+
 ## Lifecycle and automation contract
 
 Every app supports `help`, `schema`, `run`, `start`, `status`, `stop`, `health`,

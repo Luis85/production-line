@@ -101,6 +101,10 @@ jobs:
         env:
           WERK_DOCKER_RELEASE_ROOT: ${{ runner.temp }}/werk release/werk-${{ needs.build.outputs.version }}
         run: node scripts/release/docker-smoke.mjs
+      - name: Test project worker setup, mounted Markdown intake and restart
+        env:
+          WERK_PROJECT_WORKER_APP: ${{ runner.temp }}/werk release/werk-${{ needs.build.outputs.version }}/bin/apps/worker
+        run: node scripts/release/project-worker-smoke.mjs
       - name: Test the extracted Docker Factory system definition
         env:
           WERK_DOCKER_RELEASE_ROOT: ${{ runner.temp }}/werk release/werk-${{ needs.build.outputs.version }}

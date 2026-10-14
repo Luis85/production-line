@@ -23,8 +23,9 @@ try {
   }
   env.PATH = path;
   const logs = [];
+  // Image preparation and container creation precede the unchanged Compose health deadline.
   const run = async (...args) => {
-    const result = await exec(join(path, 'bash'), [join(root, 'werk-docker.sh'), ...args, '--state-dir', state], { cwd: root, env, timeout: 150000, maxBuffer: 4 * 1024 * 1024 });
+    const result = await exec(join(path, 'bash'), [join(root, 'werk-docker.sh'), ...args, '--state-dir', state], { cwd: root, env, timeout: 300000, maxBuffer: 4 * 1024 * 1024 });
     logs.push(result.stdout, result.stderr);
     return result.stdout.trim() ? JSON.parse(result.stdout) : null;
   };
@@ -40,7 +41,7 @@ try {
   const health = await run('status', '--json'); assert.equal(health.ready, true);
   const taskBody = JSON.stringify({ project: 'demo', title: 'Release journey smoke', criteria: ['Mock run completes with persisted evidence'] });
   const taskResult = await new Promise((resolve, reject) => {
-    const child = execFile(join(path,'bash'), [join(root,'werk-docker.sh'),'cli','task','create','--file','-','--key','release-smoke','--state-dir',state], { cwd:root, env, timeout:150000, maxBuffer:1024*1024 }, (error,stdout,stderr) => error ? reject(error) : resolve({stdout,stderr}));
+    const child = execFile(join(path,'bash'), [join(root,'werk-docker.sh'),'cli','task','create','--file','-','--key','release-smoke','--state-dir',state], { cwd:root, env, timeout:300000, maxBuffer:1024*1024 }, (error,stdout,stderr) => error ? reject(error) : resolve({stdout,stderr}));
     child.stdin.end(taskBody);
   });
   logs.push(taskResult.stdout,taskResult.stderr);

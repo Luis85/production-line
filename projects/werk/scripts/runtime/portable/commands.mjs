@@ -3,6 +3,7 @@ const op = (method, path, body = false, required = [], example) => ({ method, pa
 export function commands(kind) {
   const common = { health: op('GET', '/healthz'), monitoring: op('GET', kind === 'worker' ? '/monitoring' : '/v1/monitoring') };
   if (kind === 'worker') return { ...common,
+    'feature list': op('GET', '/api/features'),
     'settings get': op('GET', '/api/settings'), 'settings set': op('POST', '/api/settings', true, [], { board: { paused: true, queueCapacity: 16 } }),
     'definition list': op('GET', '/api/definitions'),
     'definition preview': op('POST', '/api/definitions', true, [], { yaml: 'agents:\n  root:\n    model: openai/gpt-4.1\n    instruction: Review the task and explain the next step.\n' }),

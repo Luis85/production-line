@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { object, profiles, workerPolicy } from '../shared/contracts.js';
 import { ValidationError } from '../shared/errors.js';
+import { resolve } from 'node:path';
 import { integer } from '../shared/cli.js';
 
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -24,8 +25,14 @@ export async function configuration(options: Record<string, string>, document?: 
     try { parsed = JSON.parse(source); }
     catch { throw new ValidationError('Invalid worker configuration JSON'); }
   }
-  const raw = object(parsed, 'Worker configuration', ['schemaVersion', 'scheduler', 'execution', 'systemPrompt', 'profiles', 'journal', 'chat']);
+  const raw = object(parsed, 'Worker configuration', ['schemaVersion', 'scheduler', 'execution', 'systemPrompt', 'profiles', 'journal', 'chat', 'features']);
   if (raw.schemaVersion !== undefined && raw.schemaVersion !== 1) throw new ValidationError('Unknown worker configuration version');
+  const featuresRaw = section(raw, 'features', ['directory', 'provider', 'pollMs']);
+  const directory = options['features-dir'] ?? featuresRaw.directory;
+  if (directory !== undefined && (typeof directory !== 'string' || !directory.trim() || directory.length > 4096 || /[\x00-\x1f]/.test(directory))) throw new ValidationError('features.directory must be a folder path.');
+  const provider = featuresRaw.provider ?? 'codex-cli';
+  if (!['codex-cli', 'claude-cli', 'openai-api', 'anthropic-api'].includes(String(provider))) throw new ValidationError('Invalid features.provider.');
+  const features = directory === undefined ? undefined : { directory: resolve(options['project-dir'] ?? process.cwd(), directory as string), provider: String(provider), pollMs: integer(String(featuresRaw.pollMs ?? 1000), 'features.pollMs', 250, 30000) };
   const scheduler = section(raw, 'scheduler', ['maxParallel', 'order', 'pollMs', 'maxAttempts']);
   const execution = section(raw, 'execution', ['mode', 'timeoutMs', 'mockMs', 'codex']);
   const journal = section(raw, 'journal', ['retainedPairs']);
@@ -68,5 +75,5 @@ export async function configuration(options: Record<string, string>, document?: 
     profiles: ps, systemPrompt
   };
   policy.configHash = hash(JSON.stringify(normalized));
-  return { ...(chatExecutable ? { chatExecutable } : {}), ...(codex ? { codex } : {}), profiles: ps, policy, pollMs, mockMs, timeoutMs, retainedPairs, systemPromptHash: hash(systemPrompt), systemPrompt };
+  return { ...(features ? { features } : {}), ...(chatExecutable ? { chatExecutable } : {}), ...(codex ? { codex } : {}), profiles: ps, policy, pollMs, mockMs, timeoutMs, retainedPairs, systemPromptHash: hash(systemPrompt), systemPrompt };
 }

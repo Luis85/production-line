@@ -11,7 +11,7 @@ import type { WorkerSettings } from '../infrastructure/settings.js';
 import type { WorkerSessions } from './sessions.js';
 import type { ConversationModel } from './conversation.js';
 export interface TaskFile { path: string; content: string; existed: boolean; }
-export interface LocalTask { definition?: DefinitionSnapshot; id: string; title: string; instruction: string; sessionId: string; provider: ProviderId; model: string; repository: string; files: TaskFile[]; status: 'queued' | 'running' | 'review' | 'failed' | 'cancelled'; priority: number; createdAt: string; finishedAt: string | null; error: string | null; summary: string | null; patch: string | null; archived: boolean; }
+export interface LocalTask { submissionHash?: string; definition?: DefinitionSnapshot; id: string; title: string; instruction: string; sessionId: string; provider: ProviderId; model: string; repository: string; files: TaskFile[]; status: 'queued' | 'running' | 'review' | 'failed' | 'cancelled'; priority: number; createdAt: string; finishedAt: string | null; error: string | null; summary: string | null; patch: string | null; archived: boolean; }
 const fingerprint = (value: string) => createHash('sha256').update(value).digest('hex');
 function patchFile(file: TaskFile, content: string) {
   if (file.content === content && file.existed) return '';
@@ -50,8 +50,13 @@ export class LocalTaskboard {
   private change(operation: (tasks: LocalTask[]) => void | Promise<void>) {
     const write = this.writing.catch(() => {}).then(async () => { const next = structuredClone(this.tasks); await operation(next); const changed = next.filter(task => this.tasks.find(item => item.id === task.id)?.status !== task.status); await this.persist(next); for (const task of this.tasks) if (!next.some(item => item.id === task.id)) this.sessions.protectTask(task.sessionId, false); this.tasks = next; for (const task of changed) await this.sessions.setTaskState(task.sessionId, task.status === 'review' ? 'completed' : task.status); }); this.writing = write; return write;
   }
-  async create(input: unknown) {
+  async create(input: unknown, submission?: { id: string; hash: string }) {
     if (this.closed) throw new DomainError('unavailable', 'Worker is stopping');
+    if (submission) {
+      if (!/^[a-z0-9-]{1,90}$/.test(submission.id) || !/^[a-f0-9]{64}$/.test(submission.hash)) throw new DomainError('invalid_input', 'Invalid feature task identity.');
+      const existing = this.tasks.find(task => task.id === submission.id);
+      if (existing) { if (existing.submissionHash !== submission.hash) throw new DomainError('conflict', 'Task ID belongs to different input.'); return this.view(); }
+    }
     const body = object(input, 'Local task', ['title', 'instruction', 'repository', 'paths', 'priority', 'provider', 'definitionId', 'agent', 'useInstructionsOnly']);
     const title = text(body.title, 'Title', 200), instruction = text(body.instruction, 'Instruction', 8000);
     const definition = this.sessions.definitions.select(body);
@@ -70,8 +75,8 @@ export class LocalTaskboard {
       files.push({ path, content, existed });
     }
     if (body.priority !== undefined && body.priority !== 1 && body.priority !== 2) throw new DomainError('invalid_input', 'Priority must be 1 or 2');
-    const id = randomUUID();
-    const task: LocalTask = { ...(definition ? { definition } : {}), id, title, instruction, sessionId: 'local-' + id, provider: provider.id, model: provider.model, repository, files, status: 'queued', priority: Number(body.priority ?? 1), createdAt: new Date().toISOString(), finishedAt: null, error: null, summary: null, patch: null, archived: false };
+    const id = submission?.id ?? randomUUID();
+    const task: LocalTask = { ...(submission ? { submissionHash: submission.hash } : {}), ...(definition ? { definition } : {}), id, title, instruction, sessionId: 'local-' + id, provider: provider.id, model: provider.model, repository, files, status: 'queued', priority: Number(body.priority ?? 1), createdAt: new Date().toISOString(), finishedAt: null, error: null, summary: null, patch: null, archived: false };
     try { await this.change(async tasks => { if (tasks.length >= 100) throw new DomainError('conflict', 'Taskboard holds 100 tasks. Delete an old task first.'); if (tasks.filter(item => ['queued', 'running'].includes(item.status)).length + this.sessions.chatActive >= this.settings.value.board.queueCapacity) throw new DomainError('conflict', 'Local task queue is full.'); await this.sessions.ensureTask(task.sessionId, 'local', task.title, task.provider, undefined, task.definition); this.sessions.protectTask(task.sessionId, true); await this.sessions.prepareTask(task.sessionId, this.input(task)); tasks.push(task); }); }
     catch (error) { if (!this.tasks.some(item => item.id === id)) { this.sessions.protectTask(task.sessionId, false); await this.sessions.setTaskState(task.sessionId, 'failed').catch(() => {}); } throw error; }
     return this.view();
