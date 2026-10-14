@@ -25,10 +25,14 @@ try {
   await until(async () => (await call('/api/features')).records[0]?.result !== undefined);
   const before = (await call('/api/features')).records[0]; assert.match(await readFile(join(project, 'requests', before.result), 'utf8'), /protocol fixture completed/);
   const cli = JSON.parse((await compose('exec', '-T', 'worker', 'node', 'bin/apps/worker/cli.mjs', 'feature', 'list')).stdout); assert.equal(cli.records.length, 1);
-  await compose('stop'); await compose('up', '-d', '--wait', '--wait-timeout', '90');
+  await compose('stop');
+  const moved = JSON.parse((await compose('run', '--rm', '--no-deps', 'worker', 'node', 'bin/apps/worker/cli.mjs', 'feature', 'folder', 'set', '--path', 'feature-requests')).stdout);
+  assert.equal(moved.path, 'feature-requests');
+  assert.match(await readFile(join(project, 'feature-requests', before.result), 'utf8'), /protocol fixture completed/);
+  await compose('up', '-d', '--wait', '--wait-timeout', '90');
   await until(async () => (await call('/api/features')).records[0]?.result !== undefined);
   assert.equal((await call('/api/features')).records[0].taskId, before.taskId); assert.equal((await call('/api/sessions')).records.length, 2);
-  console.log(JSON.stringify({ ok: true, journey: 'project-worker-docker', setupInsideContainer: true, mountedFeatureIntake: true, templateInstalled: true, resultExported: true, restartPreserved: true, duplicateTasks: false, liveProvider: false }));
+  console.log(JSON.stringify({ ok: true, journey: 'project-worker-docker', setupInsideContainer: true, mountedFeatureIntake: true, templateInstalled: true, folderReconfigured: true, resultExported: true, restartPreserved: true, duplicateTasks: false, liveProvider: false }));
 } finally {
   if (configured) await compose('down', '--remove-orphans').catch(() => {});
   await rm(project, { recursive: true, force: true });

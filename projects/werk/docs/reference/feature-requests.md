@@ -44,7 +44,12 @@ The installed `.werk/worker.json` configures the watcher:
 workers do not scan or create a feature folder. Relative paths resolve against
 `--project-dir` when supplied, otherwise the working directory. The portable
 worker launched from an initialized project discovers `.werk/worker.json`.
-`--features-dir requests` overrides its folder. Polling supports Docker bind mounts
+`feature folder get` reports the saved path; `feature folder plan --path requests`
+previews a relocation; `feature folder set --path requests` persists it and moves
+existing requests/results while the project worker is stopped. The destination
+must be a new, separate folder inside the project. See the
+[folder configuration guide](../how-to/project-worker.md#choose-or-change-the-feature-folder).
+`--features-dir requests` overrides its folder for a launch. Polling supports Docker bind mounts
 and editor atomic saves; a new request must be unchanged across two observations.
 The configurable interval is 250–30,000 ms, default 1,000 ms. Only files directly
 inside the configured folder are ingested; subfolders and underscore-prefixed
@@ -142,7 +147,7 @@ Symlinked request files, feature directories and result directories are refused.
 ## CLI management contract
 
 All feature-management commands use the authenticated worker API and require a
-running worker with a configured feature folder, except `feature template`.
+running worker with a configured feature folder, except `feature template` and the local `feature folder get|plan|set` commands.
 Use `schema` for command discovery. Output is JSON; `feature template` emits
 Markdown. In Docker, prefix commands with `docker compose -f
 .werk/compose.worker.yaml exec -T worker` and run the same Node CLI inside it.

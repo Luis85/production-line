@@ -14,6 +14,8 @@ const front = raw => parse(/^---\n([\s\S]*?)\n---\n/.exec(raw)[1]);
 test('project init installs a self-contained worker, configurable template and Docker launch without overwriting edits', async t => {
   const cwd = await project(t), initial = await cli(installer, cwd, 'init', '--features-dir', 'requests/features', '--provider', 'openai-api', '--port', '4207');
   const entry = join(cwd, 'bin/apps/worker/cli.mjs'); assert.equal(initial.featuresDirectory, join(cwd, 'requests/features'));
+  assert.equal((await cli(entry, cwd, 'feature', 'folder', 'get')).path, 'requests/features');
+  assert.equal((await cli(entry, cwd, 'feature', 'folder', 'plan', '--path', 'new-requests')).changed, true);
   const template = join(initial.featuresDirectory, '_templates/feature-request.md'); assert.equal(front(await readFile(template, 'utf8')).status, 'draft');
   await writeFile(template, '# User template\n'); await cli(entry, cwd, 'init'); assert.equal(await readFile(template, 'utf8'), '# User template\n');
   const compose = parse(await readFile(join(cwd, '.werk/compose.worker.yaml'), 'utf8')); assert.match(compose.services.worker.image, /node:24/); assert.equal(compose.services.worker.working_dir, '/project'); assert.equal(compose.services.worker.volumes[0].source, '..'); assert.match(compose.services.worker.ports[0], /4207/);
@@ -34,13 +36,17 @@ test('installed native worker consumes files, exports review patches and keeps t
   const token = (await readFile(join(cwd, '.werk/worker/webview-token'), 'utf8')).trim();
   const api = async (path, body) => { const r = await fetch(started.url + path, { method: body ? 'POST' : 'GET', headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) }); const value = await r.json(); assert.ok(r.ok, value.error); return value; };
   await api('/api/settings', { provider: { id: 'codex-cli', executable: provider } });
-  const features = join(cwd, 'features'); await writeFile(join(features, 'chat.md'), '---\nschemaVersion: 1\ntitle: Native file intake\nstatus: ready\n---\nDescribe the next step.\n');
+  let features = join(cwd, 'features'); await writeFile(join(features, 'chat.md'), '---\nschemaVersion: 1\ntitle: Native file intake\nstatus: ready\n---\nDescribe the next step.\n');
   await writeFile(join(cwd, 'approved.txt'), 'original\n'); await writeFile(join(features, 'patch.md'), '---\nschemaVersion: 1\ntitle: Approved patch\nstatus: ready\nmode: patch\npaths: [approved.txt]\n---\nChange the approved file.\n');
   await eventually(async () => { const view = await api('/api/features'); return view.records.length === 2 && view.records.every(r => ['completed', 'review'].includes(r.status) && r.result) && (await readFile(join(features, 'chat.md'), 'utf8')).includes('status: completed') && (await readFile(join(features, 'patch.md'), 'utf8')).includes('status: review'); });
   const before = await api('/api/features'); assert.equal(before.error, null); assert.equal(before.errors.length, 0);
   const chat = front(await readFile(join(features, 'chat.md'), 'utf8')), patch = front(await readFile(join(features, 'patch.md'), 'utf8'));
   assert.equal(chat.status, 'completed'); assert.equal(patch.status, 'review'); assert.match(await readFile(join(features, patch.werk.patch), 'utf8'), /\+changed/); assert.equal(await readFile(join(cwd, 'approved.txt'), 'utf8'), 'original\n');
   await cli(entry, cwd, 'stop'); running = false; await assert.rejects(readFile(join(features, '_worker.lock')), { code: 'ENOENT' });
+  const relocated = await cli(entry, cwd, 'feature', 'folder', 'set', '--path', 'requests/features');
+  features = relocated.directory;
+  assert.equal((await cli(entry, cwd, 'feature', 'folder', 'get')).path, 'requests/features');
+  assert.equal(front(await readFile(join(features, 'chat.md'), 'utf8')).id, chat.id);
   started = await cli(entry, cwd, 'start', '--port', '0'); running = true;
   await eventually(async () => (await api('/api/features')).records.length === 2);
   assert.deepEqual((await api('/api/features')).records.map(r => r.taskId).sort(), before.records.map(r => r.taskId).sort());

@@ -23,11 +23,12 @@ async function rejectLinks(path) {
     else if (!entry.isFile()) throw inputError('The portable app contains a special file.');
   }
 }
-export async function projectDefaults(options) {
+export async function projectDefaults(options, launching = false) {
   const project = resolve(options['project-dir'] ?? process.cwd());
   const path = join(project, '.werk/worker-project.json');
   const marker = await readPrivate(path).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
   if (!marker) return options;
+  if (launching && await exists(join(project, '.werk/feature-folder-change.json'))) throw inputError('Feature folder change is incomplete. Run feature folder get, then repeat feature folder set with the pending destination before starting.');
   if (marker.schemaVersion !== 1 || !Number.isInteger(marker.port) || marker.port < 1 || marker.port > 65535) throw inputError('Invalid project worker marker.');
   return { config: join(project, '.werk/worker.json'), 'state-dir': join(project, '.werk/worker'), port: String(marker.port), ...options };
 }
@@ -45,7 +46,7 @@ export async function initializeWorker(root, options) {
   const prior = await exists(app), source = await realpath(root);
   if (prior && (prior.isSymbolicLink() || !prior.isDirectory() || await realpath(app) !== source)) throw inputError('A worker app already exists. Run init from that installed app; upgrades use stop/back-up/replace/restart.');
   const normalized = await configuration({ 'project-dir': project }, existingConfig ?? { schemaVersion: 1, features: { directory: inside.split(sep).join('/'), provider: options.provider ?? 'codex-cli', pollMs: 1000 } });
-  if (!normalized.features || normalized.features.directory !== featureDirectory || options.provider && normalized.features.provider !== options.provider) throw inputError('Existing worker configuration differs. Preserve it and configure its features section explicitly.');
+  if (!normalized.features || normalized.features.directory !== featureDirectory || options.provider && normalized.features.provider !== options.provider) throw inputError('Existing worker configuration differs. Use feature folder set --path PATH to change its folder; configure provider settings separately.');
   const marker = await readPrivate(join(project, '.werk/worker-project.json')).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
   if (marker && (marker.schemaVersion !== 1 || !Number.isInteger(marker.port) || marker.port < 1 || marker.port > 65535)) throw inputError('Invalid project worker marker.');
   const port = Number(options.port ?? marker?.port ?? 4100);

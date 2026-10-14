@@ -53,6 +53,44 @@ node bin/apps/worker/cli.mjs feature list
 node bin/apps/worker/cli.mjs stop
 ```
 
+## Choose or change the feature folder
+
+Choose the folder during setup with `init --features-dir requests/features`.
+For an installed project worker, inspect or change the saved path without editing JSON:
+
+```sh
+node bin/apps/worker/cli.mjs feature folder get
+node bin/apps/worker/cli.mjs feature folder plan --path requests/features
+node bin/apps/worker/cli.mjs stop
+node bin/apps/worker/cli.mjs feature folder set --path requests/features
+node bin/apps/worker/cli.mjs start
+```
+
+`plan` previews the change without writing. `set` moves the existing feature
+folder, including requests, results, templates and ownership, and saves the new
+project-relative path. Choose a destination that does not already exist; folders
+are never merged. The path must stay inside the project, outside `.werk`, `.git`,
+`bin` and `node_modules`, and must not contain or be inside the current folder.
+Spaces work when quoted. Add `--project-dir /path/to/project` when configuring
+from elsewhere. The saved path is shared by native and Docker startup.
+
+For Docker without host Node:
+
+```sh
+docker compose -f .werk/compose.worker.yaml down
+docker compose -f .werk/compose.worker.yaml run --rm --no-deps worker node bin/apps/worker/cli.mjs feature folder set --path requests/features
+docker compose -f .werk/compose.worker.yaml up -d
+```
+
+Stop the worker before changing the path; do not start it or edit its configuration
+while the command runs. If interrupted, `feature folder get` shows the pending
+destination. Verify the old command/process has stopped, clear its stale
+`.werk/worker/worker.lock` only if necessary, then repeat `set` with that destination.
+Project startup remains blocked until the interrupted change is completed.
+For a temporary launch override, `run --features-dir PATH` remains available;
+`feature folder get` shows the saved default, while `feature list` shows the active
+watcher's directory.
+
 ## Drop your first request
 
 Copy `features/_templates/feature-request.md` to `features/search.md`. Fill in its

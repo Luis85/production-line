@@ -1,6 +1,7 @@
 import { open } from 'node:fs/promises';
 import { inputError } from '../config.mjs';
 export function workerCommands(catalog) {
+  for (const name of ['get', 'plan', 'set']) catalog['feature folder ' + name] = { local: true, required: name === 'get' ? [] : ['path'], options: ['project-dir'], mutating: name === 'set', description: name === 'set' ? 'Persist a project folder change and move requests/results. Stop the worker first; destination must be new.' : 'Inspect or preview the saved project feature-folder path, without a running worker.' };
   const action = (path, action, required = ['id'], body = false, options = [], fields = {}) => ({ method: 'POST', path, action, required, body, options, fields });
   for (const name of ['get', 'validate', 'submit', 'cancel', 'retry', 'archive', 'restore', 'delete', 'result']) catalog['feature ' + name] = action('/api/features', name, ['name', ...(['get', 'validate', 'result'].includes(name) ? [] : ['if-match'])], false, [], { name: 'name', 'if-match': 'revision' });
   for (const name of ['create', 'edit']) catalog['feature ' + name] = { ...action('/api/features', name, ['name', 'markdown', ...(name === 'edit' ? ['if-match'] : [])], false, [], { name: 'name', 'if-match': 'revision' }), input: 'Frontmatter + Markdown from --markdown PATH or - (stdin), at most 64 KiB; status: draft.' };
