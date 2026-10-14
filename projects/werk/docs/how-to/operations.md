@@ -73,8 +73,11 @@ scaled `worker` service from that deployment, and do not share `/data`.
 Inspect a worker's host port with `docker compose port --index 1 worker 4100`.
 Server and worker host ports bind to loopback. A reverse proxy/TLS and per-project
 access policy are required before exposing the service beyond the host. The
-worker status endpoint is read-only and has no login; keep it on trusted local
-interfaces. HTTP process health is distinct from provider/connection health.
+worker's basic status, health and metrics endpoints are public and read-only;
+keep them on trusted local interfaces. The interactive worker webview requires
+its local access token and exchanges it for an HttpOnly browser session; see
+[worker access](use-worker-webview.md#unlock-the-webview). HTTP process health is
+distinct from provider/connection health.
 
 Docker builds use a mutable Node 24 Debian image tag; npm dependencies use the
 committed lockfile. For controlled deployments, pin all three Dockerfiles' base images

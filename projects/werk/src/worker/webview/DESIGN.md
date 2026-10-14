@@ -20,11 +20,12 @@ executes one task at a time across chat, file tasks and remote assignments. The
 explicit Run task editor creates a separate file-task session producing a review
 patch from approved inputs. Every remote assignment also owns a dedicated task
 session. Only workers prompt LLMs; parent dashboards forward requests or route
-submitted tasks. History lists chat tasks with Open task actions, a three-column
-file-task board and retained orchestrator evidence. Dashboard starts with queued,
-running and review work, session activity and waiting remote assignments. It
-joins worker, optional orchestrator and journal in a 2D connection map, then
-shows process and host observations. Provider connections and enrollment are
+submitted tasks. History lists conversations from every task type, including archived file and
+assigned sessions, with explicit Restore and open actions. Search and type/state
+filters lead to conversations, a three-column file-task board and retained
+orchestrator evidence. Dashboard starts with current work and links to waiting,
+failed and review tasks. Health and resource summaries remain visible; connection
+geometry, runtime details and diagnostics are secondary disclosures. Provider connections and enrollment are
 editable within a disclosure. Chat also opens provider settings and saved
 connection checks inline. CLI sign-in instructions name the worker machine and
 process owner; configuration does not verify login or quota.
@@ -70,7 +71,10 @@ it does not configure providers, enroll the worker or submit work.
 Code-led, native Nuxt UI components and authored 2D system geometry. The dedicated
 unlock form has a narrow reading measure and generous space around its primary
 action. In Chat, a divided task rail sits beside the transcript on wide screens;
-below 900px it becomes a horizontal task strip above the conversation. The main
+at 900px and below it becomes a native saved-task disclosure above the conversation.
+The closed summary identifies the current task; selecting a task closes the list
+and focuses its conversation. Empty conversations place the composer before
+starter suggestions. The main
 sidebar becomes three-link top navigation at 760px and below. Inline connection,
 definition and new-task panels use the existing bordered slate surfaces and mint
 actions. Long task names wrap, code scrolls within its own block, and task and

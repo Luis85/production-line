@@ -69,7 +69,8 @@ test('runtime defaults to one vault link and sends no manufactured manual fields
   assert.equal(ui.get('#manual-fields').hidden,true);assert.equal(ui.get('#title').disabled,true);assert.equal(ui.get('#requirement-ref').required,true);
   await ui.get('#task-form').onsubmit({preventDefault(){}});
   assert.deepEqual(payloads,[minimal]);assert.equal(ui.get('#requirement-ref').value,'');assert.match(ui.get('#message').textContent,/Kontext noch nicht aufgelöst/);
-  assert.match(html,/id="intake-options"/);assert.match(html,/Optionen und manuelle Eingabe/);
+  assert.match(html,/<details id="intake-options"><summary>Ausführung und zusätzliche Optionen<\/summary>/);
+  assert.match(html,/<select id="intake-mode"><option value="vault">Anforderung aus dem Vault<\/option><option value="manual">Feature manuell beschreiben<\/option>/);
 });
 test('runtime preserves ref drafts across mode changes and reuses failed request keys',async()=>{
   const requests=[];let failed=true;

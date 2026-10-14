@@ -27,7 +27,6 @@
 
 .interaction-widget > .operation-actions:first-child { position:sticky; top:-24px; z-index:2; padding-block:12px; background:#17262f; }
 @media(max-width:760px) {
-  body:has(#factory-tree) .content > .dashboard-controls, body:has(#factory-tree) .content > .line-dashboard { order:2; }
   .interaction-widget > .operation-actions:first-child { top:-16px; }
 }
 
@@ -35,6 +34,4 @@
   .line-dashboard { display:flex; flex-direction:column; margin:12px 0; }
   .line-dashboard > h1 { font-size:26px; margin:0 0 8px; }
   .line-dashboard > p { margin:0 0 12px; }
-  .line-dashboard > .dashboard-flow { order:1; }
-  .content:has(.line-dashboard:not([hidden])) .dashboard-controls > button:last-child { display:none; }
 }

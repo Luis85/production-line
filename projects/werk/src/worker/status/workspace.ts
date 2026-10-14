@@ -103,7 +103,8 @@ export class WorkerWorkspace {
         if (connection.url && new URL(String(connection.url)).origin !== new URL(identity.url).origin) throw new DomainError('conflict', 'This identity is bound to another orchestrator. Use a separate worker state directory for another server.');
       } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
     }
-    const result = await this.settings.update(body); if (input?.provider) await this.sessions.reloadProviders(); return result;
+    if (input?.provider) return this.sessions.updateProviders(() => this.settings.update(body));
+    return this.settings.update(body);
   }
   async close() { await this.features?.stopIntake(); this.acceptingTasks = false; await this.taskRequests; await this.board.close(); await this.sessions.close(); }
   async rememberTask(task: Task) { await this.taskIndex.remember(task); await this.features?.rememberRemote(task); await this.sessions.ensureTask('remote-' + task.id, 'orchestrator', task.title, task.provider === 'claude' ? 'claude-cli' : 'codex-cli'); this.historyCache = undefined; }

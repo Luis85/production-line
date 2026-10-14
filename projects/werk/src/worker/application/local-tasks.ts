@@ -77,7 +77,14 @@ export class LocalTaskboard {
     if (body.priority !== undefined && body.priority !== 1 && body.priority !== 2) throw new DomainError('invalid_input', 'Priority must be 1 or 2');
     const id = submission?.id ?? randomUUID();
     const task: LocalTask = { ...(submission ? { submissionHash: submission.hash } : {}), ...(definition ? { definition } : {}), id, title, instruction, sessionId: 'local-' + id, provider: provider.id, model: provider.model, repository, files, status: 'queued', priority: Number(body.priority ?? 1), createdAt: new Date().toISOString(), finishedAt: null, error: null, summary: null, patch: null, archived: false };
-    try { await this.change(async tasks => { if (tasks.length >= 100) throw new DomainError('conflict', 'Taskboard holds 100 tasks. Delete an old task first.'); if (tasks.filter(item => ['queued', 'running'].includes(item.status)).length + this.sessions.chatActive >= this.settings.value.board.queueCapacity) throw new DomainError('conflict', 'Local task queue is full.'); await this.sessions.ensureTask(task.sessionId, 'local', task.title, task.provider, undefined, task.definition); this.sessions.protectTask(task.sessionId, true); await this.sessions.prepareTask(task.sessionId, this.input(task)); tasks.push(task); }); }
+    try { await this.change(async tasks => {
+      // Check within the serialized write as concurrent submissions may pass the initial fast path.
+      const existing = tasks.find(item => item.id === id);
+      if (existing) {
+        if (existing.submissionHash !== submission?.hash) throw new DomainError('conflict', 'Task ID belongs to different input.');
+        return;
+      }
+      if (tasks.length >= 100) throw new DomainError('conflict', 'Taskboard holds 100 tasks. Delete an old task first.'); if (tasks.filter(item => ['queued', 'running'].includes(item.status)).length + this.sessions.chatActive >= this.settings.value.board.queueCapacity) throw new DomainError('conflict', 'Local task queue is full.'); await this.sessions.ensureTask(task.sessionId, 'local', task.title, task.provider, undefined, task.definition); this.sessions.protectTask(task.sessionId, true); await this.sessions.prepareTask(task.sessionId, this.input(task)); tasks.push(task); }); }
     catch (error) { if (!this.tasks.some(item => item.id === id)) { this.sessions.protectTask(task.sessionId, false); await this.sessions.setTaskState(task.sessionId, 'failed').catch(() => {}); } throw error; }
     return this.view();
   }

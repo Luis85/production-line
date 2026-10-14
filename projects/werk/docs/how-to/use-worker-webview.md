@@ -91,7 +91,10 @@ Provider keys and enrollment credentials are saved in the worker's private
 `workspace-settings.json`, with mode 0600 on POSIX. They are never returned to
 the browser. An empty key field preserves an existing key; use **Remove saved
 API key** to clear it. Stop active replies and finish or cancel queued local
-tasks before changing provider settings. Settings apply without reinstalling.
+tasks before changing provider settings. Settings apply without reinstalling. Editing controls are disabled while saving.
+If another operator changes settings, untouched forms update automatically;
+unsaved edits are retained with a notice and **Reload** action. Connection checks
+require saving edits first.
 
 Legacy `chat.codexExecutable` in worker JSON or native system YAML remains a
 first-start seed. Persisted webview settings take precedence on later starts.
@@ -101,7 +104,8 @@ provider does not advertise unsupported orchestrator execution capabilities.
 ## Give the worker a task in Chat
 
 Choose **New task**, select a provider and optionally an imported Docker Agent
-definition/agent, then describe the work. See [agent definition profiles](../reference/agent-definitions.md)
+definition/agent, then choose **Create draft task**. Describe the work in the
+composer and choose **Queue task**. See [agent definition profiles](../reference/agent-definitions.md)
 for preview, compatibility and instructions-only adaptation. The first message
 creates queued work with its own worker-managed model session. Follow-up messages
 continue that same task session; choose New task for unrelated work. Chat is a
@@ -118,7 +122,9 @@ host CLI sessions or transfer native session identifiers between providers.
 Changing selection in another tab makes stale send/stop requests fail rather
 than target the wrong session.
 
-The task list keeps recent conversations within reach. Replies render readable
+The task list keeps recent conversations within reach. On narrow screens, open
+**Switch task** above the conversation to search or choose a saved task. Selection
+closes this list and focuses the conversation; Escape returns focus to its summary. Replies render readable
 paragraphs, lists and fenced code, with copy actions; model HTML is never executed.
 You can draft a follow-up while work is queued or running and send it when the
 worker finishes. Use the composer or Ctrl/Command + Enter to submit a message. The stop action
@@ -136,9 +142,11 @@ approve file input and generate a patch.
 
 ## Run local coding tasks
 
-Write an instruction in Chat and choose **Run task**. Give it a title, an
+Choose **Run task** in Chat. The editor copies your current Chat draft when first opened; edit its own instructions and choose its provider connection. Give it a title, an
 absolute repository directory on the worker machine, and an explicit list of
 relative file paths. The worker captures those files when accepting the task.
+Switching Chat tasks does not change this editor’s instructions or provider. Successful submission keeps the separate Chat draft. Access expiry retains the file editor in this tab; explicit Lock clears it.
+
 Only those snapshots and your instruction are sent to the chosen provider in
 the new file task's dedicated session. The preceding Chat transcript is not
 included in its task input. File tasks use the same single execution slot as
@@ -151,7 +159,9 @@ provider returns complete changed file contents; the worker validates them and
 creates a unified patch. It never executes model-generated shell commands.
 Your checkout remains unchanged and tests are **not** run automatically.
 
-In **History → Your taskboard**, inspect a result and choose **Download patch**.
+In **History → File tasks**, choose **Review patch**, inspect the result and
+choose **Download patch**. **Open conversation** opens its dedicated transcript.
+A failed evidence read offers Retry without removing the task list.
 Review it, then check and apply it from the repository:
 
 ```sh
@@ -166,8 +176,10 @@ locally, with review artifacts under `local-review/`.
 
 ## Configure the taskboard and orchestrator queue
 
-History lists Chat tasks and their sessions, then shows file tasks in Queued,
-Running, and Review & finished columns. Inspect file tasks
+History lists conversations from chat, file tasks and orchestrator assignments.
+Search by title, ID or provider, filter task type and state, or choose archived
+tasks to **Restore and open** a conversation. File tasks also appear in Queued,
+Running, and Review & finished columns with their own search and state filter. Inspect file tasks
 to stop, change queued priority, retry failed work, archive or delete. The file
 taskboard retains at most 100 tasks. Configure:
 
@@ -185,7 +197,7 @@ The orchestrator remains the authority for assigned tasks. Its task state calls
 leased assignments `running`, while the worker distinguishes queued from
 executing. Both services must support the queue extension to enable extra places.
 
-**Pause intake** holds all new execution starts, including Chat, file tasks and
+**Pause queue** in Dashboard or History holds all new execution starts, including Chat, file tasks and
 already accepted remote assignments. The active task can finish; waiting work
 remains queued until resumed. Pausing display updates in the header is separate:
 it only pauses refresh of the webview. Reducing queue limits does not discard
@@ -212,7 +224,7 @@ from that established orchestration contract.
 
 Complete accepted assignments before choosing **Go standalone**. Pause holds
 queued assignments as well as new work; if assignments are waiting, resume them
-to finish first. Once no assignments remain, pause intake and disconnect. Identity and evidence are retained for reconnecting to
+to finish first. Once no assignments remain, pause the queue and disconnect. Identity and evidence are retained for reconnecting to
 the same orchestrator. Switching a registered identity to a different server
 requires a separate worker state directory to preserve assignment ownership.
 
@@ -252,13 +264,17 @@ evidence remains explicit. Snapshot history follows retention; the reader
 inspects at most 1,000 directories and discloses when this is only a sample.
 New task titles are kept in a bounded private index.
 
-Dashboard shows local queued/running/review work, active model sessions, waiting
-remote assignments, the connection map, orchestrator slots, delivery backlog,
-profiles, host memory/disk, worker RSS/heap, load, CPUs, OS, Node version and paths.
+Dashboard starts with current work and queue controls. **Open running task**
+opens its conversation; **Review patches** and **Failed tasks** open filtered
+History results. Health and host memory/disk remain visible. Open the named
+disclosures for the connection map, orchestrator slots, delivery backlog, profiles,
+worker RSS/heap, load, CPUs, OS, Node version, paths and diagnostics.
 Standalone mode is healthy without an orchestrator. Node RSS excludes provider
 subprocesses; container host readings are not quota guarantees. Usage, cost,
 subscription balance and login status remain unknown unless actually measured.
 
 Pages refresh every three seconds while visible; header controls pause readings
 or refresh manually. Failed reads retain the last observation with a stale-data
-warning. No environment-variable values or credentials are shown.
+warning; successful reads still update independently. A successful action remains
+accepted if its follow-up refresh fails, avoiding a misleading retry prompt.
+No environment-variable values or credentials are shown.

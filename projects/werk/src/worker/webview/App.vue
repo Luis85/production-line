@@ -16,7 +16,7 @@ function tour(event: MouseEvent) {
   launch('Worker tour', [
     { title: 'Start a task in Chat', text: 'Choose New task and send its instructions. The first message queues a task; each follow-up stays in the same session.', target: '.page-heading', activate: () => router.push('/chat') },
     { title: 'Keep each task together', text: 'Select a task to reopen its transcript. New task creates a separate session. This worker executes one task at a time; additional work waits in its queue.', target: '.session-panel' },
-    { title: 'Produce a patch with Run task', text: 'Run task creates a separate file-task session using your draft and approved files. Review its patch before applying it to your checkout.', target: '.run-task' },
+    { title: 'Produce a patch with Run task', text: 'Run task creates a separate file-task session using dedicated instructions and approved files. Review its patch before applying it to your checkout.', target: '.run-task' },
     { title: 'Follow your work', text: 'History contains chat tasks, file-task results and orchestrator attempts. Open a chat task to continue it, or inspect a file task to review its patch.', target: '.taskboard', activate: () => router.push('/history') },
     { title: 'Inspect and configure', text: 'The dashboard shows queues, sessions and host health. Configure model connections here, or enroll with an orchestrator later. This worker also runs on its own.', target: '.page-heading', activate: () => router.push('/dashboard') },
   ], event.currentTarget);
@@ -25,11 +25,17 @@ const route = useRoute(), credential = ref(''), connecting = ref(false), accessE
 const links = [{ path: '/chat', label: 'Chat', icon: 'i-lucide-messages-square' }, { path: '/history', label: 'History', icon: 'i-lucide-history' }, { path: '/dashboard', label: 'Dashboard', icon: 'i-lucide-activity' }];
 const connected = computed(() => !!state.status && ['idle', 'executing', 'standalone'].includes(state.status.state));
 let timer: ReturnType<typeof setInterval>;
-async function connect() { connecting.value = true; accessError.value = ''; try { await unlock(credential.value); credential.value = ''; } catch (error) { accessError.value = (error as Error).message; } finally { connecting.value = false; } }
+async function connect() { if (connecting.value) return; connecting.value = true; accessError.value = ''; try { await unlock(credential.value); credential.value = ''; } catch (error) { accessError.value = (error as Error).message; } finally { connecting.value = false; } }
 function visibility() { if (!document.hidden && !state.paused) void refresh(); }
 onMounted(() => { void checkAccess(); timer = setInterval(() => { if (!state.paused && !document.hidden) void refresh(); }, 3000); document.addEventListener('visibilitychange', visibility); });
 onUnmounted(() => { clearInterval(timer); document.removeEventListener('visibilitychange', visibility); });
 watch(() => route.path, async () => { await nextTick(); document.querySelector<HTMLElement>('h1')?.focus(); });
+watch(() => [state.accessChecked, state.unlocked], async ([checked, unlocked]) => {
+  if (!checked) return;
+  await nextTick();
+  if (unlocked) document.querySelector<HTMLElement>('h1')?.focus();
+  else document.getElementById('worker-token')?.focus();
+});
 </script>
 <template>
 <UApp>
@@ -63,6 +69,7 @@ watch(() => route.path, async () => { await nextTick(); document.querySelector<H
       <header class="utility-bar"><div class="connection"><span class="status-dot" :class="{ healthy: connected && !state.error }"></span><strong>{{ state.error ? 'Connection lost' : state.status?.state ?? 'Connecting' }}</strong><span class="muted">{{ state.paused ? 'Updates paused' : 'Updates every 3s' }}</span></div><div class="actions"><UButton color="neutral" variant="ghost" icon="i-lucide-compass" @click="tour">Tour</UButton><UButton color="neutral" variant="ghost" :icon="state.paused ? 'i-lucide-play' : 'i-lucide-pause'" :aria-label="state.paused ? 'Resume updates' : 'Pause updates'" @click="state.paused = !state.paused; if (!state.paused) refresh()" /><UButton color="neutral" variant="ghost" icon="i-lucide-refresh-cw" aria-label="Refresh worker" :loading="state.loading" @click="refresh()" /><UButton v-if="state.unlocked" color="neutral" variant="outline" icon="i-lucide-lock-keyhole" title="Lock this browser and clear unsent drafts" @click="lock()">Lock</UButton></div></header>
       <main id="main">
         <UAlert v-if="state.error" color="error" variant="soft" title="Live data is unavailable" :description="`${state.error} Last successful refresh: ${date(state.lastRead)}. Values below may be stale.`" icon="i-lucide-wifi-off" class="notice" />
+        <UAlert v-if="state.partialError" color="warning" variant="soft" title="Some updates are unavailable" :description="state.partialError" class="notice" />
         <RouterView v-slot="{ Component }"><KeepAlive><component :is="Component" /></KeepAlive></RouterView>
       </main>
       <footer class="workspace-footer">{{ state.lastRead ? 'Last refreshed ' + date(state.lastRead) : 'Waiting for worker data' }}<span>Werk · Worker workspace</span></footer>

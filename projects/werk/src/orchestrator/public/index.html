@@ -119,11 +119,16 @@ footer { border-top: 1px solid var(--line); font-size: 13px; margin-top: var(--s
 [hidden] { display: none !important; }
 :focus-visible { outline: 2px solid var(--mint); outline-offset: 4px; }
 ::selection { background: var(--mint); color: #102219; }
+.board-empty-toggle { display:none; }
 .worker-facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--space-4); margin-block:var(--space-6); }
 .worker-facts dt { color:var(--muted); }
 .worker-facts dd { margin:0; overflow-wrap:anywhere; }
 .page-end { margin-top:var(--space-4); }
 @media (max-width: 760px) {
+  #visual-taskboard { grid-template-columns:minmax(0,1fr); overflow:visible; }
+  #visual-taskboard .visual-column { min-height:0; }
+  #visual-taskboard[data-has-tasks=true]:not([data-show-empty=true]) .visual-column[data-empty=true] { display:none; }
+  .board-empty-toggle { display:block; margin-bottom:var(--space-4); }
   .worker-facts { grid-template-columns:minmax(0,1fr); }
   #tasks th:first-child, #tasks td:first-child, #workers th:first-child, #workers td:first-child { min-width:240px; }
   :root { --space-page: var(--space-4); --space-panel: var(--space-4); --space-section: var(--space-6); }
@@ -171,7 +176,7 @@ footer { border-top: 1px solid var(--line); font-size: 13px; margin-top: var(--s
 <div class="field"><label for="title">Feature</label><input id="title" disabled maxlength="200" placeholder="Was soll das Projektteam erhalten?"></div>
 <div class="field"><label for="criteria">Akzeptanzkriterien</label><textarea id="criteria" disabled placeholder="Ein prüfbares Kriterium pro Zeile"></textarea></div>
 <div class="field"><label for="wikilinks">Zusätzlicher Wiki-Kontext</label><textarea disabled aria-describedby="wiki-help" id="wikilinks" placeholder="[[quality/Definition of Done]]"></textarea><small id="wiki-help">Ein Wikilink pro Zeile. Diese Referenzen werden ebenfalls nur gespeichert.</small></div></div>
-<details id="intake-options"><summary>Optionen und manuelle Eingabe</summary><div class="intake-options">
+<details id="intake-options"><summary>Ausführung und zusätzliche Optionen</summary><div class="intake-options">
 <div class="field"><label for="intake-mode">Aufnahmeart</label><select id="intake-mode"><option value="vault">Anforderung aus dem Vault</option><option value="manual">Feature manuell beschreiben</option></select><small>Die manuelle Eingabe benötigt Titel und mindestens ein Akzeptanzkriterium. Beim Wechsel bleiben deine Eingaben erhalten.</small></div>
 <div class="field"><label for="execution-mode">Ausführung</label><select id="execution-mode" aria-describedby="execution-help"><option value="mock">Simulation · Standard</option><option value="cli">Codex CLI · echte Änderungen</option></select><small id="execution-help">Echte Ausführung ist eine bewusste Freigabe für den konfigurierten Codex-Worker. Sie benötigt eine manuelle Beschreibung und erzeugt einen lokalen Änderungssatz zum Review. Build und Tests sind nicht verifiziert. Kein automatischer Push oder Merge.</small></div>
 <div class="row"><div class="field"><label for="provider">Ausführungsprofil</label><select id="provider"><option value="auto">Automatisch</option><option value="claude">Claude</option><option value="codex">Codex</option></select></div>
@@ -565,7 +570,7 @@ function renderMetrics(){
   $('#snapshot-coverage').textContent='Neueste '+Math.min(records.length,40)+' von '+records.length+' Snapshots in dieser Auswahl · maximal 40 Zeilen. '+(records.length>40?'Grenze die Filter ein oder öffne die Snapshots eines Auftrags im Taskboard. ':'')+'Die Kennzahlen berücksichtigen alle geladenen Snapshots der Auswahl.';
   const focusedSnapshot=document.activeElement?.dataset?.snapshotId;const table=$('#snapshot-rows');table.replaceChildren();
   for(const row of records.slice(-40).reverse()){
-    const snapshot=row.snapshot,tr=document.createElement('tr'),button=document.createElement('button');button.dataset.snapshotId=snapshot.id;button.textContent=snapshot.phase+' · '+snapshot.taskId.slice(0,8)+' / '+snapshot.attempt;button.title='Snapshot '+snapshot.id+' · '+date(row.receivedAt);
+    const snapshot=row.snapshot,tr=document.createElement('tr'),button=document.createElement('button');button.dataset.snapshotId=snapshot.id;button.textContent=(snapshot.phase==='before'?'Vorher':'Nachher')+' · '+snapshot.taskId.slice(0,8)+' / '+snapshot.attempt;button.title='Snapshot '+snapshot.id+' · '+date(row.receivedAt);
     button.onclick=()=>{selectedSnapshotId=snapshot.id;$('#snapshot-inspector').hidden=false;$('#snapshot-heading').textContent='Snapshot '+snapshot.id;$('#snapshot-detail').textContent=JSON.stringify(row,null,2);$('#snapshot-heading').focus()};
     cell(tr,'').append(button);cell(tr,snapshot.workerId.slice(0,8)+' / '+snapshot.profileId);cell(tr,(snapshot.mode==='cli'?'CLI · ':'Simulation · ')+snapshot.execution.outcome);cell(tr,finite(snapshot.resources.rssBytes)?(snapshot.resources.rssBytes/1048576).toFixed(1)+' MiB':'Nicht erfasst');cell(tr,finite(snapshot.health.eventLoopDelayP95Ms)?snapshot.health.eventLoopDelayP95Ms.toFixed(1)+' ms':'Nicht erfasst');table.append(tr);if(focusedSnapshot===snapshot.id)button.focus({preventScroll:true})
   }

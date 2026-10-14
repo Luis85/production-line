@@ -18,7 +18,7 @@ visual navigation, dedicated dashboards, focused editors and a replayable tour.
 The user explicitly requested a Vue webview built with Nuxt UI and three pages:
 Chat, History, and Dashboard. Chat is the default page and the primary way to
 give this worker a new task or continue an existing task’s model session. History
-contains the local taskboard and retained orchestrator evidence. Dashboard carries Monitoring & Status: activity, health, environment,
+contains conversations of every task type, the local taskboard and retained orchestrator evidence. Dashboard carries Monitoring & Status: activity, health, environment,
 provider connections and optional orchestrator enrollment. Chat also provides
 provider setup and checks, saved task selection, and Docker Agent definition
 import without leaving the conversation. The old
@@ -81,7 +81,9 @@ selected instructions and supported model are passed to the worker's provider.
 An omitted or unsupported model uses that connection's configured model.
 
 Chat keeps a searchable task rail and a readable transcript with code-copy
-controls. Operators can draft a follow-up while a task runs, and send it when
+controls. On narrow screens, saved tasks collapse into a switcher above the
+conversation. Dashboard links current work, failed tasks and review patches
+directly to their action surfaces, with administration in disclosures. Operators can draft a follow-up while a task runs, and send it when
 that task finishes. A new task can wait behind the running task in the shared
 single execution slot. Saved tasks and transcripts are shared by this worker's
 operators; they are not personal account histories.

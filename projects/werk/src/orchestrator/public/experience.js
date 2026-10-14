@@ -17,7 +17,26 @@
   const rawNavigate=navigate;
   let replaying=false;
   navigate=function(next){if(!Object.hasOwn(names,next))return;if(!replaying&&location.hash!=='#'+next)history.pushState(null,'','#'+next);rawNavigate(next);const nav=$('#runtime-nav'),active=nav.querySelector('[data-tab="'+next+'"]');if(active){const a=active.getBoundingClientRect(),n=nav.getBoundingClientRect();if(a.left<n.left||a.right>n.right)nav.scrollLeft+=a.left-n.left-8;}};
-  window.addEventListener('popstate',()=>{if(!token)return;const next=location.hash.slice(1);if(Object.hasOwn(names,next)){replaying=true;navigate(next);replaying=false;}});
+  function workspaceRoute() {
+    const [page,query=''] = location.hash.slice(1).split('?');
+    const taskId = new URLSearchParams(query).get('task');
+    return { page: Object.hasOwn(names,page) ? page : 'system', taskId: page==='tasks' && /^[a-zA-Z0-9_-]{1,100}$/.test(taskId||'') ? taskId : null };
+  }
+  let workspaceRequest=0;
+  async function openWorkspaceRoute() {
+    const route=workspaceRoute(),session=sessionId,request=++workspaceRequest;
+    replaying=true; navigate(route.page); replaying=false;
+    if (!route.taskId) return;
+    const selection=detailId;
+    $('#task-search').value=''; $('#task-status').value='';
+    try {
+      const task=await api('/v1/tasks/'+encodeURIComponent(route.taskId));
+      if(request===workspaceRequest && session===sessionId && tab==='tasks' && selection===detailId) await showTask(task);
+    } catch(error) {
+      if(request===workspaceRequest && session===sessionId && tab==='tasks' && selection===detailId && !expireAuthentication(error)) message('Der verlinkte Auftrag ist nicht verfügbar. Prüfe die Linienadresse und wähle einen Auftrag im Taskboard.','error');
+    }
+  }
+  window.addEventListener('popstate',()=>{if(token)void openWorkspaceRoute();});
   const rawRefresh=refresh;
   let mapRequest=0,mapController=null,lastOverview=null;
   refresh=async function(options={}){
@@ -31,7 +50,7 @@
   section.append(button('Linienzustand aktualisieren',()=>refresh()));
   const rawClear=clearSession;
   clearSession=function(){++mapRequest;mapController?.abort();mapController=null;lastOverview=null;rawClear();map.update({nodes:[],caption:'Nicht verbunden',legend:''});board.replaceChildren();workerCards.replaceChildren();timeline.replaceChildren();workerMap.update({nodes:[],caption:'Nicht verbunden',legend:''});};
-  globalThis.werkExperience={connected(){message('');const requested=location.hash.slice(1);navigate(Object.hasOwn(names,requested)?requested:'system');}};
+  globalThis.werkExperience={connected(){message('');void openWorkspaceRoute();}};
   function renderLineMap(data,stale=false){
     globalThis.werkDashboardOverview?.(data,stale);
     const project=data?.project||$('#project').value, tasks=data?.tasks,workers=data?.workers,snapshots=data?.snapshots;
@@ -50,16 +69,21 @@
   }
   // A real task board, scoped to exactly the loaded and filtered page.
   const board=el('div',undefined,'visual-board');board.id='visual-taskboard';board.tabIndex=0;board.setAttribute('role','region');board.setAttribute('aria-label','Aufträge nach Status; horizontal verschiebbar');$('#task-count').after(board);
+  const emptyToggle=button('Leere Status anzeigen',()=>{
+    const expanded=board.dataset.showEmpty!=='true';board.dataset.showEmpty=String(expanded);
+    emptyToggle.setAttribute('aria-pressed',String(expanded));emptyToggle.textContent=expanded?'Leere Status ausblenden':'Leere Status anzeigen';
+  });emptyToggle.className='board-empty-toggle';emptyToggle.setAttribute('aria-pressed','false');board.after(emptyToggle);
   const taskTable=$('#task-rows').closest('.table-wrap'), taskDisclosure=el('details',undefined,'visual-help');taskDisclosure.append(el('summary','Aufträge als Tabelle'),taskTable);board.after(taskDisclosure);
   const rawTasks=renderTasks;
   renderTasks=function(){rawTasks();const focus=document.activeElement?.dataset?.boardTask;board.replaceChildren();const query=$('#task-search').value.trim().toLocaleLowerCase(),status=$('#task-status').value;const records=tasksCache.filter(t=>(!status||t.status===status)&&(!query||[t.title,t.id,t.project,t.requirementRef||''].some(v=>String(v).toLocaleLowerCase().includes(query))));
-    for(const [state,label] of Object.entries(statuses)){const column=el('section',undefined,'visual-column');column.dataset.state=state;const entries=records.filter(t=>t.status===state);column.append(el('h3',label+' · '+entries.length));if(!entries.length)column.append(el('p','Keine Aufträge in dieser Auswahl.'));for(const task of entries){const control=button('',()=>showTask(task));control.className='visual-task';control.dataset.boardTask=task.id;control.append(el('strong',task.title),el('small',task.project+' · '+(task.executionMode==='cli'?'Codex CLI':'Simulation')),el('small','Versuch '+task.attempt));column.append(control);if(focus===task.id)requestAnimationFrame(()=>control.focus({preventScroll:true}));}board.append(column);}
+    emptyToggle.hidden=!records.length;board.dataset.hasTasks=String(!!records.length);
+    for(const [state,label] of Object.entries(statuses)){const column=el('section',undefined,'visual-column');column.dataset.state=state;const entries=records.filter(t=>t.status===state);column.dataset.empty=String(!entries.length);column.append(el('h3',label+' · '+entries.length));if(!entries.length)column.append(el('p','Keine Aufträge in dieser Auswahl.'));for(const task of entries){const control=button('',()=>showTask(task));control.className='visual-task';control.dataset.boardTask=task.id;control.append(el('strong',task.title),el('small',task.project+' · '+(task.executionMode==='cli'?'Codex CLI':'Simulation')),el('small','Versuch '+task.attempt));column.append(control);if(focus===task.id)requestAnimationFrame(()=>control.focus({preventScroll:true}));}board.append(column);}
   };
   $('#task-search').oninput=renderTasks;$('#task-status').onchange=renderTasks;
   const timeline=el('ol',undefined,'visual-timeline');timeline.id='visual-task-events';$('#task-events').before(timeline);
   const rawEvents=el('details',undefined,'visual-help');$('#task-events').before(rawEvents);rawEvents.append(el('summary','Vollständige Ereignisdaten (JSON)'),$('#task-events'));
   const rawShowTask=showTask;
-  showTask=async function(task,options={}){const pending=rawShowTask(task,options),request=detailId;timeline.replaceChildren();await pending;if(request!==detailId||selectedTaskId!==task.id||tab!=='tasks')return;try{const events=JSON.parse($('#task-events').textContent).events;for(const event of events){const item=el('li');item.append(el('strong',({submitted:'Auftrag gespeichert',claimed:'An Worker vergeben',simulation_finished:'Simulation abgeschlossen',review_ready:'Änderungssatz zum Review bereit',abandoned:'Versuch abgebrochen',lease_expired:'Reservierung abgelaufen',snapshot_received:'Snapshot empfangen'}[event.kind]||event.kind||'Ereignis')),el('small','Nr. '+event.seq+' · '+date(typeof event.at==='number'?new Date(event.at).toISOString():event.at)),el('p',[event.detail?.phase==='before'?'Vor der Ausführung':event.detail?.phase==='after'?'Nach der Ausführung':'',event.detail?.workerId?'Worker: '+event.detail.workerId:'',event.detail?.attempt?'Versuch '+event.detail.attempt:'',event.detail?.status?'Status: '+(statuses[event.detail.status]||event.detail.status):'',event.detail?.message||event.detail?.reason||''].filter(Boolean).join(' · ')||'Im Orchestrator dieser Linie gespeichert.'));timeline.append(item);}}catch{timeline.append(el('li','Keine lesbare Ereignisseite. Nutze „Ereignisse neu laden“.'));}};
+  showTask=async function(task,options={}){const pending=rawShowTask(task,options),request=detailId;if(tab==='tasks')history.replaceState(null,'','#tasks?task='+encodeURIComponent(task.id));timeline.replaceChildren();await pending;if(request!==detailId||selectedTaskId!==task.id||tab!=='tasks')return;try{const events=JSON.parse($('#task-events').textContent).events;for(const event of events){const item=el('li');item.append(el('strong',({submitted:'Auftrag gespeichert',claimed:'An Worker vergeben',simulation_finished:'Simulation abgeschlossen',review_ready:'Änderungssatz zum Review bereit',abandoned:'Versuch abgebrochen',lease_expired:'Reservierung abgelaufen',snapshot_received:'Snapshot empfangen'}[event.kind]||event.kind||'Ereignis')),el('small','Nr. '+event.seq+' · '+date(typeof event.at==='number'?new Date(event.at).toISOString():event.at)),el('p',[event.detail?.phase==='before'?'Vor der Ausführung':event.detail?.phase==='after'?'Nach der Ausführung':'',event.detail?.workerId?'Worker: '+event.detail.workerId:'',event.detail?.attempt?'Versuch '+event.detail.attempt:'',event.detail?.status?'Status: '+(statuses[event.detail.status]||event.detail.status):'',event.detail?.message||event.detail?.reason||''].filter(Boolean).join(' · ')||'Im Orchestrator dieser Linie gespeichert.'));timeline.append(item);}}catch{timeline.append(el('li','Keine lesbare Ereignisseite. Nutze „Ereignisse neu laden“.'));}};
   // Worker identities and configuration stay in their owning line.
   const workerCards=el('div',undefined,'visual-worker-grid');$('#worker-page-state').parentElement.after(workerCards);
   const workerTable=$('#worker-rows').closest('.table-wrap'), workerDisclosure=el('details',undefined,'visual-help');workerTable.before(workerDisclosure);workerDisclosure.append(el('summary','Worker als Tabelle'),workerTable);
@@ -75,15 +99,17 @@
   const rawSnapshot=el('details',undefined,'visual-help');$('#snapshot-detail').before(rawSnapshot);rawSnapshot.append(el('summary','Vollständiger Snapshot (JSON)'),$('#snapshot-detail'));
   const snapshotObserver=new MutationObserver(()=>{snapshotFacts.replaceChildren();try{const record=JSON.parse($('#snapshot-detail').textContent),s=record.snapshot;for(const [label,value]of [['Auftrag',s.taskId],['Phase',s.phase==='before'?'Vor der Ausführung':'Nach der Ausführung'],['Ergebnis',s.execution.outcome],['Ausführung',s.mode==='cli'?'Codex CLI':'Simulation'],['Versuchsdauer',Number.isFinite(s.execution.durationMs)?Math.round(s.execution.durationMs)+' ms':'Nicht erfasst'],['Worker',s.workerId],['Profil',s.profileId],['SHA-256',record.sha256]]){const pair=el('div');pair.append(el('dt',label),el('dd',String(value)));snapshotFacts.append(pair);}}catch{}});snapshotObserver.observe($('#snapshot-detail'),{childList:true,characterData:true,subtree:true});
   const filterHelp=el('details',undefined,'visual-help');filterHelp.append(el('summary','Messwerte filtern'),document.querySelector('.metric-filters'));$('#metric-summary').before(filterHelp);
-  for(const [buttonId,selected,selector,key]of [['close-worker-detail',()=>workerDetailId,'[data-visual-worker]','visualWorker'],['close-task-detail',()=>selectedTaskId,'[data-board-task]','boardTask']]){const control=$('#'+buttonId),original=control.onclick;control.onclick=()=>{const id=selected();original();const card=[...document.querySelectorAll(selector)].find(node=>node.dataset[key]===id);(card||$('#heading')).focus();};}
+  for(const [buttonId,selected,selector,key]of [['close-worker-detail',()=>workerDetailId,'[data-visual-worker]','visualWorker'],['close-task-detail',()=>selectedTaskId,'[data-board-task]','boardTask']]){const control=$('#'+buttonId),original=control.onclick;control.onclick=()=>{const id=selected();original();if(buttonId==='close-task-detail')history.replaceState(null,'','#tasks');const card=[...document.querySelectorAll(selector)].find(node=>node.dataset[key]===id);(card||$('#heading')).focus();};}
   // Put the editor and its consequences together; long-form explanation is optional.
   const readinessHelp=el('details',undefined,'visual-help');readinessHelp.append(el('summary','Bereitschaft der Linie prüfen'),$('#line-readiness').parentElement);$('#intake').append(readinessHelp);
+  const firstHelp=$('#first-task-help'),firstHeading=firstHelp.querySelector('h2'),firstText=firstHelp.querySelector('p');firstHeading.textContent='Erster Testlauf';firstText.textContent='Beschreibe einen Testauftrag oder übergib einen Vault-Verweis. Simulation erstellt keinen Code oder PR.';
   const intakeHeading=$('#intake > h2');intakeHeading.textContent='Auftrag vorbereiten';intakeHeading.nextElementSibling.textContent='Aufnahmeart wählen und die benötigten Angaben ergänzen.';
   const intakeAside=$('#intake aside');const help=el('details',undefined,'visual-help');help.append(el('summary','Aufnahme, Zuweisung und Review verstehen'));while(intakeAside.firstChild)help.append(intakeAside.firstChild);$('#intake').append(help);
   intakeAside.className='visual-form-preview';intakeAside.append(el('h3','Dein geplanter Auftrag'));const preview=el('div');intakeAside.append(preview);
   const choices=el('div',undefined,'visual-choice');choices.setAttribute('role','group');choices.setAttribute('aria-label','Aufnahmeart');
   for(const [mode,label]of [['vault','Vault-Verweis'],['manual','Feature beschreiben']])choices.append(button(label,()=>{$('#intake-mode').value=mode;updateIntakeMode();updatePreview();(mode==='manual'?$('#title'):$('#requirement-ref')).focus();}));$('#task-form').prepend(choices);
   function updatePreview(){preview.replaceChildren();const manual=$('#intake-mode').value==='manual';for(const [i,control]of [...choices.children].entries())control.setAttribute('aria-pressed',String(manual?i===1:i===0));preview.append(el('p',manual?$('#title').value||'Noch kein Feature benannt':$('#requirement-ref').value||'Noch kein Vault-Verweis'),el('p','Projekt: '+$('#project').value));const flow=el('ol');for(const label of ['Speichern im Orchestrator','Reservierung durch passenden Worker',$('#execution-mode').value==='cli'?'Lokalen Änderungssatz prüfen':'Simulation & Snapshots prüfen'])flow.append(el('li',label));preview.append(flow);if(manual)preview.append(el('p',$('#criteria').value.split('\n').filter(v=>v.trim()).length+' Akzeptanzkriterien'));preview.append(el('p',$('#execution-mode').value==='cli'?'Echte Ausführung ausgewählt. Kein automatischer Push oder Merge.':'Simulation erstellt keinen Code oder Pull Request.'));}
+  const acceptedTaskForm=$('#task-form').onsubmit;$('#task-form').onsubmit=async event=>{await acceptedTaskForm(event);updatePreview();};
   $('#task-form').addEventListener('input',updatePreview);$('#task-form').addEventListener('change',updatePreview);updatePreview();updateJourney();
 })();
 
@@ -95,12 +121,12 @@
   const tools=el('div',undefined,'operation-actions'),interact=button('Interaktion öffnen',event=>openInteraction(event.currentTarget)),tour=button('Tour starten',event=>startTour(event.currentTarget));tools.append(interact,tour);$('#heading').after(tools);
   let widget=null;
   function openInteraction(trigger){if(!token){message('Verbinde dich zuerst mit dem Orchestrator.');return;}widget?.close();widget=WerkInteraction({title:'Interaktion · '+$('#project').value,project:$('#project').value,trigger,canWrite,request:body=>api('/v1/interaction',{method:'POST',body}),submit:(body,key)=>api('/v1/tasks',{method:'POST',body,idempotencyKey:key})});}
-  function startTour(trigger){WerkTour('Orchestrator / production line',[
-    {title:'Understand this production line',text:'The dashboard follows work from intake through the queue and workers to review. Switch between 3D and 2D without changing the underlying observations.',target:'#system',activate:()=>navigate('system')},
-    {title:'Interact before you submit',text:'Open Interaktion to connect to a registered worker’s model session. Submit task is a separate, explicit action. Simulation and live execution remain clearly distinguished.',target:'.operation-actions'},
-    {title:'Choose how work is routed',text:'Automatic routing matches project, provider and execution mode, then prefers available capacity. Manual routing waits for your selected worker. Existing running assignments keep their leases.',target:'#line-routing',activate:()=>{routing.open=true;}},
-    {title:'Follow tasks and results',text:'The taskboard groups the loaded page by status. Open a task for its event timeline, evidence and routing destination. Review is a human decision.',target:'#tasks',activate:()=>navigate('tasks')},
-    {title:'Inspect a worker',text:'Workers show their registered profiles, capacity and assignments. Their own webviews start with Chat and provide local history and a dashboard.',target:'#workers',activate:()=>navigate('workers')},
+  function startTour(trigger){WerkTour('Orchestrator / Produktionslinie',[
+    {title:'Diese Produktionslinie verstehen',text:'Das Dashboard verfolgt Aufträge von der Aufnahme über Warteschlange und Worker bis zum Review. 3D und 2D zeigen denselben beobachteten Stand.',target:'#system',activate:()=>navigate('system')},
+    {title:'Interaktion und Auftragsübergabe',text:'Die Interaktion verbindet dich mit der Sitzung eines registrierten Workers. Einen Auftrag über die Linie zu übergeben ist eine eigene Aktion. Simulation und echte Ausführung bleiben unterscheidbar.',target:'.operation-actions'},
+    {title:'Auftragsrouting wählen',text:'Automatisches Routing berücksichtigt Projekt, Provider und Ausführungsart und bevorzugt freie Kapazität. Manuelles Routing wartet auf den gewählten Worker. Laufende Reservierungen bleiben erhalten.',target:'#line-routing',activate:()=>{routing.open=true;}},
+    {title:'Aufträge und Ergebnisse verfolgen',text:'Das Taskboard gruppiert die geladene Seite nach Status. Öffne einen Auftrag für Ereignisse, Evidenz und Routing. Review bleibt eine menschliche Entscheidung.',target:'#tasks',activate:()=>navigate('tasks')},
+    {title:'Einen Worker untersuchen',text:'Worker zeigen registrierte Profile, Kapazität und Reservierungen. Ihre eigene Webansicht startet mit Chat und bietet History und Dashboard.',target:'#workers',activate:()=>navigate('workers')},
   ],trigger);}
   const flow=el('ol',undefined,'dashboard-flow');flow.setAttribute('aria-label','Prozessübersicht');$('#system').prepend(flow);
   globalThis.werkDashboardOverview=(overview,stale)=>{flow.replaceChildren();if(!overview){flow.append(el('li','Prozessdaten nicht verfügbar'));return;}for(const [label,value]of [['Wartend',overview.tasks.queued],['Reserviert / aktiv',overview.tasks.running],['Review',overview.tasks.review??0],['Klärung',overview.tasks.blocked],['Freie Slots',overview.workers.slotsAvailable]]){const item=el('li');item.append(el('strong',String(value)),el('span',label+(stale?' · veraltet':'')));flow.append(item);}};
@@ -110,11 +136,48 @@
   for(const [value,label]of [['auto','Automatisch · Fähigkeiten und Kapazität'],['manual','Manuell · ausgewählter Worker']]){const option=el('option',label);option.value=value;mode.append(option);}
   for(const [value,label]of [['worker','Reihenfolge des Workers'],['priority','Hohe Priorität zuerst'],['fifo','Ältester Auftrag zuerst']]){const option=el('option',label);option.value=value;order.append(option);}
   const save=el('button','Routing speichern');save.type='submit';form.append(el('p','Ohne passenden Worker wartet der Auftrag. Bereits vergebene Arbeit wird durch eine Änderung nicht verschoben.'),save,feedback);routing.append(form);$('#system').append(routing);
-  mode.onchange=()=>{worker.disabled=mode.value==='auto'||!canWrite;};
-  routing.addEventListener('toggle',async()=>{if(!routing.open||!token)return;const own=sessionId;try{const [policy,result]=await Promise.all([api('/v1/routing'),api('/v1/workers')]);if(own!==sessionId)return;mode.value=policy.mode;order.value=policy.order;worker.replaceChildren();const none=el('option','Kein Ziel · wartet auf manuelle Auswahl');none.value='';worker.append(none);for(const item of result.workers){const option=el('option',item.id+' · '+(item.online?'online':'offline'));option.value=item.id;worker.append(option);}worker.value=policy.workerId||'';save.disabled=mode.disabled=order.disabled=!canWrite;mode.onchange();}catch(error){if(own===sessionId)feedback.textContent=error.message;}});
-  form.onsubmit=async event=>{event.preventDefault();const own=sessionId;save.disabled=true;try{await api('/v1/routing',{method:'PUT',body:{mode:mode.value,workerId:mode.value==='manual'?(worker.value||null):null,order:order.value}});if(own===sessionId)feedback.textContent='Routing gespeichert. Neue Vergaben verwenden diese Methode.';}catch(error){if(own===sessionId)feedback.textContent=error.message;}finally{save.disabled=!canWrite;}};
-  const taskRoute=el('details',undefined,'visual-help');taskRoute.append(el('summary','Ziel für diesen wartenden Auftrag'));const destination=el('input'),label=el('label','Worker-ID · leer für Routing-Standard'),routeNote=el('p');destination.id='task-destination';label.htmlFor=destination.id;const routeForm=el('form',undefined,'operation-form'),routeSave=el('button','Ziel speichern');routeSave.type='submit';routeForm.append(label,destination,routeSave,routeNote);taskRoute.append(routeForm);$('#task-detail').append(taskRoute);
-  routeForm.onsubmit=async event=>{event.preventDefault();routeSave.disabled=true;const id=selectedTaskId,own=sessionId;try{await api('/v1/tasks/'+encodeURIComponent(id)+'/routing',{method:'PUT',body:{workerId:destination.value.trim()||null}});if(own===sessionId&&id===selectedTaskId)routeNote.textContent='Ziel gespeichert. Projekt, Provider und Kapazität bleiben Voraussetzung.';}catch(error){if(own===sessionId)routeNote.textContent=error.message;}finally{routeSave.disabled=!canWrite;}};
-  const oldShow=showTask;showTask=async function(task,options={}){const id=task.id;await oldShow(task,options);if(selectedTaskId===id){taskRoute.hidden=task.status!=='queued'||!canWrite;routeNote.textContent='';destination.value='';}};
-  const oldClear=clearSession;clearSession=function(){widget?.close();widget=null;flow.replaceChildren();form.reset();feedback.textContent='';routeNote.textContent='';oldClear();};
+  let routingBusy=false,routingRead=0;
+  function routingControls(){mode.disabled=order.disabled=save.disabled=routingBusy||!token||!canWrite;worker.disabled=routingBusy||!token||mode.value==='auto'||!canWrite;}
+  mode.onchange=routingControls;
+  routing.addEventListener('toggle',async()=>{
+    if(!routing.open||!token||routingBusy)return;
+    const own=sessionId,read=++routingRead;routingBusy=true;feedback.textContent='Routing wird geladen…';routingControls();
+    try {
+      const [policy,result]=await Promise.all([api('/v1/routing'),api('/v1/workers')]);if(own!==sessionId||read!==routingRead)return;
+      mode.value=policy.mode;order.value=policy.order;worker.replaceChildren();
+      const none=el('option','Kein Ziel · wartet auf manuelle Auswahl');none.value='';worker.append(none);
+      for(const item of result.workers){const option=el('option',item.id+' · '+(item.online?'online':'offline'));option.value=item.id;worker.append(option);}
+      worker.value=policy.workerId||'';feedback.textContent='';
+    } catch(error){if(own===sessionId&&read===routingRead&&!expireAuthentication(error))feedback.textContent=error.message;}
+    finally{if(read===routingRead){routingBusy=false;routingControls();}}
+  });
+  form.onsubmit=async event=>{
+    event.preventDefault();if(routingBusy||!token||!canWrite)return;
+    const own=sessionId,body={mode:mode.value,workerId:mode.value==='manual'?(worker.value||null):null,order:order.value};
+    routingBusy=true;routingControls();feedback.textContent='Routing wird gespeichert…';
+    try{await api('/v1/routing',{method:'PUT',body});if(own===sessionId)feedback.textContent='Routing gespeichert. Neue Vergaben verwenden diese Methode.';}
+    catch(error){if(own===sessionId&&!expireAuthentication(error))feedback.textContent=error.message;}
+    finally{if(own===sessionId){routingBusy=false;routingControls();}}
+  };
+  const taskRoute=el('details',undefined,'visual-help');taskRoute.append(el('summary','Ziel für diesen wartenden Auftrag ändern'));
+  const destination=el('input'),label=el('label','Neuer Ziel-Worker · leer für Routing-Standard'),routeNote=el('p');routeNote.setAttribute('role','status');
+  const routeHelp=el('p','Diese Eingabe ändert das Ziel. Sie zeigt keine gespeicherte Zielauswahl an. Ein leerer Wert entfernt die auftragsspezifische Zuweisung.');
+  destination.id='task-destination';label.htmlFor=destination.id;
+  const routeForm=el('form',undefined,'operation-form'),routeSave=el('button','Ziel speichern');routeSave.type='submit';routeForm.append(label,destination,routeHelp,routeSave,routeNote);taskRoute.append(routeForm);$('#task-detail').append(taskRoute);
+  let routedTask='',routeBusy=false,routeRequest=0;
+  routeForm.onsubmit=async event=>{
+    event.preventDefault();if(routeBusy||!token||!canWrite||!selectedTaskId)return;
+    const id=selectedTaskId,own=sessionId,request=++routeRequest,workerId=destination.value.trim()||null;
+    routeBusy=true;destination.disabled=routeSave.disabled=true;routeNote.textContent='Ziel wird gespeichert…';
+    try{await api('/v1/tasks/'+encodeURIComponent(id)+'/routing',{method:'PUT',body:{workerId}});if(own===sessionId&&id===selectedTaskId&&request===routeRequest)routeNote.textContent='Ziel gespeichert. Projekt, Provider und Kapazität bleiben Voraussetzung.';}
+    catch(error){if(own===sessionId&&id===selectedTaskId&&request===routeRequest&&!expireAuthentication(error))routeNote.textContent=error.message;}
+    finally{if(own===sessionId&&id===selectedTaskId&&request===routeRequest){routeBusy=false;destination.disabled=routeSave.disabled=!canWrite;}}
+  };
+  const oldShow=showTask;showTask=async function(task,options={}){
+    const id=task.id;await oldShow(task,options);
+    if(selectedTaskId!==id||tab!=='tasks')return;
+    taskRoute.hidden=task.status!=='queued'||!canWrite;
+    if(routedTask!==id){routedTask=id;++routeRequest;routeBusy=false;routeNote.textContent='';destination.value='';destination.disabled=routeSave.disabled=!canWrite;}
+  };
+  const oldClear=clearSession;clearSession=function(){widget?.close();widget=null;++routingRead;routingBusy=false;++routeRequest;routeBusy=false;routedTask='';routing.open=false;flow.replaceChildren();form.reset();feedback.textContent='';routeNote.textContent='';oldClear();routingControls();destination.disabled=routeSave.disabled=true;};
 })();

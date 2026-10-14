@@ -20,7 +20,7 @@ export class WorkerSessions {
   private protectedTasks = new Set<string>();
   protectTask(id: string, protectedTask: boolean) { if (protectedTask) this.protectedTasks.add(id); else this.protectedTasks.delete(id); }
   private records: SessionRecord[] = []; private selected = 'default';
-  private instances = new Map<string, WorkerConversation>(); private changing = false;
+  private instances = new Map<string, WorkerConversation>(); private changing = false; private changingProviders = false;
   constructor(directory: string, settings: WorkerSettings, model: typeof modelFor = modelFor) { this.definitions = new WorkerDefinitions(directory); this.model = model; this.directory = directory; this.settings = settings; this.executor = new SerialExecutor(() => settings.value.board.paused); }
   async init() {
     await this.definitions.init();
@@ -62,6 +62,7 @@ export class WorkerSessions {
     await this.instances.get(id)!.cancel(); return this.detail(id);
   }
   async start(message: unknown, id = this.selected) {
+    this.assertProvidersStable();
     this.detail(id);
     const record = this.records.find(item => item.id === id)!, chat = this.instances.get(id)!;
     if (record.kind !== 'chat' && (['queued', 'running'].includes(record.taskState ?? '') || this.executor.current === record.id)) throw new DomainError('conflict', 'Wait for this task to finish before sending a follow-up.');
@@ -71,6 +72,7 @@ export class WorkerSessions {
     return result;
   }
   async ensureTask(id: string, kind: SessionRecord['kind'], title: string, provider: ProviderId, submissionHash?: string, definition?: DefinitionSnapshot) {
+    this.assertProvidersStable();
     const found = this.records.find(record => record.id === id); if (found) return found;
     if (this.changing) throw new DomainError('conflict', 'Session change in progress. Retry task preparation.');
     if (this.records.length >= 100) throw new DomainError('conflict', 'Task session limit reached (100). Delete old task history before accepting more.');
@@ -87,6 +89,7 @@ export class WorkerSessions {
   async recordTask(id: string, input: string, output: string, failed = false) { const conversation = this.instances.get(id); if (!conversation) throw new DomainError('not_found', 'Task session not found'); await conversation.recordTask(input, output, failed); }
 
   async setTaskState(id: string, state: TaskState) {
+    if (state === 'queued' || state === 'running') this.assertProvidersStable();
     const record = this.records.find(item => item.id === id); if (!record) throw new DomainError('not_found', 'Task session not found');
     if (record.taskState === state) return;
     record.taskState = state; await this.persist();
@@ -97,10 +100,28 @@ export class WorkerSessions {
     const write = this.writes.catch(() => {}).then(() => atomicWrite(join(this.directory, 'sessions.json'), serialized));
     this.writes = write; return write;
   }
-  async reloadProviders() { if (this.busy) throw new DomainError('conflict', 'Stop active replies before changing providers.'); for (const record of this.records) await this.load(record); }
+  private assertProvidersStable() {
+    if (this.changingProviders) throw new DomainError('conflict', 'Provider settings are being saved. Retry this task when saving finishes.');
+  }
+  async updateProviders<T>(update: () => Promise<T>): Promise<T> {
+    if (this.changing || this.busy) throw new DomainError('conflict', 'Finish task changes and stop active replies before changing providers.');
+    // Reserve admission before settings persistence; loading a pending transcript would mark its live reply interrupted.
+    this.changing = true; this.changingProviders = true;
+    try {
+      const result = await update();
+      for (const record of this.records) {
+        const previous = this.instances.get(record.id);
+        await this.load(record);
+        await previous?.close();
+      }
+      return result;
+    } finally { this.changingProviders = false; this.changing = false; }
+  }
+  async reloadProviders() { await this.updateProviders(async () => {}); }
   async action(input: unknown) {
     if (this.changing) throw new DomainError('conflict', 'Session change in progress.');
     this.changing = true; const previous = structuredClone({ records: this.records, selected: this.selected });
+    let deleted: string | undefined;
     try {
       const body = object(input, 'Session action', ['action', 'id', 'title', 'provider', 'definitionId', 'agent', 'useInstructionsOnly']);
       if (body.action === 'create') {
@@ -122,11 +143,23 @@ export class WorkerSessions {
           if (record.id === this.selected && !next) throw new DomainError('conflict', 'Create another session before archiving the current one.');
           if (record.id === this.selected) this.selected = next!.id;
           if (body.action === 'archive') record.archived = true;
-          else { if (this.protectedTasks.has(record.id)) throw new DomainError('conflict', 'Delete the linked local task from History before deleting its session.'); await this.instances.get(record.id)!.clear(); this.records = this.records.filter(item => item.id !== record.id); }
+          else { if (this.protectedTasks.has(record.id)) throw new DomainError('conflict', 'Delete the linked local task from History before deleting its session.'); deleted = record.id; this.records = this.records.filter(item => item.id !== record.id); }
         } else throw new DomainError('invalid_input', 'Unknown session action');
       }
-      await this.persist(); return this.view();
-    } catch (error) { this.records = previous.records; this.selected = previous.selected; throw error; }
+      await this.persist();
+      // Commit the index before removing history: failed writes must preserve the existing transcript.
+      if (deleted) {
+        const conversation = this.instances.get(deleted)!;
+        await conversation.clear().catch(() => {}); // An unindexed transcript can be cleaned up later.
+        await conversation.close(); this.instances.delete(deleted);
+      }
+      return this.view();
+    } catch (error) {
+      for (const id of this.instances.keys()) if (!previous.records.some(record => record.id === id)) {
+        await this.instances.get(id)!.close(); this.instances.delete(id);
+      }
+      this.records = previous.records; this.selected = previous.selected; throw error;
+    }
     finally { this.changing = false; }
   }
   async close() { await Promise.all([...this.instances.values()].map(item => item.close())); }

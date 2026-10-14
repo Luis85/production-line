@@ -61,8 +61,12 @@ test('history and private environment use worker-scoped auth, preserve snapshots
   assert.equal((await fetch(base+'/api/chat',{...post,headers:{...post.headers,Origin:'https://evil.invalid'}})).status,403);
   assert.equal((await fetch(base+'/api/chat',post)).status,503);
   assert.equal((await fetch(base+'/api/chat',{...post,body:'x'.repeat(70000)})).status,413);
-  for(const path of ['/','/chat','/history','/monitoring-status']) {const response=await fetch(base+path);assert.equal(response.status,200);const html=await response.text();assert.match(html,/id="app"/);assert.match(html,/assets\/.*\.js/);assert.doesNotMatch(html,new RegExp(token));}
+  for(const path of ['/','/chat','/history','/dashboard','/monitoring-status','/history?taskState=failed','/history?taskState=queued&kind=local','/chat?task=saved']) {const response=await fetch(base+path);assert.equal(response.status,200);const html=await response.text();assert.match(html,/id="app"/);assert.match(html,/assets\/.*\.js/);assert.doesNotMatch(html,new RegExp(token));}
   const html=await(await fetch(base+'/chat')).text();const asset=/src="([^"]+\.js)"/.exec(html)[1];const js=await fetch(base+asset);assert.equal(js.status,200);assert.match(js.headers.get('content-type'),/javascript/);assert.ok((await js.text()).length>1000);
+  assert.equal((await fetch(base+'/unknown?taskState=failed')).status,404);
+  assert.equal((await fetch(base+'/api/history?taskState=failed',{headers})).status,404);
+  assert.equal((await fetch(base+'/api/history?taskState=failed')).status,401);
+  assert.equal((await fetch(base+'/history?taskState=failed',{method:'POST'})).status,405);
   assert.equal((await fetch(base+'/assets/missing.js')).status,404);assert.equal((await fetch(base+'/healthz')).status,200);assert.equal((await fetch(base+'/status',{method:'POST'})).status,405);
 });
 test('Codex chat configuration is explicit and does not change task execution mode',async()=>{

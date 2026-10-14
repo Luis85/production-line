@@ -1,10 +1,10 @@
 # UI journey and layout contract
 
-## One workflow, two clearly identified surfaces
+## One workflow, three clearly identified surfaces
 
 The Factory webview is the portfolio/hierarchy entry point. Selecting a line
-opens its independent orchestrator, which starts on the **line map** (`#system`)
-after authentication. Explicit `#intake`, `#tasks`, `#workers` and `#metrics`
+opens its Dashboard inside Factory. An explicit action opens the independent
+orchestrator, which starts on its **Dashboard** (`#system`) after authentication. Explicit `#intake`, `#tasks`, `#workers` and `#metrics`
 links retain their requested destination after connection. Factory has no
 duplicate taskboard. Partial line availability remains visible in rollups. The
 Factory map and line map display HTTP-backed observations; the line's taskboard
@@ -32,12 +32,14 @@ real Git PR operations in this starter.
 | Analyze | What can be compared reliably? | Portfolio filters, sample counts, latest-window disclosure and unknown cost/quality states |
 | Review delivery | Is the feature accepted? | Target workflow requires human review and verified feature-PR merge; mock status never implies this |
 
-The worker's local page is an operational detail view: process state, occupied
-slots, current attempts, profile configuration, last contact, last error and
-latest snapshot identity. The visual slot display is bounded to the first 24
-configured slots; local occupancy does not establish scheduling eligibility.
-It is read-only and does not introduce a second task management interface. Docker status ports must be discovered from the actual
-replica mapping; do not fabricate a local URL from a worker ID.
+The worker has three workspaces: **Chat** creates or continues a task, **History**
+finds conversations and local file-task evidence, and **Dashboard** shows current
+work, queue controls and operational health. A standalone worker owns its local
+tasks, provider connections and sessions. Chat, file tasks and parent assignments
+share one execution slot; queued work does not add capacity. Parent-assigned work
+remains under the owning orchestrator's authority. Local patches require human
+review and are not applied automatically. Docker webview ports must be discovered
+from the actual replica mapping; do not fabricate a URL from a worker ID.
 
 ## State and feedback
 
@@ -49,7 +51,10 @@ task, rather than asking the user to infer success from an empty form.
 
 After successful connection, the authentication form collapses; Disconnect
 restores it and preserves the unsent intake draft. Runtime drafts remain in
-memory while navigating; tokens never enter URLs or browser storage. Hash routes
+memory while navigating; tokens never enter URLs or browser storage. The worker
+exchanges its local access token for an HttpOnly browser session; worker access
+and provider sign-in are separate. Explicit Lock clears local drafts, while
+session expiry preserves them for recovery after unlocking. Hash routes
 and browser Back/Forward restore the selected workspace after authentication;
 the active navigation item remains visible within the mobile navigation strip.
 The task-to-snapshot action clears conflicting filters and visibly scopes metrics to that task, with an
@@ -157,7 +162,7 @@ Use the evidence for the release candidate being assessed.
 
 Factory's tree, breadcrumbs and scope picker communicate the selected logical
 factory. Its overview includes descendant lines. The empty-state sequence is
-create factory → register line → open that line's map or Intake. Factory create/edit
+create factory → register line → open that line's Dashboard or Intake. Factory create/edit
 forms manage hierarchy; line forms distinguish server-reachable orchestrator
 URL from the browser-facing line webview URL and a server-side credential reference.
 

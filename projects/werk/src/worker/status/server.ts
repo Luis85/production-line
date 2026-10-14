@@ -61,7 +61,8 @@ export async function statusServer(get: () => Status, host: string, port: number
       return json(res, 404, { error: 'Not found' });
     }
     if(req.method !== 'GET')return json(res,405,{error:'Read-only status service'});
-    if (workspace && ['/', '/chat', '/history', '/dashboard', '/monitoring-status'].includes(req.url ?? '')) return html(res, await readFile(new URL('../public/index.html', import.meta.url), 'utf8'));
+    const pagePath = new URL(req.url ?? '/', 'http://worker.local').pathname;
+    if (workspace && ['/', '/chat', '/history', '/dashboard', '/monitoring-status'].includes(pagePath)) return html(res, await readFile(new URL('../public/index.html', import.meta.url), 'utf8'));
     if (workspace && /^\/assets\/[a-zA-Z0-9_.-]+\.(?:js|css)$/.test(req.url ?? '')) {
       try { const body = await readFile(new URL('../public' + req.url, import.meta.url)); res.writeHead(200, { 'content-type': req.url!.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8', 'cache-control': 'public, max-age=31536000, immutable', 'x-content-type-options': 'nosniff' }); res.end(body); return; }
       catch { return json(res, 404, { error: 'Asset not found' }); }

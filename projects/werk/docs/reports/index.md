@@ -8,9 +8,13 @@ separately under `docs/handoff`; original source provenance is recorded in the
 
 | Record | Scope |
 | --- | --- |
+| [System journey polish](system-journey-polish.md) | Screenshot-driven worker, Factory, orchestrator and shared interaction improvements; final integrated checks and authenticated task handoff |
 | [Project worker and feature folders](feature-folder-review.md) | Project installation, reusable templates, durable Markdown intake, serial execution and native/Docker qualification |
 | [Worker access, Chat and agent definitions](worker-overhaul-review.md) | Research-led overhaul, independent review, integrated checks and twelve final screenshots |
 | [Worker product research](worker-product-research.md) | Dated provider/Docker research, onboarding and task-chat findings, and product improvement priorities |
+| [Worker view atlas](worker-view-atlas.html) | Interactive sitemap with 54 views and 107 embedded desktop/mobile screenshots |
+| [Worker deeper review](worker-deeper-review.md) | Independent second audit, mobile workflow, actionable history, concurrency fixes and four-width browser evidence |
+| [Worker iteration review](worker-iteration-review.md) | Worker UX research, independent file editor, queue clarity, persistence fixes and fresh browser evidence |
 | [Portable Node apps](portable-apps-validation.md) | Copyable apps, automation CLI, task sessions, independent lifecycle and later composition |
 | [Worker task sessions and independent systems](worker-system-review.md) | Serial execution, persistent sessions, composable routing, dashboards, reviews and a 34-capture storyboard |
 | [Spatial visualization polish](spatial-polish-review.md) | Correct 3D projection, distinct models, label placement and desktop/mobile confirmation |
