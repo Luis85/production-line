@@ -9,6 +9,7 @@ separately under `docs/handoff`; original source provenance is recorded in the
 | Record | Scope |
 | --- | --- |
 | [Worker model lifecycle and operations review](worker-model-operations-review.md) | Durable model contracts, questions/recovery, project integrations, resource monitoring, twelve-factor review and qualification |
+| [Interactive resource and integration journey](worker-resources-integrations-journey.html) | Reviewed project synchronization, protected edits and real local warning/deadline/recovery screenshots |
 | [Interactive model interaction journey](worker-model-interaction-journey.html) | Questions, restart recovery, continuation, immutable dispatches and consumption screenshots |
 | [Worker model interaction research](worker-model-research.md) | Provider contracts, durable prompts, questions, continuation and evidence design |
 | [Subscription integration research](worker-subscription-research.md) | Official subscription paths, SDK/app-server comparison, authentication limits and normalized events |

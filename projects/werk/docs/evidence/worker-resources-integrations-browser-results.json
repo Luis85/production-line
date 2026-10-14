@@ -1,0 +1,51 @@
+{
+  "primaryEvidence": {
+    "actualTimerWarning": true,
+    "maximumDurationStopsAttempt": true,
+    "phase": "failed",
+    "alertOpenedAndResolved": true,
+    "protectedCustomFile": true,
+    "providerCalls": false,
+    "workerOnlyResources": true,
+    "overflow": 0,
+    "pageErrors": [],
+    "shots": [
+      {
+        "name": "actual-chat-warning",
+        "width": 390,
+        "evidence": "Actual isolated worker resource API/events and harmless slow deterministic executable;1-second warning,25-second maximum, no genuine provider."
+      },
+      {
+        "name": "actual-resource-warning",
+        "width": 1440,
+        "evidence": "Actual isolated worker resource API/events and harmless slow deterministic executable;1-second warning,25-second maximum, no genuine provider."
+      },
+      {
+        "name": "actual-resource-warning",
+        "width": 320,
+        "evidence": "Actual isolated worker resource API/events and harmless slow deterministic executable;1-second warning,25-second maximum, no genuine provider."
+      },
+      {
+        "name": "actual-resource-resolved",
+        "width": 390,
+        "evidence": "Actual isolated worker resource API/events and harmless slow deterministic executable;1-second warning,25-second maximum, no genuine provider."
+      },
+      {
+        "name": "integration-protected-conflict",
+        "width": 390,
+        "evidence": "Actual isolated worker resource API/events and harmless slow deterministic executable;1-second warning,25-second maximum, no genuine provider."
+      }
+    ]
+  },
+  "integrationAndPolicy": {
+    "integrationApplied": true,
+    "settingsSaved": true,
+    "realResourceSample": true,
+    "providerCalls": false,
+    "pageErrors": [],
+    "overflow": 0
+  },
+  "captureScope": "Primary gallery uses actual APIs only. Synthetic CPU/3-hour resource-response screenshots are supplemental scratch evidence and excluded from this gallery. Real timer warning1s,maximum25s,sample10s; no hours-long soak, genuine provider or provider-process resource measurement.",
+  "stages": 7,
+  "embeddedImages": 10
+}
