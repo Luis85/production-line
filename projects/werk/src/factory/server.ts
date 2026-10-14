@@ -1,3 +1,4 @@
+import { serveWebviewAsset } from '../shared/http/webview-assets.js';
 import { privateJson } from '../shared/http/bounded-client.js';
 import { FactoryIntake } from './application/intake.js';
 import { SqliteIntakeStore } from './infrastructure/intake-store.js';
@@ -56,7 +57,11 @@ export async function startFactoryServer(config: FactoryServerConfig) {
     const intakeStore = new SqliteIntakeStore(config.db === ':memory:' ? ':memory:' : config.db + '.intake.sqlite');
     const intake = new FactoryIntake(registry, reader, intakeStore, new HttpLineDelivery(credentials));
     application.protectIntake((type, id) => intake.assertRemoval(type, id));
-    const server = createServer(observeHttp('factory', createFactoryHandler(application, config.adminToken, view, () => serviceEvent('factory', 'internal_error', 'error'), guide, access, config.audit, intake, async (id, input) => { const line = registry.line(id); const credential = credentials[line.tokenEnv]; if (!credential) throw new DomainError('unavailable', 'Line credential unavailable'); return privateJson(new URL('/v1/interaction', line.orchestratorUrl), credential, 'POST', input); })));
+    const handler = createFactoryHandler(application, config.adminToken, view, () => serviceEvent('factory', 'internal_error', 'error'), guide, access, config.audit, intake, async (id, input) => { const line = registry.line(id); const credential = credentials[line.tokenEnv]; if (!credential) throw new DomainError('unavailable', 'Line credential unavailable'); return privateJson(new URL('/v1/interaction', line.orchestratorUrl), credential, 'POST', input); });
+    const server = createServer(observeHttp('factory', async (request, response) => {
+      if (await serveWebviewAsset(request, response, new URL('./public/', import.meta.url))) return;
+      await handler(request, response);
+    }));
     server.requestTimeout = 15000;
     server.headersTimeout = 10000;
     try {

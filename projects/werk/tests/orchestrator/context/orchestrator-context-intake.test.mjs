@@ -52,7 +52,7 @@ test('bound HTTP and minimal CLI intake persist ready context without leaking co
     const response = await api.post(input); assert.equal(response.status, 201); const task = await response.json();
     assert.equal(task.title, 'Pinned feature'); assert.deepEqual(task.criteria, ['Observable success']);
     assert.equal(task.context.commit, f.commit); assert.equal(task.context.featureId, 'feature-1');
-    assert.equal((await (await api.get('/healthz')).json()).schema, 5);
+    assert.equal((await (await api.get('/healthz')).json()).schema, 6);
     const manifest = await (await api.get('/v1/tasks/' + task.id + '/context')).json();
     const { sha256, ...unsigned } = manifest;
     assert.equal(sha256, createHash('sha256').update(JSON.stringify(unsigned)).digest('hex'));
@@ -147,16 +147,16 @@ test('context persistence failure rolls back its task and event atomically', asy
   } finally { store.close(); }
 });
 
-test('schema5 migrates legacy mock tasks without inventing context or changing retries', async t => {
+test('schema6 migrates legacy mock tasks without inventing context or changing retries', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'werk-v4-')); t.after(() => rm(directory, { recursive: true, force: true }));
   const db = join(directory, 'state.sqlite'); let store = new Store(db);
   try {
     const legacy = store.submit(input, 'legacy'); const auth = store.register('demo', profiles);
     store.db.exec('DROP TABLE task_contexts; PRAGMA user_version=3'); store.close(); store = new Store(db);
-    assert.equal(store.db.prepare('PRAGMA user_version').get().user_version, 5);
+    assert.equal(store.db.prepare('PRAGMA user_version').get().user_version, 6);
     assert.deepEqual(store.submission(input, 'legacy'), legacy); assert.equal(store.worker(auth.token).id, auth.id);
     assert.equal(store.get(legacy.id).context, undefined); assert.throws(() => store.context(legacy.id), error => error.code === 'not_found');
-    store.db.exec('PRAGMA user_version=6'); store.close(); store = undefined;
+    store.db.exec('PRAGMA user_version=7'); store.close(); store = undefined;
     assert.throws(() => new Store(db), /newer than/);
   } finally { store?.close(); }
 });

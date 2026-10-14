@@ -1,3 +1,5 @@
+import { privateJson } from '../../shared/http/bounded-client.js';
+import { checkedTaskPage } from '../application/task-pages.js';
 import { DomainError } from '../../shared/errors.js';
 import { validateOverview } from '../../shared/factory.js';
 import type { LineOverview, ProductionLine } from '../../shared/factory.js';
@@ -62,6 +64,29 @@ export class HttpLineReader implements LineReader {
             void result.then(() => this.inflight.delete(key), () => this.inflight.delete(key));
         }
         return { line, ...await result };
+    }
+    async tasks(line: ProductionLine, query: { limit: number; cursor?: string }) {
+        if (this.stopped || this.queue.length >= 256) throw new DomainError('unavailable', 'Factory observation capacity is busy; retry later.');
+        const credential = this.credentials[line.tokenEnv];
+        if (!credential) throw new DomainError('unavailable', 'The referenced line credential is not configured.');
+        const controller = new AbortController();
+        this.controllers.add(controller);
+        const timeout = setTimeout(() => controller.abort(), this.timeoutMs).unref();
+        let acquired = false;
+        try {
+            acquired = await this.slot(controller.signal);
+            if (!acquired || this.stopped || controller.signal.aborted) throw new DomainError('unavailable', 'The line task request timed out or was cancelled.');
+            const url = new URL('/v1/tasks', line.orchestratorUrl);
+            // Upstream rows include private criteria before allowlist projection. Keep each bounded read small.
+            const upstreamLimit = Math.min(query.limit, 10);
+            url.searchParams.set('limit', String(upstreamLimit));
+            if (query.cursor) url.searchParams.set('cursor', query.cursor);
+            return checkedTaskPage(await privateJson(url, credential, 'GET', undefined, { signal: controller.signal, timeoutMs: this.timeoutMs }), upstreamLimit, query.cursor);
+        } finally {
+            clearTimeout(timeout);
+            this.controllers.delete(controller);
+            if (acquired) this.release();
+        }
     }
     private async inspect(line: ProductionLine): Promise<Omit<LineOverview, 'line'>> {
         const unavailable = (status: LineOverview['status'], error: string): Omit<LineOverview, 'line'> => ({ status, error, overview: null, checkedAt: new Date().toISOString() });

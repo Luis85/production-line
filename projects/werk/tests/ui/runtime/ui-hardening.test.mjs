@@ -1,71 +1,115 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import vm from 'node:vm';
-import { randomUUID } from 'node:crypto';
-import { statusHtml } from '../../../src/worker/dist/worker/status/server.js';
-
-const html=await readFile(new URL('../../../src/orchestrator/public/index.html',import.meta.url),'utf8');
-const source=html.split('<script>')[1].split('</script>')[0];
-function harness(fetch,script=source){
-  const nodes=new Map();
-  class Element {
-    constructor(){this.value='';this.children=[];this.dataset={};this.textContent='';this.attributes={};this.hidden=false}
-    append(...children){this.children.push(...children)}
-    replaceChildren(...children){this.children=children}
-    setAttribute(k,v){this.attributes[k]=v}
-    removeAttribute(k){delete this.attributes[k]}
-    focus(){document.activeElement=this}
-    get firstElementChild(){return this.children[0]}
-    closest(){return this}
-    querySelectorAll(){return []}
-  }
-  const get=id=>{if(!nodes.has(id))nodes.set(id,new Element());return nodes.get(id)};
-  const document={getElementById:id=>get('#'+id),querySelector:get,querySelectorAll:()=>[],createElement:()=>new Element(),createElementNS:()=>new Element(),hidden:false,title:'',activeElement:null};
-  const context=vm.createContext({document,fetch,crypto:{randomUUID},AbortSignal,AbortController,Date,console,setInterval:()=>{},URLSearchParams});
-  vm.runInContext(script,context);
-  return {get,context,run:code=>vm.runInContext(code,context)};
-}
-const response=body=>({ok:true,status:200,json:async()=>body&&['tasks','workers','events'].some(key=>Array.isArray(body[key]))?{hasMore:false,nextCursor:null,...body}:body});
-const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b});return {promise,resolve,reject}};
-
-test('repeated keyboard connection requests make one authentication call',async()=>{
-  const pending=deferred();let calls=0;
-  const h=harness(()=>{calls++;return pending.promise});h.get('#token').value='admin';
-  const first=h.get('#connect').onclick();await h.get('#connect').onclick();
-  assert.equal(calls,1);assert.equal(h.get('#connect').disabled,true);
-  pending.reject(Error('offline'));await first;
-  assert.equal(h.get('#connect').disabled,false);assert.equal(h.run('connecting'),false);
-  assert.equal(h.get('#token').value,'admin');
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  line,
+  overview,
+  deferred,
+  diagnosticModule,
+  status,
+  response,
+} from "../helpers/runtime-harness.mjs";
+test("duplicate keyboard authentication makes one request", async () => {
+  const pending = deferred();
+  const f = line(() => pending.promise, { connected: false });
+  const login = f.connect("fixture");
+  await f.connect("duplicate");
+  assert.equal(f.calls.length, 1);
+  pending.resolve(overview());
+  await login;
+  assert.equal(f.state.token, "fixture");
 });
-
-test('disconnect during authentication invalidates the response and permits reconnecting',async()=>{
-  const pending=deferred();const h=harness(()=>pending.promise);h.get('#token').value='admin';
-  const first=h.get('#connect').onclick();h.get('#disconnect').onclick();pending.resolve(response({tasks:[]}));await first;
-  assert.equal(h.run('token'),'');assert.equal(h.run('connecting'),false);
-  assert.equal(h.get('#connect').disabled,false);assert.equal(h.get('#connect').textContent,'Verbinden');
+test("disconnect during authentication fences the response and permits reconnect", async () => {
+  const pending = deferred();
+  let first = true;
+  const f = line(
+    () => {
+      if (first) {
+        first = false;
+        return pending.promise;
+      }
+      return overview();
+    },
+    { connected: false },
+  );
+  const login = f.connect("old");
+  f.disconnect();
+  await f.connect("new");
+  pending.resolve(overview({ project: "old" }));
+  await login;
+  assert.equal(f.state.token, "new");
+  assert.equal(f.state.intake.project, "demo");
 });
-
-test('worker malformed status preserves the complete last good response and recovers',async()=>{
-  const good={workerId:'worker-1',project:'demo',state:'idle',updatedAt:new Date().toISOString(),activeTasks:[{id:'task-1',attempt:1,profile:'mock'}],profiles:[{id:'mock',provider:'local',mode:'mock'}],maxParallel:2};
-  let next=good;const script=statusHtml().split('<script>')[1].split('</script>')[0];
-  const h=harness(async()=>response(next),script);await new Promise(resolve=>setImmediate(resolve));
-  assert.equal(h.get('#active-rows').children[0].children[0].textContent,'task-1');
-  const prior=h.get('#values').children;
-  for(const invalid of [null,{}, {...good,activeTasks:[null]}, {...good,profiles:[null]}, {...good,maxParallel:'many'}]){
-    next=invalid;await h.get('#refresh').onclick();
-    assert.equal(h.get('#values').children,prior);assert.equal(h.get('#active-rows').children[0].children[0].textContent,'task-1');
-    assert.equal(h.get('#error').dataset.kind,'error');assert.match(h.get('#freshness').textContent,/may be stale/);
-    assert.equal(h.get('#refresh').disabled,false);
-  }
-  next={...good,state:'executing'};await h.get('#refresh').onclick();
-  assert.equal(h.get('#state-label').textContent,'Executing simulations');assert.equal(h.get('#error').dataset.kind,'info');
+test("malformed diagnostics preserve the entire last good response and recover", async () => {
+  let value = status({ workerId: "old" }),
+    clock = 1;
+  const f = diagnosticModule.createDiagnosticStore(null, {
+    fetcher: async () => response(value),
+    now: () => clock++,
+  });
+  await f.refresh();
+  const saved = structuredClone(f.state.snapshot);
+  value = { ...status(), activeTasks: "bad", workerId: "wrong" };
+  await f.refresh();
+  assert.deepEqual(f.state.snapshot, saved);
+  assert.equal(f.state.lastFetched, 1);
+  assert.equal(f.state.failed, true);
+  value = status({ workerId: "new" });
+  await f.refresh();
+  assert.equal(f.state.snapshot.workerId, "new");
+  assert.equal(f.state.failed, false);
 });
-
-test('worker status live region announces recovery rather than every polling timestamp',async()=>{
-  const good={state:'idle',activeTasks:[],profiles:[],maxParallel:1};
-  const h=harness(async()=>response(good),statusHtml().split('<script>')[1].split('</script>')[0]);await new Promise(resolve=>setImmediate(resolve));
-  const node=h.get('#error'),message=node.textContent;let writes=0;
-  Object.defineProperty(node,'textContent',{get:()=>message,set:()=>writes++});
-  await h.get('#refresh').onclick();assert.equal(writes,0);
+test("diagnostic live announcements are stable across normal timestamps and announce recovery", async () => {
+  let fail = false,
+    clock = 1;
+  const f = diagnosticModule.createDiagnosticStore(null, {
+    fetcher: async () => {
+      if (fail) throw Error();
+      return response(status());
+    },
+    now: () => clock++,
+  });
+  await f.refresh();
+  const good = f.state.announcement;
+  await f.refresh();
+  assert.equal(f.state.announcement, good);
+  fail = true;
+  await f.refresh();
+  assert.notEqual(f.state.announcement, good);
+  fail = false;
+  await f.refresh();
+  assert.equal(f.state.announcement, good);
+});
+test("diagnostic unmount fences late data and offline snapshots never fetch", async () => {
+  const pending = deferred();
+  const f = diagnosticModule.createDiagnosticStore(null, {
+    fetcher: () => pending.promise,
+  });
+  const read = f.refresh();
+  f.close();
+  pending.resolve(response(status()));
+  await read;
+  assert.equal(f.state.snapshot, null);
+  let calls = 0;
+  const offline = diagnosticModule.createDiagnosticStore(status(), {
+    fetcher: () => {
+      calls++;
+      throw Error();
+    },
+  });
+  await offline.refresh();
+  await offline.setPaused(false);
+  assert.equal(calls, 0);
+  assert.equal(offline.state.offline, true);
+  const invalid = diagnosticModule.createDiagnosticStore(
+    { invalid: true },
+    {
+      fetcher: () => {
+        calls++;
+        throw Error();
+      },
+    },
+  );
+  await invalid.refresh();
+  assert.equal(invalid.state.failed, true);
+  assert.equal(calls, 0);
 });

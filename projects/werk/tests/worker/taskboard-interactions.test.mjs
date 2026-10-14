@@ -6,7 +6,11 @@ import { reactive, ref, computed, watch, nextTick, effectScope } from 'vue';
 
 async function fixture(t, name, ports = {}) {
   const source = await readFile(new URL(`../../src/worker/webview/${name}`, import.meta.url), 'utf8');
-  const script = source.match(/<script setup[^>]*>([\s\S]*?)<\/script>/)[1].replace(/^import .*;\n/gm, '');
+  const scriptSource = source.match(/<script setup[^>]*>([\s\S]*?)<\/script>/)[1];
+  // Parse imports so formatted multiline and type-only imports are removed alike.
+  // The component script then runs against the explicit behavioral ports below.
+  const parsed = ts.createSourceFile('fixture.ts', scriptSource, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
+  const script = ts.createPrinter().printFile(ts.factory.updateSourceFile(parsed, parsed.statements.filter(statement => !ts.isImportDeclaration(statement))));
   const state = reactive({ unlocked: true, workspaceBusy: false, actionError: '', settings: null, board: { tasks: [{ id: 'a', title: 'Alpha', provider: 'codex-cli', status: 'review', archived: false }, { id: 'b', title: 'Beta', provider: 'claude-cli', status: 'failed', archived: false }] }, sessions: { records: [] } });
   const route = reactive({ path: '/history', query: {} }), calls = [], navigations = [], focused = [];
   const request = ports.request ?? (async (path, method, body) => ({ ...state.board.tasks.find(task => task.id === body.id), sessionId: `local-${body.id}` }));

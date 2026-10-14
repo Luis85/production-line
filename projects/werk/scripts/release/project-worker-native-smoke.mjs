@@ -17,8 +17,8 @@ try {
   assert.equal(setup.featuresDirectory, join(project, 'requests/features'));
   await assert.rejects(readFile(join(project, 'package.json')), { code: 'ENOENT' });
   await assert.rejects(readFile(join(project, '.git/config')), { code: 'ENOENT' });
-  const fixture = join(project, 'provider-fixture');
-  await writeFile(fixture, `#!${process.execPath}\nif(process.argv.includes('login')){console.log('Logged in using fixture');process.exit(0)}let text='';for await(const p of process.stdin)text+=p;const reply=text.includes('QUESTION_FLOW')&&!text.includes('ANSWER_COMPLETE')?JSON.stringify({werkInteraction:{schemaVersion:1,kind:'question',message:'Which layout should the fixture retain?',choices:[{id:'existing',label:'Keep the existing layout'}]}}):text.includes('ESCALATION_FLOW')&&!text.includes('RESUME_COMPLETE')?JSON.stringify({werkInteraction:{schemaVersion:1,kind:'escalation',message:'The fixture requires an operator decision.',reason:'No authority to choose a new layout.'}}):text.includes('Implement the requested changes')?JSON.stringify({summary:'Fixture review',files:[{path:'approved.txt',content:'changed\\n'}]}):'Packaged feature protocol fixture completed.';console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:reply}}));\n`, { mode: 0o700 });
+  const fixture = join(project, 'provider-fixture'), invocations = join(project, 'fixture-model-invocations');
+  await writeFile(fixture, `#!${process.execPath}\nimport { appendFileSync } from 'node:fs';if(process.argv.includes('login')){console.log('Logged in using fixture');process.exit(0)}appendFileSync(${JSON.stringify(invocations)},'invoked\\n');let text='';for await(const p of process.stdin)text+=p;const reply=text.includes('QUESTION_FLOW')&&!text.includes('ANSWER_COMPLETE')?JSON.stringify({werkInteraction:{schemaVersion:1,kind:'question',message:'Which layout should the fixture retain?',choices:[{id:'existing',label:'Keep the existing layout'}]}}):text.includes('ESCALATION_FLOW')&&!text.includes('RESUME_COMPLETE')?JSON.stringify({werkInteraction:{schemaVersion:1,kind:'escalation',message:'The fixture requires an operator decision.',reason:'No authority to choose a new layout.'}}):text.includes('Implement the requested changes')?JSON.stringify({summary:'Fixture review',files:[{path:'approved.txt',content:'changed\\n'}]}):'Packaged feature protocol fixture completed.';console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:reply}}));\n`, { mode: 0o700 });
   await writeFile(join(project, 'provider.json'), JSON.stringify({ provider: { id: 'codex-cli', executable: fixture } }), { mode: 0o600 });
   const schema = await cli('schema');
   const hasRunEvidence = !!schema.commands['run analyze'];
@@ -38,7 +38,11 @@ try {
   const current = await cli('feature', 'get', '--name', 'example.md');
   await cli('feature', 'submit', '--name', 'example.md', '--if-match', current.revision);
   const queued = await cli('feature', 'get', '--name', 'example.md');
-  assert.match(queued.markdown, /status: ready/);
+  // Pausing execution does not pause intake: a polling tick may already adopt ready work.
+  assert.match(queued.markdown, /status: (?:ready|queued)\n/);
+  if (queued.record) assert.equal(queued.record.status, 'queued');
+  if (queued.execution) assert.equal(queued.execution.status, 'queued');
+  await assert.rejects(readFile(invocations), { code: 'ENOENT' });
   await cli('queue', 'resume');
   const completed = await cli('feature', 'wait', '--name', 'example.md', '--timeout-ms', '30000');
   assert.equal(completed.record.status, 'completed');

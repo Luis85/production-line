@@ -103,7 +103,7 @@ test('HTTP intake, stdin CLI and three real worker processes complete a mock fle
   try{
     app=await startServer({db:join(dir,'db.sqlite'),host:'127.0.0.1',port:0,adminToken:admin,enrollmentToken:enroll,project:'demo'});
     const url='http://127.0.0.1:'+app.server.address().port;
-    const page=await (await fetch(url)).text();assert.ok(page.includes('data-tab="intake" aria-current="page"'));
+    const page=await (await fetch(url)).text();assert.match(page,/<div id="app"/);const modulePath=page.match(/<script[^>]+type="module"[^>]+src="([^"]+)"/)[1];const asset=await fetch(new URL(modulePath,url));assert.equal(asset.status,200);assert.match(asset.headers.get('content-type'),/javascript/);assert.equal(await(await fetch(url+'/intake')).text(),page);
     assert.equal((await fetch(url+'/v1/tasks')).status,401);
     assert.equal((await fetch(url+'/v1/tasks',{method:'POST',headers:{Authorization:'Bearer '+admin,'Content-Type':'application/json','Idempotency-Key':'null'},body:'null'})).status,400);
     const oc='src/orchestrator/dist/orchestrator/cli.js',wc='src/worker/dist/worker/cli.js';
@@ -124,7 +124,7 @@ test('HTTP intake, stdin CLI and three real worker processes complete a mock fle
     const line=children[0].getLog().split('\n').find(l=>l.includes('status_listening'));const port=JSON.parse(line).address.port;
     const statusUrl='http://127.0.0.1:'+port;
     assert.match(await (await fetch(statusUrl)).text(), /id="app"/);
-    const snapshot=await cli(wc,['status','--url',statusUrl,'--format','html'],{});assert.equal(snapshot.code,0,snapshot.stderr);assert.ok(snapshot.stdout.includes('Exported snapshot'));
+    const snapshot=await cli(wc,['status','--url',statusUrl,'--format','html'],{});assert.equal(snapshot.code,0,snapshot.stderr);const exported=JSON.parse(snapshot.stdout.match(/<script id="werk-status-data" type="application\/json">([\s\S]*?)<\/script>/)[1]);const current=await(await fetch(statusUrl+'/status')).json();assert.equal(exported.workerId,current.workerId);assert.equal(exported.mode,current.mode);assert.ok(Array.isArray(exported.activeTasks));
     const list=await cli(oc,['task','list'],env);assert.equal(JSON.parse(list.stdout).tasks.length,9);
     const events=await cli(oc,['task','events','--id',id],env);assert.equal(JSON.parse(events.stdout).events.at(-1).kind,'simulation_finished');
     const identity=JSON.parse(await readFile(join(dir,'worker0/identity.json'),'utf8'));

@@ -63,6 +63,8 @@ export class WorkerRunJournal {
   }
   private save(run: WorkerRun) { this.db.prepare('UPDATE worker_runs SET outcome=?, payload=? WHERE id=?').run(run.outcome, JSON.stringify(run), run.id); }
   async begin(metadata: RunMetadata): Promise<WorkerRun> {
+    if (metadata.purpose !== undefined && !['execution', 'gate_review', 'rework'].includes(metadata.purpose)) throw new DomainError('invalid_input', 'Invalid run purpose.');
+    if (metadata.requestId !== undefined && (typeof metadata.requestId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(metadata.requestId))) throw new DomainError('invalid_input', 'Invalid request identity.');
     const id = randomUUID();
     const run = this.transaction(() => {
       const attempt = Number(this.db.prepare('SELECT COUNT(*) AS count FROM worker_runs WHERE session_id=?').get(metadata.sessionId)!.count) + 1;
@@ -129,6 +131,10 @@ export class WorkerRunJournal {
       if (key === 'kind' && !['chat', 'local', 'orchestrator'].includes(value) || key === 'outcome' && !outcomes.includes(value as RunOutcome)) throw new DomainError('invalid_input', `Invalid ${key} filter.`);
       clauses.push(`${column}=?`); values.push(value);
     }
+    if (query.purpose !== undefined) {
+      if (!['execution', 'gate_review', 'rework'].includes(query.purpose)) throw new DomainError('invalid_input', 'Invalid purpose filter.');
+      clauses.push("COALESCE(json_extract(payload, '$.purpose'), 'execution')=?"); values.push(query.purpose);
+    }
     for (const key of ['since', 'until'] as const) if (query[key] !== undefined) {
       const value = query[key]; if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(value) || !/(?:Z|[+-]\d{2}:\d{2})$/.test(value) || !Number.isFinite(Date.parse(value))) throw new DomainError('invalid_input', `Invalid ${key}; use an ISO timestamp.`);
       clauses.push('created_at' + (key === 'since' ? '>=' : '<=') + '?'); values.push(new Date(value).toISOString());
@@ -142,7 +148,7 @@ export class WorkerRunJournal {
     const limit = query.limit ?? 50, offset = query.offset ?? 0;
     if (!Number.isInteger(limit) || limit < 1 || limit > 100 || !Number.isSafeInteger(offset) || offset < 0) throw new DomainError('invalid_input', 'Use limit 1–100 and a nonnegative offset.');
     let after = 0;
-    const filters = createHash('sha256').update(JSON.stringify(Object.fromEntries(['sessionId','taskId','provider','kind','outcome','since','until'].map(key => [key, query[key as keyof RunQuery] ?? null])))).digest('hex');
+    const filters = createHash('sha256').update(JSON.stringify(Object.fromEntries(['sessionId','taskId','provider','kind','outcome','since','until', ...(query.purpose === undefined ? [] : ['purpose'])].map(key => [key, query[key as keyof RunQuery] ?? null])))).digest('hex');
     if (query.cursor !== undefined) {
       if (query.offset !== undefined || query.asOf !== undefined) throw new DomainError('invalid_input', 'Use cursor without offset or asOf.');
       try { if (typeof query.cursor !== 'string' || query.cursor.length > 2048) throw Error(); const value = JSON.parse(Buffer.from(query.cursor, 'base64url').toString()); if (value.filters !== filters || !Number.isSafeInteger(value.after) || value.after < 0 || !Number.isSafeInteger(value.asOf) || value.asOf < value.after) throw Error(); after = value.after; query = { ...query, asOf: value.asOf }; }

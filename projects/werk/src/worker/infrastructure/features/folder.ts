@@ -1,3 +1,5 @@
+import { exportFeatureGates, validateFeatureGates } from './gates.js';
+import type { WorkerRequest } from '../../application/request-gates.js';
 import type { InteractionView } from '../../application/interactions.js';
 import { exportFeatureEvidence, writeImmutableFeatureArtifact, validateFeatureExecution } from './evidence.js';
 import { FeatureDocuments } from './documents.js';
@@ -38,6 +40,7 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
       for (const record of index.records) if (!record || !featureId.test(record.id) || !requestName(record.name) || !['folder', 'orchestrator'].includes(record.source) || typeof record.submitted !== 'boolean' || typeof record.inputHash !== 'string' || typeof record.taskId !== 'string' || typeof record.sessionId !== 'string' || !record.submitted && !record.input) throw Error('Invalid feature index record.');
       for (const record of index.records) {
         validateFeatureExecution(record);
+        validateFeatureGates(record);
         if (record.interaction && (!Number.isSafeInteger(record.interaction.revision) || record.interaction.revision < 0 || typeof record.interaction.phase !== 'string' || (record.interaction.pendingId && !featureId.test(record.interaction.pendingId)) || (record.interaction.link && record.interaction.link !== `_questions/${record.id}/${record.interaction.pendingId}.md`))) throw Error('Invalid feature interaction projection.');
       }
       return index;
@@ -91,7 +94,7 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
     const current = await readBoundedFile(path, 65536).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
     if (current === null || digest(current) !== file.revision) return false;
     const parsed = parseFeature(current);
-    const next = renderFeature(parsed, record.id, record.status, { archived: record.archived ?? false, source: record.source, taskId: record.taskId, sessionId: record.sessionId, submittedAt: record.createdAt, updatedAt: record.updatedAt, inputHash: record.inputHash, ...(record.attempt !== undefined ? { attempt: record.attempt } : {}), ...(record.error ? { error: record.error } : {}), ...(record.result ? { result: record.result } : {}), ...(record.patch ? { patch: record.patch } : {}), ...(record.execution ? { execution: record.execution } : {}), ...(record.executionDirectory ? { executionDirectory: record.executionDirectory } : {}), ...(record.interaction ? { interaction: record.interaction } : {}), ...(inputChanged ? { inputChanged: true, note: 'Accepted input is frozen. Copy to a new filename and remove id/werk to request different work.' } : {}) });
+    const next = renderFeature(parsed, record.id, record.status, { archived: record.archived ?? false, source: record.source, taskId: record.taskId, sessionId: record.sessionId, submittedAt: record.createdAt, updatedAt: record.updatedAt, inputHash: record.inputHash, ...(record.attempt !== undefined ? { attempt: record.attempt } : {}), ...(record.error ? { error: record.error } : {}), ...(record.result ? { result: record.result } : {}), ...(record.patch ? { patch: record.patch } : {}), ...(record.execution ? { execution: record.execution } : {}), ...(record.executionDirectory ? { executionDirectory: record.executionDirectory } : {}), ...(record.interaction ? { interaction: record.interaction } : {}), ...(record.gates ? { gates: record.gates, requestPhase: record.gates.phase, executionStatus: record.executionStatus } : {}), ...(inputChanged ? { inputChanged: true, note: 'Accepted input is frozen. Copy to a new filename and remove id/werk to request different work.' } : {}) });
     if (next === current) return true;
     // Optimistic editor protection; a changed observation is retried on the next scan.
     if (await readBoundedFile(path, 65536) !== current) return false;
@@ -108,6 +111,9 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
     } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
     const raw = '---\n' + stringify({ schemaVersion: 1, id: record.id, title, source: 'orchestrator', status: record.status, werk: { taskId: record.taskId, sessionId: record.sessionId, attempt: record.attempt } }) + '---\n' + markdown;
     const file = await open(path, 'wx', 0o600); try { await file.writeFile(raw); await file.sync(); } finally { await file.close(); }
+  }
+  async gates(record: FeatureRecord, request: WorkerRequest) {
+    return exportFeatureGates(this.directory, record, request, path => realDirectory(path, true));
   }
   async question(record: FeatureRecord, view: InteractionView) {
     const pending = view.pending;
@@ -126,7 +132,7 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
     if (!featureId.test(record.id)) throw Error('Invalid feature ID.');
     validateFeatureExecution(record);
     const directory = join(this.directory, '_results'); await realDirectory(directory);
-    const raw = '---\n' + stringify({ schemaVersion: 1, featureId: record.id, source: record.source, status: record.status, taskId: record.taskId, sessionId: record.sessionId, updatedAt: record.execution?.completedAt ?? record.updatedAt, ...(record.execution ? { execution: record.execution } : {}) }) + '---\n# Worker result\n\n' + text + '\n';
+    const raw = '---\n' + stringify({ schemaVersion: 1, featureId: record.id, source: record.source, status: record.executionStatus ?? record.status, taskId: record.taskId, sessionId: record.sessionId, updatedAt: record.execution?.completedAt ?? record.updatedAt, ...(record.execution ? { execution: record.execution } : {}) }) + '---\n# Worker result\n\n' + text + '\n';
     if (record.execution?.after) {
       const executionDirectory = join(directory, record.id); await realDirectory(executionDirectory, true);
       // The mutable latest result is a convenience; each run keeps its own original result.

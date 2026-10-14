@@ -7,9 +7,9 @@ import { isMainScript } from './verify.mjs';
 import { createArchives } from './archives.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
-export const releaseFiles = ['werk.mjs', 'werk-docker.sh', 'werk-docker.ps1', 'compose.release.yaml', 'compose.windows.yaml', 'Dockerfile.release', 'Dockerfile.release.dockerignore', 'examples/system.yaml', 'schemas/system.schema.json', 'scripts/release/verify.mjs', 'scripts/release/install.mjs', 'src/guide/public/index.html', 'LICENSE'];
+export const releaseFiles = ['werk.mjs', 'werk-docker.sh', 'werk-docker.ps1', 'compose.release.yaml', 'compose.windows.yaml', 'Dockerfile.release', 'Dockerfile.release.dockerignore', 'examples/system.yaml', 'schemas/system.schema.json', 'schemas/request-gates.schema.json', 'scripts/release/verify.mjs', 'scripts/release/install.mjs', 'LICENSE'];
 export const releaseTrees = ['bin/apps/factory', 'bin/apps/orchestrator', 'bin/apps/worker', 'scripts/security', 'scripts/infrastructure', 'scripts/system', 'scripts/runtime', 'scripts/docker', 'src/factory/dist', 'src/orchestrator/dist', 'src/worker/dist'];
-export const releaseDocs = ['how-to/monitor-long-running-worker', 'how-to/project-agent-integrations', 'reference/model-interaction', 'how-to/answer-and-resume-worker', 'tutorials/worker-feature-lifecycle', 'reference/worker-run-metrics', 'how-to/project-worker', 'reference/feature-requests', 'reference/agent-definitions', 'reference/updates', 'reference/portable-apps', 'how-to/assemble-independent-components', 'how-to/use-worker-webview', 'how-to/run-codex-task', 'how-to/manage-access', 'reference/access-control', 'tutorials/linux-vm-first-task', 'how-to/operate-linux-vm', 'reference/infrastructure', 'explanation/twelve-factor', 'tutorials/system-from-yaml', 'reference/system-definition', 'explanation/core-entities', 'tutorials/local-first-task', 'tutorials/docker-first-task', 'how-to/maintain-runtime', 'how-to/monitor-runtime', 'how-to/upgrade-backup', 'how-to/operate-with-agents', 'reference/runtime-cli', 'reference/observability', 'reference/configuration', 'reference/releases', 'reference/security', 'explanation/runtime-layout', 'explanation/modes'].map(path => `docs/${path}.md`);
+export const releaseDocs = ['reference/request-gates', 'how-to/rework-worker-requests', 'how-to/monitor-long-running-worker', 'how-to/project-agent-integrations', 'reference/model-interaction', 'how-to/answer-and-resume-worker', 'tutorials/worker-feature-lifecycle', 'reference/worker-run-metrics', 'how-to/project-worker', 'reference/feature-requests', 'reference/agent-definitions', 'reference/updates', 'reference/portable-apps', 'how-to/assemble-independent-components', 'how-to/use-worker-webview', 'how-to/run-codex-task', 'how-to/manage-access', 'reference/access-control', 'tutorials/linux-vm-first-task', 'how-to/operate-linux-vm', 'reference/infrastructure', 'explanation/twelve-factor', 'tutorials/system-from-yaml', 'reference/system-definition', 'explanation/core-entities', 'tutorials/local-first-task', 'tutorials/docker-first-task', 'how-to/maintain-runtime', 'how-to/monitor-runtime', 'how-to/upgrade-backup', 'how-to/operate-with-agents', 'reference/runtime-cli', 'reference/observability', 'reference/configuration', 'reference/releases', 'reference/security', 'explanation/runtime-layout', 'explanation/modes'].map(path => `docs/${path}.md`);
 const releaseTemplates = { 'readme.md.txt': 'README.md', 'agents.md.txt': 'AGENTS.md', 'docs-index.md.txt': 'docs/index.md' };
 const extensions = new Set(['.js', '.mjs', '.cjs', '.json', '.md', '.html', '.css', '.svg', '.png', '.jpg', '.jpeg', '.webp', '.yaml', '.yml', '.sh', '.ps1', '.py', '.txt']);
 const excluded = new Set(['.git', '.state', '.werk', '.env', '.DS_Store', 'backups', 'release']);
@@ -54,11 +54,10 @@ async function collect(projectRoot) {
   }
   // The standalone guide must match the self-contained page served by the runtime.
   const builtGuide = entries.find(entry => entry.path === 'src/factory/dist/factory/public/guide.html');
-  const standaloneGuide = entries.find(entry => entry.path === 'src/guide/public/index.html');
-  if (!builtGuide || !standaloneGuide) throw Error('Missing composed system guide; run npm run build first');
-  totalBytes += builtGuide.content.length - standaloneGuide.content.length;
+  if (!builtGuide) throw Error('Missing compiled system guide; run npm run build first');
+  totalBytes += builtGuide.content.length;
   if (totalBytes > 256 * 1024 * 1024) throw Error('Release exceeds packaging limits (256 MiB)');
-  standaloneGuide.content = builtGuide.content;
+  entries.push({ path: 'src/guide/public/index.html', content: builtGuide.content, mode: 0o644 });
   const paths = new Set(entries.map(entry => entry.path));
   for (const entry of entries.filter(entry => entry.path.endsWith('.md') && !entry.path.startsWith('src/') && !/^bin\/apps\/[^/]+\/src\//.test(entry.path))) {
     for (const match of entry.content.toString('utf8').matchAll(/!?\[[^\]]+\]\(([^\s)]+)(?:\s+"[^"]*")?\)/g)) {

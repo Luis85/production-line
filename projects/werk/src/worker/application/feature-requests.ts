@@ -1,9 +1,16 @@
+import type { WorkerRequest, RequestPhase } from './request-gates.js';
 import type { InteractionView } from './interactions.js';
 import type { RunSnapshot, ProviderUsage } from './run-evidence.js';
 import { manageFeature, type FeatureDocumentPort } from './feature-management.js';
 import { DomainError } from '../../shared/errors.js';
 import { randomUUID, createHash } from 'node:crypto';
 
+export interface FeatureGateProjection {
+  requestId: string; revision: number; inputRevision: number; phase: RequestPhase;
+  policyId: string; policyVersion: number; policyDigest: string;
+  ready: 'pass' | 'fail' | 'unknown' | 'not_evaluated'; done: 'pass' | 'fail' | 'unknown' | 'not_evaluated';
+  link: string; questions: string; gaps: string;
+}
 export interface FeatureExecutionEvidence {
   runId: string; attempt: number; before: RunSnapshot; after?: RunSnapshot;
   usage?: ProviderUsage; durationMs?: number | null; queueDurationMs?: number | null;
@@ -13,7 +20,7 @@ export interface FeatureExecutionLinks {
   result?: string; patch?: string;
 }
 export interface FeatureInput { title: string; mode: 'chat' | 'patch'; provider: string; message: string; paths?: string[]; priority: number; definitionId?: string; agent?: string; useInstructionsOnly?: boolean; }
-export interface FeatureRecord { id: string; name: string; source: 'folder' | 'orchestrator'; taskId: string; sessionId: string; input?: FeatureInput; inputHash: string; submitted: boolean; status: string; createdAt: string; updatedAt: string; error?: string; result?: string; patch?: string; attempt?: number; archived?: boolean; execution?: FeatureExecutionLinks; executionDirectory?: string; interaction?: { phase: string; revision: number; pendingId?: string; link?: string }; }
+export interface FeatureRecord { id: string; name: string; source: 'folder' | 'orchestrator'; taskId: string; sessionId: string; input?: FeatureInput; inputHash: string; submitted: boolean; status: string; createdAt: string; updatedAt: string; error?: string; result?: string; patch?: string; attempt?: number; archived?: boolean; execution?: FeatureExecutionLinks; executionDirectory?: string; gates?: FeatureGateProjection; executionStatus?: string; interaction?: { phase: string; revision: number; pendingId?: string; link?: string }; }
 export interface FeatureIndex { version: 1; owner: string; records: FeatureRecord[]; }
 export interface FeatureFile { name: string; revision: string; id?: string; status?: string; source?: string; input?: FeatureInput; error?: string; }
 export interface FeatureFolderPort {
@@ -27,6 +34,7 @@ export interface FeatureFolderPort {
   createRemote(record: FeatureRecord, title: string, markdown: string): Promise<void>;
   evidence(record: FeatureRecord, evidence: FeatureExecutionEvidence): Promise<FeatureExecutionLinks>;
   question?(record: FeatureRecord, view: InteractionView): Promise<void>;
+  gates?(record: FeatureRecord, request: WorkerRequest): Promise<FeatureGateProjection>;
   result(record: FeatureRecord, text: string, patch?: string): Promise<void>;
   report(value: { records: FeatureRecord[]; errors: { file: string; message: string }[] }): Promise<void>;
   close(): Promise<void>;
@@ -34,7 +42,7 @@ export interface FeatureFolderPort {
 export interface FeatureQueuePort {
   control?(record: FeatureRecord, action: 'cancel' | 'retry'): Promise<unknown>;
   submit(record: FeatureRecord): Promise<void>;
-  inspect(record: FeatureRecord): { status: string; text?: string; patch?: string; error?: string; evidence?: FeatureExecutionEvidence; interaction?: InteractionView } | undefined;
+  inspect(record: FeatureRecord): { status: string; text?: string; patch?: string; error?: string; evidence?: FeatureExecutionEvidence; interaction?: InteractionView; request?: WorkerRequest } | undefined;
 }
 const fingerprint = (input: FeatureInput) => createHash('sha256').update(JSON.stringify(input)).digest('hex');
 const terminal = new Set(['completed', 'review', 'failed', 'cancelled']);
@@ -133,7 +141,15 @@ export class FeatureRequests {
   private async synchronizeExecution(record: FeatureRecord) {
     const current = this.queue.inspect(record);
     if (!current) { this.change(record, 'unavailable', 'Task history is no longer retained. This request will not be submitted again.'); return; }
-    this.change(record, current.status, current.error);
+    const phase = current.request?.phase;
+    // Preserve established execution labels; the independently persisted gate projection
+    // owns readiness, rework and completion authority without relabeling a known attempt.
+    const held = phase && ['readiness', 'needs_rework', 'waiting_input', 'escalated', 'review'].includes(phase);
+    this.change(record, held ? phase === 'readiness' ? 'needs_rework' : phase : current.status, current.error);
+    if (current.request && this.folder.gates) {
+      record.gates = await this.folder.gates(record, current.request);
+      record.executionStatus = current.status;
+    } else { delete record.gates; delete record.executionStatus; }
     if (current.interaction) {
       const view = current.interaction;
       record.interaction = { phase: view.phase, revision: view.revision, ...(view.pending ? { pendingId: view.pending.id, link: `_questions/${record.id}/${view.pending.id}.md` } : {}) };
@@ -145,8 +161,8 @@ export class FeatureRequests {
     } else delete record.execution;
     // Latest-result pointers must not describe a retry or follow-up that has not finished.
     // Its earlier immutable execution exports remain available in the execution directory.
-    if (!terminal.has(record.status) || current.text === undefined) { delete record.result; delete record.patch; }
-    if (terminal.has(record.status) && current.text !== undefined) {
+    if (!terminal.has(current.status) || current.text === undefined) { delete record.result; delete record.patch; }
+    if (terminal.has(current.status) && current.text !== undefined) {
       await this.folder.result(record, current.text, current.patch);
       record.result = `_results/${record.id}.md`;
       if (current.patch) record.patch = `_results/${record.id}.patch`; else delete record.patch;

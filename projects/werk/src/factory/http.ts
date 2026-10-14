@@ -1,3 +1,4 @@
+import { taskPageQuery } from './application/task-pages.js';
 import type { FactoryIntake } from './application/intake.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { accessAuthorization, accessView, withAccess, requireWrite, type AccessDocument } from '../shared/http/access.js';
@@ -40,6 +41,8 @@ export function createFactoryHandler(application: FactoryApplication, adminToken
                 const id = target.searchParams.get('factoryId');
                 return json(response, 200, withAccess(await application.overview(id === null ? undefined : identifier(id, 'factoryId')), principal));
             }
+            const taskPage = path.match(/^\/v1\/lines\/([^/]+)\/tasks$/);
+            if (taskPage && method === 'GET') return json(response, 200, await application.taskPage(identifier(taskPage[1], 'lineId'), taskPageQuery(target.searchParams)));
             const interact = path.match(/^\/v1\/lines\/([^/]+)\/interaction$/);
             if (interaction && interact && method === 'POST') return json(response, 200, await interaction(identifier(interact[1], 'lineId'), await readJson(request)));
             if (intake && path === '/v1/intake') {

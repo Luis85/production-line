@@ -1,76 +1,126 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import vm from 'node:vm';
-import ts from 'typescript';
-import { randomUUID } from 'node:crypto';
-
-const source = await readFile(new URL('../../../src/factory/public/experience.js', import.meta.url), 'utf8');
-const syntax = ts.createSourceFile('experience.js', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
-const functions = new Map(), assignments = new Map();
-function visit(node) {
-  if (ts.isFunctionDeclaration(node) && node.name) functions.set(node.name.text, node.getText(syntax));
-  if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
-    const key = node.left.getText(syntax);
-    if (ts.isFunctionExpression(node.right) || ts.isArrowFunction(node.right)) assignments.set(key, node.right.getText(syntax));
-  }
-  ts.forEachChild(node, visit);
-}
-visit(syntax);
-const control = value => ({ value, required: true, disabled: false, textContent: '', dataset: {}, setAttribute() {} });
-function fixture(api = async () => ({ id: 'saved', reason: 'Accepted' })) {
-  const names = ['title', 'criteria', 'reference', 'project', 'provider', 'execution', 'factory', 'destination'];
-  const fields = Object.fromEntries(names.map(name => [name, control('')]));
-  Object.assign(fields.title, { value: 'Saved fixture' }); fields.criteria.value = 'Criteria'; fields.project.value = 'demo';
-  fields.provider.value = 'auto'; fields.execution.value = 'mock'; fields.factory.value = 'fixture';
-  const form = { setAttribute() {}, querySelectorAll: () => Object.values(fields), reset() { for (const field of Object.values(fields)) field.value = ''; } };
-  const routingForm = { setAttribute() {}, querySelectorAll: () => [], reset() { this.resets = (this.resets || 0) + 1; } };
-  const context = vm.createContext({ ...fields, form, routingForm, send: control(''), save: control(''), policyLine: control(''), policyMode: control('auto'), paused: {checked:false}, fillLines() {}, state: { token: 'private-memory-fixture', canWrite: true, saving: false, session: 1 }, crypto: { randomUUID }, api, loadQueue: async () => {}, feedback: control(''), queue: { replaceChildren() {} }, lineMap: { update() {} }, previousDisconnect() { context.state.token = ''; context.state.session++; } });
-  vm.runInContext(`let submitting=false,policySaving=false,widget=null,request=0,queueRequest=0,lastOverview=null,registrySignature='',scopeSignature='',taskKey='retained-key',lastTask=''; const policyDrafts=new Map();\n${functions.get('updateTaskValidation')}\n${functions.get('setIntakeBusy')}\n${functions.get('setRoutingBusy')}\n${functions.get('rememberPolicyDraft')}\n${functions.get('loadPolicy')}\nform.onsubmit=${assignments.get('form.onsubmit')};\ndisconnect=${assignments.get('disconnect')};`, context);
-  return { context, fields, form, run: code => vm.runInContext(code, context) };
-}
-
-test('Factory expiry retains unsent intake and retry key; explicit disconnect clears them', () => {
-  const surface = fixture(); surface.fields.reference.value = '[[Fixtures/Requirement]]';
-  surface.run('disconnect({preserveDrafts:true})');
-  assert.equal(surface.fields.title.value, 'Saved fixture'); assert.equal(surface.fields.reference.value, '[[Fixtures/Requirement]]');
-  assert.equal(surface.run('taskKey'), 'retained-key');
-  assert.equal(surface.fields.title.required, false);
-  surface.run('disconnect()'); assert.equal(surface.fields.title.value, ''); assert.equal(surface.fields.reference.value, '');
-  assert.equal(surface.fields.title.required, true); assert.equal(surface.fields.criteria.required, true);
-  assert.notEqual(surface.run('taskKey'), 'retained-key');
+import test from "node:test";
+import assert from "node:assert/strict";
+import { factory, response, deferred } from "../helpers/runtime-harness.mjs";
+const fill = (f) =>
+  Object.assign(f.state.taskDraft, {
+    project: "demo",
+    title: "Review checkout retry behavior",
+    criteria: "Retry remains recoverable",
+    reference: "",
+  });
+test("Factory expiry retains unsent intake and retry key; explicit disconnect clears them", async () => {
+  const f = factory((_p, init) => {
+    if (init.method === "POST") throw Error("Offline");
+  });
+  fill(f);
+  await f.submitIntake();
+  f.disconnect(true);
+  assert.equal(f.state.taskDraft.title, "Review checkout retry behavior");
+  await f.connect("new-fixture");
+  await f.submitIntake();
+  const writes = f.calls.filter((c) => c.method === "POST");
+  assert.equal(
+    writes[0].headers["Idempotency-Key"],
+    writes[1].headers["Idempotency-Key"],
+  );
+  f.disconnect();
+  assert.equal(f.state.taskDraft.title, "");
+  assert.equal(f.state.taskDraft.reference, "");
+});
+test("Factory intake blocks duplicate submit and reference success restores an empty manual draft", async () => {
+  const pending = deferred();
+  const f = factory((_p, init) =>
+    init.method === "POST" ? pending.promise : undefined,
+  );
+  fill(f);
+  f.state.taskDraft.reference = "[[Fixtures/Requirement]]";
+  const send = f.submitIntake();
+  await f.submitIntake();
+  assert.equal(f.calls.filter((c) => c.method === "POST").length, 1);
+  assert.equal(f.state.intakeBusy, true);
+  const write = f.calls[0];
+  assert.deepEqual(write.body.task, {
+    project: "demo",
+    provider: "auto",
+    executionMode: "mock",
+    priority: 1,
+    requirementRef: "[[Fixtures/Requirement]]",
+  });
+  pending.resolve(response({ id: "saved", reason: "Delivery pending" }));
+  await send;
+  assert.equal(f.state.taskDraft.reference, "");
+  assert.equal(f.state.taskDraft.title, "");
+  assert.equal(f.state.intakeBusy, false);
+  assert.match(f.state.intakeMessage, /Gespeichert: saved/);
+});
+test("Factory failed intake keeps input and stable key; changed body receives new key", async () => {
+  const f = factory((_p, init) => {
+    if (init.method === "POST") throw Error("Offline");
+  });
+  fill(f);
+  await f.submitIntake();
+  await f.submitIntake();
+  f.state.taskDraft.title = "Changed";
+  await f.submitIntake();
+  const writes = f.calls.filter((c) => c.method === "POST");
+  assert.equal(
+    writes[0].headers["Idempotency-Key"],
+    writes[1].headers["Idempotency-Key"],
+  );
+  assert.notEqual(
+    writes[1].headers["Idempotency-Key"],
+    writes[2].headers["Idempotency-Key"],
+  );
+  assert.equal(f.state.taskDraft.title, "Changed");
+  assert.match(f.state.intakeMessage, /Eingaben bleiben erhalten/);
+  assert.equal(f.state.intakeBusy, false);
+});
+test("Factory saved routing draft survives background refresh and late reads cannot change another factory", async () => {
+  const pending = deferred();
+  const f = factory((path) =>
+    path.includes("/factories/root/routing") ? pending.promise : undefined,
+  );
+  f.state.policy = { mode: "manual", lineId: "line-a", paused: true };
+  f.editPolicy();
+  await f.loadPolicy();
+  assert.deepEqual(
+    { ...f.state.policy },
+    { mode: "manual", lineId: "line-a", paused: true },
+  );
+  assert.equal(f.calls.length, 0);
+  f.state.policyDrafts.clear();
+  const loading = f.loadPolicy();
+  assert.equal(f.state.policyLoading, true);
+  f.state.intakeFactory = "child";
+  await f.loadPolicy();
+  pending.resolve(response({ mode: "manual", lineId: "wrong", paused: true }));
+  await loading;
+  assert.equal(f.state.policy.lineId, null);
+  assert.equal(f.state.policyLoading, false);
+});
+test("routing save blocks duplicate writes and retains the selected values on failure", async () => {
+  const pending = deferred();
+  const f = factory((_p, init) =>
+    init.method === "PUT" ? pending.promise : undefined,
+  );
+  f.state.policy = { mode: "manual", lineId: "line-a", paused: true };
+  const save = f.savePolicy();
+  await f.savePolicy();
+  f.navigate("other");
+  assert.equal(f.state.scope, "");
+  assert.equal(f.calls.filter((c) => c.method === "PUT").length, 1);
+  pending.reject(Error("Offline"));
+  await save;
+  assert.equal(f.state.policy.lineId, "line-a");
+  assert.equal(f.state.policyBusy, false);
+  assert.match(f.state.policyError, /Offline/);
 });
 
-test('Factory intake prevents duplicate submission and restores manual validation after reference success', async () => {
-  let release, calls = 0;
-  const surface = fixture(() => { calls++; return new Promise(resolve => { release = resolve; }); });
-  surface.fields.reference.value = '[[Fixtures/Requirement]]'; surface.run('updateTaskValidation()');
-  const pending = surface.form.onsubmit({ preventDefault() {} });
-  await surface.form.onsubmit({ preventDefault() {} }); assert.equal(calls, 1); assert.equal(surface.fields.project.disabled, true);
-  release({ id: 'saved', reason: 'Accepted' }); await pending;
-  assert.equal(surface.fields.reference.value, ''); assert.equal(surface.fields.title.required, true); assert.equal(surface.fields.criteria.required, true);
-  assert.equal(surface.fields.project.disabled, false); assert.equal(surface.context.feedback.dataset.kind, 'success');
-});
-
-test('Factory failed intake preserves inputs and the same idempotency key for retry', async () => {
-  const keys = []; const surface = fixture(async (_path, options) => { keys.push(options.idempotencyKey); throw Error('Offline'); });
-  await surface.form.onsubmit({ preventDefault() {} }); await surface.form.onsubmit({ preventDefault() {} });
-  assert.equal(surface.fields.title.value, 'Saved fixture'); assert.equal(keys.length, 2); assert.equal(keys[0], keys[1]);
-  assert.equal(surface.fields.title.disabled, false); assert.equal(surface.context.feedback.dataset.kind, 'error');
-  assert.match(surface.context.feedback.textContent, /Eingaben bleiben erhalten/);
-});
-
-
-test('Factory routing draft survives background reload and supersedes an older policy response', async () => {
-  let release; const surface=fixture(() => new Promise(resolve => { release=resolve; }));
-  const pending=surface.run('loadPolicy()');
-  surface.context.policyMode.value='manual';surface.context.policyLine.value='line-fixture';surface.context.paused.checked=true;
-  surface.run('rememberPolicyDraft()');
-  release({mode:'auto',lineId:null,paused:false});await pending;
-  assert.equal(surface.context.policyMode.value,'manual');assert.equal(surface.context.policyLine.value,'line-fixture');assert.equal(surface.context.paused.checked,true);
-  surface.context.policyMode.value='auto';surface.context.policyLine.value='';surface.context.paused.checked=false;
-  await surface.run('loadPolicy()');
-  assert.equal(surface.context.policyMode.value,'manual');assert.equal(surface.context.policyLine.value,'line-fixture');assert.equal(surface.context.paused.checked,true);
-  surface.run('setRoutingBusy(true)');assert.equal(surface.fields.factory.disabled,true);
-  surface.run('setRoutingBusy(false)');assert.equal(surface.fields.factory.disabled,false);
+test("clearing a queued intake destination sends null to restore automatic routing", async () => {
+  const f = factory();
+  f.state.queueTargets.set("saved", "");
+  await f.assignTarget({ id: "saved", lineId: "line-a" });
+  assert.deepEqual(f.calls.find((c) => c.method === "PUT").body, {
+    lineId: null,
+  });
 });

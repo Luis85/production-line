@@ -89,3 +89,16 @@ claim that a current build has passed final review or live-provider verification
 Preserve keyboard focus, mobile navigation, stale-data feedback, private access
 and unsent work during page changes. Local tasks produce review artifacts from
 approved inputs; they do not apply patches or run project tests automatically.
+
+
+## Shared Vue foundation
+
+The workspace frame, access presentation, connection display and guided tour use
+`src/shared/webview` Vue components and the shared Werk theme. Credential handling,
+refresh state and task drafts remain in the worker store; route pages retain their
+`KeepAlive` lifecycle. The shared polling helper skips hidden or paused views and
+prevents overlapping scheduled reads. Tours use Nuxt UI modal focus management,
+await route activation before highlighting a target, and close when access locks.
+Shared skip links focus main content without changing hash-based routes used by
+other Werk applications. The shared spatial component keeps the established pure
+camera geometry while Vue owns its controls, selection and inspector.

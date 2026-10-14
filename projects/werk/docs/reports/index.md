@@ -8,6 +8,9 @@ separately under `docs/handoff`; original source provenance is recorded in the
 
 | Record | Scope |
 | --- | --- |
+| [Unified worker, webviews and request gates](werk-unified-worker-review.md) | Shared Vue/Nuxt UI Kanban, deterministic request lifecycle, package comparison and integrated qualification |
+| [Interactive unified view sitemap](werk-unified-views.html) | Current route and worker-panel screenshots, gate workflow and explicit evidence provenance |
+| [Worker request gates and recovery](worker-request-gates-review.md) | Deterministic readiness/completion, advisory rework, remote checkpoint ownership, command admission disclosure and focused fixture validation |
 | [Worker model lifecycle and operations review](worker-model-operations-review.md) | Durable model contracts, questions/recovery, project integrations, resource monitoring, twelve-factor review and qualification |
 | [Interactive resource and integration journey](worker-resources-integrations-journey.html) | Reviewed project synchronization, protected edits and real local warning/deadline/recovery screenshots |
 | [Interactive model interaction journey](worker-model-interaction-journey.html) | Questions, restart recovery, continuation, immutable dispatches and consumption screenshots |

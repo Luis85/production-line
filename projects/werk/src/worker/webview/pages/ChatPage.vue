@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ResourceMonitorPanel from '../components/ResourceMonitorPanel.vue';
+import RequestGatePanel from '../components/RequestGatePanel.vue';
 import InteractionPanel from '../components/InteractionPanel.vue';
 import type { InteractionView } from '../../application/interactions';
 import SessionPanel from '../components/SessionPanel.vue';
@@ -133,6 +134,7 @@ function keydown(event: KeyboardEvent) { if (event.key === 'Enter' && (event.ctr
             <UButton color="neutral" variant="outline" @click="showSetup">Connect provider</UButton>
           </div>
           <ResourceMonitorPanel v-if="state.unlocked" compact />
+          <RequestGatePanel :request-id="current?.requestId" />
           <InteractionPanel :current-status="current?.status" @change="interaction = $event" @busy="interactionBusy = $event" />
           <details v-if="snapshot" class="task-definition">
             <summary>

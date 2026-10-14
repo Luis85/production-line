@@ -1,3 +1,4 @@
+import type { RequestGateEvidence } from './request-gate.js';
 import type { PinnedContextReference } from './context.js';
 export type Provider = 'auto' | 'claude' | 'codex';
 export interface TaskInput {
@@ -23,6 +24,8 @@ export interface TaskInput {
     };
 }
 export interface Task extends TaskInput {
+    /** Numeric worker-owned gate receipt; absent on older workers. */
+    requestGate?: RequestGateEvidence;
     /** Absent on legacy/unbound mock tasks; never accepted from intake clients. */
     context?: PinnedContextReference;
     id: string;

@@ -18,5 +18,6 @@ export interface FactoryRegistry {
     deleteLine(id: string): void;
 }
 export interface LineReader {
+    tasks?(line: ProductionLine, query: { limit: number; cursor?: string }): Promise<import('./task-pages.js').FactoryTaskPage>;
     read(line: ProductionLine): Promise<LineOverview>;
 }

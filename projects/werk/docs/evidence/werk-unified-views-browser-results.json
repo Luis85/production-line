@@ -1,0 +1,2288 @@
+{
+  "schemaVersion": 1,
+  "qualifiedArchiveSha256": "938ff1459b2e4212efb4a4f4e34bafe4da153e53ef27eaad0d13ce4d0aa01d57",
+  "currentViews": 58,
+  "currentImages": 148,
+  "documentOverflowFailures": [],
+  "captures": [
+    {
+      "id": "factory-access",
+      "title": "Connect to Factory",
+      "group": "Factory",
+      "width": 1440,
+      "file": "factory-access-1440.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "factory-access",
+      "title": "Connect to Factory",
+      "group": "Factory",
+      "width": 390,
+      "file": "factory-access-390.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "factory-access",
+      "title": "Connect to Factory",
+      "group": "Factory",
+      "width": 320,
+      "file": "factory-access-320.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "factory-overview",
+      "title": "Factory overview",
+      "group": "Factory",
+      "width": 1440,
+      "file": "factory-overview-1440.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "factory-overview",
+      "title": "Factory overview",
+      "group": "Factory",
+      "width": 390,
+      "file": "factory-overview-390.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "factory-overview",
+      "title": "Factory overview",
+      "group": "Factory",
+      "width": 320,
+      "file": "factory-overview-320.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "factory-line",
+      "title": "Production-line dashboard",
+      "group": "Factory",
+      "width": 1440,
+      "file": "factory-line-1440.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "factory-line",
+      "title": "Production-line dashboard",
+      "group": "Factory",
+      "width": 390,
+      "file": "factory-line-390.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "factory-line",
+      "title": "Production-line dashboard",
+      "group": "Factory",
+      "width": 320,
+      "file": "factory-line-320.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "orchestrator-access",
+      "title": "Connect to production line",
+      "group": "Orchestrator",
+      "width": 1440,
+      "file": "orchestrator-access-1440.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "orchestrator-access",
+      "title": "Connect to production line",
+      "group": "Orchestrator",
+      "width": 390,
+      "file": "orchestrator-access-390.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "orchestrator-access",
+      "title": "Connect to production line",
+      "group": "Orchestrator",
+      "width": 320,
+      "file": "orchestrator-access-320.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "orchestrator-dashboard",
+      "title": "Line dashboard",
+      "group": "Orchestrator",
+      "width": 1440,
+      "file": "orchestrator-dashboard-1440.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "orchestrator-dashboard",
+      "title": "Line dashboard",
+      "group": "Orchestrator",
+      "width": 390,
+      "file": "orchestrator-dashboard-390.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "orchestrator-dashboard",
+      "title": "Line dashboard",
+      "group": "Orchestrator",
+      "width": 320,
+      "file": "orchestrator-dashboard-320.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "orchestrator-intake",
+      "title": "Prepare a mock task",
+      "group": "Orchestrator",
+      "width": 1440,
+      "file": "orchestrator-intake-1440.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "orchestrator-intake",
+      "title": "Prepare a mock task",
+      "group": "Orchestrator",
+      "width": 390,
+      "file": "orchestrator-intake-390.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "orchestrator-intake",
+      "title": "Prepare a mock task",
+      "group": "Orchestrator",
+      "width": 320,
+      "file": "orchestrator-intake-320.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "orchestrator-tasks",
+      "title": "Task queue",
+      "group": "Orchestrator",
+      "width": 1440,
+      "file": "orchestrator-tasks-1440.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "orchestrator-tasks",
+      "title": "Task queue",
+      "group": "Orchestrator",
+      "width": 390,
+      "file": "orchestrator-tasks-390.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "orchestrator-tasks",
+      "title": "Task queue",
+      "group": "Orchestrator",
+      "width": 320,
+      "file": "orchestrator-tasks-320.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "orchestrator-workers",
+      "title": "Worker capacity",
+      "group": "Orchestrator",
+      "width": 1440,
+      "file": "orchestrator-workers-1440.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "orchestrator-workers",
+      "title": "Worker capacity",
+      "group": "Orchestrator",
+      "width": 390,
+      "file": "orchestrator-workers-390.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "orchestrator-workers",
+      "title": "Worker capacity",
+      "group": "Orchestrator",
+      "width": 320,
+      "file": "orchestrator-workers-320.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "orchestrator-metrics",
+      "title": "Execution evidence",
+      "group": "Orchestrator",
+      "width": 1440,
+      "file": "orchestrator-metrics-1440.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "orchestrator-metrics",
+      "title": "Execution evidence",
+      "group": "Orchestrator",
+      "width": 390,
+      "file": "orchestrator-metrics-390.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "orchestrator-metrics",
+      "title": "Execution evidence",
+      "group": "Orchestrator",
+      "width": 320,
+      "file": "orchestrator-metrics-320.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "guide-model",
+      "title": "System guide",
+      "group": "Guide",
+      "width": 1440,
+      "file": "guide-model-1440.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "guide-model",
+      "title": "System guide",
+      "group": "Guide",
+      "width": 390,
+      "file": "guide-model-390.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "guide-model",
+      "title": "System guide",
+      "group": "Guide",
+      "width": 320,
+      "file": "guide-model-320.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "guide-definition",
+      "title": "Compose system definition",
+      "group": "Guide",
+      "width": 1440,
+      "file": "guide-definition-1440.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "guide-definition",
+      "title": "Compose system definition",
+      "group": "Guide",
+      "width": 390,
+      "file": "guide-definition-390.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "guide-definition",
+      "title": "Compose system definition",
+      "group": "Guide",
+      "width": 320,
+      "file": "guide-definition-320.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-intake",
+      "title": "Intake",
+      "group": "Concept",
+      "width": 1440,
+      "file": "concept-intake-1440.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-intake",
+      "title": "Intake",
+      "group": "Concept",
+      "width": 390,
+      "file": "concept-intake-390.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-intake",
+      "title": "Intake",
+      "group": "Concept",
+      "width": 320,
+      "file": "concept-intake-320.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-factories",
+      "title": "Factories",
+      "group": "Concept",
+      "width": 1440,
+      "file": "concept-factories-1440.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-factories",
+      "title": "Factories",
+      "group": "Concept",
+      "width": 390,
+      "file": "concept-factories-390.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-factories",
+      "title": "Factories",
+      "group": "Concept",
+      "width": 320,
+      "file": "concept-factories-320.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-architektur-d",
+      "title": "Architektur \u00b7 3D",
+      "group": "Concept",
+      "width": 1440,
+      "file": "concept-architektur-d-1440.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-architektur-d",
+      "title": "Architektur \u00b7 3D",
+      "group": "Concept",
+      "width": 390,
+      "file": "concept-architektur-d-390.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-architektur-d",
+      "title": "Architektur \u00b7 3D",
+      "group": "Concept",
+      "width": 320,
+      "file": "concept-architektur-d-320.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-prozess",
+      "title": "Prozess",
+      "group": "Concept",
+      "width": 1440,
+      "file": "concept-prozess-1440.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-prozess",
+      "title": "Prozess",
+      "group": "Concept",
+      "width": 390,
+      "file": "concept-prozess-390.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-prozess",
+      "title": "Prozess",
+      "group": "Concept",
+      "width": 320,
+      "file": "concept-prozess-320.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-taskboard",
+      "title": "Taskboard",
+      "group": "Concept",
+      "width": 1440,
+      "file": "concept-taskboard-1440.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-taskboard",
+      "title": "Taskboard",
+      "group": "Concept",
+      "width": 390,
+      "file": "concept-taskboard-390.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-taskboard",
+      "title": "Taskboard",
+      "group": "Concept",
+      "width": 320,
+      "file": "concept-taskboard-320.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-dashboard",
+      "title": "Dashboard",
+      "group": "Concept",
+      "width": 1440,
+      "file": "concept-dashboard-1440.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-dashboard",
+      "title": "Dashboard",
+      "group": "Concept",
+      "width": 390,
+      "file": "concept-dashboard-390.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-dashboard",
+      "title": "Dashboard",
+      "group": "Concept",
+      "width": 320,
+      "file": "concept-dashboard-320.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-worker-provider",
+      "title": "Worker & Provider",
+      "group": "Concept",
+      "width": 1440,
+      "file": "concept-worker-provider-1440.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-worker-provider",
+      "title": "Worker & Provider",
+      "group": "Concept",
+      "width": 390,
+      "file": "concept-worker-provider-390.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-worker-provider",
+      "title": "Worker & Provider",
+      "group": "Concept",
+      "width": 320,
+      "file": "concept-worker-provider-320.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-betrieb-cli",
+      "title": "Betrieb & CLI",
+      "group": "Concept",
+      "width": 1440,
+      "file": "concept-betrieb-cli-1440.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-betrieb-cli",
+      "title": "Betrieb & CLI",
+      "group": "Concept",
+      "width": 390,
+      "file": "concept-betrieb-cli-390.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-betrieb-cli",
+      "title": "Betrieb & CLI",
+      "group": "Concept",
+      "width": 320,
+      "file": "concept-betrieb-cli-320.jpg",
+      "overflow": 0,
+      "viewportOnly": false,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-system",
+      "title": "System",
+      "group": "Concept",
+      "width": 1440,
+      "file": "concept-system-1440.jpg",
+      "overflow": 0,
+      "viewportOnly": true,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-system",
+      "title": "System",
+      "group": "Concept",
+      "width": 390,
+      "file": "concept-system-390.jpg",
+      "overflow": 0,
+      "viewportOnly": true,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "concept-system",
+      "title": "System",
+      "group": "Concept",
+      "width": 320,
+      "file": "concept-system-320.jpg",
+      "overflow": 0,
+      "viewportOnly": true,
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "factory-viewer",
+      "title": "Factory viewer permissions",
+      "group": "Factory",
+      "width": 390,
+      "file": "factory-viewer-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual isolated local APIs",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "factory-create",
+      "title": "Create a named Factory",
+      "group": "Factory",
+      "width": 390,
+      "file": "factory-create-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual isolated local APIs",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "factory-delete-confirm",
+      "title": "Confirm removing only the empty Factory",
+      "group": "Factory",
+      "width": 390,
+      "file": "factory-delete-confirm-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual isolated local APIs",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "factory-recovered-draft",
+      "title": "Recover an unsaved Factory draft",
+      "group": "Factory",
+      "width": 390,
+      "file": "factory-recovered-draft-390.jpg",
+      "overflow": 0,
+      "evidence": "Explicit401 HTTP fixture; authenticated reconnect uses actual API",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "diagnostics-live",
+      "title": "Live worker diagnostics",
+      "group": "Diagnostics",
+      "width": 1440,
+      "file": "diagnostics-live-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual compiled diagnostic interface and real CLIexport; localreadonly statusservice uses actual systemworker snapshot",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "diagnostics-live",
+      "title": "Live worker diagnostics",
+      "group": "Diagnostics",
+      "width": 390,
+      "file": "diagnostics-live-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual compiled diagnostic interface and real CLIexport; localreadonly statusservice uses actual systemworker snapshot",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "diagnostics-live",
+      "title": "Live worker diagnostics",
+      "group": "Diagnostics",
+      "width": 320,
+      "file": "diagnostics-live-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual compiled diagnostic interface and real CLIexport; localreadonly statusservice uses actual systemworker snapshot",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "diagnostics-stale",
+      "title": "Failed refresh retains last successful status",
+      "group": "Diagnostics",
+      "width": 390,
+      "file": "diagnostics-stale-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual compiled diagnostic interface and real CLIexport; localreadonly statusservice uses actual systemworker snapshot",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "diagnostics-offline",
+      "title": "CLI static export over localhost",
+      "group": "Diagnostics",
+      "width": 1440,
+      "file": "diagnostics-offline-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual compiled diagnostic interface and real CLIexport; localreadonly statusservice uses actual systemworker snapshot",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "diagnostics-offline",
+      "title": "CLI static export over localhost",
+      "group": "Diagnostics",
+      "width": 390,
+      "file": "diagnostics-offline-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual compiled diagnostic interface and real CLIexport; localreadonly statusservice uses actual systemworker snapshot",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "diagnostics-offline",
+      "title": "CLI static export over localhost",
+      "group": "Diagnostics",
+      "width": 320,
+      "file": "diagnostics-offline-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual compiled diagnostic interface and real CLIexport; localreadonly statusservice uses actual systemworker snapshot",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)"
+    },
+    {
+      "id": "worker-provider-codex-cli",
+      "title": "Codex CLI provider connection",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-provider-codex-cli-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-provider-codex-cli",
+      "title": "Codex CLI provider connection",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-provider-codex-cli-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-provider-codex-cli",
+      "title": "Codex CLI provider connection",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-provider-codex-cli-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-provider-claude-code-cli",
+      "title": "Claude Code CLI provider connection",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-provider-claude-code-cli-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-provider-claude-code-cli",
+      "title": "Claude Code CLI provider connection",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-provider-claude-code-cli-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-provider-claude-code-cli",
+      "title": "Claude Code CLI provider connection",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-provider-claude-code-cli-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-provider-openai-\u00b7-api",
+      "title": "OpenAI \u00b7 API provider connection",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-provider-openai-\u00b7-api-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-provider-openai-\u00b7-api",
+      "title": "OpenAI \u00b7 API provider connection",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-provider-openai-\u00b7-api-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-provider-openai-\u00b7-api",
+      "title": "OpenAI \u00b7 API provider connection",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-provider-openai-\u00b7-api-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-provider-claude-\u00b7-api",
+      "title": "Claude \u00b7 API provider connection",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-provider-claude-\u00b7-api-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-provider-claude-\u00b7-api",
+      "title": "Claude \u00b7 API provider connection",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-provider-claude-\u00b7-api-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-provider-claude-\u00b7-api",
+      "title": "Claude \u00b7 API provider connection",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-provider-claude-\u00b7-api-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-definitions",
+      "title": "Agent definition import",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-definitions-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-definitions",
+      "title": "Agent definition import",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-definitions-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-definitions",
+      "title": "Agent definition import",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-definitions-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-definition-preview",
+      "title": "Review definition before import",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-definition-preview-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-definition-preview",
+      "title": "Review definition before import",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-definition-preview-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-definition-preview",
+      "title": "Review definition before import",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-definition-preview-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-file-editor",
+      "title": "Prepare a file task without executing",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-file-editor-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-file-editor",
+      "title": "Prepare a file task without executing",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-file-editor-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-file-editor",
+      "title": "Prepare a file task without executing",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-file-editor-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-settings",
+      "title": "Provider and orchestrator settings",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-settings-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-settings",
+      "title": "Provider and orchestrator settings",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-settings-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-settings",
+      "title": "Provider and orchestrator settings",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-settings-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-resources",
+      "title": "Resources, duration policy and retained alert history",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-resources-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-resources",
+      "title": "Resources, duration policy and retained alert history",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-resources-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-resources",
+      "title": "Resources, duration policy and retained alert history",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-resources-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-integrations",
+      "title": "Project integration readiness",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-integrations-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-integrations",
+      "title": "Project integration readiness",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-integrations-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-integrations",
+      "title": "Project integration readiness",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-integrations-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-runtime",
+      "title": "Runtime and execution profiles",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-runtime-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-runtime",
+      "title": "Runtime and execution profiles",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-runtime-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-runtime",
+      "title": "Runtime and execution profiles",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-runtime-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-access",
+      "title": "Unlock local worker",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-access-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-access",
+      "title": "Unlock local worker",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-access-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-access",
+      "title": "Unlock local worker",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-access-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-chat",
+      "title": "Worker draft conversation",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-chat-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-chat",
+      "title": "Worker draft conversation",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-chat-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-chat",
+      "title": "Worker draft conversation",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-chat-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-history",
+      "title": "Worker History",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-history-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-history",
+      "title": "Worker History",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-history-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-history",
+      "title": "Worker History",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-history-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-dashboard",
+      "title": "Worker Dashboard",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-dashboard-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-dashboard",
+      "title": "Worker Dashboard",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-dashboard-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-dashboard",
+      "title": "Worker Dashboard",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-dashboard-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-tour-1",
+      "title": "Worker tour \u00b7 step 1",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-tour-1-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-tour-1",
+      "title": "Worker tour \u00b7 step 1",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-tour-1-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-tour-2",
+      "title": "Worker tour \u00b7 step 2",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-tour-2-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-tour-2",
+      "title": "Worker tour \u00b7 step 2",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-tour-2-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-tour-3",
+      "title": "Worker tour \u00b7 step 3",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-tour-3-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-tour-3",
+      "title": "Worker tour \u00b7 step 3",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-tour-3-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-tour-4",
+      "title": "Worker tour \u00b7 step 4",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-tour-4-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-tour-4",
+      "title": "Worker tour \u00b7 step 4",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-tour-4-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-tour-5",
+      "title": "Worker tour \u00b7 step 5",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-tour-5-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-tour-5",
+      "title": "Worker tour \u00b7 step 5",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-tour-5-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-file-detail",
+      "title": "File task patch review",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-file-detail-1440.jpg",
+      "overflow": 0,
+      "evidence": "Explicit browser API fixture: synthetic file task and patch; no model execution, filesystem edits or patch application",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-file-detail",
+      "title": "File task patch review",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-file-detail-390.jpg",
+      "overflow": 0,
+      "evidence": "Explicit browser API fixture: synthetic file task and patch; no model execution, filesystem edits or patch application",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-file-detail",
+      "title": "File task patch review",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-file-detail-320.jpg",
+      "overflow": 0,
+      "evidence": "Explicit browser API fixture: synthetic file task and patch; no model execution, filesystem edits or patch application",
+      "captureCandidate": "qualified-v3"
+    },
+    {
+      "id": "worker-new-task",
+      "title": "Create a separate task",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-new-task-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual final gallery-v4 extracted release; isolated mock-only state, no provider calls",
+      "captureCandidate": "gallery-v4"
+    },
+    {
+      "id": "worker-new-task",
+      "title": "Create a separate task",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-new-task-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual final gallery-v4 extracted release; isolated mock-only state, no provider calls",
+      "captureCandidate": "gallery-v4"
+    },
+    {
+      "id": "worker-new-task",
+      "title": "Create a separate task",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-new-task-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual final gallery-v4 extracted release; isolated mock-only state, no provider calls",
+      "captureCandidate": "gallery-v4"
+    },
+    {
+      "id": "worker-task-settings",
+      "title": "Rename and archive a saved task",
+      "group": "Worker",
+      "width": 1440,
+      "file": "worker-task-settings-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual final gallery-v4 extracted release; isolated mock-only state, no provider calls",
+      "captureCandidate": "gallery-v4"
+    },
+    {
+      "id": "worker-task-settings",
+      "title": "Rename and archive a saved task",
+      "group": "Worker",
+      "width": 390,
+      "file": "worker-task-settings-390.jpg",
+      "overflow": 0,
+      "evidence": "Actual final gallery-v4 extracted release; isolated mock-only state, no provider calls",
+      "captureCandidate": "gallery-v4"
+    },
+    {
+      "id": "worker-task-settings",
+      "title": "Rename and archive a saved task",
+      "group": "Worker",
+      "width": 320,
+      "file": "worker-task-settings-320.jpg",
+      "overflow": 0,
+      "evidence": "Actual final gallery-v4 extracted release; isolated mock-only state, no provider calls",
+      "captureCandidate": "gallery-v4"
+    },
+    {
+      "id": "concept-unresolved",
+      "title": "Unresolved requirement needs correction",
+      "group": "Concept",
+      "width": 1440,
+      "file": "concept-unresolved-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual local concept simulation UI; all tasks/checks/events fictitious, no provider or Git connection",
+      "captureCandidate": "focus-v5"
+    },
+    {
+      "id": "concept-review-gate",
+      "title": "Explicit simulated review gate",
+      "group": "Concept",
+      "width": 1440,
+      "file": "concept-review-gate-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual local concept simulation UI; all tasks/checks/events fictitious, no provider or Git connection",
+      "captureCandidate": "focus-v5"
+    },
+    {
+      "id": "concept-unknown-metrics",
+      "title": "Unreported simulation metrics stay unknown",
+      "group": "Concept",
+      "width": 1440,
+      "file": "concept-unknown-metrics-1440.jpg",
+      "overflow": 0,
+      "evidence": "Actual local concept simulation UI; all tasks/checks/events fictitious, no provider or Git connection",
+      "captureCandidate": "focus-v5"
+    },
+    {
+      "id": "gate-policy",
+      "title": "Future admission gate policy",
+      "group": "Worker request gates",
+      "width": 1440,
+      "file": "gate-policy-desktop.jpg",
+      "overflow": 0,
+      "evidence": "Extracted release UI and real HTTP/journals, injected no-network model responses. No-network model fixtures, actual runtime and durable journals.",
+      "captureCandidate": "polished-v2 (all UI byte-identical to qualified-v3)"
+    },
+    {
+      "id": "gate-policy",
+      "title": "Future admission gate policy",
+      "group": "Worker request gates",
+      "width": 390,
+      "file": "gate-policy-mobile.jpg",
+      "overflow": 0,
+      "evidence": "Extracted release UI and real HTTP/journals, injected no-network model responses. No-network model fixtures, actual runtime and durable journals.",
+      "captureCandidate": "polished-v2 (all UI byte-identical to qualified-v3)"
+    },
+    {
+      "id": "gate-readiness-question",
+      "title": "Readiness hold and reviewer question",
+      "group": "Worker request gates",
+      "width": 1440,
+      "file": "gate-readiness-question-desktop.jpg",
+      "overflow": 0,
+      "evidence": "Extracted release UI and real HTTP/journals, injected no-network model responses. No-network model fixtures, actual runtime and durable journals.",
+      "captureCandidate": "polished-v2 (all UI byte-identical to qualified-v3)"
+    },
+    {
+      "id": "gate-readiness-question",
+      "title": "Readiness hold and reviewer question",
+      "group": "Worker request gates",
+      "width": 390,
+      "file": "gate-readiness-question-mobile.jpg",
+      "overflow": 0,
+      "evidence": "Extracted release UI and real HTTP/journals, injected no-network model responses. No-network model fixtures, actual runtime and durable journals.",
+      "captureCandidate": "polished-v2 (all UI byte-identical to qualified-v3)"
+    },
+    {
+      "id": "gate-rework-candidate",
+      "title": "Advisory rework candidate awaiting acceptance",
+      "group": "Worker request gates",
+      "width": 1440,
+      "file": "gate-rework-candidate-desktop.jpg",
+      "overflow": 0,
+      "evidence": "Extracted release UI and real HTTP/journals, injected no-network model responses. No-network model fixtures, actual runtime and durable journals.",
+      "captureCandidate": "polished-v2 (all UI byte-identical to qualified-v3)"
+    },
+    {
+      "id": "gate-rework-candidate",
+      "title": "Advisory rework candidate awaiting acceptance",
+      "group": "Worker request gates",
+      "width": 390,
+      "file": "gate-rework-candidate-mobile.jpg",
+      "overflow": 0,
+      "evidence": "Extracted release UI and real HTTP/journals, injected no-network model responses. No-network model fixtures, actual runtime and durable journals.",
+      "captureCandidate": "polished-v2 (all UI byte-identical to qualified-v3)"
+    },
+    {
+      "id": "gate-completion-held",
+      "title": "Known result awaiting operator attestation",
+      "group": "Worker request gates",
+      "width": 1440,
+      "file": "gate-completion-held-desktop.jpg",
+      "overflow": 0,
+      "evidence": "Extracted release UI and real HTTP/journals, injected no-network model responses. No-network model fixtures, actual runtime and durable journals.",
+      "captureCandidate": "polished-v2 (all UI byte-identical to qualified-v3)"
+    },
+    {
+      "id": "gate-completion-held",
+      "title": "Known result awaiting operator attestation",
+      "group": "Worker request gates",
+      "width": 390,
+      "file": "gate-completion-held-mobile.jpg",
+      "overflow": 0,
+      "evidence": "Extracted release UI and real HTTP/journals, injected no-network model responses. No-network model fixtures, actual runtime and durable journals.",
+      "captureCandidate": "polished-v2 (all UI byte-identical to qualified-v3)"
+    },
+    {
+      "id": "gate-done",
+      "title": "Request completed with recorded operator attestation",
+      "group": "Worker request gates",
+      "width": 1440,
+      "file": "gate-done-desktop.jpg",
+      "overflow": 0,
+      "evidence": "Extracted release UI and real HTTP/journals, injected no-network model responses. No-network model fixtures, actual runtime and durable journals.",
+      "captureCandidate": "polished-v2 (all UI byte-identical to qualified-v3)"
+    },
+    {
+      "id": "gate-done",
+      "title": "Request completed with recorded operator attestation",
+      "group": "Worker request gates",
+      "width": 390,
+      "file": "gate-done-mobile.jpg",
+      "overflow": 0,
+      "evidence": "Extracted release UI and real HTTP/journals, injected no-network model responses. No-network model fixtures, actual runtime and durable journals.",
+      "captureCandidate": "polished-v2 (all UI byte-identical to qualified-v3)"
+    }
+  ],
+  "checks": {
+    "factory-functional": {
+      "checks": [
+        "Actual viewer cannot edit registry",
+        "Login focuses page heading",
+        "Invalid editor field focused",
+        "Cancel restores trigger focus",
+        "Actual create, root-preserving edit, and empty-delete succeeded",
+        "Fixture401 retains draft through real reconnect",
+        "Delayed private response cannot repopulate disconnected view",
+        "No access tokens in browser storage"
+      ],
+      "shots": [
+        {
+          "id": "factory-viewer",
+          "title": "Factory viewer permissions",
+          "group": "Factory",
+          "width": 390,
+          "file": "factory-viewer-390.jpg",
+          "overflow": 0,
+          "evidence": "Actual isolated local APIs"
+        },
+        {
+          "id": "factory-create",
+          "title": "Create a named Factory",
+          "group": "Factory",
+          "width": 390,
+          "file": "factory-create-390.jpg",
+          "overflow": 0,
+          "evidence": "Actual isolated local APIs"
+        },
+        {
+          "id": "factory-delete-confirm",
+          "title": "Confirm removing only the empty Factory",
+          "group": "Factory",
+          "width": 390,
+          "file": "factory-delete-confirm-390.jpg",
+          "overflow": 0,
+          "evidence": "Actual isolated local APIs"
+        },
+        {
+          "id": "factory-recovered-draft",
+          "title": "Recover an unsaved Factory draft",
+          "group": "Factory",
+          "width": 390,
+          "file": "factory-recovered-draft-390.jpg",
+          "overflow": 0,
+          "evidence": "Explicit401 HTTP fixture; authenticated reconnect uses actual API"
+        }
+      ],
+      "pageErrors": [],
+      "realLocalCrud": true,
+      "fixtures": [
+        "401 response",
+        "delayed private read"
+      ],
+      "providerCalls": false
+    },
+    "guide-functional": {
+      "checks": [
+        "Topology selection and2D control",
+        "Native/Docker previews match selection",
+        "Port collision blocks download",
+        "Downloaded real YAML validates through candidate launcher plan"
+      ],
+      "externalRequests": [],
+      "pageErrors": [],
+      "fileOpening": "Blocked by administrator in Chromium; actual file opening remains unverified",
+      "download": "Actual system.yaml from UI, validated read-only; no deployment"
+    },
+    "diagnostics-functional": {
+      "checks": [
+        "Live announcement remains stable on unchanged successful refresh",
+        "Pause/resume and error recovery retain sample",
+        "Actual CLI self-contained export makes no status reads; actualfileURL blockedenvironment"
+      ],
+      "shots": [
+        {
+          "id": "diagnostics-live",
+          "title": "Live worker diagnostics",
+          "group": "Diagnostics",
+          "width": 1440,
+          "file": "diagnostics-live-1440.jpg",
+          "overflow": 0,
+          "evidence": "Actual compiled diagnostic interface and real CLIexport; localreadonly statusservice uses actual systemworker snapshot"
+        },
+        {
+          "id": "diagnostics-live",
+          "title": "Live worker diagnostics",
+          "group": "Diagnostics",
+          "width": 390,
+          "file": "diagnostics-live-390.jpg",
+          "overflow": 0,
+          "evidence": "Actual compiled diagnostic interface and real CLIexport; localreadonly statusservice uses actual systemworker snapshot"
+        },
+        {
+          "id": "diagnostics-live",
+          "title": "Live worker diagnostics",
+          "group": "Diagnostics",
+          "width": 320,
+          "file": "diagnostics-live-320.jpg",
+          "overflow": 0,
+          "evidence": "Actual compiled diagnostic interface and real CLIexport; localreadonly statusservice uses actual systemworker snapshot"
+        },
+        {
+          "id": "diagnostics-stale",
+          "title": "Failed refresh retains last successful status",
+          "group": "Diagnostics",
+          "width": 390,
+          "file": "diagnostics-stale-390.jpg",
+          "overflow": 0,
+          "evidence": "Actual compiled diagnostic interface and real CLIexport; localreadonly statusservice uses actual systemworker snapshot"
+        },
+        {
+          "id": "diagnostics-offline",
+          "title": "CLI static export over localhost",
+          "group": "Diagnostics",
+          "width": 1440,
+          "file": "diagnostics-offline-1440.jpg",
+          "overflow": 0,
+          "evidence": "Actual compiled diagnostic interface and real CLIexport; localreadonly statusservice uses actual systemworker snapshot"
+        },
+        {
+          "id": "diagnostics-offline",
+          "title": "CLI static export over localhost",
+          "group": "Diagnostics",
+          "width": 390,
+          "file": "diagnostics-offline-390.jpg",
+          "overflow": 0,
+          "evidence": "Actual compiled diagnostic interface and real CLIexport; localreadonly statusservice uses actual systemworker snapshot"
+        },
+        {
+          "id": "diagnostics-offline",
+          "title": "CLI static export over localhost",
+          "group": "Diagnostics",
+          "width": 320,
+          "file": "diagnostics-offline-320.jpg",
+          "overflow": 0,
+          "evidence": "Actual compiled diagnostic interface and real CLIexport; localreadonly statusservice uses actual systemworker snapshot"
+        }
+      ],
+      "pageErrors": [],
+      "exportBytes": 517605,
+      "fileOpening": "Blocked by administrator; localhost validates exported bytes and offline mode",
+      "providerCalls": false
+    },
+    "concept-functional": {
+      "checks": [
+        "Per-line drafts retained across switch",
+        "Requirement repair retains exact task ID and line",
+        "Drawer closed with Escape; focus result recorded",
+        "Ticks reach review; explicit approval enables simulated merge",
+        "Repeated import no duplicates; receipt opens board and clears search",
+        "Unknown cost metric does not fabricate chart points"
+      ],
+      "shots": [
+        {
+          "id": "concept-unresolved",
+          "title": "Unresolved requirement needs correction",
+          "group": "Concept",
+          "width": 1440,
+          "file": "concept-unresolved-1440.jpg",
+          "overflow": 0,
+          "evidence": "Actual local concept simulation UI; all tasks/checks/events fictitious, no provider or Git connection"
+        },
+        {
+          "id": "concept-review-gate",
+          "title": "Explicit simulated review gate",
+          "group": "Concept",
+          "width": 1440,
+          "file": "concept-review-gate-1440.jpg",
+          "overflow": 0,
+          "evidence": "Actual local concept simulation UI; all tasks/checks/events fictitious, no provider or Git connection"
+        },
+        {
+          "id": "concept-unknown-metrics",
+          "title": "Unreported simulation metrics stay unknown",
+          "group": "Concept",
+          "width": 1440,
+          "file": "concept-unknown-metrics-1440.jpg",
+          "overflow": 0,
+          "evidence": "Actual local concept simulation UI; all tasks/checks/events fictitious, no provider or Git connection"
+        }
+      ],
+      "closeFocus": {
+        "tag": "BODY",
+        "text": "Zum Inhaltwerk. Software-FabrikLokale KonzeptsimulationJSON exportierenDemo zur\u00fc"
+      },
+      "apiRequests": [],
+      "pageErrors": [],
+      "scope": "Local browser simulation; no provider/Git calls",
+      "closeFocusQualification": "Captured before the final explicit drawer focus fix; final targeted keyboard check recorded separately."
+    },
+    "worker-drafts": {
+      "taskSwitchEmptyDraft": true,
+      "taskSwitchRestoresPriorDraft": true,
+      "pageErrors": [],
+      "providerCalls": false
+    },
+    "final-concept-focus": {
+      "checks": [
+        "Per-line drafts retained across switch",
+        "Requirement repair retains exact task ID and line",
+        "Drawer Escape restores exact task card focus after Intake navigation",
+        "Keyboard card open and close button restore exact card focus",
+        "Ticks reach review; explicit approval enables simulated merge",
+        "Filtered merged card disappearing restores page heading focus",
+        "Repeated import no duplicates; receipt opens board and clears search",
+        "Unknown cost metric does not fabricate chart points"
+      ],
+      "shots": [
+        {
+          "id": "concept-unresolved",
+          "title": "Unresolved requirement needs correction",
+          "group": "Concept",
+          "width": 1440,
+          "file": "concept-unresolved-1440.jpg",
+          "overflow": 0,
+          "evidence": "Actual local concept simulation UI; all tasks/checks/events fictitious, no provider or Git connection"
+        },
+        {
+          "id": "concept-review-gate",
+          "title": "Explicit simulated review gate",
+          "group": "Concept",
+          "width": 1440,
+          "file": "concept-review-gate-1440.jpg",
+          "overflow": 0,
+          "evidence": "Actual local concept simulation UI; all tasks/checks/events fictitious, no provider or Git connection"
+        },
+        {
+          "id": "concept-unknown-metrics",
+          "title": "Unreported simulation metrics stay unknown",
+          "group": "Concept",
+          "width": 1440,
+          "file": "concept-unknown-metrics-1440.jpg",
+          "overflow": 0,
+          "evidence": "Actual local concept simulation UI; all tasks/checks/events fictitious, no provider or Git connection"
+        }
+      ],
+      "closeFocus": {
+        "tag": "BUTTON",
+        "text": "Konzeptsimulation (line-atlas) \u00b7 Passende Maschine frei \u00b7 bereit f\u00fcr n\u00e4chsten Ta",
+        "taskId": "107",
+        "sourceId": "line-atlas"
+      },
+      "apiRequests": [],
+      "pageErrors": [],
+      "scope": "Local browser simulation; no provider/Git calls",
+      "knownBeforeFix": "Responsive overflow and controlled drawer focus were sent to source owners; final candidate confirmation pending"
+    }
+  },
+  "limitations": [
+    "Deterministic mock/no-network fixture models; no genuine provider calls, billed usage or subscription claims.",
+    "Software keyboard and assistive technology not tested.",
+    "Chromium administrator policy blocks file:// navigation. Downloaded system YAML passed the actual launcher plan; standalone diagnostic HTML verified over isolated localhost.",
+    "Historical54-state worker atlas remains linked as prior evidence, not current recapture."
+  ],
+  "historicalAtlas": "worker-view-atlas.html",
+  "byteIdentityReceipts": [
+    "docs/evidence/werk-unified-worker-validation.json"
+  ],
+  "views": [
+    {
+      "id": "factory-access",
+      "title": "Connect to Factory",
+      "group": "Factory",
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/"
+    },
+    {
+      "id": "factory-overview",
+      "title": "Factory overview",
+      "group": "Factory",
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/"
+    },
+    {
+      "id": "factory-line",
+      "title": "Production-line dashboard",
+      "group": "Factory",
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/"
+    },
+    {
+      "id": "orchestrator-access",
+      "title": "Connect to production line",
+      "group": "Orchestrator",
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/#/access"
+    },
+    {
+      "id": "orchestrator-dashboard",
+      "title": "Line dashboard",
+      "group": "Orchestrator",
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/#/dashboard"
+    },
+    {
+      "id": "orchestrator-intake",
+      "title": "Prepare a mock task",
+      "group": "Orchestrator",
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/#/intake"
+    },
+    {
+      "id": "orchestrator-tasks",
+      "title": "Task queue",
+      "group": "Orchestrator",
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/#/tasks"
+    },
+    {
+      "id": "orchestrator-workers",
+      "title": "Worker capacity",
+      "group": "Orchestrator",
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/#/workers"
+    },
+    {
+      "id": "orchestrator-metrics",
+      "title": "Execution evidence",
+      "group": "Orchestrator",
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/#/metrics"
+    },
+    {
+      "id": "guide-model",
+      "title": "System guide",
+      "group": "Guide",
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/guide"
+    },
+    {
+      "id": "guide-definition",
+      "title": "Compose system definition",
+      "group": "Guide",
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/guide"
+    },
+    {
+      "id": "concept-intake",
+      "title": "Intake",
+      "group": "Concept",
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/concept#intake"
+    },
+    {
+      "id": "concept-factories",
+      "title": "Factories",
+      "group": "Concept",
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/concept#factories"
+    },
+    {
+      "id": "concept-architektur-d",
+      "title": "Architektur \u00b7 3D",
+      "group": "Concept",
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/concept#architektur-d"
+    },
+    {
+      "id": "concept-prozess",
+      "title": "Prozess",
+      "group": "Concept",
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/concept#prozess"
+    },
+    {
+      "id": "concept-taskboard",
+      "title": "Taskboard",
+      "group": "Concept",
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/concept#taskboard"
+    },
+    {
+      "id": "concept-dashboard",
+      "title": "Dashboard",
+      "group": "Concept",
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/concept#dashboard"
+    },
+    {
+      "id": "concept-worker-provider",
+      "title": "Worker & Provider",
+      "group": "Concept",
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/concept#worker-provider"
+    },
+    {
+      "id": "concept-betrieb-cli",
+      "title": "Betrieb & CLI",
+      "group": "Concept",
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/concept#betrieb-cli"
+    },
+    {
+      "id": "concept-system",
+      "title": "System",
+      "group": "Concept",
+      "evidence": "Actual immutable Vue candidate, isolated mock-only system",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/concept#system"
+    },
+    {
+      "id": "factory-viewer",
+      "title": "Factory viewer permissions",
+      "group": "Factory",
+      "evidence": "Actual isolated local APIs",
+      "captureCandidate": "qualified-v3",
+      "route": "/"
+    },
+    {
+      "id": "factory-create",
+      "title": "Create a named Factory",
+      "group": "Factory",
+      "evidence": "Actual isolated local APIs",
+      "captureCandidate": "qualified-v3",
+      "route": "/"
+    },
+    {
+      "id": "factory-delete-confirm",
+      "title": "Confirm removing only the empty Factory",
+      "group": "Factory",
+      "evidence": "Actual isolated local APIs",
+      "captureCandidate": "qualified-v3",
+      "route": "/"
+    },
+    {
+      "id": "factory-recovered-draft",
+      "title": "Recover an unsaved Factory draft",
+      "group": "Factory",
+      "evidence": "Explicit401 HTTP fixture; authenticated reconnect uses actual API",
+      "captureCandidate": "qualified-v3",
+      "route": "/"
+    },
+    {
+      "id": "diagnostics-live",
+      "title": "Live worker diagnostics",
+      "group": "Diagnostics",
+      "evidence": "Actual compiled diagnostic interface and real CLIexport; localreadonly statusservice uses actual systemworker snapshot",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/status"
+    },
+    {
+      "id": "diagnostics-stale",
+      "title": "Failed refresh retains last successful status",
+      "group": "Diagnostics",
+      "evidence": "Actual compiled diagnostic interface and real CLIexport; localreadonly statusservice uses actual systemworker snapshot",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/status"
+    },
+    {
+      "id": "diagnostics-offline",
+      "title": "CLI static export over localhost",
+      "group": "Diagnostics",
+      "evidence": "Actual compiled diagnostic interface and real CLIexport; localreadonly statusservice uses actual systemworker snapshot",
+      "captureCandidate": "final-v1 (UI byte-identical to qualified-v3 outside worker)",
+      "route": "/status"
+    },
+    {
+      "id": "worker-provider-codex-cli",
+      "title": "Codex CLI provider connection",
+      "group": "Worker",
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3",
+      "route": "/chat"
+    },
+    {
+      "id": "worker-provider-claude-code-cli",
+      "title": "Claude Code CLI provider connection",
+      "group": "Worker",
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3",
+      "route": "/chat"
+    },
+    {
+      "id": "worker-provider-openai-\u00b7-api",
+      "title": "OpenAI \u00b7 API provider connection",
+      "group": "Worker",
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3",
+      "route": "/chat"
+    },
+    {
+      "id": "worker-provider-claude-\u00b7-api",
+      "title": "Claude \u00b7 API provider connection",
+      "group": "Worker",
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3",
+      "route": "/chat"
+    },
+    {
+      "id": "worker-definitions",
+      "title": "Agent definition import",
+      "group": "Worker",
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3",
+      "route": "/chat"
+    },
+    {
+      "id": "worker-definition-preview",
+      "title": "Review definition before import",
+      "group": "Worker",
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3",
+      "route": "/chat"
+    },
+    {
+      "id": "worker-file-editor",
+      "title": "Prepare a file task without executing",
+      "group": "Worker",
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3",
+      "route": "/chat"
+    },
+    {
+      "id": "worker-settings",
+      "title": "Provider and orchestrator settings",
+      "group": "Worker",
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3",
+      "route": "/dashboard"
+    },
+    {
+      "id": "worker-resources",
+      "title": "Resources, duration policy and retained alert history",
+      "group": "Worker",
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3",
+      "route": "/dashboard"
+    },
+    {
+      "id": "worker-integrations",
+      "title": "Project integration readiness",
+      "group": "Worker",
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3",
+      "route": "/dashboard"
+    },
+    {
+      "id": "worker-runtime",
+      "title": "Runtime and execution profiles",
+      "group": "Worker",
+      "evidence": "Actual extracted candidate UI; no provider execution",
+      "captureCandidate": "qualified-v3",
+      "route": "/dashboard"
+    },
+    {
+      "id": "worker-access",
+      "title": "Unlock local worker",
+      "group": "Worker",
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3",
+      "route": "/chat"
+    },
+    {
+      "id": "worker-chat",
+      "title": "Worker draft conversation",
+      "group": "Worker",
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3",
+      "route": "/chat"
+    },
+    {
+      "id": "worker-history",
+      "title": "Worker History",
+      "group": "Worker",
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3",
+      "route": "/history"
+    },
+    {
+      "id": "worker-dashboard",
+      "title": "Worker Dashboard",
+      "group": "Worker",
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3",
+      "route": "/dashboard"
+    },
+    {
+      "id": "worker-tour-1",
+      "title": "Worker tour \u00b7 step 1",
+      "group": "Worker",
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3",
+      "route": "/chat"
+    },
+    {
+      "id": "worker-tour-2",
+      "title": "Worker tour \u00b7 step 2",
+      "group": "Worker",
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3",
+      "route": "/chat"
+    },
+    {
+      "id": "worker-tour-3",
+      "title": "Worker tour \u00b7 step 3",
+      "group": "Worker",
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3",
+      "route": "/chat"
+    },
+    {
+      "id": "worker-tour-4",
+      "title": "Worker tour \u00b7 step 4",
+      "group": "Worker",
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3",
+      "route": "/chat"
+    },
+    {
+      "id": "worker-tour-5",
+      "title": "Worker tour \u00b7 step 5",
+      "group": "Worker",
+      "evidence": "Actual qualified1502-file candidate UI, isolated mock-only system, no provider calls",
+      "captureCandidate": "qualified-v3",
+      "route": "/chat"
+    },
+    {
+      "id": "worker-file-detail",
+      "title": "File task patch review",
+      "group": "Worker",
+      "evidence": "Explicit browser API fixture: synthetic file task and patch; no model execution, filesystem edits or patch application",
+      "captureCandidate": "qualified-v3",
+      "route": "/history"
+    },
+    {
+      "id": "worker-new-task",
+      "title": "Create a separate task",
+      "group": "Worker",
+      "evidence": "Actual final gallery-v4 extracted release; isolated mock-only state, no provider calls",
+      "captureCandidate": "gallery-v4",
+      "route": "/chat"
+    },
+    {
+      "id": "worker-task-settings",
+      "title": "Rename and archive a saved task",
+      "group": "Worker",
+      "evidence": "Actual final gallery-v4 extracted release; isolated mock-only state, no provider calls",
+      "captureCandidate": "gallery-v4",
+      "route": "/dashboard"
+    },
+    {
+      "id": "concept-unresolved",
+      "title": "Unresolved requirement needs correction",
+      "group": "Concept",
+      "evidence": "Actual local concept simulation UI; all tasks/checks/events fictitious, no provider or Git connection",
+      "captureCandidate": "focus-v5",
+      "route": "/concept#unresolved"
+    },
+    {
+      "id": "concept-review-gate",
+      "title": "Explicit simulated review gate",
+      "group": "Concept",
+      "evidence": "Actual local concept simulation UI; all tasks/checks/events fictitious, no provider or Git connection",
+      "captureCandidate": "focus-v5",
+      "route": "/concept#review-gate"
+    },
+    {
+      "id": "concept-unknown-metrics",
+      "title": "Unreported simulation metrics stay unknown",
+      "group": "Concept",
+      "evidence": "Actual local concept simulation UI; all tasks/checks/events fictitious, no provider or Git connection",
+      "captureCandidate": "focus-v5",
+      "route": "/concept#unknown-metrics"
+    },
+    {
+      "id": "gate-policy",
+      "title": "Future admission gate policy",
+      "group": "Worker request gates",
+      "evidence": "Extracted release UI and real HTTP/journals, injected no-network model responses. No-network model fixtures, actual runtime and durable journals.",
+      "captureCandidate": "polished-v2 (all UI byte-identical to qualified-v3)",
+      "route": "/dashboard"
+    },
+    {
+      "id": "gate-readiness-question",
+      "title": "Readiness hold and reviewer question",
+      "group": "Worker request gates",
+      "evidence": "Extracted release UI and real HTTP/journals, injected no-network model responses. No-network model fixtures, actual runtime and durable journals.",
+      "captureCandidate": "polished-v2 (all UI byte-identical to qualified-v3)",
+      "route": "/chat"
+    },
+    {
+      "id": "gate-rework-candidate",
+      "title": "Advisory rework candidate awaiting acceptance",
+      "group": "Worker request gates",
+      "evidence": "Extracted release UI and real HTTP/journals, injected no-network model responses. No-network model fixtures, actual runtime and durable journals.",
+      "captureCandidate": "polished-v2 (all UI byte-identical to qualified-v3)",
+      "route": "/chat"
+    },
+    {
+      "id": "gate-completion-held",
+      "title": "Known result awaiting operator attestation",
+      "group": "Worker request gates",
+      "evidence": "Extracted release UI and real HTTP/journals, injected no-network model responses. No-network model fixtures, actual runtime and durable journals.",
+      "captureCandidate": "polished-v2 (all UI byte-identical to qualified-v3)",
+      "route": "/chat"
+    },
+    {
+      "id": "gate-done",
+      "title": "Request completed with recorded operator attestation",
+      "group": "Worker request gates",
+      "evidence": "Extracted release UI and real HTTP/journals, injected no-network model responses. No-network model fixtures, actual runtime and durable journals.",
+      "captureCandidate": "polished-v2 (all UI byte-identical to qualified-v3)",
+      "route": "/chat"
+    }
+  ],
+  "galleryChecks": {
+    "views": 58,
+    "imagesDecoded": 148,
+    "search": true,
+    "groupFilter": true,
+    "viewportSelector": true,
+    "imageZoomEscape": true,
+    "downloadEvidence": true,
+    "mobileOverflow": 0,
+    "pageErrors": [],
+    "externalRequests": []
+  }
+}

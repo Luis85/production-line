@@ -1,3 +1,4 @@
+import { verifyReviewArtifact } from './review-artifact.js';
 import { ProviderModelError } from '../application/model-contract.js';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -61,9 +62,7 @@ export class CodexAdapter implements Adapter {
     private config: CodexConfiguration; private stateDir: string; private systemPrompt: string;
     constructor(config: CodexConfiguration, stateDir: string, systemPrompt: string) { this.config = config; this.stateDir = stateDir; this.systemPrompt = systemPrompt; }
     async verifyReview(task: Task, review: NonNullable<Awaited<ReturnType<Adapter['run']>>['review']>) {
-        if (!task.lease || review.artifactPath !== `review/${task.lease}/change.patch`) throw Error('Review artifact identity mismatch');
-        const patch = await readBoundedFile(join(this.stateDir, review.artifactPath), 1048576);
-        if (Buffer.byteLength(patch) !== review.patchBytes || createHash('sha256').update(patch).digest('hex') !== review.patchSha256) throw Error('Review artifact is missing or changed; restore evidence before completing');
+        await verifyReviewArtifact(this.stateDir,task.lease,review);
     }
     async run(task: Task, signal: AbortSignal) {
         if (process.platform !== 'linux') throw Error('Live Codex execution currently requires native Linux');

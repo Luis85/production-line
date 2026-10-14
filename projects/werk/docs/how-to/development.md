@@ -284,3 +284,7 @@ Interface reference: [docs/api.md](../reference/api.md). Architecture and remain
 integration boundaries: [docs/architecture.md](../explanation/architecture.md).
 
 Source modules and test suites are grouped by concern. See the [architecture map](../explanation/architecture.md#implemented-dependency-map) and [test suite guide](../../tests/README.md). The project test command uses Node 24 recursive glob discovery for both `.test.mjs` and `.test.cjs`.
+
+## Shared browser interfaces
+
+All product views use Vue and Nuxt UI. Read the [webview architecture](../reference/webview-architecture.md) before adding shared components or changing browser state. The unified typecheck covers every entry; independent app builds include their own compiled assets and standalone guide/export views.

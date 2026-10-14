@@ -8,7 +8,7 @@ export function auditMutation(service: MutationAudit['service'], request: Incomi
   if (!['POST', 'PATCH', 'DELETE', 'PUT'].includes(request.method ?? '')) return;
   const path = new URL(request.url ?? '/', 'http://localhost').pathname;
   const staticPaths = ['/v1/tasks', '/v1/iteration/tasks', '/v1/factories', '/v1/lines'];
-  const route = staticPaths.includes(path) ? path : /^\/v1\/(factories|lines)\/[^/]+$/.test(path) ? path.replace(/\/[^/]+$/, '/:id') : 'unmatched';
+  const route = staticPaths.includes(path) ? path : /^\/v1\/tasks\/[^/]+\/successor$/.test(path) ? '/v1/tasks/:id/successor' : /^\/v1\/(factories|lines)\/[^/]+$/.test(path) ? path.replace(/\/[^/]+$/, '/:id') : 'unmatched';
   const header = response.getHeader('x-request-id');
   const requestId = typeof header === 'string' && /^[a-f0-9-]{36}$/.test(header) ? header : randomUUID();
   let recorded = false;

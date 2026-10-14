@@ -9,6 +9,7 @@ import UButton from '@nuxt/ui/components/Button.vue';
 import UBadge from '@nuxt/ui/components/Badge.vue';
 import UAlert from '@nuxt/ui/components/Alert.vue';
 import UIcon from '@nuxt/ui/components/Icon.vue';
+import RequestPolicyPanel from '../components/RequestPolicyPanel.vue';
 import SettingsPanel from '../components/SettingsPanel.vue';
 import { state, bytes, date, workspaceAction } from '../store';
 
@@ -118,6 +119,7 @@ async function openRunning() {
     <details class="monitor-section dashboard-disclosure">
       <summary>Provider connections &amp; orchestrator enrollment</summary>
       <SettingsPanel />
+      <RequestPolicyPanel />
     </details>
     <details class="monitor-section dashboard-disclosure">
       <summary>Connections &amp; delivery</summary>

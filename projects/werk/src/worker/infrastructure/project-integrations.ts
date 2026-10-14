@@ -1,28 +1,64 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { constants } from 'node:fs';
-import { lstat, open, mkdir, realpath, rename, unlink } from 'node:fs/promises';
-import { dirname, join, resolve, sep } from 'node:path';
-import { DomainError } from '../../shared/errors.js';
+import { createHash, randomUUID } from "node:crypto";
+import { constants } from "node:fs";
+import { lstat, open, mkdir, realpath, rename, unlink } from "node:fs/promises";
+import { dirname, join, resolve, sep } from "node:path";
+import { DomainError } from "../../shared/errors.js";
 
 const templateVersion = 1;
-const manifestPath = '.werk/agent-integrations.json';
-const pendingPath = '.werk/agent-integrations.pending.json';
-const lockPath = '.werk/agent-integrations.lock';
-const paths = ['.claude/skills/werk-worker/SKILL.md', '.agents/skills/werk-worker/SKILL.md', '.codex/werk-worker.md'] as const;
-const hash = (text: string) => createHash('sha256').update(text).digest('hex');
-const digest = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
-interface Manifest { schemaVersion: 1; templateVersion: number; files: Record<string, { sha256: string }>; }
-interface Pending { schemaVersion: 1; previousManifestSha256: string | null; nextManifestSha256: string; files: { path: string; beforeSha256: string | null; afterSha256: string }[]; }
-interface Observation { text: string | null; sha256: string | null; mode: number | null; blocked: string | null; }
+const manifestPath = ".werk/agent-integrations.json";
+const pendingPath = ".werk/agent-integrations.pending.json";
+const lockPath = ".werk/agent-integrations.lock";
+const paths = [
+  ".claude/skills/werk-worker/SKILL.md",
+  ".agents/skills/werk-worker/SKILL.md",
+  ".codex/werk-worker.md",
+] as const;
+const hash = (text: string) => createHash("sha256").update(text).digest("hex");
+const digest = (value: unknown): value is string =>
+  typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+interface Manifest {
+  schemaVersion: 1;
+  templateVersion: number;
+  files: Record<string, { sha256: string }>;
+}
+interface Pending {
+  schemaVersion: 1;
+  previousManifestSha256: string | null;
+  nextManifestSha256: string;
+  files: { path: string; beforeSha256: string | null; afterSha256: string }[];
+}
+interface Observation {
+  text: string | null;
+  sha256: string | null;
+  mode: number | null;
+  blocked: string | null;
+}
 export interface IntegrationFile {
-  path: string; state: 'missing' | 'current' | 'update' | 'conflict' | 'blocked'; action: 'create' | 'replace' | 'none' | 'blocked';
-  sha256: string | null; managedSha256: string | null; desiredSha256: string; content: string; reason: string | null;
+  path: string;
+  state: "missing" | "current" | "update" | "conflict" | "blocked";
+  action: "create" | "replace" | "none" | "blocked";
+  sha256: string | null;
+  managedSha256: string | null;
+  desiredSha256: string;
+  content: string;
+  reason: string | null;
 }
 export interface IntegrationPlan {
-  schemaVersion: 1; templateVersion: 1; projectDirectory: string; planId: string; canApply: boolean; recoveryRequired: boolean;
-  files: IntegrationFile[]; conflicts: { path: string; reason: string }[];
+  schemaVersion: 1;
+  templateVersion: 1;
+  projectDirectory: string;
+  planId: string;
+  canApply: boolean;
+  recoveryRequired: boolean;
+  files: IntegrationFile[];
+  conflicts: { path: string; reason: string }[];
 }
-export interface IntegrationSyncResult extends IntegrationPlan { applied: boolean; seedOnly: boolean; written: string[]; skipped: string[]; }
+export interface IntegrationSyncResult extends IntegrationPlan {
+  applied: boolean;
+  seedOnly: boolean;
+  written: string[];
+  skipped: string[];
+}
 const skill = `---
 name: werk-worker
 description: Operate this project's Werk worker through its local CLI: feature requests, questions, safe continuation, events, usage evidence and review patches.
@@ -44,7 +80,10 @@ Use private JSON files or stdin for provider credentials, never CLI arguments,
 URLs, transcripts or these integration files. Keep original accepted feature
 input immutable. Question answers and resume are separate guarded operations;
 read the current revision and retain the same operation key after uncertain
-responses. A waiting_input or escalated result is not completed work.
+responses. A waiting_input or escalated result is not completed work. Read request get and
+request events for deterministic readiness/completion gates and reviewer findings.
+A model completion is not Request Done; Request Done is not permission to merge.
+Only make an operator attestation when explicitly authorized for that exact result.
 
 Use the explicit approved-file patch workflow for project changes. Review the
 resulting patch; the worker does not apply it, run project tests, publish or merge.
@@ -64,6 +103,45 @@ Process each stable event ID once and persist nextAfter after handling a page.
 usage_observed is cumulative per invocation: replace the prior measurement rather
 than summing observations. Cached tokens are a subset of input tokens.
 providerReportedCostUsd with costBasis is a reported estimate, never an invoice.
+
+## Deterministic request gates and rework
+
+    node bin/apps/worker/cli.mjs request schema
+    node bin/apps/worker/cli.mjs request policy
+    node bin/apps/worker/cli.mjs request list --session-id SESSION_ID
+    node bin/apps/worker/cli.mjs request get --id REQUEST_ID
+    node bin/apps/worker/cli.mjs request events --id REQUEST_ID --after SEQUENCE
+
+Definitions of Ready and Done are bounded JSON rules over recorded worker facts.
+Unknown facts fail closed. Reviewer findings are advisory; model text cannot prove
+builds, tests or operator approval. A failed readiness gate reserves one advisory
+reviewer dispatch per accepted input/policy/stage. A stopped or uncertain reviewer
+is never automatically replayed. Consumption includes review and rework calls.
+
+Assign human rework with request assign --file OWNER.json containing
+{"assignee":"operator"}, plus --id REQUEST_ID --if-match REVISION --key OPERATION_ID.
+For explicit model rework use request rework with JSON {"stage":"ready"} or
+{"stage":"done"} and the same guard flags. Read the candidate and unresolved
+questions before request accept with {"candidateId":"ID"}. Acceptance preserves
+the old input, increments the input revision, invalidates old approval and evaluates
+readiness again. Ready accepted candidates may dispatch a new model invocation.
+Approved files/context cannot be expanded by a reviewer; create a new approved-file
+task for a different file snapshot. Changing remote accepted input requires an
+upstream successor task. Passing a held Done gate can reconcile a retained known
+result without a new model call; original attempt snapshots remain unchanged.
+
+Changing request policy applies only to future admissions. Read request policy,
+edit its policy JSON deliberately and use request set-policy --if-match REVISION
+--key OPERATION_ID --file POLICY.json with {"policy":{...}}. Existing requests retain
+their frozen policy and history. Keep operation keys stable after uncertain replies;
+read current request state before a new operation. Never forge approval to unblock work.
+An acknowledged execute or accept command reports dispatch for the current input
+generation. If not_admitted and still ready, inspect the current request and issue
+a new guarded request execute operation with a new key. Identical receipt replay
+does not dispatch new work; admitted is not proof of completion.
+
+    node bin/apps/worker/cli.mjs run list --purpose gate_review
+    node bin/apps/worker/cli.mjs run analyze --purpose rework
 
 ## Discover and configure
 
@@ -172,153 +250,506 @@ or guide contents are conflicts and remain untouched. Existing config.toml,
 AGENTS.md, CLAUDE.md, hooks, credential files and native agent roles are never
 changed by this integration. There are no global home-directory writes.
 `;
-const templates: Record<string, string> = { [paths[0]]: skill, [paths[1]]: skill, [paths[2]]: guide };
-async function exists(path: string) { return lstat(path).catch(error => { if (error.code !== 'ENOENT') throw error; return null; }); }
+const templates: Record<string, string> = {
+  [paths[0]]: skill,
+  [paths[1]]: skill,
+  [paths[2]]: guide,
+};
+async function exists(path: string) {
+  return lstat(path).catch((error) => {
+    if (error.code !== "ENOENT") throw error;
+    return null;
+  });
+}
 async function rootDirectory(value: string) {
-  if (typeof value !== 'string' || !value.trim()) throw new DomainError('invalid_input', 'Choose an existing project directory.');
+  if (typeof value !== "string" || !value.trim())
+    throw new DomainError(
+      "invalid_input",
+      "Choose an existing project directory.",
+    );
   const root = await realpath(resolve(value));
-  if (!(await lstat(root)).isDirectory()) throw new DomainError('invalid_input', 'Choose an existing project directory.');
+  if (!(await lstat(root)).isDirectory())
+    throw new DomainError(
+      "invalid_input",
+      "Choose an existing project directory.",
+    );
   return root;
 }
 /** All descendants are checked without following links; a missing path is a read-only observation. */
 async function observe(root: string, path: string): Promise<Observation> {
   let current = root;
-  const parts = path.split('/');
+  const parts = path.split("/");
   for (let i = 0; i < parts.length; i++) {
-    current = join(current, parts[i]); const info = await exists(current);
+    current = join(current, parts[i]);
+    const info = await exists(current);
     if (!info) return { text: null, sha256: null, mode: null, blocked: null };
-    if (info.isSymbolicLink() || (i < parts.length - 1 && !info.isDirectory())) return { text: null, sha256: null, mode: null, blocked: 'Path contains a symbolic link or non-directory ancestor.' };
+    if (info.isSymbolicLink() || (i < parts.length - 1 && !info.isDirectory()))
+      return {
+        text: null,
+        sha256: null,
+        mode: null,
+        blocked: "Path contains a symbolic link or non-directory ancestor.",
+      };
     if (i < parts.length - 1) continue;
-    if (!info.isFile() || info.nlink !== 1) return { text: null, sha256: null, mode: null, blocked: 'Target must be a regular file with a single hard link.' };
-    if (info.size > 65536) return { text: null, sha256: null, mode: null, blocked: 'Target exceeds the 64 KiB integration limit.' };
-    const file = await open(current, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+    if (!info.isFile() || info.nlink !== 1)
+      return {
+        text: null,
+        sha256: null,
+        mode: null,
+        blocked: "Target must be a regular file with a single hard link.",
+      };
+    if (info.size > 65536)
+      return {
+        text: null,
+        sha256: null,
+        mode: null,
+        blocked: "Target exceeds the 64 KiB integration limit.",
+      };
+    const file = await open(
+      current,
+      constants.O_RDONLY |
+        (constants.O_NOFOLLOW ?? 0) |
+        (constants.O_NONBLOCK ?? 0),
+    );
     try {
       const checked = await file.stat();
-      if (!checked.isFile() || checked.nlink !== 1 || checked.size > 65536) throw new DomainError('conflict', 'Integration target changed while reading.');
-      const bytes = Buffer.alloc(65537); let size = 0;
-      while (size < bytes.length) { const part = await file.read(bytes, size, bytes.length - size, null); if (!part.bytesRead) break; size += part.bytesRead; }
-      if (size > 65536) return { text: null, sha256: null, mode: null, blocked: 'Target exceeds the 64 KiB integration limit.' };
-      const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, size));
-      return { text, sha256: hash(text), mode: checked.mode & 0o777, blocked: null };
-    } finally { await file.close(); }
+      if (!checked.isFile() || checked.nlink !== 1 || checked.size > 65536)
+        throw new DomainError(
+          "conflict",
+          "Integration target changed while reading.",
+        );
+      const bytes = Buffer.alloc(65537);
+      let size = 0;
+      while (size < bytes.length) {
+        const part = await file.read(bytes, size, bytes.length - size, null);
+        if (!part.bytesRead) break;
+        size += part.bytesRead;
+      }
+      if (size > 65536)
+        return {
+          text: null,
+          sha256: null,
+          mode: null,
+          blocked: "Target exceeds the 64 KiB integration limit.",
+        };
+      const text = new TextDecoder("utf-8", { fatal: true }).decode(
+        bytes.subarray(0, size),
+      );
+      return {
+        text,
+        sha256: hash(text),
+        mode: checked.mode & 0o777,
+        blocked: null,
+      };
+    } finally {
+      await file.close();
+    }
   }
-  throw new DomainError('invalid_input', 'Invalid integration path.');
+  throw new DomainError("invalid_input", "Invalid integration path.");
 }
 function manifest(text: string | null): Manifest {
   if (text === null) return { schemaVersion: 1, templateVersion, files: {} };
   const value = JSON.parse(text);
-  if (!value || value.schemaVersion !== 1 || !Number.isSafeInteger(value.templateVersion) || value.templateVersion < 1 || !value.files || typeof value.files !== 'object' || Array.isArray(value.files) || Object.keys(value).some(key => !['schemaVersion', 'templateVersion', 'files'].includes(key))) throw Error('Invalid manifest');
-  for (const [path, entry] of Object.entries(value.files)) if (!paths.includes(path as typeof paths[number]) || !entry || typeof entry !== 'object' || Object.keys(entry).length !== 1 || !digest((entry as { sha256: unknown }).sha256)) throw Error('Invalid manifest path');
+  if (
+    !value ||
+    value.schemaVersion !== 1 ||
+    !Number.isSafeInteger(value.templateVersion) ||
+    value.templateVersion < 1 ||
+    !value.files ||
+    typeof value.files !== "object" ||
+    Array.isArray(value.files) ||
+    Object.keys(value).some(
+      (key) => !["schemaVersion", "templateVersion", "files"].includes(key),
+    )
+  )
+    throw Error("Invalid manifest");
+  for (const [path, entry] of Object.entries(value.files))
+    if (
+      !paths.includes(path as (typeof paths)[number]) ||
+      !entry ||
+      typeof entry !== "object" ||
+      Object.keys(entry).length !== 1 ||
+      !digest((entry as { sha256: unknown }).sha256)
+    )
+      throw Error("Invalid manifest path");
   return value;
 }
 function pending(text: string | null, owned: Manifest): Pending | null {
   if (text === null) return null;
   const value = JSON.parse(text);
-  if (!value || value.schemaVersion !== 1 || ![null, undefined].includes(value.previousManifestSha256) && !digest(value.previousManifestSha256) || !digest(value.nextManifestSha256) || !Array.isArray(value.files) || value.files.length > paths.length || Object.keys(value).some(key => !['schemaVersion', 'previousManifestSha256', 'nextManifestSha256', 'files'].includes(key))) throw Error('Invalid checkpoint');
+  if (
+    !value ||
+    value.schemaVersion !== 1 ||
+    (![null, undefined].includes(value.previousManifestSha256) &&
+      !digest(value.previousManifestSha256)) ||
+    !digest(value.nextManifestSha256) ||
+    !Array.isArray(value.files) ||
+    value.files.length > paths.length ||
+    Object.keys(value).some(
+      (key) =>
+        ![
+          "schemaVersion",
+          "previousManifestSha256",
+          "nextManifestSha256",
+          "files",
+        ].includes(key),
+    )
+  )
+    throw Error("Invalid checkpoint");
   const seen = new Set();
   for (const entry of value.files) {
-    if (!entry || !paths.includes(entry.path) || seen.has(entry.path) || !digest(entry.afterSha256) || entry.beforeSha256 !== null && !digest(entry.beforeSha256) || Object.keys(entry).some(key => !['path', 'beforeSha256', 'afterSha256'].includes(key))) throw Error('Invalid checkpoint target');
+    if (
+      !entry ||
+      !paths.includes(entry.path) ||
+      seen.has(entry.path) ||
+      !digest(entry.afterSha256) ||
+      (entry.beforeSha256 !== null && !digest(entry.beforeSha256)) ||
+      Object.keys(entry).some(
+        (key) => !["path", "beforeSha256", "afterSha256"].includes(key),
+      )
+    )
+      throw Error("Invalid checkpoint target");
     seen.add(entry.path);
   }
   return value;
 }
-interface ReadPlan { plan: IntegrationPlan; manifest: Manifest; manifestObservation: Observation; pending: Pending | null; pendingObservation: Observation; observations: Map<string, Observation>; }
+interface ReadPlan {
+  plan: IntegrationPlan;
+  manifest: Manifest;
+  manifestObservation: Observation;
+  pending: Pending | null;
+  pendingObservation: Observation;
+  observations: Map<string, Observation>;
+}
 async function readPlan(root: string): Promise<ReadPlan> {
-  const metadata = await observe(root, manifestPath), checkpoint = await observe(root, pendingPath);
-  let owned: Manifest = { schemaVersion: 1, templateVersion, files: {} }, recovery: Pending | null = null, metadataError = metadata.blocked ?? checkpoint.blocked;
-  try { if (!metadataError) { owned = manifest(metadata.text); recovery = pending(checkpoint.text, owned); if (recovery && metadata.sha256 !== recovery.previousManifestSha256 && metadata.sha256 !== recovery.nextManifestSha256) throw Error('Checkpoint ownership changed'); } }
-  catch { metadataError = 'Ownership manifest or interrupted-write checkpoint is invalid; inspect it before making changes.'; }
-  const observations = new Map<string, Observation>(), files: IntegrationFile[] = [];
+  const metadata = await observe(root, manifestPath),
+    checkpoint = await observe(root, pendingPath);
+  let owned: Manifest = { schemaVersion: 1, templateVersion, files: {} },
+    recovery: Pending | null = null,
+    metadataError = metadata.blocked ?? checkpoint.blocked;
+  try {
+    if (!metadataError) {
+      owned = manifest(metadata.text);
+      recovery = pending(checkpoint.text, owned);
+      if (
+        recovery &&
+        metadata.sha256 !== recovery.previousManifestSha256 &&
+        metadata.sha256 !== recovery.nextManifestSha256
+      )
+        throw Error("Checkpoint ownership changed");
+    }
+  } catch {
+    metadataError =
+      "Ownership manifest or interrupted-write checkpoint is invalid; inspect it before making changes.";
+  }
+  const observations = new Map<string, Observation>(),
+    files: IntegrationFile[] = [];
   for (const path of paths) {
-    const observation = await observe(root, path); observations.set(path, observation);
+    const observation = await observe(root, path);
+    observations.set(path, observation);
     let managedSha256 = owned.files[path]?.sha256 ?? null;
     let recoveryError: string | null = null;
-    const interrupted = recovery?.files.find(file => file.path === path);
+    const interrupted = recovery?.files.find((file) => file.path === path);
     if (interrupted) {
-      if (metadata.sha256 === recovery!.previousManifestSha256 && interrupted.beforeSha256 !== managedSha256) recoveryError = 'Interrupted ownership does not match the saved manifest.';
-      if (![interrupted.beforeSha256, interrupted.afterSha256].includes(observation.sha256)) recoveryError = 'Target changed after an interrupted integration write.';
-      if (observation.sha256 === interrupted.afterSha256) managedSha256 = interrupted.afterSha256;
+      if (
+        metadata.sha256 === recovery!.previousManifestSha256 &&
+        interrupted.beforeSha256 !== managedSha256
+      )
+        recoveryError =
+          "Interrupted ownership does not match the saved manifest.";
+      if (
+        ![interrupted.beforeSha256, interrupted.afterSha256].includes(
+          observation.sha256,
+        )
+      )
+        recoveryError =
+          "Target changed after an interrupted integration write.";
+      if (observation.sha256 === interrupted.afterSha256)
+        managedSha256 = interrupted.afterSha256;
     }
     const desiredSha256 = hash(templates[path]);
-    let state: IntegrationFile['state'], reason: string | null = metadataError ?? observation.blocked ?? recoveryError;
-    if (reason) state = 'blocked';
-    else if (observation.sha256 === null) state = 'missing';
-    else if (!managedSha256) { state = 'conflict'; reason = 'Existing file is not owned by Werk and will not be adopted or replaced.'; }
-    else if (observation.sha256 !== managedSha256) { state = 'conflict'; reason = 'Managed file was edited; preserve the operator changes before syncing.'; }
-    else state = observation.sha256 === desiredSha256 ? 'current' : 'update';
-    files.push({ path, state, action: state === 'missing' ? 'create' : state === 'update' ? 'replace' : state === 'current' ? 'none' : 'blocked', sha256: observation.sha256, managedSha256, desiredSha256, content: templates[path], reason });
+    let state: IntegrationFile["state"],
+      reason: string | null =
+        metadataError ?? observation.blocked ?? recoveryError;
+    if (reason) state = "blocked";
+    else if (observation.sha256 === null) state = "missing";
+    else if (!managedSha256) {
+      state = "conflict";
+      reason =
+        "Existing file is not owned by Werk and will not be adopted or replaced.";
+    } else if (observation.sha256 !== managedSha256) {
+      state = "conflict";
+      reason =
+        "Managed file was edited; preserve the operator changes before syncing.";
+    } else state = observation.sha256 === desiredSha256 ? "current" : "update";
+    files.push({
+      path,
+      state,
+      action:
+        state === "missing"
+          ? "create"
+          : state === "update"
+            ? "replace"
+            : state === "current"
+              ? "none"
+              : "blocked",
+      sha256: observation.sha256,
+      managedSha256,
+      desiredSha256,
+      content: templates[path],
+      reason,
+    });
   }
-  const conflicts = files.filter(file => ['blocked', 'conflict'].includes(file.state)).map(file => ({ path: file.path, reason: file.reason! }));
-  const planId = hash(JSON.stringify({ projectDirectory: root, templateVersion, metadata: metadata.sha256, checkpoint: checkpoint.sha256, files: files.map(({ content, ...file }) => file) }));
-  return { plan: { schemaVersion: 1, templateVersion, projectDirectory: root, planId, canApply: !conflicts.length, recoveryRequired: !!recovery, files, conflicts }, manifest: owned, manifestObservation: metadata, pending: recovery, pendingObservation: checkpoint, observations };
+  const conflicts = files
+    .filter((file) => ["blocked", "conflict"].includes(file.state))
+    .map((file) => ({ path: file.path, reason: file.reason! }));
+  const planId = hash(
+    JSON.stringify({
+      projectDirectory: root,
+      templateVersion,
+      metadata: metadata.sha256,
+      checkpoint: checkpoint.sha256,
+      files: files.map(({ content, ...file }) => file),
+    }),
+  );
+  return {
+    plan: {
+      schemaVersion: 1,
+      templateVersion,
+      projectDirectory: root,
+      planId,
+      canApply: !conflicts.length,
+      recoveryRequired: !!recovery,
+      files,
+      conflicts,
+    },
+    manifest: owned,
+    manifestObservation: metadata,
+    pending: recovery,
+    pendingObservation: checkpoint,
+    observations,
+  };
 }
-export async function planProjectIntegrations(projectDirectory: string): Promise<IntegrationPlan> { return (await readPlan(await rootDirectory(projectDirectory))).plan; }
+export async function planProjectIntegrations(
+  projectDirectory: string,
+): Promise<IntegrationPlan> {
+  return (await readPlan(await rootDirectory(projectDirectory))).plan;
+}
 async function parents(root: string, path: string) {
   let current = root;
-  for (const part of path.split('/').slice(0, -1)) {
-    current = join(current, part); const info = await exists(current);
+  for (const part of path.split("/").slice(0, -1)) {
+    current = join(current, part);
+    const info = await exists(current);
     if (!info) await mkdir(current, { mode: 0o700 });
-    else if (!info.isDirectory() || info.isSymbolicLink()) throw new DomainError('conflict', 'Integration directory changed; inspect the plan again.');
+    else if (!info.isDirectory() || info.isSymbolicLink())
+      throw new DomainError(
+        "conflict",
+        "Integration directory changed; inspect the plan again.",
+      );
   }
 }
-async function publish(root: string, path: string, text: string, before: string | null, mode = 0o600) {
+async function publish(
+  root: string,
+  path: string,
+  text: string,
+  before: string | null,
+  mode = 0o600,
+) {
   await parents(root, path);
   const current = await observe(root, path);
-  if (current.blocked || current.sha256 !== before) throw new DomainError('conflict', 'Integration file changed; inspect the plan again.');
-  const absolute = join(root, ...path.split('/'));
+  if (current.blocked || current.sha256 !== before)
+    throw new DomainError(
+      "conflict",
+      "Integration file changed; inspect the plan again.",
+    );
+  const absolute = join(root, ...path.split("/"));
   if (before === null) {
-    const file = await open(absolute, 'wx', mode);
-    try { await file.writeFile(text); await file.sync(); } finally { await file.close(); }
-  } else {
-    const temporary = join(dirname(absolute), '.werk-integration-' + randomUUID() + '.tmp');
-    const file = await open(temporary, 'wx', current.mode ?? mode);
+    const file = await open(absolute, "wx", mode);
     try {
-      await file.writeFile(text); await file.sync(); await file.close();
+      await file.writeFile(text);
+      await file.sync();
+    } finally {
+      await file.close();
+    }
+  } else {
+    const temporary = join(
+      dirname(absolute),
+      ".werk-integration-" + randomUUID() + ".tmp",
+    );
+    const file = await open(temporary, "wx", current.mode ?? mode);
+    try {
+      await file.writeFile(text);
+      await file.sync();
+      await file.close();
       const observed = await observe(root, path);
-      if (observed.blocked || observed.sha256 !== before) throw new DomainError('conflict', 'Integration file changed; inspect the plan again.');
-      await parents(root, path); await rename(temporary, absolute);
-    } finally { await file.close().catch(() => {}); await unlink(temporary).catch(error => { if (error.code !== 'ENOENT') throw error; }); }
+      if (observed.blocked || observed.sha256 !== before)
+        throw new DomainError(
+          "conflict",
+          "Integration file changed; inspect the plan again.",
+        );
+      await parents(root, path);
+      await rename(temporary, absolute);
+    } finally {
+      await file.close().catch(() => {});
+      await unlink(temporary).catch((error) => {
+        if (error.code !== "ENOENT") throw error;
+      });
+    }
   }
 }
 async function recover(root: string, read: ReadPlan) {
   if (!read.pending) return;
-  const repaired: Manifest = { schemaVersion: 1, templateVersion: read.manifest.templateVersion, files: { ...read.manifest.files } };
-  for (const entry of read.pending.files) if (read.observations.get(entry.path)!.sha256 === entry.afterSha256) repaired.files[entry.path] = { sha256: entry.afterSha256 };
-  const text = JSON.stringify(repaired, null, 2) + '\n';
-  if (hash(text) !== read.manifestObservation.sha256) await publish(root, manifestPath, text, read.manifestObservation.sha256);
+  const repaired: Manifest = {
+    schemaVersion: 1,
+    templateVersion: read.manifest.templateVersion,
+    files: { ...read.manifest.files },
+  };
+  for (const entry of read.pending.files)
+    if (read.observations.get(entry.path)!.sha256 === entry.afterSha256)
+      repaired.files[entry.path] = { sha256: entry.afterSha256 };
+  const text = JSON.stringify(repaired, null, 2) + "\n";
+  if (hash(text) !== read.manifestObservation.sha256)
+    await publish(root, manifestPath, text, read.manifestObservation.sha256);
   await unlink(join(root, pendingPath));
 }
-async function apply(projectDirectory: string, expectedPlanId: string | undefined, seedOnly: boolean): Promise<IntegrationSyncResult> {
-  const root = await rootDirectory(projectDirectory), initial = await readPlan(root);
-  if (!seedOnly && (!digest(expectedPlanId) || initial.plan.planId !== expectedPlanId || !initial.plan.canApply)) throw new DomainError('conflict', 'Integration plan changed or contains conflicts. Read integrations plan and reconcile before syncing.');
-  if (seedOnly && initial.plan.files.every(file => file.state !== 'missing')) return { ...initial.plan, applied: false, seedOnly, written: [], skipped: initial.plan.files.filter(file => file.state !== 'current').map(file => file.path) };
-  if (initial.plan.files.some(file => file.state === 'blocked')) return { ...initial.plan, applied: false, seedOnly, written: [], skipped: initial.plan.files.filter(file => file.state !== 'current').map(file => file.path) };
-  if (!initial.plan.recoveryRequired && initial.plan.files.every(file => file.state === 'current')) return { ...initial.plan, applied: false, seedOnly, written: [], skipped: [] };
+async function apply(
+  projectDirectory: string,
+  expectedPlanId: string | undefined,
+  seedOnly: boolean,
+): Promise<IntegrationSyncResult> {
+  const root = await rootDirectory(projectDirectory),
+    initial = await readPlan(root);
+  if (
+    !seedOnly &&
+    (!digest(expectedPlanId) ||
+      initial.plan.planId !== expectedPlanId ||
+      !initial.plan.canApply)
+  )
+    throw new DomainError(
+      "conflict",
+      "Integration plan changed or contains conflicts. Read integrations plan and reconcile before syncing.",
+    );
+  if (seedOnly && initial.plan.files.every((file) => file.state !== "missing"))
+    return {
+      ...initial.plan,
+      applied: false,
+      seedOnly,
+      written: [],
+      skipped: initial.plan.files
+        .filter((file) => file.state !== "current")
+        .map((file) => file.path),
+    };
+  if (initial.plan.files.some((file) => file.state === "blocked"))
+    return {
+      ...initial.plan,
+      applied: false,
+      seedOnly,
+      written: [],
+      skipped: initial.plan.files
+        .filter((file) => file.state !== "current")
+        .map((file) => file.path),
+    };
+  if (
+    !initial.plan.recoveryRequired &&
+    initial.plan.files.every((file) => file.state === "current")
+  )
+    return {
+      ...initial.plan,
+      applied: false,
+      seedOnly,
+      written: [],
+      skipped: [],
+    };
   await parents(root, lockPath);
-  const lock = await open(join(root, lockPath), 'wx', 0o600).catch(() => { throw new DomainError('conflict', 'The project integration lock is held. Retry after the operation finishes. After a crash, stop all workers and CLI integration operations, verify no operation remains, then remove only .werk/agent-integrations.lock and inspect integrations plan before syncing; never remove a live lock.'); });
+  const lock = await open(join(root, lockPath), "wx", 0o600).catch(() => {
+    throw new DomainError(
+      "conflict",
+      "The project integration lock is held. Retry after the operation finishes. After a crash, stop all workers and CLI integration operations, verify no operation remains, then remove only .werk/agent-integrations.lock and inspect integrations plan before syncing; never remove a live lock.",
+    );
+  });
   const lockInfo = await lock.stat();
   try {
     const checked = await readPlan(root);
-    if (checked.plan.planId !== initial.plan.planId) throw new DomainError('conflict', 'Integration plan changed while acquiring its lock. Read the plan again.');
+    if (checked.plan.planId !== initial.plan.planId)
+      throw new DomainError(
+        "conflict",
+        "Integration plan changed while acquiring its lock. Read the plan again.",
+      );
     // Reconcile only proven completed writes; never restore or adopt unknown file contents.
     if (checked.pending) await recover(root, checked);
     const read = await readPlan(root);
-    const writes = read.plan.files.filter(file => file.state === 'missing' || !seedOnly && file.state === 'update');
-    const next: Manifest = { schemaVersion: 1, templateVersion, files: { ...read.manifest.files } };
-    for (const file of writes) next.files[file.path] = { sha256: file.desiredSha256 };
-    const nextText = JSON.stringify(next, null, 2) + '\n';
+    const writes = read.plan.files.filter(
+      (file) =>
+        file.state === "missing" || (!seedOnly && file.state === "update"),
+    );
+    const next: Manifest = {
+      schemaVersion: 1,
+      templateVersion,
+      files: { ...read.manifest.files },
+    };
+    for (const file of writes)
+      next.files[file.path] = { sha256: file.desiredSha256 };
+    const nextText = JSON.stringify(next, null, 2) + "\n";
     if (writes.length) {
-      const checkpoint: Pending = { schemaVersion: 1, previousManifestSha256: read.manifestObservation.sha256, nextManifestSha256: hash(nextText), files: writes.map(file => ({ path: file.path, beforeSha256: file.sha256, afterSha256: file.desiredSha256 })) };
-      await publish(root, pendingPath, JSON.stringify(checkpoint, null, 2) + '\n', null);
-      for (const file of writes) await publish(root, file.path, file.content, file.sha256, 0o644);
-      await publish(root, manifestPath, nextText, read.manifestObservation.sha256);
+      const checkpoint: Pending = {
+        schemaVersion: 1,
+        previousManifestSha256: read.manifestObservation.sha256,
+        nextManifestSha256: hash(nextText),
+        files: writes.map((file) => ({
+          path: file.path,
+          beforeSha256: file.sha256,
+          afterSha256: file.desiredSha256,
+        })),
+      };
+      await publish(
+        root,
+        pendingPath,
+        JSON.stringify(checkpoint, null, 2) + "\n",
+        null,
+      );
+      for (const file of writes)
+        await publish(root, file.path, file.content, file.sha256, 0o644);
+      await publish(
+        root,
+        manifestPath,
+        nextText,
+        read.manifestObservation.sha256,
+      );
       await unlink(join(root, pendingPath));
     }
-    return { ...(await readPlan(root)).plan, applied: writes.length > 0 || !!checked.pending, seedOnly, written: writes.map(file => file.path), skipped: read.plan.files.filter(file => ['blocked', 'conflict'].includes(file.state) || seedOnly && file.state === 'update').map(file => file.path) };
+    return {
+      ...(await readPlan(root)).plan,
+      applied: writes.length > 0 || !!checked.pending,
+      seedOnly,
+      written: writes.map((file) => file.path),
+      skipped: read.plan.files
+        .filter(
+          (file) =>
+            ["blocked", "conflict"].includes(file.state) ||
+            (seedOnly && file.state === "update"),
+        )
+        .map((file) => file.path),
+    };
   } finally {
-    await lock.close(); const current = await exists(join(root, lockPath));
-    if (current && !current.isSymbolicLink() && current.ino === lockInfo.ino && current.dev === lockInfo.dev) await unlink(join(root, lockPath));
+    await lock.close();
+    const current = await exists(join(root, lockPath));
+    if (
+      current &&
+      !current.isSymbolicLink() &&
+      current.ino === lockInfo.ino &&
+      current.dev === lockInfo.dev
+    )
+      await unlink(join(root, lockPath));
   }
 }
-export async function syncProjectIntegrations(projectDirectory: string, expectedPlanId: string): Promise<IntegrationSyncResult> { return apply(projectDirectory, expectedPlanId, false); }
-export async function seedProjectIntegrations(projectDirectory: string): Promise<IntegrationSyncResult> { return apply(projectDirectory, undefined, true); }
+export async function syncProjectIntegrations(
+  projectDirectory: string,
+  expectedPlanId: string,
+): Promise<IntegrationSyncResult> {
+  return apply(projectDirectory, expectedPlanId, false);
+}
+export async function seedProjectIntegrations(
+  projectDirectory: string,
+): Promise<IntegrationSyncResult> {
+  return apply(projectDirectory, undefined, true);
+}

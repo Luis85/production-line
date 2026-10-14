@@ -1,3 +1,4 @@
+import { serveWebviewAsset } from '../shared/http/webview-assets.js';
 import { loadAccessFile, accessAuthorization, type AccessDocument } from '../shared/http/access.js';
 import type { AuditSink } from '../shared/http/audit.js';
 import { monitoringThresholds, type MonitoringThresholds } from '../shared/monitoring.js';
@@ -50,14 +51,18 @@ export async function startServer(config: ServerConfig) {
   );
   const store = new Store(config.db, config.leaseMs);
   const application = new OrchestratorApplication(store, config.project, contextIntake, monitoring);
-  const server = createServer(observeHttp('orchestrator', createHttpHandler({
+  const handler = createHttpHandler({
     application,
     schemaVersion: SCHEMA_VERSION,
     authorize: tokenAuthorization(config.adminToken, config.enrollmentToken, access),
     audit: config.audit,
     views: { intake, concept, guide },
     reportError: () => serviceEvent('orchestrator', 'internal_error', 'error'),
-  })));
+  });
+  const server = createServer(observeHttp('orchestrator', async (request, response) => {
+    if (await serveWebviewAsset(request, response, new URL('./public/', import.meta.url))) return;
+    await handler(request, response);
+  }));
   server.requestTimeout = 15000;
   server.headersTimeout = 10000;
   server.keepAliveTimeout = 5000;

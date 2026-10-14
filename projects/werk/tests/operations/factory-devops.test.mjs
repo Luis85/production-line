@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { factoryFleetOptions, validateFactorySecrets, bootstrapHierarchy } from '../../scripts/factory-fleet.mjs';
-import { mkdtemp, mkdir, cp, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, cp, readFile, writeFile, rm, symlink, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 const exec=promisify(execFile);
@@ -30,21 +31,30 @@ test('hierarchy bootstrap is repeatable and never overwrites line settings',asyn
   records.lines[0].orchestratorUrl='http://other:3000';await assert.rejects(bootstrapHierarchy(call,config),/settings differ/);assert.equal(writes,3);
 });
 test('factory distribution builds independently and includes its webview without YAML',async()=>{
-  const root=await mkdtemp(join(tmpdir(),'werk-factory-build-'));
+  const root=await realpath(await mkdtemp(join(tmpdir(),'werk-factory-build-')));
   try{
     await mkdir(join(root,'scripts'));await cp(new URL('../../scripts/build.mjs',import.meta.url),join(root,'scripts/build.mjs'));
     await writeFile(join(root,'package.json'),JSON.stringify({version:'0.1.0',engines:{node:'>=24 <25'}}));
-    await mkdir(join(root,'src/factory/public'),{recursive:true});await mkdir(join(root,'src/shared'));
+    await cp(new URL('../../scripts/webviews.mjs',import.meta.url),join(root,'scripts/webviews.mjs'));
+    await symlink(fileURLToPath(new URL('../../node_modules',import.meta.url)),join(root,'node_modules'),'junction');
+    await mkdir(join(root,'src/shared'),{recursive:true});
+    await mkdir(join(root,'src/factory'),{recursive:true});
     await writeFile(join(root,'src/factory/cli.ts'),'#!/usr/bin/env node\nconsole.log("factory");');
-    await writeFile(join(root,'src/factory/public/index.html'),'<!doctype html><html><head></head><body><h1>Factory</h1></body></html>');
-    await mkdir(join(root,'src/guide/public'),{recursive:true});await writeFile(join(root,'src/guide/public/index.html'),'<!doctype html><html><head></head><body><h1>System guide</h1></body></html>');
-    await cp(new URL('../../src/shared/ui',import.meta.url),join(root,'src/shared/ui'),{recursive:true});
-    for(const app of ['factory','guide'])await cp(new URL('../../src/'+app+'/public/experience.js',import.meta.url),join(root,'src/'+app+'/public/experience.js'));
+    for (const [app,title] of [['factory','Factory'],['guide','System guide']]) {
+      const view=join(root,'src',app,'webview');await mkdir(view,{recursive:true});
+      await writeFile(join(view,'index.html'),'<!doctype html><html><head><title>'+title+'</title></head><body><div id="app"></div><script type="module" src="/main.ts"></script></body></html>');
+      await writeFile(join(view,'main.ts'),"import {createApp} from 'vue'; createApp({template:'<h1>"+title+"</h1>'}).mount('#app');");
+    }
     await exec(process.execPath,[join(root,'scripts/build.mjs'),'factory','--dist-only']);
     const dest=join(root,'src/factory/dist');const manifest=JSON.parse(await readFile(join(dest,'package.json'),'utf8'));assert.equal(manifest.bin['werk-factory'],'factory/cli.js');
     assert.match(await readFile(join(dest,'factory/public/index.html'),'utf8'),/Factory/);
     assert.match(await readFile(join(dest,'factory/public/guide.html'),'utf8'),/System guide/);
-    for(const file of ['index.html','guide.html']){const page=await readFile(join(dest,'factory/public',file),'utf8');assert.match(page,/class SpatialMap/);for(const [,script]of page.matchAll(/<script>([\s\S]*?)<\/script>/g))new (await import('node:vm')).Script(script);}
+    const page=await readFile(join(dest,'factory/public/index.html'),'utf8');
+    const entry=/src="(\/assets\/[^" ]+\.js)"/.exec(page);assert.ok(entry,'Factory must ship a compiled module entry');
+    assert.ok((await readFile(join(dest,'factory/public',entry[1]))).length>0);
+    const guide=await readFile(join(dest,'factory/public/guide.html'),'utf8');
+    assert.match(guide,/<script type="module">/);assert.doesNotMatch(guide,/<script[^>]+src=/);
+    assert.equal(await readFile(join(dest,'package.json'),'utf8').then(value=>JSON.parse(value).name),'@werk/factory');
     assert.equal((await exec(process.execPath,[join(dest,'factory/cli.js')])).stdout.trim(),'factory');
   }finally{await rm(root,{recursive:true,force:true});}
 });

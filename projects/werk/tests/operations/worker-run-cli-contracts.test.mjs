@@ -17,13 +17,14 @@ test('run filters produce typed bounded requests and reject mistakes before any 
   assert.deepEqual(await workerBody(catalog['run get'],undefined,{id:'attempt-one'}),{action:'get',id:'attempt-one'});
 });
 test('JSON export preserves nullable original evidence and CSV escapes spreadsheet formulas and full snapshots',()=>{
-  const record={id:'run-one',sessionId:'session-one',taskId:'task-one',kind:'chat',title:'=SUM(1,2)',provider:'codex-cli',model:'fixture',attempt:1,before:{capturedAt:'before',consumption:{inputTokens:null,costUsd:null}},after:{capturedAt:'after',consumption:{outputTokens:8,costUsd:null}}};
+  const record={id:'run-one',sessionId:'session-one',taskId:'task-one',kind:'chat',purpose:'gate_review',requestId:'request-one',title:'=SUM(1,2)',provider:'codex-cli',model:'fixture',attempt:1,before:{capturedAt:'before',consumption:{inputTokens:null,costUsd:null}},after:{capturedAt:'after',consumption:{outputTokens:8,costUsd:null}}};
   const page={schemaVersion:1,rows:[record],total:1,asOf:4,nextOffset:1,nextCursor:'page-two'};
   assert.deepEqual(JSON.parse(workerOutput(page,{},catalog['run export'])),page);
-  const csv=workerOutput(page,{format:'csv'},catalog['run export']);assert.match(csv,/^id,sessionId,taskId,kind,title,provider,model,attempt,sequence,outcome/);assert.match(csv,/usage,resourceDelta,before,after,schemaVersion,total,asOf,nextOffset,nextCursor\r\n/);assert.match(csv,/"page-two"$/);assert.match(csv,/"'=SUM\(1,2\)"/);assert.match(csv,/""costUsd"":null/);assert.match(csv,/""capturedAt"":""before""/);assert.match(csv,/""capturedAt"":""after""/);
+  const csv=workerOutput(page,{format:'csv'},catalog['run export']);assert.match(csv,/^id,sessionId,taskId,kind,title,provider,model,attempt,sequence,outcome/);assert.match(csv,/usage,resourceDelta,before,after,schemaVersion,total,asOf,nextOffset,nextCursor,purpose,requestId\r\n/);assert.match(csv,/"page-two","gate_review","request-one"$/);assert.match(csv,/"'=SUM\(1,2\)"/);assert.match(csv,/""costUsd"":null/);assert.match(csv,/""capturedAt"":""before""/);assert.match(csv,/""capturedAt"":""after""/);
   assert.deepEqual(JSON.parse(workerOutput({providers:[{id:'codex-cli'}],connection:{url:'private-worker'}},{},catalog['provider list'])),{providers:[{id:'codex-cli'}]});
 });
 test('wait observes failure as terminal and timeout has a stable code without cancelling work',async()=>{
-  const stopped={session:{status:'failed'}};assert.equal(await waitForWorker(async()=>stopped,'task','10'),stopped);
+  for (const status of ['failed','needs_rework','interrupted','done']) { const stopped={session:{status}};assert.equal(await waitForWorker(async()=>stopped,'task','10'),stopped); }
+  const held={execution:{status:'needs_rework',request:{phase:'needs_rework'}}};assert.equal(await waitForWorker(async()=>held,'feature','10'),held);
   let calls=0;await assert.rejects(waitForWorker(async()=>{calls++;return{session:{status:'queued'}};},'task','1'),error=>error.code==='wait_timeout'&&/continues/.test(error.message));assert.ok(calls>=1);
 });
