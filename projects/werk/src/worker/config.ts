@@ -1,3 +1,4 @@
+import { DEFAULT_MAX_RUNTIME_MS, MAX_MAX_RUNTIME_MS } from './application/execution-policy.js';
 import { chatConfiguration } from './status/workspace.js';
 import { codexConfiguration } from './infrastructure/codex-adapter.js';
 import { createHash } from 'node:crypto';
@@ -67,7 +68,7 @@ export async function configuration(options: Record<string, string>, document?: 
   if (mode === 'cli' && (policy.maxParallel !== 1 || policy.maxAttempts !== 1 || ps.length !== 1 || ps[0].maxParallel !== 1)) throw new ValidationError('Live Codex requires one profile, one slot and one attempt');
   const pollMs = integer(options['poll-ms'] ?? String(scheduler.pollMs ?? 1000), 'poll-ms', 100, 30000);
   const mockMs = integer(options['mock-ms'] ?? String(execution.mockMs ?? 3000), 'mock-ms', 1, 3600000);
-  const timeoutMs = integer(options['timeout-ms'] ?? String(execution.timeoutMs ?? 60000), 'timeout-ms', 50, 3600000);
+  const timeoutMs = integer(options['timeout-ms'] ?? String(execution.timeoutMs ?? (mode === 'cli' ? DEFAULT_MAX_RUNTIME_MS : 60000)), 'timeout-ms', 50, MAX_MAX_RUNTIME_MS);
   const normalized = {
     schemaVersion: 1,
     scheduler: { ...policy, configHash: undefined, pollMs },

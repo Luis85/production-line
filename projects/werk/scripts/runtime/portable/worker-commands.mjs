@@ -8,10 +8,32 @@ export function workerCommands(catalog) {
   catalog['feature template'] = { local: true, required: [], options: [], mutating: false, outputFormat: 'markdown', description: 'Print an editable draft frontmatter + Markdown request without a running worker. Save it to a file, finish it, then feature create/validate/submit.' };
   catalog['provider list'] = { method: 'GET', path: '/api/settings', view: 'providers', description: 'List redacted provider configuration; keys and sign-in output are never returned.' };
   catalog['provider configure'] = { method: 'POST', path: '/api/settings', body: true, example: { provider: { id: 'codex-cli', executable: '/absolute/path/to/codex' } }, description: 'Save provider settings from private JSON file/stdin; this does not prove sign-in or prompt a model. Use provider check afterward.' };
+  for (const name of ['status', 'plan', 'sync']) catalog['integrations ' + name] = { local: true, required: [], options: ['project-dir', ...(name === 'sync' ? ['if-match', 'dry-run'] : [])], mutating: name === 'sync', description: name === 'sync' ? 'Apply a reviewed project integration plan with --if-match PLAN_ID; --dry-run returns a read-only plan. Never adopts unowned files or overwrites operator edits.' : 'Inspect recognized Claude/Codex project skills and generated operation guide without a running worker or filesystem writes.' };
+  catalog['resource status'] = { method: 'GET', path: '/api/resources', mutating: false, description: 'Inspect worker Node RSS/heap/CPU and admission policy. Provider subprocess totals and subscription quotas are not measured.' };
+  catalog['resource events'] = { ...action('/api/resources', 'events', [], false, ['after', 'limit']), mutating: false, description: 'Read retained resource transitions; follow nextAfter, check gap and oldestAvailableSequence. --after nonnegative sequence, --limit 1–100; default 50.' };
+  catalog.capabilities = { method: 'GET', path: '/api/capabilities', mutating: false, description: 'Discover worker interaction/context capabilities. Configuration and supported adapter behavior do not prove model authentication, quota, or native session resume.' };
+  catalog['interaction get'] = { ...action('/api/interactions', 'get'), description: 'Inspect this worker session interaction revision, phase, pending question/escalation, and retained turns; browser selection is unchanged.' };
+  catalog['interaction turn'] = { ...action('/api/interactions', 'turn', ['id', 'turn-id']), description: 'Read one retained immutable turn request/result in this session.' };
+  catalog['interaction events'] = { ...action('/api/interactions', 'events', ['id'], false, ['after', 'limit']),
+    flags: { id: 'Worker session ID', after: 'Nonnegative global event sequence; default 0', limit: 'Integer 1–100; default 50' },
+    output: '{schemaVersion,sessionId,events,nextAfter,hasMore}; durable session-filtered events, no prompt/provider raw content',
+    description: 'Read durable normalized interaction events in sequence order. Pass nextAfter on the next page/poll; empty pages retain the cursor. Polling is supported, token streaming/SSE is not.' };
+  catalog['interaction answer'] = { ...action('/api/interactions', 'answer', ['id', 'question-id', 'if-match', 'key'], true, ['message']), inputBodyOptional: true,
+    example: { answer: 'Use the existing page layout.' }, input: 'Exactly one answer from --message TEXT or JSON --file PATH|- {answer:string}; maximum 8,000 characters.',
+    flags: { id: 'Worker session ID', 'question-id': 'Current pending.id from interaction get', 'if-match': 'Numeric interaction revision from interaction get', key: 'Stable caller operation ID for replay after an uncertain response' },
+    description: 'Durably answer the current pending question. Identical operation ID/input replays the acknowledgement; changed reuse or stale revision conflicts. Admission may wait for capacity.' };
+  catalog['interaction cancel'] = { ...action('/api/interactions', 'cancel', ['id', 'question-id', 'if-match', 'key']),
+    flags: { id: 'Worker session ID', 'question-id': 'Current pending.id from interaction get', 'if-match': 'Numeric interaction revision', key: 'Stable cancellation operation ID' },
+    description: 'Decline the current pending question/escalation with revision and replay guards. Running task cancellation remains with its owning task API.' };
+  catalog['interaction resume'] = { ...action('/api/interactions', 'resume', ['id', 'turn-id', 'if-match', 'key'], true, ['message']), inputBodyOptional: true,
+    example: { message: 'Continue with the saved context.' }, input: 'Optional continuation message from --message TEXT or JSON --file PATH|- {message:string}; maximum 8,000 characters.',
+    flags: { id: 'Worker session ID', 'turn-id': 'Prior retained turn ID', 'if-match': 'Numeric interaction revision from interaction get', key: 'Stable caller operation ID for replay after an uncertain response' },
+    description: 'Continue a supported stopped interaction using its explicit retained context. Inspect capability/context mode; this is distinct from retrying the original input.' };
+  catalog['task resume'] = { ...catalog['interaction resume'], description: 'Alias of interaction resume with explicit session/turn/revision/operation ID. Retry remains a separate repeat-input action.' };
   const runFields = { 'session-id': 'sessionId', 'task-id': 'taskId', provider: 'provider', kind: 'kind', outcome: 'outcome', since: 'since', until: 'until', limit: 'limit', offset: 'offset', cursor: 'cursor', 'as-of': 'asOf' };
   const runFilters = {
     'session-id': 'Worker session ID', 'task-id': 'Owning task ID', provider: 'codex-cli|claude-cli|openai-api|anthropic-api', kind: 'chat|local|orchestrator',
-    outcome: 'queued|running|completed|review|failed|cancelled|interrupted', since: 'ISO-8601 timestamp with explicit timezone, inclusive', until: 'ISO-8601 timestamp with explicit timezone, inclusive',
+    outcome: 'queued|running|completed|review|failed|cancelled|interrupted|waiting_input|escalated', since: 'ISO-8601 timestamp with explicit timezone, inclusive', until: 'ISO-8601 timestamp with explicit timezone, inclusive',
     limit: 'Integer 1–100; default 50', offset: 'Nonnegative integer; prefer returned nextCursor for stable traversal', cursor: 'Returned nextCursor for the same filters', 'as-of': 'Returned nonnegative admission-sequence watermark; not a timestamp',
   };
   for (const name of ['list', 'get', 'analyze', 'export']) {
@@ -37,13 +59,27 @@ export function workerCommands(catalog) {
   catalog['task wait'] = { ...action('/api/tasks', 'get'), wait: 'task', options: ['timeout-ms'] };
   catalog['file-task wait'] = { ...action('/api/taskboard/detail', undefined), wait: 'file-task', options: ['timeout-ms'] };
   catalog['feature wait'] = { ...catalog['feature result'], wait: 'feature', options: ['timeout-ms'] };
+  for (const name of ['task wait', 'file-task wait', 'feature wait']) {
+    catalog[name].description = 'Observe stopped or operator-action state, including waiting_input/escalated. Exit 0 is an observation, not proof of completion. Inspect interaction get for pending input; timeout leaves work running.';
+    catalog[name].stopsOn = ['completed', 'review', 'failed', 'cancelled', 'unavailable', 'waiting_input', 'escalated'];
+  }
   for (const [name, item] of Object.entries(catalog)) {
     if (['task list', 'session list', 'file-task list', 'feature list'].includes(name)) item.options = ['status', 'archived'];
-    if (item.method === 'POST') { item.mutating = item.path !== '/api/runs' && !item.wait && !['get', 'validate', 'result'].includes(item.action) && !name.endsWith(' get'); item.destructive = item.action === 'delete'; }
+    if (item.method === 'POST') { item.mutating = item.path !== '/api/runs' && !item.wait && !['get', 'turn', 'events', 'validate', 'result'].includes(item.action) && !name.endsWith(' get'); item.destructive = item.action === 'delete'; }
   }
   return catalog;
 }
 export async function workerBody(command, body, options) {
+  if (command.path === '/api/resources' && command.action === 'events') {
+    const result = { action: 'events' };
+    for (const key of ['after', 'limit']) if (options[key] !== undefined) {
+      const n = Number(options[key]), min = key === 'limit' ? 1 : 0, max = key === 'limit' ? 100 : Number.MAX_SAFE_INTEGER;
+      if (!/^\d+$/.test(options[key]) || !Number.isSafeInteger(n) || n < min || n > max) throw inputError('--' + key + ' must be an integer ' + min + '–' + max + '.');
+      result[key] = n;
+    }
+    return result;
+  }
+  if (command.path === '/api/interactions') return interactionBody(command, body, options);
   if (command.path === '/api/runs') return workerRunBody(command, options);
   if (command.fixedBody) return command.fixedBody;
   if (command.wait === 'file-task') return { id: options.id };
@@ -77,7 +113,7 @@ export async function waitForWorker(request, kind, timeoutValue = '60000') {
   for (;;) {
     const result = await request();
     const state = kind === 'task' ? result.session?.status : kind === 'file-task' ? result.status : result.execution?.status ?? result.record?.status;
-    if (['completed', 'review', 'failed', 'cancelled', 'unavailable'].includes(state)) return result;
+    if (['completed', 'review', 'failed', 'cancelled', 'unavailable', 'waiting_input', 'escalated'].includes(state)) return result;
     if (Date.now() >= deadline) throw Object.assign(Error('Wait timed out; task continues. Inspect it or cancel explicitly.'), { code: 'wait_timeout' });
     await new Promise(resolve => setTimeout(resolve, Math.min(1000, deadline - Date.now())));
   }
@@ -96,7 +132,7 @@ function workerRunBody(command, options) {
       if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) || !Number.isFinite(Date.parse(value))) throw inputError('--' + option + ' must be an ISO timestamp with an explicit timezone.');
       body[field] = new Date(value).toISOString();
     } else {
-      const choices = { provider: ['codex-cli', 'claude-cli', 'openai-api', 'anthropic-api'], kind: ['chat', 'local', 'orchestrator'], outcome: ['queued', 'running', 'completed', 'review', 'failed', 'cancelled', 'interrupted'] }[option];
+      const choices = { provider: ['codex-cli', 'claude-cli', 'openai-api', 'anthropic-api'], kind: ['chat', 'local', 'orchestrator'], outcome: ['queued', 'running', 'completed', 'review', 'failed', 'cancelled', 'interrupted', 'waiting_input', 'escalated'] }[option];
       if (choices && !choices.includes(value)) throw inputError('--' + option + ' must be ' + choices.join('|') + '.');
       if (!value || value.length > (option === 'cursor' ? 4096 : 200) || /[\x00-\x1f]/.test(value)) throw inputError('Invalid --' + option + '.');
       body[field] = value;
@@ -120,4 +156,38 @@ export function workerOutput(result, options, command) {
     return '"' + text.replaceAll('"', '""') + '"';
   };
   return [headers.join(','), ...result.rows.map(row => headers.map(header => cell(['total', 'asOf', 'nextOffset', 'nextCursor'].includes(header) ? result[header] : row[header])).join(','))].join('\r\n');
+}
+
+function interactionBody(command, body, options) {
+  if (body !== undefined && (!body || typeof body !== 'object' || Array.isArray(body))) throw inputError('Interaction input must be a JSON object.');
+  const contentField = command.action === 'answer' ? 'answer' : 'message';
+  if (body && Object.keys(body).some(field => field !== contentField)) throw inputError('Interaction input accepts only ' + contentField + '; target, revision and operation ID come from command flags.');
+  const identifier = (value, flag) => {
+    if (typeof value !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(value)) throw inputError('Invalid --' + flag + '; use 1–100 letters, digits, underscores or hyphens.');
+    return value;
+  };
+  const result = { action: command.action, sessionId: identifier(options.id, 'id') };
+  if (command.action === 'events') {
+    for (const flag of ['after', 'limit']) {
+      if (options[flag] === undefined) continue;
+      const value = options[flag], numeric = Number(value), minimum = flag === 'limit' ? 1 : 0, maximum = flag === 'limit' ? 100 : Number.MAX_SAFE_INTEGER;
+      if (!/^\d+$/.test(value) || !Number.isSafeInteger(numeric) || numeric < minimum || numeric > maximum) throw inputError('--' + flag + ' must be an integer ' + minimum + '–' + maximum + '.');
+      result[flag] = numeric;
+    }
+    return result;
+  }
+  if (options['turn-id'] !== undefined) result.turnId = identifier(options['turn-id'], 'turn-id');
+  if (options['question-id'] !== undefined) result.pendingId = identifier(options['question-id'], 'question-id');
+  if (['answer', 'resume', 'cancel'].includes(command.action)) {
+    const revision = options['if-match'];
+    if (typeof revision !== 'string' || !/^\d+$/.test(revision) || !Number.isSafeInteger(Number(revision))) throw inputError('--if-match must be a nonnegative numeric interaction revision.');
+    result.expectedRevision = Number(revision); result.operationId = identifier(options.key, 'key');
+    if (command.action === 'cancel') return result;
+    if (options.message !== undefined && body?.[contentField] !== undefined) throw inputError('Choose --message or --file, not both.');
+    const message = options.message ?? body?.[contentField];
+    if (message !== undefined && (typeof message !== 'string' || !message.trim() || message.length > 8000)) throw inputError(contentField + ' must contain 1–8,000 characters.');
+    if (command.action === 'answer' && message === undefined) throw inputError('Supply an answer using --message or --file.');
+    if (message !== undefined) result[contentField] = message;
+  }
+  return result;
 }

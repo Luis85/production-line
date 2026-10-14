@@ -56,7 +56,7 @@ usage values instead.
 | `queueDurationMs` | Measured wait before acquiring the slot; separate from execution duration |
 | `inputTokens`, `outputTokens` | Normalized provider-reported token counts, when available |
 | `cacheReadTokens`, `cacheWriteTokens` | Subsets of input, not additional tokens to add again |
-| `providerReportedCostUsd` | Actual provider-reported USD cost, not a tariff estimate or subscription allocation |
+| `providerReportedCostUsd` | Provider-reported USD amount; consult `costBasis` to distinguish estimates, billed amounts, unknown provenance and unavailable cost |
 
 `null` means unknown or invalid/unavailable; zero means reported/measured zero.
 The worker does not infer a price from a model name. CLI subscription balance,
@@ -91,7 +91,7 @@ Filters: `--session-id`, `--task-id`, `--provider`, `--kind`, `--outcome`,
 `--since` and `--until`. Timestamp filters use ISO timestamps with an explicit
 `Z` or offset. Providers are `codex-cli`, `claude-cli`, `openai-api` and
 `anthropic-api`; kinds are `chat`, `local` and `orchestrator`. Outcomes are
-`queued`, `running`, `completed`, `review`, `failed`, `cancelled` and `interrupted`.
+`queued`, `running`, `completed`, `review`, `waiting_input`, `escalated`, `failed`, `cancelled` and `interrupted`.
 
 For HTTP, use the same camelCase field names (`sessionId`, `taskId`, `asOf`),
 `action: "list"|"get"|"analyze"|"export"`, and `id` for inspection. `limit`
@@ -118,3 +118,9 @@ Dashboard links. Filters affect both the displayed list and its analysis.
 Measurements, missing coverage and recovered interruptions remain visibly
 separate. The [worker lifecycle tutorial](../tutorials/worker-feature-lifecycle.md)
 walks through this from a downloaded package.
+
+Questions end one invocation and release the execution slot; an answer starts
+another run. Usage checkpoints replace cumulative observations within one run
+and can survive interruption. Claude-reported USD is an estimate, not an invoice;
+older records without `costBasis` have unknown provenance. See the
+[interaction contract](model-interaction.md) for checkpoint and recovery semantics.

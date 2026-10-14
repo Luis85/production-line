@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import ResourceMonitorPanel from '../components/ResourceMonitorPanel.vue';
+import InteractionPanel from '../components/InteractionPanel.vue';
+import type { InteractionView } from '../../application/interactions';
 import SessionPanel from '../components/SessionPanel.vue';
 import RunTask from '../components/RunTask.vue';
 import NewTask from '../components/NewTask.vue';
@@ -29,12 +32,14 @@ function escapePanels(event: KeyboardEvent) {
 }
 const sending = ref(false), creating = ref(false), setup = ref(false), definitions = ref(false);
 watch(() => state.sessions?.selected, () => { creating.value = false; });
+const interaction = ref<InteractionView | null>(null), interactionBusy = ref(false);
+const checkpointBlocked = computed(() => !!interaction.value?.pending || !!interaction.value?.latestTurn && ['failed', 'cancelled', 'interrupted'].includes(interaction.value.phase));
 const current = computed(() => state.sessions?.records.find(item => item.id === state.sessions?.selected));
 const snapshot = computed(() => current.value?.definition);
-const available = computed(() => state.unlocked && state.chat?.available && !state.workspaceBusy && !current.value?.busy);
+const available = computed(() => state.unlocked && state.chat?.available && !state.workspaceBusy && !interactionBusy.value && !checkpointBlocked.value && !current.value?.busy);
 const firstMessage = computed(() => !state.chat?.messages.length);
 const phase = computed(() => state.chat?.phase ?? 'idle');
-async function createTask() { if (sending.value || state.workspaceBusy) return; taskTrigger = document.activeElement as HTMLElement; creating.value = true; await nextTick(); document.getElementById('session-provider')?.focus(); }
+async function createTask() { if (sending.value || interactionBusy.value || state.workspaceBusy) return; taskTrigger = document.activeElement as HTMLElement; creating.value = true; await nextTick(); document.getElementById('session-provider')?.focus(); }
 async function useStarter(text: string) { state.draft = text; await nextTick(); document.getElementById('chat-message')?.focus(); }
 async function created() { creating.value = false; await nextTick(); document.getElementById('chat-message')?.focus(); }
 async function showSetup() { setupTrigger = document.activeElement as HTMLElement; setup.value = true; await nextTick(); document.getElementById('provider-connection')?.focus(); }
@@ -96,7 +101,7 @@ function keydown(event: KeyboardEvent) { if (event.key === 'Enter' && (event.ctr
       <DefinitionPanel />
     </section>
     <div class="chat-workspace">
-      <SessionPanel :disabled="sending" @new-task="createTask" />
+      <SessionPanel :disabled="sending || interactionBusy" @new-task="createTask" />
       <div class="chat-main">
         <NewTask
           v-if="creating"
@@ -127,6 +132,8 @@ function keydown(event: KeyboardEvent) { if (event.key === 'Enter' && (event.ctr
             </div>
             <UButton color="neutral" variant="outline" @click="showSetup">Connect provider</UButton>
           </div>
+          <ResourceMonitorPanel v-if="state.unlocked" compact />
+          <InteractionPanel :current-status="current?.status" @change="interaction = $event" @busy="interactionBusy = $event" />
           <details v-if="snapshot" class="task-definition">
             <summary>
               Agent: {{ snapshot.name }} / {{ snapshot.agent }}
@@ -225,6 +232,7 @@ function keydown(event: KeyboardEvent) { if (event.key === 'Enter' && (event.ctr
           <p v-if="state.chat?.busy" class="page-note">
             Draft a follow-up now; send it when this task finishes. New task queues separate work.
           </p>
+          <p v-if="checkpointBlocked" class="page-note" role="status">Use the answer or resume controls above to continue this task. Your follow-up draft stays here.</p>
           <form class="composer" @submit.prevent="act('send')">
             <label for="chat-message">{{
               firstMessage ? "Task instructions" : "Follow-up for this task"

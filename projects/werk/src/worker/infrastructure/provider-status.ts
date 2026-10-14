@@ -9,10 +9,11 @@ export interface ProviderStatus {
   id: ProviderId; configured: boolean; available: boolean;
   authentication: 'authenticated' | 'signed-out' | 'unknown' | 'unavailable' | 'not-verified';
   message: string; checkedAt: string;
+  minimumVersion?: string; version?: string; compatibility?: 'minimum_met' | 'unsupported' | 'unknown';
 }
-async function statusCommand(connection: ProviderConnection, cwd: string): Promise<{ code: number | null; output: string }> {
+async function statusCommand(connection: ProviderConnection, cwd: string, args = connection.id === 'codex-cli' ? ['login', 'status'] : ['auth', 'status']): Promise<{ code: number | null; output: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(connection.executable, connection.id === 'codex-cli' ? ['login', 'status'] : ['auth', 'status'], { cwd, env: providerEnvironment(connection.id === 'codex-cli' ? 'codex' : 'claude'), detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(connection.executable, args, { cwd, env: providerEnvironment(connection.id === 'codex-cli' ? 'codex' : 'claude'), detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
     const output: Buffer[] = []; let bytes = 0, failed = false;
     const kill = () => { if (child.pid) try { process.kill(-child.pid, 'SIGKILL'); } catch {} };
     const timer = setTimeout(() => { failed = true; kill(); }, 5000);
@@ -41,9 +42,17 @@ export class ProviderStatusChecks {
     if (process.platform === 'win32') return { ...base, authentication: 'unavailable', message: 'Subscription CLI execution needs a native Linux or macOS worker. Use an API provider on Windows.' };
     if (!connection.executable) return { ...base, authentication: 'unavailable', message: 'Install the provider CLI and save its absolute executable path.' };
     try { await access(connection.executable, constants.X_OK); } catch { return { ...base, authentication: 'unavailable', message: 'The saved CLI executable cannot be run by the worker account.' }; }
-    const available = { ...base, available: true };
+    let available: Omit<ProviderStatus, 'authentication' | 'message'> = { ...base, available: true };
     const directory = await mkdtemp(join(tmpdir(), 'werk-provider-status-'));
     try {
+      if (connection.id === 'claude-cli') {
+        const version = await statusCommand(connection, directory, ['--version']);
+        const matched = /^v?(\d{1,4})\.(\d{1,4})\.(\d{1,6})(?:\s|\(|$)/m.exec(version.output);
+        const parts = matched?.slice(1).map(Number);
+        const minimumMet = !!parts && (parts[0] > 2 || parts[0] === 2 && (parts[1] > 1 || parts[1] === 1 && parts[2] >= 248));
+        available = { ...available, minimumVersion: '2.1.248', ...(matched && version.code === 0 ? { version: matched.slice(1).join('.'), compatibility: minimumMet ? 'minimum_met' : 'unsupported' } : { compatibility: 'unknown' }) };
+        if (available.compatibility === 'unsupported') return { ...available, available: false, authentication: 'unknown', message: 'Upgrade Claude Code to 2.1.248 or later. This worker requires --restricted and keeps all no-tools isolation flags enabled. No model request was made.' };
+      }
       const result = await statusCommand(connection, directory);
       if (connection.id === 'codex-cli') {
         if (/not logged in|not authenticated/i.test(result.output)) return { ...available, authentication: 'signed-out', message: 'Run codex login in a terminal as the worker account, then check again.' };
@@ -51,7 +60,7 @@ export class ProviderStatusChecks {
       } else {
         try {
           const value = JSON.parse(result.output);
-          if (value.loggedIn === true && result.code === 0) return { ...available, authentication: 'authenticated', message: 'Claude Code reports a signed-in account. No model request was made.' };
+          if (value.loggedIn === true && result.code === 0) return { ...available, authentication: 'authenticated', message: 'Claude Code reports a signed-in account. No model request was made.' + (available.compatibility === 'unknown' ? ' The CLI version could not be verified; this worker requires Claude Code 2.1.248 or later.' : '') };
           if (value.loggedIn === false) return { ...available, authentication: 'signed-out', message: 'Run claude auth login in a terminal as the worker account, then check again.' };
         } catch { /* Older CLI versions may not provide a machine-readable status. */ }
       }

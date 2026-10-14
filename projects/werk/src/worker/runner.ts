@@ -37,6 +37,7 @@ export interface WorkerConfig {
     systemPromptHash: string;
     systemPrompt: string;
     projectDir?: string;
+    integrationProjectDir?: string;
     features?: { directory: string; provider: string; pollMs: number };
     retainedPairs?: number;
     codex?: CodexConfiguration;

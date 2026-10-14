@@ -234,3 +234,13 @@ uses the original captured files. Neither creates a second session. Archive/dele
 never removes the private deduplication record or frees its 1,000-record limit.
 Use `task delete` and `file-task delete` explicitly to clean retained task history;
 requests whose history has been removed become `unavailable`, without replay.
+
+## Questions and explicit continuation
+
+A local chat or approved-file task can enter `waiting_input` (a question) or `escalated` (an operator decision). It releases the execution slot while waiting. The worker preserves the accepted request body, approved file snapshots and frozen provider configuration.
+
+The request’s worker-owned `werk.interaction` metadata exposes `phase`, `revision`, and, while pending, `pendingId` and a `link` to `_questions/<feature-id>/<pending-id>.md`. The companion records the question, choice identifiers and escalation reason. It is a historical projection: it can remain after resolution, and editing it never answers the task. Read current interaction state before acting.
+
+Answer or resume through the worker’s unified interaction controls (UI, CLI or API), supplying the current revision, pending/turn identifier and a unique operation ID. The same operation can be retried safely; a stale decision is rejected. Answering queues a new measured run using explicit worker-context replay, rather than a hidden provider-session resume. Failed or interrupted continuations require explicit resume. Restart preserves unanswered checkpoints and reconstructs known valid patch results without another provider call. Orchestrator-owned assignments retain their orchestrator lease and routing boundaries.
+
+Question companions contain request-specific content; handle them with the same privacy care as feature requests and result artifacts. Numeric before/after evidence remains separate.

@@ -77,7 +77,7 @@ test('actual API requests use immutable definition instruction and model in prov
   for (const id of ['openai-api', 'anthropic-api']) {
     let body;
     const model = modelFor({ id, apiKey: 'private', executable: '', model: 'definition-model', instruction: 'Explain design decisions.' }, '/tmp', async (_url, options) => { body = JSON.parse(options.body); return Response.json(id === 'openai-api' ? { status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: 'Done' }] }] } : { stop_reason: 'end_turn', content: [{ type: 'text', text: 'Done' }] }); });
-    assert.equal(await model.reply([{ role: 'user', text: 'Help' }], new AbortController().signal), 'Done'); assert.equal(body.model, 'definition-model'); assert.equal(id === 'openai-api' ? body.instructions : body.system, 'Explain design decisions.');
+    assert.equal(await model.reply([{ role: 'user', text: 'Help' }], new AbortController().signal), 'Done'); assert.equal(body.model, 'definition-model'); assert.match(id === 'openai-api' ? body.instructions : body.system, /Explain design decisions\./); assert.match(id === 'openai-api' ? body.instructions : body.system, /Werk interaction protocol version 1/);
   }
 });
 test('large definition task snapshots remain restartable beyond the old 128 KiB catalog limit', async t => {

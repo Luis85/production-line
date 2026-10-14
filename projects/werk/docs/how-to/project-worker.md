@@ -25,6 +25,11 @@ This copies the self-contained app to `bin/apps/worker` and creates:
 - `.werk/compose.worker.yaml`: a standalone Docker worker.
 - `features/_templates/feature-request.md`: an editable draft template.
 - Private `.werk/worker` state and `.werk/provider-home`, with Git ignore entries.
+- Project agent skills for Claude Code and Codex, plus the Codex supporting guide,
+  where those files are missing. Existing edits are preserved and reported.
+
+See [project agent integrations](project-agent-integrations.md) for invocation,
+inspection and guarded synchronization. These skills do not start work automatically.
 
 Choose another folder/provider/port at setup:
 

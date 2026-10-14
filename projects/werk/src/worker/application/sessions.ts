@@ -1,3 +1,5 @@
+import { WorkerInteractionJournal } from '../infrastructure/journal/interactions.js';
+import type { InteractionCommand } from './interactions.js';
 import { WorkerRunJournal } from '../infrastructure/journal/local-runs.js';
 import { WorkerDefinitions, definitionConnection, validateSnapshot, type DefinitionSnapshot } from './definitions.js';
 import { SerialExecutor } from './serial-executor.js';
@@ -10,12 +12,13 @@ import { FileConversationStore } from '../infrastructure/conversation.js';
 import { atomicWrite, ensureDirectory, readBoundedFile } from '../infrastructure/journal/files.js';
 import { modelFor, type ProviderId } from '../infrastructure/providers.js';
 import type { WorkerSettings } from '../infrastructure/settings.js';
-export type TaskState = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type TaskState = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'waiting_input' | 'escalated';
 export interface SessionRecord { definition?: DefinitionSnapshot; submissionHash?: string; taskState?: TaskState; taskId: string; kind: 'chat' | 'local' | 'orchestrator'; id: string; title: string; provider: ProviderId; createdAt: string; archived: boolean; }
 /** Worker-owned transcripts are provider-independent; native CLI session IDs never cross providers. */
 export class WorkerSessions {
   readonly definitions: WorkerDefinitions;
   readonly runs: WorkerRunJournal;
+  readonly interactions: WorkerInteractionJournal;
   private directory: string; private settings: WorkerSettings; private model: typeof modelFor;
   readonly executor: SerialExecutor;
   private writes = Promise.resolve();
@@ -23,9 +26,10 @@ export class WorkerSessions {
   protectTask(id: string, protectedTask: boolean) { if (protectedTask) this.protectedTasks.add(id); else this.protectedTasks.delete(id); }
   private records: SessionRecord[] = []; private selected = 'default';
   private instances = new Map<string, WorkerConversation>(); private changing = false; private changingProviders = false;
-  constructor(directory: string, settings: WorkerSettings, model: typeof modelFor = modelFor) { this.runs = new WorkerRunJournal(directory); this.definitions = new WorkerDefinitions(directory); this.model = model; this.directory = directory; this.settings = settings; this.executor = new SerialExecutor(() => settings.value.board.paused); }
+  constructor(directory: string, settings: WorkerSettings, model: typeof modelFor = modelFor) { this.interactions = new WorkerInteractionJournal(directory); this.runs = new WorkerRunJournal(directory); this.definitions = new WorkerDefinitions(directory); this.model = model; this.directory = directory; this.settings = settings; this.executor = new SerialExecutor(() => settings.value.board.paused); }
   async init() {
-    await this.runs.init();
+    await this.interactions.init();
+    await this.runs.init(id => this.interactions.resultForRun(id));
     await this.definitions.init();
     try { const value = JSON.parse(await readBoundedFile(join(this.directory, 'sessions.json'), 2097152));
       if (!Array.isArray(value.records) || !value.records.length || value.records.length > 100 || new Set(value.records.map((item: SessionRecord) => item.id)).size !== value.records.length) throw Error('Invalid sessions');
@@ -35,13 +39,14 @@ export class WorkerSessions {
     } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       this.records = [{ id: 'default', taskId: 'default', kind: 'chat', title: 'New task', provider: 'codex-cli', createdAt: new Date().toISOString(), archived: false }]; await this.persist();
     }
+    this.interactions.retainSessions(this.records.map(record => record.id));
     for (const record of this.records) await this.load(record);
   }
   private async load(record: SessionRecord) {
     const directory = record.id === 'default' ? this.directory : join(this.directory, 'sessions', record.id);
     await ensureDirectory(directory);
     const model = this.model(definitionConnection(this.settings.provider(record.provider), record.definition), directory);
-    const conversation = new WorkerConversation(new FileConversationStore(directory), model, 120000, this.executor, record.id, { journal: this.runs, metadata: () => ({ sessionId: record.id, taskId: record.taskId, kind: record.kind, title: record.title, provider: record.provider, model: record.definition?.model || this.settings.provider(record.provider).model }) });
+    const conversation = new WorkerConversation(new FileConversationStore(directory), model, () => this.settings.value.execution.maxRuntimeMs, this.executor, record.id, { journal: this.runs, interactions: this.interactions, metadata: () => ({ sessionId: record.id, taskId: record.taskId, kind: record.kind, title: record.title, provider: record.provider, model: record.definition?.model || this.settings.provider(record.provider).model }) });
     await conversation.init(); this.instances.set(record.id, conversation);
   }
   assertSelected(id: unknown) { if (id !== undefined && id !== this.selected) throw new DomainError('conflict', 'The selected session changed. Refresh before sending.'); }
@@ -51,8 +56,11 @@ export class WorkerSessions {
   get busy() { return this.executor.busy || this.records.some(record => ['queued', 'running'].includes(record.taskState ?? '')) || [...this.instances.values()].some(item => item.snapshot().busy); }
   view() { return { selected: this.selected, execution: { currentSessionId: this.executor.current, queued: this.executor.waiting, maxParallel: 1 }, records: this.records.map(record => {
     const conversation = this.instances.get(record.id)?.snapshot(), last = conversation?.messages.at(-1);
-    const status = this.executor.current === record.id ? 'running' : conversation?.busy ? 'queued' : record.taskState ?? (!last ? 'draft' : last.state === 'error' ? 'failed' : last.state === 'cancelled' ? 'cancelled' : 'completed');
-    return { ...record, status, busy: (conversation?.busy ?? false) || ['queued', 'running'].includes(record.taskState ?? ''), messages: conversation?.messages.length ?? 0 };
+    const interaction = this.interactions.view(record.id);
+    const active = this.executor.current === record.id || conversation?.busy || ['queued', 'running'].includes(record.taskState ?? '');
+    const failedInteraction = interaction.phase === 'failed' && !active;
+    const status = failedInteraction || ['waiting_input', 'escalated', 'cancelled', 'interrupted'].includes(interaction.phase) ? interaction.phase : this.executor.current === record.id ? 'running' : conversation?.busy ? 'queued' : record.taskState ?? (!last ? 'draft' : last.state === 'error' ? 'failed' : last.state === 'cancelled' ? 'cancelled' : 'completed');
+    return { ...record, status, interaction, busy: (conversation?.busy ?? false) || ['queued', 'running'].includes(record.taskState ?? ''), messages: conversation?.messages.length ?? 0 };
   }) }; }
   detail(id: string) {
     const record = this.records.find(item => item.id === id);
@@ -63,6 +71,12 @@ export class WorkerSessions {
     const { session } = this.detail(id);
     if (session.kind !== 'chat' && ['queued', 'running'].includes(session.taskState ?? '')) throw new DomainError('conflict', 'Use the owning taskboard or orchestrator to cancel this assignment.');
     await this.instances.get(id)!.cancel(); return this.detail(id);
+  }
+  async interact(command: InteractionCommand) {
+    this.assertProvidersStable();
+    const detail = this.detail(command.sessionId);
+    if (detail.session.kind !== 'chat' && ['queued', 'running'].includes(detail.session.taskState ?? '')) throw new DomainError('conflict', 'The owning task must finish before this session can continue.');
+    return this.instances.get(command.sessionId)!.interact(command);
   }
   async start(message: unknown, id = this.selected) {
     this.assertProvidersStable();
@@ -125,6 +139,7 @@ export class WorkerSessions {
     if (this.changing) throw new DomainError('conflict', 'Session change in progress.');
     this.changing = true; const previous = structuredClone({ records: this.records, selected: this.selected });
     let deleted: string | undefined;
+    let indexCommitted = false;
     try {
       const body = object(input, 'Session action', ['action', 'id', 'title', 'provider', 'definitionId', 'agent', 'useInstructionsOnly']);
       if (body.action === 'create') {
@@ -150,20 +165,22 @@ export class WorkerSessions {
         } else throw new DomainError('invalid_input', 'Unknown session action');
       }
       await this.persist();
+      indexCommitted = true;
       // Commit the index before removing history: failed writes must preserve the existing transcript.
       if (deleted) {
         const conversation = this.instances.get(deleted)!;
         await conversation.clear().catch(() => {}); // An unindexed transcript can be cleaned up later.
-        await conversation.close(); this.instances.delete(deleted);
+        await conversation.close(); this.instances.delete(deleted); this.interactions.deleteSession(deleted);
       }
       return this.view();
     } catch (error) {
+      if (indexCommitted) throw error;
       for (const id of this.instances.keys()) if (!previous.records.some(record => record.id === id)) {
-        await this.instances.get(id)!.close(); this.instances.delete(id);
+        await this.instances.get(id)!.close(); this.instances.delete(id); this.interactions.deleteSession(id);
       }
       this.records = previous.records; this.selected = previous.selected; throw error;
     }
     finally { this.changing = false; }
   }
-  async close(options: { retainEvidence?: boolean } = {}) { await Promise.all([...this.instances.values()].map(item => item.close())); if (!options.retainEvidence) this.runs.close(); }
+  async close(options: { retainEvidence?: boolean } = {}) { await Promise.all([...this.instances.values()].map(item => item.close())); if (!options.retainEvidence) { this.runs.close(); this.interactions.close(); } }
 }

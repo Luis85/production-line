@@ -1,3 +1,4 @@
+import type { ResourceStatus } from '../application/resources.js';
 import { WorkerAccess } from './access.js';
 import { ProviderStatusChecks } from '../infrastructure/provider-status.js';
 import { readFile } from 'node:fs/promises';
@@ -20,10 +21,22 @@ export interface Status {
   heartbeatErrors: number; maxParallel: number; activeTasks: {id:string;attempt:number;profile:string|null}[];
   configurationHash: string; lastSnapshot: string|null;
 }
-export function workerMonitoring(status: Status, thresholds: MonitoringThresholds, now = Date.now()) {
+export function workerMonitoring(status: Status, thresholds: MonitoringThresholds, now = Date.now(), resources?: ResourceStatus) {
   const connected = ['idle', 'executing'].includes(status.state);
   const metrics: Record<string, number> = { werk_worker_connected: connected ? 1 : 0, werk_worker_active_tasks: status.activeTasks.length, werk_worker_heartbeat_errors: status.heartbeatErrors, werk_worker_last_contact_known: status.lastContact ? 1 : 0, werk_worker_last_contact_age_seconds: ageSeconds(now, status.lastContact ? Date.parse(status.lastContact) : null), werk_outbox_measurement_available: status.outbox ? 1 : 0 };
   if (status.outbox) { metrics.werk_outbox_pending = status.outbox.pending; metrics.werk_outbox_oldest_age_seconds = status.outbox.oldestAgeSeconds; }
+  if (resources) {
+    metrics.werk_worker_resource_alerts = resources.alerts.length;
+    metrics.werk_worker_resource_persistence_error = resources.persistenceError ? 1 : 0;
+    metrics.werk_worker_resource_sample_error = resources.sampleError ? 1 : 0;
+    metrics.werk_worker_resource_sample_known = resources.snapshot ? 1 : 0;
+    const sample = resources.snapshot;
+    if (sample) {
+      metrics.werk_worker_resource_sample_age_seconds = Math.max(0, (now - Date.parse(sample.capturedAt)) / 1000);
+      const values = { werk_worker_process_rss_bytes: sample.rssBytes, werk_worker_process_heap_used_bytes: sample.heapUsedBytes, werk_worker_process_heap_limit_bytes: sample.heapLimitBytes, werk_worker_process_cpu_cores: sample.cpuCores, werk_worker_process_cpu_percent_available_parallelism: sample.cpuPercent, werk_worker_state_disk_available_bytes: sample.diskAvailableBytes };
+      for (const [key, value] of Object.entries(values)) if (value !== null && Number.isFinite(value)) metrics[key] = value;
+    }
+  }
   const alerts = [];
   if (!connected && status.state !== 'standalone') alerts.push(operationalAlert('worker_disconnected', 'Worker is not connected and ready for work.', 'Inspect worker lifecycle state, orchestrator availability and enrollment configuration.'));
   if (status.outbox && (status.outbox.pending >= thresholds.outboxPending || status.outbox.oldestAgeSeconds >= thresholds.outboxAgeSeconds)) alerts.push(operationalAlert('outbox_backlog', 'Durable evidence is waiting for acknowledgement.', 'Restore orchestrator connectivity and inspect delivery errors; preserve the outbox.'));
@@ -39,10 +52,16 @@ export async function statusServer(get: () => Status, host: string, port: number
       if (await access!.route(req, res)) return;
       access!.authenticate(req);
       if (req.method === 'POST' && req.url === '/api/providers/check') { const body = await readJson(req); if (Object.keys(body).some(key => key !== 'id') || typeof body.id !== 'string') throw new ApiError(400, 'Choose a provider to check.'); return json(res, 200, await providers.check(workspace.settings.provider(body.id))); }
+      if (req.method === 'GET' && req.url === '/api/integrations') return json(res, 200, await workspace.integrations());
+      if (req.method === 'POST' && req.url === '/api/integrations') return json(res, 200, await workspace.integrations(await readJson(req)));
       if (req.method === 'GET' && req.url === '/api/features') return json(res, 200, await workspace.features?.list() ?? { enabled: false });
       if (req.method === 'POST' && req.url === '/api/features') { if (!workspace.features) throw new ApiError(409, 'Configure a feature folder first.'); return json(res, 200, await workspace.features.action(await readJson(req))); }
       if (req.method === 'GET' && req.url === '/api/definitions') return json(res, 200, workspace.definitions.view());
       if (req.method === 'POST' && req.url === '/api/definitions') return json(res, 200, await workspace.definitions.action(await readJson(req)));
+      if (req.method === 'GET' && req.url === '/api/resources') return json(res, 200, workspace.resources.status());
+      if (req.method === 'POST' && req.url === '/api/resources') return json(res, 200, workspace.resourceEvents(await readJson(req)));
+      if (req.method === 'GET' && req.url === '/api/capabilities') return json(res, 200, workspace.capabilities());
+      if (req.method === 'POST' && req.url === '/api/interactions') return json(res, 200, await workspace.interaction(await readJson(req)));
       if (req.method === 'POST' && req.url === '/api/runs') return json(res, 200, workspace.runEvidence(await readJson(req)));
       if (req.method === 'POST' && req.url === '/api/tasks') return json(res, 200, await workspace.task(await readJson(req)));
       if (req.method === 'GET' && req.url === '/api/settings') return json(res, 200, workspace.settings.publicView());
@@ -69,8 +88,8 @@ export async function statusServer(get: () => Status, host: string, port: number
       catch { return json(res, 404, { error: 'Asset not found' }); }
     }
     if(req.url === '/')return html(res,statusHtml());
-    if(req.url === '/monitoring')return json(res,200,workerMonitoring(get(),thresholds));
-    if(req.url === '/metrics'){res.writeHead(200,{'content-type':'text/plain; version=0.0.4; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'});res.end(prometheus(workerMonitoring(get(),thresholds)));return;}
+    if(req.url === '/monitoring')return json(res,200,workerMonitoring(get(),thresholds,Date.now(),workspace?.resources.status()));
+    if(req.url === '/metrics'){res.writeHead(200,{'content-type':'text/plain; version=0.0.4; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'});res.end(prometheus(workerMonitoring(get(),thresholds,Date.now(),workspace?.resources.status())));return;}
     if(req.url === '/status')return json(res,200,get());
     if(req.url === '/healthz'){const status=get();return json(res,['idle','executing','standalone'].includes(status.state)?200:503,status);}
     return json(res,404,{error:'Not found'});

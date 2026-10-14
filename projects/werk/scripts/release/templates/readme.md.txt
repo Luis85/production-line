@@ -94,3 +94,8 @@ For automation, use the [agent guide](docs/how-to/operate-with-agents.md). For
 upgrades and recovery, preserve state and follow the
 [backup guide](docs/how-to/upgrade-backup.md). The
 [documentation hub](docs/index.md) routes all runtime guides and references.
+
+For model questions, escalation and stopped requests, use the
+[answer and resume guide](docs/how-to/answer-and-resume-worker.md).
+The [interaction contract](docs/reference/model-interaction.md) describes durable
+checkpoints, provider capabilities and replayable lifecycle events.

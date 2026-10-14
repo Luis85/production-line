@@ -145,6 +145,23 @@ Run history survives session deletion and restart. History exposes project
 requests, run inspection, filtered analysis and export; the portable CLI exposes
 the same records for humans and agents. Bounded pages never imply bounded
 aggregate totals. Unknown usage/cost remains null and totals include per-field
-coverage. Cache tokens are subsets of input; provider-reported USD cost is not a
-price estimate, subscription balance or quality measurement. Remote assignment
+coverage. Cache tokens are subsets of input; provider-reported USD includes cost
+provenance and can be an estimate. It is not a subscription balance or quality
+measurement. Remote assignment
 snapshots remain under their existing orchestrator evidence contract.
+
+## Durable worker–model interactions
+
+The local worker saves an immutable semantic dispatch before invoking a provider.
+Adapters expose one versioned request/result/capability contract. Structured
+questions and escalations release the execution slot and remain on the owning
+request until answered or cancelled through revision-guarded operations. Stable
+operation keys deduplicate accepted commands after lost acknowledgements.
+
+Chat and CLI expose checkpoint inspection and explicit continuation. Current
+adapters use saved worker context in a fresh invocation; native provider session
+resume and live token streaming are not advertised. A durably saved result is
+reconciled after restart without another model call; ambiguous in-flight work
+stays interrupted. A content-free durable event feed lets clients replay lifecycle
+changes independently of provider formats. See the
+[interaction contract](docs/reference/model-interaction.md).

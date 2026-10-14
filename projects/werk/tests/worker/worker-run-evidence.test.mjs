@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -70,14 +70,42 @@ test('failed before persistence cannot invoke provider and reports an unsaved ch
  let calls=0;const f=await sessionFixture(t,()=>({async reply(){calls++;return 'Fixture';}}));f.sessions.runs.start=async()=>{throw Error('Fixture full disk');};await f.sessions.start('Do not execute');await until(()=>!f.sessions.busy);assert.equal(calls,0);assert.equal(f.sessions.chat.snapshot().persistenceError,true);assert.equal(f.sessions.runs.list().rows[0].before,null);
 });
 
-test('failed retry reservation leaves the cancelled task/session retryable',async t=>{
- const f=await sessionFixture(t,()=>({async reply(){return 'Unused';}}));await f.board.create({title:'Patch',instruction:'Create file',repository:f.repository,paths:['a.txt']});const task=f.board.view().tasks[0];await f.board.action({id:task.id,action:'cancel'});const begin=f.sessions.runs.begin.bind(f.sessions.runs);f.sessions.runs.begin=async()=>{throw Error('Fixture ledger full');};await assert.rejects(f.board.action({id:task.id,action:'retry'}),/ledger full/);assert.equal(f.board.detail(task.id).status,'cancelled');assert.equal(f.sessions.detail(task.sessionId).session.status,'cancelled');assert.equal(f.sessions.detail(task.sessionId).session.busy,false);f.sessions.runs.begin=begin;await f.board.action({id:task.id,action:'retry'});assert.notEqual(f.board.detail(task.id).runId,task.runId);
+test('failed retry reservation retains the cancelled run and exposes saved input as a failed resumable attempt', async t => {
+  const f = await sessionFixture(t, () => ({ async reply() { return 'Unused'; } }));
+  await f.board.create({ title: 'Patch', instruction: 'Create file', repository: f.repository, paths: ['a.txt'] });
+  const task = f.board.view().tasks[0];
+  await f.board.action({ id: task.id, action: 'cancel' });
+  const cancelledRun = f.sessions.runs.get(task.runId);
+  const cancelledTurn = f.sessions.interactions.view(task.sessionId).latestTurn;
+  assert.equal(cancelledRun.outcome, 'cancelled');
+  const begin = f.sessions.runs.begin.bind(f.sessions.runs);
+  f.sessions.runs.begin = async () => { throw Error('Fixture ledger full'); };
+  await assert.rejects(f.board.action({ id: task.id, action: 'retry' }), /ledger full/);
+  const failed = f.sessions.interactions.view(task.sessionId);
+  const failedTurn = f.sessions.interactions.turn(task.sessionId, failed.latestTurn.id);
+  assert.equal(f.board.detail(task.id).status, 'failed');
+  assert.equal(f.sessions.detail(task.sessionId).session.status, 'failed');
+  assert.equal(f.sessions.detail(task.sessionId).session.busy, false);
+  assert.equal(failed.phase, 'failed');
+  assert.equal(failedTurn.kind, 'resume');
+  assert.equal(failedTurn.priorTurnId, cancelledTurn.id);
+  assert.equal(failedTurn.runId, null);
+  assert.equal(f.sessions.runs.list().total, 1);
+  assert.deepEqual(f.sessions.runs.get(task.runId), cancelledRun);
+  f.sessions.runs.begin = begin;
+  await f.board.action({ id: task.id, action: 'retry' });
+  assert.equal(f.board.detail(task.id).status, 'queued');
+  assert.notEqual(f.board.detail(task.id).runId, task.runId);
+  assert.equal(f.sessions.runs.list().total, 2);
+  assert.deepEqual(f.sessions.runs.get(task.runId), cancelledRun);
+  const resumed = f.sessions.interactions.view(task.sessionId);
+  assert.equal(f.sessions.interactions.turn(task.sessionId, resumed.latestTurn.id).priorTurnId, failedTurn.id);
 });
 
 test('workspace shutdown drains chat before final feature export and disposes ledger last',async t=>{
- const directory=await mkdtemp(join(tmpdir(),'werk-evidence-close-')),folder=join(directory,'features');await mkdir(folder);const journal=new SnapshotJournal(directory,'a'.repeat(64),'b'.repeat(64));await journal.init();let entered=false;const workspace=new WorkerWorkspace({stateDir:join(directory,'state'),projectDir:directory,features:{directory:folder,provider:'codex-cli',pollMs:1},pollMs:1000,timeoutMs:60000},journal,()=>({activeTasks:[]}));workspace.sessions.model=()=>({async reply(messages,signal){entered=true;await new Promise(resolve=>signal.addEventListener('abort',resolve,{once:true}));signal.throwIfAborted();return 'Unused';}});await workspace.init();t.after(async()=>{await workspace.close();await journal.close();await rm(directory,{recursive:true,force:true});});await writeFile(join(folder,'request.md'),'---\nschemaVersion: 1\ntitle: Shutdown fixture\nstatus: ready\n---\nExplain this fixture.\n');await workspace.features.tick(true);await workspace.features.tick(true);await until(()=>entered);await workspace.close();const document=await readFile(join(folder,'request.md'),'utf8');assert.match(document,/status: cancelled/);assert.match(document,/after:/);assert.throws(()=>workspace.sessions.runs.list(),/not open/);
+ const directory=await realpath(await mkdtemp(join(tmpdir(),'werk-evidence-close-'))),folder=join(directory,'features');await mkdir(folder);const journal=new SnapshotJournal(directory,'a'.repeat(64),'b'.repeat(64));await journal.init();let entered=false;const workspace=new WorkerWorkspace({stateDir:join(directory,'state'),projectDir:directory,features:{directory:folder,provider:'codex-cli',pollMs:1},pollMs:1000,timeoutMs:60000},journal,()=>({activeTasks:[]}));workspace.sessions.model=()=>({async reply(messages,signal){entered=true;await new Promise(resolve=>signal.addEventListener('abort',resolve,{once:true}));signal.throwIfAborted();return 'Unused';}});await workspace.init();t.after(async()=>{await workspace.close();await journal.close();await rm(directory,{recursive:true,force:true});});await writeFile(join(folder,'request.md'),'---\nschemaVersion: 1\ntitle: Shutdown fixture\nstatus: ready\n---\nExplain this fixture.\n');await workspace.features.tick(true);await workspace.features.tick(true);await until(()=>entered);await workspace.close();const document=await readFile(join(folder,'request.md'),'utf8');assert.match(document,/status: cancelled/);assert.match(document,/after:/);assert.throws(()=>workspace.sessions.runs.list(),/not open/);
 });
 
 test('deferred runner shutdown retains ledger through remote completion and final feature reconciliation',async t=>{
- const directory=await mkdtemp(join(tmpdir(),'werk-evidence-remote-close-')),folder=join(directory,'features');await mkdir(folder);const journal=new SnapshotJournal(directory,'a'.repeat(64),'b'.repeat(64));await journal.init();const workspace=new WorkerWorkspace({stateDir:join(directory,'state'),projectDir:directory,features:{directory:folder,provider:'codex-cli',pollMs:1},pollMs:1000,timeoutMs:60000},journal,()=>({activeTasks:[]}));await workspace.init();t.after(async()=>{await workspace.close();await journal.close();await rm(directory,{recursive:true,force:true});});await workspace.features.rememberRemote({id:'remote-shutdown',title:'Remote fixture',criteria:['Finish'],attempt:1});await workspace.sessions.ensureTask('remote-remote-shutdown','orchestrator','Remote fixture','codex-cli');const run=await workspace.sessions.runs.begin(metadata({sessionId:'remote-remote-shutdown',kind:'orchestrator'}));await workspace.sessions.runs.start(run.id);await workspace.close({deferEvidence:true});assert.equal(workspace.sessions.runs.get(run.id).outcome,'running');await workspace.sessions.recordTask('remote-remote-shutdown','Remote request','Remote completed during shutdown');await workspace.sessions.setTaskState('remote-remote-shutdown','completed');await workspace.sessions.runs.finish(run.id,'completed');await workspace.closeEvidence();const document=await readFile(join(folder,'remote-remote-shutdown.md'),'utf8');assert.match(document,/status: completed/);assert.match(document,new RegExp(run.id));assert.match(document,/after:/);assert.throws(()=>workspace.sessions.runs.list(),/not open/);
+ const directory=await realpath(await mkdtemp(join(tmpdir(),'werk-evidence-remote-close-'))),folder=join(directory,'features');await mkdir(folder);const journal=new SnapshotJournal(directory,'a'.repeat(64),'b'.repeat(64));await journal.init();const workspace=new WorkerWorkspace({stateDir:join(directory,'state'),projectDir:directory,features:{directory:folder,provider:'codex-cli',pollMs:1},pollMs:1000,timeoutMs:60000},journal,()=>({activeTasks:[]}));await workspace.init();t.after(async()=>{await workspace.close();await journal.close();await rm(directory,{recursive:true,force:true});});await workspace.features.rememberRemote({id:'remote-shutdown',title:'Remote fixture',criteria:['Finish'],attempt:1});await workspace.sessions.ensureTask('remote-remote-shutdown','orchestrator','Remote fixture','codex-cli');const run=await workspace.sessions.runs.begin(metadata({sessionId:'remote-remote-shutdown',kind:'orchestrator'}));await workspace.sessions.runs.start(run.id);await workspace.close({deferEvidence:true});assert.equal(workspace.sessions.runs.get(run.id).outcome,'running');await workspace.sessions.recordTask('remote-remote-shutdown','Remote request','Remote completed during shutdown');await workspace.sessions.setTaskState('remote-remote-shutdown','completed');await workspace.sessions.runs.finish(run.id,'completed');await workspace.closeEvidence();const document=await readFile(join(folder,'remote-remote-shutdown.md'),'utf8');assert.match(document,/status: completed/);assert.match(document,new RegExp(run.id));assert.match(document,/after:/);assert.throws(()=>workspace.sessions.runs.list(),/not open/);
 });

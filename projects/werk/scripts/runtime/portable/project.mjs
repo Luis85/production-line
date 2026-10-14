@@ -23,6 +23,16 @@ async function rejectLinks(path) {
     else if (!entry.isFile()) throw inputError('The portable app contains a special file.');
   }
 }
+export async function configuredProjectRoot(options) {
+  const project = await realpath(resolve(options['project-dir'] ?? process.cwd()));
+  const directory = await exists(join(project, '.werk'));
+  if (!directory) return undefined;
+  if (!directory.isDirectory() || directory.isSymbolicLink()) throw inputError('Project metadata must be a regular directory.');
+  const marker = await readPrivate(join(project, '.werk/worker-project.json')).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
+  if (!marker) return undefined;
+  if (marker.schemaVersion !== 1 || !Number.isInteger(marker.port) || marker.port < 1 || marker.port > 65535) throw inputError('Invalid project worker marker.');
+  return project;
+}
 export async function projectDefaults(options, launching = false) {
   const project = resolve(options['project-dir'] ?? process.cwd());
   const path = join(project, '.werk/worker-project.json');
@@ -61,8 +71,8 @@ export async function initializeWorker(root, options) {
   if (!existingConfig) await createPrivate(config, { schemaVersion: 1, features: { directory: inside.split(sep).join('/'), provider: options.provider ?? 'codex-cli', pollMs: 1000 } });
   await seed(join(project, '.werk/worker-project.json'), JSON.stringify({ schemaVersion: 1, port }, null, 2) + '\n');
   await seed(join(featureDirectory, '_templates/feature-request.md'), featureTemplate);
-  await ignore(join(project, '.werk/.gitignore'), ['worker/', 'provider-home/']);
-  await ignore(join(featureDirectory, '.gitignore'), ['_worker.lock', '_worker-owner.json', '_worker-status.md', '_results/']);
+  await ignore(join(project, '.werk/.gitignore'), ['worker/', 'provider-home/', 'agent-integrations.json', 'agent-integrations.pending.json', 'agent-integrations.lock']);
+  await ignore(join(featureDirectory, '.gitignore'), ['_worker.lock', '_worker-owner.json', '_worker-status.md', '_results/', '_questions/']);
   const name = 'werk-worker-' + randomBytes(5).toString('hex');
   const compose = `# Project-local worker. Native and Docker runs share state: stop one before starting the other.
 name: ${name}
@@ -98,5 +108,10 @@ services:
       retries: 6
 `;
   await seed(join(project, '.werk/compose.worker.yaml'), compose);
-  return { initialized: true, projectDirectory: project, application: app, stateDirectory: state, featuresDirectory: featureDirectory, template: join(featureDirectory, '_templates/feature-request.md'), configuration: config, commands: { run: 'node bin/apps/worker/cli.mjs run', start: 'node bin/apps/worker/cli.mjs start', status: 'node bin/apps/worker/cli.mjs status', docker: 'docker compose -f .werk/compose.worker.yaml up -d', dockerStop: 'docker compose -f .werk/compose.worker.yaml down' }, next: 'Connect a provider in the webview or use settings set --file provider.json and provider check --id PROVIDER. Create a draft with feature create, validate it, then submit with its current revision; or copy the template into the feature folder and set status: ready.' };
+  let integrations;
+  try {
+    const { seedProjectIntegrations } = await import(new URL('../../../src/worker/dist/worker/infrastructure/project-integrations.js', import.meta.url));
+    integrations = await seedProjectIntegrations(project);
+  } catch { integrations = { applied: false, unavailable: true, reason: 'Integration setup did not complete. Inspect integrations plan before syncing.' }; }
+  return { integrations, initialized: true, projectDirectory: project, application: app, stateDirectory: state, featuresDirectory: featureDirectory, template: join(featureDirectory, '_templates/feature-request.md'), configuration: config, commands: { run: 'node bin/apps/worker/cli.mjs run', start: 'node bin/apps/worker/cli.mjs start', status: 'node bin/apps/worker/cli.mjs status', docker: 'docker compose -f .werk/compose.worker.yaml up -d', dockerStop: 'docker compose -f .werk/compose.worker.yaml down' }, next: 'Connect a provider in the webview or use settings set --file provider.json and provider check --id PROVIDER. Create a draft with feature create, validate it, then submit with its current revision; or copy the template into the feature folder and set status: ready.' };
 }

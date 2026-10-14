@@ -25,7 +25,7 @@ function adoptSessions(sessions: NonNullable<typeof state.sessions>) {
   }
   state.sessions = sessions;
 }
-export function taskStatus(value: string) { return ({ draft: 'Draft', queued: 'Queued', running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled' }[value] ?? value); }
+export function taskStatus(value: string) { return ({ draft: 'Draft', queued: 'Queued', running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Stopped', interrupted: 'Interrupted', waiting_input: 'Waiting for your answer', escalated: 'Decision needed' }[value] ?? value); }
 export interface DefinitionAgent { name: string; description: string; instruction: string; model: string; provider: string; unsupported: string[]; requiresAdaptation: boolean; }
 export interface AgentDefinition { id: string; name: string; digest: string; createdAt: string; agents: DefinitionAgent[]; }
 export async function newTask(options: { provider?: string; title?: string; definitionId?: string; agent?: string; useInstructionsOnly?: boolean } = {}) {
@@ -39,7 +39,9 @@ export async function request(path: string, method = 'GET', body?: unknown) {
   const data = await response.json();
   if (!response.ok) {
     if (response.status === 401 && path !== '/api/access' && access === accessGeneration) { relock(); state.accessMessage = 'Your access expired or the worker restarted. Unlock to return to your task. Your unsent draft is kept in this tab.'; }
-    throw Error(data.error ?? `Request failed (${response.status})`);
+    const failure = Error(data.error ?? `Request failed (${response.status})`) as Error & { status: number };
+    failure.status = response.status;
+    throw failure;
   }
   return data;
 }

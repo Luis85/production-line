@@ -1,0 +1,97 @@
+{
+  "reviewedAt": "2026-10-14",
+  "typecheck": "passed",
+  "tests": {
+    "total": 762,
+    "passed": 761,
+    "failed": 0,
+    "skipped": 1,
+    "skipReason": "PowerShell-specific test on Linux"
+  },
+  "dependencyAudit": {
+    "vulnerabilities": 0
+  },
+  "package": {
+    "files": 1435,
+    "native": "passed",
+    "docker": "passed",
+    "projectNative": "passed",
+    "projectDocker": "passed",
+    "postQualificationChange": "Only worker public assets changed for alert-history CSS spacing; all other packaged files are byte-identical."
+  },
+  "projectJourneys": [
+    {
+      "kind": "native",
+      "ok": true,
+      "journey": "packaged-native-project-worker",
+      "installedWithoutNpm": true,
+      "projectGitRequired": false,
+      "configurableFolder": true,
+      "providerProtocolFixture": true,
+      "resultExported": true,
+      "patchRequiresReview": true,
+      "restartPreserved": true,
+      "durableRunEvidence": true,
+      "interactionEvidence": {
+        "questionRestartPreserved": true,
+        "revisionGuarded": true,
+        "answerReplaySafe": true,
+        "changedReplayRejected": true,
+        "actualDispatchRetained": true,
+        "guardedEscalationCancelResume": true,
+        "contextMode": "worker_context_replay",
+        "nativeProviderSessionResumed": false,
+        "capabilityDiscovery": true,
+        "durableEventPagination": true
+      },
+      "liveProvider": false
+    },
+    {
+      "kind": "docker",
+      "ok": true,
+      "journey": "project-worker-docker",
+      "setupInsideContainer": true,
+      "mountedFeatureIntake": true,
+      "templateInstalled": true,
+      "folderReconfigured": true,
+      "resultExported": true,
+      "restartPreserved": true,
+      "duplicateTasks": false,
+      "durableRunEvidence": true,
+      "interactionEvidence": {
+        "pendingQuestionRestartPreserved": true,
+        "guardedAnswer": true,
+        "answerReplaySafe": true,
+        "changedReplayRejected": true,
+        "actualDispatchRetained": true,
+        "normalizedEvents": true,
+        "nativeProviderSessionResumed": false
+      },
+      "liveProvider": false
+    }
+  ],
+  "integrationAndResourceNative": {
+    "ok": true,
+    "installedWithoutNpm": true,
+    "nongitIntegrationApiRoot": true,
+    "recognizedSkillsSeeded": true,
+    "operatorConfigPreserved": true,
+    "readOnlyDryRun": true,
+    "guardedNoopSync": true,
+    "operatorEditConflictPreserved": true,
+    "resourceStatus": true,
+    "resourceEventPagination": true,
+    "bundledProviderImport": true,
+    "noModelCalls": true
+  },
+  "integrationAndResourceDocker": {
+    "ok": true,
+    "dockerResourceStatus": true,
+    "dockerResourceEvents": true,
+    "dockerCanonicalMountedIntegrationRoot": true,
+    "dockerDryRunConflictPreserved": true,
+    "noModelCalls": true
+  },
+  "modelCalls": "Deterministic local protocol fixtures; no paid provider calls",
+  "longSessionValidation": "Injected clocks, bounded real local HTTP/CLI deadlines and cancellation; no24-hour soak"
+}

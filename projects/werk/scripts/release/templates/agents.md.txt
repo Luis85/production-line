@@ -11,6 +11,12 @@ with `node bin/apps/worker/cli.mjs schema`; use revision-guarded feature command
 and run list/get/analyze/export. Parse terminal outcomes and coverage explicitly;
 a wait timeout does not cancel work, and unknown usage is not zero.
 
+Read docs/reference/model-interaction.md and docs/how-to/answer-and-resume-worker.md
+for model capabilities, questions, event replay and checkpoint recovery. Waiting
+for input is not completion. Answers/cancellation/resume need the current
+interaction revision and a stable operation key; retry lost acknowledgements with
+identical arguments. Resume replays worker-owned context in a new invocation.
+
 For a Factory hierarchy, use `node werk.mjs system plan --file examples/system.yaml`
 then `system up` with that file, or the Docker wrapper's `system` actions with
 `--environment docker`. Read docs/reference/system-definition.md first. The YAML

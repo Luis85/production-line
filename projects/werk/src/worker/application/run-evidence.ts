@@ -1,10 +1,11 @@
 /** Worker-session evidence excludes prompt text, credentials, provider subprocess accounting and inferred prices. */
 export interface ProviderUsage {
   inputTokens: number | null; outputTokens: number | null; cacheReadTokens: number | null; cacheWriteTokens: number | null;
+  costBasis?: 'reported_estimate' | 'reported_billed' | 'unavailable' | 'unknown';
   providerReportedCostUsd: number | null; source: 'provider_reported' | 'unavailable'; reason: string | null;
 }
-export const unknownUsage = (reason = 'The provider did not report usage for this attempt.'): ProviderUsage => ({ inputTokens: null, outputTokens: null, cacheReadTokens: null, cacheWriteTokens: null, providerReportedCostUsd: null, source: 'unavailable', reason });
-export type RunOutcome = 'queued' | 'running' | 'completed' | 'review' | 'failed' | 'cancelled' | 'interrupted';
+export const unknownUsage = (reason = 'The provider did not report usage for this attempt.'): ProviderUsage => ({ inputTokens: null, outputTokens: null, cacheReadTokens: null, cacheWriteTokens: null, providerReportedCostUsd: null, costBasis: 'unavailable', source: 'unavailable', reason });
+export type RunOutcome = 'queued' | 'running' | 'completed' | 'review' | 'failed' | 'cancelled' | 'interrupted' | 'waiting_input' | 'escalated';
 export interface RunMetadata { sessionId: string; taskId: string; kind: 'chat' | 'local' | 'orchestrator'; title: string; provider: string; model: string; }
 export interface ConsumptionTotals {
   runs: number; reportedRuns: number;
@@ -32,5 +33,6 @@ export interface RunAnalysis {
 export interface RunEvidence {
   begin(metadata: RunMetadata): Promise<WorkerRun>;
   start(id: string): Promise<void>;
+  observeUsage?(id: string, usage: ProviderUsage): void;
   finish(id: string, outcome: Exclude<RunOutcome, 'queued' | 'running'>, usage?: ProviderUsage): Promise<WorkerRun>;
 }

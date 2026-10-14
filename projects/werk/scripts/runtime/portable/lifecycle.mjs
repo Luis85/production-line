@@ -5,6 +5,7 @@ import { join, resolve, relative, isAbsolute, sep, dirname, basename } from 'nod
 import { setTimeout as delay } from 'node:timers/promises';
 import { privateDirectory, readPrivate, createPrivate, inputError } from '../config.mjs';
 import { controlRequest, createControl } from '../control.mjs';
+import { configuredProjectRoot } from './project.mjs';
 import { runComponent } from '../component.mjs';
 
 const metadataPath = state => join(state, 'portable.json');
@@ -132,7 +133,7 @@ export async function run(kind, state, root, options, internal) {
       const { runWorker } = await import(new URL(`../../../src/worker/dist/worker/runner.js`, import.meta.url));
       const { configuration } = await import(new URL(`../../../src/worker/dist/worker/config.js`, import.meta.url));
       const effective = await configuration(options);
-      worker = runWorker({ ...effective, stateDir: state, url: options.url, enrollmentToken: process.env.WERK_ENROLLMENT_TOKEN ?? '', projectDir: options['project-dir'], statusHost: options.host ?? '127.0.0.1', statusPort: Number(options.port ?? 4100) }, abort.signal, { ready: async address => {
+      worker = runWorker({ ...effective, stateDir: state, url: options.url, enrollmentToken: process.env.WERK_ENROLLMENT_TOKEN ?? '', projectDir: options['project-dir'], integrationProjectDir: await configuredProjectRoot(options), statusHost: options.host ?? '127.0.0.1', statusPort: Number(options.port ?? 4100) }, abort.signal, { ready: async address => {
         const host = address.address === '0.0.0.0' || address.address === '::' ? '127.0.0.1' : address.address;
         await onReady({ url: `http://${host.includes(':') ? '[' + host + ']' : host}:${address.port}`, credentialsFile: join(state, 'webview-token') });
       } });

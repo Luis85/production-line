@@ -13,7 +13,7 @@ const detail = ref<{ name: string; markdown: string; revision: string; record: F
 const active = ref(true);
 let revision = 0, detailRevision = 0, trigger: HTMLElement | null = null;
 const files = computed(() => folder.value && 'files' in folder.value ? folder.value.files.filter(file => [file.name, file.title, file.status].join(' ').toLowerCase().includes(search.value.trim().toLowerCase())) : []);
-const statusLabel = (value?: string) => value === 'draft' ? 'Draft · not queued' : value === 'waiting' ? 'Waiting for admission' : value === 'ready' ? 'Ready for intake' : value ?? 'Status unavailable';
+const statusLabel = (value?: string) => value === 'waiting_input' ? 'Waiting for your answer' : value === 'escalated' ? 'Decision needed' : value === 'draft' ? 'Draft · not queued' : value === 'waiting' ? 'Waiting for admission' : value === 'ready' ? 'Ready for intake' : value ?? 'Status unavailable';
 async function load() {
   if (!active.value || !state.unlocked || loading.value) return;
   const current = ++revision; loading.value = true; error.value = '';

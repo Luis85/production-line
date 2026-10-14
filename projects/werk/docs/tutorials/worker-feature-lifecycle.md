@@ -125,6 +125,13 @@ patch and result; it does not apply the patch, run your tests, publish or merge
 it. Inspect the saved evidence, run `git apply --check` and apply the patch when
 appropriate, then verify the actual project behavior yourself.
 
+A question returns `waiting_input`, or `escalated` for an operator decision.
+The invocation has ended and another task can use the slot. Read its owning
+session with `interaction get`, then follow the
+[answer and resume guide](../how-to/answer-and-resume-worker.md). A guarded answer
+starts a new invocation using the saved request context. Do not edit the accepted
+Markdown body to answer.
+
 `feature wait` returning a terminal state is not proof of success: inspect that
 state. A timeout leaves work running and returns a machine-readable
 `wait_timeout` error. Inspect it again or cancel explicitly. Failed/cancelled

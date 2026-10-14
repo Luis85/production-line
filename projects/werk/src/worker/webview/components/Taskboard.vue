@@ -11,7 +11,7 @@ const route = useRoute(), router = useRouter();
 const capacity = ref(16), remoteQueue = ref(0), order = ref('fifo'), busy = ref(false), archived = ref(false), detail = ref<LocalTask | null>(null), removing = ref(false);
 const search = ref(''), status = ref('all'), selectedId = ref(''), detailLoading = ref(false), detailError = ref(''), actionError = ref('');
 let inspectTrigger: HTMLElement | null = null, detailRevision = 0;
-const statusOptions = [{ label: 'All file tasks', value: 'all' }, { label: 'Needs review', value: 'review' }, { label: 'Failed', value: 'failed' }, { label: 'Queued', value: 'queued' }, { label: 'Running', value: 'running' }, { label: 'Cancelled', value: 'cancelled' }];
+const statusOptions = [{ label: 'All file tasks', value: 'all' }, { label: 'Waiting for answer', value: 'waiting_input' }, { label: 'Decision needed', value: 'escalated' }, { label: 'Needs review', value: 'review' }, { label: 'Failed', value: 'failed' }, { label: 'Queued', value: 'queued' }, { label: 'Running', value: 'running' }, { label: 'Cancelled', value: 'cancelled' }];
 watch(() => route.query.fileState, value => { status.value = statusOptions.some(item => item.value === value) ? String(value) : 'all'; search.value = ''; archived.value = false; }, { immediate: true });
 async function closeDetail() {
   detailRevision++; selectedId.value = ''; detail.value = null; detailLoading.value = false; detailError.value = ''; actionError.value = ''; removing.value = false;
@@ -21,10 +21,15 @@ async function focusFileTasks() { if (!['review', 'failed'].includes(String(rout
 onActivated(() => { void focusFileTasks(); });
 watch(() => route.query.fileState, () => { if (route.path === '/history') void focusFileTasks(); });
 const columns = [{ id: 'queued', title: 'Queued' }, { id: 'running', title: 'Running' }, { id: 'finished', title: 'Review & finished' }];
-const shownColumns = computed(() => status.value === 'all' ? columns : columns.filter(column => column.id === (['queued', 'running'].includes(status.value) ? status.value : 'finished')));
+const attentionColumn = { id: 'attention', title: 'Needs your input' };
+const shownColumns = computed(() => {
+  const available = allTasks.value.some(task => ['waiting_input', 'escalated'].includes(task.status)) ? [attentionColumn, ...columns] : columns;
+  const target = ['waiting_input', 'escalated'].includes(status.value) ? 'attention' : ['queued', 'running'].includes(status.value) ? status.value : 'finished';
+  return status.value === 'all' ? available : [...columns, attentionColumn].filter(column => column.id === target);
+});
 const allTasks = computed(() => state.board?.tasks ?? []);
 const visible = computed(() => allTasks.value.filter(task => (archived.value || !task.archived) && (status.value === 'all' || task.status === status.value) && [task.title, task.id, task.provider].join(' ').toLowerCase().includes(search.value.trim().toLowerCase())));
-const tasksFor = (column: string) => visible.value.filter(task => column === 'finished' ? !['queued', 'running'].includes(task.status) : task.status === column);
+const tasksFor = (column: string) => visible.value.filter(task => column === 'attention' ? ['waiting_input', 'escalated'].includes(task.status) : column === 'finished' ? !['queued', 'running', 'waiting_input', 'escalated'].includes(task.status) : task.status === column);
 function clearFilters() { search.value = ''; status.value = 'all'; archived.value = true; }
 watch(() => !!state.settings, value => { if (value && state.settings) { capacity.value = state.settings.board.queueCapacity; remoteQueue.value = state.settings.board.orchestratorQueue; order.value = state.settings.board.order; } }, { immediate: true });
 async function readDetail(id: string, focus = false) {
@@ -124,7 +129,7 @@ function download() { if (!detail.value?.patch) return; const url = URL.createOb
       <p>No file tasks match these filters.</p>
       <UButton color="neutral" variant="outline" @click="clearFilters">Show all file tasks</UButton>
     </div>
-    <div v-else class="board-columns" :class="{ filtered: status !== 'all' }">
+    <div v-else class="board-columns" :class="{ filtered: status !== 'all', 'with-attention': shownColumns.length === 4 }">
       <section v-for="column in shownColumns" :key="column.id" class="board-column">
         <h3>
           {{ column.title }}

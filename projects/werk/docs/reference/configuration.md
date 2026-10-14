@@ -107,3 +107,20 @@ these environment variables describe the lower-level application clients.
 Source-development fleet launchers have separate `.state` directories and
 additional development environment flags. Their setup is not the release
 operator contract. See [runtime layout](../explanation/runtime-layout.md).
+
+## Local worker execution policy
+
+`WERK_WORKER_MAX_RUNTIME_MS` is an authoritative process-environment override for
+local model invocations: integer milliseconds from 1000 to 86400000. Absent, the
+saved private workspace execution setting applies, otherwise the default is six
+hours. Empty/invalid values fail startup. The private settings API exposes
+`executionSource` and rejects execution edits while the override is active; it
+preserves the saved value for later use after removing the override. Other local
+settings, including resource thresholds and provider configuration, remain in the
+private state directory. Existing saved connection settings can replace startup
+connection defaults; the CLI-over-environment rule above concerns the listed
+operator defaults, not every saved worker setting.
+
+A dispatched invocation freezes its duration policy; edits affect later calls.
+See [long-running worker operations](../how-to/monitor-long-running-worker.md) for
+monitoring scope, warning thresholds, shutdown and recovery.

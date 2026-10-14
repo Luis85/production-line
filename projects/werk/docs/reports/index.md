@@ -8,6 +8,10 @@ separately under `docs/handoff`; original source provenance is recorded in the
 
 | Record | Scope |
 | --- | --- |
+| [Worker model lifecycle and operations review](worker-model-operations-review.md) | Durable model contracts, questions/recovery, project integrations, resource monitoring, twelve-factor review and qualification |
+| [Interactive model interaction journey](worker-model-interaction-journey.html) | Questions, restart recovery, continuation, immutable dispatches and consumption screenshots |
+| [Worker model interaction research](worker-model-research.md) | Provider contracts, durable prompts, questions, continuation and evidence design |
+| [Subscription integration research](worker-subscription-research.md) | Official subscription paths, SDK/app-server comparison, authentication limits and normalized events |
 | [Worker lifecycle and metrics](worker-lifecycle-review.md) | Downloaded-package installation, Markdown request lifecycle, durable per-run evidence, CLI analysis and native/Docker qualification |
 | [Interactive lifecycle journey](worker-lifecycle-journey.html) | Fifteen embedded desktop/mobile screenshots covering requests, paired observations and many-run analysis |
 | [System journey polish](system-journey-polish.md) | Screenshot-driven worker, Factory, orchestrator and shared interaction improvements; final integrated checks and authenticated task handoff |

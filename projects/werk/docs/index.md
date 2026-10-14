@@ -24,6 +24,10 @@ follows [Diátaxis](https://diataxis.fr/).
 
 - [Assemble independent workers, orchestrators and Factories](how-to/assemble-independent-components.md)
 - [Install a project worker and use its feature folder](how-to/project-worker.md)
+- [Integrate with Claude and Codex](how-to/project-agent-integrations.md): reviewed project skills and guarded synchronization.
+- [Monitor long-running workers](how-to/monitor-long-running-worker.md): duration budgets, resource warnings and durable alert history.
+- [Answer questions and resume requests](how-to/answer-and-resume-worker.md): guarded answers, cancellation, checkpoints and event replay.
+- [Worker–model interaction contract](reference/model-interaction.md): capabilities, typed results, durable events and recovery.
 - [Markdown feature-request contract](reference/feature-requests.md)
 - [Use the worker webview](how-to/use-worker-webview.md): Chat, History and Dashboard.
 

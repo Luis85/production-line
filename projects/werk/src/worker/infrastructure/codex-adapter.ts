@@ -1,3 +1,4 @@
+import { ProviderModelError } from '../application/model-contract.js';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { access, cp, lstat, mkdir, realpath, rename, rm } from 'node:fs/promises';
@@ -48,7 +49,7 @@ export async function providerCommand(executable: string, args: string[], cwd: s
             const captured = Buffer.concat(output);
             // Numeric telemetry may exist even when execution fails; diagnostics never leave this callback.
             try { observeOutput?.(captured); } catch { /* Telemetry must not mask process cleanup or outcome. */ }
-            if (failed || signal.aborted || code !== 0) reject(Error(signal.aborted ? 'Provider execution interrupted or timed out' : 'Provider command failed; inspect CLI installation and authentication with operator diagnostics'));
+            if (failed || signal.aborted || code !== 0) reject(new ProviderModelError(signal.aborted ? 'cancelled' : 'unavailable'));
             else resolveResult(captured);
         });
     });
@@ -69,7 +70,8 @@ export class CodexAdapter implements Adapter {
         if (task.executionMode !== 'cli' || task.provider !== 'codex' || !task.lease || !/^[a-zA-Z0-9_-]{1,100}$/.test(task.lease)) throw Error('Live Codex requires an explicit Codex task and lease');
         await access(this.config.executable, constants.X_OK).catch(() => { throw Error('Configured Codex executable is unavailable'); });
         const source = await realpath(this.config.repository);
-        const bounded = AbortSignal.any([signal, AbortSignal.timeout(3600000)]);
+        // The runner owns the frozen attempt deadline; no shorter hidden adapter cap.
+        const bounded = signal;
         const git = (args: string[], cwd = source) => providerCommand('git', ['-c', 'core.hooksPath=/dev/null', ...args], cwd, bounded);
         const baseCommit = (await git(['rev-parse', '--verify', `${task.context?.commit ?? task.source?.commit ?? 'HEAD'}^{commit}`])).toString('utf8').trim();
         if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(baseCommit)) throw Error('Repository base commit is invalid');

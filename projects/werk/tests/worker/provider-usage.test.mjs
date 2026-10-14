@@ -21,6 +21,41 @@ test('provider normalization preserves unknown and measured zero without inventi
   assert.equal(providerUsage('codex', { usage: { input_tokens: 3, cached_input_tokens: 4, output_tokens: 2 } }).cacheReadTokens, null);
 });
 
+test('cost provenance distinguishes Claude client estimates from billing and unknown cost', () => {
+  for (const reported of [0, 0.012]) {
+    const usage = providerUsage('claude', { total_cost_usd: reported });
+    assert.equal(usage.providerReportedCostUsd, reported);
+    assert.equal(usage.costBasis, 'reported_estimate');
+    assert.equal(usage.source, 'provider_reported');
+  }
+  for (const reported of [undefined, null, -1, Infinity, NaN, '0.012']) {
+    const usage = providerUsage('claude', { usage: { output_tokens: 3 }, total_cost_usd: reported });
+    assert.equal(usage.providerReportedCostUsd, null);
+    assert.equal(usage.costBasis, 'unavailable');
+    assert.equal(usage.outputTokens, 3);
+  }
+  for (const protocol of ['openai', 'anthropic', 'codex']) {
+    const usage = providerUsage(protocol, { usage: { output_tokens: 3 }, total_cost_usd: 1, costBasis: 'reported_billed' });
+    assert.equal(usage.providerReportedCostUsd, null);
+    assert.equal(usage.costBasis, 'unavailable');
+  }
+  assert.equal(providerUsage('claude', {}).costBasis, 'unavailable');
+});
+
+test('Claude crash zeros remain unknown while positive partial usage survives', () => {
+  const zero = { input_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, output_tokens: 0 };
+  const crashed = providerUsage('claude', { subtype: 'error_during_execution', usage: zero, total_cost_usd: 0 });
+  assert.equal(crashed.source, 'unavailable');
+  assert.equal(crashed.inputTokens, null); assert.equal(crashed.outputTokens, null);
+  assert.equal(crashed.cacheReadTokens, null); assert.equal(crashed.cacheWriteTokens, null);
+  assert.equal(crashed.providerReportedCostUsd, null); assert.equal(crashed.costBasis, 'unavailable');
+  const partial = providerUsage('claude', { subtype: 'error_during_execution', usage: { ...zero, output_tokens: 3 }, total_cost_usd: 0 });
+  assert.equal(partial.outputTokens, 3); assert.equal(partial.inputTokens, null); assert.equal(partial.providerReportedCostUsd, null);
+  const completed = providerUsage('claude', { subtype: 'success', usage: zero, total_cost_usd: 0 });
+  assert.equal(completed.inputTokens, 0); assert.equal(completed.outputTokens, 0); assert.equal(completed.providerReportedCostUsd, 0);
+  assert.equal(completed.costBasis, 'reported_estimate');
+});
+
 test('cache input is a subset of normalized input for every supported protocol', () => {
   assert.equal(providerUsage('codex', { usage: { input_tokens: 100, cached_input_tokens: 60, output_tokens: 8 } }).inputTokens, 100);
   assert.equal(providerUsage('openai', { usage: { input_tokens: 100, input_tokens_details: { cached_tokens: 60 }, output_tokens: 8 } }).inputTokens, 100);
@@ -36,7 +71,12 @@ test('API usage survives incomplete and HTTP error results without storing respo
     for (const status of [200, 429]) {
       let usage;
       const model = modelFor(connection(id), '/unused', async () => Response.json({ status: 'incomplete', stop_reason: 'max_tokens', usage: { input_tokens: 12, output_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, private_diagnostic: 'must-not-be-evidence' }, { status }));
-      await assert.rejects(model.reply(messages, signal(), value => { usage = value; }), status === 200 ? /Incomplete/ : /API request failed/);
+      await assert.rejects(model.reply(messages, signal(), value => { usage = value; }), error => {
+        assert.equal(error.name, 'ProviderModelError');
+        assert.equal(error.code, status === 200 ? 'incomplete' : 'rate_limit');
+        assert.equal(error.status, status === 200 ? undefined : 429);
+        return true;
+      });
       assert.equal(usage.inputTokens, 12); assert.equal(usage.outputTokens, 5); assert.equal(usage.providerReportedCostUsd, null);
       assert.equal(JSON.stringify(usage).includes('must-not-be-evidence'), false);
     }
@@ -79,7 +119,7 @@ test('telemetry observer failure cannot alter child success or mask child failur
   for (const exitCode of [0, 5]) {
     const fixture = await cliFixture(t, 'bounded fixture', exitCode);
     const execution = providerCommand(fixture.executable, [], fixture.directory, signal(), undefined, true, 'codex', () => { throw Error('observer failure'); });
-    if (exitCode) await assert.rejects(execution, /Provider command failed/);
+    if (exitCode) await assert.rejects(execution, { name: 'ProviderModelError', code: 'unavailable' });
     else assert.equal((await execution).toString(), 'bounded fixture');
   }
 });

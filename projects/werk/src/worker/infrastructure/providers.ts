@@ -1,9 +1,11 @@
+import { providerTransport } from './provider-transport.js';
 import { providerUsage } from './provider-usage.js';
 import type { ProviderUsage } from '../application/run-evidence.js';
 import { access } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { delimiter, isAbsolute, join } from 'node:path';
-import type { ConversationModel, ChatMessage } from '../application/conversation.js';
+import type { ChatMessage } from '../application/conversation.js';
+import { classifyProviderStatus, legacyModelReply, modelCapabilities, parseModelResult, ProviderModelError, requireModelRequest, type ModelRequest, type ModelResult, type StructuredModel } from '../application/model-contract.js';
 import { CodexConversationModel } from './conversation.js';
 import { providerCommand } from './codex-adapter.js';
 import { ensureDirectory } from './journal/files.js';
@@ -20,38 +22,62 @@ export async function findExecutable(name: string) {
   return '';
 }
 export function providerReady(connection: ProviderConnection) { return connection.id.endsWith('-cli') ? !!connection.executable : !!connection.apiKey && !!connection.model; }
-export function modelFor(connection: ProviderConnection, directory: string, transport: typeof fetch = fetch): ConversationModel | undefined {
-  if (!providerReady(connection) || (process.platform === 'win32' && connection.id.endsWith('-cli'))) return;
+export function modelFor(saved: ProviderConnection, directory: string, transport: typeof fetch = providerTransport): StructuredModel | undefined {
+  if (!providerReady(saved) || (process.platform === 'win32' && saved.id.endsWith('-cli'))) return;
+  const connection = { ...saved };
   if (connection.id === 'codex-cli') return new CodexConversationModel(connection.executable, directory, connection.instruction, connection.model);
-  if (connection.id === 'claude-cli') return { async reply(messages: ChatMessage[], signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void) {
-    if (process.platform === 'win32') throw Error('Subscription CLI requires a POSIX host');
-    const cwd = join(directory, 'chat-workspace'); await ensureDirectory(cwd);
-    const result = await providerCommand(connection.executable, ['--print', '--output-format', 'json', '--safe-mode', '--restricted', '--tools', '', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--setting-sources', '', '--no-session-persistence', '--disable-slash-commands', ...(connection.model ? ['--model', connection.model] : []), '--system-prompt', 'Answer the supplied conversation in plain text. No tools or live system access are available.' + (connection.instruction ? '\nTask agent instructions:\n' + connection.instruction : '')], cwd, signal, JSON.stringify(messages.map(({ role, text }) => ({ role, content: text }))), true, 'claude', output => {
-      let response; try { response = JSON.parse(output.toString('utf8')); } catch { return; }
-      if (response?.type === 'result') onUsage?.(providerUsage('claude', response));
-    });
-    const value = JSON.parse(result.toString('utf8'));
-    if (value.is_error || typeof value.result !== 'string') throw Error('Invalid Claude response');
-    return value.result;
-  } };
-  return { async reply(messages: ChatMessage[], signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void) {
-    const openai = connection.id === 'openai-api';
-    const response = await transport(openai ? 'https://api.openai.com/v1/responses' : 'https://api.anthropic.com/v1/messages', {
+  const model: StructuredModel = {
+    configuration: Object.freeze({ id: connection.id, model: connection.model, instruction: connection.instruction ?? '' }), capabilities: modelCapabilities,
+    reply(messages: ChatMessage[], signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void) { return legacyModelReply(model, messages, signal, onUsage); },
+    async execute(request: ModelRequest, signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void): Promise<ModelResult> {
+      requireModelRequest(request, connection.id);
+      if (connection.id === 'claude-cli') return claudeReply(connection, directory, request, signal, onUsage);
+      return apiReply(connection, request, signal, transport, onUsage);
+    }
+  };
+  return model;
+}
+async function claudeReply(connection: ProviderConnection, directory: string, request: ModelRequest, signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void) {
+  if (process.platform === 'win32') throw new ProviderModelError('unavailable');
+  const cwd = join(directory, 'chat-workspace'); await ensureDirectory(cwd);
+  const result = await providerCommand(connection.executable, ['--print', '--output-format', 'json', '--safe-mode', '--restricted', '--tools', '', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--setting-sources', '', '--no-session-persistence', '--disable-slash-commands', ...(request.provider.model ? ['--model', request.provider.model] : []), '--system-prompt', request.protocolInstructions], cwd, signal, JSON.stringify(request.messages.map(({ role, text }) => ({ role, content: text }))), true, 'claude', output => {
+    let response; try { response = JSON.parse(output.toString('utf8')); } catch { return; }
+    if (response?.type === 'result') onUsage?.(providerUsage('claude', response));
+  });
+  let value; try { value = JSON.parse(result.toString('utf8')); } catch { throw new ProviderModelError('protocol'); }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ProviderModelError('protocol');
+  if (value.is_error) throw new ProviderModelError('unavailable');
+  if (typeof value.result !== 'string') throw new ProviderModelError('protocol');
+  return parseModelResult(value.result);
+}
+async function apiReply(connection: ProviderConnection, request: ModelRequest, signal: AbortSignal, transport: typeof fetch, onUsage?: (usage: ProviderUsage) => void) {
+  const openai = connection.id === 'openai-api';
+  let response;
+  try {
+    response = await transport(openai ? 'https://api.openai.com/v1/responses' : 'https://api.anthropic.com/v1/messages', {
       method: 'POST', signal, redirect: 'error', headers: { 'content-type': 'application/json', ...(openai ? { authorization: `Bearer ${connection.apiKey}` } : { 'x-api-key': connection.apiKey, 'anthropic-version': '2023-06-01' }) },
-      body: JSON.stringify(openai ? { model: connection.model, ...(connection.instruction ? { instructions: connection.instruction } : {}), store: false, max_output_tokens: 8192, input: messages.map(({ role, text }) => ({ role, content: text })) } : { model: connection.model, ...(connection.instruction ? { system: connection.instruction } : {}), max_tokens: 8192, messages: messages.map(({ role, text }) => ({ role, content: text })) })
+      body: JSON.stringify(openai ? { model: request.provider.model, instructions: request.protocolInstructions, store: false, max_output_tokens: 8192, input: request.messages.map(({ role, text }) => ({ role, content: text })) } : { model: request.provider.model, system: request.protocolInstructions, max_tokens: 8192, messages: request.messages.map(({ role, text }) => ({ role, content: text })) })
     });
-    const reader = response.body?.getReader(); if (!reader) throw Error('Empty provider response');
-    const chunks: Uint8Array[] = []; let size = 0;
-    try { for (;;) { const part = await reader.read(); if (part.done) break; size += part.value.length; if (size > 1048576) throw Error('Provider response limit'); chunks.push(part.value); } }
-    finally { await reader.cancel(); }
-    let value;
-    try { value = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
-    catch { throw Error(response.ok ? 'Invalid provider response' : 'Provider API request failed'); }
-    onUsage?.(providerUsage(openai ? 'openai' : 'anthropic', value));
-    if (!response.ok) throw Error('Provider API request failed');
-    if (openai && value.status !== 'completed') throw Error('Incomplete provider response');
-    if (!openai && !['end_turn', 'stop_sequence'].includes(value.stop_reason)) throw Error('Incomplete provider response');
-    const blocks = openai ? (value.output ?? []).filter((item: any) => item.type === 'message').flatMap((item: any) => item.content ?? []) : value.content ?? [];
-    return blocks.filter((item: any) => item.type === (openai ? 'output_text' : 'text')).map((item: any) => item.text).join('\n\n');
-  } };
+  } catch { throw new ProviderModelError(signal.aborted ? 'cancelled' : 'unavailable'); }
+  const reader = response.body?.getReader(); if (!reader) throw response.ok ? new ProviderModelError('protocol') : classifyProviderStatus(response.status);
+  const chunks: Uint8Array[] = []; let size = 0;
+  try { for (;;) { const part = await reader.read(); if (part.done) break; size += part.value.length; if (size > 1048576) throw new ProviderModelError('protocol'); chunks.push(part.value); } }
+  catch (error) { if (error instanceof ProviderModelError) throw error; throw new ProviderModelError(signal.aborted ? 'cancelled' : 'unavailable'); }
+  finally { await reader.cancel().catch(() => {}); }
+  let value;
+  try { value = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+  catch { throw response.ok ? new ProviderModelError('protocol') : classifyProviderStatus(response.status); }
+  onUsage?.(providerUsage(openai ? 'openai' : 'anthropic', value));
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw response.ok ? new ProviderModelError('protocol') : classifyProviderStatus(response.status);
+  if (!response.ok) throw classifyProviderStatus(response.status, value);
+  if (openai && value.status !== 'completed') throw new ProviderModelError('incomplete');
+  if (!openai && value.stop_reason === 'refusal') throw new ProviderModelError('refusal');
+  if (!openai && !['end_turn', 'stop_sequence'].includes(value.stop_reason)) throw new ProviderModelError('incomplete');
+  if (openai && !Array.isArray(value.output) || !openai && !Array.isArray(value.content)) throw new ProviderModelError('protocol');
+  if (openai && value.output.some((item: any) => !['message', 'reasoning'].includes(item?.type))) throw new ProviderModelError('protocol');
+  const blocks = openai ? value.output.filter((item: any) => item.type === 'message').flatMap((item: any) => item.content ?? []) : value.content;
+  if (blocks.some((item: any) => item?.type === 'refusal')) throw new ProviderModelError('refusal');
+  if (blocks.some((item: any) => ![openai ? 'output_text' : 'text', 'thinking', 'redacted_thinking'].includes(item?.type))) throw new ProviderModelError('protocol');
+  if (blocks.filter((item: any) => item.type === (openai ? 'output_text' : 'text')).some((item: any) => typeof item.text !== 'string')) throw new ProviderModelError('protocol');
+  return parseModelResult(blocks.filter((item: any) => item.type === (openai ? 'output_text' : 'text')).map((item: any) => item.text).join('\n\n'));
 }

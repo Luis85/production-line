@@ -72,8 +72,9 @@ The worker discovers CLI executables on PATH at first startup. Sign in using
 `codex login` or `claude auth login` as the same OS account that runs the worker.
 Subscription adapters currently require Linux or macOS. API connections and the
 webview also run on Windows. Use **Check sign-in** after saving a CLI connection. The worker runs only
-`codex login status` or `claude auth status`, with bounded output and a five-second
-deadline. The result distinguishes signed-in, signed-out, unavailable and unknown;
+`codex login status` or `claude auth status`, plus a bounded Claude version
+probe. Each subprocess has a five-second deadline. Known Claude versions older
+than 2.1.248 require an upgrade; an unknown version is not confirmed compatible. The result distinguishes signed-in, signed-out, unavailable and unknown;
 it never exposes raw account diagnostics. No model prompt or paid API call is
 made. For API connections, the check confirms saved configuration only: it does
 not verify credentials, quota, billing or model availability. There is no automatic
@@ -285,3 +286,17 @@ or refresh manually. Failed reads retain the last observation with a stale-data
 warning; successful reads still update independently. A successful action remains
 accepted if its follow-up refresh fails, avoiding a misleading retry prompt.
 No environment-variable values or credentials are shown.
+
+## Answer a question or continue after interruption
+
+Chat shows a pending question or escalation separately from a completed answer.
+Read its reason/choices, enter your response and submit through the pending-input
+control. Generic follow-up sending is held until that decision is resolved.
+History and Dashboard identify requests needing input and link back to Chat.
+
+Inspect the saved checkpoint before resuming a failed, cancelled or interrupted
+turn. Continuation replays saved context in a fresh invocation and may consume
+additional tokens. Restart alone does not repeat ambiguous work. Latest-turn
+consumption shows measured values and unavailable fields; a reported estimate is
+not a billed amount. See [answer and resume](answer-and-resume-worker.md) for the
+equivalent human/agent CLI workflow and stable operation-key rules.

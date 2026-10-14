@@ -1,0 +1,84 @@
+{
+  "runtime": "Real isolated worker protocol; deterministic local executable replaces the provider. Token counters are fixture-generated; no genuine provider, account quota or billed cost.",
+  "pendingSurvivesRestart": true,
+  "answerDraftSurvivesExpiry": true,
+  "explicitAnswer": true,
+  "cancelAndContextResume": true,
+  "normalizedEvents": [
+    "accepted",
+    "prepared",
+    "started",
+    "usage_observed",
+    "escalated",
+    "pending_cancelled",
+    "accepted",
+    "prepared",
+    "started",
+    "usage_observed",
+    "completed"
+  ],
+  "turns": 2,
+  "pageErrors": [],
+  "shots": [
+    {
+      "name": "question",
+      "width": 1440,
+      "fixture": "Actual local runtime with a deterministic executable; token counts are synthetic, no genuine provider."
+    },
+    {
+      "name": "question",
+      "width": 390,
+      "fixture": "Actual local runtime with a deterministic executable; token counts are synthetic, no genuine provider."
+    },
+    {
+      "name": "reopened-question",
+      "width": 390,
+      "fixture": "Actual local runtime with a deterministic executable; token counts are synthetic, no genuine provider."
+    },
+    {
+      "name": "answered-checkpoint",
+      "width": 1440,
+      "fixture": "Actual local runtime with a deterministic executable; token counts are synthetic, no genuine provider."
+    },
+    {
+      "name": "answered-checkpoint",
+      "width": 390,
+      "fixture": "Actual local runtime with a deterministic executable; token counts are synthetic, no genuine provider."
+    },
+    {
+      "name": "escalation",
+      "width": 390,
+      "fixture": "Actual local runtime with a deterministic executable; token counts are synthetic, no genuine provider."
+    },
+    {
+      "name": "stopped",
+      "width": 390,
+      "fixture": "Actual local runtime with a deterministic executable; token counts are synthetic, no genuine provider."
+    },
+    {
+      "name": "resumed-checkpoint",
+      "width": 1440,
+      "fixture": "Actual local runtime with a deterministic executable; token counts are synthetic, no genuine provider."
+    },
+    {
+      "name": "resumed-checkpoint",
+      "width": 320,
+      "fixture": "Actual local runtime with a deterministic executable; token counts are synthetic, no genuine provider."
+    },
+    {
+      "name": "consumption-analysis",
+      "width": 1440,
+      "fixture": "Actual local runtime with a deterministic executable; token counts are synthetic, no genuine provider."
+    },
+    {
+      "name": "consumption-analysis",
+      "width": 390,
+      "fixture": "Actual local runtime with a deterministic executable; token counts are synthetic, no genuine provider."
+    },
+    {
+      "name": "consumption-analysis",
+      "width": 320,
+      "fixture": "Actual local runtime with a deterministic executable; token counts are synthetic, no genuine provider."
+    }
+  ]
+}

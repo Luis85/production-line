@@ -37,7 +37,14 @@ test('interrupted replies recover honestly; provider errors and timeouts never e
   const store=memoryStore();store.value.messages=[{id:'old',role:'assistant',text:'',state:'pending',at:new Date().toISOString()}];
   const chat=new WorkerConversation(store,{async reply(){throw Error('secret-provider-credential');}});await chat.init();assert.equal(chat.snapshot().messages[0].state,'error');
   await chat.start('Retry');await waitFor(()=>!chat.snapshot().busy);assert.doesNotMatch(JSON.stringify(chat.snapshot()),/secret-provider/);
-  const timed=new WorkerConversation(memoryStore(),{async reply(_,signal){await once(signal,'abort');throw Error('timed out');}},20);await timed.init();await timed.start('Slow');await waitFor(()=>!timed.snapshot().busy);assert.match(timed.snapshot().messages.at(-1).text,/longer than/);
+  const timeoutStore=memoryStore();let attempts=0;
+  const timed=new WorkerConversation(timeoutStore,{async reply(_,signal){attempts++;await once(signal,'abort');throw Error('timed out');}},20);
+  await timed.init();await timed.start('Slow');await waitFor(()=>!timed.snapshot().busy);
+  const failed=timed.snapshot().messages.at(-1);assert.equal(failed.state,'error');
+  assert.match(failed.text,/configured execution time limit/);assert.match(failed.text,/saved context is retained; resume explicitly/);
+  assert.deepEqual((await timeoutStore.read()).messages,timed.snapshot().messages);
+  assert.equal(timeoutStore.value.messages[0].text,'Slow');assert.equal(attempts,1);
+  await timed.close();
 });
 test('failed acceptance never invokes a model; shutdown during acceptance cannot start a model', async()=>{
   let calls=0;const failing=memoryStore();failing.write=async()=>{throw Error('disk full');};const chat=new WorkerConversation(failing,{async reply(){calls++;return 'reply';}});await chat.init();await assert.rejects(chat.start('Hello'),/disk full/);assert.equal(calls,0);assert.equal(chat.snapshot().messages.length,0);

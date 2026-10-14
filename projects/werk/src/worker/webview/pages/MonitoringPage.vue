@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import ProjectIntegrationsPanel from '../components/ProjectIntegrationsPanel.vue';
+import ResourceMonitorPanel from '../components/ResourceMonitorPanel.vue';
 import RunEvidencePanel from '../components/RunEvidencePanel.vue';
 import FeatureRequestsPanel from '../components/FeatureRequestsPanel.vue';
 import { computed, ref } from 'vue';
@@ -15,6 +17,7 @@ const queueBusy = ref(false), opening = ref(false), actionError = ref('');
 const env = computed(() => state.environment), worker = computed(() => state.status);
 const runningSession = computed(() => state.sessions?.records.find(item => item.id === state.sessions?.execution.currentSessionId));
 const reviews = computed(() => state.board?.tasks.filter(task => task.status === 'review' && !task.archived).length ?? 0);
+const inputNeeded = computed(() => state.sessions?.records.filter(task => ['waiting_input', 'escalated'].includes(task.status) && !task.archived).length ?? 0);
 const failures = computed(() => state.sessions?.records.filter(task => task.status === 'failed' && !task.archived).length ?? 0);
 const executionTitle = computed(() => {
   if (!state.sessions) return 'Loading worker activity…';
@@ -77,6 +80,7 @@ async function openRunning() {
       </div>
       <p v-if="runningSession && state.settings?.board.paused" class="page-note">The queue is paused. This task can finish; waiting tasks will not start.</p>
       <p v-if="actionError" role="alert" class="error-text">{{ actionError }}</p>
+      <p v-if="inputNeeded" class="needs-input-notice" role="status"><RouterLink to="/history?taskState=attention">{{ inputNeeded }} {{ inputNeeded === 1 ? 'task needs' : 'tasks need' }} your answer or decision →</RouterLink></p>
       <ul class="activity-links" aria-label="Work queues">
         <li><RouterLink to="/history"><strong>{{ state.sessions?.execution.queued ?? '—' }}</strong><span>Waiting tasks</span><UIcon name="i-lucide-arrow-up-right" /></RouterLink></li>
         <li><RouterLink to="/history?fileState=review"><strong>{{ state.board ? reviews : '—' }}</strong><span>Review patches</span><UIcon name="i-lucide-arrow-up-right" /></RouterLink></li>
@@ -107,6 +111,8 @@ async function openRunning() {
       </section>
     </div>
 
+    <ResourceMonitorPanel v-if="state.unlocked" />
+    <ProjectIntegrationsPanel v-if="state.unlocked" />
     <RunEvidencePanel v-if="state.unlocked" compact />
     <FeatureRequestsPanel v-if="state.unlocked" compact />
     <details class="monitor-section dashboard-disclosure">
@@ -149,7 +155,7 @@ async function openRunning() {
         </dl>
       </template>
       <ul class="profile-list"><li v-for="profile in worker?.profiles" :key="profile.id"><UIcon name="i-lucide-box" /><div><strong>{{ profile.id }}</strong><span>{{ profile.provider }} · {{ profile.mode === 'mock' ? 'Simulated' : 'Live CLI' }}</span></div></li></ul>
-      <p class="page-note">Configured profiles do not verify login, quota or remaining subscription. Provider usage and cost are unavailable.</p>
+      <p class="page-note">Configured profiles do not verify login, quota or remaining subscription. Execution evidence shows usage and reported cost when a provider supplies them; subscription balances and remaining quota are unavailable.</p>
     </details>
     <details class="monitor-section dashboard-disclosure">
       <summary>Diagnostics &amp; evidence identifiers</summary>
