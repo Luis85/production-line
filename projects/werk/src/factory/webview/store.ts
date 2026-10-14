@@ -170,6 +170,16 @@ export function createFactoryStore(fetcher: typeof fetch = fetch) {
         ? { body: JSON.stringify(options.body) }
         : {}),
     });
+    // Authentication status is authoritative even when a proxy returns a non-JSON body.
+    if (
+      response.status === 401 &&
+      options.token === undefined &&
+      own === session
+    ) {
+      disconnect(true);
+      state.error =
+        "Zugangstoken nicht mehr gültig. Bitte erneut verbinden; ungespeicherte Eingaben bleiben erhalten.";
+    }
     let result;
     try {
       result = await response.json();
@@ -184,15 +194,6 @@ export function createFactoryStore(fetcher: typeof fetch = fetch) {
       );
     }
     if (!response.ok) {
-      if (
-        response.status === 401 &&
-        options.token === undefined &&
-        own === session
-      ) {
-        disconnect(true);
-        state.error =
-          "Zugangstoken nicht mehr gültig. Bitte erneut verbinden; ungespeicherte Eingaben bleiben erhalten.";
-      }
       throw Object.assign(Error(result?.error ?? "HTTP " + response.status), {
         status: response.status,
       });

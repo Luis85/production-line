@@ -601,7 +601,12 @@ export async function waitForWorker(request, kind, timeoutValue = "60000") {
         : kind === "file-task"
           ? result.status
           : (result.execution?.status ?? result.record?.status);
-    if (
+    // A feature result combines a durable execution snapshot with an exported
+    // record. Completion can land between those reads; wait until its projection
+    // also settles before returning a result whose record still says running.
+    const projectionPending = kind === "feature" && result.record &&
+      ["queued", "running", "waiting", "ready", "readiness"].includes(result.record.status);
+    if (!projectionPending &&
       [
         "completed",
         "review",

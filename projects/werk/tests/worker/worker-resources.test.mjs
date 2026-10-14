@@ -1,3 +1,4 @@
+import { cleanup } from './fixture-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
@@ -20,7 +21,7 @@ async function fixture(t, values = {}, overrides = {}) {
   const logs = [], policy = { ...defaultResourcePolicy(), diskFreeBytes: 0, diskFreePercent: 10, ...overrides };
   const monitor = new WorkerResourceMonitor({ store: journal, read: async () => structuredClone(reading), policy: () => policy, active: () => active, now: () => wall, log: event => logs.push(event) });
   await monitor.init();
-  t.after(async () => { await monitor.close(); await rm(directory, { recursive: true, force: true }); });
+  cleanup(t, async () => { await monitor.close(); await rm(directory, { recursive: true, force: true }); });
   return { directory, journal, monitor, logs, policy, get reading() { return reading; }, set reading(value) { reading = value; }, set active(value) { active = value; }, set wall(value) { wall = value; }, async tick(ms = 10000, cpuCores = 0) { reading.monotonicMs += ms; reading.cpuTotalMicros += ms * 1000 * cpuCores; wall += ms; await monitor.sample(); } };
 }
 
@@ -64,7 +65,7 @@ test('long execution warnings use monotonic elapsed time and never flood after w
 test('restart preserves stable event history, ends old pressure episodes and starts CPU with unavailable delta', async t => {
   const f = await fixture(t, { rssBytes: 90 }); const original = f.monitor.events().events[0]; await f.monitor.close();
   const journal = new WorkerResourceJournal(f.directory), monitor = new WorkerResourceMonitor({ store: journal, read: async () => baseline(), policy: () => f.policy, active: () => null });
-  await monitor.init(); t.after(() => monitor.close());
+  await monitor.init(); cleanup(t, () => monitor.close());
   const events = monitor.events().events; assert.deepEqual(events[0], original); assert.equal(events[1].reason, 'worker_restarted'); assert.equal(events[1].alertId, original.alertId); assert.equal(monitor.status().snapshot.cpuPercent, null);
 });
 
@@ -96,7 +97,7 @@ test('monitor timer is unreferenced and shutdown drains a pending sample before 
 });
 
 test('native measurements stay scoped to configured state and missing filesystems remain unavailable', async t => {
-  const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-native-resources-'))); t.after(() => rm(directory, { recursive: true, force: true }));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-native-resources-'))); cleanup(t, () => rm(directory, { recursive: true, force: true }));
   const read = resourceSampler(directory), reading = await read(); assert.equal(reading.processId, process.pid); assert.ok(reading.heapLimitBytes > 0); assert.ok(reading.cpuCapacityCores >= 1); assert.ok(reading.diskTotalBytes > 0);
   const absent = await resourceSampler(join(directory, 'missing'))(); assert.equal(absent.diskAvailableBytes, null); assert.ok(absent.unavailable.includes('state_filesystem'));
   const foreign = join(directory, 'foreign'); await writeFile(foreign, 'unchanged'); await symlink(foreign, join(directory, 'worker-resources.sqlite'));
@@ -106,7 +107,7 @@ test('native measurements stay scoped to configured state and missing filesystem
 test('resource policy validates hard bounds and environment execution override retains underlying settings', async t => {
   for (const patch of [{ memoryPercent: NaN }, { cpuPercent: 101 }, { cpuSustainMs: 0 }, { diskFreeBytes: -1 }, { longRunningMs: Infinity }, { extra: 1 }]) assert.throws(() => validateResourcePolicy({ ...defaultResourcePolicy(), ...patch }));
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-policy-'))); const previous = process.env.WERK_WORKER_MAX_RUNTIME_MS;
-  t.after(async () => { if (previous === undefined) delete process.env.WERK_WORKER_MAX_RUNTIME_MS; else process.env.WERK_WORKER_MAX_RUNTIME_MS = previous; await rm(directory, { recursive: true, force: true }); });
+  cleanup(t, async () => { if (previous === undefined) delete process.env.WERK_WORKER_MAX_RUNTIME_MS; else process.env.WERK_WORKER_MAX_RUNTIME_MS = previous; await rm(directory, { recursive: true, force: true }); });
   delete process.env.WERK_WORKER_MAX_RUNTIME_MS; const settings = new WorkerSettings(directory); await settings.init(); assert.equal(settings.value.execution.maxRuntimeMs, 21600000);
   await settings.update({ execution: { maxRuntimeMs: 7200000 }, resources: { longRunningMs: 1800000 } });
   process.env.WERK_WORKER_MAX_RUNTIME_MS = '10800000'; const overridden = new WorkerSettings(directory); await overridden.init();
@@ -130,7 +131,7 @@ test('resource endpoints require worker access, reject arbitrary paths and expos
   const status = () => ({ activeTasks: [], state: 'standalone', heartbeatErrors: 0, lastContact: null });
   const workspace = new WorkerWorkspace({ stateDir: directory, pollMs: 1000, timeoutMs: 60000 }, journal, status); await workspace.init();
   const server = await statusServer(status, '127.0.0.1', 0, undefined, workspace);
-  t.after(async () => { await new Promise(resolve => server.close(resolve)); await workspace.close(); await journal.close(); await rm(directory, { recursive: true, force: true }); });
+  cleanup(t, async () => { await new Promise(resolve => server.close(resolve)); await workspace.close(); await journal.close(); await rm(directory, { recursive: true, force: true }); });
   const base = 'http://127.0.0.1:' + server.address().port, token = (await readFile(join(directory, 'webview-token'), 'utf8')).trim();
   const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token };
   const post = body => fetch(base + '/api/resources', { method: 'POST', headers, body: JSON.stringify(body) });

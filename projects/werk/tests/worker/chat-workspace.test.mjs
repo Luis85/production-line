@@ -1,3 +1,4 @@
+import { normalizeSource } from '../helpers/source-text.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -5,7 +6,7 @@ import ts from 'typescript';
 import { computed, nextTick, reactive, ref, watch } from 'vue';
 
 async function componentScript(file, ports, exports) {
-  const source = await readFile(new URL('../../src/worker/webview/' + file, import.meta.url), 'utf8');
+  const source = normalizeSource(await readFile(new URL('../../src/worker/webview/' + file, import.meta.url), 'utf8'));
   const script = /<script setup[^>]*>([\s\S]*?)<\/script>/.exec(source)[1].replace(/^import .*;\n/gm, '');
   const javascript = ts.transpile(script, { target: ts.ScriptTarget.ES2022 });
   const dependencies = { computed, nextTick, reactive, ref, watch, ...ports };

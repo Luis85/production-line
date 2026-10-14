@@ -49,7 +49,18 @@ Every app supports `help`, `schema`, `run`, `start`, `status`, `stop`, `health`,
 required flags and example bodies. Successful commands write JSON to stdout;
 diagnostics go to stderr. `--json` is optional. Exit 0 means success, 2 means invalid
 input or API rejection, and 1 means operational failure. No command prompts or
-opens a browser. `status` distinguishes running, stopping, stopped and unreachable;
+opens a browser. Worker help also reports the local execution-policy environment
+variable, bounds, precedence and inspection commands, plus request-gate recovery
+semantics. `WERK_WORKER_MAX_RUNTIME_MS` controls each local model invocation,
+not the lifetime of a session or a CLI polling deadline. The default is six hours,
+with a validated one-second to 24-hour range; a process-environment override wins
+over saved private settings and must be removed/restarted before execution edits.
+Inspect `settings get` for `executionSource` and `resource status` for admission
+conditions. Resource snapshots measure the worker Node process, not provider
+subprocess totals or subscription balances. Fleet `workers.execution.timeoutMs`
+is a separate deployment policy with its own bounds; see
+the release guides `docs/reference/configuration.md` and
+`docs/reference/system-definition.md`. `status` distinguishes running, stopping, stopped and unreachable;
 unreachable exits 1. A running process is not necessarily connected to its upstream.
 Use `health` and `monitoring` to inspect application readiness and current conditions.
 

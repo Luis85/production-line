@@ -122,3 +122,35 @@ test('an expired request from an older access lifetime cannot relock a newly unl
   assert.equal(state.unlocked, true);
   assert.equal(state.sessions.selected, 'fresh-session');
 });
+
+
+test('non-JSON expired access clears private projections and preserves the unsent draft', async t => {
+  const { state, request } = await store(t);
+  state.unlocked = true;
+  state.sessions = { selected: 'private-session', records: [] };
+  state.chat = { messages: [{ text: 'Private answer' }] };
+  state.settings = { providers: [] };
+  state.board = { tasks: [{ id: 'private-task' }] };
+  state.history = { rows: [{ id: 'private-history' }] };
+  state.draft = 'Keep this unsent message';
+  globalThis.fetch = async () => new Response('Access expired', { status: 401 });
+  await assert.rejects(request('/api/taskboard'), error => error.status === 401);
+  assert.equal(state.unlocked, false);
+  for (const key of ['sessions', 'chat', 'settings', 'board', 'history']) assert.equal(state[key], null);
+  assert.equal(state.draft, 'Keep this unsent message');
+  assert.equal(state.draftEpoch, 0);
+  assert.match(state.accessMessage, /Unlock/);
+});
+
+test('a non-JSON 401 from an older access lifetime leaves the new private session intact', async t => {
+  const { state, request, unlock } = await store(t), data = payloads(), oldRead = deferred();
+  state.unlocked = true;
+  globalThis.fetch = async path => path === '/api/old-read' ? oldRead.promise : response(data[path] ?? {});
+  const obsolete = request('/api/old-read');
+  await unlock('new-access');
+  oldRead.resolve(new Response('Expired old access', { status: 401 }));
+  await assert.rejects(obsolete, error => error.status === 401);
+  assert.equal(state.unlocked, true);
+  assert.equal(state.sessions.selected, 'fresh-session');
+  assert.equal(state.chat.messages[0].text, 'Fresh answer');
+});

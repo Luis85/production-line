@@ -1,3 +1,4 @@
+import { normalizeSource } from '../helpers/source-text.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -6,7 +7,7 @@ import { reactive, ref, computed, watch, nextTick, toRefs } from 'vue';
 
 // Exercise the actual editor script with its worker port injected; no DOM renderer or provider calls.
 async function editorFixture(action) {
-  const source = await readFile(new URL('../../src/worker/webview/components/RunTask.vue', import.meta.url), 'utf8');
+  const source = normalizeSource(await readFile(new URL('../../src/worker/webview/components/RunTask.vue', import.meta.url), 'utf8'));
   const scripts = [...source.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map(match => match[1].replace(/^import .*;\n/gm, '')).join('\n');
   const state = reactive({ draftEpoch: 0, unlocked: true, draft: 'Original chat instructions', actionError: '', settings: { providers: [{ id: 'codex-cli', configured: true }, { id: 'claude-cli', configured: true }] }, sessions: { selected: 'one', records: [{ id: 'one', provider: 'codex-cli' }, { id: 'two', provider: 'claude-cli' }] }, definitions: [] });
   const javascript = ts.transpile(scripts, { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS });

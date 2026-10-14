@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   line,
+  lineModule,
   factory,
   task,
   worker,
@@ -12,33 +13,67 @@ import {
   status,
   diagnosticModule,
 } from "../helpers/runtime-harness.mjs";
-for (const code of [401, 503])
-  test(`Factory ${code} ${code === 401 ? "expires access while retaining drafts" : "retains usable session for retry"}`, async () => {
+for (const format of ["json", "text"])
+  for (const code of [401, 403, 503])
+    test(`Factory ${code} ${format} response clears only expired access and preserves drafts`, async () => {
+      const f = factory((path) =>
+        path.startsWith("/v1/overview")
+          ? format === "json"
+            ? response({ error: "Unavailable" }, code)
+            : new Response("Access unavailable", { status: code })
+          : undefined,
+      );
+      f.state.taskDraft.title = "Unsent";
+      f.state.cache.set("private", { marker: "private" });
+      await f.refresh(false);
+      assert.equal(!!f.state.token, code !== 401);
+      assert.equal(f.state.taskDraft.title, "Unsent");
+      assert.equal(f.state.loading, false);
+      if (code === 401) {
+        assert.equal(f.state.cache.size, 0);
+        assert.deepEqual(f.state.factories, []);
+        assert.deepEqual(f.state.lines, []);
+        assert.equal(f.state.overview, null);
+        assert.match(f.state.error, /nicht mehr gültig/);
+      }
+    });
+for (const format of ["json", "text"])
+  test(`Factory late old-session ${format} 401 cannot disconnect newly authenticated session`, async () => {
+    const pending = deferred();
+    let old = true;
     const f = factory((path) =>
-      path.startsWith("/v1/overview")
-        ? response({ error: "Unavailable" }, code)
-        : undefined,
+      path.startsWith("/v1/overview") && old ? pending.promise : undefined,
     );
-    f.state.taskDraft.title = "Unsent";
-    await f.refresh(false);
-    assert.equal(!!f.state.token, code !== 401);
-    assert.equal(f.state.taskDraft.title, "Unsent");
-    assert.equal(f.state.loading, false);
+    const read = f.refresh(false);
+    f.disconnect();
+    old = false;
+    await f.connect("new");
+    pending.resolve(
+      format === "json"
+        ? response({ error: "expired" }, 401)
+        : new Response("Expired", { status: 401 }),
+    );
+    await read;
+    assert.equal(f.state.token, "new");
+    assert.ok(f.state.factories.length > 0);
   });
-test("Factory late old-session 401 cannot disconnect newly authenticated session", async () => {
-  const pending = deferred();
-  let old = true;
-  const f = factory((path) =>
-    path.startsWith("/v1/overview") && old ? pending.promise : undefined,
-  );
-  const read = f.refresh(false);
-  f.disconnect();
-  old = false;
-  await f.connect("new");
-  pending.resolve(response({ error: "expired" }, 401));
-  await read;
-  assert.equal(f.state.token, "new");
-});
+for (const code of [401, 403, 503])
+  test(`Orchestrator real transport preserves HTTP ${code} through a non-JSON response`, async (t) => {
+    t.mock.method(
+      globalThis,
+      "fetch",
+      async () => new Response("Access unavailable", { status: code }),
+    );
+    const f = lineModule.createOrchestratorStore();
+    f.state.token = "fixture";
+    f.state.tasks = [task("private")];
+    f.state.tab = "tasks";
+    f.state.intake.title = "Unsent";
+    await f.refresh();
+    assert.equal(!!f.state.token, code !== 401);
+    assert.equal(f.state.intake.title, "Unsent");
+    assert.equal(f.state.tasks.length, code === 401 ? 0 : 1);
+  });
 test("line logout clears hidden identities, selected snapshots and filter options", () => {
   const f = line();
   f.state.selectedTask = task();

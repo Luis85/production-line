@@ -1,3 +1,4 @@
+import { cleanup } from './fixture-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rename, rm } from 'node:fs/promises';
@@ -11,7 +12,7 @@ async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(), 'werk-session-reliability-'));
   const settings = new WorkerSettings(directory); await settings.init();
   const sessions = new WorkerSessions(directory, settings, model); await sessions.init();
-  t.after(async () => { await sessions.close(); await rm(directory, { recursive: true, force: true }); });
+  cleanup(t, async () => { await sessions.close(); await rm(directory, { recursive: true, force: true }); });
   return { directory, settings, sessions };
 }
 test('failed session index deletion retains the transcript and selected task', async t => {
@@ -28,7 +29,7 @@ test('failed session index deletion retains the transcript and selected task', a
   await rm(join(directory, 'sessions.json'), { recursive: true });
   await rename(join(directory, 'sessions-backup.json'), join(directory, 'sessions.json'));
   const recovered = new WorkerSessions(directory, settings, model);
-  await recovered.init(); t.after(() => recovered.close());
+  await recovered.init(); cleanup(t, () => recovered.close());
   assert.deepEqual(recovered.detail('default').chat.messages, before.chat.messages);
 });
 test('deletion releases cached conversations and failed creation leaves no cached orphan', async t => {
@@ -48,7 +49,7 @@ test('deletion releases cached conversations and failed creation leaves no cache
 test('concurrent feature submissions admit one durable task and reject conflicting content', async t => {
   const { directory, settings, sessions } = await fixture(t);
   const repository = join(directory, 'repo'); await mkdir(repository);
-  const board = new LocalTaskboard(directory, settings, sessions, model); await board.init(); t.after(() => board.close());
+  const board = new LocalTaskboard(directory, settings, sessions, model); await board.init(); cleanup(t, () => board.close());
   const input = { title: 'Create file', instruction: 'Create approved file', repository, paths: ['hello.txt'] };
   const submission = { id: 'feature-same', hash: 'a'.repeat(64) };
   await Promise.all([board.create(input, submission), board.create(input, submission)]);
@@ -59,7 +60,7 @@ test('concurrent feature submissions admit one durable task and reject conflicti
   ]);
   assert.equal(results.filter(result => result.status === 'fulfilled').length, 1);
   assert.match(results.find(result => result.status === 'rejected').reason.message, /different input/);
-  const recovered = new LocalTaskboard(directory, settings, sessions, model); await recovered.init(); t.after(() => recovered.close());
+  const recovered = new LocalTaskboard(directory, settings, sessions, model); await recovered.init(); cleanup(t, () => recovered.close());
   assert.equal(recovered.view().tasks.length, 2);
   assert.equal(new Set(recovered.view().tasks.map(task => task.id)).size, 2);
 });

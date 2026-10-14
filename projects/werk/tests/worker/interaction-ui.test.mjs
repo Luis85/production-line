@@ -1,3 +1,4 @@
+import { normalizeSource } from '../helpers/source-text.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -5,7 +6,7 @@ import ts from 'typescript';
 import { reactive, ref, computed, watch, nextTick, effectScope } from 'vue';
 const checkpoint = (sessionId = 'task-A', revision = 1) => ({ schemaVersion: 1, sessionId, revision, phase: 'waiting_input', pending: { id: 'question-1', kind: 'question', message: 'Which retry budget?', createdAt: '2026-10-14T16:15:00Z', turnId: 'turn-1' }, latestTurn: { id: 'turn-1', kind: 'message', status: 'waiting_input', finishedAt: null }, turns: [], totalTurns: 1 });
 async function fixture(t, request) {
-  const source = await readFile(new URL('../../src/worker/webview/components/InteractionPanel.vue', import.meta.url), 'utf8');
+  const source = normalizeSource(await readFile(new URL('../../src/worker/webview/components/InteractionPanel.vue', import.meta.url), 'utf8'));
   const script = [...source.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map(match => match[1]).join('\n').replace(/^import .*;\n/gm, '');
   const state = reactive({ unlocked: true, draftEpoch: 0, sessions: { selected: 'task-A' }, lastRead: '' });
   const changes = [], scope = effectScope(); let operation = 0; t.after(() => scope.stop());

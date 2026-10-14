@@ -28,3 +28,10 @@ test('wait observes failure as terminal and timeout has a stable code without ca
   const held={execution:{status:'needs_rework',request:{phase:'needs_rework'}}};assert.equal(await waitForWorker(async()=>held,'feature','10'),held);
   let calls=0;await assert.rejects(waitForWorker(async()=>{calls++;return{session:{status:'queued'}};},'task','1'),error=>error.code==='wait_timeout'&&/continues/.test(error.message));assert.ok(calls>=1);
 });
+
+test('feature wait observes terminal execution only after its generated record settles', async () => {
+  let reads = 0;
+  const completed = {record:{status:'completed',result:'_results/fixture.md'},execution:{status:'completed',text:'Fixture output'}};
+  const result = await waitForWorker(async () => ++reads === 1 ? {record:{status:'running'},execution:completed.execution} : completed, 'feature', '2000');
+  assert.equal(reads,2); assert.equal(result,completed);
+});

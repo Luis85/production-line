@@ -8,6 +8,8 @@ separately under `docs/handoff`; original source provenance is recorded in the
 
 | Record | Scope |
 | --- | --- |
+| [CI recovery and independent polish](ci-recovery-polish.md) | Clean image builds, Windows portability and cleanup, truthful feature wait, cancellation accounting and access recovery |
+| [CI recovery browser walkthrough](ci-recovery-polish.html) | Shared-board states and before/after malformed access-expiry journeys |
 | [Unified worker, webviews and request gates](werk-unified-worker-review.md) | Shared Vue/Nuxt UI Kanban, deterministic request lifecycle, package comparison and integrated qualification |
 | [Interactive unified view sitemap](werk-unified-views.html) | Current route and worker-panel screenshots, gate workflow and explicit evidence provenance |
 | [Worker request gates and recovery](worker-request-gates-review.md) | Deterministic readiness/completion, advisory rework, remote checkpoint ownership, command admission disclosure and focused fixture validation |

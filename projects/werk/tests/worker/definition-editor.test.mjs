@@ -1,10 +1,11 @@
+import { normalizeSource } from '../helpers/source-text.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 import { ref, watch, nextTick, effectScope } from 'vue';
 async function editor(t, request) {
-  const source = await readFile(new URL('../../src/worker/webview/components/DefinitionPanel.vue', import.meta.url), 'utf8');
+  const source = normalizeSource(await readFile(new URL('../../src/worker/webview/components/DefinitionPanel.vue', import.meta.url), 'utf8'));
   const script = source.match(/<script setup[^>]*>([\s\S]*?)<\/script>/)[1].replace(/^import .*;\n/gm, '');
   const ports = { ref, watch, nextTick, request, refresh: async () => {}, state: { definitions: [] } };
   const scope = effectScope(); t.after(() => scope.stop());

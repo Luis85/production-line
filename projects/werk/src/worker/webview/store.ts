@@ -36,10 +36,11 @@ export async function newTask(options: { provider?: string; title?: string; defi
 export async function request(path: string, method = 'GET', body?: unknown) {
   const access = accessGeneration;
   const response = await fetch(path, { method, credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(10000), headers: { 'X-Werk-Request': 'webview', ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
-  const data = await response.json();
+  // Access invalidation must not depend on a proxy/server returning valid JSON.
+  if (response.status === 401 && path !== '/api/access' && access === accessGeneration) { relock(); state.accessMessage = 'Your access expired or the worker restarted. Unlock to return to your task. Your unsent draft is kept in this tab.'; }
+  const data = await response.json().catch(error => { if (response.ok) throw error; return {}; });
   if (!response.ok) {
-    if (response.status === 401 && path !== '/api/access' && access === accessGeneration) { relock(); state.accessMessage = 'Your access expired or the worker restarted. Unlock to return to your task. Your unsent draft is kept in this tab.'; }
-    const failure = Error(data.error ?? `Request failed (${response.status})`) as Error & { status: number };
+    const failure = Error(data?.error ?? `Request failed (${response.status})`) as Error & { status: number };
     failure.status = response.status;
     throw failure;
   }

@@ -101,3 +101,25 @@ test('fleet reuses credentials, exports custom URL and drains workers before ser
     await assert.rejects(access(join(state,'fleet.lock')));
   } finally {if(child?.exitCode===null)child.kill('SIGKILL');await rm(root,{recursive:true,force:true});}
 });
+
+// Exercise the same root alias mismatch as Windows short-name temp paths.
+test('standalone webview resolves a directory alias before Vite emits HTML', async () => {
+  const { buildStandaloneWebview } = await import('../../scripts/webviews.mjs');
+  const root = await mkdtemp(join(tmpdir(), 'werk-vite-alias-'));
+  try {
+    const actual = join(root, 'canonical project'), alias = join(root, 'alias');
+    await mkdir(join(actual, 'view'), { recursive: true });
+    await writeFile(join(actual, 'view/index.html'), '<div id="app"></div><script type="module" src="./entry.js"></script>');
+    await writeFile(join(actual, 'view/entry.js'), 'document.querySelector("#app").textContent = "alias-safe";');
+    await symlink(actual, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    const output = join(root, 'export.html');
+    await buildStandaloneWebview(alias, 'view', output, join(root, 'scratch'));
+    const html = await readFile(output, 'utf8');
+    assert.match(html, /alias-safe/);
+    assert.match(html, /<script type="module">/);
+    assert.doesNotMatch(html, /src="[^"]+\.js"/);
+    await assert.rejects(access(join(root, 'scratch')));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

@@ -1,3 +1,4 @@
+import { cleanup } from './fixture-cleanup.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -36,7 +37,7 @@ async function fixture(t) {
   );
   const journal = new WorkerRequestJournal(directory);
   await journal.init();
-  t.after(async () => {
+  cleanup(t, async () => {
     journal.close();
     await rm(directory, { recursive: true, force: true });
   });
@@ -164,7 +165,7 @@ test("durable policy affects new requests only and command receipts deduplicate 
   journal.close();
   const reopened = new WorkerRequestJournal(directory);
   await reopened.init();
-  t.after(() => reopened.close());
+  cleanup(t, () => reopened.close());
   assert.equal(reopened.policy().digest, saved.digest);
   assert.equal(reopened.get(first.id).policy.id, "werk-default");
 });
@@ -241,7 +242,7 @@ test("failed readiness queues one review and survives restart without phantom pr
   journal.close();
   const reopened = new WorkerRequestJournal(directory);
   await reopened.init();
-  t.after(() => reopened.close());
+  cleanup(t, () => reopened.close());
   const retained = reopened.get(request.id);
   assert.equal(retained.reviews[0].status, "interrupted");
   assert.equal(retained.reviews[0].usage.inputTokens, 12);
@@ -308,7 +309,7 @@ test("known result survives recovery; unknown started execution interrupts witho
   journal.close();
   const reopened = new WorkerRequestJournal(directory);
   await reopened.init();
-  t.after(() => reopened.close());
+  cleanup(t, () => reopened.close());
   assert.equal(reopened.get(first.id).phase, "done");
   assert.equal(reopened.get(first.id).execution.result.text, "Known answer.");
   assert.equal(reopened.get(pending.id).phase, "interrupted");

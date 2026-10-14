@@ -1,10 +1,11 @@
+import { normalizeSource } from '../helpers/source-text.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 import { computed, ref, watch, nextTick, reactive, effectScope } from 'vue';
 async function fixture(t, request) {
-  const source = await readFile(new URL('../../src/worker/webview/components/RunEvidencePanel.vue', import.meta.url), 'utf8');
+  const source = normalizeSource(await readFile(new URL('../../src/worker/webview/components/RunEvidencePanel.vue', import.meta.url), 'utf8'));
   const script = source.match(/<script setup[^>]*>([\s\S]*?)<\/script>/)[1].replace(/^import .*;\n/gm, '');
   const state = reactive({ unlocked: true }), route = reactive({ path: '/history', query: {} }), downloads = [];
   const ports = { computed, ref, watch, nextTick, state, request, useRoute: () => route, defineProps: () => ({ compact: false }), onMounted() {}, onActivated() {}, onDeactivated() {}, document: { createElement: () => ({ click() {} }), getElementById: () => ({ focus() {} }) }, URL: { createObjectURL: blob => { downloads.push(blob.parts); return 'fixture'; }, revokeObjectURL() {} }, Blob: class { constructor(parts) { this.parts = parts; } }, setTimeout() {} };

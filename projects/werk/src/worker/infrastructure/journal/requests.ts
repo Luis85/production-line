@@ -1076,8 +1076,16 @@ export class WorkerRequestJournal implements RequestGatePort {
     return this.transaction(() => {
       const request = this.get(id),
         intent = request.reviews.find((r) => r.id === intentId);
-      if (!intent || intent.status !== "running")
-        conflict("Usage does not belong to an active reviewer.");
+      // A CLI can report its final counters while reacting to an abort. The request
+      // cancellation is already durable, but that final observation still belongs
+      // to the admitted invocation and must not look like a storage failure.
+      const cancelledInvocation =
+        intent?.status === "interrupted" &&
+        intent.errorCode === "operator_cancelled" &&
+        !!intent.runId &&
+        !!intent.dispatch;
+      if (!intent || (intent.status !== "running" && !cancelledInvocation))
+        conflict("Usage does not belong to an admitted reviewer invocation.");
       const accepted = normalizeUsage(usage);
       if (gateDigest(intent.usage) === gateDigest(accepted)) return;
       intent.usage = accepted;

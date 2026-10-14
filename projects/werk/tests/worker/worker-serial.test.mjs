@@ -1,3 +1,4 @@
+import { cleanup } from './fixture-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
@@ -11,13 +12,13 @@ async function until(fn) { for(let n=0;n<400;n++){if(await fn())return;await del
 async function fixture(t, model) {
   const directory=await mkdtemp(join(tmpdir(),'werk-serial-')); const settings=new WorkerSettings(directory); await settings.init();
   const sessions=new WorkerSessions(directory,settings,model);await sessions.init();
-  t.after(async()=>{await sessions.close();await rm(directory,{recursive:true,force:true});});return {directory,settings,sessions};
+  cleanup(t, async()=>{await sessions.close();await rm(directory,{recursive:true,force:true});});return {directory,settings,sessions};
 }
 test('chat and file tasks share one slot, keep separate durable sessions, and reject premature follow-ups',async t=>{
   let active=0,maximum=0;const calls=[];
   const model=()=>({async reply(messages,signal){active++;maximum=Math.max(maximum,active);calls.push(messages.map(item=>item.text));try{await delay(50);signal.throwIfAborted();return messages[0].text.startsWith('Implement')?JSON.stringify({summary:'Proposed fixture',files:[{path:'hello.txt',content:'hello'}]}):'Fixture response';}finally{active--;}}});
   const {directory,settings,sessions}=await fixture(t,model);const repository=join(directory,'repo');await mkdir(repository);
-  const board=new LocalTaskboard(directory,settings,sessions,model);await board.init();t.after(()=>board.close());
+  const board=new LocalTaskboard(directory,settings,sessions,model);await board.init();cleanup(t, ()=>board.close());
   await settings.update({board:{paused:true}});
   await sessions.start('First task');const first=sessions.current.id;
   await sessions.action({action:'create',title:'New task',provider:'codex-cli'});await sessions.start('Second task');const second=sessions.current.id;
@@ -30,7 +31,7 @@ test('chat and file tasks share one slot, keep separate durable sessions, and re
   await sessions.action({action:'select',id:first});await sessions.start('Follow-up');await until(()=>!sessions.busy);
   assert.equal(calls[3][0],'First task');assert.ok(calls[3].includes('Follow-up'));assert.equal(sessions.current.id,first);
   await assert.rejects(sessions.action({action:'delete',id:local.sessionId}),/linked local task/);
-  const recovered=new WorkerSessions(directory,settings,model);await recovered.init();t.after(()=>recovered.close());
+  const recovered=new WorkerSessions(directory,settings,model);await recovered.init();cleanup(t, ()=>recovered.close());
   assert.equal(recovered.view().records.length,3);assert.equal(recovered.view().records.find(item=>item.id===first).messages,4);
   assert.equal(recovered.view().records.find(item=>item.id===local.sessionId).messages,2);
 });
@@ -52,18 +53,18 @@ test('failed taskboard writes and restart reconciliation leave no locked orphan 
   await sessions.action({action:'delete',id:orphan.id});
   await sessions.ensureTask('local-interrupted','local','Interrupted save','codex-cli');
   await rm(join(directory,'taskboard.json'),{recursive:true});
-  const recovered=new LocalTaskboard(directory,settings,sessions);await recovered.init();t.after(()=>recovered.close());
+  const recovered=new LocalTaskboard(directory,settings,sessions);await recovered.init();cleanup(t, ()=>recovered.close());
   assert.equal(sessions.view().records.find(item=>item.id==='local-interrupted').status,'failed');assert.equal(sessions.busy,false);
 });
 test('cancelled and failed file tasks retain original context, and followup outcome updates the session',async t=>{
   let followup;
   const {directory,settings,sessions}=await fixture(t,()=>({async reply(messages){followup=messages;return 'Follow-up answered';}}));
-  const repository=join(directory,'repo');await mkdir(repository);const board=new LocalTaskboard(directory,settings,sessions,()=>({async reply(){throw Error('Provider failed');}}));await board.init();t.after(()=>board.close());
+  const repository=join(directory,'repo');await mkdir(repository);const board=new LocalTaskboard(directory,settings,sessions,()=>({async reply(){throw Error('Provider failed');}}));await board.init();cleanup(t, ()=>board.close());
   await board.create({title:'Cancelled',instruction:'Original cancelled instruction',repository,paths:['a.txt']});let task=board.view().tasks[0];await board.action({id:task.id,action:'cancel'});
   await sessions.action({action:'select',id:task.sessionId});assert.match(sessions.chat.snapshot().messages[0].text,/Original cancelled/);assert.match(sessions.chat.snapshot().messages[1].text,/cancelled/);
   await sessions.start('Explain cancellation');await until(()=>!sessions.busy);assert.match(followup[0].text,/Original cancelled/);assert.equal(sessions.view().records.find(item=>item.id===task.sessionId).status,'completed');
   await board.create({title:'Failed',instruction:'Original failed instruction',repository,paths:['b.txt']});task=board.view().tasks[1];await until(async()=>{await board.tick();return board.detail(task.id).status==='failed';});
   await sessions.action({action:'select',id:task.sessionId});assert.match(sessions.chat.snapshot().messages[0].text,/Original failed/);assert.equal(sessions.chat.snapshot().messages.at(-1).state,'error');
-  const recovered=new WorkerSessions(directory,settings,()=>({async reply(){return 'Unused';}}));await recovered.init();t.after(()=>recovered.close());const recoveredBoard=new LocalTaskboard(directory,settings,recovered);await recoveredBoard.init();t.after(()=>recoveredBoard.close());
+  const recovered=new WorkerSessions(directory,settings,()=>({async reply(){return 'Unused';}}));await recovered.init();cleanup(t, ()=>recovered.close());const recoveredBoard=new LocalTaskboard(directory,settings,recovered);await recoveredBoard.init();cleanup(t, ()=>recoveredBoard.close());
   const firstSession=board.view().tasks[0].sessionId;assert.equal(recovered.view().records.find(item=>item.id===firstSession).status,'completed');
 });

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
-import { resolve, dirname } from "node:path";
+import { resolve, dirname, relative, isAbsolute } from "node:path";
 // Every served Vue entry must resolve entirely within its release, without a CDN.
 for (const app of ["factory", "orchestrator", "worker"])
   for (const file of app === "worker"
@@ -31,7 +31,8 @@ for (const app of ["factory", "orchestrator", "worker"])
         const path = pending.pop();
         if (seen.has(path)) continue;
         seen.add(path);
-        assert(path.startsWith(root + "/"), "asset stays inside package");
+        const within = relative(root, path);
+        assert(within && !isAbsolute(within) && within !== ".." && !within.startsWith("../") && !within.startsWith("..\\"), "asset stays inside package");
         assert((await stat(path)).isFile());
         const text = await readFile(path, "utf8");
         if (path.endsWith(".js"))

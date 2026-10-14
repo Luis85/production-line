@@ -52,14 +52,29 @@ test('failed acceptance never invokes a model; shutdown during acceptance cannot
   const closing=new WorkerConversation(blocked,{async reply(_,signal){signal.throwIfAborted();calls++;return 'reply';}});await closing.init();const accepted=closing.start('Hello'),stop=closing.close();release();await accepted;await stop;assert.equal(calls,0);assert.equal(closing.snapshot().busy,false);
 });
 test('history and private environment use worker-scoped auth, preserve snapshots, and serve built Vue routes', async t => {
-  const directory=await mkdtemp(join(tmpdir(),'werk-webview-'));t.after(()=>rm(directory,{recursive:true,force:true}));
-  const current=status(),journal=new SnapshotJournal(directory,'a'.repeat(64),'b'.repeat(64));await journal.init();t.after(()=>journal.close());
+  const directory=await mkdtemp(join(tmpdir(),'werk-webview-'));
+  let journal, workspace, restarted, server;
+  t.after(async () => {
+    const errors = [];
+    // Stop traffic and every workspace sampler before closing journals and deleting files.
+    for (const cleanup of [
+      async () => { if (server) { server.closeAllConnections(); await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())); } },
+      () => restarted?.close(),
+      () => workspace?.close(),
+      () => journal?.close(),
+      () => rm(directory, { recursive: true, force: true }),
+    ]) {
+      try { await cleanup(); } catch (error) { errors.push(error); }
+    }
+    if (errors.length) throw new AggregateError(errors, 'Webview fixture cleanup failed');
+  });
+  const current=status();journal=new SnapshotJournal(directory,'a'.repeat(64),'b'.repeat(64));await journal.init();
   const task={id:'task-one',project:'alpha',attempt:1,lease:'lease-one',profile:'codex-1'};
   const before=journal.capture(task,current.workerId,current.profiles[0],current,'before');await journal.persist(before);await journal.persist(journal.capture(task,current.workerId,current.profiles[0],current,'after',before,'simulated'));
   const cfg={stateDir:directory,url:'http://localhost:3000',pollMs:1000,timeoutMs:60000};
-  const workspace=new WorkerWorkspace(cfg,journal,()=>current);await workspace.init();await workspace.updateSettings({provider:{id:'codex-cli',executable:''}});await workspace.rememberTask({...task,title:'Improve worker navigation'});
-  const token=(await readFile(join(directory,'webview-token'),'utf8')).trim();const restarted=new WorkerWorkspace(cfg,journal,()=>current);await restarted.init();assert.equal((await readFile(join(directory,'webview-token'),'utf8')).trim(),token);
-  const server=await statusServer(()=>current,'127.0.0.1',0,undefined,workspace);t.after(async()=>{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));});
+  workspace=new WorkerWorkspace(cfg,journal,()=>current);await workspace.init();await workspace.updateSettings({provider:{id:'codex-cli',executable:''}});await workspace.rememberTask({...task,title:'Improve worker navigation'});
+  const token=(await readFile(join(directory,'webview-token'),'utf8')).trim();restarted=new WorkerWorkspace(cfg,journal,()=>current);await restarted.init();assert.equal((await readFile(join(directory,'webview-token'),'utf8')).trim(),token);
+  server=await statusServer(()=>current,'127.0.0.1',0,undefined,workspace);
   const base=`http://127.0.0.1:${server.address().port}`,headers={Authorization:`Bearer ${token}`};
   assert.equal((await fetch(base+'/api/history')).status,401);assert.equal((await fetch(base+'/api/environment',{headers:{Authorization:'Bearer wrong'}})).status,401);
   const environment=await(await fetch(base+'/api/environment',{headers})).json();assert.equal(environment.stateDirectory,directory);assert.doesNotMatch(JSON.stringify(environment),/secret|hidden|webview-token/);assert.equal(environment.chat.configured,false);

@@ -460,3 +460,17 @@ node src/orchestrator/dist/orchestrator/cli.js task successor --id {{
     </section>
   </section>
 </template>
+
+<style scoped>
+#tasks {
+  grid-template-columns: minmax(0, 1fr);
+}
+#tasks > section[aria-label="Aufträge als Tabelle"] {
+  min-width: 0;
+  max-width: 100%;
+}
+#tasks .table-scroll {
+  min-width: 0;
+  width: 100%;
+}
+</style>

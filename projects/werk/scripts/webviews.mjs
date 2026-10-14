@@ -1,4 +1,4 @@
-import { readFile, writeFile, rm } from 'node:fs/promises';
+import { readFile, writeFile, rm, realpath } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { build } from 'vite';
 import vue from '@vitejs/plugin-vue';
@@ -16,12 +16,12 @@ export function webviewConfig(root, outDir, standalone = false) {
   };
 }
 export async function buildWebview(projectRoot, source, destination) {
-  await build(webviewConfig(join(projectRoot, source), destination));
+  await build(webviewConfig(await realpath(join(projectRoot, source)), destination));
 }
 /** Standalone explanations/exports use the same Vue components without a server or CDN. */
 export async function buildStandaloneWebview(projectRoot, source, destination, scratch) {
   try {
-    await build(webviewConfig(join(projectRoot, source), scratch, true));
+    await build(webviewConfig(await realpath(join(projectRoot, source)), scratch, true));
     let html = await readFile(join(scratch, 'index.html'), 'utf8');
     const asset = async path => {
       if (!/^\.\/assets\/[a-zA-Z0-9_.-]+\.(?:js|css)$/.test(path)) throw Error('Unexpected standalone webview asset: ' + path);

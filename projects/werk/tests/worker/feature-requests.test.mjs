@@ -1,3 +1,4 @@
+import { cleanup } from './fixture-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm, writeFile, readFile, rename, symlink, realpath } from 'node:fs/promises';
@@ -17,7 +18,7 @@ async function fixture(t, queue) {
   await mkdir(state); const tasks = new Map(), submissions = [];
   queue ??= { async submit(record) { if (!tasks.has(record.taskId)) { submissions.push(structuredClone(record)); tasks.set(record.taskId, { status: 'queued' }); } }, inspect(record) { return tasks.get(record.taskId); } };
   const folder = new MarkdownFeatureFolder(directory, state, 'codex-cli', project); const service = new FeatureRequests(folder, queue, 0); await service.init();
-  t.after(async () => { await service.close(); await rm(project, { recursive: true, force: true }); });
+  cleanup(t, async () => { await service.close(); await rm(project, { recursive: true, force: true }); });
   return { project, directory, state, folder, service, queue, tasks, submissions, put: (name, text) => writeFile(join(directory, name), text), read: async name => parseFeature(await readFile(join(directory, name), 'utf8')) };
 }
 async function scan(service) { await service.tick(true); await service.tick(true); }
@@ -102,7 +103,7 @@ test('feature patch submission is idempotent and shares the serial executor with
   const f = await fixture(t); let active = 0, maximum = 0, calls = 0;
   const model = () => ({ async reply(messages) { calls++; maximum = Math.max(maximum, ++active); await new Promise(r => setTimeout(r, 20)); active--; return messages[0].text.startsWith('Implement') ? JSON.stringify({ summary: 'Patch fixture', files: [{ path: 'new.txt', content: 'hello\n' }] }) : 'Chat fixture'; } });
   const settings = new WorkerSettings(f.state); await settings.init(); const sessions = new WorkerSessions(f.state, settings, model); await sessions.init(); const board = new LocalTaskboard(f.state, settings, sessions, model); await board.init();
-  t.after(async () => { await board.close(); await sessions.close(); });
+  cleanup(t, async () => { await board.close(); await sessions.close(); });
   await settings.update({ board: { paused: true } }); await sessions.start('Other task');
   const input = { title: 'Patch feature', instruction: 'Create approved file', repository: f.project, paths: ['new.txt'] }, submission = { id: 'feature-fixed', hash: 'a'.repeat(64) };
   await board.create(input, submission); await board.create(input, submission); assert.equal(board.view().tasks.length, 1);

@@ -1,10 +1,11 @@
+import { normalizeSource } from '../helpers/source-text.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 import { ref, computed, watch, reactive, effectScope, nextTick } from 'vue';
 async function fixture(t, component, request, workspaceAction = async () => true) {
- const source = await readFile(new URL('../../src/worker/webview/components/' + component + '.vue', import.meta.url), 'utf8');
+ const source = normalizeSource(await readFile(new URL('../../src/worker/webview/components/' + component + '.vue', import.meta.url), 'utf8'));
  const script = source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1].replace(/^import .*;\n/gm, '');
  const state = reactive({ unlocked: true, lastRead: '', settings: null });
  const scope = effectScope(); t.after(() => scope.stop());

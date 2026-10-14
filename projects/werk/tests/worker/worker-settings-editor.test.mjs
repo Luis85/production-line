@@ -1,3 +1,4 @@
+import { normalizeSource } from '../helpers/source-text.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
@@ -7,7 +8,7 @@ import ts from 'typescript';
 import { nextTick } from 'vue';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 async function editor(t) {
-  const component = await readFile(join(root, 'src/worker/webview/components/SettingsPanel.vue'), 'utf8');
+  const component = normalizeSource(await readFile(join(root, 'src/worker/webview/components/SettingsPanel.vue'), 'utf8'));
   const script = component.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1]
     .replace(/^import U(?:Button|Input|Select).*\n/gm, '')
     .replace(/^import \{ state,.*\n/gm, '')
