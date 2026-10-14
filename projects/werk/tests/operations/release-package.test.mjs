@@ -13,6 +13,15 @@ import { extractRelease } from '../../scripts/release/extract.mjs';
 import { verifyRelease } from '../../scripts/release/verify.mjs';
 
 async function fixture(t) {
+  // The fixture represents its own tagged release, independent of the CI tag.
+  const previous = { GITHUB_REF_TYPE: process.env.GITHUB_REF_TYPE, GITHUB_REF_NAME: process.env.GITHUB_REF_NAME };
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  });
+  process.env.GITHUB_REF_TYPE = 'tag';
+  process.env.GITHUB_REF_NAME = 'v0.1.0';
   const root = await mkdtemp(join(tmpdir(), 'werk release test '));
   t.after(() => rm(root, { recursive: true, force: true }));
   const put = async (path, content = 'fixture\n') => { await mkdir(dirname(join(root, path)), {recursive:true}); await writeFile(join(root, path), content); };
