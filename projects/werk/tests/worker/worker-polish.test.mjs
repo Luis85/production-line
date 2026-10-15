@@ -181,3 +181,22 @@ test('completion cannot conceal an outstanding orchestrator polling failure', {t
     assert.equal((await readState()).state,'disconnected');
   }finally{cancel();try{await running;}finally{await rm(dir,{recursive:true,force:true});}}
 });
+
+test('an unwritable status snapshot is reported and retried without stopping a standalone worker',{timeout:30000},async t=>{
+  const dir=await mkdtemp(join(tmpdir(),'werk-status-write-'));const stop=new AbortController();
+  // A directory in place of status.json makes every snapshot replacement fail on every platform.
+  await mkdir(join(dir,'status.json'));
+  const adapter={mode:'mock',async run(){throw Error('No task is expected');}};
+  let runtimeError,running;
+  try{
+    const c=await configuration({'poll-ms':'100'});
+    running=runWorker({...c,stateDir:dir,url:'',enrollmentToken:'',statusHost:'127.0.0.1',statusPort:0},stop.signal,{adapter});
+    running.catch(error=>{runtimeError=error;});
+    // Several standalone polls (each with up to ~2.3 s of Windows retries) must not end the worker.
+    await delay(process.platform==='win32'?6000:800);
+    assert.equal(runtimeError,undefined);
+    await rm(join(dir,'status.json'),{recursive:true,force:true});
+    for(let i=0;i<100;i++){const state=await readFile(join(dir,'status.json'),'utf8').then(JSON.parse,()=>null);if(state?.state==='standalone')break;await delay(50);}
+    assert.equal(JSON.parse(await readFile(join(dir,'status.json'),'utf8')).state,'standalone');
+  }finally{stop.abort();try{await running;}finally{await rm(dir,{recursive:true,force:true});}}
+});

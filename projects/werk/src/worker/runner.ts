@@ -261,6 +261,12 @@ export async function runWorker(
       .then(() => atomicWrite(join(config.stateDir, "status.json"), body));
     return writing;
   };
+  // The status file is an observability snapshot: a transient write failure (for example a
+  // Windows scanner briefly locking it) is reported and retried on the next poll, never fatal.
+  const publishStatus = () =>
+    save().catch(() => {
+      serviceEvent("worker", "state_write_error", "error");
+    });
   try {
     await handle.writeFile(String(process.pid));
     await handle.sync();
@@ -318,7 +324,7 @@ export async function runWorker(
           connected = false;
           state.state = "standalone";
           state.lastError = null;
-          await save();
+          await publishStatus();
         } else {
           if (!session) {
             const gateway =
@@ -563,7 +569,7 @@ export async function runWorker(
           if (!connected) serviceEvent("worker", "connection_restored");
           connected = true;
           state.state = operationalState();
-          await save();
+          await publishStatus();
         }
       } catch (error) {
         if (error instanceof IdentityConfigurationError) throw error;
@@ -571,7 +577,7 @@ export async function runWorker(
         connected = false;
         state.state = operationalState();
         state.lastError = (error as Error).message;
-        await save();
+        await publishStatus();
       }
       try {
         await delay(config.pollMs + Math.random() * 250, undefined, {
