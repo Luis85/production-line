@@ -21,8 +21,9 @@ async function publish(temporary: string, destination: string, operations: Atomi
     catch (error) {
       // Windows readers/antivirus can briefly prevent replacement. Never remove the existing destination.
       const code = (error as NodeJS.ErrnoException)?.code;
-      if (platform !== 'win32' || !['EPERM', 'EACCES', 'EBUSY'].includes(code ?? '') || attempt >= 7) throw error;
-      await wait(Math.min(10 * 2 ** attempt, 100));
+      // Scanners and indexers can hold a fresh file for well over a second; allow ~2.3 s in total.
+      if (platform !== 'win32' || !['EPERM', 'EACCES', 'EBUSY'].includes(code ?? '') || attempt >= 13) throw error;
+      await wait(Math.min(10 * 2 ** attempt, 250));
       await assertDirectory(dirname(destination));
     }
   }
