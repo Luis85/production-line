@@ -122,7 +122,18 @@ test('registered edits recover old incomplete evidence, survive a lost acknowled
   await until(async()=> (await worker.api('/api/execution-profiles')).value.state==='ready');
   const identity=JSON.parse(await readFile(join(path,'identity.json'),'utf8'));assert.equal(identity.id,registration.id);assert.equal(identity.configHash,current().config.configHash);
   const next=store.submit({project:'alpha',title:'Edited profile task',criteria:['Done'],wikilinks:[],provider:'claude',priority:1},'new-profile-task');
-  await worker.api('/api/settings',{board:{paused:false}});await until(()=>store.get(next.id).status==='simulated');
+  // The committed profile becomes visible before the final guarded status write finishes.
+  await until(async()=>{
+    const resumed=await worker.api('/api/settings',{board:{paused:false}});
+    if(resumed.status===409){assert.match(resumed.value.error,/Finish the execution profile change/);return false;}
+    assert.equal(resumed.status,200);return true;
+  });
+  try { await until(()=>store.get(next.id).status==='simulated'); }
+  catch(cause){
+    const task=store.get(next.id),status=(await worker.api('/status')).value;
+    const progress={task:{status:task.status,attempt:task.attempt,profile:task.profile},worker:{state:status.state,lastError:status.lastError,active:status.activeTasks?.length,queued:status.queuedTasks?.length},events:store.events(next.id).map(event=>event.kind),snapshots:store.snapshots({task:next.id}).map(row=>({phase:row.snapshot.phase,outcome:row.snapshot.execution.outcome}))};
+    throw new Error('Edited-profile task did not complete: '+JSON.stringify(progress),{cause});
+  }
   const completed=store.get(next.id);assert.equal(completed.profile,replacement[0].id);
   const snapshots=store.snapshots({task:next.id});assert.ok(snapshots.every(row=>row.snapshot.provenance.configurationHash===identity.configHash));
   assert.equal(store.workers().length,1);assert.ok(store.snapshots({task:task.id}).some(row=>row.snapshot.phase==='after'));

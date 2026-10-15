@@ -19,12 +19,14 @@ export interface RepositoryDiscoveryStatus {
 /** Inspection is local and read-only: never discover an ancestor or invoke remote transports. */
 async function inspect(path: string, signal: AbortSignal): Promise<Candidate | null> {
   try {
-    const bounded = AbortSignal.any([signal, AbortSignal.timeout(2500)]);
+    // Git for Windows has a higher cold-process startup cost; keep the entire probe bounded.
+    const timeoutMs = process.platform === "win32" ? 10000 : 2500;
+    const bounded = AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]);
     const root = await realpath(path), metadata = await lstat(join(root, '.git'));
     if (metadata.isSymbolicLink() || (!metadata.isFile() && !metadata.isDirectory())) return null;
     // Do not allow ambient GIT_DIR/GIT_WORK_TREE/config injection to redirect this inspection.
     const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.toUpperCase().startsWith('GIT_')));
-    const git = async (...args: string[]) => (await execute('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', ...args], { cwd: root, env: { ...env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never', GIT_OPTIONAL_LOCKS: '0' }, encoding: 'utf8', maxBuffer: 65536, timeout: 2500, windowsHide: true, signal: bounded })).stdout.trim();
+    const git = async (...args: string[]) => (await execute('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', ...args], { cwd: root, env: { ...env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never', GIT_OPTIONAL_LOCKS: '0' }, encoding: 'utf8', maxBuffer: 65536, timeout: Math.min(timeoutMs, 5000), windowsHide: true, signal: bounded })).stdout.trim();
     if (await realpath(await git('rev-parse', '--show-toplevel')) !== root) return null;
     const commonDirectory = await realpath(await git('rev-parse', '--path-format=absolute', '--git-common-dir'));
     const common = await lstat(commonDirectory);
@@ -62,7 +64,6 @@ export class RepositoryDiscovery {
       if (value.repositoryId !== undefined && (typeof value.repositoryId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(value.repositoryId))) throw Error('Invalid repository discovery assignment.');
       this.decision = value;
     } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
-    this.candidate = await inspect(resolve(this.installation), this.signal);
     await this.assignmentsChanged(assignments);
     if (this.candidate && this.legacyRepository) {
       const approved = await inspect(resolve(this.legacyRepository), this.signal);
@@ -79,6 +80,11 @@ export class RepositoryDiscovery {
     return { ...candidate, decision, watch: !!candidate.remote && !!candidate.currentBranch, ...(this.assignedId ? { repositoryId: this.assignedId } : {}) };
   }
   async assignmentsChanged(assignments: RepositoryAssignment[]) {
+    // Explicit assignment can follow Git initialization after worker startup.
+    // Refresh before matching it, while keeping prior choices bound to their identity.
+    const candidate = await inspect(resolve(this.installation), this.signal);
+    if (candidate?.id !== this.candidate?.id) this.approvedLegacy = false;
+    this.candidate = candidate;
     this.assignedId = undefined;
     if (!this.candidate) return;
     for (const assignment of assignments) {

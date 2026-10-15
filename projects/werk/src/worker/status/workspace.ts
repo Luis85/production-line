@@ -824,7 +824,8 @@ export class WorkerWorkspace {
     try {
       await this.repositoryDiscovery.verify(id);
       await this.repositoryDiscovery.assignmentsChanged(this.settings.value.repositories.items);
-      const candidate = this.repositoryDiscovery.view()!;
+      const candidate = this.repositoryDiscovery.view();
+      if (!candidate || candidate.id !== id) throw new DomainError("conflict", "The installation repository changed. Refresh and review it before choosing.");
       if (action === "decline") {
         if (candidate.repositoryId && candidate.decision === "accepted") throw new DomainError("conflict", "This repository is assigned already. Remove its assignment before declining it.");
         await this.repositoryDiscovery.record("declined");
