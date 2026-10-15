@@ -20,6 +20,8 @@ test('digest detects source, fixture and configuration drift while ignoring buil
     const initial = await sourceDigest(root);
     await mkdir(join(root, 'src/worker/dist'), { recursive: true });
     await writeFile(join(root, 'src/worker/dist/app.js'), 'generated');
+    await mkdir(join(root, 'src/worker/.build-12345/worker/public'), { recursive: true });
+    await writeFile(join(root, 'src/worker/.build-12345/worker/public/index.html'), 'concurrent runtime staging');
     assert.equal(await sourceDigest(root), initial);
     await writeFile(join(root, 'storybook/app.stories.ts'), 'changed fixture');
     assert.notEqual(await sourceDigest(root), initial);

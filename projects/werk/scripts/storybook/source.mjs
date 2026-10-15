@@ -14,7 +14,7 @@ export async function sourceFiles(root) {
     if (stat.isSymbolicLink()) throw Error(`Storybook input must not be a symlink: ${path}`);
     if (stat.isDirectory()) {
       for (const name of (await readdir(resolve(root, path))).sort()) {
-        if (['node_modules', 'dist', '.nuxt-ui'].includes(name)) continue;
+        if (['node_modules', 'dist', '.nuxt-ui'].includes(name) || name.startsWith('.build-')) continue;
         await walk(`${path}/${name}`);
       }
     } else if (stat.isFile()) files.push(path);
