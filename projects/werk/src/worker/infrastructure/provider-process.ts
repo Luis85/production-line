@@ -111,7 +111,9 @@ public static class WerkProviderJob {
   $spec = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([Environment]::GetEnvironmentVariable('WERK_PROVIDER_LAUNCH')))
   [Environment]::SetEnvironmentVariable('WERK_PROVIDER_LAUNCH', $null)
   $launch = ConvertFrom-Json -InputObject $spec
-  [Environment]::SetEnvironmentVariable('PSModulePath', $null)
+  foreach ($entry in $launch.restoreEnvironment.PSObject.Properties) {
+    [Environment]::SetEnvironmentVariable($entry.Name, $entry.Value)
+  }
   $code = [WerkProviderJob]::Run([string]$launch.executable, [string[]]$launch.arguments)
   exit $code
 } catch {
@@ -129,9 +131,21 @@ export function spawnProvider(executable: string, args: string[], cwd: string, e
   const systemRoot = process.env.SystemRoot;
   if (!systemRoot || !win32.isAbsolute(systemRoot)) throw Error('Windows SystemRoot is unavailable');
   const powershell = win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  // Windows PowerShell needs its OS installation/architecture context to resolve
+  // built-in cmdlets and compile the helper. Restore the caller's environment
+  // before creating the provider so these wrapper-only values never broaden it.
+  const supervisorEnv = { ...env }, restoreEnvironment: Record<string, string | null> = {};
+  const setRuntimeValue = (key: string, value: string) => {
+    const matches = Object.keys(supervisorEnv).filter(candidate => candidate.toLowerCase() === key.toLowerCase()).sort();
+    restoreEnvironment[key] = matches.length ? supervisorEnv[matches[0]] ?? null : null;
+    for (const candidate of matches) delete supervisorEnv[candidate];
+    supervisorEnv[key] = value;
+  };
+  for (const key of ['ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432', 'CommonProgramFiles', 'CommonProgramFiles(x86)', 'CommonProgramW6432', 'PROCESSOR_ARCHITECTURE', 'PROCESSOR_ARCHITEW6432', 'NUMBER_OF_PROCESSORS', 'OS'])
+    if (process.env[key]) setRuntimeValue(key, process.env[key]!);
+  setRuntimeValue('PSModulePath', win32.join(win32.dirname(powershell), 'Modules'));
   return spawn(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(supervisor, 'utf16le').toString('base64')], {
-    // Resolve built-in cmdlets without scanning unrelated user/module locations.
-    cwd, env: { ...env, PSModulePath: win32.join(win32.dirname(powershell), 'Modules'), WERK_PROVIDER_LAUNCH: Buffer.from(JSON.stringify({ executable, arguments: args }), 'utf8').toString('base64') },
+    cwd, env: { ...supervisorEnv, WERK_PROVIDER_LAUNCH: Buffer.from(JSON.stringify({ executable, arguments: args, restoreEnvironment }), 'utf8').toString('base64') },
     detached: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
   });
 }
