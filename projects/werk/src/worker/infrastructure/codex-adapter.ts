@@ -1,6 +1,7 @@
 import { verifyReviewArtifact } from './review-artifact.js';
 import { ProviderModelError } from '../application/model-contract.js';
-import { spawn, type ChildProcess } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
+import { spawnProvider } from './provider-process.js';
 import { createHash } from 'node:crypto';
 import { access, cp, lstat, mkdir, realpath, rename, rm } from 'node:fs/promises';
 import { constants } from 'node:fs';
@@ -23,15 +24,11 @@ export function codexConfiguration(value: unknown): CodexConfiguration {
 const windowsEnvironment = ['SystemRoot', 'windir', 'SystemDrive', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'TEMP', 'TMP', 'PATHEXT', 'ComSpec', 'HOMEDRIVE', 'HOMEPATH', 'USERNAME', 'CLAUDE_CODE_GIT_BASH_PATH'];
 /** POSIX providers lead a detached process group; Windows has no groups and must not open a console window. */
 export function providerSpawnOptions() { return { detached: process.platform !== 'win32', windowsHide: true }; }
-/** Kill a provider and its descendants. Windows walks the live tree once; an exited PID may already be reused. */
+/** Windows children are job-owning supervisors; terminating one closes its job and all descendants. */
 export function killProviderTree(child: ChildProcess, kind: NodeJS.Signals) {
     if (!child.pid) return;
     if (process.platform !== 'win32') { try { process.kill(-child.pid, kind); } catch { /* Group already exited. */ } return; }
-    if (child.exitCode !== null || child.signalCode !== null) return;
-    // Terminate the parent only after taskkill has walked the tree, so descendants are not orphaned first.
-    const fallback = () => { if (child.exitCode === null && child.signalCode === null) try { child.kill(kind); } catch { /* Already exited. */ } };
-    try { spawn(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe'), ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true }).once('error', fallback).once('exit', fallback); }
-    catch { fallback(); }
+    if (child.exitCode === null && child.signalCode === null) try { child.kill(kind); } catch { /* Supervisor already exited. */ }
 }
 /** Provider diagnostics never become logs/evidence; operator authentication is inherited, never copied. */
 export function providerEnvironment(provider = 'codex'): NodeJS.ProcessEnv {
@@ -49,7 +46,7 @@ export async function providerCommand(executable: string, args: string[], cwd: s
     return new Promise((resolveResult, reject) => {
         let bytes = 0, failed = false, ended = false, killTimer: ReturnType<typeof setTimeout> | undefined;
         const output: Buffer[] = [];
-        const child = spawn(executable, args, { cwd, env: providerEnvironment(provider), ...providerSpawnOptions(), stdio: ['pipe', 'pipe', 'pipe'] });
+        const child = spawnProvider(executable, args, cwd, providerEnvironment(provider));
         const kill = (kind: NodeJS.Signals) => killProviderTree(child, kind);
         const interrupt = () => { failed = true; kill('SIGTERM'); killTimer ??= setTimeout(() => kill('SIGKILL'), 1000); };
         const collect = (chunk: Buffer, stdout: boolean) => { bytes += chunk.length; if (bytes > 4 * 1024 * 1024) interrupt(); else if (stdout && capture) output.push(chunk); };

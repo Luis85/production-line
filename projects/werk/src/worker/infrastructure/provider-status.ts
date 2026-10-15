@@ -1,9 +1,9 @@
-import { spawn } from 'node:child_process';
+import { spawnProvider } from './provider-process.js';
 import { constants } from 'node:fs';
 import { access, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { killProviderTree, providerEnvironment, providerSpawnOptions } from './codex-adapter.js';
+import { killProviderTree, providerEnvironment } from './codex-adapter.js';
 import { providerReady, type ProviderConnection, type ProviderId } from './providers.js';
 export interface ProviderStatus {
   id: ProviderId; configured: boolean; available: boolean;
@@ -13,7 +13,8 @@ export interface ProviderStatus {
 }
 async function statusCommand(connection: ProviderConnection, cwd: string, args = connection.id === 'codex-cli' ? ['login', 'status'] : ['auth', 'status']): Promise<{ code: number | null; output: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(connection.executable, args, { cwd, env: providerEnvironment(connection.id === 'codex-cli' ? 'codex' : 'claude'), ...providerSpawnOptions(), stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawnProvider(connection.executable, args, cwd, providerEnvironment(connection.id === 'codex-cli' ? 'codex' : 'claude'));
+    child.stdin.on('error', () => {}); child.stdin.end();
     const output: Buffer[] = []; let bytes = 0, failed = false;
     const kill = () => killProviderTree(child, 'SIGKILL');
     const timer = setTimeout(() => { failed = true; kill(); }, 5000);

@@ -84,6 +84,14 @@ made. For API connections, the check confirms saved configuration only: it does
 not verify credentials, quota, billing or model availability. There is no automatic
 API fallback that could silently change billing.
 
+On native Windows, CLI execution requires Windows PowerShell 5.1, its .NET
+Framework runtime, and host policy that permits `Add-Type` and nested Windows
+Job Objects. The worker invokes PowerShell from `SystemRoot` without changing
+execution policy. If process containment cannot be established, the provider is
+not started. Cancellation closes the supervisor's lifetime job and terminates
+its provider processes. On normal provider exit, remaining descendants are
+terminated before output is drained and the result is returned.
+
 Use a current Codex CLI supporting `exec --json --ignore-user-config`,
 `--ephemeral`, the read-only sandbox and disabled tool feature flags. Claude
 Code must support `--safe-mode`, `--restricted`, `--tools`, `--strict-mcp-config`
