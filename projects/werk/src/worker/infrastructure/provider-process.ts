@@ -15,6 +15,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Win32.SafeHandles;
 public static class WerkProviderJob {
@@ -84,10 +85,15 @@ public static class WerkProviderJob {
       input = new FileStream(new SafeFileHandle(inWrite, true), FileAccess.Write); inWrite = IntPtr.Zero;
       output = new FileStream(new SafeFileHandle(outRead, true), FileAccess.Read); outRead = IntPtr.Zero;
       error = new FileStream(new SafeFileHandle(errRead, true), FileAccess.Read); errRead = IntPtr.Zero;
-      var providerInput = input; var hostOutput = Console.OpenStandardOutput(); var hostError = Console.OpenStandardError();
-      Task.Run(() => { try { Console.OpenStandardInput().CopyTo(providerInput); } catch (IOException) {} catch (ObjectDisposedException) {} finally { providerInput.Dispose(); } });
-      Task stdout = output.CopyToAsync(hostOutput), stderr = error.CopyToAsync(hostError);
       Check(ResumeThread(child.Thread) != uint.MaxValue);
+      var providerInput = input; var hostOutput = Console.OpenStandardOutput(); var hostError = Console.OpenStandardError();
+      // Anonymous pipe handles are synchronous on .NET Framework. Starting an async
+      // read here can block before the provider is resumed. Dedicated pumps keep all
+      // blocking pipe I/O off the supervisor thread and avoid thread-pool starvation.
+      Task.Factory.StartNew(() => { try { Console.OpenStandardInput().CopyTo(providerInput); } catch (IOException) {} catch (ObjectDisposedException) {} finally { providerInput.Dispose(); } }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+      var providerOutput = output; var providerError = error;
+      Task stdout = Task.Factory.StartNew(() => providerOutput.CopyTo(hostOutput), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+      Task stderr = Task.Factory.StartNew(() => providerError.CopyTo(hostError), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
       if (WaitForSingleObject(child.Process, uint.MaxValue) != 0) throw new InvalidOperationException("Provider wait failed");
       uint code; Check(GetExitCodeProcess(child.Process, out code));
       Check(TerminateJobObject(job, 125)); // Provider exited; terminate any remaining descendants before draining.
