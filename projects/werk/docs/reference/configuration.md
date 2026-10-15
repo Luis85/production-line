@@ -58,7 +58,9 @@ a matching execution policy. `runtime` selects native or Docker deployment. Setu
 Stop services before a deliberate configuration or deployment change. Existing
 worker identities are bound to their connection/configuration: changing ports,
 project or worker configuration may require a new worker state and an explicitly
-planned migration. A stopped edit is not an automatic identity migration.
+planned migration. A stopped edit is not an automatic identity migration. The
+[execution-profile editor](#editable-execution-profiles) provides a guarded update
+for profile IDs/providers without replacing that identity or changing deployment mode.
 
 ## State and credential ownership
 
@@ -124,6 +126,73 @@ operator defaults, not every saved worker setting.
 A dispatched invocation freezes its duration policy; edits affect later calls.
 See [long-running worker operations](../how-to/monitor-long-running-worker.md) for
 monitoring scope, warning thresholds, shutdown and recovery.
+
+## Editable execution profiles
+
+The private worker endpoint `GET /api/execution-profiles` returns
+`{schemaVersion: 1, profiles, configurationHash, mode, allowedProviders, maxProfiles,
+state, pending, canEdit, saveBlockedReason}`. `profiles` and `configurationHash`
+describe the active configuration; `pending` is null or a requested
+`{profiles, configurationHash}`. `state` is `ready` or `pending`.
+
+Send `POST /api/execution-profiles` with only `expectedConfigurationHash` and
+`profiles`. Each profile has `{id, provider, mode, maxParallel: 1}`. Use the hash
+returned by the latest GET; a stale hash conflicts. IDs are unique, 1–100 letters,
+digits, underscores or hyphens. A mock worker accepts 1–8 profiles with provider
+`claude` or `codex` and mode `mock`. The native Linux Codex adapter accepts
+exactly one `codex` profile with mode `cli`. Mode changes and additional execution
+slots are rejected. All profiles share the worker’s one slot; provider sign-in,
+model settings and imported agent definitions are separate configuration.
+
+Saving requires paused intake and no queued/running tasks, active replies or
+repository preparations. Before first registration, a valid change applies
+immediately. After registration, the worker durably stages it until the same
+orchestrator acknowledges it. Active profiles remain unchanged while pending;
+new local/remote admissions, queue resume and a different profile edit are blocked.
+An identical pending request may be retried. Read status after an uncertain response
+and compare the active/pending profiles before submitting a new change.
+
+The worker retries at its normal orchestration poll interval (100–30,000 ms,
+plus up to 250 ms jitter). Offline saves survive restart. Going standalone keeps
+the update pending until reconnecting to the same orchestrator. An older
+orchestrator returning 404 must be upgraded; automatic retries then continue.
+Acknowledgment updates the existing worker identity in place and preserves its
+credential, sessions and history, including the provider/mode recorded for past
+attempts. The private `execution-profiles.json` belongs to worker state; startup
+JSON is unchanged. Its base hash rejects reuse with a different startup
+configuration rather than silently applying an incompatible override.
+
+The worker uses its own credential for `POST /v1/worker/profiles`, with
+`{profiles, expectedConfigurationHash, configurationHash}`. The orchestrator
+returns `{profiles, configurationHash}`, accepts an exact replay, and rejects
+stale hashes or active/accepted queued leases. This is not an administrative
+endpoint for changing another worker.
+
+## Detected installation repository
+
+At startup the worker locally inspects its integration project directory, otherwise
+`--project-dir`, otherwise its startup working directory. The resolved directory
+must itself be a Git checkout root with a `.git` directory or regular Git file;
+linked worktrees are supported. It never walks upward to select an ancestor.
+Detection does not fetch, pull or create worktrees.
+
+An unconfigured candidate requires an explicit saved accept/decline. Acceptance
+adds a generated assignment ID and enables watching only when a current branch
+and remote exist; detached HEAD or no remote gives `watch: false`. Such checkouts
+can still supply committed file-task inputs. Add/configure a remote or select a
+branch yourself, then enable watching through repository settings. A first commit
+is required before task worktrees can be created.
+
+Both decisions persist privately in `repository-discovery.json`. Decline hides
+the Taskboard prompt; Dashboard lets the operator reconsider. Acceptance requires
+idle queues and preparations; decline can be recorded while unrelated work runs.
+Existing explicit repository assignments, including a matching configured legacy
+Codex repository, count as authorization. Explicitly assigning a skipped checkout
+also accepts it. Removing an assignment does not erase its saved acceptance;
+legacy use remains subject to the ordinary repository-selection rules below.
+The worker revalidates repository identity before watching and task preparation;
+replacing the checkout at the same path requires a fresh choice. Neither a pending
+nor a declined checkout can be used through the legacy absolute-directory input.
 
 ## Assigned Git repositories
 
@@ -215,11 +284,21 @@ them in Dashboard's **Git repositories** section or use `settings get` /
 `settings set` on the worker CLI.
 
 Authenticated `GET /api/repositories` returns
-`{schemaVersion: 1, pollMs, items: [...] }` with current repository status.
+`{schemaVersion: 1, pollMs, items: [...], discovery}` with current repository status.
+`discovery` is null or `{id, path, currentBranch, remote, watch, decision, repositoryId?}`.
+`currentBranch`/`remote` may be null; `decision` is `pending`, `accepted` or `declined`.
+The discovery `id` is an opaque repository-identity SHA-256, distinct from its
+assignment `repositoryId`; `watch` describes the proposed acceptance default.
 `GET /api/environment` includes the same view as `repositories`.
 `POST /api/repositories` with `{"action":"sync","id":"app"}` requests a sync;
 omit `id` to sync all assignments. `{"action":"status"}` refreshes status.
-The portable worker CLI can access these through `api --path /api/repositories`.
+To record a detected-repository choice, send
+`{"action":"accept","discoveryId":"ID_FROM_STATUS"}` or
+`{"action":"decline","discoveryId":"ID_FROM_STATUS"}`. Do not send assignment
+`id` with these actions; a stale discovery ID conflicts and requires a fresh
+inspection. The portable worker CLI exposes `repository status`,
+`repository sync [--id ID]`, and `repository accept|decline --discovery-id ID`.
+See the [CLI contract](runtime-cli.md#worker-repositories-and-execution-profiles).
 
 Managed Docker fleets reject checkout assignments because their generated mounts
 do not expose repositories. Standalone project containers need a Git-enabled

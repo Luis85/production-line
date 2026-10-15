@@ -3,6 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue';
 import UButton from '@nuxt/ui/components/Button.vue';
 import UInput from '@nuxt/ui/components/Input.vue';
 import { state, date, workspaceAction } from '../store';
+import RepositoryDiscovery from './RepositoryDiscovery.vue';
 
 interface RepositoryDraft { id: string; path: string; remote: string; branch: string; watch: boolean; }
 const entries = ref<RepositoryDraft[]>([]), seconds = ref(30), baseline = ref('');
@@ -59,6 +60,7 @@ const statusLabel = (value?: string) => ({ pending: 'Waiting for first check', s
   <section class="monitor-section repository-panel" aria-labelledby="repositories-title">
     <h2 id="repositories-title">Git repositories</h2>
     <p class="page-note">Assign existing checkouts on the worker machine. Watched repositories are fetched and pulled when a fast-forward is safe. File tasks run in isolated Git worktrees.</p>
+    <RepositoryDiscovery reconsider />
     <ul v-if="assigned.length" class="repository-list">
       <li v-for="item in assigned" :key="item.id">
         <div class="section-heading"><h3 class="break-anywhere">{{ item.id }}</h3><UButton type="button" color="neutral" variant="outline" :loading="syncing === item.id" :disabled="!!syncing || busy || !state.unlocked" @click="sync(item.id)">Check &amp; pull</UButton></div>

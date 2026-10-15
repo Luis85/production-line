@@ -100,6 +100,53 @@ management is optional and is not started by the single-line operator. See
 [configuration](configuration.md) for credential scopes and
 [agent operation](../how-to/operate-with-agents.md) for safe noninteractive use.
 
+## Worker repositories and execution profiles
+
+Use the portable worker client from the installed project with the same
+`--state-dir` as startup when overriding its default. It reads the selected
+worker’s local credentials; stdout is JSON and no command prompts for a choice.
+
+| Command after `node bin/apps/worker/cli.mjs` | Contract |
+| --- | --- |
+| `repository status` | Inspect assignments and the detected project checkout without fetching |
+| `repository sync [--id ASSIGNMENT_ID]` | Fetch and safely fast-forward one assignment, or all when omitted |
+| `repository accept --discovery-id ID` | Accept the exact detected checkout and save an assignment; requires idle work |
+| `repository decline --discovery-id ID` | Persist the choice not to use the detected checkout |
+| `profile list` | Read active profiles, current `configurationHash` and any pending update |
+| `profile set --file profiles.json` | Save a guarded profile update while paused and idle; `--file -` reads stdin |
+
+Read `repository status` first and use its `discovery.id`, not an assignment ID
+or path, for accept/decline. Both choices survive restart; a declined candidate
+can later be accepted. Acceptance starts watching only when a branch and remote
+exist. No remote or detached HEAD leaves watching off; committed tasks can still
+use worktrees. A stale discovery ID requires inspecting the current candidate.
+
+For profile changes, drain queued/running work and active replies, run
+`queue pause`, then `profile list`. Use its active `configurationHash` in the
+input below, preserving the worker’s current mode:
+
+```json
+{
+  "expectedConfigurationHash": "HASH_FROM_PROFILE_LIST",
+  "profiles": [{ "id": "codex-review", "provider": "codex", "mode": "mock", "maxParallel": 1 }]
+}
+```
+
+Mock mode supports 1–8 unique Claude/Codex profiles. Native Linux Codex mode
+supports exactly one Codex profile with `mode: "cli"`; the editor cannot switch
+modes or add execution slots. Before first registration the save applies locally.
+For a registered worker, a successful save may return `state: "pending"` while
+the orchestrator is unavailable. The worker persists and retries it automatically;
+new admissions and queue resume remain blocked until acknowledgment. Re-read
+`profile list` after an uncertain result; retry only the same pending payload.
+Run `queue resume` after `state: "ready"` when ready to accept work.
+
+These commands call private `/api/repositories` and `/api/execution-profiles`
+endpoints. See [repository consent](configuration.md#detected-installation-repository)
+and [profile configuration](configuration.md#editable-execution-profiles) for
+persistence, restart and compatibility behavior. The portable client’s
+`schema` output supplies the current machine-readable command catalog.
+
 ## Native maintenance
 
 `node werk.mjs maintenance backup --state-dir PATH --to NEW_BACKUP_DIRECTORY` copies complete stopped native line/system state with private checksummed manifest. `verify --from BACKUP_DIRECTORY` validates it; `restore --from BACKUP_DIRECTORY --to NEW_STATE_DIRECTORY` refuses existing destinations. `diagnose --state-dir PATH` reports ownership and disk pressure without changing locks. All support `--json`; success is 0, failed checks/I/O are 1, invalid input is 2. See [backup and recovery](../how-to/upgrade-backup.md) for limits, shutdown requirements, privacy and Docker procedures.

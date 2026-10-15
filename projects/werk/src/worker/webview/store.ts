@@ -1,3 +1,4 @@
+import type { ExecutionProfilesView } from '../application/execution-profiles';
 import type { WorkerSettings } from '../infrastructure/settings';
 import type { WorkerSessions } from '../application/sessions';
 import type { LocalTaskboard } from '../application/local-tasks';
@@ -8,6 +9,7 @@ import type { WorkerConversation } from '../application/conversation';
 import type { workerMonitoring } from '../status/server';
 export type HistoryRow = Awaited<ReturnType<WorkerWorkspace['history']>>['rows'][number];
 export const state = reactive({
+  executionProfiles: null as ExecutionProfilesView | null,
   settings: null as ReturnType<WorkerSettings['publicView']> | null, sessions: null as ReturnType<WorkerSessions['view']> | null, board: null as ReturnType<LocalTaskboard['view']> | null,
   status: null as Status | null, environment: null as Awaited<ReturnType<WorkerWorkspace['environment']>> | null,
   history: null as Awaited<ReturnType<WorkerWorkspace['history']>> | null,
@@ -91,7 +93,7 @@ export async function request(path: string, method = 'GET', body?: unknown) {
 }
 function relock() {
   if (state.sessions?.selected) drafts.set(state.sessions.selected, state.draft);
-  generation++; accessGeneration++; state.unlocked = false; state.environment = null; state.history = null; state.chat = null; state.settings = null; state.sessions = null; state.board = null; state.definitions = []; state.actionError = ''; state.workspaceBusy = false;
+  generation++; accessGeneration++; state.unlocked = false; state.environment = null; state.executionProfiles = null; state.history = null; state.chat = null; state.settings = null; state.sessions = null; state.board = null; state.definitions = []; state.actionError = ''; state.workspaceBusy = false;
 }
 export async function lock() {
   try { await request('/api/access', 'DELETE'); state.draftEpoch++; relock(); state.draft = ''; drafts.clear(); state.accessMessage = 'This browser is locked and unsent drafts were cleared. Running tasks continue on the worker.'; }
@@ -111,9 +113,9 @@ export async function refresh() {
   if (state.loading || !state.unlocked) return;
   state.loading = true; const current = generation;
   try {
-    const results = await Promise.allSettled([request('/status'), request('/monitoring'), request('/api/environment'), request('/api/history'), request('/api/chat/session'), request('/api/settings'), request('/api/taskboard'), request('/api/definitions')]);
+    const results = await Promise.allSettled([request('/status'), request('/monitoring'), request('/api/environment'), request('/api/history'), request('/api/chat/session'), request('/api/settings'), request('/api/taskboard'), request('/api/definitions'), request('/api/execution-profiles')]);
     if (current !== generation) return;
-    const [status, monitoring, environment, history, pair, settings, board, definitions] = results;
+    const [status, monitoring, environment, history, pair, settings, board, definitions, executionProfiles] = results;
     if (status.status === 'fulfilled') state.status = status.value;
     if (monitoring.status === 'fulfilled') state.monitoring = monitoring.value;
     if (environment.status === 'fulfilled') state.environment = environment.value;
@@ -122,7 +124,8 @@ export async function refresh() {
     if (settings.status === 'fulfilled') state.settings = settings.value;
     if (board.status === 'fulfilled') state.board = board.value;
     if (definitions.status === 'fulfilled') state.definitions = definitions.value.definitions;
-    const labels = ['Worker status', 'Monitoring', 'Environment', 'History', 'Task conversation', 'Settings', 'File tasks', 'Agent definitions'];
+    if (executionProfiles.status === 'fulfilled') state.executionProfiles = executionProfiles.value;
+    const labels = ['Worker status', 'Monitoring', 'Environment', 'History', 'Task conversation', 'Settings', 'File tasks', 'Agent definitions', 'Execution profiles'];
     const failures = results.flatMap((result, index) => result.status === 'rejected' ? [labels[index]] : []);
     state.error = status.status === 'rejected' ? 'Worker status could not be refreshed. Check the worker process and retry.' : '';
     state.partialError = failures.length && !state.error ? `${failures.join(', ')} could not be refreshed. Those values may be stale. Refresh to retry.` : '';
@@ -165,10 +168,13 @@ export async function workspaceAction(path: string, body: unknown): Promise<any>
   try {
     const result = await request(path, 'POST', body);
     if (access !== accessGeneration) return;
-    if (path === '/api/settings' || path === '/api/sessions' || path === '/api/taskboard' || path === '/api/taskboard/action') {
+    if (path === '/api/settings' || path === '/api/repositories' || path === '/api/sessions' || path === '/api/taskboard' || path === '/api/taskboard/action') {
       // A successful write remains acknowledged even when another mutation invalidated its snapshot.
       const adoptResult = current === generation, applied = ++generation;
-      if (adoptResult && path === '/api/settings') state.settings = result;
+      if (path === '/api/repositories') {
+        if (adoptResult && state.environment) state.environment.repositories = result;
+        if (adoptResult && state.settings) state.settings.repositories = { pollMs: result.pollMs, items: result.items.map(({ id, path, remote, branch, watch }: ReturnType<WorkerSettings['publicView']>['repositories']['items'][number]) => ({ id, path, remote, watch, ...(branch ? { branch } : {}) })) };
+      } else if (adoptResult && path === '/api/settings') state.settings = result;
       else if (adoptResult && path !== '/api/sessions') state.board = result;
       if (path === '/api/settings' || path === '/api/sessions') await readConversation(applied, access);
     } else if (current !== generation) return; // Detail reads must not escape a changed workspace.
@@ -177,6 +183,19 @@ export async function workspaceAction(path: string, body: unknown): Promise<any>
   }
   catch (error) { if (access === accessGeneration) state.actionError = error instanceof Error ? error.message : 'Action failed. Refresh and retry.'; }
   finally { if (path === '/api/sessions' && access === accessGeneration) state.workspaceBusy = false; }
+}
+/** Preserve conflicts for the profile editor while invalidating older background reads. */
+export async function executionProfilesAction(body: { expectedConfigurationHash: string; profiles: ExecutionProfilesView['profiles'] }): Promise<ExecutionProfilesView | undefined> {
+  if (!state.unlocked) return;
+  const access = accessGeneration;
+  try {
+    const result: ExecutionProfilesView = await request('/api/execution-profiles', 'POST', body);
+    if (access !== accessGeneration || !state.unlocked) return;
+    state.executionProfiles = result;
+    generation++;
+    await refresh();
+    if (access === accessGeneration && state.unlocked) return result;
+  } catch (error) { if (access === accessGeneration && state.unlocked) throw error; }
 }
 export const bytes = (value: number | null | undefined) => value == null ? 'Unavailable' : value >= 1073741824 ? `${(value / 1073741824).toFixed(1)} GiB` : `${(value / 1048576).toFixed(1)} MiB`;
 export const date = (value: string | null | undefined) => value ? new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'Not recorded';

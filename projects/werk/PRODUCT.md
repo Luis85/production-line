@@ -196,3 +196,19 @@ reconciled after restart without another model call; ambiguous in-flight work
 stays interrupted. A content-free durable event feed lets clients replay lifecycle
 changes independently of provider formats. See the
 [interaction contract](docs/reference/model-interaction.md).
+
+## Repository consent and execution profiles
+
+On startup, a worker inspects its installation/project folder for an exact Git
+checkout, including linked worktrees. An unassigned detected repository appears
+as an optional consent prompt after unlock. Accepting adds a repository assignment;
+watching starts only when a branch and remote are available. Coding tasks use
+retained worktrees. Declining is remembered across restarts and can be reconsidered
+in Dashboard. Detection does not search parent folders or contact remotes.
+
+Dashboard also edits execution profile IDs and providers within the worker’s
+configured execution mode. Profiles share one execution slot. Changes require
+paused intake and no queued or active work; registered workers retain their
+identity and history while synchronizing the change with their orchestrator.
+A saved pending change blocks new admission until acknowledged. Execution profiles
+remain separate from provider connections, model settings and agent definitions.

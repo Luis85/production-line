@@ -73,7 +73,8 @@ export async function providerCommand(executable: string, args: string[], cwd: s
 export class CodexAdapter implements Adapter {
     readonly mode = 'cli' as const;
     private config: CodexConfiguration; private stateDir: string; private systemPrompt: string; private repositories?: RepositoryManager;
-    constructor(config: CodexConfiguration, stateDir: string, systemPrompt: string, repositories?: RepositoryManager) { this.config = config; this.stateDir = stateDir; this.systemPrompt = systemPrompt; this.repositories = repositories; }
+    private beforeLegacyRepositoryUse?: (repository: string) => Promise<void>;
+    constructor(config: CodexConfiguration, stateDir: string, systemPrompt: string, repositories?: RepositoryManager, beforeLegacyRepositoryUse?: (repository: string) => Promise<void>) { this.config = config; this.stateDir = stateDir; this.systemPrompt = systemPrompt; this.repositories = repositories; this.beforeLegacyRepositoryUse = beforeLegacyRepositoryUse; }
     async verifyReview(task: Task, review: NonNullable<Awaited<ReturnType<Adapter['run']>>['review']>) {
         await verifyReviewArtifact(this.stateDir,task.lease,review);
     }
@@ -81,6 +82,8 @@ export class CodexAdapter implements Adapter {
         if (process.platform !== 'linux') throw Error('Live Codex execution currently requires native Linux');
         if (task.executionMode !== 'cli' || task.provider !== 'codex' || !task.lease || !/^[a-zA-Z0-9_-]{1,100}$/.test(task.lease)) throw Error('Live Codex requires an explicit Codex task and lease');
         if (task.repository !== undefined && !this.repositories?.view().length) throw Error('Task repository is not assigned to this worker');
+        // Consent is checked before reserving attempt state or touching the repository.
+        if (!this.repositories?.view().length && this.config.repository) await this.beforeLegacyRepositoryUse?.(this.config.repository);
         await access(this.config.executable, constants.X_OK).catch(() => { throw Error('Configured Codex executable is unavailable'); });
         // The runner owns the frozen attempt deadline; no shorter hidden adapter cap.
         const bounded = signal;

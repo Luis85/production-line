@@ -220,6 +220,10 @@ export async function statusServer(
             return json(res, 200, workspace.runEvidence(await readJson(req)));
           if (req.method === "POST" && req.url === "/api/tasks")
             return json(res, 200, await workspace.task(await readJson(req)));
+          if (req.url === '/api/execution-profiles' && workspace.executionProfiles) {
+            if (req.method === 'GET') return json(res, 200, workspace.executionProfiles.view());
+            if (req.method === 'POST') return json(res, 200, await workspace.executionProfiles.update(await readJson(req)));
+          }
           if (req.method === "GET" && req.url === "/api/settings")
             return json(res, 200, workspace.settings.publicView());
           if (req.method === "POST" && req.url === "/api/settings")
@@ -248,7 +252,7 @@ export async function statusServer(
             return json(
               res,
               200,
-              await workspace.board.action(await readJson(req)),
+              await workspace.taskboardAction(await readJson(req)),
             );
           if (req.method === "POST" && req.url === "/api/taskboard/detail") {
             const body = await readJson(req);

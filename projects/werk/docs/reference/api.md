@@ -32,6 +32,7 @@ binding comes from the server's enrollment grant, never the worker request.
 | `GET /v1/capabilities` | Admin | Versioned mock intake/context/profile capabilities and observed capacity |
 | `GET /v1/snapshots` | Admin | Snapshot payloads, digests, receipt times and next cursor |
 | `POST /v1/workers/register` | Enrollment | `{profiles,policy}` → worker ID/token/project |
+| `POST /v1/worker/profiles` | Worker | `{profiles,expectedConfigurationHash,configurationHash}` → `{profiles,configurationHash}`; guarded update for this worker only, preserving mode and one slot; see [profile configuration](configuration.md#editable-execution-profiles) |
 | `GET /v1/worker/assignments/current` | Worker | Current assigned running tasks |
 | `POST /v1/worker/assignments/next` | Worker | `{requestId}` → `{task: Task|null}`; atomic claim |
 | `GET /v1/worker/tasks/:id/context?lease=LEASE&attempt=N` | Worker | Exact historical assignment context; no lease renewal |

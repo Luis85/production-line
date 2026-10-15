@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import { workerPolicy } from "../../shared/contracts.js";
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 /** Called inside the store's startup transaction; never commits partial upgrades. */
 export function migrateSchema(db: DatabaseSync): void {
   const version = (db.prepare("PRAGMA user_version").get() as any).user_version;
@@ -38,7 +38,7 @@ export function migrateSchema(db: DatabaseSync): void {
       CREATE TABLE IF NOT EXISTS attempts (
         task TEXT NOT NULL, attempt INTEGER NOT NULL, worker TEXT NOT NULL, lease TEXT NOT NULL UNIQUE,
         profile TEXT NOT NULL, claim_key TEXT NOT NULL, config_hash TEXT NOT NULL,
-        max_attempts INTEGER NOT NULL DEFAULT 3,
+        max_attempts INTEGER NOT NULL DEFAULT 3, provider TEXT, mode TEXT,
         PRIMARY KEY(task,attempt), UNIQUE(worker,claim_key)
       );
       CREATE TABLE IF NOT EXISTS snapshots (
@@ -67,6 +67,15 @@ export function migrateSchema(db: DatabaseSync): void {
       "UPDATE attempts SET max_attempts=COALESCE((SELECT json_extract(config,'$.maxAttempts') FROM workers WHERE workers.id=attempts.worker),3)",
     );
   }
+  for (const name of ['provider', 'mode']) {
+    if (!columns('attempts').includes(name)) db.exec('ALTER TABLE attempts ADD COLUMN ' + name + ' TEXT');
+  }
+  // Profiles were immutable through schema 6. Pin their assignment authority once;
+  // missing legacy profiles stay unreadable and block edits instead of inventing authority.
+  if (version < 7) db.exec(`UPDATE attempts SET
+      provider=(SELECT json_extract(p.value,'$.provider') FROM workers w,json_each(w.profiles) p WHERE w.id=attempts.worker AND json_extract(p.value,'$.id')=attempts.profile),
+      mode=(SELECT json_extract(p.value,'$.mode') FROM workers w,json_each(w.profiles) p WHERE w.id=attempts.worker AND json_extract(p.value,'$.id')=attempts.profile)
+      WHERE provider IS NULL OR mode IS NULL;`);
   db.exec(`CREATE TABLE IF NOT EXISTS routing_policy(project TEXT PRIMARY KEY,payload TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS task_routing(task TEXT PRIMARY KEY REFERENCES tasks(id),worker TEXT NOT NULL REFERENCES workers(id));
       CREATE TABLE IF NOT EXISTS task_successors (
@@ -74,5 +83,5 @@ export function migrateSchema(db: DatabaseSync): void {
         operation_id TEXT NOT NULL, digest TEXT NOT NULL, child TEXT NOT NULL UNIQUE REFERENCES tasks(id),
         PRIMARY KEY(parent,operation_id), UNIQUE(parent,attempt,evaluation)
       );
-      PRAGMA user_version=6;`);
+      PRAGMA user_version=7;`);
 }

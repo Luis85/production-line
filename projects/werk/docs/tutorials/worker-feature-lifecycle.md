@@ -54,6 +54,27 @@ token into a command. For browser access, use the local token-file path printed
 by startup. [Project setup](../how-to/project-worker.md) also covers Docker,
 multiple projects and safely changing the feature folder later.
 
+If the project directory is a Git checkout, inspect its detected repository before
+submitting file work:
+
+```sh
+node bin/apps/worker/cli.mjs repository status
+```
+
+Review `discovery.path`, branch and remote. To authorize this checkout, use the
+returned `discovery.id` in the explicit acceptance command:
+
+```sh
+node bin/apps/worker/cli.mjs repository accept --discovery-id ID_FROM_DISCOVERY
+```
+
+An existing explicit assignment already authorizes use. Acceptance persists and
+starts watching only when a branch and remote exist. You can decline instead;
+Chat remains available, but this checkout's file requests cannot run until authorized.
+The [repository consent contract](../reference/configuration.md#detected-installation-repository)
+explains reconsidering a choice and stale IDs. A non-Git project has no detected
+repository and can continue with bounded file snapshots.
+
 ## 3. Connect the model provider
 
 Sign in to Codex CLI as the account running the worker. Save a private JSON file
@@ -79,7 +100,17 @@ API key in a private input file or stdin; do not commit that input file.
 ## 4. Create a feature request
 
 For a small coding example, create `greeting.txt` in your project with the text
-`Hello`. Save the following as `request-draft.md` outside the watched folder:
+`Hello`. In a Git checkout, add this file to a commit before submitting the
+request: task worktrees capture committed input and exclude uncommitted changes.
+For a new repository, this also supplies the required first commit.
+
+```sh
+git add -- greeting.txt
+git commit -m "Add greeting for the worker tutorial"
+```
+
+Skip these Git commands for a non-Git project; the worker snapshots its approved
+file directly. Save the following as `request-draft.md` outside the watched folder:
 
 ```markdown
 ---

@@ -17,7 +17,7 @@ import {
   validateLineCapabilities,
   type RegisteredCapabilities,
 } from "../shared/capabilities.js";
-import { identifier, object, taskInput, repositoryScope } from "../shared/contracts.js";
+import { identifier, object, taskInput, repositoryScope, workerProfilesUpdate } from "../shared/contracts.js";
 import type { ContextManifest } from "../shared/context.js";
 import { assertPinnedIteration } from "./intake/iteration.js";
 import { DomainError } from "../shared/errors.js";
@@ -29,6 +29,8 @@ import type {
   SnapshotRecord,
   TaskEvent,
   WorkerRecord,
+  WorkerProfilesRequest,
+  WorkerProfilesResponse,
   WorkerSummary,
   WorkerDetail,
   PageQuery,
@@ -88,6 +90,7 @@ export interface OrchestratorRepository {
     profiles: unknown,
     policy?: unknown,
   ): { id: string; token: string };
+  updateProfiles?(worker: WorkerRecord, input: WorkerProfilesRequest): WorkerProfilesResponse;
   worker(token: string): WorkerRecord;
   workers(): WorkerSummary[];
   current(worker: WorkerRecord): Task[];
@@ -159,6 +162,12 @@ export class WorkerOperations {
 
   current() {
     return { tasks: this.repository.current(this.identity) };
+  }
+
+  updateProfiles(input: unknown): WorkerProfilesResponse {
+    const update = workerProfilesUpdate(input);
+    if (!this.repository.updateProfiles) throw new DomainError('unavailable', 'Worker profile updates are unavailable.');
+    return this.repository.updateProfiles(this.identity, update);
   }
 
   claim(input: unknown) {

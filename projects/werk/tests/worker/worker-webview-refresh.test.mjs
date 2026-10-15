@@ -154,3 +154,29 @@ test('a non-JSON 401 from an older access lifetime leaves the new private sessio
   assert.equal(state.sessions.selected, 'fresh-session');
   assert.equal(state.chat.messages[0].text, 'Fresh answer');
 });
+
+test('profile acknowledgement survives unrelated mutations and a held prewrite refresh', async t => {
+  const { state, executionProfilesAction, workspaceAction, refresh } = await store(t), data = payloads(), admission = deferred(), heldRead = deferred();
+  state.unlocked = true; const old = { configurationHash: 'old', profiles: [{ id: 'old' }] }, accepted = { configurationHash: 'new', profiles: [{ id: 'new' }] };
+  data['/api/execution-profiles'] = old; state.executionProfiles = old;
+  let hold = false;
+  globalThis.fetch = async (path, options) => {
+    if (path === '/api/execution-profiles' && options.method === 'POST') return admission.promise;
+    if (path === '/api/execution-profiles' && hold) return heldRead.promise;
+    return response(data[path] ?? {});
+  };
+  const saving = executionProfilesAction({ expectedConfigurationHash: 'old', profiles: accepted.profiles });
+  await workspaceAction('/api/settings', { board: { paused: true } });
+  hold = true; const reading = refresh(); admission.resolve(response(accepted));
+  assert.deepEqual(await saving, accepted); assert.equal(state.executionProfiles.configurationHash, 'new');
+  heldRead.resolve(response(old)); await reading; assert.equal(state.executionProfiles.configurationHash, 'new');
+});
+test('profile conflicts remain explicit and late profile writes cannot restore data after Lock', async t => {
+  const { state, executionProfilesAction, lock } = await store(t); state.unlocked = true;
+  globalThis.fetch = async () => response({ error: 'Profiles changed' }, 409);
+  await assert.rejects(executionProfilesAction({ expectedConfigurationHash: 'old', profiles: [] }), error => error.status === 409);
+  const admission = deferred(); globalThis.fetch = async path => path === '/api/execution-profiles' ? admission.promise : response({});
+  const saving = executionProfilesAction({ expectedConfigurationHash: 'old', profiles: [] });
+  await lock(); admission.resolve(response({ configurationHash: 'late', profiles: [{ id: 'private' }] }));
+  assert.equal(await saving, undefined); assert.equal(state.executionProfiles, null);
+});

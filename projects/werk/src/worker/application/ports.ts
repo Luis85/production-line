@@ -1,3 +1,4 @@
+import type { WorkerProfilesRequest, WorkerProfilesResponse } from '../../shared/protocol.js';
 import type { RequestGateEvidence } from '../../shared/request-gate.js';
 import type { Adapter, Profile, Task, WorkerPolicy } from '../../shared/contracts.js';
 import type { Snapshot } from '../../shared/snapshots.js';
@@ -12,6 +13,7 @@ export interface WorkerIdentity {
 
 /** The worker application knows operations, never URLs or bearer tokens. */
 export interface WorkerClient {
+  updateProfiles?(input: WorkerProfilesRequest): Promise<WorkerProfilesResponse>;
   currentAssignments(): Promise<Task[]>;
   claim(requestId: string, queueCapacity?: number, repositoryIds?: string[], legacyRepository?: boolean): Promise<Task | null>;
   heartbeat(task: Task): Promise<Task>;

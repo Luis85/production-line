@@ -69,6 +69,9 @@ test('claims refresh saved assignments, withdraw removed repositories, and reuse
 test('legacy CLI fallback is advertised separately from explicit repository assignments', { timeout: 20000 }, async t => {
   const root = await mkdtemp(join(tmpdir(), 'werk-legacy-routing-')), stop = new AbortController();
   const config = await configuration({ 'poll-ms': '100' });
+  // The injected adapter never executes; still advertise a valid live profile on every test platform.
+  config.profiles = [{ id: 'codex-live', provider: 'codex', mode: 'cli', maxParallel: 1 }];
+  config.policy = { ...config.policy, maxAttempts: 1, configHash: 'b'.repeat(64) };
   let run, claim;
   t.after(async () => { stop.abort(); await run; await rm(root, { recursive: true, force: true }); });
   const gateway = {

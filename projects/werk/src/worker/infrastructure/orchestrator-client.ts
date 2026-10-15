@@ -1,3 +1,4 @@
+import { profiles as validateProfiles } from '../../shared/contracts.js';
 import { validateRequestGateEvidence } from "../../shared/request-gate.js";
 import type { Profile, Task, WorkerPolicy } from "../../shared/contracts.js";
 import type { Snapshot } from "../../shared/snapshots.js";
@@ -95,6 +96,13 @@ export class HttpWorkerGateway implements WorkerGateway {
     const taskPath = (task: Pick<Task, "id">, action: string) =>
       `/v1/worker/tasks/${encodeURIComponent(task.id)}/${action}`;
     return {
+      async updateProfiles(input) {
+        const response = record(await call('/v1/worker/profiles', 'POST', input));
+        const profiles = validateProfiles(response.profiles);
+        if (response.configurationHash !== input.configurationHash || JSON.stringify(profiles) !== JSON.stringify(input.profiles))
+          throw new Error('Orchestrator acknowledged different execution profiles');
+        return { profiles, configurationHash: input.configurationHash };
+      },
       async currentAssignments() {
         const response = record(
           await call("/v1/worker/assignments/current", "GET"),

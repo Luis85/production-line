@@ -80,6 +80,36 @@ interfaces. Workers enroll with a different credential and retain their own
 identity. Never grant a coding agent provider credentials merely to operate the
 mock runtime.
 
+## Review a worker’s repository and execution profiles
+
+From the installed project, inspect the worker with
+`node bin/apps/worker/cli.mjs repository status`. Discovery alone does not permit
+using the project checkout. Review `discovery.path`, branch and remote against
+the operator’s intended repository, then record the authorized choice with
+`repository accept --discovery-id ID` or `repository decline --discovery-id ID`.
+Use the returned opaque `discovery.id`; do not substitute a path or assignment ID.
+A changed candidate requires fresh inspection. A saved decline survives restart
+and can later be accepted. With no remote or detached HEAD, acceptance leaves
+watching off while committed worktree tasks remain available.
+
+Execution profiles can be changed without replacing the worker identity. Finish
+or stop queued/running work and active replies, then run `queue pause` and
+`profile list` through the same client. Send `profile set --file profiles.json`
+with `{expectedConfigurationHash, profiles}`, copying the active hash from the
+read. Keep the installed mode and `maxParallel: 1`; profiles configure routing
+names/providers, not credentials or model access. The [CLI reference](../reference/runtime-cli.md#worker-repositories-and-execution-profiles)
+provides the exact JSON and supported counts/providers.
+
+Treat `state: "pending"` as a saved request awaiting the registered orchestrator,
+not an applied configuration. The worker retries automatically and blocks new
+local/remote admissions and resume until acknowledgment. Restart and going
+standalone do not discard the pending request. After an uncertain save, inspect
+active and pending profiles before retrying the same payload; do not submit a
+different edit. Resume only after `profile list` reports `state: "ready"`.
+Preserve the same state directory and orchestrator so identity and history remain
+continuous. These worker commands use local private credentials, separately from
+the line-admin client above.
+
 ## Inspect readiness and diagnostics
 
 For a Factory hierarchy, use the [system operator](../reference/system-definition.md)

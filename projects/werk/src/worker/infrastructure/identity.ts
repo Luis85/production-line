@@ -7,7 +7,7 @@ export class IdentityConfigurationError extends Error {}
 
 export async function loadOrRegisterIdentity(
   stateDir: string, url: string, profiles: Profile[], policy: WorkerPolicy,
-  gateway: WorkerGateway, stop: AbortSignal
+  gateway: WorkerGateway, stop: AbortSignal, pendingConfigurationHash?: string
 ): Promise<WorkerIdentity> {
   let identity: WorkerIdentity;
   try {
@@ -19,10 +19,15 @@ export async function loadOrRegisterIdentity(
     identity = validateIdentity({ ...registered, url, configHash: policy.configHash });
     await atomicWrite(join(stateDir, 'identity.json'), JSON.stringify(identity));
   }
-  if (identity.url !== url || identity.configHash !== policy.configHash) {
+  if (identity.url !== url || (identity.configHash !== policy.configHash && identity.configHash !== pendingConfigurationHash)) {
     throw new IdentityConfigurationError('Identity is bound to server and configuration. Drain this worker and use a new state directory for changed configuration.');
   }
   return identity;
+}
+
+export async function readRegisteredIdentity(stateDir: string): Promise<WorkerIdentity | undefined> {
+  try { return validateIdentity(JSON.parse(await readBoundedFile(join(stateDir, 'identity.json'), 16384))); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
 }
 
 function validateIdentity(value: unknown): WorkerIdentity {
