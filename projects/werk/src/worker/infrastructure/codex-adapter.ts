@@ -1,6 +1,7 @@
 import { verifyReviewArtifact } from './review-artifact.js';
 import { ProviderModelError } from '../application/model-contract.js';
-import { spawn } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
+import { spawnProvider } from './provider-process.js';
 import { createHash } from 'node:crypto';
 import { access, cp, lstat, mkdir, realpath, rename, rm } from 'node:fs/promises';
 import { constants } from 'node:fs';
@@ -20,22 +21,33 @@ export function codexConfiguration(value: unknown): CodexConfiguration {
     return { executable: config.executable, repository: config.repository, allowedPaths: config.allowedPaths as string[] };
 }
 
+const windowsEnvironment = ['SystemRoot', 'windir', 'SystemDrive', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'TEMP', 'TMP', 'PATHEXT', 'ComSpec', 'HOMEDRIVE', 'HOMEPATH', 'USERNAME', 'CLAUDE_CODE_GIT_BASH_PATH'];
+/** POSIX providers lead a detached process group; Windows has no groups and must not open a console window. */
+export function providerSpawnOptions() { return { detached: process.platform !== 'win32', windowsHide: true }; }
+/** Windows children are job-owning supervisors; terminating one closes its job and all descendants. */
+export function killProviderTree(child: ChildProcess, kind: NodeJS.Signals) {
+    if (!child.pid) return;
+    if (process.platform !== 'win32') { try { process.kill(-child.pid, kind); } catch { /* Group already exited. */ } return; }
+    if (child.exitCode === null && child.signalCode === null) try { child.kill(kind); } catch { /* Supervisor already exited. */ }
+}
 /** Provider diagnostics never become logs/evidence; operator authentication is inherited, never copied. */
 export function providerEnvironment(provider = 'codex'): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = {};
     for (const key of ['PATH', 'HOME', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'HTTPS_PROXY', 'HTTP_PROXY', 'ALL_PROXY', 'NO_PROXY', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'NODE_EXTRA_CA_CERTS', 'LANG', 'LC_ALL']) if (process.env[key]) env[key] = process.env[key];
+    // Windows CLIs locate the OS account's profile, login and temporary files through these.
+    if (process.platform === 'win32') for (const key of windowsEnvironment) if (process.env[key]) env[key] = process.env[key];
     // Preserve managed-runtime policy/auth routing; never copy these values to task evidence.
     for (const key of Object.keys(process.env)) if (provider === 'codex' && key.startsWith('CODEX_') && process.env[key]) env[key] = process.env[key];
     return { ...env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0' };
 }
-/** Kill the process group, including descendants, before resolving an interrupted operation. */
+/** Kill the provider's process tree, including descendants, before resolving an interrupted operation. */
 export async function providerCommand(executable: string, args: string[], cwd: string, signal: AbortSignal, input?: string, capture = true, provider = 'codex', observeOutput?: (output: Buffer) => void): Promise<Buffer> {
     signal.throwIfAborted();
     return new Promise((resolveResult, reject) => {
         let bytes = 0, failed = false, ended = false, killTimer: ReturnType<typeof setTimeout> | undefined;
         const output: Buffer[] = [];
-        const child = spawn(executable, args, { cwd, env: providerEnvironment(provider), detached: true, stdio: ['pipe', 'pipe', 'pipe'] });
-        const kill = (kind: NodeJS.Signals) => { if (child.pid) try { process.kill(-child.pid, kind); } catch {} };
+        const child = spawnProvider(executable, args, cwd, providerEnvironment(provider));
+        const kill = (kind: NodeJS.Signals) => killProviderTree(child, kind);
         const interrupt = () => { failed = true; kill('SIGTERM'); killTimer ??= setTimeout(() => kill('SIGKILL'), 1000); };
         const collect = (chunk: Buffer, stdout: boolean) => { bytes += chunk.length; if (bytes > 4 * 1024 * 1024) interrupt(); else if (stdout && capture) output.push(chunk); };
         child.stdout.on('data', chunk => collect(chunk, true)); child.stderr.on('data', chunk => collect(chunk, false));

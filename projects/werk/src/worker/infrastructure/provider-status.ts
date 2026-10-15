@@ -1,9 +1,9 @@
-import { spawn } from 'node:child_process';
+import { spawnProvider } from './provider-process.js';
 import { constants } from 'node:fs';
 import { access, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { providerEnvironment } from './codex-adapter.js';
+import { killProviderTree, providerEnvironment } from './codex-adapter.js';
 import { providerReady, type ProviderConnection, type ProviderId } from './providers.js';
 export interface ProviderStatus {
   id: ProviderId; configured: boolean; available: boolean;
@@ -13,12 +13,15 @@ export interface ProviderStatus {
 }
 async function statusCommand(connection: ProviderConnection, cwd: string, args = connection.id === 'codex-cli' ? ['login', 'status'] : ['auth', 'status']): Promise<{ code: number | null; output: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(connection.executable, args, { cwd, env: providerEnvironment(connection.id === 'codex-cli' ? 'codex' : 'claude'), detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawnProvider(connection.executable, args, cwd, providerEnvironment(connection.id === 'codex-cli' ? 'codex' : 'claude'));
+    child.stdin.on('error', () => {}); child.stdin.end();
     const output: Buffer[] = []; let bytes = 0, failed = false;
-    const kill = () => { if (child.pid) try { process.kill(-child.pid, 'SIGKILL'); } catch {} };
+    const kill = () => killProviderTree(child, 'SIGKILL');
     const timer = setTimeout(() => { failed = true; kill(); }, 5000);
-    const collect = (chunk: Buffer) => { bytes += chunk.length; if (bytes > 65536) { failed = true; kill(); } else output.push(chunk); };
-    child.stdout.on('data', collect); child.stderr.on('data', collect);
+    // Claude's machine-readable stdout must remain separate from startup diagnostics.
+    // Codex reports login status on stderr; both streams always count toward the limit.
+    const collect = (chunk: Buffer, stdout: boolean) => { bytes += chunk.length; if (bytes > 65536) { failed = true; kill(); } else if (stdout || connection.id === 'codex-cli') output.push(chunk); };
+    child.stdout.on('data', chunk => collect(chunk, true)); child.stderr.on('data', chunk => collect(chunk, false));
     child.once('error', () => { failed = true; });
     child.once('close', code => { clearTimeout(timer); kill(); if (failed) reject(Error('Provider status unavailable')); else resolve({ code, output: Buffer.concat(output).toString('utf8') }); });
   });
@@ -39,7 +42,7 @@ export class ProviderStatusChecks {
   private async inspect(connection: ProviderConnection): Promise<ProviderStatus> {
     const base = { id: connection.id, configured: providerReady(connection), available: false, checkedAt: new Date().toISOString() };
     if (!connection.id.endsWith('-cli')) return { ...base, available: base.configured, authentication: 'not-verified', message: base.configured ? 'API key and model are saved. A task will verify provider access; this check makes no API request.' : 'Save an API key and model to connect this provider.' };
-    if (process.platform === 'win32') return { ...base, authentication: 'unavailable', message: 'Subscription CLI execution needs a native Linux or macOS worker. Use an API provider on Windows.' };
+    if (process.platform === 'win32' && connection.id === 'codex-cli') return { ...base, authentication: 'unavailable', message: 'Codex CLI execution needs a native Linux or macOS worker. Use Claude Code CLI or an API provider on Windows.' };
     if (!connection.executable) return { ...base, authentication: 'unavailable', message: 'Install the provider CLI and save its absolute executable path.' };
     try { await access(connection.executable, constants.X_OK); } catch { return { ...base, authentication: 'unavailable', message: 'The saved CLI executable cannot be run by the worker account.' }; }
     let available: Omit<ProviderStatus, 'authentication' | 'message'> = { ...base, available: true };

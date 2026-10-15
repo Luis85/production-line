@@ -73,8 +73,9 @@ you into a provider. Four connections are supported:
 
 The worker discovers CLI executables on PATH at first startup. Sign in using
 `codex login` or `claude auth login` as the same OS account that runs the worker.
-Subscription adapters currently require Linux or macOS. API connections and the
-webview also run on Windows. Use **Check sign-in** after saving a CLI connection. The worker runs only
+Claude Code CLI runs on Linux, macOS and native Windows; the worker discovers
+`claude.exe` on PATH. Codex CLI still requires Linux or macOS. API connections and
+the webview run everywhere. Use **Check sign-in** after saving a CLI connection. The worker runs only
 `codex login status` or `claude auth status`, plus a bounded Claude version
 probe. Each subprocess has a five-second deadline. Known Claude versions older
 than 2.1.248 require an upgrade; an unknown version is not confirmed compatible. The result distinguishes signed-in, signed-out, unavailable and unknown;
@@ -82,6 +83,14 @@ it never exposes raw account diagnostics. No model prompt or paid API call is
 made. For API connections, the check confirms saved configuration only: it does
 not verify credentials, quota, billing or model availability. There is no automatic
 API fallback that could silently change billing.
+
+On native Windows, CLI execution requires Windows PowerShell 5.1, its .NET
+Framework runtime, and host policy that permits `Add-Type` and nested Windows
+Job Objects. The worker invokes PowerShell from `SystemRoot` without changing
+execution policy. If process containment cannot be established, the provider is
+not started. Cancellation closes the supervisor's lifetime job and terminates
+its provider processes. On normal provider exit, remaining descendants are
+terminated before output is drained and the result is returned.
 
 Use a current Codex CLI supporting `exec --json --ignore-user-config`,
 `--ephemeral`, the read-only sandbox and disabled tool feature flags. Claude
