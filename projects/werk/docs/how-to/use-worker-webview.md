@@ -149,8 +149,10 @@ own disclosures. Replies render readable paragraphs, lists and fenced code,
 with copy actions; model HTML is never executed.
 You can draft a follow-up while work is queued or running and send it when the
 worker finishes. Use the composer or Ctrl/Command + Enter to submit a message. The stop action
-cancels the pending or active reply. Provider execution is bounded to two minutes
-once started; queue waiting is separate. Sessions hold at most 60 messages with
+cancels the pending or active reply. Each provider invocation uses the worker’s
+configured execution limit: six hours by default, configurable from one second
+to 24 hours. `WERK_WORKER_MAX_RUNTIME_MS` overrides saved settings. The limit
+starts when execution begins; queue waiting is separate. Sessions hold at most 60 messages with
 a 48,000-character input budget; user messages are limited to 8,000 characters
 and replies to 32,000. Up to 100 task sessions are retained. Deleting a task session
 requires confirmation; New task preserves the previous transcript. A failed save

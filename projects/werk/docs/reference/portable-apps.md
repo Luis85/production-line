@@ -117,7 +117,7 @@ provider's CLI on the host. An example settings document is:
 
 On Windows, configure Claude Code CLI with its absolute `claude.exe` path and use
 `"provider":"claude-cli"` in task input. See the
-[Windows Claude requirements](../how-to/use-worker-webview.md#connect-claude-or-codex)
+[Windows Claude requirements](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/use-worker-webview.md#connect-claude-or-codex)
 for PowerShell, .NET and process-containment prerequisites. Alternatively, configure
 an API connection, for example
 `{"provider":{"id":"openai-api","model":"YOUR_SELECTED_MODEL","apiKey":"PRIVATE_API_KEY"}}`,

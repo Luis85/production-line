@@ -50,7 +50,7 @@ alongside fixes prompted by the platform CI matrix.
 | P2 | Onboarding | Tours blocked the interface and mixed English controls into German fleet screens. | Nonmodal tours leave the page usable and use the surface's language while retaining Escape and focus recovery. |
 | P1 | Deployment | Project-worker and source-worker Docker images lacked Git; lean release images lacked SSH; Git transport context was filtered from workers. | Git-capable pinned images, verified SSH runtime dependencies, and narrowly forwarded proxy/CA/SSH-agent context independent of provider credentials. |
 | P2 | Documentation | Release documentation denied automatic updates; backup guidance omitted assigned repositories; the guide conflated project and repository. | Correct update instructions, explicit repository/worktree backup scope, accurate Worker/project explanations and scoped cookie-security guidance. |
-| P1 | Windows provider lifecycle | PR #10's initial PID-tree cleanup could miss descendants after their provider parent exited, including children retaining output pipes. | A Job Object supervisor contains the provider before its code runs, terminates remaining descendants on normal exit and closes lifetime containment on cancellation. Native Windows qualification remains pending. |
+| P1 | Windows provider lifecycle | PR #10's initial PID-tree cleanup could miss descendants after their provider parent exited, including children retaining output pipes. | A Job Object supervisor contains the provider before its code runs, terminates remaining descendants on normal exit and closes lifetime containment on cancellation. Native Windows qualification is required before merge. |
 | P1 | Windows repository identity | Git reports registered worktrees with forward slashes, while native paths use backslashes. Raw comparison rejected a valid owned worktree. | Resolve absolute registration paths using native path semantics while retaining canonical-directory, ownership, base-commit and tamper checks. |
 | P1 | Windows worktree paths | Full 100-character assignment IDs could exhaust Windows path limits in checkout and Git administration paths. | Bounded readable names include a digest of the complete assignment/task identity; ownership metadata retains the full ID and rejects mismatches. |
 | P2 | Portable verification | macOS temporary-directory aliases, Git checkout line endings, POSIX path expectations and host CLI discovery made fixtures environment-dependent. | Canonical fixture roots, explicit Git line-ending settings, CRLF-safe component extraction, native path expectations and a paused API-provider fixture retain the original behavior assertions. |
@@ -129,7 +129,14 @@ descendants before draining output. Cancellation terminates the supervisor,
 closing the lifetime job without a PID lookup. Failure to establish containment
 fails the invocation. Native Windows tests cover cancellation, parent exit with
 inherited or ignored pipes, bounded status checks, argument quoting and raw stdin.
-Native CI exposed a synchronous pipe-read startup deadlock in the first supervisor revision. The provider now resumes before dedicated raw-stream pumps start; native Windows qualification of that correction is required before merge.
+Native CI diagnostics located startup stalls in PowerShell `Add-Type` under the
+restricted environment, before provider launch. A compiler matrix reproduced the
+stall with restricted environments and succeeded with the standard Windows
+installation and architecture variables. The supervisor receives that fixed
+runtime-variable allowlist and a built-in Windows PowerShell module path. It
+restores the caller’s original values, removing additions, before creating the
+provider. Raw-stream pumps start after the suspended provider resumes. Native
+fixtures verify provider behavior and environment restoration.
 
 The platform follow-up distinguishes a production fix from fixture corrections:
 
@@ -150,10 +157,10 @@ The platform follow-up distinguishes a production fix from fixture corrections:
 | Evidence | Status and scope |
 | --- | --- |
 | PR #10 isolated Linux `npm run check` | 924 passes, zero failures, eight platform skips; 932 tests total. This is the separate PR #10 checkout, not the combined release. |
-| Combined Linux check before final Windows corrections | 1,014 passes, zero failures and eight platform skips; 1,022 tests total. |
+| Combined Linux check after repository and lifecycle corrections | 1,015 passes, zero failures and eight platform skips; 1,023 tests total. Windows-only startup and environment changes are qualified separately by native CI. |
 | Main portability regression selection | 29 passes, zero failures or skips on Linux, including registration tampering and deterministic repository fixtures. |
-| Native Windows Claude provider supervision | Pending Windows CI; Linux skips do not establish Windows behavior. |
-| Combined candidate platform matrix and release artifacts | Pending refreshed results for the integrated revision; earlier counts and archives above remain baseline evidence. |
+| Native Windows Claude provider supervision | [PR #10 checks](https://github.com/Luis85/production-line/pull/10/checks) record the isolated branch’s qualification. The integrated code is checked again in PR #11; Linux skips do not establish Windows behavior. |
+| Combined candidate platform matrix and release artifacts | [PR #11 checks](https://github.com/Luis85/production-line/pull/11/checks) record qualification for the integrated candidate. The [v0.4.0 release](https://github.com/Luis85/production-line/releases/tag/v0.4.0) publishes only after the tagged revision’s archive, Docker, cloud-init VM and Storybook gates pass. Earlier counts and archives above remain baseline evidence. |
 
 ## Qualification boundaries
 
@@ -162,8 +169,8 @@ not use an authenticated provider account. Browser and Storybook data are
 simulation fixtures. Linux process-group cancellation is covered. Windows Job
 Object supervision applies to provider invocations and provider-status checks;
 it does not establish cancellation of Git descendant SSH/helper processes on
-Windows, which remains outside this evidence. Native Windows provider tests
-are still pending. Native Codex worktree execution remains Linux-only, and
+Windows, which remains outside this evidence. Native Windows evidence is
+recorded in the linked CI checks. Native Codex worktree execution remains Linux-only, and
 Codex CLI conversations remain unavailable on Windows. Repository worktrees
 separate task edits but are not isolation for mutually untrusted tenants.
 
