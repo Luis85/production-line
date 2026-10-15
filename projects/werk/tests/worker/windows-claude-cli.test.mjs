@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { execFile, spawn } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -61,83 +61,6 @@ test('Windows provider environment keeps the account profile but drops unrelated
   assert.equal(env.GIT_TERMINAL_PROMPT, '0');
 });
 
-test('Windows compiles a known supervisor type with its restricted runtime environment', { ...windows, timeout: 25000 }, async t => {
-  const f = await treeFixture(t);
-  const powershell = join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-  const restricted = providerEnvironment('claude');
-  const runtime = { ...restricted };
-  for (const key of ['ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432', 'CommonProgramFiles', 'CommonProgramFiles(x86)', 'CommonProgramW6432', 'PSModulePath', 'PROCESSOR_ARCHITECTURE', 'PROCESSOR_ARCHITEW6432', 'NUMBER_OF_PROCESSORS', 'OS']) if (process.env[key]) runtime[key] = process.env[key];
-  const source = await readFile(new URL('../../src/worker/infrastructure/provider-process.ts', import.meta.url), 'utf8');
-  const definition = /Add-Type -TypeDefinition @'\r?\n([\s\S]*?)\r?\n'@/.exec(source)?.[1];
-  assert.ok(definition, 'static supervisor C# source is available');
-  const minimal = 'public static class WerkCompileProbe { public static string Value() { return "compiled"; } }';
-  const command = `$ErrorActionPreference='Stop'; [Console]::Error.WriteLine('WERK_PHASE:shell'); try { Add-Type -TypeDefinition ([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:WERK_TEST_TYPE))); [Console]::WriteLine('compiled'); [Console]::Error.WriteLine('WERK_PHASE:compiled'); exit 0 } catch { [Console]::Error.WriteLine('WERK_PHASE:caught'); [Console]::Error.WriteLine('WERK_ERROR:'+$_.Exception.GetType().FullName+':'+$_.Exception.HResult); foreach ($code in [regex]::Matches([string]$_,'CS[0-9]{4}')) { [Console]::Error.WriteLine('WERK_CS:'+$code.Value) }; exit 125 }`;
-  const results = await Promise.all([['minimal-restricted', restricted, minimal], ['minimal-runtime', runtime, minimal], ['minimal-ordinary', process.env, minimal], ['supervisor-restricted', restricted, definition], ['supervisor-runtime', runtime, definition], ['supervisor-ordinary', process.env, definition]].map(async ([name, env, type]) => {
-    const child = spawn(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(command, 'utf16le').toString('base64')], { cwd: f.directory, env: { ...env, WERK_TEST_TYPE: Buffer.from(type, 'utf8').toString('base64') }, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
-    t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); });
-    child.stdin.on('error', () => {}); child.stdin.end();
-    let output = '', diagnostics = '', exit = null;
-    child.stdout.on('data', chunk => { output = (output + chunk.toString('utf8')).slice(-4096); });
-    child.stderr.on('data', chunk => { diagnostics = (diagnostics + chunk.toString('utf8')).slice(-4096); });
-    child.once('exit', (code, signal) => { exit = { code, signal }; });
-    const close = new Promise((resolve, reject) => { child.once('close', resolve); child.once('error', reject); });
-    let code = null, timedOut = false;
-    try { code = await bounded(close); } catch { timedOut = true; }
-    const phases = [...diagnostics.matchAll(/WERK_PHASE:([a-z-]+)/g)].map(match => match[1]);
-    const error = /WERK_ERROR:([A-Za-z.]+):-?\d+/.exec(diagnostics)?.[0];
-    return { name, code, exit, timedOut, phases, error, compilerCodes: [...diagnostics.matchAll(/WERK_CS:(CS[0-9]{4})/g)].map(match => match[1]), outputMatches: output.trim() === 'compiled' };
-  }));
-  t.diagnostic(JSON.stringify(results));
-  for (const result of results) assert.ok(result.code === 0 && !result.timedOut && result.outputMatches, result.name + ' compiler probe failed');
-});
-
-test('Windows supervisor completes a contained invocation without blocking startup or drain', { ...windows, timeout: 25000 }, async t => {
-  const f = await treeFixture(t);
-  const source = await readFile(new URL('../../src/worker/infrastructure/provider-process.ts', import.meta.url), 'utf8');
-  let supervisor = /const supervisor = String\.raw`([\s\S]*?)`;/.exec(source)?.[1]?.replace(/\r\n/g, '\n');
-  assert.ok(supervisor, 'static supervisor source is available');
-  // Instrument this known fixture only. Report fixed phase names, never subprocess
-  // diagnostics or invocation arguments, if native process startup/drain stalls.
-  const phases = [
-    ['IntPtr lifetimeJob = CreateContainedJob();', 'lifetime-create'],
-    ['if (!AssignProcessToJobObject(lifetimeJob, GetCurrentProcess()))', 'lifetime-assign'],
-    ['job = CreateContainedJob();', 'provider-job'],
-    ['Check(CreatePipe(out inRead, out inWrite, ref security, 0));', 'pipes'],
-    ['Check(CreateProcess(executable, command,', 'process-create'],
-    ['if (!AssignProcessToJobObject(job, child.Process))', 'provider-assign'],
-    ['input = new FileStream(', 'streams'],
-    ['Check(ResumeThread(child.Thread)', 'resume'],
-    ['if (WaitForSingleObject(child.Process, uint.MaxValue)', 'provider-wait'],
-    ['Check(TerminateJobObject(job, 125));', 'descendants-stop'],
-    ['Task.WaitAll(stdout, stderr);', 'streams-drain'],
-    ['return unchecked((int)code);', 'return'],
-  ];
-  for (const [needle, phase] of phases) {
-    assert.ok(supervisor.includes(needle), phase);
-    supervisor = supervisor.replace(needle, `Console.Error.WriteLine("WERK_PHASE:${phase}");\n      ${needle}`);
-  }
-  supervisor = supervisor.replace("$ErrorActionPreference = 'Stop'", "$ErrorActionPreference = 'Stop'\n[Console]::Error.WriteLine('WERK_PHASE:shell')")
-    .replace('  $spec = ', "  [Console]::Error.WriteLine('WERK_PHASE:compiled')\n  $spec = ")
-    .replace('} catch {\n  [Console]::Error.WriteLine', "} catch {\n  [Console]::Error.WriteLine('WERK_PHASE:caught'); [Console]::Error.WriteLine('WERK_ERROR:'+$_.Exception.GetType().FullName+':'+$_.Exception.HResult); foreach ($code in [regex]::Matches([string]$_,'CS[0-9]{4}')) { [Console]::Error.WriteLine('WERK_CS:'+$code.Value) }\n  [Console]::Error.WriteLine");
-  const powershell = join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-  const child = spawn(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(supervisor, 'utf16le').toString('base64')], {
-    cwd: f.directory, env: { ...providerEnvironment('claude'), WERK_PROVIDER_LAUNCH: Buffer.from(JSON.stringify({ executable: process.execPath, arguments: ['-e', "process.stdout.write('fixture completed')"] }), 'utf8').toString('base64') },
-    windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
-  });
-  t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); });
-  child.stdin.on('error', () => {}); child.stdin.end();
-  let output = '', diagnostics = '', exit = null;
-  child.once('exit', (code, signal) => { exit = { code, signal }; });
-  child.stdout.on('data', chunk => { output += chunk.toString('utf8'); });
-  child.stderr.on('data', chunk => { diagnostics = (diagnostics + chunk.toString('utf8')).slice(-16384); });
-  const close = new Promise((resolve, reject) => { child.once('close', resolve); child.once('error', reject); });
-  let code;
-  try { code = await bounded(close); }
-  catch { throw Error('Supervisor deadline; exit: ' + JSON.stringify(exit) + '; phases: ' + [...diagnostics.matchAll(/WERK_PHASE:([a-z-]+)/g)].map(match => match[1]).join(', ') + '; category: ' + (/WERK_ERROR:([A-Za-z.]+):-?\d+/.exec(diagnostics)?.[0] ?? 'none') + '; compiler codes: ' + [...diagnostics.matchAll(/WERK_CS:(CS[0-9]{4})/g)].map(match => match[1]).join(', ')); }
-  assert.equal(code, 0, 'Supervisor exit; phases: ' + [...diagnostics.matchAll(/WERK_PHASE:([a-z-]+)/g)].map(match => match[1]).join(', '));
-  assert.equal(output, 'fixture completed');
-});
-
 test('Windows cancellation terminates the provider and its descendants', { ...windows, timeout: 30000 }, async t => {
   const f = await treeFixture(t);
   const script = `const {spawn}=require('node:child_process');const c=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});require('node:fs').appendFileSync(${JSON.stringify(f.pidFile)},String(c.pid)+'\\n');setInterval(()=>{},1000);`;
@@ -167,9 +90,10 @@ test('Windows preserves empty, quoted and Unicode arguments and raw stdin withou
   const f = await treeFixture(t);
   const args = ['', 'two words', '"quoted"', 'ends\\', 'slash\\"quote', 'snow ☃ 日本語', '$value; & echo not-a-command', 'first\nsecond'];
   const input = 'first\0line\r\n雪\n'.repeat(20000);
-  const script = `const chunks=[];process.stdin.on('data',chunk=>chunks.push(chunk));process.stdin.on('end',()=>{const input=Buffer.concat(chunks);process.stderr.write('fixture-only diagnostics');process.stdout.write(JSON.stringify({args:process.argv.slice(1),bytes:input.length,hash:require('node:crypto').createHash('sha256').update(input).digest('hex')}));});`;
+  const script = `const chunks=[];process.stdin.on('data',chunk=>chunks.push(chunk));process.stdin.on('end',()=>{const input=Buffer.concat(chunks);process.stderr.write('fixture-only diagnostics');process.stdout.write(JSON.stringify({args:process.argv.slice(1),modulePath:process.env.PSModulePath,bytes:input.length,hash:require('node:crypto').createHash('sha256').update(input).digest('hex')}));});`;
   const output = JSON.parse((await bounded(providerCommand(process.execPath, ['-e', script, '--', ...args], f.directory, f.controller.signal, input, true, 'claude'))).toString('utf8'));
   assert.deepEqual(output.args, args);
+  assert.equal(output.modulePath, undefined, 'supervisor-only module discovery does not change the provider environment');
   assert.equal(output.bytes, Buffer.byteLength(input));
   assert.equal(output.hash, createHash('sha256').update(input).digest('hex'));
 });
