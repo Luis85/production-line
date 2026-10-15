@@ -26,8 +26,8 @@ test('read-only CLI status checks report login, redact diagnostics and share con
   const results = await Promise.all([checks.check(connection), checks.check(connection), checks.check(connection)]);
   assert.equal(results[0].authentication, 'authenticated'); assert.equal(results[0].available, true); assert.doesNotMatch(JSON.stringify(results), /secret-private-account/);
   await checks.check(connection); assert.equal(await readFile(path + '.calls', 'utf8'), 'x');
-  const claude = await executable(t, `if (process.argv.slice(2).join(' ') !== 'auth status') process.exit(3); console.log(JSON.stringify({loggedIn: true, email: 'private@example.com', authMethod: 'oauth_token'}));`);
-  const status = await checks.check(provider('claude-cli', { executable: claude })); assert.equal(status.authentication, 'authenticated'); assert.doesNotMatch(JSON.stringify(status), /private@example|oauth_token/);
+  const claude = await executable(t, `console.error('private-startup-diagnostic'); if (process.argv.slice(2).join(' ') !== 'auth status') process.exit(3); console.log(JSON.stringify({loggedIn: true, email: 'private@example.com', authMethod: 'oauth_token'}));`);
+  const status = await checks.check(provider('claude-cli', { executable: claude })); assert.equal(status.authentication, 'authenticated'); assert.doesNotMatch(JSON.stringify(status), /private@example|oauth_token|private-startup-diagnostic/);
 });
 test('signed-out, malformed and excessive CLI output never becomes authenticated or exposes raw output', { skip: process.platform === 'win32' }, async t => {
   const signedOut = await executable(t, `console.log(JSON.stringify({loggedIn: false, error:'secret'})); process.exitCode = 1;`);
@@ -36,6 +36,9 @@ test('signed-out, malformed and excessive CLI output never becomes authenticated
   const unknown = await checks.check(provider('claude-cli', { executable: bad })); assert.equal(unknown.authentication, 'unknown'); assert.doesNotMatch(JSON.stringify(unknown), /private broken/);
   const huge = await executable(t, `console.log('secret'.repeat(20_000)); setInterval(() => {}, 1000);`);
   assert.equal((await checks.check(provider('codex-cli', { executable: huge }))).authentication, 'unknown');
+  const hugeDiagnostics = await executable(t, `console.error('private-diagnostic'.repeat(20_000)); console.log(JSON.stringify({loggedIn:true})); setInterval(() => {}, 1000);`);
+  const bounded = await checks.check(provider('claude-cli', { executable: hugeDiagnostics }));
+  assert.equal(bounded.authentication, 'unknown'); assert.doesNotMatch(JSON.stringify(bounded), /private-diagnostic/);
 });
 
 test('hanging status command times out and does not leak provider output', { skip: process.platform === 'win32' }, async t => {

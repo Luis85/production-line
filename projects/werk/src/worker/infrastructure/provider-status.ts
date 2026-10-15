@@ -18,8 +18,10 @@ async function statusCommand(connection: ProviderConnection, cwd: string, args =
     const output: Buffer[] = []; let bytes = 0, failed = false;
     const kill = () => killProviderTree(child, 'SIGKILL');
     const timer = setTimeout(() => { failed = true; kill(); }, 5000);
-    const collect = (chunk: Buffer) => { bytes += chunk.length; if (bytes > 65536) { failed = true; kill(); } else output.push(chunk); };
-    child.stdout.on('data', collect); child.stderr.on('data', collect);
+    // Claude's machine-readable stdout must remain separate from startup diagnostics.
+    // Codex reports login status on stderr; both streams always count toward the limit.
+    const collect = (chunk: Buffer, stdout: boolean) => { bytes += chunk.length; if (bytes > 65536) { failed = true; kill(); } else if (stdout || connection.id === 'codex-cli') output.push(chunk); };
+    child.stdout.on('data', chunk => collect(chunk, true)); child.stderr.on('data', chunk => collect(chunk, false));
     child.once('error', () => { failed = true; });
     child.once('close', code => { clearTimeout(timer); kill(); if (failed) reject(Error('Provider status unavailable')); else resolve({ code, output: Buffer.concat(output).toString('utf8') }); });
   });
