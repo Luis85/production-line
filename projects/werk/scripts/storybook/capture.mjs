@@ -123,6 +123,60 @@ export function readStoryEvidence() {
   };
 }
 
+/** Qualify the generated catalog itself in addition to its source stories. */
+export async function verifyStorymap(browser, origin, inventory, manifest) {
+  const results = [];
+  const total = inventory.components.length + manifest.stories.filter((story) => story.viewport === 'desktop').length;
+  const query = inventory.components[0].path;
+  const matches = 1 + manifest.stories.filter((story) => story.viewport === 'desktop' && story.mounted.includes(query)).length;
+  for (const viewport of VIEWPORTS) {
+    const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height }, serviceWorkers: 'block' });
+    const page = await context.newPage();
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+    page.on('response', (response) => { if (response.status() >= 400) errors.push(`HTTP ${response.status()}: ${response.url()}`); });
+    page.on('requestfailed', (request) => errors.push(`Request failed: ${request.url()}`));
+    await context.route('**/*', (route) => {
+      const url = new URL(route.request().url());
+      if (['data:', 'blob:'].includes(url.protocol)) return route.continue();
+      if (url.origin !== origin || /^\/(?:api|v1|status|monitoring|health)(?:\/|$)/.test(url.pathname)) {
+        errors.push(`Unmocked catalog request: ${url.origin}${url.pathname}`);
+        return route.abort('blockedbyclient');
+      }
+      return route.continue();
+    });
+    await context.routeWebSocket('**/*', (socket) => { errors.push(`Unmocked catalog WebSocket: ${socket.url()}`); socket.close(); });
+    try {
+      await page.goto(`${origin}/storymap/`, { waitUntil: 'load' });
+      async function check(expected, empty, phase) {
+        const actual = await page.evaluate(() => ({
+          visible: document.querySelectorAll('.searchable:not([hidden])').length,
+          empty: !document.querySelector('#no-results').hidden,
+          overflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+        }));
+        if (actual.visible !== expected || actual.empty !== empty) throw new Error(`Catalog ${phase} produced ${actual.visible} visible entries; expected ${expected}, empty=${empty}`);
+        if (actual.overflow) throw new Error(`Catalog ${phase} overflows horizontally`);
+      }
+      await page.locator('h1').waitFor({ state: 'visible' });
+      await check(total, false, 'initial view');
+      await page.locator('#search').fill(query);
+      await check(matches, false, 'source search');
+      await page.locator('#search').fill('__werk_storymap_no_matching_entry__');
+      await check(0, true, 'empty search');
+      await page.locator('#search').fill('');
+      await check(total, false, 'cleared search');
+      if (errors.length) throw new Error(errors.join('\n'));
+      results.push({ viewport: viewport.name, passed: true, checks: ['render', 'overflow', 'source-search', 'empty-search', 'cleared-search'] });
+    } catch (error) {
+      throw new Error(`Generated storymap (${viewport.name}): ${[error.message, ...errors].join('\n')}`, { cause: error });
+    } finally {
+      await context.close();
+    }
+  }
+  return results;
+}
+
 async function inspectStory(browser, origin, entry, viewport, inventory, output) {
   const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height },
     deviceScaleFactor: 1, locale: 'en-US', timezoneId: 'UTC', colorScheme: 'light', reducedMotion: 'reduce', serviceWorkers: 'block' });
@@ -211,8 +265,10 @@ export async function capture({ root = PROJECT_ROOT, staticRoot = join(root, 'st
       capturedAt: new Date().toISOString(), fixtureTime: FIXED_DATE, viewports: VIEWPORTS, coverage, stories: records };
     await writeFile(join(output, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
     await writeFile(join(output, 'index.html'), renderStorymap(inventory, manifest));
+    const catalog = await verifyStorymap(browser, serving.origin, inventory, manifest);
+    if (inventory.sourceDigest !== await sourceDigest(root) || inventory.commit !== sourceCommit(root)) throw new Error('Source identity changed during catalog qualification; rebuild and capture again.');
     const qualification = { schemaVersion: 1, version: inventory.version, commit: inventory.commit, sourceDigest: inventory.sourceDigest,
-      passed: true, coverage, stories: entries.length, screenshots: records.length, errors: [], files: await assetManifest(staticRoot) };
+      passed: true, coverage, stories: entries.length, screenshots: records.length, catalog, errors: [], files: await assetManifest(staticRoot) };
     await writeFile(join(output, 'qualification.json'), `${JSON.stringify(qualification, null, 2)}\n`);
     process.stdout.write(`Storymap qualified: ${coverage.covered}/${coverage.total} components, ${entries.length} stories, ${records.length} screenshots.\n`);
     return qualification;
