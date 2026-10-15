@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, realpath, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';
@@ -9,11 +9,11 @@ import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/jou
 import { statusServer } from '../../src/worker/dist/worker/status/server.js';
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', ...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 async function fixture(t) {
-  const root = await mkdtemp(join(tmpdir(), 'werk-repository-api-')), state = join(root, 'state'); await mkdir(state);
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'werk-repository-api-'))), state = join(root, 'state'); await mkdir(state);
   const repos = [];
   for (const id of ['frontend', 'backend']) {
     const path = join(root, id), remote = join(root, id + '.git'); await mkdir(path);
-    git(path, 'init', '-b', 'main'); await writeFile(join(path, 'a.txt'), id + '\n'); git(path, 'add', '.'); git(path, 'commit', '-m', 'initial');
+    git(path, 'init', '-b', 'main'); git(path, 'config', 'core.autocrlf', 'false'); await writeFile(join(path, 'a.txt'), id + '\n'); git(path, 'add', '.'); git(path, 'commit', '-m', 'initial');
     git(root, 'init', '--bare', remote); git(path, 'remote', 'add', 'origin', remote); git(path, 'push', '-u', 'origin', 'main');
     repos.push({ id, path, remote: 'origin', watch: false, branch: 'main' });
   }
@@ -43,11 +43,13 @@ test('repository assignments are authenticated, persisted, watched, and availabl
 });
 test('assigned file tasks snapshot their worktrees and prevent reassignment while queued', async t => {
   const f = await fixture(t);
-  assert.equal((await f.post('/api/settings', { repositories: { items: f.repos }, board: { paused: true } })).status, 200);
+  assert.equal((await f.post('/api/settings', { repositories: { items: f.repos }, board: { paused: true }, provider: { id: 'openai-api', apiKey: 'fixture-key-never-sent', model: 'fixture-model' } })).status, 200);
   await writeFile(join(f.repos[1].path, 'a.txt'), 'operator dirty edit\n');
-  const task = { title: 'Backend task', instruction: 'Change text', repository: 'backend', paths: ['a.txt'], provider: 'codex-cli' };
+  const task = { title: 'Backend task', instruction: 'Change text', repository: 'backend', paths: ['a.txt'], provider: 'openai-api' };
   assert.equal((await f.post('/api/taskboard', task)).status, 202);
   const entry = f.workspace.board.view().tasks[0], detail = f.workspace.board.detail(entry.id);
+  assert.equal(f.workspace.settings.value.board.paused, true);
+  assert.equal(detail.status, 'queued', 'The paused fixture must retain an admitted task without relying on a host CLI installation.');
   assert.equal(detail.repositoryId, 'backend'); assert.equal(detail.repository, f.repos[1].path); assert.ok(detail.worktree.startsWith(join(detail.repository, '.werk', 'worktrees')));
   assert.equal(detail.files[0].content, 'backend\n'); assert.equal(await readFile(join(detail.repository, 'a.txt'), 'utf8'), 'operator dirty edit\n');
   assert.equal((await f.post('/api/settings', { repositories: { items: [] } })).status, 409);

@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import { lstat, mkdir, open, readFile, realpath, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 
 export class RepositoryGitError extends Error {
   readonly reason: 'failed' | 'timeout' | 'cancelled';
@@ -86,7 +86,9 @@ async function ownedWorktree(path: string, owner: Ownership, root: RepositoryRoo
   const dotGit = await lstat(join(path, '.git'));
   if (!dotGit.isFile() || dotGit.isSymbolicLink()) throw Error('Existing task worktree metadata changed.');
   const listing = await repositoryGit(root.path, ['worktree', 'list', '--porcelain', '-z'], signal, timeoutMs);
-  if (!listing.split('\0').includes(`worktree ${path}`)) throw Error('Existing task worktree is not registered with its repository.');
+  // Git for Windows emits forward slashes even when Node's canonical path uses backslashes.
+  const registered = listing.split('\0').some(entry => entry.startsWith('worktree ') && isAbsolute(entry.slice(9)) && resolve(entry.slice(9)) === path);
+  if (!registered) throw Error('Existing task worktree is not registered with its repository.');
   const observed = await repositoryRoot(path, signal, timeoutMs);
   if (observed.commonDirectory !== root.commonDirectory) throw Error('Existing task worktree belongs to another repository.');
   const head = (await repositoryGit(path, ['rev-parse', '--verify', 'HEAD'], signal, timeoutMs)).trim();

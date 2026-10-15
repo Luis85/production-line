@@ -28,6 +28,7 @@ async function fixture(t, options = {}) {
     const path = join(directory, id);
     await mkdir(path);
     await git(path, "init", "--initial-branch=main");
+    await git(path, "config", "core.autocrlf", "false");
     await git(path, "config", "user.name", "Worker test");
     await git(path, "config", "user.email", "worker@example.invalid");
     await writeFile(join(path, "checkout.txt"), id + " committed\n");

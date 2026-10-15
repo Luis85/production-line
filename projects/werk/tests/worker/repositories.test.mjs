@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, join, sep } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { RepositoryManager, prepareRepositoryWorktree } from '../../src/worker/dist/worker/infrastructure/repositories.js';
 import { repositoryGit } from '../../src/worker/dist/worker/infrastructure/repositories-git.js';
@@ -12,16 +12,16 @@ import { repositoryGit } from '../../src/worker/dist/worker/infrastructure/repos
 const signal = () => new AbortController().signal;
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'user.name=Werk Fixture', '-c', 'user.email=fixture@example.invalid', ...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 async function fixtures(t, count = 1) {
-  const directory = await mkdtemp(join(tmpdir(), 'werk-repositories-')), repositories = [];
+  const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-repositories-'))), repositories = [];
   const managers = [];
   t.after(async () => { for (const manager of managers) await manager.close(); await rm(directory, { recursive: true, force: true }); });
   for (let i = 0; i < count; i++) {
     const id = `repo-${i}`, remote = join(directory, `${id}.git`), producer = join(directory, `${id}-producer`), path = join(directory, id);
     git(directory, 'init', '--bare', '--initial-branch=main', remote);
-    git(directory, 'clone', '--', remote, producer);
+    git(directory, 'clone', '--config', 'core.autocrlf=false', '--', remote, producer);
     await writeFile(join(producer, 'file.txt'), 'initial\n');
     git(producer, 'add', 'file.txt'); git(producer, 'commit', '-m', 'Initial fixture'); git(producer, 'push', 'origin', 'main');
-    git(directory, 'clone', '--', remote, path);
+    git(directory, 'clone', '--config', 'core.autocrlf=false', '--', remote, path);
     repositories.push({ id, path, remote: 'origin', branch: 'main', watch: true, producer, remotePath: remote });
   }
   const configuration = (items = repositories, pollMs = 1000) => ({ pollMs, items: items.map(({ id, path, remote, branch, watch }) => ({ id, path, remote, branch, watch })) });
@@ -170,4 +170,17 @@ test('remote tracked files cannot replace ignored task worktrees or their parent
   await manager.sync();
   assert.equal(manager.view()[0].state, 'error'); assert.match(manager.view()[0].error, /worktree storage/);
   assert.equal((await lstat(join(repo.path, '.werk'))).isSymbolicLink(), false); assert.equal(await readFile(join(owned.path, 'file.txt'), 'utf8'), 'precious task edit\n');
+});
+
+test('worktree registration uses native paths and refuses a registration retargeted elsewhere', async t => {
+  const f = await fixtures(t), manager = f.manager(), repo = f.repositories[0];
+  const worktree = await manager.prepareWorktree(repo.id, 'registration-identity', signal());
+  const listed = git(repo.path, 'worktree', 'list', '--porcelain', '-z').split('\0');
+  assert.ok(listed.includes('worktree ' + worktree.path.split(sep).join('/')), 'Git reports registered worktree paths with forward slashes.');
+  assert.equal((await manager.prepareWorktree(repo.id, 'registration-identity', signal())).reused, true);
+  await writeFile(join(worktree.path, 'file.txt'), 'retain task edits\n');
+  const administration = git(worktree.path, 'rev-parse', '--absolute-git-dir');
+  await writeFile(join(administration, 'gitdir'), join(f.directory, 'unrelated', '.git') + '\n');
+  await assert.rejects(manager.prepareWorktree(repo.id, 'registration-identity', signal()), /not registered/);
+  assert.equal(await readFile(join(worktree.path, 'file.txt'), 'utf8'), 'retain task edits\n');
 });

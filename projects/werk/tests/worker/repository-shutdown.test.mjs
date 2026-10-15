@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { chmod, lstat, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -37,12 +37,12 @@ async function until(check, message, limit = 10000) {
   }
 }
 async function fixture(t, features = false) {
-  const directory = await mkdtemp(join(tmpdir(), "werk-repository-shutdown-"));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "werk-repository-shutdown-")));
   const repository = join(directory, "repository"), remote = join(directory, "remote.git");
   const state = join(directory, "state"), featureDirectory = join(directory, "features");
   const marker = join(directory, "transport-started.json"), transport = join(directory, "slow-transport");
   git(directory, "init", "--bare", "--initial-branch=main", remote);
-  git(directory, "clone", "--", remote, repository);
+  git(directory, "clone", "--config", "core.autocrlf=false", "--", remote, repository);
   await writeFile(join(repository, "approved.txt"), "committed original\n");
   git(repository, "add", "approved.txt");
   git(repository, "commit", "-m", "Fixture baseline");

@@ -7,7 +7,7 @@ import ts from 'typescript';
 import { nextTick } from 'vue';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 async function editor(t) {
-  const component = await readFile(join(root, 'src/worker/webview/components/RepositoryPanel.vue'), 'utf8');
+  const component = (await readFile(join(root, 'src/worker/webview/components/RepositoryPanel.vue'), 'utf8')).replace(/\r\n/g, '\n');
   const script = component.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1]
     .replace(/^import U(?:Button|Input).*\n/gm, '')
     .replace(/^import \{ state,.*\n/gm, '');
