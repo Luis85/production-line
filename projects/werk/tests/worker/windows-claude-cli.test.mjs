@@ -92,10 +92,10 @@ test('Windows preserves empty, quoted and Unicode arguments and raw stdin withou
   const input = 'first\0line\r\n雪\n'.repeat(20000);
   const runtimeKeys = ['ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432', 'CommonProgramFiles', 'CommonProgramFiles(x86)', 'CommonProgramW6432', 'PROCESSOR_ARCHITECTURE', 'PROCESSOR_ARCHITEW6432', 'NUMBER_OF_PROCESSORS', 'OS', 'PSModulePath'];
   const callerEnvironment = providerEnvironment('claude');
-  const expectedRuntime = Object.fromEntries(runtimeKeys.flatMap(key => {
-    const original = Object.keys(callerEnvironment).sort().find(candidate => candidate.toLowerCase() === key.toLowerCase());
-    return original !== undefined && callerEnvironment[original] !== undefined ? [[key, callerEnvironment[original]]] : [];
-  }));
+  // A direct child can receive standard runtime values absent from its supplied environment.
+  const baselineScript = `process.stdout.write(JSON.stringify(Object.fromEntries(${JSON.stringify(runtimeKeys)}.map(key=>[key,process.env[key]]))))`;
+  const baseline = await executeFile(process.execPath, ['-e', baselineScript], { cwd: f.directory, env: callerEnvironment, windowsHide: true, timeout: 10000, maxBuffer: 65536 });
+  const expectedRuntime = JSON.parse(baseline.stdout);
   const script = `const chunks=[];process.stdin.on('data',chunk=>chunks.push(chunk));process.stdin.on('end',()=>{const input=Buffer.concat(chunks);process.stderr.write('fixture-only diagnostics');process.stdout.write(JSON.stringify({args:process.argv.slice(1),runtime:Object.fromEntries(${JSON.stringify(runtimeKeys)}.map(key=>[key,process.env[key]])),privateLaunchPresent:process.env.WERK_PROVIDER_LAUNCH!==undefined,bytes:input.length,hash:require('node:crypto').createHash('sha256').update(input).digest('hex')}));});`;
   const output = JSON.parse((await bounded(providerCommand(process.execPath, ['-e', script, '--', ...args], f.directory, f.controller.signal, input, true, 'claude'))).toString('utf8'));
   assert.deepEqual(output.args, args);
