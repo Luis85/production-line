@@ -89,3 +89,39 @@ Inside the artifact, `storymap/source.json` is the scanned source contract,
 `qualification.json` records coverage and hashes of every generated file.
 The interactive index is at the archive root; the screenshot reference is
 `storymap/index.html`. See [release contents](../reference/releases.md).
+
+## Host release documentation on GitHub Pages
+
+The release workflow publishes the qualified Storybook to
+[the project site](https://luis85.github.io/production-line/) and the illustrated
+[storymap](https://luis85.github.io/production-line/storymap/). These URLs become
+available after Pages is enabled and the first release with this workflow finishes.
+The hosted site is replaced on every successful release, including prereleases.
+Version-specific documentation remains attached to each release as a ZIP.
+
+A repository administrator must complete this one-time setup:
+
+1. Open **Settings → Pages → Build and deployment** and choose **GitHub Actions**
+   as the source.
+2. In **Settings → Environments → github-pages**, allow deployment from tags
+   matching `v*`. Keep the release workflow's tag/version and `main` ancestry
+   checks; a default environment rule allowing only `main` would block tag runs.
+3. Merge the workflow change, then publish the next version using the
+   [release procedure](../reference/releases.md#publish-a-release).
+
+The Storybook job uploads the same static directory that passed screenshot and
+archive qualification. The Pages job waits for successful release publication,
+checks that this is still the most recently published release, then uses GitHub's
+automatic token with `contents: read`, `pages: write` and `id-token: write` to
+deploy it. Pull requests and manual branch runs cannot update the site. Deployment
+stays in the release workflow because releases created by `GITHUB_TOKEN` do not
+trigger another workflow through the `release` event.
+
+The **github-pages** environment links to the deployed URL. If only Pages fails,
+correct its settings and use **Re-run failed jobs** on that release run while
+its seven-day Pages artifact is retained. This retries deployment without
+rebuilding the site or modifying the published release. A retry for an older
+release is skipped if a newer stable release or prerelease has been published;
+retry the newer release's Pages job instead. After artifact expiry, ship a new
+release. Do not rerun all release jobs to repair Pages: publication
+intentionally refuses to replace already-published assets.

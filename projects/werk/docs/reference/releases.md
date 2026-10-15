@@ -92,6 +92,15 @@ and mobile captures, and no capture errors. Packaging rejects stale source or
 revision evidence, incomplete coverage, changed or unqualified output files,
 unsafe paths and symlinks.
 
+After release publication, the same qualified site is deployed to the repository's
+[GitHub Pages](https://luis85.github.io/production-line/), with the illustrated map
+at [/storymap/](https://luis85.github.io/production-line/storymap/). Both stable and
+prerelease publications refresh the hosted site. See the
+[one-time Pages setup and retry procedure](../how-to/generate-storybook.md#host-release-documentation-on-github-pages).
+Pull requests and manual branch runs do not deploy. The Pages job has its own
+status: a failed deployment leaves the previous site and the published release
+available.
+
 ## Maintainer build contract
 
 In the source checkout only, install the locked browser with
@@ -171,6 +180,9 @@ manual branch runs qualify candidates without publishing.
    `STORYBOOK-SHA256SUMS` to a draft, then publishes it. Stable versions are marked
    latest; versions such as `0.2.0-rc.1` are prereleases and never replace latest.
    Release notes include download/start commands.
+5. The **Publish released Storybook to GitHub Pages** job deploys the qualified
+   site after publication. Complete the one-time Pages setup linked above before
+   the first tag release; the **github-pages** environment reports its URL.
 
 The latest stable link intentionally does not change on every merge. Only tag a
 stable version that should become the new latest release; use prerelease tags
