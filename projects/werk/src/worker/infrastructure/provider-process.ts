@@ -143,7 +143,7 @@ export function spawnProvider(executable: string, args: string[], cwd: string, e
   };
   for (const key of ['ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432', 'CommonProgramFiles', 'CommonProgramFiles(x86)', 'CommonProgramW6432', 'PROCESSOR_ARCHITECTURE', 'PROCESSOR_ARCHITEW6432', 'NUMBER_OF_PROCESSORS', 'OS'])
     if (process.env[key]) setRuntimeValue(key, process.env[key]!);
-  setRuntimeValue('PSModulePath', win32.join(win32.dirname(powershell), 'Modules'));
+  if (process.env.PSModulePath) setRuntimeValue('PSModulePath', process.env.PSModulePath);
   return spawn(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(supervisor, 'utf16le').toString('base64')], {
     cwd, env: { ...supervisorEnv, WERK_PROVIDER_LAUNCH: Buffer.from(JSON.stringify({ executable, arguments: args, restoreEnvironment }), 'utf8').toString('base64') },
     detached: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
