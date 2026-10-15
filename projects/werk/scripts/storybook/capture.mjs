@@ -103,6 +103,26 @@ async function serve(directory) {
   return { server, origin: `http://127.0.0.1:${server.address().port}` };
 }
 
+/** Runs inside the story iframe; dialogs may teleport outside #storybook-root. */
+export function readStoryEvidence() {
+  function visible(element) {
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 && element.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+  }
+  const errorSelector = '.sb-errordisplay, .sb-error, #error-message';
+  const surfaces = [...document.querySelectorAll('#storybook-root, [role="dialog"], [role="alertdialog"]')];
+  const meaningful = surfaces.some((surface) => !surface.closest(`${errorSelector}, [aria-hidden="true"], [hidden]`) &&
+    visible(surface) && ((surface.innerText?.trim().length ?? 0) > 0 || surface.querySelector('svg, img, canvas')));
+  const visibleErrors = [...document.querySelectorAll(errorSelector)].filter(visible).map((element) => element.textContent);
+  return {
+    metadata: window.__WERK_STORYMAP__,
+    mounted: [...(window.__WERK_MOUNTED_SOURCES__ ?? [])].sort(),
+    errors: [...(window.__WERK_STORY_ERRORS__ ?? []), ...visibleErrors],
+    meaningful,
+    horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
+  };
+}
+
 async function inspectStory(browser, origin, entry, viewport, inventory, output) {
   const context = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height },
     deviceScaleFactor: 1, locale: 'en-US', timezoneId: 'UTC', colorScheme: 'light', reducedMotion: 'reduce', serviceWorkers: 'block' });
@@ -135,19 +155,7 @@ async function inspectStory(browser, origin, entry, viewport, inventory, output)
       await document.fonts.ready;
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     });
-    const evidence = await page.evaluate(() => {
-      const root = document.querySelector('#storybook-root');
-      const rect = root?.getBoundingClientRect();
-      const errorDisplay = document.querySelector('.sb-errordisplay, .sb-error, #error-message');
-      const visibleError = errorDisplay && errorDisplay.getBoundingClientRect().height > 0 ? errorDisplay.textContent : '';
-      return {
-        metadata: window.__WERK_STORYMAP__,
-        mounted: [...(window.__WERK_MOUNTED_SOURCES__ ?? [])].sort(),
-        errors: [...(window.__WERK_STORY_ERRORS__ ?? []), ...(visibleError ? [visibleError] : [])],
-        meaningful: Boolean(rect && rect.width > 0 && rect.height > 0 && ((root.innerText?.trim().length ?? 0) > 0 || root.querySelector('svg, img, canvas'))),
-        horizontalOverflow: document.documentElement.scrollWidth > window.innerWidth + 1,
-      };
-    });
+    const evidence = await page.evaluate(readStoryEvidence);
     const issues = validateStoryEvidence({ id: entry.id, ...evidence, errors: [...errors, ...evidence.errors] }, inventory.components);
     if (issues.length) throw new Error(issues.join('\n'));
     const screenshot = `screenshots/${entry.id}-${viewport.name}.png`;

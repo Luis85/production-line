@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, symlink, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { assetManifest, calculateCoverage, capture, validateCaptureRecords, validateStoryEvidence } from '../../scripts/storybook/capture.mjs';
+import { runInNewContext } from 'node:vm';
+import { assetManifest, calculateCoverage, capture, readStoryEvidence, validateCaptureRecords, validateStoryEvidence } from '../../scripts/storybook/capture.mjs';
 import { renderStorymap, routeMatches } from '../../scripts/storybook/render-storymap.mjs';
 
 const components = [
@@ -57,6 +58,28 @@ test('blank interfaces, render errors, missing metadata and untracked mounts fai
   assert.match(validateStoryEvidence({ ...story, metadata: undefined }, components).join('\n'), /missing storymap metadata/);
   assert.match(validateStoryEvidence({ ...story, mounted: [...story.mounted, 'src/untracked.vue'] }, components).join('\n'), /absent from the inventory/);
   assert.match(validateStoryEvidence({ ...story, horizontalOverflow: true }, components).join('\n'), /overflows its viewport horizontally/);
+});
+
+test('visible teleported dialogs qualify while blank, hidden, and Storybook error surfaces do not', () => {
+  const element = ({ text = '', width = 0, height = 0, visible = true, excluded = false } = {}) => ({
+    innerText: text, textContent: text, getBoundingClientRect: () => ({ width, height }),
+    checkVisibility: () => visible, closest: () => excluded ? {} : null, querySelector: () => null,
+  });
+  const blankRoot = element();
+  const dialog = element({ text: 'Connect model session', width: 768, height: 656 });
+  function inspect(surfaces, errors = []) {
+    return runInNewContext(`(${readStoryEvidence.toString()})()`, {
+      window: { __WERK_STORYMAP__: metadata, __WERK_MOUNTED_SOURCES__: new Set([components[0].path]), innerWidth: 1440 },
+      document: { querySelectorAll: selector => selector.startsWith('#storybook-root') ? surfaces : errors, documentElement: { scrollWidth: 1440 } },
+    });
+  }
+  assert.equal(inspect([blankRoot, dialog]).meaningful, true);
+  assert.equal(inspect([blankRoot]).meaningful, false);
+  assert.equal(inspect([blankRoot, element({ text: 'Hidden dialog', width: 768, height: 656, visible: false })]).meaningful, false);
+  const error = element({ text: 'Storybook render failure', width: 768, height: 656, excluded: true });
+  const failure = inspect([blankRoot, error], [error]);
+  assert.equal(failure.meaningful, false);
+  assert.match(failure.errors.join('\n'), /Storybook render failure/);
 });
 
 test('storymap escapes source text and links source elements only to observed examples', () => {
