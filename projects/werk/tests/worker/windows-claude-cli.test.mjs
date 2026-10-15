@@ -90,9 +90,10 @@ test('Windows preserves empty, quoted and Unicode arguments and raw stdin withou
   const f = await treeFixture(t);
   const args = ['', 'two words', '"quoted"', 'ends\\', 'slash\\"quote', 'snow ☃ 日本語', '$value; & echo not-a-command', 'first\nsecond'];
   const input = 'first\0line\r\n雪\n'.repeat(20000);
-  const script = `const chunks=[];process.stdin.on('data',chunk=>chunks.push(chunk));process.stdin.on('end',()=>{const input=Buffer.concat(chunks);process.stderr.write('fixture-only diagnostics');process.stdout.write(JSON.stringify({args:process.argv.slice(1),bytes:input.length,hash:require('node:crypto').createHash('sha256').update(input).digest('hex')}));});`;
+  const script = `const chunks=[];process.stdin.on('data',chunk=>chunks.push(chunk));process.stdin.on('end',()=>{const input=Buffer.concat(chunks);process.stderr.write('fixture-only diagnostics');process.stdout.write(JSON.stringify({args:process.argv.slice(1),modulePath:process.env.PSModulePath,bytes:input.length,hash:require('node:crypto').createHash('sha256').update(input).digest('hex')}));});`;
   const output = JSON.parse((await bounded(providerCommand(process.execPath, ['-e', script, '--', ...args], f.directory, f.controller.signal, input, true, 'claude'))).toString('utf8'));
   assert.deepEqual(output.args, args);
+  assert.equal(output.modulePath, undefined, 'supervisor-only module discovery does not change the provider environment');
   assert.equal(output.bytes, Buffer.byteLength(input));
   assert.equal(output.hash, createHash('sha256').update(input).digest('hex'));
 });

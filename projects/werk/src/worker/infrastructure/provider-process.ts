@@ -111,6 +111,7 @@ public static class WerkProviderJob {
   $spec = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([Environment]::GetEnvironmentVariable('WERK_PROVIDER_LAUNCH')))
   [Environment]::SetEnvironmentVariable('WERK_PROVIDER_LAUNCH', $null)
   $launch = ConvertFrom-Json -InputObject $spec
+  [Environment]::SetEnvironmentVariable('PSModulePath', $null)
   $code = [WerkProviderJob]::Run([string]$launch.executable, [string[]]$launch.arguments)
   exit $code
 } catch {
@@ -129,7 +130,8 @@ export function spawnProvider(executable: string, args: string[], cwd: string, e
   if (!systemRoot || !win32.isAbsolute(systemRoot)) throw Error('Windows SystemRoot is unavailable');
   const powershell = win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
   return spawn(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(supervisor, 'utf16le').toString('base64')], {
-    cwd, env: { ...env, WERK_PROVIDER_LAUNCH: Buffer.from(JSON.stringify({ executable, arguments: args }), 'utf8').toString('base64') },
+    // Resolve built-in cmdlets without scanning unrelated user/module locations.
+    cwd, env: { ...env, PSModulePath: win32.join(win32.dirname(powershell), 'Modules'), WERK_PROVIDER_LAUNCH: Buffer.from(JSON.stringify({ executable, arguments: args }), 'utf8').toString('base64') },
     detached: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
   });
 }
