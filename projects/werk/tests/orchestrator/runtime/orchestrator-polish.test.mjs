@@ -21,7 +21,7 @@ test('v1 migration adds policy and attempt limits atomically and remains reopena
     const legacy=new DatabaseSync(file);
     legacy.exec('CREATE TABLE workers(id TEXT PRIMARY KEY,project TEXT NOT NULL,profiles TEXT NOT NULL,token_hash TEXT UNIQUE NOT NULL,seen INTEGER NOT NULL); PRAGMA user_version=1;');
     legacy.prepare('INSERT INTO workers VALUES(?,?,?,?,?)').run('old-worker','demo',JSON.stringify(ps),'hash',1);legacy.close();
-    s=new Store(file);assert.equal(s.db.prepare('PRAGMA user_version').get().user_version,6);
+    s=new Store(file);assert.equal(s.db.prepare('PRAGMA user_version').get().user_version,7);
     const w=s.workers()[0];assert.equal(w.config.maxParallel,1);assert.equal(w.config.order,'priority');
     s.submit(task,'migration-task');const assigned=s.claim(w);assert.equal(assigned.attempt,1);
     assert.equal(s.db.prepare('SELECT max_attempts FROM attempts').get().max_attempts,3);
@@ -85,7 +85,7 @@ test('API rejects unknown registration and lease fields rather than silently ign
     const auth=app.store.register('demo',ps);
     assert.equal((await post('/v1/worker/assignments/next',auth.token,{requestId:'request',unexpected:true})).status,400);
     assert.equal((await post('/v1/worker/tasks/no-task/heartbeat',auth.token,{lease:'lease',attempt:'1'})).status,400);
-    assert.equal((await(await fetch(url+'/healthz')).json()).schema,6);
+    assert.equal((await(await fetch(url+'/healthz')).json()).schema,7);
   }finally{await app.close();}
 });
 

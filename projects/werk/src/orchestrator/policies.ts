@@ -26,6 +26,8 @@ interface SnapshotAssignment {
   leaseId: string;
   profileId: string;
   configurationHash: string;
+  provider: Profile['provider'] | null;
+  mode: Profile['mode'] | null;
 }
 
 /** Historical assignment identity permits late telemetry without granting a current lease. */
@@ -35,8 +37,9 @@ export function assertSnapshotAssignment(
   assignment: SnapshotAssignment | undefined,
   worker: WorkerRecord,
 ): void {
-  const profile = worker.profiles.find(item => item.id === snapshot.profileId);
-  if (!profile || profile.provider !== snapshot.provider || profile.mode !== snapshot.mode || profile.mode !== (task.executionMode ?? 'mock')) {
+  // Profile edits must not change the authority of an already accepted attempt.
+  if (!assignment || assignment.provider !== snapshot.provider || assignment.mode !== snapshot.mode
+    || assignment.mode !== (task.executionMode ?? 'mock') || (task.provider !== 'auto' && task.provider !== snapshot.provider)) {
     throw new DomainError('forbidden', 'Snapshot provider does not match assigned profile');
   }
   if (!assignment || assignment.workerId !== worker.id || assignment.leaseId !== snapshot.pairId

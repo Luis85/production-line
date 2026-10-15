@@ -29,10 +29,12 @@ export class RepositoryManager {
   private running = false;
   private closed = false;
   private readonly timeoutMs: number;
+  private readonly beforeRepositoryUse?: (assignment: RepositoryAssignment) => Promise<void>;
 
-  constructor(config: RepositoryConfiguration, options: { commandTimeoutMs?: number } = {}) {
+  constructor(config: RepositoryConfiguration, options: { commandTimeoutMs?: number; beforeRepositoryUse?: (assignment: RepositoryAssignment) => Promise<void> } = {}) {
     this.config = validateRepositoryConfiguration(config, path => resolve(path));
     this.timeoutMs = options.commandTimeoutMs ?? 30000;
+    this.beforeRepositoryUse = options.beforeRepositoryUse;
     if (!Number.isSafeInteger(this.timeoutMs) || this.timeoutMs < 1 || this.timeoutMs > 300000) throw new DomainError('invalid_input', 'Invalid Git command timeout.');
     this.resetStatuses();
   }
@@ -105,6 +107,7 @@ export class RepositoryManager {
     return operation;
   }
   private async inspectRoot(item: RepositoryAssignment, signal: AbortSignal) {
+    await this.beforeRepositoryUse?.(item);
     const root = await repositoryRoot(item.path, signal, this.timeoutMs);
     for (const [id, other] of this.roots) if (id !== item.id && other.commonDirectory === root.commonDirectory) throw new RepositoryProblem('The same Git repository cannot have multiple assignments.');
     this.roots.set(item.id, root); return root;

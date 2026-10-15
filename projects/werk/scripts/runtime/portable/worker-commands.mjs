@@ -64,6 +64,28 @@ export function workerCommands(catalog) {
     description:
       "Print an editable draft frontmatter + Markdown request without a running worker. Save it to a file, finish it, then feature create/validate/submit.",
   };
+  catalog["repository status"] = {
+    method: "GET", path: "/api/repositories",
+    description: "Inspect assigned repositories and the installation-folder consent request without fetching.",
+  };
+  catalog["repository sync"] = {
+    ...action("/api/repositories", "sync", [], false, ["id"]),
+    description: "Fetch assigned repositories and fast-forward clean checkouts; --id selects one assignment.",
+  };
+  for (const name of ["accept", "decline"])
+    catalog["repository " + name] = {
+      ...action("/api/repositories", name, ["discovery-id"], false, [], { "discovery-id": "discoveryId" }),
+      description: "Record the explicit choice for the exact detected installation repository. Read repository status for its discovery id first.",
+    };
+  catalog["profile list"] = {
+    method: "GET", path: "/api/execution-profiles",
+    description: "Inspect execution profiles, their configuration hash and any pending update.",
+  };
+  catalog["profile set"] = {
+    method: "POST", path: "/api/execution-profiles", body: true,
+    example: { expectedConfigurationHash: "Current configurationHash from profile list", profiles: [{ id: "codex-review", provider: "codex", mode: "mock", maxParallel: 1 }] },
+    description: "Save execution profiles from JSON file/stdin while the queue is paused and idle. Use the current configuration hash; connected workers synchronize before applying.",
+  };
   catalog["provider list"] = {
     method: "GET",
     path: "/api/settings",

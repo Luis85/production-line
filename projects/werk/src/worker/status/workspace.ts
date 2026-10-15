@@ -1,3 +1,5 @@
+import type { ExecutionProfilesControl } from '../application/execution-profiles.js';
+import { RepositoryDiscovery } from '../infrastructure/repository-discovery.js';
 import type { RepositoryConfiguration } from '../application/repositories.js';
 import { RepositoryManager, prepareRepositoryWorktree } from '../infrastructure/repositories.js';
 import { requestGateSchema } from '../application/request-gate-schema.js';
@@ -79,9 +81,12 @@ export function chatConfiguration(value: unknown): string | undefined {
   return raw.codexExecutable;
 }
 export class WorkerWorkspace {
+  readonly executionProfiles?: ExecutionProfilesControl;
   private taskIndex: TaskIndex;
   readonly features?: FeatureRequests;
   readonly repositories: RepositoryManager;
+  readonly repositoryDiscovery: RepositoryDiscovery;
+  private configurationUpdating = false;
   private repositoryPreparations = 0;
   private repositoriesUpdating = false;
   private repositoryStop = new AbortController();
@@ -102,7 +107,14 @@ export class WorkerWorkspace {
   get executor() {
     return this.sessions.executor;
   }
+  async taskboardAction(input: unknown) {
+    if ((input as Record<string, unknown> | null)?.action === 'retry')
+      return this.withRepositoryAdmission(() => this.board.action(input));
+    return this.board.action(input);
+  }
   async startChat(message: unknown) {
+    if (this.configurationUpdating || this.executionProfiles?.pending())
+      throw new DomainError("conflict", "Finish the execution profile change before starting new work.");
     if (!this.acceptingTasks)
       throw new DomainError("unavailable", "Worker is stopping.");
     if (
@@ -216,6 +228,8 @@ export class WorkerWorkspace {
       );
     if (!this.acceptingTasks)
       throw new DomainError("unavailable", "Worker is stopping.");
+    if (action !== "cancel" && (this.configurationUpdating || this.executionProfiles?.pending()))
+      throw new DomainError("conflict", "Finish the execution profile change before starting new work.");
     if (action === "set_policy")
       return gates.setPolicy({
         policy: initial.policy,
@@ -411,6 +425,8 @@ export class WorkerWorkspace {
         "invalid_input",
         "Interaction action: get|turn|answer|resume|cancel",
       );
+    if (this.configurationUpdating || this.executionProfiles?.pending())
+      throw new DomainError("conflict", "Finish the execution profile change before starting new work.");
     if (!this.acceptingTasks)
       throw new DomainError("unavailable", "Worker is stopping.");
     if (
@@ -538,6 +554,8 @@ export class WorkerWorkspace {
             : identifier(body.id, "id");
         if (body.action === "get") return this.sessions.detail(id);
         if (body.action === "cancel") return this.sessions.cancelTask(id);
+        if (this.configurationUpdating || this.executionProfiles?.pending())
+          throw new DomainError("conflict", "Finish the execution profile change before starting new work.");
         let requestMessage = body.message;
         if (body.action === "retry") {
           const detail = this.sessions.detail(id);
@@ -597,21 +615,21 @@ export class WorkerWorkspace {
             this.settings.value.board.queueCapacity
           )
             throw new DomainError("conflict", "Worker task queue is full.");
-          await this.sessions.ensureTask(
+          await this.withRepositoryAdmission(() => this.sessions.ensureTask(
             id,
             "chat",
             title,
             provider.id,
             submissionHash,
             definition,
-          );
+          ));
         }
         if (
           this.sessions.chatActive + this.board.active >=
           this.settings.value.board.queueCapacity
         )
           throw new DomainError("conflict", "Worker task queue is full.");
-        await this.sessions.start(message, id);
+        await this.withRepositoryAdmission(() => this.sessions.start(message, id));
         return this.sessions.detail(id);
       });
     this.taskRequests = operation.then(
@@ -627,11 +645,13 @@ export class WorkerWorkspace {
   };
   private historyReading?: ReturnType<WorkerWorkspace["readHistory"]>;
   private config: {
+    executionProfiles?: ExecutionProfilesControl;
     stateDir: string;
     url?: string;
     enrollmentToken?: string;
     projectDir?: string;
     integrationProjectDir?: string;
+    codex?: { repository?: string };
     repositories?: RepositoryConfiguration;
     features?: { directory: string; provider: string; pollMs: number };
     chatExecutable?: string;
@@ -643,11 +663,13 @@ export class WorkerWorkspace {
   private get: () => Status;
   constructor(
     config: {
+      executionProfiles?: ExecutionProfilesControl;
       stateDir: string;
       url?: string;
       enrollmentToken?: string;
       projectDir?: string;
       integrationProjectDir?: string;
+      codex?: { repository?: string };
       repositories?: RepositoryConfiguration;
       features?: { directory: string; provider: string; pollMs: number };
       chatExecutable?: string;
@@ -660,6 +682,7 @@ export class WorkerWorkspace {
   ) {
     this.taskIndex = new TaskIndex(config.stateDir);
     this.config = config;
+    this.executionProfiles = config.executionProfiles;
     this.journal = journal;
     this.get = get;
     this.settings = new WorkerSettings(
@@ -669,7 +692,8 @@ export class WorkerWorkspace {
       config.chatExecutable,
       config.repositories,
     );
-    this.repositories = new RepositoryManager(this.settings.value.repositories);
+    this.repositories = new RepositoryManager(this.settings.value.repositories, { beforeRepositoryUse: item => this.repositoryDiscovery.assertAllowed(item.path) });
+    this.repositoryDiscovery = new RepositoryDiscovery(config.stateDir, config.integrationProjectDir ?? config.projectDir ?? process.cwd(), this.repositoryStop.signal, config.codex?.repository);
     this.sessions = new WorkerSessions(
       config.stateDir, this.settings, modelFor, undefined, () => this.board.active,
     );
@@ -733,7 +757,7 @@ export class WorkerWorkspace {
           inspect: (record) => this.inspectFeature(record),
           control: (record, action) =>
             record.input?.mode === "patch"
-              ? this.board.action({ id: record.taskId, action })
+              ? this.taskboardAction({ id: record.taskId, action })
               : this.task({ id: record.sessionId, action }),
         },
         config.features.pollMs,
@@ -756,6 +780,7 @@ export class WorkerWorkspace {
       );
     }
     await this.settings.init();
+    await this.repositoryDiscovery.init(this.settings.value.repositories.items);
     await this.repositories.configure(this.settings.value.repositories);
     await this.repositories.init();
     await this.sessions.init();
@@ -767,22 +792,64 @@ export class WorkerWorkspace {
     this.repositories.start();
   }
   repositoryStatus() {
-    return { schemaVersion: 1, pollMs: this.settings.value.repositories.pollMs, items: this.repositories.view() };
+    return { schemaVersion: 1, pollMs: this.settings.value.repositories.pollMs, items: this.repositories.view(), discovery: this.repositoryDiscovery.view() };
   }
   async repositoryCommand(input: unknown) {
-    const body = object(input, "Repository command", ["action", "id"]);
+    const body = object(input, "Repository command", ["action", "id", "discoveryId"]);
+    if (body.action === "accept" || body.action === "decline") {
+      if (body.id !== undefined) throw new DomainError("invalid_input", "Use discoveryId for the detected installation repository.");
+      return this.chooseDiscoveredRepository(body.action, body.discoveryId);
+    }
+    if (body.discoveryId !== undefined) throw new DomainError("invalid_input", "Use discoveryId only when accepting or declining a detected repository.");
     if (body.action === "status" && body.id === undefined) return this.repositoryStatus();
     if (body.action !== "sync" || (body.id !== undefined && typeof body.id !== "string"))
       throw new DomainError("invalid_input", "Use status or sync with an optional repository id.");
-    if (!this.acceptingTasks || this.repositoriesUpdating)
-      throw new DomainError("unavailable", "Repository assignments are changing or the worker is stopping.");
+    if (!this.acceptingTasks || this.repositoriesUpdating || this.configurationUpdating || this.executionProfiles?.pending())
+      throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
     if (body.id !== undefined) this.repositories.resolve(body.id as string);
     await this.repositories.sync(body.id as string | undefined);
     return this.repositoryStatus();
   }
+  private assertRepositoryChangeAllowed() {
+    if (!this.acceptingTasks || this.configurationUpdating || this.executionProfiles?.pending())
+      throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
+    if (this.repositoriesUpdating || this.repositoryPreparations || this.sessions.busy || this.board.active || this.get().activeTasks.length || this.get().queuedTasks?.length)
+      throw new DomainError("conflict", "Finish or cancel queued and active tasks before changing repository assignments.");
+  }
+  private async chooseDiscoveredRepository(action: "accept" | "decline", id: unknown) {
+    if (action === "accept") this.assertRepositoryChangeAllowed();
+    else if (!this.acceptingTasks || this.repositoriesUpdating || this.configurationUpdating)
+      throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
+    this.repositoriesUpdating = true;
+    try {
+      await this.repositoryDiscovery.verify(id);
+      await this.repositoryDiscovery.assignmentsChanged(this.settings.value.repositories.items);
+      const candidate = this.repositoryDiscovery.view()!;
+      if (action === "decline") {
+        if (candidate.repositoryId && candidate.decision === "accepted") throw new DomainError("conflict", "This repository is assigned already. Remove its assignment before declining it.");
+        await this.repositoryDiscovery.record("declined");
+      } else {
+        if (!candidate.repositoryId) {
+          const configuration = this.settings.value.repositories;
+          await this.settings.update({ repositories: { ...configuration, items: [...configuration.items, this.repositoryDiscovery.assignment(configuration.items)] } });
+        }
+        const assignment = this.settings.value.repositories.items.find(item => item.path === candidate.path || item.id === candidate.repositoryId);
+        await this.repositoryDiscovery.record("accepted", assignment?.id);
+        await this.repositoryDiscovery.assignmentsChanged(this.settings.value.repositories.items);
+        await this.repositories.configure(this.settings.value.repositories);
+      }
+      return this.repositoryStatus();
+    } finally { this.repositoriesUpdating = false; }
+  }
+  async withIdleConfiguration<T>(operation: () => Promise<T>): Promise<T> {
+    if (!this.acceptingTasks || this.configurationUpdating || !this.settings.value.board.paused || this.repositoriesUpdating || this.repositoryPreparations || this.sessions.busy || this.board.active || this.get().activeTasks.length || this.get().queuedTasks?.length)
+      throw new DomainError("conflict", "Pause intake and finish or cancel queued tasks and active replies before changing execution profiles.");
+    this.configurationUpdating = true;
+    try { return await operation(); } finally { this.configurationUpdating = false; }
+  }
   async withRepositoryAdmission<T>(operation: () => Promise<T>): Promise<T> {
-    if (!this.acceptingTasks || this.repositoriesUpdating)
-      throw new DomainError("unavailable", "Repository assignments are changing or the worker is stopping.");
+    if (!this.acceptingTasks || this.repositoriesUpdating || this.configurationUpdating || this.executionProfiles?.pending())
+      throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
     this.repositoryPreparations++;
     try {
       return await operation();
@@ -791,8 +858,8 @@ export class WorkerWorkspace {
     }
   }
   private async prepareTaskWorkspace(selector: string, key: string, signal: AbortSignal, commit?: string) {
-    if (!this.acceptingTasks || this.repositoriesUpdating)
-      throw new DomainError("unavailable", "Repository assignments are changing or the worker is stopping.");
+    if (!this.acceptingTasks || this.repositoriesUpdating || this.configurationUpdating || this.executionProfiles?.pending())
+      throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
     signal = AbortSignal.any([signal, this.repositoryStop.signal]);
     this.repositoryPreparations++;
     try {
@@ -801,6 +868,7 @@ export class WorkerWorkspace {
       // Legacy approved-file tasks may still use an ordinary, non-Git project folder.
       if (!isAbsolute(selector)) throw new DomainError("invalid_input", "Choose an assigned repository or an absolute project folder.");
       const repository = await realpath(selector);
+      await this.repositoryDiscovery.assertAllowed(repository);
       const metadata = await lstat(join(repository, ".git")).catch(error => {
         if (error.code === "ENOENT") return null;
         throw error;
@@ -810,6 +878,8 @@ export class WorkerWorkspace {
   }
   async updateSettings(body: unknown) {
     const input = body as Record<string, unknown>;
+    if (this.configurationUpdating || (this.executionProfiles?.pending() && (input?.board as Record<string, unknown>)?.paused === false))
+      throw new DomainError("conflict", "Finish the execution profile change before updating worker settings or resuming intake.");
     const update = async () => {
       if (input?.provider && (this.sessions.busy || this.board.active))
         throw new DomainError(
@@ -851,11 +921,11 @@ export class WorkerWorkspace {
       return this.settings.update(body);
     };
     if (input?.repositories !== undefined) {
-      if (this.repositoriesUpdating || this.repositoryPreparations || this.sessions.busy || this.board.active || this.get().activeTasks.length || this.get().queuedTasks?.length)
-        throw new DomainError("conflict", "Finish or cancel queued and active tasks before changing repository assignments.");
+      this.assertRepositoryChangeAllowed();
       this.repositoriesUpdating = true;
       try {
         const result = await update();
+        await this.repositoryDiscovery.assignmentsChanged(this.settings.value.repositories.items);
         await this.repositories.configure(this.settings.value.repositories);
         return result;
       } finally { this.repositoriesUpdating = false; }

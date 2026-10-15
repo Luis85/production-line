@@ -214,3 +214,19 @@ export const RepositoryAssignments: Story = {
     await element(canvasElement, '#repository-id-0'); await ready(canvasElement);
   },
 };
+
+export const RepositoryConsent: Story = {
+  name: '24 · Choose the detected repository',
+  parameters: { storymap: storymap('The first unlocked taskboard asks before adding its local Git checkout. The full path, watching permission and a durable decline are visible without blocking tasks.', ['components/WorkerShell', 'pages/TaskboardPage', 'components/RepositoryDiscovery'], '/taskboard') },
+  render: renderPage(TaskboardPage, 'repository-pending'), play: settled,
+};
+export const ReconsiderRepository: Story = {
+  name: '25 · Reconsider a skipped repository',
+  parameters: { storymap: storymap('A skipped installation checkout stays available in Dashboard. Declining does not create an assignment or start watching it.', ['components/RepositoryPanel', 'components/RepositoryDiscovery'], '/dashboard') },
+  render: renderComponent(RepositoryPanel, 'repository-declined'), play: settled,
+};
+export const LocalRepositoryConsent: Story = {
+  name: '26 · Use a local repository without a remote',
+  parameters: { storymap: storymap('A local checkout can be assigned for file tasks while watching remains off. Adding a remote and enabling watching is a later operator choice.', ['components/RepositoryPanel', 'components/RepositoryDiscovery'], '/dashboard') },
+  render: renderComponent(RepositoryPanel, 'repository-local'), play: settled,
+};

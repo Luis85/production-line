@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import RepositoryPanel from '../components/RepositoryPanel.vue';
+import ExecutionProfilesPanel from '../components/ExecutionProfilesPanel.vue';
 import ProjectIntegrationsPanel from '../components/ProjectIntegrationsPanel.vue';
 import ResourceMonitorPanel from '../components/ResourceMonitorPanel.vue';
 import RunEvidencePanel from '../components/RunEvidencePanel.vue';
@@ -16,13 +17,13 @@ import DefinitionPanel from '../components/DefinitionPanel.vue';
 import { state, bytes, date, workspaceAction } from '../store';
 
 const router = useRouter(), route = useRoute();
-const providerDetails = ref<HTMLDetailsElement | null>(null), definitionDetails = ref<HTMLDetailsElement | null>(null);
+const providerDetails = ref<HTMLDetailsElement | null>(null), definitionDetails = ref<HTMLDetailsElement | null>(null), profileDetails = ref<HTMLDetailsElement | null>(null);
 async function openLinkedSettings() {
   if (route.path !== '/dashboard') return;
   const path = route.fullPath;
   await nextTick();
   if (route.fullPath !== path) return;
-  const target = route.hash === '#provider-connections' ? providerDetails.value : route.hash === '#agent-definitions' ? definitionDetails.value : null;
+  const target = route.hash === '#provider-connections' ? providerDetails.value : route.hash === '#agent-definitions' ? definitionDetails.value : route.hash === '#execution-profiles' ? profileDetails.value : null;
   if (!target) return;
   target.open = true;
   target.querySelector('summary')?.focus({ preventScroll: true });
@@ -138,6 +139,10 @@ async function openRunning() {
       <SettingsPanel />
       <RequestPolicyPanel />
     </details>
+    <details id="execution-profiles" ref="profileDetails" class="monitor-section dashboard-disclosure">
+      <summary>Execution profiles</summary>
+      <ExecutionProfilesPanel />
+    </details>
     <details id="agent-definitions" ref="definitionDetails" class="monitor-section dashboard-disclosure">
       <summary>Agent definitions</summary>
       <DefinitionPanel />
@@ -158,7 +163,7 @@ async function openRunning() {
       </dl>
     </details>
     <details class="monitor-section dashboard-disclosure">
-      <summary>Runtime, storage &amp; execution profiles</summary>
+      <summary>Runtime &amp; storage</summary>
       <template v-if="env">
         <p class="page-note">Host and process measurements exclude the model subprocess. {{ env.chat.configured ? 'Selected task provider: ' + env.chat.provider + '.' : 'The selected task provider is not configured.' }}</p>
         <dl class="facts">
@@ -177,7 +182,6 @@ async function openRunning() {
           <div><dt>Retained acknowledged pairs</dt><dd>{{ env.retainedPairs }}</dd></div>
         </dl>
       </template>
-      <ul class="profile-list"><li v-for="profile in worker?.profiles" :key="profile.id"><UIcon name="i-lucide-box" /><div><strong>{{ profile.id }}</strong><span>{{ profile.provider }} · {{ profile.mode === 'mock' ? 'Simulated' : 'Live CLI' }}</span></div></li></ul>
       <p class="page-note">Configured profiles do not verify login, quota or remaining subscription. Execution evidence shows usage and reported cost when a provider supplies them; subscription balances and remaining quota are unavailable.</p>
     </details>
     <details class="monitor-section dashboard-disclosure">

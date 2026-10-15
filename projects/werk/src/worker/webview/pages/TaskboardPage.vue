@@ -5,6 +5,7 @@ import UButton from '@nuxt/ui/components/Button.vue';
 import UInput from '@nuxt/ui/components/Input.vue';
 import UIcon from '@nuxt/ui/components/Icon.vue';
 import TaskInteraction from '../components/TaskInteraction.vue';
+import RepositoryDiscovery from '../components/RepositoryDiscovery.vue';
 import OverviewTaskCard from '../components/OverviewTaskCard.vue';
 import { buildTaskOverview, type TaskOverviewInput, type TaskOverviewItem } from '../task-overview';
 import type { RunPage, WorkerRun } from '../../application/run-evidence';
@@ -135,6 +136,7 @@ onDeactivated(() => { active = false; evidenceRevision++; });
       </div></div>
       </header>
 
+      <RepositoryDiscovery />
       <section class="active-run" :class="{ occupied: !!currentSession }" aria-labelledby="active-run-heading">
         <div class="active-run-heading"><span class="activity-dot" :class="{ idle: !currentSession }" /><h2 id="active-run-heading">{{ currentSession ? 'Running now' : !state.sessions ? 'Loading taskboard…' : state.settings?.board.paused ? 'New starts paused' : 'Worker available' }}</h2><span class="serial-note">One task at a time</span></div>
         <template v-if="currentSession">

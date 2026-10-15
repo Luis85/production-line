@@ -156,6 +156,9 @@ export function createHttpHandler(dependencies: HttpDependencies) {
         if (method === "POST" && path === "/v1/worker/assignments/next") {
           return json(response, 200, worker.claim(await readJson(request)));
         }
+        if (method === "POST" && path === "/v1/worker/profiles") {
+          return json(response, 200, worker.updateProfiles(await readJson(request)));
+        }
         if (method === "POST" && path === "/v1/worker/snapshots") {
           return json(response, 201, worker.snapshot(await readJson(request)));
         }

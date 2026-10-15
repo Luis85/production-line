@@ -10,6 +10,7 @@ async function editor(t) {
   const component = (await readFile(join(root, 'src/worker/webview/components/RepositoryPanel.vue'), 'utf8')).replace(/\r\n/g, '\n');
   const script = component.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1]
     .replace(/^import U(?:Button|Input).*\n/gm, '')
+    .replace(/^import RepositoryDiscovery.*\n/gm, '')
     .replace(/^import \{ state,.*\n/gm, '');
   const fixture = { unlocked: true, draftEpoch: 0, settings: { repositories: { pollMs: 30000, items: [{ id: 'web', path: '/projects/web', remote: 'origin', watch: true }] } }, environment: { repositories: { items: [] } }, sessions: { execution: { queued: 0 } }, status: { activeTasks: [] } };
   const harness = `import { reactive } from 'vue';

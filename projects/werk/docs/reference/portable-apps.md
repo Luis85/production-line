@@ -20,7 +20,7 @@ node bin/apps/factory/cli.mjs start --state-dir .werk/factory --port 3100
 Start any subset in any order. `start` returns JSON when the app and authenticated
 control endpoint are ready; `run` stays in the foreground for CI, systemd, launchd,
 Windows services or containers. Use `--port 0` for an available port and read `url`
-from the result. Workers open Chat first; Factory and orchestrators open Dashboard.
+from the result. Workers open Taskboard first; Factory and orchestrators open Dashboard.
 Startup returns the private credential **file path**, never its contents. Open the
 returned URL and unlock the webview using that file locally. The CLI reads local
 credentials itself. Workers may enroll later through `settings set`; Factory can
@@ -44,6 +44,12 @@ state directories and ports for additional workers.
 
 ## Assign repositories to a worker
 
+If the installation/project folder is a Git root, the worker offers it on
+Taskboard before using it. Review `repository status`, then explicitly choose
+`repository accept --discovery-id ID` or `repository decline --discovery-id ID`.
+The saved choice survives restart; acceptance adds an assignment. No remote or
+detached HEAD leaves watching off. Discovery never selects an unrelated ancestor.
+
 Use Dashboard's **Git repositories** section or
 `settings set --file repositories.json` with a top-level
 `repositories` object: `{pollMs: 30000, items: [{id, path, remote, branch?, watch}]}`.
@@ -53,12 +59,19 @@ under each checkout's `.werk/worktrees`. Drain tasks before changing assignments
 Worker JSON passed through `--config` can seed assignments; saved private settings
 take precedence after the first start. Git must be installed on the worker host.
 
-The private status endpoint is available with
-`api --path /api/repositories`; POST `{"action":"sync","id":"app"}` to sync
-one assignment, or omit `id` for all. Local file tasks select the assignment ID
+Use `repository status` to inspect assignments and `repository sync --id app`
+to check/pull one assignment; omit `--id` for all. The same private endpoint is
+available with `api --path /api/repositories`. Local file tasks select the assignment ID
 in their existing `repository` field. Assigning repositories does not change
 mock execution or give provider Chat arbitrary filesystem tools. See the
 [configuration contract](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/configuration.md#assigned-git-repositories).
+
+Execution profiles are editable in **Dashboard → Execution profiles** or through
+`profile list` / `profile set --file profiles.json`. Keep the current mode and
+one shared execution slot. Pause and drain work first; registered workers persist
+changes until their orchestrator acknowledges them. See the
+[CLI contract](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/runtime-cli.md#worker-repositories-and-execution-profiles)
+for guarded input and pending-update behavior.
 
 ## Lifecycle and automation contract
 

@@ -156,3 +156,19 @@ await route activation before highlighting a target and close when access locks.
 Shared skip links focus main content without changing hash-based routes used by
 other Werk applications. Taskboard aggregation is a pure view of retained worker
 state; it does not introduce a second task queue or execution authority.
+
+## Repository consent and profile editing
+
+A detected installation repository appears in a nonmodal prompt above the
+taskboard and in Dashboard’s repository section. Show its full wrapping path,
+branch and remote name without remote credentials. Use repository and Don’t use
+are explicit choices; the latter persists and leaves a reconsideration action
+in Dashboard. Pending actions, failures and acknowledged choices have visible
+feedback without stealing focus during polling.
+
+Execution profiles have a focused Dashboard editor with labelled ID/provider
+fields, add/remove controls and a visible execution-mode boundary. Keep drafts
+while live observations refresh, report stale saves before overwriting changes,
+and distinguish saved pending synchronization from active profiles. Explain
+pause/drain requirements next to the save controls and keep one-slot semantics
+explicit. Provider sign-in and model settings remain in Provider connections.

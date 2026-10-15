@@ -63,6 +63,26 @@ node bin/apps/worker/cli.mjs feature list
 node bin/apps/worker/cli.mjs stop
 ```
 
+## Review the detected project repository
+
+If the project directory is itself a Git checkout, unlock Taskboard and review
+**Use this Git repository?**. Check its full path, branch and remote, then choose
+**Use repository** or **Don’t use**. Detection alone does not authorize fetching,
+pulling or task worktrees. The choice survives restart; a skipped repository can
+be accepted later in **Dashboard → Git repositories**.
+
+Accepting adds a saved assignment. A checkout with a branch and remote starts
+watching; without a remote, or with detached HEAD, watching starts off. Committed
+files remain usable for worktree tasks. Configure a remote/current branch before
+enabling watching. Finish queued/running work before accepting. A Git checkout
+in a parent directory is not automatically offered, and linked worktrees with a
+`.git` file are supported. An existing explicit assignment already authorizes use.
+
+Complete this choice before submitting a feature-folder patch request for the
+detected checkout. Chat and tasks for other assigned repositories remain available.
+For the equivalent noninteractive commands, see
+[worker repository and profile commands](../reference/runtime-cli.md#worker-repositories-and-execution-profiles).
+
 ## Assign Git repositories
 
 In Dashboard, open **Git repositories → Manage repository assignments** and add
@@ -220,7 +240,9 @@ Code CLI signed in on that machine, or an API provider; Codex CLI remains POSIX-
 Register through the worker's existing connection settings. New assignments are
 written into the same feature folder as frontmatter plus Markdown, with their
 orchestrator task/session IDs and current state. They share the same serial
-execution slot. The orchestrator keeps routing and lease ownership; editing an
+execution slot. Edit the offered IDs/providers in **Dashboard → Execution profiles**
+while paused and idle; see [profile editing](use-worker-webview.md#edit-execution-profiles)
+for the supported modes and acknowledgment required after registration. The orchestrator keeps routing and lease ownership; editing an
 exported file cannot create a second local execution or alter the remote task.
 
 

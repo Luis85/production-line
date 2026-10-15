@@ -128,3 +128,12 @@ export function profiles(value: unknown): Profile[] {
         throw new ValidationError('Profile IDs must be unique');
     return result;
 }
+
+/** Editing changes profile selection, never machine capacity or lease authority. */
+export function workerProfilesUpdate(value: unknown): import('./protocol.js').WorkerProfilesRequest {
+    const input = object(value, 'Worker profiles', ['profiles', 'expectedConfigurationHash', 'configurationHash']);
+    const next = profiles(input.profiles);
+    if (next.some(profile => profile.maxParallel !== 1) || new Set(next.map(profile => profile.mode)).size !== 1 || (next[0].mode === 'cli' && next.length !== 1))
+        throw new ValidationError('Editable profiles require one slot each and a shared mode; live execution requires exactly one Codex profile');
+    return { profiles: next, expectedConfigurationHash: text(input.expectedConfigurationHash, 'expectedConfigurationHash', 100), configurationHash: sha256(input.configurationHash, 'configurationHash') };
+}

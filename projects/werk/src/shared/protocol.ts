@@ -56,6 +56,16 @@ export interface RegistrationResponse {
     token: string;
     project: string;
 }
+/** Worker-owned compare-and-swap; hashes never appear in public worker summaries. */
+export interface WorkerProfilesRequest {
+    profiles: Profile[];
+    expectedConfigurationHash: string;
+    configurationHash: string;
+}
+export interface WorkerProfilesResponse {
+    profiles: Profile[];
+    configurationHash: string;
+}
 export interface ClaimRequest {
     requestId: string;
     queueCapacity?: number;

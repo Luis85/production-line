@@ -24,6 +24,7 @@ import {
   identifier,
   workerPolicy,
   repositoryScope,
+  workerProfilesUpdate,
 } from "../../shared/contracts.js";
 import { validateSnapshot } from "../../shared/snapshots.js";
 import type { OrchestratorOverview, TaskCounts } from "../../shared/factory.js";
@@ -37,6 +38,8 @@ import {
 } from "../policies.js";
 import type {
   WorkerRecord,
+  WorkerProfilesRequest,
+  WorkerProfilesResponse,
   WorkerSummary,
   TaskEvent,
   SnapshotRecord,
@@ -555,6 +558,26 @@ export class Store implements OrchestratorRepository {
       );
     return { id, token };
   }
+  updateProfiles(w: WorkerRecord, input: WorkerProfilesRequest): WorkerProfilesResponse {
+    const update = workerProfilesUpdate(input);
+    return this.transaction(() => {
+      const row = this.db.prepare('SELECT project,profiles,config FROM workers WHERE id=?').get(w.id);
+      if (!row || row.project !== w.project) throw new DomainError('unauthorized', 'Worker registration no longer exists.');
+      const current = profiles(JSON.parse(String(row.profiles))), config = workerPolicy(JSON.parse(String(row.config)));
+      if (config.configHash === update.configurationHash && canonicalValue(current) === canonicalValue(update.profiles))
+        return { profiles: current, configurationHash: config.configHash };
+      if (config.configHash !== update.expectedConfigurationHash || config.configHash === update.configurationHash)
+        throw new DomainError('conflict', 'Worker configuration changed. Reload before editing profiles.');
+      if (new Set(current.map(profile => profile.mode)).size !== 1 || current[0].mode !== update.profiles[0].mode)
+        throw new DomainError('invalid_input', "Execution profiles must retain this worker's configured mode.");
+      if (this.db.prepare("SELECT 1 FROM tasks WHERE worker=? AND status='running' LIMIT 1").get(w.id))
+        throw new DomainError('conflict', 'Finish or abandon all accepted assignments before editing profiles.');
+      if (this.db.prepare("SELECT 1 FROM attempts WHERE worker=? AND (provider IS NULL OR mode IS NULL OR provider NOT IN ('claude','codex') OR mode NOT IN ('mock','cli')) LIMIT 1").get(w.id))
+        throw new DomainError('conflict', 'Historical profile authority is incomplete; profile edits are unavailable for this registration.');
+      this.db.prepare('UPDATE workers SET profiles=?,config=? WHERE id=?').run(JSON.stringify(update.profiles), JSON.stringify({ ...config, configHash: update.configurationHash }), w.id);
+      return { profiles: update.profiles, configurationHash: update.configurationHash };
+    });
+  }
   worker(token: string): WorkerRecord {
     const w = this.db
       .prepare(
@@ -596,9 +619,11 @@ export class Store implements OrchestratorRepository {
       );
     const scope = repositoryScope(repositoryIds, legacyRepository);
     return this.transaction(() => {
-      const stored = this.db.prepare("SELECT config FROM workers WHERE id=?").get(w.id);
-      if (!stored) throw new DomainError("unauthorized", "Worker registration no longer exists.");
-      w = { ...w, config: workerPolicy(JSON.parse(String(stored.config))) };
+      const stored = this.db.prepare("SELECT project,profiles,config FROM workers WHERE id=?").get(w.id);
+      if (!stored || stored.project !== w.project) throw new DomainError("unauthorized", "Worker registration no longer exists.");
+      const config = workerPolicy(JSON.parse(String(stored.config)));
+      if (w.config.configHash !== config.configHash) throw new DomainError('conflict', 'Worker configuration changed before this assignment request.');
+      w = { ...w, profiles: profiles(JSON.parse(String(stored.profiles))), config };
       const now = this.clock();
       this.db.prepare("UPDATE workers SET seen=? WHERE id=?").run(now, w.id);
       this.reapExpiredInsideTransaction();
@@ -716,7 +741,7 @@ export class Store implements OrchestratorRepository {
       const assigned = this.get(t.id);
       this.db
         .prepare(
-          "INSERT INTO attempts(task,attempt,worker,lease,profile,claim_key,config_hash,max_attempts) VALUES(?,?,?,?,?,?,?,?)",
+          "INSERT INTO attempts(task,attempt,worker,lease,profile,claim_key,config_hash,max_attempts,provider,mode) VALUES(?,?,?,?,?,?,?,?,?,?)",
         )
         .run(
           t.id,
@@ -727,6 +752,8 @@ export class Store implements OrchestratorRepository {
           claimKey,
           w.config.configHash ?? "default",
           w.config.maxAttempts ?? 3,
+          profile.provider,
+          profile.mode,
         );
       return assigned;
     });
@@ -1085,6 +1112,8 @@ export class Store implements OrchestratorRepository {
               leaseId: a.lease,
               profileId: a.profile,
               configurationHash: a.config_hash,
+              provider: a.provider,
+              mode: a.mode,
             }
           : undefined,
         w,

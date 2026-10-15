@@ -113,8 +113,9 @@ require saving edits first.
 
 Legacy `chat.codexExecutable` in worker JSON or native system YAML remains a
 first-start seed. Persisted webview settings take precedence on later starts.
-Orchestrator task profiles remain separately configured: connecting a chat/API
-provider does not advertise unsupported orchestrator execution capabilities.
+Orchestrator task profiles are edited separately under **Execution profiles**:
+connecting a chat/API provider does not change the worker’s orchestration mode
+or advertised profiles.
 
 ## Create and follow up on a task
 
@@ -167,6 +168,19 @@ approve file input and generate a patch.
 
 ## Assign and watch repositories
 
+An unassigned Git checkout in the worker’s project folder appears on unlocked
+Taskboard as **Use this Git repository?**. Review the full checkout path, branch
+and remote. **Use repository** saves an assignment and enables safe watching when
+a branch and remote exist. Without either, watching stays off and committed file
+tasks can still use worktrees. Finish queued/running work before accepting.
+
+**Don’t use** saves a decline and removes the Taskboard prompt. It does not block
+Chat or unrelated work. Revisit the choice in **Dashboard → Git repositories →
+Use the repository you skipped?**. Until accepted or explicitly assigned, the
+detected checkout is not fetched, pulled or used for task worktrees. The worker
+does not automatically select a parent directory’s repository. Choices survive
+restart; replacing the repository requires a fresh choice.
+
 In Dashboard, open **Git repositories → Manage repository assignments** to assign
 existing Git checkouts to this worker.
 Choose stable IDs and paths on the worker machine, then configure the remote,
@@ -187,8 +201,9 @@ Choose **New task → Prepare a file task** in the interaction panel. The file e
 repository from the assigned list, and an explicit list of relative file paths.
 The worker captures those files from a pinned worktree when accepting the task.
 When no repositories are assigned, the absolute-directory input remains available.
-Git roots use worktrees; legacy non-Git directories retain bounded snapshot-only
-behavior without Git provenance.
+Git roots use worktrees; the detected project checkout still requires the saved
+consent above. Legacy non-Git directories retain bounded snapshot-only behavior
+without Git provenance.
 Switching task selection does not change this editor’s instructions or provider. Successful submission keeps the separate conversation draft. Access expiry retains the file editor in this tab; explicit Lock clears it.
 
 Only those snapshots and your instruction are sent to the chosen provider in
@@ -277,6 +292,35 @@ requires a separate worker state directory to preserve assignment ownership.
 
 For independent launch commands, private service credentials and subsequent
 Factory registration, see [Assemble independent components](assemble-independent-components.md).
+
+## Edit execution profiles
+
+Open **Dashboard → Execution profiles**. These are the IDs/providers offered for
+orchestrator assignments, separate from provider sign-in, model settings and
+imported agent definitions. A simulated worker supports 1–8 Claude/Codex profiles;
+a worker already configured for native Linux Codex supports one Codex profile.
+Editing keeps the current execution mode and the shared single execution slot.
+
+1. Finish or stop queued/running tasks and active replies, then **Pause new starts**.
+   Pausing leaves queued work in place; resume to finish it or stop it before editing.
+2. Edit **Profile ID** and **Provider**, using **Add profile** or **Remove** where
+   available. IDs must be unique; changing an ID changes its routing name.
+3. Choose **Save profiles**. Before first registration, the change takes effect
+   immediately. A registered worker shows **Waiting for the orchestrator** until
+   the same orchestrator accepts the update; the old profiles remain active.
+4. Once the update is accepted, resume from **Work in progress** when ready.
+
+Offline changes are saved and retried automatically. While pending, new local and
+remote work, queue resume and further profile edits are blocked. Restart preserves
+the pending change; **Go standalone** does not bypass its required acknowledgment.
+Reconnect to the same orchestrator to complete it. An older orchestrator without
+profile updates must be upgraded before acceptance can succeed.
+
+If the save response is uncertain, use **Check saved profiles** or **Retry same
+save**. If another operator changed profiles, your draft stays visible; use
+**Discard edits and reload** before making a new change. Worker identity, sessions
+and task history are preserved. See the [profile contract](../reference/configuration.md#editable-execution-profiles)
+for API fields and private-state persistence.
 
 ## Interact from a line or orchestrator dashboard
 

@@ -1,11 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, mkdir, writeFile, readFile, chmod, rm, readdir } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, chmod, rm, readdir, rename } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { CodexAdapter, codexConfiguration } from '../../src/worker/dist/worker/infrastructure/codex-adapter.js';
+import { RepositoryDiscovery } from '../../src/worker/dist/worker/infrastructure/repository-discovery.js';
 import { RepositoryManager } from '../../src/worker/dist/worker/infrastructure/repositories.js';
 import { configuration } from '../../src/worker/dist/worker/config.js';
 import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
@@ -122,6 +123,31 @@ test('model Git metadata cannot redirect trusted postprocessing into the shared 
   assert.equal(execFileSync('git',['diff','--cached'],{cwd:f.repository,encoding:'utf8'}),'');
   const retained=JSON.parse(await readFile(join(f.stateDir,'workspaces',f.task.lease,'worktree.json'),'utf8'));
   assert.match(await readFile(join(retained.workspace,'.git'),'utf8'),/^gitdir: /);
+});
+
+test('legacy native Codex refuses declined or replaced installation repositories before any worktree or provider invocation',linux,async t=>{
+  const f=await fixture(t), marker=join(f.directory,'provider-invoked');
+  await writeFile(f.executable,`#!${process.execPath}\nrequire('node:fs').appendFileSync(${JSON.stringify(marker)},'called\\n');require('node:fs').appendFileSync('README.md','Approved repository.');\n`);
+  const initial=new RepositoryDiscovery(f.stateDir,f.repository,new AbortController().signal,f.repository);await initial.init([]);await initial.record('declined');
+  const discovery=new RepositoryDiscovery(f.stateDir,f.repository,new AbortController().signal,f.repository);await discovery.init([]);
+  const adapter=new CodexAdapter(f.config,f.stateDir,'Explicit consent required.',undefined,path=>discovery.assertAllowed(path));
+  assert.equal(discovery.legacyAllowed(),false);
+  await assert.rejects(adapter.run(f.task,new AbortController().signal),/Approve the detected/);
+  await assert.rejects(readFile(marker),error=>error.code==='ENOENT');
+  await assert.rejects(readdir(join(f.repository,'.werk/worktrees')),error=>error.code==='ENOENT');
+  await assert.rejects(readdir(join(f.stateDir,'workspaces',f.task.lease)),error=>error.code==='ENOENT');
+  await discovery.record('accepted');assert.equal(discovery.legacyAllowed(),true);
+  await rename(join(f.repository,'.git'),join(f.directory,'previous.git'));
+  const git=(...args)=>execFileSync('git',['-c','core.hooksPath=/dev/null',...args],{cwd:f.repository,encoding:'utf8',stdio:'pipe'});
+  git('init');git('add','README.md');git('-c','user.name=Werk Test','-c','user.email=werk@example.invalid','commit','-m','Replacement repository');
+  await assert.rejects(adapter.run(f.task,new AbortController().signal),/Approve the detected/);
+  assert.equal(discovery.legacyAllowed(),false);
+  await assert.rejects(readFile(marker),error=>error.code==='ENOENT');
+  await assert.rejects(readdir(join(f.repository,'.werk/worktrees')),error=>error.code==='ENOENT');
+  await discovery.verify(discovery.view().id);await discovery.record('accepted');
+  const result=await adapter.run(f.task,new AbortController().signal);
+  assert.equal(result.kind,'change-set');assert.equal(await readFile(marker,'utf8'),'called\n');
+  assert.equal(await readFile(join(f.repository,'README.md'),'utf8'),'# Fixture\n');
 });
 
 test('native Codex routes one project to assigned repositories and preserves project-id fallback',linux,async t=>{

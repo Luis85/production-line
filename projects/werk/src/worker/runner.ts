@@ -1,3 +1,6 @@
+import { ExecutionProfiles, type ExecutionProfilesView } from './application/execution-profiles.js';
+import { executionProfilesStorage } from './infrastructure/execution-profiles.js';
+import { DomainError } from '../shared/errors.js';
 import type { RepositoryConfiguration } from './application/repositories.js';
 import { verifyReviewArtifact } from "./infrastructure/review-artifact.js";
 import { RemoteGateReconciler } from "./application/reconcile-request-gates.js";
@@ -33,6 +36,7 @@ import {
 } from "./infrastructure/orchestrator-client.js";
 import {
   loadOrRegisterIdentity,
+  readRegisteredIdentity,
   IdentityConfigurationError,
 } from "./infrastructure/identity.js";
 import { executeAttempt } from "./application/execute-attempt.js";
@@ -110,7 +114,9 @@ export async function runWorker(
       config.retainedPairs > 100000)
   )
     throw Error("retainedPairs must be an integer in 0–100000");
+  config = { ...config, profiles: structuredClone(config.profiles), policy: { ...config.policy } };
   const mode = dependencies.adapter?.mode ?? (config.codex ? "cli" : "mock");
+  const executionProfiles = new ExecutionProfiles(config.policy.configHash, config.profiles, mode, executionProfilesStorage(config.stateDir));
   const now = dependencies.now ?? Date.now;
   await ensureDirectory(config.stateDir);
   const lock = join(config.stateDir, "worker.lock");
@@ -153,9 +159,43 @@ export async function runWorker(
     },
     config.retainedPairs,
   );
-  const workspace = new WorkerWorkspace(
+  let session:
+    | { url: string; identity: import('./application/ports.js').WorkerIdentity; client: import('./application/ports.js').WorkerClient }
+    | undefined;
+  let requestId = randomUUID();
+  const profileView = (): ExecutionProfilesView => {
+    const pending = Boolean(executionProfiles.pending);
+    const saveBlockedReason = pending ? 'Saved profiles are waiting for the orchestrator. Keep intake paused until they are applied.'
+      : !workspace.settings.value.board.paused ? 'Pause intake before editing execution profiles.'
+      : workspace.sessions.busy || workspace.board.active || state.activeTasks.length || state.queuedTasks?.length
+        ? 'Finish or cancel queued tasks and active replies before editing execution profiles.' : null;
+    return { ...executionProfiles.view(), canEdit: !saveBlockedReason, saveBlockedReason };
+  };
+  const applyProfileState = () => {
+    const active = executionProfiles.active;
+    config.profiles = active.profiles;
+    config.policy.configHash = active.configurationHash;
+    state.profiles = active.profiles;
+    state.configurationHash = active.configurationHash;
+    journal.configHash = active.configurationHash;
+    requestId = randomUUID();
+  };
+  const workspace: WorkerWorkspace = new WorkerWorkspace(
     {
       ...config,
+      executionProfiles: {
+        view: profileView,
+        pending: () => Boolean(executionProfiles.pending),
+        update: async (input) => workspace.withIdleConfiguration(async () => {
+          const registered = session?.identity ?? await readRegisteredIdentity(config.stateDir);
+          // A failed terminal write can outlive its lease. Finish recovery under the old profile authority first.
+          if (registered) await journal.recover(registered.id, config.profiles, state, before => remoteGates(registered.url).recoverSnapshot(before));
+          await executionProfiles.stage(input);
+          if (executionProfiles.pending && !registered) { await executionProfiles.commit(); applyProfileState(); }
+          await save();
+          return profileView();
+        }),
+      },
       chatExecutable: config.chatExecutable ?? config.codex?.executable,
     },
     journal,
@@ -165,11 +205,11 @@ export async function runWorker(
     const repositoryIds = workspace.settings.value.repositories.items.map(item => item.id);
     return {
       repositoryIds,
-      legacyRepository: mode === "cli" && repositoryIds.length === 0 && Boolean(config.codex?.repository),
+      legacyRepository: mode === "cli" && repositoryIds.length === 0 && Boolean(config.codex?.repository) && workspace.repositoryDiscovery.legacyAllowed(),
     };
   };
   const adapter = dependencies.adapter ?? (config.codex
-    ? new CodexAdapter(config.codex, config.stateDir, config.systemPrompt, workspace.repositories)
+    ? new CodexAdapter(config.codex, config.stateDir, config.systemPrompt, workspace.repositories, path => workspace.repositoryDiscovery.assertAllowed(path))
     : new MockAdapter(config.mockMs));
   const gateReconciler = new RemoteGateReconciler(
     workspace.sessions.requests,
@@ -265,6 +305,9 @@ export async function runWorker(
     await handle.writeFile(String(process.pid));
     await handle.sync();
     await handle.close();
+    await executionProfiles.init();
+    if (executionProfiles.pending && !(await readRegisteredIdentity(config.stateDir))) await executionProfiles.commit();
+    applyProfileState();
     await journal.init();
     await workspace.init();
     status = await statusServer(
@@ -303,14 +346,6 @@ export async function runWorker(
         serviceEvent("worker", "state_write_error", "error");
       });
     }, 250);
-    let session:
-      | {
-          url: string;
-          identity: import("./application/ports.js").WorkerIdentity;
-          client: import("./application/ports.js").WorkerClient;
-        }
-      | undefined;
-    let requestId = randomUUID();
     while (!stopping.aborted) {
       try {
         const connection = workspace.settings.value.connection;
@@ -321,6 +356,7 @@ export async function runWorker(
           await save();
         } else {
           if (!session) {
+            const initialize = async () => {
             const gateway =
               dependencies.gateway ??
               new HttpWorkerGateway(connection.url, connection.enrollmentToken);
@@ -331,6 +367,7 @@ export async function runWorker(
               { ...config.policy, ...repositoryScope() },
               gateway,
               stopping,
+              executionProfiles.pending?.configurationHash,
             );
             await journal.recover(
               identity.id,
@@ -345,8 +382,12 @@ export async function runWorker(
             };
             state.workerId = identity.id;
             state.project = identity.project;
+            };
+            // A pending transition already blocks admissions; otherwise reserve registration too.
+            if (executionProfiles.pending) await initialize();
+            else await workspace.withRepositoryAdmission(initialize);
           }
-          const { client, identity } = session;
+          const { client, identity } = session!;
           const reconciliation = await gateReconciler.tick(
             client,
             identity,
@@ -355,6 +396,22 @@ export async function runWorker(
           if (reconciliation.failed)
             serviceEvent("worker", "gate_resolution_pending", "warn");
           await journal.flush((snapshot) => client.publishSnapshot(snapshot));
+          if (executionProfiles.pending) {
+            await workspace.withIdleConfiguration(async () => {
+              const pending = executionProfiles.pending!;
+              if (!client.updateProfiles) throw new DomainError('unavailable', 'The orchestrator must support editable execution profiles before this saved change can be applied.');
+              const acknowledgement = await client.updateProfiles({ ...pending, expectedConfigurationHash: executionProfiles.active.configurationHash });
+              if (acknowledgement.configurationHash !== pending.configurationHash || JSON.stringify(acknowledgement.profiles) !== JSON.stringify(pending.profiles))
+                throw new DomainError('conflict', 'The orchestrator acknowledged different execution profiles.');
+              const updated = { ...identity, configHash: pending.configurationHash };
+              // Persist identity first: a crash here is recoverable using the durable pending hash.
+              await atomicWrite(join(config.stateDir, 'identity.json'), JSON.stringify(updated));
+              session!.identity = updated;
+              await executionProfiles.commit();
+              applyProfileState();
+              await save();
+            });
+          }
           const accept = async (task: Task) => {
             if (
               !task.lease ||
