@@ -212,8 +212,8 @@ docker run --rm --user 1000:1000 `
   node /installer/cli.mjs init
 ```
 
-Then use the Compose commands above. Native CLI providers remain POSIX-only;
-Windows native workers use API providers.
+Then use the Compose commands above. A native Windows worker can use the Claude
+Code CLI signed in on that machine, or an API provider; Codex CLI remains POSIX-only.
 
 ## Add an orchestrator later
 

@@ -117,13 +117,33 @@ test('a remote failure allows committed local work; legacy Git paths also get ma
   git(repo.path, 'remote', 'remove', 'origin'); await manager.init();
   assert.equal(manager.view()[0].state, 'error'); assert.match(manager.view()[0].error, /remote does not exist/);
   const assigned = await manager.prepareWorktree(repo.id, 'offline', signal()); assert.equal(assigned.baseCommit, git(repo.path, 'rev-parse', 'HEAD'));
-  const fullId = 'a'.repeat(100), longIdManager = f.manager([{ ...repo, id: fullId }]);
-  const fullIdTask = await longIdManager.prepareWorktree(fullId, 'long-assignment-id', signal());
-  assert.equal(fullIdTask.repositoryId, fullId); assert.ok(basename(fullIdTask.path).startsWith(fullId + '-'));
   const legacy = await prepareRepositoryWorktree(repo.path, 'legacy', signal());
   assert.equal(legacy.repository, repo.path); assert.equal(legacy.repositoryId, 'local');
   assert.equal(git(repo.path, 'status', '--porcelain'), '');
   assert.equal((await readFile(join(repo.path, '.git', 'info', 'exclude'), 'utf8')).split('/.werk/worktrees/').length, 2);
+});
+
+test('maximum-length assignment IDs use bounded worktree names with full, collision-safe identities', async t => {
+  const f = await fixtures(t), repo = f.repositories[0], fullId = 'a'.repeat(100), otherId = 'a'.repeat(99) + 'b';
+  const manager = f.manager([{ ...repo, id: fullId }]), otherManager = f.manager([{ ...repo, id: otherId }]);
+  const taskKey = 'long-assignment-id';
+  const first = await manager.prepareWorktree(fullId, taskKey, signal());
+  const other = await otherManager.prepareWorktree(otherId, taskKey, signal());
+  assert.equal(first.repositoryId, fullId); assert.equal(other.repositoryId, otherId);
+  assert.ok(basename(first.path).length <= 58); assert.ok(basename(other.path).length <= 58);
+  assert.notEqual(first.path, other.path, 'IDs sharing their readable prefix must not share worktrees.');
+  const shortId = fullId.slice(0, 24), shortManager = f.manager([{ ...repo, id: shortId }]);
+  const short = await shortManager.prepareWorktree(shortId, JSON.stringify([fullId, taskKey]), signal());
+  assert.notEqual(first.path, short.path, 'A short ID and chosen task key must not alias a long identity.');
+  const marker = join(repo.path, '.git', 'werk-worktrees', `${basename(first.path)}.json`);
+  const owner = JSON.parse(await readFile(marker, 'utf8'));
+  assert.equal(owner.repositoryId, fullId); assert.equal(owner.taskKey, taskKey);
+  await writeFile(join(first.path, 'file.txt'), 'retained long-ID work\n');
+  const reused = await manager.prepareWorktree(fullId, taskKey, signal());
+  assert.equal(reused.reused, true); assert.equal(reused.path, first.path);
+  assert.equal(await readFile(join(reused.path, 'file.txt'), 'utf8'), 'retained long-ID work\n');
+  await writeFile(marker, JSON.stringify({ ...owner, repositoryId: otherId }));
+  await assert.rejects(manager.prepareWorktree(fullId, taskKey, signal()), /ownership/);
 });
 
 test('watching honors per-repository pause, reconfiguration and shutdown', async t => {

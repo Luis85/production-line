@@ -5,8 +5,8 @@ The runtime release contains `bin/apps/factory`, `bin/apps/orchestrator` and
 Each includes its compiled application, webview, CLI and runtime dependencies.
 Only **Node.js 24.x** is required. No npm install, source checkout, Docker or sibling
 application is needed. CLI subscription providers additionally need their installed,
-authenticated executable on a Linux or macOS worker machine. Windows workers use
-API providers. API providers need a configured key and selected model.
+authenticated executable on the worker machine. Claude Code CLI runs on Linux,
+macOS and Windows; Codex CLI requires Linux or macOS. API providers need a configured key and selected model.
 
 From the destination project directory:
 
@@ -115,7 +115,11 @@ provider's CLI on the host. An example settings document is:
 {"provider":{"id":"codex-cli","executable":"/absolute/path/to/codex"}}
 ```
 
-On Windows, configure an API connection instead, for example
+On Windows, configure Claude Code CLI with its absolute `claude.exe` path and use
+`"provider":"claude-cli"` in task input. See the
+[Windows Claude requirements](../how-to/use-worker-webview.md#connect-claude-or-codex)
+for PowerShell, .NET and process-containment prerequisites. Alternatively, configure
+an API connection, for example
 `{"provider":{"id":"openai-api","model":"YOUR_SELECTED_MODEL","apiKey":"PRIVATE_API_KEY"}}`,
 and use `"provider":"openai-api"` in task input. Keep the configuration file private.
 

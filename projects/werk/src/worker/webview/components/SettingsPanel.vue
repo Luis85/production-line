@@ -92,7 +92,7 @@ async function save(body: unknown) {
           </label>
           <UInput id="provider-path" v-model="executable" placeholder="/absolute/path/to/codex" class="w-full" :disabled="editingLocked" />
           <p class="page-note">
-            Uses the worker process owner’s existing CLI login. Sign in on the machine first. After saving, check sign-in below. Subscription quota and model access are not verified by this check. Subscription CLIs currently require Linux or macOS.
+            Uses the worker process owner’s existing CLI login. Sign in on the machine first. After saving, check sign-in below. Subscription quota and model access are not verified by this check. Claude Code CLI supports Linux, macOS and Windows; Codex CLI requires Linux or macOS. See the <a href="https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/use-worker-webview.md#connect-claude-or-codex" target="_blank" rel="noopener noreferrer">Windows Claude requirements</a>.
           </p>
           <div class="provider-login">
             <strong>

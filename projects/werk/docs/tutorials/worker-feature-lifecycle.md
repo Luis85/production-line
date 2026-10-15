@@ -8,8 +8,13 @@ do not need a Factory, orchestrator, npm install or source build.
 You need Node.js 24 and a verified Werk runtime archive. For real execution, you
 also need a configured provider: a signed-in Codex/Claude CLI on the worker's
 machine, or a supported API account. Installing Werk does not sign in to a model
-provider. The examples use Codex CLI on Linux/macOS; Windows native workers use
-an API provider. See [provider setup](../how-to/use-worker-webview.md#connect-claude-or-codex).
+provider. The examples use Codex CLI on Linux/macOS. Native Windows workers can
+use Claude Code CLI or an API provider. For Claude, substitute `claude-cli` for
+`codex-cli` in provider selections below, sign in with `claude auth login` and
+configure the absolute path to `claude.exe`. See
+[provider setup and Windows Claude requirements](../how-to/use-worker-webview.md#connect-claude-or-codex)
+for PowerShell, .NET and process-containment prerequisites. The separate native
+Codex adapter for orchestrator tasks remains Linux-only.
 
 ## 1. Download and verify the package
 

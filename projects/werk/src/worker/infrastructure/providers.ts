@@ -1,8 +1,9 @@
 import { providerTransport } from './provider-transport.js';
 import { providerUsage } from './provider-usage.js';
 import type { ProviderUsage } from '../application/run-evidence.js';
-import { access } from 'node:fs/promises';
+import { access, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { delimiter, isAbsolute, join } from 'node:path';
 import type { ChatMessage } from '../application/conversation.js';
 import { classifyProviderStatus, legacyModelReply, observeModelInvocation, modelCapabilities, parseModelResult, ProviderModelError, requireModelRequest, type ModelRequest, type ModelResult, type StructuredModel } from '../application/model-contract.js';
@@ -23,7 +24,8 @@ export async function findExecutable(name: string) {
 }
 export function providerReady(connection: ProviderConnection) { return connection.id.endsWith('-cli') ? !!connection.executable : !!connection.apiKey && !!connection.model; }
 export function modelFor(saved: ProviderConnection, directory: string, transport: typeof fetch = providerTransport): StructuredModel | undefined {
-  if (!providerReady(saved) || (process.platform === 'win32' && saved.id.endsWith('-cli'))) return;
+  // Codex CLI conversations remain POSIX-only; Claude Code CLI also runs on native Windows.
+  if (!providerReady(saved) || (process.platform === 'win32' && saved.id === 'codex-cli')) return;
   const connection = { ...saved };
   if (connection.id === 'codex-cli') return new CodexConversationModel(connection.executable, directory, connection.instruction, connection.model);
   const model: StructuredModel = {
@@ -38,13 +40,23 @@ export function modelFor(saved: ProviderConnection, directory: string, transport
   };
   return model;
 }
+/** Every isolation flag stays enabled on every platform. */
+export function claudeArguments(model: string, promptFile: string) {
+  return ['--print', '--output-format', 'json', '--safe-mode', '--restricted', '--tools', '', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--setting-sources', '', '--no-session-persistence', '--disable-slash-commands', ...(model ? ['--model', model] : []), '--system-prompt-file', promptFile];
+}
 async function claudeReply(connection: ProviderConnection, directory: string, request: ModelRequest, signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void) {
-  if (process.platform === 'win32') throw new ProviderModelError('unavailable');
   const cwd = join(directory, 'chat-workspace'); await ensureDirectory(cwd);
-  const result = await providerCommand(connection.executable, ['--print', '--output-format', 'json', '--safe-mode', '--restricted', '--tools', '', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}', '--setting-sources', '', '--no-session-persistence', '--disable-slash-commands', ...(request.provider.model ? ['--model', request.provider.model] : []), '--system-prompt', request.protocolInstructions], cwd, signal, JSON.stringify(request.messages.map(({ role, text }) => ({ role, content: text }))), true, 'claude', output => {
-    let response; try { response = JSON.parse(output.toString('utf8')); } catch { return; }
-    if (response?.type === 'result') onUsage?.(providerUsage('claude', response));
-  });
+  // Instructions can exceed one argument (Linux) or the whole command line (Windows); pass them as a private file.
+  const promptDirectory = await mkdtemp(join(tmpdir(), 'werk-claude-prompt-'));
+  let result: Buffer;
+  try {
+    const promptFile = join(promptDirectory, 'system-prompt.md');
+    await writeFile(promptFile, request.protocolInstructions, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+    result = await providerCommand(connection.executable, claudeArguments(request.provider.model, promptFile), cwd, signal, JSON.stringify(request.messages.map(({ role, text }) => ({ role, content: text }))), true, 'claude', output => {
+      let response; try { response = JSON.parse(output.toString('utf8')); } catch { return; }
+      if (response?.type === 'result') onUsage?.(providerUsage('claude', response));
+    });
+  } finally { await rm(promptDirectory, { recursive: true, force: true }); }
   let value; try { value = JSON.parse(result.toString('utf8')); } catch { throw new ProviderModelError('protocol'); }
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ProviderModelError('protocol');
   if (value.is_error) throw new ProviderModelError('unavailable');

@@ -5,6 +5,10 @@ multi-repository implementation. Six parallel reviews covered task authors,
 worker operators, fleet administrators, maintainers, security and release
 operations. Findings were reproduced before changing behavior; each lane then
 verified its fixes, with a second review across the new routing boundaries.
+A follow-up inventory identified concurrent [PR #10](https://github.com/Luis85/production-line/pull/10),
+which adds native Windows Claude Code CLI support. It was reviewed in an isolated
+checkout for integration into the main [PR #11](https://github.com/Luis85/production-line/pull/11),
+alongside fixes prompted by the platform CI matrix.
 
 ## Acceptance
 
@@ -22,6 +26,11 @@ verified its fixes, with a second review across the new routing boundaries.
   private and deployment documentation consistent with the shipped runtime.
 - Qualify the exact prebuilt release through the existing platform, Docker,
   VM and Storybook gates before publishing.
+- Preserve Claude isolation flags, private prompt handling and credential
+  boundaries on native Windows; supervise provider descendants through abort,
+  timeout and parent exit. Keep Windows Codex CLI unavailable.
+- Validate native Git registration paths and canonical temporary paths without
+  relying on a runner's Git line-ending policy or installed provider CLIs.
 
 ## Findings and resulting behavior
 
@@ -41,6 +50,10 @@ verified its fixes, with a second review across the new routing boundaries.
 | P2 | Onboarding | Tours blocked the interface and mixed English controls into German fleet screens. | Nonmodal tours leave the page usable and use the surface's language while retaining Escape and focus recovery. |
 | P1 | Deployment | Project-worker and source-worker Docker images lacked Git; lean release images lacked SSH; Git transport context was filtered from workers. | Git-capable pinned images, verified SSH runtime dependencies, and narrowly forwarded proxy/CA/SSH-agent context independent of provider credentials. |
 | P2 | Documentation | Release documentation denied automatic updates; backup guidance omitted assigned repositories; the guide conflated project and repository. | Correct update instructions, explicit repository/worktree backup scope, accurate Worker/project explanations and scoped cookie-security guidance. |
+| P1 | Windows provider lifecycle | PR #10's initial PID-tree cleanup could miss descendants after their provider parent exited, including children retaining output pipes. | A Job Object supervisor contains the provider before its code runs, terminates remaining descendants on normal exit and closes lifetime containment on cancellation. Native Windows qualification remains pending. |
+| P1 | Windows repository identity | Git reports registered worktrees with forward slashes, while native paths use backslashes. Raw comparison rejected a valid owned worktree. | Resolve absolute registration paths using native path semantics while retaining canonical-directory, ownership, base-commit and tamper checks. |
+| P1 | Windows worktree paths | Full 100-character assignment IDs could exhaust Windows path limits in checkout and Git administration paths. | Bounded readable names include a digest of the complete assignment/task identity; ownership metadata retains the full ID and rejects mismatches. |
+| P2 | Portable verification | macOS temporary-directory aliases, Git checkout line endings, POSIX path expectations and host CLI discovery made fixtures environment-dependent. | Canonical fixture roots, explicit Git line-ending settings, CRLF-safe component extraction, native path expectations and a paused API-provider fixture retain the original behavior assertions. |
 
 The implementation retains the Factory/orchestrator/worker boundaries. Repository
 capabilities use existing JSON persistence rather than a database migration and
@@ -67,6 +80,11 @@ before/after evidence:
 | Line intake, mobile | [Before](../evidence/2026-10-15-repository-review/fleet-before-line-intake-mobile.png) | [After](../evidence/2026-10-15-repository-review/fleet-after-line-intake-mobile.png) | Repository choice appears in the form and preview without page overflow. |
 
 ## Verification
+
+The following results qualify the initial `0.4.0` candidate at `9fc5094`, before
+the portability fixes and PR #10 integration. The 1,010 passes plus one skip
+are a baseline of 1,011 tests, not the integrated candidate's final count.
+The archive and visual inventories likewise describe that earlier candidate.
 
 - `npm run check`: TypeScript and Vue checks, all independent application builds,
   **1,010 passing tests**, zero failures and one platform skip (PowerShell installer
@@ -95,15 +113,61 @@ Release publication is additionally gated by GitHub Actions for the exact tagged
 revision, including Windows/macOS/Linux, Docker and an actual Ubuntu cloud-init
 VM. Configured workflow coverage alone is not evidence that those jobs passed.
 
+## Concurrent PR and platform follow-up
+
+PR #10 was reviewed across provider selection, Windows account environment,
+Claude isolation arguments, private prompt-file cleanup, bounded status checks
+and descendant process lifetime. Long protocol instructions use a private
+system-prompt file rather than a command-line argument; provider tooling and
+MCP access remain disabled. The integrated release retains version `0.4.0`;
+PR #10's proposed `0.3.1` version is not a separate publication target.
+
+Windows supervision uses kill-on-close Job Objects. The supervisor joins its
+lifetime job before creating a suspended provider and assigns the child to
+its execution job before resuming it. Normal provider exit terminates remaining
+descendants before draining output. Cancellation terminates the supervisor,
+closing the lifetime job without a PID lookup. Failure to establish containment
+fails the invocation. Native Windows tests cover cancellation, parent exit with
+inherited or ignored pipes, bounded status checks, argument quoting and raw stdin.
+Native CI exposed a synchronous pipe-read startup deadlock in the first supervisor revision. The provider now resumes before dedicated raw-stream pumps start; native Windows qualification of that correction is required before merge.
+
+The platform follow-up distinguishes a production fix from fixture corrections:
+
+- `bca5bff` fixes Windows worktree registration comparison. A regression also
+  retargets Git administration metadata and confirms that reuse is rejected
+  without losing retained task edits.
+- macOS fixtures resolve temporary-directory aliases before comparing canonical
+  repository identities. Disposable Git fixtures set `core.autocrlf=false`;
+  component extraction normalizes CRLF. Production snapshot bytes and integrity
+  checks are unchanged.
+- Paused task-admission fixtures explicitly configure an API provider and assert
+  that the task remains queued. They make no model request and require no host
+  CLI installation. Path expectations use the current platform's native resolver.
+- The shutdown regression advances only its configured deadline clock while
+  retaining real TCP upload abortion, one database close and database reopening
+  assertions; it does not depend on CI wall-clock scheduling.
+
+| Evidence | Status and scope |
+| --- | --- |
+| PR #10 isolated Linux `npm run check` | 924 passes, zero failures, eight platform skips; 932 tests total. This is the separate PR #10 checkout, not the combined release. |
+| Combined Linux check before final Windows corrections | 1,014 passes, zero failures and eight platform skips; 1,022 tests total. |
+| Main portability regression selection | 29 passes, zero failures or skips on Linux, including registration tampering and deterministic repository fixtures. |
+| Native Windows Claude provider supervision | Pending Windows CI; Linux skips do not establish Windows behavior. |
+| Combined candidate platform matrix and release artifacts | Pending refreshed results for the integrated revision; earlier counts and archives above remain baseline evidence. |
+
 ## Qualification boundaries
 
 Live-provider protocol tests use controlled CLI and HTTP fixtures; this pass did
 not use an authenticated provider account. Browser and Storybook data are
-simulation fixtures. Linux process-group cancellation is covered; termination of
-Git descendant SSH/helper processes on Windows is not established by these tests.
-Native Codex execution remains Linux-only. Repository worktrees separate task
-edits but are not isolation for mutually untrusted tenants.
+simulation fixtures. Linux process-group cancellation is covered. Windows Job
+Object supervision applies to provider invocations and provider-status checks;
+it does not establish cancellation of Git descendant SSH/helper processes on
+Windows, which remains outside this evidence. Native Windows provider tests
+are still pending. Native Codex worktree execution remains Linux-only, and
+Codex CLI conversations remain unavailable on Windows. Repository worktrees
+separate task edits but are not isolation for mutually untrusted tenants.
 
-The initial remote PR inventory was empty. This increment is delivered through
-its own reviewed pull request and the normal `v0.4.0` release workflow, preserving
-all existing qualification gates.
+The concurrent PR inventory and its review are recorded above. The combined
+increment is delivered through PR #11 and the normal `v0.4.0` release workflow,
+preserving all existing qualification gates. Publication requires the final
+revision's results, not the earlier candidate's successful checks.

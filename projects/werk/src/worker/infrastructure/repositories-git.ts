@@ -78,7 +78,7 @@ async function excludeWorktrees(root: RepositoryRoot, signal: AbortSignal, timeo
   } finally { await handle.close(); }
 }
 
-interface Ownership { version: 1; repository: string; taskKey: string; path: string; baseCommit: string; }
+interface Ownership { version: 1; repositoryId?: string; repository: string; taskKey: string; path: string; baseCommit: string; }
 const commitId = (value: string) => /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(value);
 async function ownedWorktree(path: string, owner: Ownership, root: RepositoryRoot, signal: AbortSignal, timeoutMs: number) {
   const info = await lstat(path);
@@ -101,7 +101,11 @@ export async function createRepositoryWorktree(root: RepositoryRoot, repositoryI
   signal.throwIfAborted();
   if (!taskKey || taskKey.length > 1024 || !/^[a-zA-Z0-9_-]{1,100}$/.test(repositoryId)) throw Error('Invalid repository task identity.');
   if (baseCommit !== undefined && !commitId(baseCommit)) throw Error('Task base must be a full Git commit identifier.');
-  const name = `${repositoryId}-${createHash('sha256').update(taskKey).digest('hex').slice(0, 32)}`;
+  // Bound both checkout and Git administration paths on Windows without losing the full assignment identity.
+  // Keep existing short-ID paths stable; long IDs share only a readable prefix, never the identity digest.
+  const identity = repositoryId.length > 24 ? JSON.stringify([repositoryId, taskKey]) : taskKey;
+  const separator = repositoryId.length > 24 ? '--' : '-';
+  const name = `${repositoryId.slice(0, 24)}${separator}${createHash('sha256').update(identity).digest('hex').slice(0, 32)}`;
   const werk = await directory(root.path, '.werk'), worktrees = await directory(werk, 'worktrees');
   await excludeWorktrees(root, signal, timeoutMs);
   const metadata = await directory(root.commonDirectory, 'werk-worktrees'), path = join(worktrees, name), marker = join(metadata, `${name}.json`);
@@ -110,7 +114,7 @@ export async function createRepositoryWorktree(root: RepositoryRoot, repositoryI
   if (markerInfo) {
     if (!markerInfo.isFile() || markerInfo.isSymbolicLink() || markerInfo.size > 16384) throw Error('Task worktree ownership metadata is invalid.');
     try { owner = JSON.parse(await readFile(marker, 'utf8')); } catch { throw Error('Task worktree ownership metadata is invalid.'); }
-    if (!owner || owner.version !== 1 || owner.taskKey !== taskKey || owner.repository !== root.path || owner.path !== path || !commitId(owner.baseCommit) || (baseCommit && owner.baseCommit !== baseCommit)) throw Error('Task worktree ownership does not match this task.');
+    if (!owner || owner.version !== 1 || (owner.repositoryId !== repositoryId && !(owner.repositoryId === undefined && repositoryId.length <= 24)) || owner.taskKey !== taskKey || owner.repository !== root.path || owner.path !== path || !commitId(owner.baseCommit) || (baseCommit && owner.baseCommit !== baseCommit)) throw Error('Task worktree ownership does not match this task.');
   }
   const exists = await lstat(path).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
   if (exists) {
@@ -121,7 +125,7 @@ export async function createRepositoryWorktree(root: RepositoryRoot, repositoryI
   if (!owner) {
     const commit = (await repositoryGit(root.path, ['rev-parse', '--verify', `${baseCommit ?? 'HEAD'}^{commit}`], signal, timeoutMs)).trim();
     if (!commitId(commit)) throw Error('Repository base commit is invalid.');
-    owner = { version: 1, repository: root.path, taskKey, path, baseCommit: commit };
+    owner = { version: 1, repositoryId, repository: root.path, taskKey, path, baseCommit: commit };
     await writeFile(marker, JSON.stringify(owner) + '\n', { flag: 'wx', mode: 0o600 });
   }
   signal.throwIfAborted();

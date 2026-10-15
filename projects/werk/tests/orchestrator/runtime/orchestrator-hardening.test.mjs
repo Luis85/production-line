@@ -81,7 +81,7 @@ test('independent SQLite processes claim disjoint assignments and retain fencing
   } finally { store?.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
-test('shutdown aborts an unfinished upload within its deadline and releases the database', { timeout: 3000 }, async () => {
+test('shutdown aborts an unfinished upload at its configured deadline and releases the database', { timeout: 15000 }, async t => {
   const directory = await mkdtemp(join(tmpdir(), 'werk-shutdown-'));
   const path = join(directory, 'state.sqlite');
   const app = await startServer({ ...config, db: path, shutdownTimeoutMs: 40 });
@@ -92,13 +92,34 @@ test('shutdown aborts an unfinished upload within its deadline and releases the 
     socket.on('error', () => {});
     await once(socket, 'connect');
     socket.write(`POST /v1/tasks HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer ${config.adminToken}\r\nContent-Type: application/json\r\nContent-Length: 1000\r\n\r\n{`);
-    await requestStarted;
-    const started = performance.now();
-    await Promise.all([app.close(), app.close()]);
-    assert.ok(performance.now() - started < 1000);
+    const [request] = await requestStarted;
+    assert.equal(request.complete, false, 'the real HTTP upload remains incomplete');
+    const aborted = new Promise(resolve => request.once('aborted', resolve));
+    const forceClose = t.mock.method(app.server, 'closeAllConnections');
+    const closeStore = t.mock.method(app.store, 'close');
+    // Control only the shutdown clock; real TCP and SQLite cleanup may be delayed by CI scheduling.
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const closing = app.close();
+    assert.equal(app.close(), closing, 'concurrent shutdown callers share one completion');
+    t.mock.timers.tick(39);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(forceClose.mock.callCount(), 0, 'active uploads retain their configured grace period');
+    assert.equal(closeStore.mock.callCount(), 0, 'the database stays open until active requests stop');
+    assert.equal(request.destroyed, false);
+    assert.deepEqual(app.store.list(), []);
+    t.mock.timers.tick(1);
+    assert.equal(forceClose.mock.callCount(), 1, 'the deadline forces active connections closed');
+    await Promise.all([closing, aborted]);
+    assert.equal(request.destroyed, true);
+    assert.equal(app.server.listening, false);
+    assert.equal(closeStore.mock.callCount(), 1, 'shutdown releases the database exactly once');
     const reopened = new Store(path);
     try { assert.deepEqual(reopened.list(), []); } finally { reopened.close(); }
-  } finally { socket?.destroy(); await app.close(); await rm(directory, { recursive: true, force: true }); }
+  } finally {
+    socket?.destroy(); app.server.closeAllConnections();
+    try { await app.close(); }
+    finally { t.mock.timers.reset(); await rm(directory, { recursive: true, force: true }); }
+  }
 });
 
 test('shutdown deadlines reject invalid configuration before opening a server', async () => {
