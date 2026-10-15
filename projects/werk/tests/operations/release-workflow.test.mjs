@@ -39,11 +39,13 @@ test('stable publication uploads the complete draft before selecting latest', { 
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(calls.map(args => args[1]), ['view', 'create', 'upload', 'edit']);
   assert.ok(calls[1].includes('--draft'));
-  for (const path of ['release/werk-0.1.0.tar.gz', 'release/werk-0.1.0.zip', 'release/install.mjs', 'release/SHA256SUMS']) assert.ok(calls[2].includes(path));
+  for (const path of ['release/werk-0.1.0.tar.gz', 'release/werk-0.1.0.zip', 'release/install.mjs', 'release/SHA256SUMS', 'release/werk-storybook-0.1.0.zip', 'release/STORYBOOK-SHA256SUMS']) assert.ok(calls[2].includes(path));
   assert.ok(calls[3].includes('--latest'));
   assert.ok(calls[3].includes('--draft=false'));
   assert.match(notes, /https:\/\/github.com\/example\/werk\/releases\/latest\/download\/install.mjs/);
   assert.match(notes, /\$LASTEXITCODE -eq 0/);
+  assert.match(notes, /werk-storybook-0\.1\.0\.zip/);
+  assert.match(notes, /storymap\/index\.html/);
 });
 
 test('prereleases publish without replacing the stable latest release', { skip: !supported }, async t => {
@@ -63,4 +65,19 @@ test('failed uploads remain unpublished and only drafts can be repaired', { skip
   const published = await publish(t, '0.1.0', 'published');
   assert.notEqual(published.result.status, 0);
   assert.deepEqual(published.calls.map(args => args[1]), ['view']);
+});
+
+
+test('release publication requires screenshot qualification and downloads its exact packaged artifact', () => {
+  assert.ok(workflow.jobs.publish.needs.includes('storybook'));
+  const qualification = workflow.jobs.storybook.steps;
+  const commands = qualification.flatMap(step => step.run ? [step.run] : []);
+  assert.ok(commands.includes('npm exec -- playwright install --with-deps chromium'));
+  assert.ok(commands.indexOf('npm run storybook:ci') < commands.indexOf('npm run release:storybook'));
+  const upload = qualification.find(step => step.with?.name === 'werk-storybook-candidate');
+  assert.equal(upload.with['if-no-files-found'], 'error');
+  assert.match(upload.with.path, /werk-storybook-\*\.zip/);
+  assert.match(upload.with.path, /STORYBOOK-SHA256SUMS/);
+  const download = workflow.jobs.publish.steps.find(step => step.with?.name === 'werk-storybook-candidate');
+  assert.equal(download.with.path, 'release');
 });

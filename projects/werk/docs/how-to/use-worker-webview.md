@@ -15,9 +15,12 @@ executes exactly one task at a time, including Chat, explicit file tasks and
 remote assignments. For parallel work, start separate workers; see the
 [native and Docker examples](assemble-independent-components.md#scale-with-separate-workers).
 
-The worker has exactly three pages: **Chat** (the default), **History** and
-**Dashboard**. Dashboard contains Monitoring & Status; existing
-`/monitoring-status` bookmarks redirect to `/dashboard`. Choose **Tour** in the
+The worker opens on **Taskboard**, with **History** and **Dashboard** in the
+header. The board groups work into Needs you, Running, Up next, Drafts and
+Completed. The interaction panel on the right creates tasks or follows up on
+the selected task; on narrow screens it follows the board. Dashboard contains
+Monitoring & Status. Existing `/chat` bookmarks redirect to `/taskboard` while
+preserving task links; `/monitoring-status` redirects to `/dashboard`. Choose **Tour** in the
 header for a replayable introduction. Back, Next and Close let you explore at
 your own pace; the tour does not send messages, run tasks or change settings.
 
@@ -56,8 +59,8 @@ To rotate access, stop the worker, remove only `webview-token`, and restart.
 
 ## Connect Claude or Codex
 
-Open the provider connection editor directly from **Chat**, or use
-**Dashboard → Provider connections & orchestrator enrollment → Connections**.
+Use **Dashboard → Provider connections & orchestrator enrollment → Connections**.
+The task interaction panel links to this editor when a connection needs setup.
 Worker access and model sign-in are separate: unlocking the webview never signs
 you into a provider. Four connections are supported:
 
@@ -102,16 +105,24 @@ first-start seed. Persisted webview settings take precedence on later starts.
 Orchestrator task profiles remain separately configured: connecting a chat/API
 provider does not advertise unsupported orchestrator execution capabilities.
 
-## Give the worker a task in Chat
+## Create and follow up on a task
 
-Choose **New task**, select a provider and optionally an imported Docker Agent
-definition/agent, then choose **Create draft task**. Describe the work in the
-composer and choose **Queue task**. See [agent definition profiles](../reference/agent-definitions.md)
-for preview, compatibility and instructions-only adaptation. The first message
-creates queued work with its own worker-managed model session. Follow-up messages
-continue that same task session; choose New task for unrelated work. Chat is a
-task-entry surface, not an independent parallel model process. Requests wait
-while another task occupies the worker or execution is paused.
+Choose **New task** in the task interaction panel, select a connection and enter
+the outcome under **Task instructions**. **Create task** creates its session and
+queues the first message together. Expand **Agent definition** to choose an
+imported definition/agent or an optional task name. See
+[agent definition profiles](../reference/agent-definitions.md) for compatibility
+and instructions-only adaptation. If creation succeeds but message delivery
+cannot be confirmed, the task keeps its instructions for review before retrying.
+
+Select a board card to open **Follow up** for that task. The transcript, saved
+model evidence and composer remain scoped to the selection. Use **New task** for
+unrelated work. Additional tasks wait while the worker is occupied or new starts
+are paused. The Running strip identifies the recorded active attempt and its
+model when evidence is available; a configured default is not shown as proof of
+the model used. **Stop task** targets that verified local execution. Upstream
+assignments retain their orchestrator controls, and reviewer runs open the
+request review controls.
 
 Every explicit local file task and remote orchestrator assignment also has a
 dedicated session. Sessions retain their transcript and provider affinity across
@@ -123,10 +134,10 @@ host CLI sessions or transfer native session identifiers between providers.
 Changing selection in another tab makes stale send/stop requests fail rather
 than target the wrong session.
 
-The task list keeps recent conversations within reach. On narrow screens, open
-**Switch task** above the conversation to search or choose a saved task. Selection
-closes this list and focuses the conversation; Escape returns focus to its summary. Replies render readable
-paragraphs, lists and fenced code, with copy actions; model HTML is never executed.
+Use **Board** or **List**, search by title or identity, and select a card to
+focus its conversation. Drafts and completed work remain available in their
+own disclosures. Replies render readable paragraphs, lists and fenced code,
+with copy actions; model HTML is never executed.
 You can draft a follow-up while work is queued or running and send it when the
 worker finishes. Use the composer or Ctrl/Command + Enter to submit a message. The stop action
 cancels the pending or active reply. Provider execution is bounded to two minutes
@@ -143,10 +154,10 @@ approve file input and generate a patch.
 
 ## Run local coding tasks
 
-Choose **Run task** in Chat. The editor copies your current Chat draft when first opened; edit its own instructions and choose its provider connection. Give it a title, an
+Choose **New task → Prepare a file task** in the interaction panel. The file editor has its own draft; edit its own instructions and choose its provider connection. Give it a title, an
 absolute repository directory on the worker machine, and an explicit list of
 relative file paths. The worker captures those files when accepting the task.
-Switching Chat tasks does not change this editor’s instructions or provider. Successful submission keeps the separate Chat draft. Access expiry retains the file editor in this tab; explicit Lock clears it.
+Switching task selection does not change this editor’s instructions or provider. Successful submission keeps the separate conversation draft. Access expiry retains the file editor in this tab; explicit Lock clears it.
 
 Only those snapshots and your instruction are sent to the chosen provider in
 the new file task's dedicated session. The preceding Chat transcript is not
@@ -289,10 +300,10 @@ No environment-variable values or credentials are shown.
 
 ## Answer a question or continue after interruption
 
-Chat shows a pending question or escalation separately from a completed answer.
+The taskboard places a pending question or escalation in **Needs you** and opens its answer controls in **Follow up**.
 Read its reason/choices, enter your response and submit through the pending-input
 control. Generic follow-up sending is held until that decision is resolved.
-History and Dashboard identify requests needing input and link back to Chat.
+History and Dashboard identify requests needing input and link back to the selected task on the taskboard.
 
 Inspect the saved checkpoint before resuming a failed, cancelled or interrupted
 turn. Continuation replays saved context in a fresh invocation and may consume

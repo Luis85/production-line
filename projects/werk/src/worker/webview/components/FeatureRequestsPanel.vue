@@ -32,7 +32,7 @@ async function refreshSelected() {
   catch (failure) { if (current === detailRevision && active.value && state.unlocked) error.value = (failure as Error).message; }
 }
 async function closeDetail() { detailRevision++; detail.value = null; await nextTick(); trigger?.isConnected && trigger.focus(); }
-async function openConversation() { if (!detail.value?.record) return; if (await workspaceAction('/api/sessions', { action: 'select', id: detail.value.record.sessionId })) await router.push('/chat'); else error.value = state.actionError || 'The task conversation could not be opened.'; }
+async function openConversation() { const sessionId = detail.value?.record?.sessionId; if (!sessionId) return; if (await workspaceAction('/api/sessions', { action: 'select', id: sessionId })) await router.push({ path: '/taskboard', query: { session: sessionId } }); else error.value = state.actionError || 'The task conversation could not be opened.'; }
 async function entry() { await load(); if (!props.compact && route.query.view === 'features') { await nextTick(); document.getElementById('project-requests-title')?.focus(); } }
 onMounted(() => { void entry(); }); onActivated(() => { active.value = true; void entry(); });
 onDeactivated(() => { active.value = false; revision++; detailRevision++; loading.value = false; });

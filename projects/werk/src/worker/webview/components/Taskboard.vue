@@ -23,7 +23,8 @@ const capacity = ref(16),
   busy = ref(false),
   archived = ref(false),
   detail = ref<LocalTask | null>(null),
-  removing = ref(false);
+  removing = ref(false),
+  active = ref(false);
 const search = ref(""),
   status = ref("all"),
   selectedId = ref(""),
@@ -69,20 +70,38 @@ async function closeDetail() {
   )?.focus({ preventScroll: true });
 }
 async function focusFileTasks() {
-  if (!["review", "failed"].includes(String(route.query.fileState))) return;
+  if (!active.value || !state.unlocked || route.path !== "/history" || route.query.fileId || !["review", "failed"].includes(String(route.query.fileState))) return;
   await nextTick();
+  if (!active.value || route.path !== "/history" || route.query.fileId) return;
   const heading = document.getElementById("taskboard-title");
   heading?.focus({ preventScroll: true });
   heading?.scrollIntoView({ block: "start" });
 }
+async function openLinkedFileTask() {
+  if (!active.value || !state.unlocked || route.path !== "/history") return;
+  const id = typeof route.query.fileId === "string" ? route.query.fileId : "";
+  if (!id) { await focusFileTasks(); return; }
+  if (selectedId.value === id && detailLoading.value) {
+    await nextTick();
+    if (active.value && route.path === "/history" && route.query.fileId === id)
+      document.getElementById("local-task-detail")?.focus();
+    return;
+  }
+  await inspect(id);
+  if (active.value && route.path === "/history" && selectedId.value === id) {
+    inspectTrigger = document.getElementById("taskboard-title");
+    await nextTick();
+    if (active.value && route.path === "/history" && route.query.fileId === id)
+      document.getElementById("local-task-detail")?.focus();
+  }
+}
 onActivated(() => {
-  void focusFileTasks();
+  active.value = true;
+  void openLinkedFileTask();
 });
 watch(
-  () => route.query.fileState,
-  () => {
-    if (route.path === "/history") void focusFileTasks();
-  },
+  () => [route.path, route.query.fileId, route.query.fileState, state.unlocked],
+  () => { void openLinkedFileTask(); },
 );
 const columns = [
   {
@@ -202,6 +221,7 @@ watch(
   { flush: "sync" },
 );
 onDeactivated(() => {
+  active.value = false;
   detailRevision++;
   if (detailLoading.value && selectedId.value)
     detailError.value =
@@ -238,16 +258,17 @@ async function inspect(id: string, event?: MouseEvent) {
 }
 async function openConversation() {
   if (busy.value || !detail.value) return;
+  const sessionId = detail.value.sessionId;
   busy.value = true;
   actionError.value = "";
   try {
     if (
       await workspaceAction("/api/sessions", {
         action: "select",
-        id: detail.value.sessionId,
+        id: sessionId,
       })
     )
-      await router.push("/chat");
+      await router.push({ path: "/taskboard", query: { session: sessionId } });
     else
       actionError.value =
         state.actionError || "The conversation could not be opened. Try again.";
@@ -291,7 +312,7 @@ function download() {
       <div>
         <h2 id="taskboard-title" tabindex="-1">File tasks</h2>
         <p class="page-note">
-          Patch-producing tasks from Run task in Chat. Each owns a separate
+          Patch-producing tasks from Prepare a file task in Task interaction. Each owns a separate
           session and runs in this worker’s shared queue.
         </p>
       </div>
@@ -346,10 +367,10 @@ function download() {
     </p>
     <div v-if="!allTasks.length" class="compact-empty">
       <p>
-        No file tasks yet. Prepare approved files in Chat to receive a patch for
+        No file tasks yet. Choose Prepare a file task in Task interaction to receive a patch for
         review.
       </p>
-      <UButton to="/chat" color="neutral" variant="outline">Open Chat</UButton>
+      <UButton to="/taskboard" color="neutral" variant="outline">Open taskboard</UButton>
     </div>
     <div v-else-if="!visible.length" class="compact-empty">
       <p>No file tasks match these filters.</p>

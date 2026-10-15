@@ -3,17 +3,32 @@ import ProjectIntegrationsPanel from '../components/ProjectIntegrationsPanel.vue
 import ResourceMonitorPanel from '../components/ResourceMonitorPanel.vue';
 import RunEvidencePanel from '../components/RunEvidencePanel.vue';
 import FeatureRequestsPanel from '../components/FeatureRequestsPanel.vue';
-import { computed, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, nextTick, onActivated, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import UButton from '@nuxt/ui/components/Button.vue';
 import UBadge from '@nuxt/ui/components/Badge.vue';
 import UAlert from '@nuxt/ui/components/Alert.vue';
 import UIcon from '@nuxt/ui/components/Icon.vue';
 import RequestPolicyPanel from '../components/RequestPolicyPanel.vue';
 import SettingsPanel from '../components/SettingsPanel.vue';
+import DefinitionPanel from '../components/DefinitionPanel.vue';
 import { state, bytes, date, workspaceAction } from '../store';
 
-const router = useRouter();
+const router = useRouter(), route = useRoute();
+const providerDetails = ref<HTMLDetailsElement | null>(null), definitionDetails = ref<HTMLDetailsElement | null>(null);
+async function openLinkedSettings() {
+  if (route.path !== '/dashboard') return;
+  const path = route.fullPath;
+  await nextTick();
+  if (route.fullPath !== path) return;
+  const target = route.hash === '#provider-connections' ? providerDetails.value : route.hash === '#agent-definitions' ? definitionDetails.value : null;
+  if (!target) return;
+  target.open = true;
+  target.querySelector('summary')?.focus({ preventScroll: true });
+  target.scrollIntoView({ block: 'start' });
+}
+watch(() => route.fullPath, () => { void openLinkedSettings(); });
+onActivated(() => { void openLinkedSettings(); });
 const queueBusy = ref(false), opening = ref(false), actionError = ref('');
 const env = computed(() => state.environment), worker = computed(() => state.status);
 const runningSession = computed(() => state.sessions?.records.find(item => item.id === state.sessions?.execution.currentSessionId));
@@ -47,7 +62,7 @@ async function openRunning() {
   if (!id || opening.value) return;
   opening.value = true; actionError.value = '';
   try {
-    if (await workspaceAction('/api/sessions', { action: 'select', id })) await router.push('/chat');
+    if (await workspaceAction('/api/sessions', { action: 'select', id })) await router.push({ path: '/taskboard', query: { session: id } });
     else actionError.value = state.actionError || 'The task could not be opened. Refresh and try again.';
   } finally { opening.value = false; }
 }
@@ -57,7 +72,7 @@ async function openRunning() {
   <section class="dashboard-page">
     <div class="page-heading">
       <div><h1 tabindex="-1">Worker dashboard</h1><p>Current work, items to review and the health of this worker.</p></div>
-      <UButton to="/chat" color="neutral" variant="outline" icon="i-lucide-messages-square">Open Chat</UButton>
+      <UButton to="/taskboard" color="neutral" variant="outline" icon="i-lucide-layout-dashboard">Open taskboard</UButton>
     </div>
     <UAlert v-for="alert in state.monitoring?.alerts" :key="alert.code" :title="alert.message"
       :description="alert.remediation" color="warning" variant="soft" icon="i-lucide-triangle-alert" class="notice" />
@@ -116,10 +131,14 @@ async function openRunning() {
     <ProjectIntegrationsPanel v-if="state.unlocked" />
     <RunEvidencePanel v-if="state.unlocked" compact />
     <FeatureRequestsPanel v-if="state.unlocked" compact />
-    <details class="monitor-section dashboard-disclosure">
+    <details id="provider-connections" ref="providerDetails" class="monitor-section dashboard-disclosure">
       <summary>Provider connections &amp; orchestrator enrollment</summary>
       <SettingsPanel />
       <RequestPolicyPanel />
+    </details>
+    <details id="agent-definitions" ref="definitionDetails" class="monitor-section dashboard-disclosure">
+      <summary>Agent definitions</summary>
+      <DefinitionPanel />
     </details>
     <details class="monitor-section dashboard-disclosure">
       <summary>Connections &amp; delivery</summary>

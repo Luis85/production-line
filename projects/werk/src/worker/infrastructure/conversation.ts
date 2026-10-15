@@ -1,4 +1,4 @@
-import { legacyModelReply, modelCapabilities, parseModelResult, ProviderModelError, requireModelRequest, type ModelRequest, type StructuredModel } from '../application/model-contract.js';
+import { legacyModelReply, observeModelInvocation, modelCapabilities, parseModelResult, ProviderModelError, requireModelRequest, type ModelRequest, type StructuredModel } from '../application/model-contract.js';
 import type { ProviderUsage } from '../application/run-evidence.js';
 import { codexUsage } from './provider-usage.js';
 import { join, resolve } from 'node:path';
@@ -25,18 +25,20 @@ export class CodexConversationModel implements StructuredModel {
   reply(messages: ChatMessage[], signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void) { return legacyModelReply(this, messages, signal, onUsage); }
   async execute(request: ModelRequest, signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void) {
     requireModelRequest(request, 'codex-cli');
-    const cwd = join(resolve(this.directory), 'chat-workspace');
-    await ensureDirectory(cwd);
-    const output = await providerCommand(this.executable, ['exec', ...(request.provider.model ? ['--model', request.provider.model] : []), '--ignore-user-config', '--ephemeral', '--skip-git-repo-check', '--sandbox', 'read-only', '--json', '--disable', 'shell_tool', '--disable', 'unified_exec', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'code_mode', '--disable', 'multi_agent', '-c', 'approval_policy="never"', '-c', 'web_search="disabled"', '-c', 'project_doc_max_bytes=0', '-c', 'shell_environment_policy.inherit="none"', '-C', cwd, '-'], cwd, signal, request.renderedPrompt, true, 'codex', output => codexUsage(output, onUsage));
-    const replies: string[] = [];
-    for (const line of output.toString('utf8').split('\n')) {
-      if (!line.trim()) continue;
-      let event; try { event = JSON.parse(line); } catch { throw new ProviderModelError('protocol'); }
-      if (!event || typeof event !== 'object' || typeof event.type !== 'string') throw new ProviderModelError('protocol');
-      if (event.type === 'error' || event.type === 'turn.failed') throw new ProviderModelError('unavailable');
-      if (event.item && ['command_execution', 'file_change', 'mcp_tool_call', 'web_search'].includes(event.item.type)) throw new ProviderModelError('protocol');
-      if (event.type === 'item.completed' && event.item?.type === 'agent_message' && typeof event.item.text === 'string') replies.push(event.item.text);
-    }
-    return parseModelResult(replies.join('\n\n'));
+    return observeModelInvocation(signal, onUsage, async observe => {
+      const cwd = join(resolve(this.directory), 'chat-workspace');
+      await ensureDirectory(cwd);
+      const output = await providerCommand(this.executable, ['exec', ...(request.provider.model ? ['--model', request.provider.model] : []), '--ignore-user-config', '--ephemeral', '--skip-git-repo-check', '--sandbox', 'read-only', '--json', '--disable', 'shell_tool', '--disable', 'unified_exec', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'code_mode', '--disable', 'multi_agent', '-c', 'approval_policy="never"', '-c', 'web_search="disabled"', '-c', 'project_doc_max_bytes=0', '-c', 'shell_environment_policy.inherit="none"', '-C', cwd, '-'], cwd, signal, request.renderedPrompt, true, 'codex', output => codexUsage(output, observe));
+      const replies: string[] = [];
+      for (const line of output.toString('utf8').split('\n')) {
+        if (!line.trim()) continue;
+        let event; try { event = JSON.parse(line); } catch { throw new ProviderModelError('protocol'); }
+        if (!event || typeof event !== 'object' || typeof event.type !== 'string') throw new ProviderModelError('protocol');
+        if (event.type === 'error' || event.type === 'turn.failed') throw new ProviderModelError('unavailable');
+        if (event.item && ['command_execution', 'file_change', 'mcp_tool_call', 'web_search'].includes(event.item.type)) throw new ProviderModelError('protocol');
+        if (event.type === 'item.completed' && event.item?.type === 'agent_message' && typeof event.item.text === 'string') replies.push(event.item.text);
+      }
+      return parseModelResult(replies.join('\n\n'));
+    });
   }
 }

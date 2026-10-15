@@ -13,10 +13,13 @@
     ],
     "types": [
       "vite/client"
-    ]
+    ],
+    "allowJs": true
   },
   "include": [
     "src/**/webview/**/*.ts",
-    "src/**/webview/**/*.vue"
+    "src/**/webview/**/*.vue",
+    "storybook/**/*.ts",
+    ".storybook/**/*.ts"
   ]
 }

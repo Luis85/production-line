@@ -99,3 +99,10 @@ For model questions, escalation and stopped requests, use the
 [answer and resume guide](docs/how-to/answer-and-resume-worker.md).
 The [interaction contract](docs/reference/model-interaction.md) describes durable
 checkpoints, provider capabilities and replayable lifecycle events.
+
+For illustrated component stories, complete system journeys and desktop/mobile
+screenshots, download the matching `werk-storybook-<version>.zip` and
+`STORYBOOK-SHA256SUMS` from the same GitHub release. After verification and
+extraction, open `storymap/index.html`. The
+[Storybook release contract](docs/reference/releases.md#illustrated-storybook-and-storymaps)
+explains provenance, simulation fixtures and interactive browsing.

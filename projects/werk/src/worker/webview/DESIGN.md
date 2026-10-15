@@ -1,104 +1,158 @@
 # Worker workspace direction
 
 ## THESIS
-Operate mode. One independently runnable worker, exactly three pages: Chat
-(default), History and Dashboard. Dashboard contains Monitoring & Status; the
-legacy `/monitoring-status` route redirects to `/dashboard`. Vue with Nuxt UI is
-the user-pinned implementation. One worker executes exactly one task at a time;
-additional worker instances provide parallelism.
+
+Operate mode. One independently runnable worker, three primary pages: Taskboard
+(default at `/taskboard`), History and Dashboard. The selected third mockup
+establishes an attention-first taskboard with a task interaction panel on the
+right. Vue with Nuxt UI remains the implementation foundation. One worker
+executes exactly one task at a time; additional workers provide parallelism.
+
+The legacy `/chat` route redirects to `/taskboard` while preserving its query.
+Dashboard includes Monitoring & Status and setup; `/monitoring-status` continues
+to redirect to `/dashboard`. History remains the evidence and management surface.
 
 ## OWN-WORLD
-Extend Werk's existing dark slate and mint operational identity. Preserve readable system typography, 44px controls, private credentials and honest mock labels. This is a local worker detail surface.
+
+Extend Werk's dark slate and mint operational identity. Use readable system
+typography, 44px controls, private credentials and honest simulation labels.
+The surface describes one local worker and its shared execution slot. It does
+not imply a fleet or several simultaneously running models.
 
 ## STORY
-Persistent page navigation anchors the worker identity. After unlock, Chat is the
-primary task entry. Its searchable task rail keeps saved tasks and their states
-beside the transcript. New task selects a provider connection, an optional Docker
-Agent definition and a named agent before creating a dedicated provider session;
-the first message queues the task and follow-ups preserve that session. One worker
-executes one task at a time across chat, file tasks and remote assignments. The
-explicit Run task editor creates a separate file-task session producing a review
-patch from approved inputs. Every remote assignment also owns a dedicated task
-session. Only workers prompt LLMs; parent dashboards forward requests or route
-submitted tasks. History lists conversations from every task type, including archived file and
-assigned sessions, with explicit Restore and open actions. Search and type/state
-filters lead to conversations, a three-column file-task board and retained
-orchestrator evidence. Dashboard starts with current work and links to waiting,
-failed and review tasks. Health and resource summaries remain visible; connection
-geometry, runtime details and diagnostics are secondary disclosures. Provider connections and enrollment are
-editable within a disclosure. Chat also opens provider settings and saved
-connection checks inline. CLI sign-in instructions name the worker machine and
-process owner; configuration does not verify login or quota.
-Standalone is a healthy state, not an onboarding error. Chat, file tasks and
-remote assignments share one execution slot. Show accepted-but-waiting work as
-queued, never as concurrent model execution. Pause holds all new starts and lets
-the active task finish. Scale with separate native/Docker workers, not a
-per-worker concurrency control.
 
-Docker Agent definitions open in a separate inline Chat disclosure. File upload or
-pasted YAML leads to a preview of each agent's instructions, model and unsupported
-features before import. Import does not execute the definition. New task requires
-explicit instructions-only acceptance when features are omitted and shows a
-provider mismatch before creation. A task disclosure presents its fixed agent
-snapshot, so definition removal or later imports cannot silently change the task.
-Run task has its own definition and agent selection for the separate file task.
+A horizontal WorkerShell keeps identity, Taskboard / History / Dashboard
+navigation, update state, Tour and Lock visible. After unlock, Taskboard answers
+three questions: what needs the operator, what is running, and what is waiting.
+A Running now strip follows the current shared executor owner. Below it, a wider
+Needs you area prioritizes checkpoint questions, decisions, request rework,
+review and failed or interrupted attempts. Up next shows waiting work alongside
+it. Completed and Drafts use disclosures beneath the active work.
+
+One card represents one retained task across its session, local file task and
+project-request projections. Preserve original task/session/request identifiers
+and the source labels Chat, File task, Assigned and Project request. Project
+companion files do not transfer authority over remote assignments to the local
+worker. Stale running records that disagree with the shared execution slot need
+refresh, not a second running card. Simulations remain labelled Simulated; model
+completion is separate from review, acceptance, patch application or merge.
+
+Selecting a task pins its identity above the right-hand interaction panel.
+New task adds work; Follow up continues that selected task. This panel is for
+task instructions, responses and checkpoint answers. Configuration, provider
+login and worker administration belong in Dashboard. Empty states link to setup
+when needed without turning task interaction into a settings form.
+
+New task selects a provider and, optionally, an imported Docker Agent definition
+and named agent. One UI submission coordinates creating a dedicated worker-owned
+session and sending the first message to its returned session ID. These are
+separate server requests, not a transactional backend operation. If creation
+succeeds but the first-message result is unconfirmed, preserve the created task
+and instructions and direct the operator to inspect the conversation before
+retrying. An uncertain creation must not trigger an automatic duplicate create.
+Follow-ups retain the selected session. Unsent drafts survive normal refresh,
+navigation and access expiry in the current tab; reload persistence is not
+promised, and explicit Lock clears them.
+
+The file-task editor remains available for approved local inputs and produces
+a review patch in its own session. Remote assignments also retain dedicated
+sessions. History lists every task type, archived records, project requests,
+file-task management and retained execution evidence. Its existing review and
+inspection actions remain the route to evidence rather than a new board-specific
+record store.
+
+## MONITORING AND STEERING
+
+The selected task exposes its observed state and retained provider/model evidence.
+Label an invocation snapshot as recorded and a file-task or definition snapshot
+as configured. Do not substitute current connection settings for an older run,
+or treat the model from a completed attempt as the model of a new active turn.
+If a provider uses an unspecified default, the actual model remains unknown.
+Missing usage, cost, progress and provider telemetry remain unavailable.
+
+Saved interaction events, checkpoints, transcripts and run evidence explain what
+has happened. Structured questions and escalations release the execution slot;
+answering them uses their revision-guarded controls. Current continuation replays
+retained worker context in a fresh invocation. Live token streaming, native
+provider-session resume and arbitrary changes to an in-flight prompt are not
+advertised.
+
+Keep three controls distinct:
+
+- Stop task acts on the selected task's supported execution or checkpoint control.
+- Pause new starts holds the shared queue while the active task finishes.
+- Pause updates pauses this browser's automatic reads and changes no worker work.
+
+A follow-up may be drafted while its task runs; sending waits until that task
+finishes. New tasks may queue behind it. Queue capacity is not execution capacity.
+Standalone is a healthy worker state. Scale parallel work with separate native
+or Docker workers, never a per-worker concurrency control.
+
+## SETUP AND DEFINITIONS
+
+Dashboard owns provider connections, saved connection checks, Docker Agent
+definitions, enrollment and diagnostics. CLI sign-in instructions name the worker
+machine and process owner. Configuration does not establish successful login,
+subscription quota, model access or measured cost.
+
+Agent YAML upload or paste leads to a preview of instructions, model and
+unsupported features before import. Import does not execute Docker, tools,
+hooks or delegated teams. New task requires explicit instructions-only acceptance
+when unsupported features are omitted and surfaces provider mismatch before
+creation. Each task retains its fixed definition snapshot, so later imports or
+removal cannot silently change it. The file-task editor has its own definition
+and agent selection.
 
 ## FIRST VIEWPORT
+
 Before unlock, a dedicated access screen focuses on one token field, a visibility
 toggle and Unlock worker. Local file guidance and expandable help distinguish
 workspace access from provider sign-in. A separate HttpOnly session preserves
-access across reloads for up to 12 hours; Lock, expiry or a worker restart returns
-to unlock. The durable access token is cleared after successful entry and is not
-saved in browser storage, the session cookie or a URL. Expired access keeps
-unsent drafts in the current tab; explicit Lock clears them. Running tasks
-continue on the worker.
+access across reloads for up to 12 hours; Lock, expiry or restart returns to
+unlock. The durable access token is cleared after successful entry and is not
+saved in browser storage, the session cookie or a URL. Running tasks continue
+on the worker when browser access locks.
 
-After unlock, the active page and worker state are immediate. Chat starts with a
-useful empty state, a visible New task action and composer, and an inline provider
-connection prompt when a model is unavailable. Connections and Agent definitions
-stay secondary to the conversation. The task rail shows readable names, provider
-and task state; task settings disclose rename, archive and confirmed deletion.
-Replies support paragraphs, lists, emphasis, inline code and fenced code with a
-Copy code action. Model output remains text rather than interpreted HTML. The
-composer accepts a draft while the selected task is running; sending a follow-up
-waits for that task to finish. Queued and running states have distinct copy and
-cancel/stop actions. A persistent
-Tour action replays a guided introduction across the three pages, including
-sessions, Run task, History and Dashboard. The tour navigates and explains;
-it does not configure providers, enroll the worker or submit work.
+After unlock, the board and right-hand interaction panel establish the worker's
+current work immediately. Empty attention and queue areas explain their state;
+no placeholder task, model name or fabricated progress is presented as real.
+The selected task remains clear while the operator drafts instructions or reads
+output. A persistent Tour explains the three pages and their controls without
+configuring providers, enrolling the worker or submitting work.
 
 ## FORM
-Code-led, native Nuxt UI components and authored 2D system geometry. The dedicated
-unlock form has a narrow reading measure and generous space around its primary
-action. In Chat, a divided task rail sits beside the transcript on wide screens;
-at 900px and below it becomes a native saved-task disclosure above the conversation.
-The closed summary identifies the current task; selecting a task closes the list
-and focuses its conversation. Empty conversations place the composer before
-starter suggestions. The main
-sidebar becomes three-link top navigation at 760px and below. Inline connection,
-definition and new-task panels use the existing bordered slate surfaces and mint
-actions. Long task names wrap, code scrolls within its own block, and task and
-provider states include text rather than relying on color. Evidence details
-disclose progressively, and background updates preserve reading position. No
-decorative 3D model is needed for one worker's three pages.
+
+Use native Nuxt UI controls and authored two-dimensional layout. The horizontal
+header and board retain the existing slate surfaces, mint action color and
+readable hierarchy. Wide screens place the board beside the narrower interaction
+panel; within the board, Needs you has more space than Up next. Small screens
+stack board and interaction without losing the selected task or requiring drag
+and drop. Native buttons and links provide keyboard equivalents for every action.
+
+Task names and model/provider labels wrap. Status always includes text rather
+than relying on color. Transcript replies support paragraphs, lists, emphasis,
+inline code and fenced code with Copy code. Model output remains text, not
+interpreted HTML; long code scrolls inside its block. Evidence and secondary
+settings disclose progressively. Background updates preserve selection, drafts,
+focus and reading position; explicit user navigation may move focus to its target.
 
 ## FINISH
-Keep documented routes, labels and capability limits aligned with the actual
-workspace. Record dated review evidence separately; this surface brief does not
-claim that a current build has passed final review or live-provider verification.
-Preserve keyboard focus, mobile navigation, stale-data feedback, private access
-and unsent work during page changes. Local tasks produce review artifacts from
-approved inputs; they do not apply patches or run project tests automatically.
 
+Keep route labels and capability limits aligned with the actual workspace.
+Record dated review evidence separately: this design direction does not claim a
+build has passed browser review or live-provider verification. Preserve keyboard
+focus, narrow-screen navigation, stale-data feedback, private access and unsent
+work. Local tasks produce review artifacts from approved inputs; they do not
+apply patches or run project tests automatically.
 
 ## Shared Vue foundation
 
-The workspace frame, access presentation, connection display and guided tour use
-`src/shared/webview` Vue components and the shared Werk theme. Credential handling,
-refresh state and task drafts remain in the worker store; route pages retain their
-`KeepAlive` lifecycle. The shared polling helper skips hidden or paused views and
-prevents overlapping scheduled reads. Tours use Nuxt UI modal focus management,
-await route activation before highlighting a target, and close when access locks.
+The worker's horizontal shell frames shared access, connection and guided-tour
+components from `src/shared/webview` and the shared Werk theme. Credential
+handling, refresh state and task drafts remain in the worker store; route pages
+retain their `KeepAlive` lifecycle. Shared polling skips hidden or paused views
+and prevents overlapping scheduled reads. Tours use Nuxt UI focus management,
+await route activation before highlighting a target and close when access locks.
 Shared skip links focus main content without changing hash-based routes used by
-other Werk applications. The shared spatial component keeps the established pure
-camera geometry while Vue owns its controls, selection and inspector.
+other Werk applications. Taskboard aggregation is a pure view of retained worker
+state; it does not introduce a second task queue or execution authority.

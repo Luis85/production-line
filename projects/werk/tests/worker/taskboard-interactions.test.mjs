@@ -73,7 +73,7 @@ test('review and failure entry links reset stale file filters and file evidence 
   assert.deepEqual(f.visible.value.map(task => task.id), ['a']); assert.equal(f.search.value, ''); assert.equal(f.archived.value, false);
   f.route.query.fileState = 'failed'; await nextTick(); assert.deepEqual(f.visible.value.map(task => task.id), ['b']);
   await f.inspect('b', event); await f.openConversation();
-  assert.deepEqual(f.calls[0], { path: '/api/sessions', body: { action: 'select', id: 'local-b' } }); assert.deepEqual(f.navigations, ['/chat']);
+  assert.deepEqual(f.calls[0], { path: '/api/sessions', body: { action: 'select', id: 'local-b' } }); assert.deepEqual(f.navigations, [{ path: '/taskboard', query: { session: 'local-b' } }]);
 });
 
 test('History recovers archived file and orchestrator sessions and filters by task kind', async t => {
@@ -82,7 +82,7 @@ test('History recovers archived file and orchestrator sessions and filters by ta
   f.chatArchive.value = 'archived'; assert.deepEqual(f.chatTasks.value.map(task => task.id), ['local', 'orchestrator']);
   f.taskKind.value = 'local'; assert.deepEqual(f.chatTasks.value.map(task => task.id), ['local']);
   await f.openChat('local'); assert.deepEqual(f.calls[0], { path: '/api/sessions', body: { action: 'select', id: 'local' } });
-  assert.deepEqual(f.navigations, ['/chat']);
+  assert.deepEqual(f.navigations, [{ path: '/taskboard', query: { session: 'local' } }]);
   f.clearChatFilters(); assert.equal(f.chatTasks.value.length, 3);
 });
 

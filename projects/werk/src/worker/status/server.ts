@@ -303,6 +303,7 @@ export async function statusServer(
           workspace &&
           [
             "/",
+            "/taskboard",
             "/chat",
             "/history",
             "/dashboard",

@@ -15,14 +15,20 @@ visual navigation, dedicated dashboards, focused editors and a replayable tour.
 
 ## Worker Scope
 
-The user explicitly requested a Vue webview built with Nuxt UI and three pages:
-Chat, History, and Dashboard. Chat is the default page and the primary way to
-give this worker a new task or continue an existing task’s model session. History
-contains conversations of every task type, the local taskboard and retained orchestrator evidence. Dashboard carries Monitoring & Status: activity, health, environment,
-provider connections and optional orchestrator enrollment. Chat also provides
-provider setup and checks, saved task selection, and Docker Agent definition
-import without leaving the conversation. The old
-`/monitoring-status` route redirects to `/dashboard`; there is no fourth page.
+The worker uses Vue with Nuxt UI and three primary pages: Taskboard, History
+and Dashboard. Taskboard (`/taskboard`) opens after unlock. The selected third
+mockup direction puts the task overview first: a Running now strip above an
+asymmetric Needs you / Up next board, with Completed and Drafts disclosed below.
+Chat tasks, approved-file tasks, assigned work and project requests retain their
+source labels and identifiers without appearing as duplicate cards.
+
+A task-scoped interaction panel sits to the right. Its New task and Follow up
+modes add work or continue the selected task; the panel does not become a general
+assistant or a configuration workspace. History retains conversations, file-task
+management, project requests and execution evidence. Dashboard carries health,
+environment, provider connections, agent definitions and optional orchestrator
+enrollment. The legacy `/chat` route redirects to `/taskboard` while preserving
+its query; `/monitoring-status` continues to redirect to `/dashboard`.
 
 ## Worker Access
 
@@ -54,16 +60,26 @@ Docker volume and webview port.
 
 Every task owns a dedicated worker-managed LLM session. The first message in
 New task queues that task; follow-up messages use the same session. Explicit
-file tasks and remote assignments also receive dedicated sessions. Pause holds
-all new execution starts while the active task finishes. The worker is the only
-component that prompts an LLM; Factory and orchestrator own routing, not model
-execution. Chat retains a Run task editor for approved file inputs and patches.
+file tasks and remote assignments also receive dedicated sessions. The UI handles
+creation and the first message as one submission workflow, dispatching only to
+the returned session ID. These remain separate server requests: if the first
+message is not confirmed, retain the instructions with the created task and ask
+the operator to inspect its conversation before retrying. Do not silently create
+a second task or claim that an ambiguous submission was rejected.
+
+Stop task targets the selected execution or checkpoint. Pause new starts holds
+the shared queue while the active task finishes. Pause updates only pauses this
+browser's automatic reads. None of these controls is a live edit to an in-flight
+model prompt. The worker is the only component that prompts an LLM; Factory and
+orchestrator own routing, not model execution. The taskboard retains access to
+the file-task editor for approved inputs and review patches.
 
 ## Worker Provider and Agent Definitions
 
-Provider connections belong to the worker. Chat exposes the same saved connection
-settings as Dashboard, with local Codex or Claude sign-in commands and a check of
-the saved connection. CLI sign-in must belong to the user running the worker;
+Provider connections belong to the worker. Dashboard owns saved connection
+settings, local Codex or Claude sign-in commands and checks of saved connections.
+Taskboard links there when a connection needs setup. CLI sign-in must belong to
+the user running the worker;
 Docker workers need access inside their container. API credentials are stored
 privately on the worker and are not returned to the browser. Saving settings does
 not prove successful authentication; a connection check does not establish
@@ -80,13 +96,28 @@ accepted omissions; later imports or removal do not change that snapshot. The
 selected instructions and supported model are passed to the worker's provider.
 An omitted or unsupported model uses that connection's configured model.
 
-Chat keeps a searchable task rail and a readable transcript with code-copy
-controls. On narrow screens, saved tasks collapse into a switcher above the
-conversation. Dashboard links current work, failed tasks and review patches
-directly to their action surfaces, with administration in disclosures. Operators can draft a follow-up while a task runs, and send it when
-that task finishes. A new task can wait behind the running task in the shared
-single execution slot. Saved tasks and transcripts are shared by this worker's
-operators; they are not personal account histories.
+The taskboard keeps the selected task visible beside its conversation. Needs you
+prioritizes checkpoint questions, decisions, request rework, review and failures;
+Up next shows waiting work. Only the observed shared executor owner appears as
+Running now. Completed model turns, human acceptance and applied patches remain
+separate facts. Stopped work is labelled Stopped; mock execution is labelled
+Simulated and never presented as an implementation.
+
+The interaction panel shows the selected task identity, readable transcript and
+code-copy controls. Operators can draft a follow-up during execution and send it
+when that task finishes. Questions and escalations use their explicit checkpoint
+controls. Saved events and execution evidence support monitoring; live token
+streaming, native provider resume and arbitrary mid-run steering are not implied.
+
+Provider/model readings distinguish retained invocation evidence from configured
+file-task or agent snapshots. A previous completed attempt cannot establish the
+model of a new running turn, and an unspecified provider-default model remains
+unknown. Unreported usage, cost and progress stay unavailable rather than being
+estimated. On narrow screens, board and interaction controls stack while retaining
+selection, readable task names and keyboard access. Unsent drafts survive normal
+refresh, navigation and access expiry in the current tab; page reload and explicit
+Lock do not promise draft persistence. Saved tasks and transcripts are shared by
+this worker's operators, not personal account histories.
 
 ## Assembly, dashboards and routing
 
@@ -158,8 +189,8 @@ questions and escalations release the execution slot and remain on the owning
 request until answered or cancelled through revision-guarded operations. Stable
 operation keys deduplicate accepted commands after lost acknowledgements.
 
-Chat and CLI expose checkpoint inspection and explicit continuation. Current
-adapters use saved worker context in a fresh invocation; native provider session
+The task interaction panel and CLI expose checkpoint inspection and explicit
+continuation. Current adapters use saved worker context in a fresh invocation; native provider session
 resume and live token streaming are not advertised. A durably saved result is
 reconciled after restart without another model call; ambiguous in-flight work
 stays interrupted. A content-free durable event feed lets clients replay lifecycle

@@ -178,4 +178,8 @@ Shared contracts remain in `src/shared`. Source and tests are grouped by concern
 
 The complete source check also requires Python 3 on Linux/macOS for the infrastructure safety suite. The downloaded native runtime has no host Python dependency.
 
-The [worker webview](docs/how-to/use-worker-webview.md) provides Vue + Nuxt UI pages for Chat, History, and Monitoring & Status. Optional native Linux Codex chat uses the worker account’s existing login.
+The [worker webview](docs/how-to/use-worker-webview.md) opens on the taskboard, with task interaction to its right, plus History and Dashboard pages. Optional native Linux Codex chat uses the worker account’s existing login.
+
+## Generated UI reference
+
+The [storybook workflow](docs/how-to/generate-storybook.md) renders the real Vue components and complete system journeys with deterministic desktop/mobile screenshots. Run `npm run storybook:ci` after installing the pinned Playwright browser. Pull requests and releases enforce source coverage; each release publishes a separate `werk-storybook-<version>.zip` with `STORYBOOK-SHA256SUMS`.

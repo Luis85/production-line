@@ -48,7 +48,7 @@ JSON result. Worker assignments and delayed responses use browser route fixtures
 the script does not change persisted tasks. Keep the isolated system running for
 the check and stop it afterward with `system stop --state-dir`.
 
-## Worker access and task-chat browser qualification
+## Worker access and taskboard browser qualification
 
 After `npm run build`, run [worker/webview-smoke.mjs](worker/webview-smoke.mjs)
 with Playwright Core and Chromium available. This explicit integration check
@@ -64,10 +64,14 @@ node tests/worker/webview-smoke.mjs
 
 The module path defaults to the workspace browser-runtime installation when
 present. Evidence defaults to a new temporary directory. The script tests unlock,
-reload, provider check, definition preview/import/adaptation, task queueing,
-follow-ups, code copying, inert HTML, responsive overflow, restart recovery and
-Lock. It saves twelve screenshots and a JSON result without credentials. No real
-provider login or model request is performed.
+reload, provider checks, definition preview/import/adaptation, task creation with
+its first message, per-task drafts, follow-ups, queue controls, checkpoint answers,
+Board/List/search, history links, patch-review deep links, code copying, inert HTML,
+tour and keyboard navigation, responsive overflow, restart recovery and Lock.
+It saves desktop, tablet and mobile screenshots, a representative taskboard view
+and a JSON result without credentials. Provider output and the proposed file patch
+come from a labelled protocol fixture; no real provider login or model request is
+performed, and the approved checkout is left unchanged.
 
 ## Project worker and feature-folder qualification
 
@@ -101,3 +105,7 @@ Node used by the installation commands), starts generated Compose, ingests a
 bind-mounted Markdown request, checks its exported result and restarts to verify
 identity/no duplicate execution. It removes its own Compose services and scratch
 project. It uses a provider protocol fixture and does not qualify live inference.
+
+## Generated UI stories and release evidence
+
+`npm run storybook:ci` builds actual Vue stories, captures desktop/mobile evidence and checks every first-party Vue source component against observed mounts. It requires Chromium and uses isolated synthetic fixtures without live model calls. `tests/storybook` exercises inventory and evidence validation; `tests/operations` checks artifact freshness, file integrity and publication gates. Follow the [storybook generation guide](../docs/how-to/generate-storybook.md) to add states or reproduce release screenshots.
