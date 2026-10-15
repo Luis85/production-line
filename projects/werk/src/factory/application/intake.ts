@@ -80,10 +80,23 @@ export class FactoryIntake {
     if (observation.status !== 'available' || !overview || !capability || overview.project !== item.task.project) return false;
     if (Date.now() - Date.parse(overview.observedAt) > 60000 || Date.parse(overview.observedAt) > Date.now() + 5000) return false;
     const mode = item.task.executionMode ?? 'mock';
+    if (this.repositoryCapacity(item, observation)?.length === 0) return false;
     if (!capability.profiles.some(profile => (profile.mode ?? 'mock') === mode && (item.task.provider === 'auto' || profile.provider === item.task.provider))) return false;
     return capability.intake.includes(capability.context === 'pinned' && item.task.source ? 'pinned_iteration' : item.task.requirementRef ? 'requirement_ref' : 'structured_task') && (capability.context !== 'pinned' || !!item.task.requirementRef);
   }
+  private repositoryCapacity(item: IntakeTask, observation: LineOverview) {
+    const mode = item.task.executionMode ?? 'mock', selector = item.task.repository ?? (mode === 'cli' ? item.task.project : undefined);
+    const capacity = observation.overview?.capabilities?.repositoryCapacity;
+    if (selector === undefined || capacity === undefined) return undefined;
+    return capacity.filter(row => (row.repositoryId === null || row.repositoryId === selector) && (!row.implicitOnly || item.task.repository === undefined) && row.mode === mode && (item.task.provider === 'auto' || row.provider === item.task.provider));
+  }
   private freeCapacity(item: IntakeTask, observation: LineOverview): number {
+    const repository = this.repositoryCapacity(item, observation);
+    if (repository) {
+      const byProvider = new Map<string, number>();
+      for (const row of repository) byProvider.set(row.provider, (byProvider.get(row.provider) ?? 0) + row.slotsAvailable);
+      return Math.max(0, ...byProvider.values());
+    }
     return Math.max(0, ...(observation.overview?.capabilities?.eligibleCapacity ?? []).filter(row => row.mode === (item.task.executionMode ?? 'mock') && (item.task.provider === 'auto' || row.provider === item.task.provider)).map(row => row.slotsAvailable));
   }
   private async dispatch() {
@@ -105,7 +118,7 @@ export class FactoryIntake {
           if (!this.scope(item.factoryId).has(chosen.line.factoryId) || JSON.stringify(policy) !== JSON.stringify(latestPolicy) || JSON.stringify(this.registry.line(chosen.line.id)) !== JSON.stringify(chosen.line)) continue;
           const task = item.task;
           const payload = chosen.overview!.capabilities!.context === 'pinned' && !task.source
-            ? { project: task.project, requirementRef: task.requirementRef, provider: task.provider, priority: task.priority, ...(task.executionMode ? { executionMode: task.executionMode } : {}) } : task;
+            ? { project: task.project, ...(task.repository === undefined ? {} : { repository: task.repository }), requirementRef: task.requirementRef, provider: task.provider, priority: task.priority, ...(task.executionMode ? { executionMode: task.executionMode } : {}) } : task;
           const pinned = this.repository.pin(item, chosen.line, policy, payload, chosen.overview!.capabilities!.context === 'pinned' && task.source ? '/v1/iteration/tasks' : '/v1/tasks');
           if (!pinned) continue;
           item = pinned;

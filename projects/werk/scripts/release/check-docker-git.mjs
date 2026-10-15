@@ -17,8 +17,10 @@ export async function checkDockerGit(image) {
       const path='/usr/lib/git-core/'+helper;
       if(!fs.existsSync(path)||cp.execFileSync('ldd',[path],{encoding:'utf8'}).includes('not found'))throw Error(helper);
     }
+    const ssh=cp.spawnSync('ssh',['-V'],{encoding:'utf8'});
+    if(ssh.error||ssh.status!==0||!ssh.stderr.includes('OpenSSH'))throw Error('ssh runtime');
     if(!fs.existsSync('/usr/share/doc/git/copyright'))throw Error('license');
-    console.log(JSON.stringify({node:process.versions.node,git:git('--version'),localCommit:true,worktree:true,archive:true,httpsHelper:true,licenses:true}));
+    console.log(JSON.stringify({node:process.versions.node,git:git('--version'),localCommit:true,worktree:true,archive:true,httpsHelper:true,sshClient:true,licenses:true}));
   `;
   const result = await exec('docker', ['run','--rm','--network','none','--read-only','--tmpfs','/tmp:rw,size=16777216','--entrypoint','node',image,'-e',program], { timeout: 60000, maxBuffer: 1024 * 1024 });
   return JSON.parse(result.stdout);

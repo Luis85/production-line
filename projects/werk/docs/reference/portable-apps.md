@@ -42,6 +42,24 @@ and [feature request contract](https://github.com/Luis85/production-line/blob/ma
 Each watched folder belongs to one worker state; choose separate feature folders,
 state directories and ports for additional workers.
 
+## Assign repositories to a worker
+
+Use Dashboard's **Git repositories** section or
+`settings set --file repositories.json` with a top-level
+`repositories` object: `{pollMs: 30000, items: [{id, path, remote, branch?, watch}]}`.
+Assign existing local Git checkouts; the worker watches/fetches each enabled
+repository and only fast-forwards clean bases. Coding tasks use retained worktrees
+under each checkout's `.werk/worktrees`. Drain tasks before changing assignments.
+Worker JSON passed through `--config` can seed assignments; saved private settings
+take precedence after the first start. Git must be installed on the worker host.
+
+The private status endpoint is available with
+`api --path /api/repositories`; POST `{"action":"sync","id":"app"}` to sync
+one assignment, or omit `id` for all. Local file tasks select the assignment ID
+in their existing `repository` field. Assigning repositories does not change
+mock execution or give provider Chat arbitrary filesystem tools. See the
+[configuration contract](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/configuration.md#assigned-git-repositories).
+
 ## Lifecycle and automation contract
 
 Every app supports `help`, `schema`, `run`, `start`, `status`, `stop`, `health`,
@@ -215,6 +233,14 @@ Orchestrator commands include `task create|list|get|events|route`, `workers list
 ```json
 {"project":"demo","title":"Implement the requirement","criteria":["Record evidence"],"wikilinks":[],"provider":"codex"}
 ```
+
+For native Codex work, add optional `"repository":"docs"` to select an assigned
+checkout independently of `project`, which stays the line scope. When omitted,
+the assignment ID defaults to `project`. Factory intake accepts the same field
+inside `task`; successor requests accept it inside `input`. The portable CLI
+passes the JSON field through unchanged. It is an assignment ID, not a path or
+remote URL. Use `"executionMode":"cli"` for explicit live execution; selecting a
+repository alone does not change mock behavior.
 
 Orchestrator `routing set --file` accepts
 `{"mode":"auto","workerId":null,"order":"fifo"}`. No workers are required

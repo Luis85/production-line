@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { CodexAdapter, codexConfiguration } from '../../src/worker/dist/worker/infrastructure/codex-adapter.js';
+import { RepositoryManager } from '../../src/worker/dist/worker/infrastructure/repositories.js';
 import { configuration } from '../../src/worker/dist/worker/config.js';
 import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
 import { executeAttempt } from '../../src/worker/dist/worker/application/execute-attempt.js';
@@ -51,7 +52,15 @@ test('live process produces durable review evidence without modifying source or 
   const after=await f.journal.read(f.task.lease,'after'),patch=await readFile(join(f.stateDir,after.review.artifactPath),'utf8');
   assert.equal(f.store.get(f.task.id).status,'review');assert.equal(after.mode,'cli');assert.equal(after.execution.outcome,'change-set');assert.equal(after.quality.tests,'not_run');assert.equal(after.usage.source,'unavailable_provider');
   assert.equal(hash(patch),after.review.patchSha256);assert.match(patch,/Human review is required/);assert.equal(await readFile(join(f.repository,'README.md'),'utf8'),'# Fixture\n');assert.equal(f.state.completedSimulations,0);assert.equal(f.state.completedReviews,1);
-  assert.equal(f.store.snapshots({project:'demo'}).length,2);assert.deepEqual(await readdir(join(f.stateDir,'workspaces')),[]);
+  assert.equal(f.store.snapshots({project:'demo'}).length,2);assert.deepEqual(await readdir(join(f.stateDir,'workspaces')),[f.task.lease]);
+  const retained=JSON.parse(await readFile(join(f.stateDir,'workspaces',f.task.lease,'worktree.json'),'utf8'));
+  assert.ok(retained.workspace.startsWith(f.repository+'/'));
+  assert.match(await readFile(join(retained.workspace,'README.md'),'utf8'),/Human review is required/);
+  assert.match(await readFile(join(retained.workspace,'.git'),'utf8'),/^gitdir: /);
+  const worktrees=execFileSync('git',['worktree','list','--porcelain'],{cwd:f.repository,encoding:'utf8'});
+  assert.ok(worktrees.includes('worktree '+retained.workspace));
+  assert.deepEqual(await readdir(join(f.stateDir,'git-metadata')),[]);
+  await assert.rejects(f.adapter.run(f.task,new AbortController().signal),/already exists; recovery must not rerun/);
   assert.throws(()=>validateSnapshot({...after,mode:'mock'}));
   await writeFile(join(f.stateDir,after.review.artifactPath),'tampered');await assert.rejects(f.adapter.verifyReview(f.task,after.review),/missing or changed/);
 });
@@ -76,12 +85,117 @@ test('provider process receives no Werk credentials and only fixed sandbox argum
 
 
 test('model-written Git filters cannot execute during trusted patch post-processing',linux,async t=>{
-  const program = "const fs=require('node:fs'),path=require('node:path');fs.appendFileSync('README.md','Reviewed change.');fs.appendFileSync('.git/config','\\n[filter \"evil\"]\\n clean = touch '+path.resolve(process.cwd(),'../../../filter-escaped')+'\\n');";
+  const program = "const fs=require('node:fs'),path=require('node:path');fs.appendFileSync('README.md','Reviewed change.');fs.appendFileSync('.git/config','\\n[filter \"evil\"]\\n clean = touch '+path.resolve(process.cwd(),'filter-escaped')+'\\n');";
   const f=await fixture(t,program);
   await writeFile(join(f.repository,'.gitattributes'),'README.md filter=evil\n');
   const git=(...args)=>execFileSync('git',['-c','core.hooksPath=/dev/null',...args],{cwd:f.repository,encoding:'utf8',stdio:['ignore','pipe','pipe']});
   git('add','.gitattributes');git('-c','user.name=Werk Test','-c','user.email=werk@example.invalid','commit','-m','Filter fixture');
   await executeAttempt(f.task,new AbortController().signal,f.dependencies);
   assert.equal(f.store.get(f.task.id).status,'review');
-  await assert.rejects(readFile(join(f.directory,'filter-escaped')),error=>error.code==='ENOENT');
+  const retained=JSON.parse(await readFile(join(f.stateDir,'workspaces',f.task.lease,'worktree.json'),'utf8'));
+  await assert.rejects(readFile(join(retained.workspace,'filter-escaped')),error=>error.code==='ENOENT');
+  assert.ok(!(await readFile(join(f.repository,'.git','config'),'utf8')).includes('evil'));
+});
+
+
+test('failed native attempts retain worktree changes and cannot replay the provider',linux,async t=>{
+  const f=await fixture(t,"require('node:fs').appendFileSync('README.md','Only once.');process.exit(7);");
+  await assert.rejects(f.adapter.run(f.task,new AbortController().signal));
+  const retained=JSON.parse(await readFile(join(f.stateDir,'workspaces',f.task.lease,'worktree.json'),'utf8'));
+  assert.equal(await readFile(join(retained.workspace,'README.md'),'utf8'),'# Fixture\nOnly once.');
+  assert.match(await readFile(join(retained.workspace,'.git'),'utf8'),/^gitdir: /);
+  await assert.rejects(f.adapter.run(f.task,new AbortController().signal),/already exists; recovery must not rerun/);
+  assert.equal(await readFile(join(retained.workspace,'README.md'),'utf8'),'# Fixture\nOnly once.');
+  assert.equal(await readFile(join(f.repository,'README.md'),'utf8'),'# Fixture\n');
+});
+
+test('model Git metadata cannot redirect trusted postprocessing into the shared repository',linux,async t=>{
+  const f=await fixture(t);
+  const originalConfig=await readFile(join(f.repository,'.git','config'),'utf8');
+  const originalHead=execFileSync('git',['rev-parse','HEAD'],{cwd:f.repository,encoding:'utf8'});
+  const program=`const fs=require('node:fs'),assert=require('node:assert/strict');assert.ok(fs.statSync('.git').isDirectory());assert.ok(!fs.existsSync('.git/commondir'));assert.ok(!fs.existsSync('.git/objects/info/alternates'));fs.rmSync('.git',{recursive:true});fs.symlinkSync(${JSON.stringify(join(f.repository,'.git'))},'.git');fs.appendFileSync('README.md','Safely isolated.');`;
+  await writeFile(f.executable,`#!${process.execPath}\n${program}\n`);
+  const result=await f.adapter.run(f.task,new AbortController().signal);
+  assert.match(await readFile(join(f.stateDir,result.review.artifactPath),'utf8'),/Safely isolated/);
+  assert.equal(await readFile(join(f.repository,'.git','config'),'utf8'),originalConfig);
+  assert.equal(execFileSync('git',['rev-parse','HEAD'],{cwd:f.repository,encoding:'utf8'}),originalHead);
+  assert.equal(execFileSync('git',['diff','--cached'],{cwd:f.repository,encoding:'utf8'}),'');
+  const retained=JSON.parse(await readFile(join(f.stateDir,'workspaces',f.task.lease,'worktree.json'),'utf8'));
+  assert.match(await readFile(join(retained.workspace,'.git'),'utf8'),/^gitdir: /);
+});
+
+test('native Codex routes one project to assigned repositories and preserves project-id fallback',linux,async t=>{
+  const f=await fixture(t), other=join(f.directory,'other');
+  execFileSync('git',['clone','--no-hardlinks','--',f.repository,other],{stdio:'pipe'});
+  const repositories=new RepositoryManager({pollMs:30000,items:[{id:'demo',path:f.repository,remote:'origin',watch:false},{id:'other',path:other,remote:'origin',watch:false}]});
+  const adapter=new CodexAdapter({...f.config,repository:undefined},f.stateDir,'Assigned work only.',repositories);
+  await assert.rejects(f.adapter.run({...f.task,repository:'demo',lease:f.task.lease+'-no-assignments'},new AbortController().signal),/not assigned/);
+  const emptyAssignments=new CodexAdapter(f.config,f.stateDir,'Assigned work only.',new RepositoryManager({pollMs:30000,items:[]}));
+  await assert.rejects(emptyAssignments.run({...f.task,repository:'demo',lease:f.task.lease+'-empty-assignments'},new AbortController().signal),/not assigned/);
+  for(const repository of ['demo','other']) {
+    const task={...f.task,repository,lease:f.task.lease+'-'+repository};
+    await adapter.run(task,new AbortController().signal);
+    const retained=JSON.parse(await readFile(join(f.stateDir,'workspaces',task.lease,'worktree.json'),'utf8'));
+    assert.equal(retained.repositoryId,repository);
+    assert.ok(retained.workspace.startsWith((repository==='demo'?f.repository:other)+'/'));
+  }
+  await adapter.run({...f.task,lease:f.task.lease+'-project-fallback'},new AbortController().signal);
+  const legacyFallback=new CodexAdapter(f.config,f.stateDir,'Assigned work only.',repositories);
+  await assert.rejects(legacyFallback.run({...f.task,repository:'unassigned',lease:f.task.lease+'-unknown-repository'},new AbortController().signal),/assigned|Unknown|unknown|configured/);
+  await assert.rejects(legacyFallback.run({...f.task,project:'unassigned',lease:f.task.lease+'-unknown'},new AbortController().signal),/assigned|Unknown|unknown|configured/);
+  assert.equal(await readFile(join(f.repository,'README.md'),'utf8'),'# Fixture\n');
+  assert.equal(await readFile(join(other,'README.md'),'utf8'),'# Fixture\n');
+});
+
+
+test('native Codex imports a pinned remote-only commit while preserving a dirty base checkout',linux,async t=>{
+  const f=await fixture(t), upstream=join(f.directory,'upstream');
+  const git=(cwd,...args)=>execFileSync('git',['-c','core.hooksPath=/dev/null',...args],{cwd,encoding:'utf8',stdio:'pipe'}).trim();
+  git(f.directory,'clone','--no-hardlinks','--',f.repository,upstream);
+  await writeFile(join(upstream,'README.md'),'# Remote commit\n');
+  git(upstream,'add','README.md');git(upstream,'-c','user.name=Werk Test','-c','user.email=werk@example.invalid','commit','-m','Remote only');
+  const remoteCommit=git(upstream,'rev-parse','HEAD'), localCommit=git(f.repository,'rev-parse','HEAD');
+  git(f.repository,'remote','add','origin',upstream);
+  await writeFile(join(f.repository,'README.md'),'# Operator uncommitted work\n');
+  const repositories=new RepositoryManager({pollMs:30000,items:[{id:'demo',path:f.repository,remote:'origin',watch:false}]});
+  t.after(()=>repositories.close());
+  const adapter=new CodexAdapter({...f.config,repository:undefined},f.stateDir,'Assigned work only.',repositories);
+  const result=await adapter.run({...f.task,context:{commit:remoteCommit}},new AbortController().signal);
+  assert.equal(result.review.baseCommit,remoteCommit);
+  assert.equal(repositories.view()[0].state,'dirty');
+  assert.equal(git(f.repository,'rev-parse','HEAD'),localCommit);
+  assert.equal(await readFile(join(f.repository,'README.md'),'utf8'),'# Operator uncommitted work\n');
+  const retained=JSON.parse(await readFile(join(f.stateDir,'workspaces',f.task.lease,'worktree.json'),'utf8'));
+  assert.equal(await readFile(join(retained.workspace,'README.md'),'utf8'),'# Remote commit\nHuman review is required.\n');
+  const patch=await readFile(join(f.stateDir,result.review.artifactPath),'utf8');
+  assert.match(patch,/Remote commit/);assert.match(patch,/Human review is required/);
+  assert.ok(!patch.includes('Operator uncommitted work'));
+});
+
+
+test('model-written submodule metadata cannot execute during trusted patch post-processing',linux,async t=>{
+  const f=await fixture(t), marker=join(f.directory,'submodule-escaped'), hook=join(f.directory,'fsmonitor');
+  const git=(...args)=>execFileSync('git',['-c','core.hooksPath=/dev/null',...args],{cwd:f.repository,encoding:'utf8',stdio:'pipe'}).trim();
+  const commit=git('rev-parse','HEAD');
+  git('update-index','--add','--cacheinfo',`160000,${commit},sub`);
+  git('-c','user.name=Werk Test','-c','user.email=werk@example.invalid','commit','-m','Track gitlink');
+  await writeFile(hook,`#!${process.execPath}\nrequire('node:fs').writeFileSync(${JSON.stringify(marker)},'escaped');\n`,{mode:0o700});
+  const program=`const fs=require('node:fs');fs.cpSync('.git','sub/.git',{recursive:true});fs.appendFileSync('sub/.git/config',${JSON.stringify('\n[core]\n fsmonitor = '+hook+'\n')});fs.appendFileSync('README.md','Allowed edit.');`;
+  await writeFile(f.executable,`#!${process.execPath}\n${program}\n`);
+  await assert.rejects(f.adapter.run(f.task,new AbortController().signal),/changes to Git submodules are unsupported/);
+  await assert.rejects(readFile(marker),error=>error.code==='ENOENT');
+  assert.equal(await readFile(join(f.repository,'README.md'),'utf8'),'# Fixture\n');
+});
+
+
+test('ignored provider files cannot hide outside-allowlist changes in retained worktrees',linux,async t=>{
+  const f=await fixture(t,"const fs=require('node:fs');fs.appendFileSync('README.md','Approved edit.');fs.mkdirSync('ignored');fs.writeFileSync('ignored/private.txt','Unapproved artifact.');");
+  await writeFile(join(f.repository,'.gitignore'),'ignored/\n');
+  const git=(...args)=>execFileSync('git',['-c','core.hooksPath=/dev/null',...args],{cwd:f.repository,encoding:'utf8',stdio:['ignore','pipe','pipe']});
+  git('add','.gitignore');git('-c','user.name=Werk Test','-c','user.email=werk@example.invalid','commit','-m','Ignore generated files');
+  await assert.rejects(f.adapter.run(f.task,new AbortController().signal),/outside the operator allowlist/);
+  const retained=JSON.parse(await readFile(join(f.stateDir,'workspaces',f.task.lease,'worktree.json'),'utf8'));
+  assert.equal(await readFile(join(retained.workspace,'ignored','private.txt'),'utf8'),'Unapproved artifact.');
+  await assert.rejects(readFile(join(f.stateDir,'review',f.task.lease,'change.patch')),error=>error.code==='ENOENT');
+  assert.equal(await readFile(join(f.repository,'README.md'),'utf8'),'# Fixture\n');
 });

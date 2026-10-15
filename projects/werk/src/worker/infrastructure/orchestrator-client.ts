@@ -103,11 +103,12 @@ export class HttpWorkerGateway implements WorkerGateway {
           throw Error("Invalid orchestrator assignments response");
         return response.tasks.map(assignment);
       },
-      async claim(requestId: string, queueCapacity?: number) {
+      async claim(requestId: string, queueCapacity?: number, repositoryIds?: string[], legacyRepository?: boolean) {
         const response = record(
           await call("/v1/worker/assignments/next", "POST", {
             requestId,
             ...(queueCapacity === undefined ? {} : { queueCapacity }),
+            ...(repositoryIds === undefined ? {} : { repositoryIds, legacyRepository: legacyRepository ?? false }),
           }),
         );
         return response.task === null ? null : assignment(response.task);
@@ -122,6 +123,7 @@ export class HttpWorkerGateway implements WorkerGateway {
           updated.attempt !== task.attempt ||
           updated.workerId !== task.workerId ||
           updated.project !== task.project ||
+          updated.repository !== task.repository ||
           updated.profile !== task.profile ||
           contextIdentity(updated.context) !== contextIdentity(task.context)
         ) {

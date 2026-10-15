@@ -19,16 +19,25 @@ const { open, title, repository, paths, instruction, provider, definitionId, age
 const busy = ref(false), submitted = ref(false), error = ref('');
 const definition = computed(() => state.definitions.find(item => item.id === definitionId.value));
 const selectedAgent = computed(() => definition.value?.agents.find(item => item.name === agent.value));
+const repositories = computed(() => state.settings?.repositories?.items ?? []);
+const selectedRepository = computed(() => repositories.value.find(item => item.id === repository.value));
+const repositoryValid = computed(() => repositories.value.length ? repositories.value.some(item => item.id === repository.value) : !!repository.value.trim());
 const configured = computed(() => state.settings?.providers.find(item => item.id === provider.value)?.configured);
 const incompatible = computed(() => selectedAgent.value?.provider && !(provider.value ?? '').startsWith(selectedAgent.value.provider === 'anthropic' ? 'claude' : 'codex') && provider.value !== `${selectedAgent.value.provider}-api`);
-const canSubmit = computed(() => state.unlocked && !busy.value && !!configured.value && !!instruction.value.trim() && !!title.value.trim() && !!repository.value.trim() && !!paths.value.trim() && !incompatible.value && (definitionId.value === 'none' || !!selectedAgent.value) && (!selectedAgent.value?.requiresAdaptation || adapt.value));
+const canSubmit = computed(() => state.unlocked && !busy.value && !!configured.value && !!instruction.value.trim() && !!title.value.trim() && repositoryValid.value && !!paths.value.trim() && !incompatible.value && (definitionId.value === 'none' || !!selectedAgent.value) && (!selectedAgent.value?.requiresAdaptation || adapt.value));
 watch(definitionId, () => { agent.value = definition.value?.agents.find(item => item.name === 'root')?.name ?? definition.value?.agents[0]?.name ?? ''; adapt.value = false; });
 watch(agent, () => { adapt.value = false; });
+async function closeEditor() {
+  if (busy.value) return;
+  open.value = false;
+  await nextTick(); document.getElementById('file-task-toggle')?.focus();
+}
 async function toggleEditor() {
   if (busy.value) return;
-  submitted.value = false; error.value = ''; open.value = !open.value;
-  if (!open.value) return;
+  if (open.value) { await closeEditor(); return; }
+  submitted.value = false; error.value = ''; open.value = true;
   if (!provider.value) provider.value = state.sessions?.records.find(item => item.id === state.sessions?.selected)?.provider ?? state.settings?.providers.find(item => item.configured)?.id ?? 'codex-cli';
+  if (!repository.value && repositories.value.length === 1) repository.value = repositories.value[0].id;
   if (!instruction.value) instruction.value = state.draft;
   await nextTick(); document.getElementById('file-task-instruction')?.focus();
 }
@@ -49,6 +58,7 @@ async function run() {
   <div class="run-task">
     <div class="actions">
       <UButton
+        id="file-task-toggle"
         color="neutral"
         variant="outline"
         icon="i-lucide-play"
@@ -62,12 +72,12 @@ async function run() {
     <p v-if="submitted" role="status">
       File task queued in its own session. <RouterLink to="/history">View file task history →</RouterLink>
     </p>
-    <form v-if="open" id="local-task-form" class="settings-form" :aria-busy="busy" @submit.prevent="run">
+    <form v-if="open" id="local-task-form" class="settings-form" :aria-busy="busy" @submit.prevent="run" @keydown.esc.stop.prevent="closeEditor">
       <fieldset :disabled="busy" class="contents">
-        <h2>Prepare a local change</h2>
+        <div class="section-heading"><h2>Prepare a local change</h2><UButton type="button" color="neutral" variant="ghost" aria-label="Close file task editor" @click="closeEditor">Close</UButton></div>
         <p>
           A new task session receives these instructions and snapshots of the approved files. The worker saves
-          a patch for review. Your checkout is not changed, and tests are not run automatically.
+          a patch for review. Assigned repositories use an isolated Git worktree. Tests are not run automatically.
         </p>
         <label for="file-task-provider">Provider connection</label
         ><USelect
@@ -83,7 +93,7 @@ async function run() {
           class="w-full"
         />
         <p v-if="!configured" class="page-note">
-          Set up this provider in Connections before queueing a file task.
+          Set up this provider in <RouterLink to="/dashboard#provider-connections">Dashboard</RouterLink> before queueing a file task.
         </p>
         <label for="file-task-instruction">File task instructions</label
         ><UTextarea
@@ -138,14 +148,14 @@ async function run() {
         <label for="local-title">Task title</label
         ><UInput id="local-title" v-model="title" required maxlength="200" class="w-full" /><label
           for="local-repository"
-          >Repository directory on the worker machine</label
-        ><UInput
+          >{{ repositories.length ? 'Assigned repository' : 'Repository directory on the worker machine' }}</label
+        ><USelect v-if="repositories.length" id="local-repository" v-model="repository" :items="repositories.map(item => ({ label: item.id, value: item.id }))" placeholder="Select a repository" :aria-describedby="selectedRepository ? 'file-task-checkout' : undefined" class="w-full" /><UInput v-else
           id="local-repository"
           v-model="repository"
           required
           placeholder="/home/you/project"
           class="w-full"
-        /><label for="local-paths">Approved files · one relative path per line</label
+        /><p v-if="selectedRepository" id="file-task-checkout" class="page-note repository-context">Checkout directory<code>{{ selectedRepository.path }}</code></p><label for="local-paths">Approved files · one relative path per line</label
         ><UTextarea id="local-paths" v-model="paths" required placeholder="src/example.ts" class="w-full" />
         <p class="page-note">
           Only these text files are sent to the provider. Up to 32 files and 48,000 characters total. New
@@ -157,3 +167,6 @@ async function run() {
     </form>
   </div>
 </template>
+<style scoped>
+.repository-context code { display: block; white-space: normal; overflow-wrap: anywhere; }
+</style>

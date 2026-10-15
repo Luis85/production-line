@@ -78,7 +78,12 @@ after readiness, unlike native start's foreground JSON-line stream.
 
 `cli` preserves the application's JSON/stdin interface; for example
 `cli task create --file - --key submission-001` reads a task JSON object from
-stdin. Application-client exit codes and output belong to that invoked client.
+stdin. The task JSON accepts optional `repository` as the worker assignment ID;
+`project` remains the line scope. Without `repository`, native Codex falls back to
+the assignment matching `project`. Native application note intake also accepts
+`task create --project ID --wikilink "[[Feature]]" --repository ASSIGNMENT_ID --key KEY`.
+With `--file`, place `repository` in the JSON instead of combining both forms.
+Application-client exit codes and output belong to that invoked client.
 
 ## Application clients
 

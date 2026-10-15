@@ -30,6 +30,13 @@ watch(
   () => s.intakeFactory,
   () => props.store.loadPolicy(),
 );
+watch(
+  () => s.taskDraft.execution,
+  (value) => {
+    if (value === "cli") s.taskDraft.provider = "codex";
+  },
+  { immediate: true },
+);
 const providers = [
     { label: "Automatisch", value: "auto" },
     { label: "Codex", value: "codex" },
@@ -77,8 +84,23 @@ const providers = [
         ><UInput
           id="factory-task-project"
           v-model="s.taskDraft.project"
+          pattern="[a-zA-Z0-9_\-]{1,100}"
+          :maxlength="100"
           required
         />
+        <label for="factory-task-repository">Repository-Zuweisung (optional)</label
+        ><UInput
+          id="factory-task-repository"
+          v-model="s.taskDraft.repository"
+          pattern="[a-zA-Z0-9_\-]{1,100}"
+          :maxlength="100"
+          aria-describedby="factory-repository-hint"
+          placeholder="z. B. portal-ui"
+        />
+        <p id="factory-repository-hint" class="muted">
+          Zuweisungs-ID aus dem Worker-Dashboard, kein Pfad oder Git-URL.
+          Leer nutzt die Projekt-ID. Das Projekt bestimmt weiterhin die passende Linie.
+        </p>
         <label for="factory-task-reference"
           >Requirement-Verweis (optional)</label
         ><UInput
@@ -108,6 +130,7 @@ const providers = [
               id="factory-task-provider"
               v-model="s.taskDraft.provider"
               :items="providers"
+              :disabled="s.taskDraft.execution === 'cli'"
             />
           </div>
           <div>
@@ -119,6 +142,10 @@ const providers = [
             />
           </div>
         </div>
+        <p v-if="s.taskDraft.execution === 'cli'" class="muted">
+          Live-Aufträge verwenden Codex und brauchen einen passenden Worker.
+          Lokale Änderungen bleiben zum menschlichen Review; kein automatischer Push oder Merge.
+        </p>
         <UButton
           type="submit"
           :loading="s.intakeBusy"
@@ -203,6 +230,9 @@ const providers = [
           >{{ item.task.project }} ·
           {{ item.destination?.name || "Ziel noch offen" }}</small
         >
+        <p v-if="item.task.repository" class="muted">
+          Repository-Zuweisung: {{ item.task.repository }}
+        </p>
         <UButton
           v-if="
             item.remoteTaskId &&

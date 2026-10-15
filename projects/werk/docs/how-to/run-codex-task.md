@@ -49,6 +49,12 @@ credential names, private-key extensions and path traversal. It has no globs.
 The task cannot select a command, change the sandbox or broaden this allowlist.
 Keep deployment YAML outside the repository being edited.
 
+To assign several checkouts, add `workers.repositories` with `items` containing
+`{id, path, remote, branch?, watch}` entries. Optional task field `repository`
+selects the assignment ID; when omitted, the task project selects it. You can then omit `execution.codex.repository`; the executable
+and approved file allowlist still belong to the operator. See
+[repository configuration](../reference/configuration.md#assigned-git-repositories).
+
 Validate the complete YAML, then use `system up`:
 
 ```sh
@@ -104,6 +110,12 @@ Choose **Codex CLI** in the orchestrator's task form, or submit a task containin
 }
 ```
 
+For a worker assigned several repositories, add `"repository": "docs"` to select
+that assignment while keeping `"project": "example"` as the line scope. Omit it
+when the assignment ID equals the project. This field accepts an assignment ID,
+not a filesystem path or Git URL. A pinned context commit must still exist in the
+selected checkout; choosing a repository does not change the context binding.
+
 Submit JSON to `POST /v1/tasks` on the production-line orchestrator, with
 `Content-Type: application/json`, `Authorization: Bearer <line-operator-token>`
 and a stable `Idempotency-Key` header. Reuse that key only for an exact retry of
@@ -115,8 +127,11 @@ provider. A live task remains queued until an eligible live worker is available.
 For an unbound structured task, execution pins the configured repository's HEAD
 commit when the attempt starts. For pinned context, the exact context commit
 must exist in that repository; the worker verifies the context manifest before
-invocation. The adapter clones local committed data into a disposable checkout,
-removes its remote and leaves the configured source checkout unchanged.
+invocation. The adapter creates a detached task worktree beneath the selected
+repository's `.werk/worktrees` directory and leaves source checkout files
+unchanged by the task. Repository watching may fast-forward a clean source
+checkout separately. The task remains pinned to its starting commit. The worktree
+and its changes remain available after execution or restart for inspection.
 
 ## Inspect the result before applying anything
 
@@ -136,7 +151,7 @@ endpoint. Review artifacts remain in worker state until the operator archives
 or removes them; include them in backups. They are separate from acknowledged
 snapshot-retention limits. Runtime backups cover private Werk state, not the external
 Git checkout, Codex executable or provider account authentication. Preserve the
-repository separately and reprovision installation/login under the recovery
+repository and its retained task worktrees separately, and reprovision installation/login under the recovery
 account; do not bundle provider credentials into a distributable backup artifact.
 
 Read the patch as source material. Confirm its SHA-256 and base commit against
@@ -164,6 +179,13 @@ terminal evidence and follows lease fencing; the live profile's one-attempt
 budget prevents automatic repeated paid executions. Correct the issue and
 submit new work deliberately. A restarted worker recovers incomplete attempts
 as interrupted rather than rerunning the provider into uncertain state.
+
+During the model invocation, the worktree uses private Git metadata to isolate
+shared repository refs and configuration. A hard process kill can leave that
+metadata in place. After stopping the worker, inspect
+`workspaces/<lease>/worktree.json` and the saved `worktree.git` pointer in private
+worker state before restoring the registered worktree link. Do not rerun the
+interrupted attempt to recover it; preserve its files for review.
 
 Process output is bounded and discarded instead of entering logs or snapshots.
 Use `codex login status`, an operator-run harmless CLI check, and your approved

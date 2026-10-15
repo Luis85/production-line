@@ -12,7 +12,7 @@ import {
   type DefinitionSnapshot,
 } from "./definitions.js";
 import { randomUUID, createHash } from "node:crypto";
-import { join, resolve, relative } from "node:path";
+import { isAbsolute, join, resolve, relative } from "node:path";
 import { realpath, lstat } from "node:fs/promises";
 import { object, text } from "../../shared/contracts.js";
 import { DomainError } from "../../shared/errors.js";
@@ -26,6 +26,21 @@ import { modelFor, type ProviderId } from "../infrastructure/providers.js";
 import type { WorkerSettings } from "../infrastructure/settings.js";
 import type { WorkerSessions } from "./sessions.js";
 import type { ConversationModel } from "./conversation.js";
+/** Repository adapters prepare committed worktrees; plain folders remain a legacy fallback. */
+export interface LocalTaskWorkspaces {
+  prepareWorktree(
+    selector: string,
+    taskKey: string,
+    signal: AbortSignal,
+    baseCommit?: string,
+  ): Promise<{
+    repositoryId?: string;
+    repository: string;
+    path: string;
+    baseCommit?: string;
+    reused?: boolean;
+  }>;
+}
 export interface TaskFile {
   path: string;
   content: string;
@@ -45,6 +60,9 @@ export interface LocalTask {
   provider: ProviderId;
   model: string;
   repository: string;
+  repositoryId?: string;
+  worktree?: string;
+  baseCommit?: string;
   files: TaskFile[];
   status:
     | "queued"
@@ -96,6 +114,12 @@ export class LocalTaskboard {
   private sessions: WorkerSessions;
   private tasks: LocalTask[] = [];
   private writing = Promise.resolve();
+  private admitting = Promise.resolve();
+  private admissionReserved = false;
+  private continuationReservations = 0;
+  private continuations = new Set<Promise<unknown>>();
+  private workspaces?: LocalTaskWorkspaces;
+  private workspaceController = new AbortController();
   private running = new Map<
     string,
     { controller: AbortController; promise: Promise<void> }
@@ -108,12 +132,16 @@ export class LocalTaskboard {
     directory: string,
     settings: WorkerSettings,
     sessions: WorkerSessions,
-    model: typeof modelFor = modelFor,
+    modelOrWorkspaces: typeof modelFor | LocalTaskWorkspaces = modelFor,
+    workspaces?: LocalTaskWorkspaces,
   ) {
     this.directory = directory;
     this.settings = settings;
     this.sessions = sessions;
-    this.model = model;
+    this.model =
+      typeof modelOrWorkspaces === "function" ? modelOrWorkspaces : modelFor;
+    this.workspaces =
+      typeof modelOrWorkspaces === "function" ? workspaces : modelOrWorkspaces;
   }
   async init() {
     try {
@@ -253,6 +281,13 @@ export class LocalTaskboard {
       provider: task.provider,
       model: task.model,
       repository: task.repository,
+      ...(task.worktree
+        ? {
+            repositoryId: task.repositoryId,
+            worktree: task.worktree,
+            baseCommit: task.baseCommit,
+          }
+        : {}),
       files: structuredClone(task.files),
       definition: task.definition ?? null,
     };
@@ -523,9 +558,12 @@ export class LocalTaskboard {
     );
   }
   get active() {
-    return this.tasks.filter((task) =>
-      ["queued", "running"].includes(task.status),
-    ).length;
+    return (
+      Number(this.admissionReserved) + this.continuationReservations +
+      this.tasks.filter((task) =>
+        ["queued", "running"].includes(task.status),
+      ).length
+    );
   }
   view() {
     return {
@@ -594,6 +632,36 @@ export class LocalTaskboard {
     return write;
   }
   async create(input: unknown, submission?: { id: string; hash: string }) {
+    // Serialize admission so duplicate durable IDs never prepare a second worktree.
+    const operation = this.admitting
+      .catch(() => {})
+      .then(async () => {
+        try {
+          return await this.createTask(input, submission);
+        } finally {
+          this.admissionReserved = false;
+        }
+      });
+    this.admitting = operation.then(() => {}, () => {});
+    return operation;
+  }
+  private assertAdmissionCapacity(tasks: LocalTask[]) {
+    if (tasks.length >= 100)
+      throw new DomainError(
+        "conflict",
+        "Taskboard holds 100 tasks. Delete an old task first.",
+      );
+    if (
+      tasks.filter((item) => ["queued", "running"].includes(item.status)).length +
+        this.sessions.chatActive + this.continuationReservations >=
+      this.settings.value.board.queueCapacity
+    )
+      throw new DomainError("conflict", "Local task queue is full.");
+  }
+  private async createTask(
+    input: unknown,
+    submission?: { id: string; hash: string },
+  ) {
     if (this.closed) throw new DomainError("unavailable", "Worker is stopping");
     if (submission) {
       if (
@@ -636,18 +704,75 @@ export class LocalTaskboard {
       ),
       definition,
     );
+    const selector = text(body.repository, "Repository", 4096);
+    const assignments = this.settings.value.repositories.items;
+    const assignment = assignments.find(
+      (item) =>
+        item.id === selector ||
+        (isAbsolute(selector) && resolve(item.path) === resolve(selector)),
+    );
+    if (assignments.length && !assignment)
+      throw new DomainError(
+        "invalid_input",
+        "Choose a repository assigned to this worker.",
+      );
     const config = codexConfiguration({
       executable: resolve("provider"),
-      repository: body.repository,
+      repository: assignment?.path ?? selector,
       allowedPaths: body.paths,
     });
-    const repository = await realpath(config.repository),
+    if (
+      body.priority !== undefined &&
+      body.priority !== 1 &&
+      body.priority !== 2
+    )
+      throw new DomainError("invalid_input", "Priority must be 1 or 2");
+    if (assignment && !this.workspaces)
+      throw new DomainError(
+        "unavailable",
+        "The assigned repository worktree service is unavailable.",
+      );
+    // Reserve capacity before preparing a durable worktree. Chat admission reads
+    // board.active, so a concurrent chat cannot consume this task's queue slot.
+    this.assertAdmissionCapacity(this.tasks);
+    this.admissionReserved = true;
+    const id = submission?.id ?? randomUUID();
+    const prepared: Awaited<ReturnType<LocalTaskWorkspaces["prepareWorktree"]>> = this.workspaces
+      ? await this.workspaces.prepareWorktree(
+          assignment?.id ?? selector,
+          id,
+          AbortSignal.any([
+            this.workspaceController.signal,
+            AbortSignal.timeout(30000),
+          ]),
+        )
+      : { repository: config.repository!, path: config.repository! };
+    if (
+      assignment &&
+      (prepared.repositoryId !== assignment.id || !prepared.baseCommit)
+    )
+      throw new DomainError(
+        "conflict",
+        "Assigned repository tasks require a committed Git worktree.",
+      );
+    if (prepared.reused)
+      throw new DomainError(
+        "conflict",
+        "This task worktree already exists. Inspect the retained task before submitting again.",
+      );
+    const repository = await realpath(prepared.repository),
+      snapshotRoot = await realpath(prepared.path),
       files: TaskFile[] = [];
+    if (prepared.baseCommit && snapshotRoot === repository)
+      throw new DomainError(
+        "conflict",
+        "Git task snapshots require a separate worktree.",
+      );
     let bytes = 0;
     for (const path of config.allowedPaths) {
       const parts = path.split("/");
       for (let i = 1; i <= parts.length; i++) {
-        const entry = join(repository, ...parts.slice(0, i));
+        const entry = join(snapshotRoot, ...parts.slice(0, i));
         const info = await lstat(entry).catch((error) => {
           if (error.code !== "ENOENT") throw error;
           return null;
@@ -661,8 +786,8 @@ export class LocalTaskboard {
             "Approved files cannot contain symlinks.",
           );
       }
-      const absolute = resolve(repository, path);
-      if (relative(repository, absolute).startsWith(".."))
+      const absolute = resolve(snapshotRoot, path);
+      if (relative(snapshotRoot, absolute).startsWith(".."))
         throw new DomainError("invalid_input", "File outside repository");
       let content = "",
         existed = true;
@@ -680,13 +805,7 @@ export class LocalTaskboard {
         );
       files.push({ path, content, existed });
     }
-    if (
-      body.priority !== undefined &&
-      body.priority !== 1 &&
-      body.priority !== 2
-    )
-      throw new DomainError("invalid_input", "Priority must be 1 or 2");
-    const id = submission?.id ?? randomUUID();
+    if (this.closed) throw new DomainError("unavailable", "Worker is stopping");
     const task: LocalTask = {
       ...(submission ? { submissionHash: submission.hash } : {}),
       ...(definition ? { definition } : {}),
@@ -697,6 +816,13 @@ export class LocalTaskboard {
       provider: provider.id,
       model: provider.model,
       repository,
+      ...(prepared.baseCommit
+        ? {
+            repositoryId: prepared.repositoryId,
+            worktree: snapshotRoot,
+            baseCommit: prepared.baseCommit,
+          }
+        : {}),
       files,
       status: "queued",
       priority: Number(body.priority ?? 1),
@@ -719,18 +845,7 @@ export class LocalTaskboard {
             );
           return;
         }
-        if (tasks.length >= 100)
-          throw new DomainError(
-            "conflict",
-            "Taskboard holds 100 tasks. Delete an old task first.",
-          );
-        if (
-          tasks.filter((item) => ["queued", "running"].includes(item.status))
-            .length +
-            this.sessions.chatActive >=
-          this.settings.value.board.queueCapacity
-        )
-          throw new DomainError("conflict", "Local task queue is full.");
+        this.assertAdmissionCapacity(tasks);
         await this.sessions.ensureTask(
           task.sessionId,
           "local",
@@ -816,7 +931,15 @@ export class LocalTaskboard {
     if (task.requestId) this.sessions.notifyRequest(task.requestId);
     return this.view();
   }
-  async executeRequest(id: string) {
+  private trackContinuation<T>(operation: Promise<T>): Promise<T> {
+    this.continuations.add(operation);
+    return operation.finally(() => { this.continuations.delete(operation); });
+  }
+  executeRequest(id: string) {
+    return this.trackContinuation(this.executeOwnedRequest(id));
+  }
+  private async executeOwnedRequest(id: string) {
+    if (this.closed) throw new DomainError("unavailable", "Worker is stopping.");
     const request = this.sessions.requests.get(id);
     if (request.owner.remote || request.input.kind !== "patch")
       throw new DomainError(
@@ -829,6 +952,8 @@ export class LocalTaskboard {
       this.sessions.notifyRequest(id);
       return this.view();
     }
+    let admissionFailure: { error: unknown } | undefined;
+    let reserved = false;
     await this.change(async (tasks) => {
       const task = tasks.find(
         (item) => item.sessionId === request.owner.sessionId,
@@ -841,6 +966,13 @@ export class LocalTaskboard {
       if (this.running.has(task.id)) return;
       const current = this.sessions.requests.get(id);
       if (current.execution?.inputRevision === current.inputRevision) return;
+      if (
+        tasks.filter((item) => ["queued", "running"].includes(item.status)).length +
+          this.sessions.chatActive + Number(this.admissionReserved) +
+          this.continuationReservations >=
+        this.settings.value.board.queueCapacity
+      )
+        throw new DomainError("conflict", "Local task queue is full.");
       const approved = this.gateInput(task).files;
       if (JSON.stringify(approved) !== JSON.stringify(current.input.files))
         throw new DomainError(
@@ -862,12 +994,38 @@ export class LocalTaskboard {
       const accepted = this.sessions.interactions.accept({
         sessionId: task.sessionId,
         kind: "message",
-        operationId: "request-" + id + "-" + current.inputRevision,
+        // Command replay is handled by the request journal; failed admissions
+        // must not pin every later guarded execute to an undispatched turn.
+        operationId: randomUUID(),
         input: task.instruction,
         context: this.context(task),
       });
       if (accepted.duplicate) return;
-      await this.prepareTurn(task, accepted.turn);
+      task.currentTurnId = accepted.turn.id;
+      delete task.runId;
+      // Keep the queue slot visible until the serialized board write publishes it.
+      this.continuationReservations++;
+      reserved = true;
+      try {
+        await this.prepareTurn(task, accepted.turn);
+      } catch (error) {
+        this.sessions.interactions.fail(
+          task.sessionId, accepted.turn.id, "failed", "admission_failed",
+        );
+        if (task.runId)
+          await this.sessions.runs.finish(task.runId, "failed").catch(() => {
+            this.evidencePersistenceError = true;
+          });
+        if (this.sessions.requests.get(id).execution?.turnId === accepted.turn.id)
+          this.sessions.requests.failExecution(id, accepted.turn.id, "failed");
+        Object.assign(task, {
+          status: "failed",
+          finishedAt: new Date().toISOString(),
+          error: "Admission did not finish. The accepted input remains saved; repair the provider and issue a fresh guarded execute.",
+        });
+        admissionFailure = { error };
+        return;
+      }
       Object.assign(task, {
         status: "queued",
         finishedAt: null,
@@ -876,16 +1034,23 @@ export class LocalTaskboard {
         patch: null,
         archived: false,
       });
+    }).finally(() => {
+      if (reserved) this.continuationReservations--;
     });
+    if (admissionFailure) throw admissionFailure.error;
     return this.view();
   }
-  async interact(body: InteractionCommand) {
+  interact(body: InteractionCommand) {
+    return this.trackContinuation(this.continueTask(body));
+  }
+  private async continueTask(body: InteractionCommand) {
     if (this.closed)
       throw new DomainError("unavailable", "Worker is stopping.");
     let accepted:
         | ReturnType<typeof this.sessions.interactions.accept>
         | undefined,
       taskForFailure: LocalTask | undefined;
+    let reserved = false;
     try {
       await this.change(async (tasks) => {
         const task = tasks.find((item) => item.sessionId === body.sessionId);
@@ -947,13 +1112,16 @@ export class LocalTaskboard {
           this.running.has(task.id) ||
           tasks.filter((item) => ["queued", "running"].includes(item.status))
             .length +
-            this.sessions.chatActive >=
+            this.sessions.chatActive + Number(this.admissionReserved) +
+            this.continuationReservations >=
             this.settings.value.board.queueCapacity
         )
           throw new DomainError(
             "conflict",
             "The answer is saved, but the worker queue is full. Resume when capacity is available.",
           );
+        this.continuationReservations++;
+        reserved = true;
         await this.prepareTurn(task, accepted.turn);
         Object.assign(task, {
           status: "queued",
@@ -1009,6 +1177,8 @@ export class LocalTaskboard {
         });
       }
       throw error;
+    } finally {
+      if (reserved) this.continuationReservations--;
     }
     return this.sessions.interactions.view(body.sessionId);
   }
@@ -1377,9 +1547,11 @@ export class LocalTaskboard {
   }
   async close() {
     this.closed = true;
+    this.workspaceController.abort();
     for (const running of this.running.values()) running.controller.abort();
     await Promise.allSettled(
-      [...this.running.values()].map((item) => item.promise),
+      [this.admitting, ...this.continuations, ...[...this.running.values()].map((item) => item.promise)],
     );
+    await this.writing.catch(() => {});
   }
 }

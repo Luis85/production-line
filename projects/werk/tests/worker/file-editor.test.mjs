@@ -15,12 +15,13 @@ async function editorFixture(action) {
   const scripts = compileScript(descriptor, { id: 'file-editor-fixture', genDefaultAs: 'EditorComponent' }).content.replace(/^import .*\n/gm, '');
   const state = reactive({ draftEpoch: 0, unlocked: true, draft: 'Original chat instructions', actionError: '', settings: { providers: [{ id: 'codex-cli', configured: true }, { id: 'claude-cli', configured: true }] }, sessions: { selected: 'one', records: [{ id: 'one', provider: 'codex-cli' }, { id: 'two', provider: 'claude-cli' }] }, definitions: [] });
   const javascript = ts.transpile(scripts, { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS });
-  const ports = { _defineComponent: defineComponent, reactive, ref, computed, watch, watchDraftEpoch: watch, nextTick, toRefs, state, workerState: state, workspaceAction: action, document: { getElementById: () => null }, UButton: null, UInput: null, USelect: null, UTextarea: null };
+  const focused = [];
+  const ports = { _defineComponent: defineComponent, reactive, ref, computed, watch, watchDraftEpoch: watch, nextTick, toRefs, state, workerState: state, workspaceAction: action, document: { getElementById: id => ({ focus: () => focused.push(id) }) }, UButton: null, UInput: null, USelect: null, UTextarea: null };
   const instantiate = new Function(...Object.keys(ports), `${javascript}\nreturn EditorComponent.setup({}, { expose() {} });`);
   const result = instantiate(...Object.values(ports));
   await result.toggleEditor();
   Object.assign(result.editor, { title: 'Change', repository: '/project', paths: 'src/a.ts' });
-  return { ...result, state };
+  return { ...result, state, focused };
 }
 
 test('file-task instructions and provider survive task switching and expiry, while explicit Lock clears them', async () => {
@@ -58,4 +59,33 @@ test('file-task provider mismatches and missing adaptation block submission; fai
   fixture.editor.adapt = true; await fixture.run();
   assert.equal(calls, 1); assert.equal(fixture.error.value, 'Queue is full');
   assert.equal(fixture.editor.instruction, 'Original chat instructions'); assert.equal(fixture.editor.repository, '/project');
+});
+
+
+test('closing file-task intake retains the independent draft and returns focus to its trigger', async () => {
+  const fixture = await editorFixture(async () => ({}));
+  await fixture.closeEditor();
+  assert.equal(fixture.editor.open, false);
+  assert.equal(fixture.editor.repository, '/project');
+  assert.equal(fixture.editor.instruction, 'Original chat instructions');
+  assert.equal(fixture.focused.at(-1), 'file-task-toggle');
+  await fixture.toggleEditor();
+  assert.equal(fixture.editor.open, true);
+  assert.equal(fixture.focused.at(-1), 'file-task-instruction');
+  fixture.busy.value = true;
+  await fixture.closeEditor();
+  assert.equal(fixture.editor.open, true);
+});
+
+test('assigned repository choices retain a complete path while submitting only the assigned ID', async () => {
+  let submitted;
+  const fixture = await editorFixture(async (_, body) => { submitted = body; return {}; });
+  fixture.state.settings.repositories = { pollMs: 30000, items: [{ id: 'web', path: '/projects/long-checkout/web', remote: 'origin', watch: true }, { id: 'api', path: '/projects/api', remote: 'origin', watch: true }] };
+  fixture.editor.repository = 'missing';
+  assert.equal(fixture.canSubmit.value, false);
+  fixture.editor.repository = 'web';
+  assert.equal(fixture.selectedRepository.value.path, '/projects/long-checkout/web');
+  assert.equal(fixture.canSubmit.value, true);
+  await fixture.run();
+  assert.equal(submitted.repository, 'web');
 });

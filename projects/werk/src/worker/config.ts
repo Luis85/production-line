@@ -1,3 +1,4 @@
+import { validateRepositoryConfiguration } from './application/repositories.js';
 import { DEFAULT_MAX_RUNTIME_MS, MAX_MAX_RUNTIME_MS } from './application/execution-policy.js';
 import { chatConfiguration } from './status/workspace.js';
 import { codexConfiguration } from './infrastructure/codex-adapter.js';
@@ -26,8 +27,9 @@ export async function configuration(options: Record<string, string>, document?: 
     try { parsed = JSON.parse(source); }
     catch { throw new ValidationError('Invalid worker configuration JSON'); }
   }
-  const raw = object(parsed, 'Worker configuration', ['schemaVersion', 'scheduler', 'execution', 'systemPrompt', 'profiles', 'journal', 'chat', 'features']);
+  const raw = object(parsed, 'Worker configuration', ['schemaVersion', 'scheduler', 'execution', 'systemPrompt', 'profiles', 'journal', 'chat', 'features', 'repositories']);
   if (raw.schemaVersion !== undefined && raw.schemaVersion !== 1) throw new ValidationError('Unknown worker configuration version');
+  const repositories = validateRepositoryConfiguration(raw.repositories, path => resolve(options['project-dir'] ?? process.cwd(), path));
   const featuresRaw = section(raw, 'features', ['directory', 'provider', 'pollMs']);
   const directory = options['features-dir'] ?? featuresRaw.directory;
   if (directory !== undefined && (typeof directory !== 'string' || !directory.trim() || directory.length > 4096 || /[\x00-\x1f]/.test(directory))) throw new ValidationError('features.directory must be a folder path.');
@@ -45,6 +47,7 @@ export async function configuration(options: Record<string, string>, document?: 
   if (mode === 'cli' && process.platform !== 'linux') throw new ValidationError('Live Codex execution currently requires native Linux');
   if (mode === 'mock' && execution.codex !== undefined) throw new ValidationError('Codex configuration requires explicit cli mode');
   const codex = mode === 'cli' ? codexConfiguration(execution.codex) : undefined;
+  if (mode === 'cli' && !codex?.repository && !repositories.items.length) throw new ValidationError('Live Codex requires execution.codex.repository or an assigned repository.');
   const chatExecutable = chatConfiguration(raw.chat) ?? codex?.executable;
   const systemPrompt = raw.systemPrompt === undefined ? defaultPrompt : raw.systemPrompt;
   if (typeof systemPrompt !== 'string' || !systemPrompt.trim() || systemPrompt.length > 20000) {
@@ -76,5 +79,5 @@ export async function configuration(options: Record<string, string>, document?: 
     profiles: ps, systemPrompt
   };
   policy.configHash = hash(JSON.stringify(normalized));
-  return { ...(features ? { features } : {}), ...(chatExecutable ? { chatExecutable } : {}), ...(codex ? { codex } : {}), profiles: ps, policy, pollMs, mockMs, timeoutMs, retainedPairs, systemPromptHash: hash(systemPrompt), systemPrompt };
+  return { repositories, ...(features ? { features } : {}), ...(chatExecutable ? { chatExecutable } : {}), ...(codex ? { codex } : {}), profiles: ps, policy, pollMs, mockMs, timeoutMs, retainedPairs, systemPromptHash: hash(systemPrompt), systemPrompt };
 }

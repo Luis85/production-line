@@ -431,6 +431,7 @@ onUnmounted(() => {
       <RegistryEditor :store="store" /><FactoryIntake :store="store" />
       <OnboardingTour
         v-model:open="tourOpen"
+        locale="de"
         :title="s.lineId ? 'Linien-Tour' : 'Factory-Tour'"
         :steps="tourSteps"
       />

@@ -1,3 +1,4 @@
+import type { RepositoryConfiguration } from './application/repositories.js';
 import { verifyReviewArtifact } from "./infrastructure/review-artifact.js";
 import { RemoteGateReconciler } from "./application/reconcile-request-gates.js";
 import { RemoteRequestGates } from "./application/remote-request-gates.js";
@@ -49,6 +50,7 @@ const taskInputText = (task: Task) =>
   JSON.stringify(
     {
       project: task.project,
+      repository: task.repository,
       title: task.title,
       criteria: task.criteria,
       wikilinks: task.wikilinks,
@@ -77,6 +79,7 @@ export interface WorkerConfig {
   systemPrompt: string;
   projectDir?: string;
   integrationProjectDir?: string;
+  repositories?: RepositoryConfiguration;
   features?: { directory: string; provider: string; pollMs: number };
   retainedPairs?: number;
   codex?: CodexConfiguration;
@@ -107,11 +110,7 @@ export async function runWorker(
       config.retainedPairs > 100000)
   )
     throw Error("retainedPairs must be an integer in 0–100000");
-  const adapter =
-    dependencies.adapter ??
-    (config.codex
-      ? new CodexAdapter(config.codex, config.stateDir, config.systemPrompt)
-      : new MockAdapter(config.mockMs));
+  const mode = dependencies.adapter?.mode ?? (config.codex ? "cli" : "mock");
   const now = dependencies.now ?? Date.now;
   await ensureDirectory(config.stateDir);
   const lock = join(config.stateDir, "worker.lock");
@@ -123,7 +122,7 @@ export async function runWorker(
   const state: Status = {
     workerId: null,
     project: null,
-    mode: adapter.mode,
+    mode,
     state: "starting",
     taskId: null,
     attempt: null,
@@ -162,6 +161,16 @@ export async function runWorker(
     journal,
     () => ({ ...state, outbox: journal.metrics(now()) }),
   );
+  const repositoryScope = () => {
+    const repositoryIds = workspace.settings.value.repositories.items.map(item => item.id);
+    return {
+      repositoryIds,
+      legacyRepository: mode === "cli" && repositoryIds.length === 0 && Boolean(config.codex?.repository),
+    };
+  };
+  const adapter = dependencies.adapter ?? (config.codex
+    ? new CodexAdapter(config.codex, config.stateDir, config.systemPrompt, workspace.repositories)
+    : new MockAdapter(config.mockMs));
   const gateReconciler = new RemoteGateReconciler(
     workspace.sessions.requests,
     journal,
@@ -205,6 +214,9 @@ export async function runWorker(
   };
   const shutdown = new AbortController(),
     stopping = AbortSignal.any([stop, shutdown.signal]);
+  const stopRepositories = () => { void workspace.repositories.close().catch(() => {}); };
+  stopping.addEventListener("abort", stopRepositories, { once: true });
+  if (stopping.aborted) stopRepositories();
   const running = new Map<
     string,
     {
@@ -316,7 +328,7 @@ export async function runWorker(
               config.stateDir,
               connection.url,
               config.profiles,
-              config.policy,
+              { ...config.policy, ...repositoryScope() },
               gateway,
               stopping,
             );
@@ -374,40 +386,50 @@ export async function runWorker(
               throw error;
             }
           };
-          const current = await client.currentAssignments();
-          for (const [id, entry] of waiting)
-            if (
-              entry.lease.signal.aborted ||
-              !current.some((task) => task.lease === id)
-            ) {
-              await entry.lease.close();
-              waiting.delete(id);
-              await cancelSession(
-                entry.task,
-                "The assignment lease expired or was withdrawn before execution.",
-              );
-            }
-          for (const task of current) await accept(task);
           const board = workspace.settings.value.board;
           {
-            const capacity =
-              config.policy.maxParallel + board.orchestratorQueue;
-            for (
-              let n = 0;
-              n < capacity &&
-              !board.paused &&
-              running.size + waiting.size < capacity &&
-              !stopping.aborted;
-              n++
-            ) {
-              const task = await client.claim(
-                requestId,
-                board.orchestratorQueue,
-              );
-              requestId = randomUUID();
-              if (!task) break;
-              await accept(task);
-            }
+            await workspace.withRepositoryAdmission(async () => {
+              try {
+                const current = await client.currentAssignments();
+                for (const [id, entry] of waiting)
+                  if (
+                    entry.lease.signal.aborted ||
+                    !current.some((task) => task.lease === id)
+                  ) {
+                    await entry.lease.close();
+                    waiting.delete(id);
+                    await cancelSession(
+                      entry.task,
+                      "The assignment lease expired or was withdrawn before execution.",
+                    );
+                  }
+                for (const task of current) await accept(task);
+                const capacity =
+                  config.policy.maxParallel + board.orchestratorQueue;
+                for (
+                  let n = 0;
+                  n < capacity &&
+                  !board.paused &&
+                  running.size + waiting.size < capacity &&
+                  !stopping.aborted;
+                  n++
+                ) {
+                  const scope = repositoryScope();
+                  const task = await client.claim(
+                    requestId,
+                    board.orchestratorQueue,
+                    scope.repositoryIds,
+                    scope.legacyRepository,
+                  );
+                  requestId = randomUUID();
+                  if (!task) break;
+                  await accept(task);
+                }
+              } finally {
+                // Publish accepted leases before releasing the assignment-change guard.
+                await save();
+              }
+            });
             const pending = [...waiting.entries()].sort(
               ([, a], [, b]) =>
                 (board.order === "priority"
@@ -559,8 +581,11 @@ export async function runWorker(
         break;
       }
     }
+  } catch (error) {
+    if (!stopping.aborted) throw error;
   } finally {
     shutdown.abort();
+    stopping.removeEventListener("abort", stopRepositories);
     state.state = "stopping";
     if (localTimer) clearInterval(localTimer);
     await workspace.close({ deferEvidence: true });

@@ -55,6 +55,7 @@ type Evidence = {
   requestPolicy?: () => GatePolicy | undefined;
   provider?: () => ModelProvider;
   notifyRequest?: (requestId: string) => void;
+  admit?: () => void;
 };
 type ChatContext = { chatMessages: ChatMessage[]; assistantId: string };
 
@@ -453,14 +454,9 @@ export class WorkerConversation {
       const admission = interactions.accept({
         sessionId: this.sessionId,
         kind: command?.action ?? "message",
-        operationId:
-          command?.operationId ??
-          (explicitRequest
-            ? "request-" +
-              explicitRequest.id +
-              "-" +
-              explicitRequest.inputRevision
-            : randomUUID()),
+        // The request journal deduplicates command receipts. A fresh guarded
+        // execution after failed admission needs a new interaction attempt.
+        operationId: command?.operationId ?? randomUUID(),
         ...(command
           ? {
               expectedRevision: command.expectedRevision,
@@ -509,6 +505,18 @@ export class WorkerConversation {
         "conflict",
         "This task session is full. Create a new task to continue.",
       );
+    }
+    try {
+      this.evidence?.admit?.();
+    } catch (error) {
+      if (turn)
+        interactions!.fail(
+          this.sessionId,
+          turn.id,
+          "failed",
+          "admission_unavailable",
+        );
+      throw error;
     }
     const maxRuntimeMs =
       typeof this.timeoutMs === "function" ? this.timeoutMs() : this.timeoutMs;

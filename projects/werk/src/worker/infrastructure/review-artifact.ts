@@ -27,6 +27,7 @@ export async function verifyReviewArtifact(
   const patch = await readBoundedFile(
     join(directory, review.artifactPath),
     1048576,
+    true,
   );
   if (
     Buffer.byteLength(patch) !== review.patchBytes ||

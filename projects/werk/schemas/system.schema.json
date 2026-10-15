@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Werk system definition",
-  "description": "One secret-free Factory service with a root and up to 31 logical subfactories, and 1\u20138 production lines. Runtime validation also requires globally distinct ports (including worker ranges), unique production-line IDs, and a worker range ending at or below 65535. YAML loading additionally rejects aliases, anchors, explicit tags, duplicate keys, multiple documents and files larger than 64 KiB. Tasks are submitted separately. Runtime validation additionally enforces unique factory IDs, known parent and line factory references, and an acyclic tree reachable from the root.",
+  "description": "One secret-free Factory service with a root and up to 31 logical subfactories, and 1–8 production lines. Runtime validation also requires globally distinct ports (including worker ranges), unique production-line IDs, and a worker range ending at or below 65535. YAML loading additionally rejects aliases, anchors, explicit tags, duplicate keys, multiple documents and files larger than 64 KiB. Tasks are submitted separately. Runtime validation additionally enforces unique factory IDs, known parent and line factory references, and an acyclic tree reachable from the root.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -151,6 +151,9 @@
                     "description": "Absolute Codex CLI path on native Linux; uses the operator login. Independent of task execution mode."
                   }
                 }
+              },
+              "repositories": {
+                "$ref": "#/$defs/repositories"
               }
             }
           },
@@ -207,7 +210,6 @@
           "additionalProperties": false,
           "required": [
             "executable",
-            "repository",
             "allowedPaths"
           ],
           "properties": {
@@ -219,7 +221,8 @@
             "repository": {
               "type": "string",
               "pattern": "^/",
-              "maxLength": 4096
+              "maxLength": 4096,
+              "description": "Legacy single repository. May be omitted when workers.repositories assigns one or more checkouts; task.repository selects the assignment id, falling back to task.project when omitted."
             },
             "allowedPaths": {
               "type": "array",
@@ -236,6 +239,63 @@
         }
       },
       "description": "Opt-in native Linux only, exactly one worker per line. Runtime additionally rejects traversal, dot paths, credential filenames and binary changes. Tasks must explicitly request cli mode; results require human review."
+    },
+    "repositories": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Existing local Git checkouts for native workers. Runtime additionally enforces unique ids and normalized paths, valid Git refs and remote names. Saved worker settings take precedence after initial seeding.",
+      "properties": {
+        "pollMs": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 3600000,
+          "default": 30000
+        },
+        "items": {
+          "type": "array",
+          "maxItems": 64,
+          "default": [],
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "path"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "pattern": "^[A-Za-z0-9_-]+$"
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "description": "Absolute checkout path on the worker host."
+              },
+              "remote": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100,
+                "default": "origin",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+              },
+              "branch": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "description": "Remote branch to watch; defaults to the checkout current branch."
+              },
+              "watch": {
+                "type": "boolean",
+                "default": true
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

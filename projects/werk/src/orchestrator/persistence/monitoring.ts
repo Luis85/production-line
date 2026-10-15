@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { identifier, profiles, workerPolicy } from '../../shared/contracts.js';
 import { DomainError } from '../../shared/errors.js';
-import type { RegisteredCapabilities } from '../../shared/capabilities.js';
+import type { RegisteredCapabilities, RepositoryCapacity } from '../../shared/capabilities.js';
 import type { WorkerDetail } from '../../shared/protocol.js';
 
 /** Use bounded projections; neither registry size nor task payloads determine response size. */
@@ -9,7 +9,15 @@ export function registeredCapabilities(db: DatabaseSync, project: string, now = 
     const rows = db.prepare("SELECT DISTINCT json_extract(p.value,'$.id') AS id,json_extract(p.value,'$.provider') AS provider,COALESCE(json_extract(p.value,'$.mode'),'mock') AS mode FROM workers w,json_each(w.profiles) p WHERE w.project=? ORDER BY id,provider,mode LIMIT 65").all(project) as { id: string; provider: 'claude' | 'codex'; mode: 'mock' | 'cli' }[];
     const providers = db.prepare("SELECT DISTINCT json_extract(p.value,'$.provider') AS provider FROM workers w,json_each(w.profiles) p WHERE w.project=? ORDER BY provider LIMIT 3").all(project) as { provider: 'claude' | 'codex' }[];
     const capacity = new Map<string, { provider: 'claude' | 'codex'; mode: 'mock' | 'cli'; slotsAvailable: number }>();
-    for (const row of db.prepare('SELECT id,profiles,config FROM workers WHERE project=? AND seen>?').iterate(project, now - ttl)) {
+    const repositoryCapacity = new Map<string, RepositoryCapacity>();
+    let repositoryCapacityTruncated = false;
+    const addRepositoryCapacity = (row: RepositoryCapacity) => {
+        const key = JSON.stringify([row.repositoryId, !!row.implicitOnly, row.provider, row.mode]), existing = repositoryCapacity.get(key);
+        if (existing) existing.slotsAvailable += row.slotsAvailable;
+        else if (repositoryCapacity.size < 260) repositoryCapacity.set(key, row);
+        else repositoryCapacityTruncated = true;
+    };
+    for (const row of db.prepare('SELECT id,profiles,config FROM workers WHERE project=? AND seen>? ORDER BY id').iterate(project, now - ttl)) {
         const workerProfiles = profiles(JSON.parse(String(row.profiles))), config = workerPolicy(JSON.parse(String(row.config)));
         const active = db.prepare("SELECT profile,COUNT(*) AS busy FROM tasks WHERE worker=? AND status='running' GROUP BY profile").all(row.id);
         const machineFree = Math.max(0, config.maxParallel - active.reduce((sum, entry) => sum + Number(entry.busy), 0));
@@ -20,9 +28,14 @@ export function registeredCapabilities(db: DatabaseSync, project: string, now = 
             grouped.set(key, (grouped.get(key) ?? 0) + free);
             if (!capacity.has(key)) capacity.set(key, { provider: profile.provider, mode: profile.mode, slotsAvailable: 0 });
         }
-        for (const [key, free] of grouped) capacity.get(key)!.slotsAvailable += Math.min(machineFree, free);
+        for (const [key, free] of grouped) {
+            const available = Math.min(machineFree, free), profile = capacity.get(key)!;
+            profile.slotsAvailable += available;
+            for (const repositoryId of config.repositoryIds ?? [null]) addRepositoryCapacity({ repositoryId, provider: profile.provider, mode: profile.mode, slotsAvailable: available });
+            if (config.repositoryIds !== undefined && config.legacyRepository && profile.mode === 'cli' && !config.repositoryIds.includes(project)) addRepositoryCapacity({ repositoryId: project, implicitOnly: true, provider: profile.provider, mode: profile.mode, slotsAvailable: available });
+        }
     }
-    return { eligibleCapacity: [...capacity.values()], providers: providers.map(row => row.provider), profiles: rows.slice(0, 64).map(row => ({ id: row.id, provider: row.provider, mode: row.mode })), profilesTruncated: rows.length > 64 };
+    return { repositoryCapacity: [...repositoryCapacity.values()], repositoryCapacityTruncated, eligibleCapacity: [...capacity.values()], providers: providers.map(row => row.provider), profiles: rows.slice(0, 64).map(row => ({ id: row.id, provider: row.provider, mode: row.mode })), profilesTruncated: rows.length > 64 };
 }
 export function workerDetail(db: DatabaseSync, project: string, id: string, now: number, ttl: number): WorkerDetail {
     const row = db.prepare('SELECT id,project,profiles,seen,config FROM workers WHERE id=? AND project=?').get(identifier(id, 'worker ID'), project) as { id: string; project: string; profiles: string; seen: number; config: string } | undefined;

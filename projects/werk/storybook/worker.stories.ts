@@ -13,6 +13,7 @@ import SettingsPanel from '../src/worker/webview/components/SettingsPanel.vue';
 import DefinitionPanel from '../src/worker/webview/components/DefinitionPanel.vue';
 import RequestGatePanel from '../src/worker/webview/components/RequestGatePanel.vue';
 import RequestPolicyPanel from '../src/worker/webview/components/RequestPolicyPanel.vue';
+import RepositoryPanel from '../src/worker/webview/components/RepositoryPanel.vue';
 import ResourceMonitorPanel from '../src/worker/webview/components/ResourceMonitorPanel.vue';
 import StatusApp from '../src/worker/webview/status/StatusApp.vue';
 import { diagnosticFixture, installWorkerFixture, type WorkerFixture } from './worker-fixtures';
@@ -139,7 +140,7 @@ export const EvidenceUnavailable: Story = {
 };
 export const WorkerDashboard: Story = {
   name: '13 · Monitor work and host health',
-  parameters: { storymap: storymap('The dashboard brings together the shared execution queue, host resources, project integration status, retained attempts and project requests.', ['components/WorkerShell', 'pages/MonitoringPage', 'components/ResourceMonitorPanel', 'components/ProjectIntegrationsPanel', 'components/RunEvidencePanel', 'components/FeatureRequestsPanel'], '/dashboard', 12) },
+  parameters: { storymap: storymap('The dashboard brings together the shared execution queue, host resources, project integration status, retained attempts and project requests.', ['components/WorkerShell', 'pages/MonitoringPage', 'components/ResourceMonitorPanel', 'components/RepositoryPanel', 'components/ProjectIntegrationsPanel', 'components/RunEvidencePanel', 'components/FeatureRequestsPanel'], '/dashboard', 12) },
   render: renderPage(MonitoringPage),
   play: async ({ canvasElement }) => { await element(canvasElement, '#integrations-title'); await ready(canvasElement); },
 };
@@ -202,4 +203,14 @@ export const OriginalAssignmentEvidence: Story = {
   parameters: { storymap: storymap('Original remote assignments keep their own journal snapshots. Simulated attempts remain explicitly distinct from implemented changes and human-reviewed patches.', ['components/WorkerShell', 'pages/HistoryPage', 'components/Taskboard'], '/history') },
   render: renderPage(HistoryPage),
   play: async ({ canvasElement }) => { (await element(canvasElement, '[data-attempt="pair-simulated"]')).click(); await element(canvasElement, '#evidence-title'); await ready(canvasElement); },
+};
+
+export const RepositoryAssignments: Story = {
+  name: '23 · Assign and watch Git repositories',
+  parameters: { storymap: storymap('Assigned checkouts show safe synchronization status. Local changes remain visible, and queued work prevents replacing repository assignments.', ['components/RepositoryPanel'], '/dashboard') },
+  render: renderComponent(RepositoryPanel),
+  play: async ({ canvasElement }) => {
+    (await element(canvasElement, '.repository-editor') as HTMLDetailsElement).open = true;
+    await element(canvasElement, '#repository-id-0'); await ready(canvasElement);
+  },
 };

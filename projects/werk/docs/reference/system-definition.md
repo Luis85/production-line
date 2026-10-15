@@ -31,6 +31,7 @@ port uniqueness, hierarchy references/cycles, reserved IDs and bounded YAML inpu
 | `productionLines[].workers.count` | Integer 1–8 worker processes |
 | `productionLines[].workers.statusPort` | First host status port; the remaining workers use consecutive ports |
 | `productionLines[].workers.execution` | Optional native Linux Codex policy; requires `count: 1`. See below. |
+| `productionLines[].workers.repositories` | Optional native repository assignments: `{pollMs, items: [{id, path, remote?, branch?, watch?}]}`. |
 
 Slugs do not end in a hyphen and cannot be reserved device names such as `con`,
 `nul` or `com1`. Names are trimmed, nonempty and contain no control characters.
@@ -55,12 +56,24 @@ not provider sessions or already-enrolled worker IDs. See
 ## Optional live Codex policy
 
 `workers.execution` accepts `mode: cli`, optional `timeoutMs` (1,000–3,600,000;
-default 300,000), and `codex` with absolute `executable` and `repository` paths
-and `allowedPaths` (1–32 unique, exact relative regular-text paths). Hidden,
+default 300,000), and `codex` with an absolute `executable`, an optional legacy
+`repository` path, and `allowedPaths` (1–32 unique, exact relative regular-text paths). Hidden,
 traversal and common credential/key paths are rejected. Policy belongs to the
 operator; task content cannot select these paths or executables. Native Linux
 and one worker per live line are required. Docker overrides and the managed
 cloud-init profile reject live policies. Omit `execution` for simulation.
+
+With `workers.repositories`, each native Codex task selects the assignment whose
+ID equals `task.repository`, or `task.project` when `repository` is omitted.
+The task project remains the line scope, so one connected worker can use several
+checkouts by selecting different repository IDs on tasks with the same project.
+The legacy `codex.repository` may then be omitted.
+Assignments use existing absolute checkout paths and are passed to each worker on
+the line. Watching fetches and fast-forwards clean bases, while task worktrees
+remain pinned. Saved worker settings override the initial assignment seed on
+later starts. Managed Docker fleets reject assignments because their mounts do
+not expose checkouts. See [repository configuration](configuration.md#assigned-git-repositories)
+for the complete assignment and worktree contract.
 
 Plans report `mode: mock|cli|mixed`. Live tasks require explicit `executionMode: cli`
 and provider `codex`; successful execution yields `review`, never a simulated

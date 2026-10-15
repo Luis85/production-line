@@ -13,7 +13,7 @@ const timeout = (promise, milliseconds) => new Promise((resolve, reject) => {
   const timer = setTimeout(() => reject(Error('Owned child did not stop before the shutdown deadline.')), milliseconds);
   promise.then(value => { clearTimeout(timer); resolve(value); }, error => { clearTimeout(timer); reject(error); });
 });
-export function runtimeEnvironment(environment, { liveProvider = false } = {}) {
+export function runtimeEnvironment(environment, { liveProvider = false, gitAccess = false } = {}) {
   const allowed = new Set(['PATH', 'Path', 'SystemRoot', 'SYSTEMROOT', 'WINDIR', 'HOME', 'USERPROFILE', 'TEMP', 'TMP', 'TMPDIR', 'LANG', 'LC_ALL', 'TZ']);
   for (const name of ['WERK_ALERT_QUEUE_AGE_SECONDS', 'WERK_ALERT_FAILURE_WINDOW_SECONDS', 'WERK_ALERT_FAILED_ATTEMPTS', 'WERK_ALERT_OUTBOX_AGE_SECONDS', 'WERK_ALERT_OUTBOX_PENDING', 'WERK_ALERT_STALE_OBSERVATION_SECONDS']) {
     const value = environment[name];
@@ -21,10 +21,13 @@ export function runtimeEnvironment(environment, { liveProvider = false } = {}) {
     if (typeof value !== 'string' || !/^[1-9][0-9]{0,7}$/.test(value) || Number(value) > 8640000) throw inputError(name + ': integer 1–8640000 required.');
     allowed.add(name);
   }
-  // Only an explicitly configured live worker receives provider runtime context.
+  // Workers may receive repository assignments after startup, including in mock mode.
+  // Keep Git transport context separate from opt-in provider context and secrets.
+  if (liveProvider || gitAccess) for (const name of ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'NODE_EXTRA_CA_CERTS']) allowed.add(name);
+  if (gitAccess) for (const name of ['SSH_AUTH_SOCK', 'GIT_SSL_CAINFO', 'GIT_SSL_CAPATH']) allowed.add(name);
   // Preserve managed Codex guards; task shell commands still inherit no environment.
   if (liveProvider) for (const name of Object.keys(environment)) {
-    if (name.startsWith('CODEX_') || ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'all_proxy', 'no_proxy', 'SSL_CERT_FILE', 'SSL_CERT_DIR', 'NODE_EXTRA_CA_CERTS', 'OPENAI_CLUSTER'].includes(name)) allowed.add(name);
+    if (name.startsWith('CODEX_') || name === 'OPENAI_CLUSTER') allowed.add(name);
   }
   return Object.fromEntries(Object.entries(environment).filter(([name, value]) => allowed.has(name) && typeof value === 'string'));
 }
@@ -112,7 +115,7 @@ export async function startRuntime(stateDir, { noOpen = false, emit = () => {}, 
   async function launch(role, index = 0) {
     abort.signal.throwIfAborted();
     const child = spawn(process.execPath, [join(releaseRoot, 'scripts/runtime/child.mjs')], { cwd: releaseRoot, detached: process.platform !== 'win32', windowsHide: true,
-      env: runtimeEnvironment(environment, { liveProvider: role === 'worker' && (config.mode === 'cli' || !!config.chat) }), stdio: ['ignore', 'ignore', 'pipe', 'ipc'] });
+      env: runtimeEnvironment(environment, { gitAccess: role === 'worker', liveProvider: role === 'worker' && (config.mode === 'cli' || !!config.chat) }), stdio: ['ignore', 'ignore', 'pipe', 'ipc'] });
     const item = { child, role, index, closed: false, completion: undefined };
     // Child diagnostics may contain provider/repository text. Only allowlisted lifecycle events
     // enter runtime output/logs; never relay arbitrary child stdout/stderr to public reports.
