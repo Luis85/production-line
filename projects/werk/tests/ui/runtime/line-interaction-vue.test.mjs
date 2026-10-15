@@ -1,5 +1,7 @@
-import test from 'node:test';import assert from 'node:assert/strict';import ts from 'typescript';import {readFile,writeFile,mkdir,rm} from 'node:fs/promises';
-const dir=new URL('../../../work/vue-migration/interaction-tests/',import.meta.url);await mkdir(dir,{recursive:true});const path=new URL('line-interaction.mjs',dir);await writeFile(path,ts.transpile((await readFile(new URL('../../../src/shared/webview/line-interaction.ts',import.meta.url),'utf8')),{target:ts.ScriptTarget.ESNext,module:ts.ModuleKind.ESNext}));const {createLineInteraction}=await import(path.href);
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { frontend } from '../helpers/frontend-loader.mjs';
+const { createLineInteraction } = await frontend('src/shared/webview/line-interaction.ts');
 const reply=(session='a',messages=[])=>({sessions:{selected:session,records:[{id:session,title:'Task '+session}]},chat:{available:true,busy:false,messages}});
 const deferred=()=>{let resolve;return {promise:new Promise(r=>resolve=r),resolve:v=>resolve(v)}};
 test('line interaction freezes session target and clears private state on selected session change',async()=>{let result=reply(),calls=[];const i=createLineInteraction(async b=>{calls.push(b);return result},async()=>({}),()=>true);i.state.workerUrl='http://localhost:4100';i.state.credential='private';await i.connect();assert.equal(i.state.credential,'');i.state.draft='Follow up';result=reply('b');await i.perform('read');assert.equal(calls[1].sessionId,'a');assert.equal(i.state.connection,null);assert.equal(i.state.chat,null);assert.match(i.state.message,/changed/);});
