@@ -39,7 +39,7 @@ test('exhausted Windows publication preserves the previous file and removes only
   await assert.rejects(atomicWrite(f.path, 'never published', 0o600, {
     platform: 'win32', async rename() { calls++; throw error; }, async wait(ms) { delays.push(ms); }
   }), cause => cause === error);
-  assert.equal(calls, 8); assert.deepEqual(delays, [10, 20, 40, 80, 100, 100, 100]);
+  assert.equal(calls, 14); assert.deepEqual(delays, [10, 20, 40, 80, 160, 250, 250, 250, 250, 250, 250, 250, 250]);
   assert.equal(await readFile(f.path, 'utf8'), 'previous complete bytes');
   assert.deepEqual(await readdir(f.directory), ['status.json']);
 });
