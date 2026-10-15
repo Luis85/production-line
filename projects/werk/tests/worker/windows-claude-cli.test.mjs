@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { createHash } from 'node:crypto';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -59,6 +59,51 @@ test('Windows provider environment keeps the account profile but drops unrelated
   for (const key of ['USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'SystemRoot']) assert.equal(env[key], process.env[key], key);
   assert.equal(env.WERK_UNRELATED_SECRET, undefined);
   assert.equal(env.GIT_TERMINAL_PROMPT, '0');
+});
+
+test('Windows supervisor completes a contained invocation without blocking startup or drain', { ...windows, timeout: 25000 }, async t => {
+  const f = await treeFixture(t);
+  const source = await readFile(new URL('../../src/worker/infrastructure/provider-process.ts', import.meta.url), 'utf8');
+  let supervisor = /const supervisor = String\.raw`([\s\S]*?)`;/.exec(source)?.[1];
+  assert.ok(supervisor, 'static supervisor source is available');
+  // Instrument this known fixture only. Report fixed phase names, never subprocess
+  // diagnostics or invocation arguments, if native process startup/drain stalls.
+  const phases = [
+    ['IntPtr lifetimeJob = CreateContainedJob();', 'lifetime-create'],
+    ['if (!AssignProcessToJobObject(lifetimeJob, GetCurrentProcess()))', 'lifetime-assign'],
+    ['job = CreateContainedJob();', 'provider-job'],
+    ['Check(CreatePipe(out inRead, out inWrite, ref security, 0));', 'pipes'],
+    ['Check(CreateProcess(executable, command,', 'process-create'],
+    ['if (!AssignProcessToJobObject(job, child.Process))', 'provider-assign'],
+    ['input = new FileStream(', 'streams'],
+    ['Check(ResumeThread(child.Thread)', 'resume'],
+    ['if (WaitForSingleObject(child.Process, uint.MaxValue)', 'provider-wait'],
+    ['Check(TerminateJobObject(job, 125));', 'descendants-stop'],
+    ['Task.WaitAll(stdout, stderr);', 'streams-drain'],
+    ['return unchecked((int)code);', 'return'],
+  ];
+  for (const [needle, phase] of phases) {
+    assert.ok(supervisor.includes(needle), phase);
+    supervisor = supervisor.replace(needle, `Console.Error.WriteLine("WERK_PHASE:${phase}");\n      ${needle}`);
+  }
+  supervisor = supervisor.replace("$ErrorActionPreference = 'Stop'", "$ErrorActionPreference = 'Stop'\n[Console]::Error.WriteLine('WERK_PHASE:shell')")
+    .replace('  $spec = ', "  [Console]::Error.WriteLine('WERK_PHASE:compiled')\n  $spec = ");
+  const powershell = join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  const child = spawn(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(supervisor, 'utf16le').toString('base64')], {
+    cwd: f.directory, env: { ...providerEnvironment('claude'), WERK_PROVIDER_LAUNCH: Buffer.from(JSON.stringify({ executable: process.execPath, arguments: ['-e', "process.stdout.write('fixture completed')"] }), 'utf8').toString('base64') },
+    windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  t.after(() => { if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL'); });
+  child.stdin.on('error', () => {}); child.stdin.end();
+  let output = '', diagnostics = '';
+  child.stdout.on('data', chunk => { output += chunk.toString('utf8'); });
+  child.stderr.on('data', chunk => { diagnostics = (diagnostics + chunk.toString('utf8')).slice(-16384); });
+  const close = new Promise((resolve, reject) => { child.once('close', resolve); child.once('error', reject); });
+  let code;
+  try { code = await bounded(close); }
+  catch { throw Error('Supervisor deadline; phases: ' + [...diagnostics.matchAll(/WERK_PHASE:([a-z-]+)/g)].map(match => match[1]).join(', ')); }
+  assert.equal(code, 0, 'Supervisor exit; phases: ' + [...diagnostics.matchAll(/WERK_PHASE:([a-z-]+)/g)].map(match => match[1]).join(', '));
+  assert.equal(output, 'fixture completed');
 });
 
 test('Windows cancellation terminates the provider and its descendants', { ...windows, timeout: 30000 }, async t => {
