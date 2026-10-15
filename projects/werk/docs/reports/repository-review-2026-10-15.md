@@ -139,7 +139,15 @@ The supervisor receives a fixed allowlist of Windows installation/architecture
 variables and the host’s module path. It restores the caller’s original values,
 removing additions, before creating the provider. Raw-stream pumps start after
 the suspended provider resumes. Native fixtures verify provider behavior and
-environment restoration.
+environment restoration. A direct native child supplies the comparison baseline
+for all eleven runtime keys, including values Windows adds during process startup.
+
+A [second native diagnostic](https://github.com/Luis85/production-line/actions/runs/38790949779)
+identified PowerShell progress diagnostics on stderr alongside valid Claude JSON
+on stdout. Claude status now parses stdout independently, while both streams
+remain subject to the shared output limit and deadline. Codex status retains its
+stderr parsing. Regression coverage verifies authentication beside benign
+diagnostics, oversized stderr rejection and private diagnostic redaction.
 
 The platform follow-up distinguishes a production fix from fixture corrections:
 
