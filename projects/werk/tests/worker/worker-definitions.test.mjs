@@ -102,7 +102,7 @@ test('subscription CLIs receive the chosen definition model and instructions wit
   const path = await directory(t);
   for (const id of ['codex-cli', 'claude-cli']) {
     const executable = join(path, id);
-    await writeFile(executable, `#!/usr/bin/env node\nlet input='';for await(const chunk of process.stdin)input+=chunk;const args=process.argv.slice(2);if(args[args.indexOf('--model')+1]!=='definition-model')process.exit(2);if(!(${JSON.stringify(id)}==='codex-cli'?input:args[args.indexOf('--system-prompt')+1]).includes('Review carefully.'))process.exit(3);console.log(JSON.stringify(${JSON.stringify(id)}==='codex-cli'?{type:'item.completed',item:{type:'agent_message',text:'Profile applied'}}:{is_error:false,result:'Profile applied'}));`, { mode: 0o700 });
+    await writeFile(executable, `#!/usr/bin/env node\nlet input='';for await(const chunk of process.stdin)input+=chunk;const args=process.argv.slice(2);if(args[args.indexOf('--model')+1]!=='definition-model')process.exit(2);if(!(${JSON.stringify(id)}==='codex-cli'?input:(await import('node:fs')).readFileSync(args[args.indexOf('--system-prompt-file')+1],'utf8')).includes('Review carefully.'))process.exit(3);console.log(JSON.stringify(${JSON.stringify(id)}==='codex-cli'?{type:'item.completed',item:{type:'agent_message',text:'Profile applied'}}:{is_error:false,result:'Profile applied'}));`, { mode: 0o700 });
     const model = modelFor({ id, executable, apiKey: '', model: 'definition-model', instruction: 'Review carefully.' }, path);
     assert.equal(await model.reply([{ role: 'user', text: 'Help' }], AbortSignal.timeout(5000)), 'Profile applied');
   }
