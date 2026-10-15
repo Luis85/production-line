@@ -48,6 +48,28 @@ JSON result. Worker assignments and delayed responses use browser route fixtures
 the script does not change persisted tasks. Keep the isolated system running for
 the check and stop it afterward with `system stop --state-dir`.
 
+## Repository intake and walkthrough browser regression
+
+[ui/browser/repository-intake.mjs](ui/browser/repository-intake.mjs) uses the same
+isolated mock system as the spatial check above. It saves one simulated Factory
+intake and one simulated line task; do not point it at production state. Workers
+must have mock profiles for this fixture. Credentials stay in process memory.
+
+```sh
+WERK_VISUAL_STATE=/absolute/path/to/demo-state \
+WERK_VISUAL_EVIDENCE_DIR=/tmp/werk-intake-browser \
+node tests/ui/browser/repository-intake.mjs
+```
+
+The installed Playwright package is the default; `WERK_PLAYWRIGHT_MODULE` and
+`WERK_CHROMIUM` can override the browser runtime. Optional
+`WERK_VISUAL_FACTORY_URL`, `WERK_VISUAL_LINE_URL` and `WERK_VISUAL_LINE_ID`
+default to Factory 3100, Alpha 3001 and `alpha`. The check verifies repository
+ID validation, live-mode provider selection, actual simulated task submissions,
+assignment display, draft preservation, German nonmodal tours, background access,
+Escape focus restoration and responsive overflow at 1440 and 390 pixels. It saves
+screenshots and a sanitized JSON result, without invoking a live provider.
+
 ## Worker access and taskboard browser qualification
 
 After `npm run build`, run [worker/webview-smoke.mjs](worker/webview-smoke.mjs)

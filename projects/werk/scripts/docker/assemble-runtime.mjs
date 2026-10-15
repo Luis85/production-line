@@ -9,11 +9,12 @@ for (const path of ['/usr/lib/git-core', '/usr/share/git-core', '/usr/share/ca-c
   mkdirSync(dirname(path), { recursive: true });
   run('cp', ['-a', donor + path, dirname(path)]);
 }
-copyFileSync(donor + '/usr/bin/git', '/usr/bin/git');
+// Git invokes an external SSH client for ssh:// and git@host remotes.
+for (const path of ['/usr/bin/git', '/usr/bin/ssh']) copyFileSync(donor + path, path);
 const libraryDirectories = ['/lib', '/usr/lib'].flatMap(path => readdirSync(donor + path, { withFileTypes: true }).filter(entry => entry.name.endsWith('-linux-gnu')).map(entry => donor + path + '/' + entry.name));
 const env = { ...process.env, LD_LIBRARY_PATH: libraryDirectories.join(':') };
 const seen = new Set(), libraries = new Set();
-const candidates = ['/usr/bin/git', ...readdirSync(donor + '/usr/lib/git-core').map(name => '/usr/lib/git-core/' + name)];
+const candidates = ['/usr/bin/git', '/usr/bin/ssh', ...readdirSync(donor + '/usr/lib/git-core').map(name => '/usr/lib/git-core/' + name)];
 if (candidates.length > 512) throw Error('Unexpected Git runtime inventory');
 for (const path of candidates) {
   const info = statSync(donor + path); if (!info.isFile() || seen.has(info.ino)) continue; seen.add(info.ino);
@@ -38,6 +39,7 @@ for (const entry of readdirSync(donor + '/usr/share/doc', { withFileTypes: true 
   const target = join('/usr/share/doc', entry.name); mkdirSync(target, { recursive: true }); copyFileSync(copyright, join(target, 'copyright'));
 }
 run('/usr/bin/git', ['--version']);
+run('/usr/bin/ssh', ['-V'], { stdio: 'pipe' });
 for (const command of ['git-remote-https', 'git-upload-pack', 'git-receive-pack']) {
   if (!existsSync('/usr/lib/git-core/' + command)) throw Error('Missing Git helper');
   const output = run('/usr/bin/ldd', ['/usr/lib/git-core/' + command]);

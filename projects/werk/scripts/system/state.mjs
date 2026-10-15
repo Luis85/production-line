@@ -43,7 +43,7 @@ export async function setupSystem(value, { stateDir } = {}) {
     }
     await privateDirectory(join(stateDir, 'lines'));
     for (const line of definition.productionLines) await setup({ stateDir: join(stateDir, 'lines', line.id), project: line.project,
-      port: line.orchestrator.port, workerPort: line.workers.statusPort, workers: line.workers.count, runtime: definition.environment, execution: line.workers.execution, chat: line.workers.chat });
+      port: line.orchestrator.port, workerPort: line.workers.statusPort, workers: line.workers.count, runtime: definition.environment, execution: line.workers.execution, chat: line.workers.chat, repositories: line.workers.repositories });
     return { configured: true, created, stateDir, definition };
   } finally { await unlink(lock); }
 }
@@ -58,7 +58,7 @@ export async function factoryCredentials(stateDir, definition) {
   await existingDirectory(join(stateDir, 'lines'));
   for (const [index, line] of definition.productionLines.entries()) {
     const loaded = await loadSetup(join(stateDir, 'lines', line.id));
-    const expected = { project: line.project, orchestratorPort: line.orchestrator.port, workerPort: line.workers.statusPort, workers: line.workers.count, runtime: definition.environment, execution: line.workers.execution, chat: line.workers.chat };
+    const expected = { project: line.project, orchestratorPort: line.orchestrator.port, workerPort: line.workers.statusPort, workers: line.workers.count, runtime: definition.environment, execution: line.workers.execution, chat: line.workers.chat, repositories: line.workers.repositories };
     if (Object.entries(expected).some(([key, value]) => JSON.stringify(loaded.config[key]) !== JSON.stringify(value))) throw inputError('A line configuration differs from the saved system. Restore the original line configuration.');
     credentials[tokenEnv(index)] = loaded.credentials.WERK_ADMIN_TOKEN;
   }

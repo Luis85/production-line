@@ -11,7 +11,7 @@ iteration import --repo PATH --branch iteration/2026-W42 --project demo --iterat
     [--context pinned --vault-root docs] (server-bound commit; PR URL remains unverified)
 context resolve --repo PATH --commit FULL_SHA --vault-root docs --project demo --wikilink "[[Features/Feature]]"
 task create --file <path|-> --key <stable-idempotency-key> [--url http://127.0.0.1:3000]
-task create --project ID --wikilink '[[Features/Feature]]' --key <stable-idempotency-key> [--url URL]
+task create --project ID --wikilink '[[Features/Feature]]' --key <stable-idempotency-key> [--repository ASSIGNMENT_ID] [--url URL]
 task successor --id TASK --attempt N --evaluation GATE_EVALUATION --key OP --file <path|-> [--url URL]
 task list [--limit 1..1000] [--cursor CURSOR] [--url URL]
 task get --id <task-id> [--url URL]
@@ -116,7 +116,7 @@ try {
   } else {
     const optionsByCommand: Record<string, string[]> = {
       "task successor": ["url", "id", "attempt", "evaluation", "key", "file"],
-      "task create": ["url", "file", "key", "project", "wikilink"],
+      "task create": ["url", "file", "key", "project", "wikilink", "repository"],
       "task list": ["url", "limit", "cursor"],
       "task get": ["url", "id"],
       "task context": ["url", "id"],
@@ -163,8 +163,13 @@ try {
           "invalid_input",
           "Vault intake requires --project and --wikilink",
         );
+      if (o.file && o.repository !== undefined)
+        throw new DomainError(
+          "invalid_input",
+          "Set repository inside the --file task JSON, or use --repository with --project and --wikilink",
+        );
       const payload = fromNote
-        ? { project: o.project, requirementRef: o.wikilink }
+        ? { project: o.project, requirementRef: o.wikilink, ...(o.repository === undefined ? {} : { repository: o.repository }) }
         : await input(o.file);
       result = await request(base, "/v1/tasks", token, "POST", payload, o.key);
     } else if (cmd === "task successor") {

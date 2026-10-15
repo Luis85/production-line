@@ -65,9 +65,11 @@ holds a per-state operation lock while starting/running/updating; backup also us
 the runtime's stopped-state locks. A stale lock is never removed automatically.
 Confirm its owner and all child processes have exited before manual recovery.
 
-Each activation of an existing state takes a complete checksum-verified native
+Each activation of an existing state takes a checksum-verified native state-directory
 backup and runs the candidate's stopped-state doctor before switching the selection
-atomically. Releases and backups are retained; monitor disk space. A failed first
+atomically. Assigned Git repositories and retained task worktrees outside that state
+directory are not included. Back them up separately using the
+[repository backup procedure](../how-to/upgrade-backup.md#preserve-assigned-repositories-and-task-worktrees). Releases and backups are retained; monitor disk space. A failed first
 start can still require recovery: the updater does not silently rewind application
 data or retry older code against potentially changed databases.
 

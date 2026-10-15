@@ -9,7 +9,7 @@ RUN --mount=type=secret,id=proxy_ca \
     npm ci --ignore-scripts --workspaces=false --strict-ssl=true
 RUN node scripts/build.mjs worker --dist-only
 
-FROM node:24-bookworm-slim
+FROM node:24.19.0-bookworm@sha256:4196d66a565c6f195728d9952f161f4adfe2ad753052a08b7ec7f1c5a6bda42b
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build --chown=node:node /build/src/worker/dist ./

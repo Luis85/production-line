@@ -324,6 +324,11 @@ async function evidence() {
         >
       </div>
       <p>{{ guidance }}</p>
+      <p v-if="s.selectedTask.repository || s.selectedTask.executionMode === 'cli'">
+        Repository-Zuweisung:
+        {{ s.selectedTask.repository || s.selectedTask.project }}
+        {{ s.selectedTask.repository ? "" : "(Projekt-Standard)" }}
+      </p>
       <p v-if="s.selectedTask.requirementRef">
         {{ s.selectedTask.requirementRef }} · {{ contextState(s.selectedTask) }}
       </p>

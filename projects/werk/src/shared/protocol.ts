@@ -58,6 +58,9 @@ export interface RegistrationResponse {
 }
 export interface ClaimRequest {
     requestId: string;
+    queueCapacity?: number;
+    repositoryIds?: string[];
+    legacyRepository?: boolean;
 }
 export interface ClaimResponse {
     task: Task | null;

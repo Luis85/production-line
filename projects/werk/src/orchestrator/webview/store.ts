@@ -212,6 +212,7 @@ export function createOrchestratorStore(options: StoreOptions = {}) {
     },
     intake: {
       project: "demo",
+      repository: "",
       projectEdited: false,
       mode: "vault",
       executionMode: "mock",
@@ -729,6 +730,7 @@ export function createOrchestratorStore(options: StoreOptions = {}) {
           project: draft.project.trim(),
           requirementRef: draft.requirementRef.trim(),
         };
+    if (draft.repository.trim()) body.repository = draft.repository.trim();
     if (draft.provider !== "auto") body.provider = draft.provider;
     if (draft.executionMode === "cli") {
       body.executionMode = "cli";

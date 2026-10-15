@@ -30,8 +30,10 @@ export function validateRequestGateEvidence(
   ]);
   if (
     body.schemaVersion !== 1 ||
-    !["ready", "done"].includes(String(body.stage)) ||
-    !["passed", "blocked"].includes(String(body.status))
+    typeof body.stage !== "string" ||
+    !["ready", "done"].includes(body.stage) ||
+    typeof body.status !== "string" ||
+    !["passed", "blocked"].includes(body.status)
   )
     throw new ValidationError("Invalid request gate receipt.");
   for (const key of ["requestId", "evaluationId"])

@@ -3,6 +3,8 @@ import type { PinnedContextReference } from './context.js';
 export type Provider = 'auto' | 'claude' | 'codex';
 export interface TaskInput {
     project: string;
+    /** Worker repository assignment; absent keeps legacy project-based selection. */
+    repository?: string;
     /** Explicit operator opt-in; absent remains simulated. */
     executionMode?: 'mock' | 'cli';
     /** Display title; reference-only intake derives this without resolving content. */
@@ -44,6 +46,10 @@ export interface Profile {
     maxParallel?: number;
 }
 export interface WorkerPolicy {
+    /** Last advertised repository scope; absent supports older unrestricted workers. */
+    repositoryIds?: string[];
+    /** Single configured checkout accepts only tasks without an explicit repository selector. */
+    legacyRepository?: boolean;
     queueCapacity?: number;
     maxParallel: number;
     order: 'priority' | 'fifo';

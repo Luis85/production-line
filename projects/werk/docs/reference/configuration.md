@@ -53,8 +53,8 @@ inside the Windows Docker named volume. The initial native configuration is:
 Native setup flags configure the project, ports, worker count and runtime. Native
 supports 1–8 workers; Docker currently supports one. Worker status ports are
 contiguous starting with `workerPort` and must not overlap the orchestrator port.
-The runtime mode is always `mock`; `runtime` selects native or Docker deployment,
-not a coding provider. Setup preserves valid existing configuration and credentials.
+The default mode is `mock`; native deployments can explicitly enable `cli` with
+a matching execution policy. `runtime` selects native or Docker deployment. Setup preserves valid existing configuration and credentials.
 Stop services before a deliberate configuration or deployment change. Existing
 worker identities are bound to their connection/configuration: changing ports,
 project or worker configuration may require a new worker state and an explicitly
@@ -124,3 +124,105 @@ operator defaults, not every saved worker setting.
 A dispatched invocation freezes its duration policy; edits affect later calls.
 See [long-running worker operations](../how-to/monitor-long-running-worker.md) for
 monitoring scope, warning thresholds, shutdown and recovery.
+
+## Assigned Git repositories
+
+A worker can own up to 64 existing Git checkouts. Add a top-level `repositories`
+object to worker JSON (for example `.werk/worker.json`), or set it through the
+private worker settings API. Native single-line `config.json` accepts the same
+object; system YAML uses `productionLines[].workers.repositories`.
+
+```json
+{
+  "repositories": {
+    "pollMs": 30000,
+    "items": [
+      { "id": "app", "path": "/srv/app", "remote": "origin", "branch": "main", "watch": true },
+      { "id": "docs", "path": "/srv/docs", "remote": "origin", "watch": true }
+    ]
+  }
+}
+```
+
+This fragment merges with the rest of the configuration; preserve existing
+feature-folder and execution settings. IDs use 1–100 letters, digits, underscores
+or hyphens and must be unique. Paths must identify different checkout directories.
+Worker JSON resolves relative paths against `--project-dir` or its working
+directory; private settings and managed deployment configuration require absolute
+paths on the worker machine. Each checkout needs a commit and Git on the worker's
+PATH. Clone repositories and configure their remote authentication beforehand;
+the worker uses the existing Git account and never stores Git credentials here.
+
+`pollMs` defaults to 30,000 and accepts 1,000–3,600,000 milliseconds. The remote
+defaults to `origin`, and `watch` defaults to `true`. An omitted branch follows
+the checkout's current branch. An explicit branch must match the checkout's
+current branch; the worker does not switch branches. Remote values are existing
+Git remote names, not URLs or commands. Unknown fields and invalid refs are rejected.
+
+Watching polls and fetches the selected remote, then fast-forwards a clean,
+behind checkout. Dirty files, local commits and divergent histories are preserved;
+there is no reset, stash, rebase, automatic merge or push. Status reports the
+condition or failed fetch. A remote outage still permits tasks from the current
+local committed HEAD. `watch: false` disables periodic synchronization for that
+repository; an explicit sync remains available.
+
+Each assigned coding task gets a detached Git worktree under
+`<repository>/.werk/worktrees/`, pinned to a committed base. Uncommitted source
+edits are excluded. The managed directory is excluded through Git's local exclude
+file. Source checkout files stay separate from task edits; background pulls do
+not change an existing task's base. Worktrees survive worker shutdown and restart.
+Review them before cleanup; use `git worktree list` and Git's normal
+`git worktree remove PATH` for reviewed clean worktrees. Do not delete a worktree
+while a task is using it. Back up repositories and retained worktrees separately
+from private worker state.
+
+Local file tasks select an assignment ID in their existing `repository` field;
+an assigned absolute checkout path is also accepted. With assignments configured,
+other paths are rejected. Provider file tasks read approved snapshots from their
+worktree and produce a review patch; that worktree holds the captured input.
+Native Codex tasks select an assignment by optional `task.repository`, falling
+back to `task.project` when omitted, and retain the actual modified worktree.
+`project` remains the line/enrollment scope: use `repository: "docs"` with the
+same line project to select a second assigned checkout. The repository field is
+an assignment ID, not a path or remote URL; it does not change the orchestrator
+context binding or relax pinned-commit validation. Its operator-defined `allowedPaths` still applies to every
+selected repository. Legacy `execution.codex.repository` remains supported when
+no assignments are configured. Feature-folder patch requests target the installed
+project directory, which must be assigned when assignments are configured.
+Without assignments, local file tasks still accept non-Git directories as bounded
+snapshots; those tasks have no Git worktree or committed-base provenance.
+
+Connected workers advertise their saved assignment IDs when enrolling and on each
+claim. The orchestrator matches an explicit task repository against those IDs;
+CLI tasks without a selector match their project ID. The legacy single-repository
+fallback is advertised separately and does not accept explicit assignment IDs.
+An unscoped mock task remains eligible without a repository. The Factory uses
+observed repository capacity when choosing a line, so an assignment can differ
+from the line's project without being sent to an incompatible worker.
+
+The registration policy and claim body accept optional `repositoryIds` (up to 64
+unique assignment IDs) and `legacyRepository` (boolean, requiring that array).
+An empty array withdraws all explicit assignments. Omitting both on a later claim
+preserves the stored scope; old workers that never advertised a scope retain their
+legacy behavior. These runtime capabilities do not change the enrollment
+configuration hash. They identify available checkouts, not filesystem permissions;
+worktree preparation still validates the selected repository and pinned commit.
+
+Repository assignment changes require queued and running tasks to be drained.
+Saved private worker settings take precedence over the initial file seed on later
+starts; editing startup JSON does not overwrite saved assignments. Inspect or edit
+them in Dashboard's **Git repositories** section or use `settings get` /
+`settings set` on the worker CLI.
+
+Authenticated `GET /api/repositories` returns
+`{schemaVersion: 1, pollMs, items: [...] }` with current repository status.
+`GET /api/environment` includes the same view as `repositories`.
+`POST /api/repositories` with `{"action":"sync","id":"app"}` requests a sync;
+omit `id` to sync all assignments. `{"action":"status"}` refreshes status.
+The portable worker CLI can access these through `api --path /api/repositories`.
+
+Managed Docker fleets reject checkout assignments because their generated mounts
+do not expose repositories. Standalone project containers need a Git-enabled
+image, writable repository mounts and paths valid inside the container. Assigning
+repositories does not enable live model execution: mock tasks remain simulations,
+and ordinary provider Chat does not gain arbitrary filesystem or shell tools.

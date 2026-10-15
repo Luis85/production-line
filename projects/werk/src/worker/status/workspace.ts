@@ -1,3 +1,5 @@
+import type { RepositoryConfiguration } from '../application/repositories.js';
+import { RepositoryManager, prepareRepositoryWorktree } from '../infrastructure/repositories.js';
 import { requestGateSchema } from '../application/request-gate-schema.js';
 import { requestDispatchStatus } from '../application/request-dispatch.js';
 import { RequestReviewManager } from "../application/request-review.js";
@@ -36,7 +38,7 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { join, resolve, isAbsolute } from "node:path";
-import { opendir, statfs } from "node:fs/promises";
+import { opendir, statfs, realpath, lstat } from "node:fs/promises";
 import {
   availableParallelism,
   freemem,
@@ -79,6 +81,10 @@ export function chatConfiguration(value: unknown): string | undefined {
 export class WorkerWorkspace {
   private taskIndex: TaskIndex;
   readonly features?: FeatureRequests;
+  readonly repositories: RepositoryManager;
+  private repositoryPreparations = 0;
+  private repositoriesUpdating = false;
+  private repositoryStop = new AbortController();
   readonly resources: WorkerResourceMonitor;
   readonly reviews: RequestReviewManager;
   readonly settings: WorkerSettings;
@@ -97,6 +103,8 @@ export class WorkerWorkspace {
     return this.sessions.executor;
   }
   async startChat(message: unknown) {
+    if (!this.acceptingTasks)
+      throw new DomainError("unavailable", "Worker is stopping.");
     if (
       this.sessions.chatActive + this.board.active >=
       this.settings.value.board.queueCapacity
@@ -128,6 +136,7 @@ export class WorkerWorkspace {
         sampleIntervalMs: 10000,
         automaticActions: false,
       },
+      repositories: { supported: true, synchronization: "fetch_fast_forward_only", workspaces: "git_worktrees", publication: false },
       projectIntegrations: {
         supported: true,
         enabled: !!(
@@ -623,6 +632,7 @@ export class WorkerWorkspace {
     enrollmentToken?: string;
     projectDir?: string;
     integrationProjectDir?: string;
+    repositories?: RepositoryConfiguration;
     features?: { directory: string; provider: string; pollMs: number };
     chatExecutable?: string;
     retainedPairs?: number;
@@ -638,6 +648,7 @@ export class WorkerWorkspace {
       enrollmentToken?: string;
       projectDir?: string;
       integrationProjectDir?: string;
+      repositories?: RepositoryConfiguration;
       features?: { directory: string; provider: string; pollMs: number };
       chatExecutable?: string;
       retainedPairs?: number;
@@ -656,12 +667,17 @@ export class WorkerWorkspace {
       config.url,
       config.enrollmentToken,
       config.chatExecutable,
+      config.repositories,
     );
-    this.sessions = new WorkerSessions(config.stateDir, this.settings);
+    this.repositories = new RepositoryManager(this.settings.value.repositories);
+    this.sessions = new WorkerSessions(
+      config.stateDir, this.settings, modelFor, undefined, () => this.board.active,
+    );
     this.board = new LocalTaskboard(
       config.stateDir,
       this.settings,
       this.sessions,
+      { prepareWorktree: (selector, key, signal, commit) => this.prepareTaskWorkspace(selector, key, signal, commit) },
     );
     this.reviews = new RequestReviewManager({
       gates: this.sessions.requests,
@@ -740,60 +756,120 @@ export class WorkerWorkspace {
       );
     }
     await this.settings.init();
+    await this.repositories.configure(this.settings.value.repositories);
+    await this.repositories.init();
     await this.sessions.init();
     await this.board.init();
     await this.taskIndex.init();
     await this.features?.init();
     await this.resources.init();
     this.resources.start();
+    this.repositories.start();
+  }
+  repositoryStatus() {
+    return { schemaVersion: 1, pollMs: this.settings.value.repositories.pollMs, items: this.repositories.view() };
+  }
+  async repositoryCommand(input: unknown) {
+    const body = object(input, "Repository command", ["action", "id"]);
+    if (body.action === "status" && body.id === undefined) return this.repositoryStatus();
+    if (body.action !== "sync" || (body.id !== undefined && typeof body.id !== "string"))
+      throw new DomainError("invalid_input", "Use status or sync with an optional repository id.");
+    if (!this.acceptingTasks || this.repositoriesUpdating)
+      throw new DomainError("unavailable", "Repository assignments are changing or the worker is stopping.");
+    if (body.id !== undefined) this.repositories.resolve(body.id as string);
+    await this.repositories.sync(body.id as string | undefined);
+    return this.repositoryStatus();
+  }
+  async withRepositoryAdmission<T>(operation: () => Promise<T>): Promise<T> {
+    if (!this.acceptingTasks || this.repositoriesUpdating)
+      throw new DomainError("unavailable", "Repository assignments are changing or the worker is stopping.");
+    this.repositoryPreparations++;
+    try {
+      return await operation();
+    } finally {
+      this.repositoryPreparations--;
+    }
+  }
+  private async prepareTaskWorkspace(selector: string, key: string, signal: AbortSignal, commit?: string) {
+    if (!this.acceptingTasks || this.repositoriesUpdating)
+      throw new DomainError("unavailable", "Repository assignments are changing or the worker is stopping.");
+    signal = AbortSignal.any([signal, this.repositoryStop.signal]);
+    this.repositoryPreparations++;
+    try {
+      if (this.settings.value.repositories.items.length)
+        return await this.repositories.prepareWorktree(selector, key, signal, commit);
+      // Legacy approved-file tasks may still use an ordinary, non-Git project folder.
+      if (!isAbsolute(selector)) throw new DomainError("invalid_input", "Choose an assigned repository or an absolute project folder.");
+      const repository = await realpath(selector);
+      const metadata = await lstat(join(repository, ".git")).catch(error => {
+        if (error.code === "ENOENT") return null;
+        throw error;
+      });
+      return metadata ? await prepareRepositoryWorktree(repository, key, signal, commit) : { repository, path: repository };
+    } finally { this.repositoryPreparations--; }
   }
   async updateSettings(body: unknown) {
     const input = body as Record<string, unknown>;
-    if (input?.provider && (this.sessions.busy || this.board.active))
-      throw new DomainError(
-        "conflict",
-        "Finish or stop queued tasks and active replies before changing providers.",
-      );
-    if (
-      input?.connection &&
-      (this.get().activeTasks.length || this.get().queuedTasks?.length)
-    )
-      throw new DomainError(
-        "conflict",
-        "Pause intake and drain orchestrator assignments before changing the connection.",
-      );
-    if (input?.connection) {
-      const connection = input.connection as Record<string, unknown>;
-      try {
-        const identity = JSON.parse(
-          await readBoundedFile(
-            join(this.config.stateDir, "identity.json"),
-            16384,
-          ),
+    const update = async () => {
+      if (input?.provider && (this.sessions.busy || this.board.active))
+        throw new DomainError(
+          "conflict",
+          "Finish or stop queued tasks and active replies before changing providers.",
         );
-        if (
-          connection.url &&
-          new URL(String(connection.url)).origin !==
-            new URL(identity.url).origin
-        )
-          throw new DomainError(
-            "conflict",
-            "This identity is bound to another orchestrator. Use a separate worker state directory for another server.",
+      if (
+        input?.connection &&
+        (this.get().activeTasks.length || this.get().queuedTasks?.length)
+      )
+        throw new DomainError(
+          "conflict",
+          "Pause intake and drain orchestrator assignments before changing the connection.",
+        );
+      if (input?.connection) {
+        const connection = input.connection as Record<string, unknown>;
+        try {
+          const identity = JSON.parse(
+            await readBoundedFile(
+              join(this.config.stateDir, "identity.json"),
+              16384,
+            ),
           );
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+          if (
+            connection.url &&
+            new URL(String(connection.url)).origin !==
+              new URL(identity.url).origin
+          )
+            throw new DomainError(
+              "conflict",
+              "This identity is bound to another orchestrator. Use a separate worker state directory for another server.",
+            );
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        }
       }
+      if (input?.provider)
+        return this.sessions.updateProviders(() => this.settings.update(body));
+      return this.settings.update(body);
+    };
+    if (input?.repositories !== undefined) {
+      if (this.repositoriesUpdating || this.repositoryPreparations || this.sessions.busy || this.board.active || this.get().activeTasks.length || this.get().queuedTasks?.length)
+        throw new DomainError("conflict", "Finish or cancel queued and active tasks before changing repository assignments.");
+      this.repositoriesUpdating = true;
+      try {
+        const result = await update();
+        await this.repositories.configure(this.settings.value.repositories);
+        return result;
+      } finally { this.repositoriesUpdating = false; }
     }
-    if (input?.provider)
-      return this.sessions.updateProviders(() => this.settings.update(body));
-    return this.settings.update(body);
+    return update();
   }
   async close(options: { deferEvidence?: boolean } = {}) {
-    await this.features?.stopIntake();
     this.acceptingTasks = false;
-    await this.taskRequests;
-    await this.reviews.close();
-    await this.board.close();
+    this.repositoryStop.abort();
+    // Abort Git preparation before awaiting feature intake, which may be waiting on it.
+    await Promise.all([
+      this.features?.stopIntake(), this.repositories.close(), this.board.close(),
+      this.reviews.close(), this.taskRequests,
+    ]);
     await this.sessions.close({ retainEvidence: true });
     if (!options.deferEvidence) await this.closeEvidence();
   }
@@ -975,6 +1051,7 @@ export class WorkerWorkspace {
             totalBytes: disk.blocks * disk.bsize,
           }
         : null,
+      repositories: this.repositoryStatus(),
       features: this.features?.view() ?? { enabled: false },
       stateDirectory: resolve(this.config.stateDir),
       projectDirectory: this.config.projectDir

@@ -37,5 +37,8 @@ export function commands(kind) {
     catalog['intake create'].example = { factoryId: 'main', task, lineId: null };
     catalog['intake route'].example = { lineId: 'alpha' };
   } else { catalog['task successor'].example = { expectedAttempt: 1, evaluationId: 'GATE_EVALUATION_ID', operationId: 'rework-1', input: task }; catalog['task create'].example = task; catalog['task route'].example = { workerId: null }; }
+  const repositoryInput = 'Optional task.repository selects a worker repository assignment ID independently of task.project (the line scope). When absent, native Codex uses the assignment matching task.project. It never accepts a repository path or URL.';
+  if (kind === 'factory') catalog['intake create'].input = repositoryInput;
+  else { catalog['task create'].input = repositoryInput; catalog['task successor'].input = repositoryInput; }
   return catalog;
 }

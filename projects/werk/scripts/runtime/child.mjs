@@ -33,7 +33,7 @@ process.on('message', async message => {
     } else if (role === 'worker') {
       const { runWorker } = await load('src/worker/dist/worker/runner.js');
       const { configuration } = await load('src/worker/dist/worker/config.js');
-      const effective = await configuration({}, workerDocument(config.execution, config.chat));
+      const effective = await configuration({}, workerDocument(config.execution, config.chat, config.repositories));
       await runWorker({ ...effective, url: `http://127.0.0.1:${config.orchestratorPort}`, stateDir: join(stateDir, 'workers', `worker-${index}`),
         enrollmentToken: credentials.WERK_ENROLLMENT_TOKEN, statusHost: '127.0.0.1', statusPort: config.workerPort + index - 1 }, abort.signal);
       if (process.connected) process.disconnect();

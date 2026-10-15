@@ -329,6 +329,7 @@ const steps = [
     />
     <OnboardingTour
       v-if="s.token"
+      locale="de"
       v-model:open="s.tourOpen"
       title="Orchestrator / Produktionslinie"
       :steps="steps"

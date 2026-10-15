@@ -58,7 +58,7 @@ export async function assertDirectory(path: string): Promise<void> {
 }
 
 /** Read at most limit + 1 bytes, even if another process grows the file after stat. */
-export async function readBoundedFile(path: string, limit: number): Promise<string> {
+export async function readBoundedFile(path: string, limit: number, strictUtf8 = false): Promise<string> {
   const info = await lstat(path);
   if (!info.isFile() || info.isSymbolicLink()) throw Error('Worker state file must be a regular file, not a symlink');
   const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
@@ -70,7 +70,11 @@ export async function readBoundedFile(path: string, limit: number): Promise<stri
     let size = 0;
     while (size <= limit) {
       const { bytesRead } = await file.read(buffer, size, buffer.length - size, null);
-      if (!bytesRead) return buffer.subarray(0, size).toString('utf8');
+      if (!bytesRead) {
+        const bytes = buffer.subarray(0, size);
+        // Integrity callers cannot replace malformed bytes with U+FFFD before hashing.
+        return strictUtf8 ? new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes) : bytes.toString('utf8');
+      }
       size += bytesRead;
     }
     throw Error(`Worker state file exceeds ${limit} bytes`);

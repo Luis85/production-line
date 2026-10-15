@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RepositoryPanel from '../components/RepositoryPanel.vue';
 import ProjectIntegrationsPanel from '../components/ProjectIntegrationsPanel.vue';
 import ResourceMonitorPanel from '../components/ResourceMonitorPanel.vue';
 import RunEvidencePanel from '../components/RunEvidencePanel.vue';
@@ -128,6 +129,7 @@ async function openRunning() {
     </div>
 
     <ResourceMonitorPanel v-if="state.unlocked" />
+    <RepositoryPanel v-if="state.unlocked" />
     <ProjectIntegrationsPanel v-if="state.unlocked" />
     <RunEvidencePanel v-if="state.unlocked" compact />
     <FeatureRequestsPanel v-if="state.unlocked" compact />

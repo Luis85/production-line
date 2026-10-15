@@ -13,7 +13,7 @@ export interface WorkerIdentity {
 /** The worker application knows operations, never URLs or bearer tokens. */
 export interface WorkerClient {
   currentAssignments(): Promise<Task[]>;
-  claim(requestId: string, queueCapacity?: number): Promise<Task | null>;
+  claim(requestId: string, queueCapacity?: number, repositoryIds?: string[], legacyRepository?: boolean): Promise<Task | null>;
   heartbeat(task: Task): Promise<Task>;
   /** Bound assignments require verified immutable context; unbound legacy mock tasks need none. */
   verifyContext?(task: Task): Promise<void>;

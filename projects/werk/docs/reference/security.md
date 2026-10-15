@@ -61,8 +61,9 @@ allowed to submit work, installed provider tools, and deployment administrators.
 A person who can rewrite credential files has control of that service. Viewer
 restrictions defend the HTTP mutation boundary, not malicious local filesystem
 access. A stolen bearer token grants its role until rotation/revocation and
-restart. There are no cookies or implicit browser credentials; clients supply an
-explicit Authorization header. Do not add permissive cross-origin policy.
+restart. Factory/orchestrator webviews and automation clients supply an explicit
+Authorization header. The worker webview uses the separate HttpOnly session
+described above. Do not add permissive cross-origin policy.
 
 Mutation audit records exclude request bodies and tokens, and are best effort
 operational logs rather than immutable compliance evidence. Use external

@@ -159,6 +159,10 @@ export async function statusServer(
               await providers.check(workspace.settings.provider(body.id)),
             );
           }
+          if (req.method === "GET" && req.url === "/api/repositories")
+            return json(res, 200, workspace.repositoryStatus());
+          if (req.method === "POST" && req.url === "/api/repositories")
+            return json(res, 200, await workspace.repositoryCommand(await readJson(req)));
           if (req.method === "GET" && req.url === "/api/integrations")
             return json(res, 200, await workspace.integrations());
           if (req.method === "POST" && req.url === "/api/integrations")

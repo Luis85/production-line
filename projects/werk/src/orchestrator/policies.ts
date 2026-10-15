@@ -5,6 +5,8 @@ import type { Snapshot } from '../shared/snapshots.js';
 
 /** Machine capacity, subscription capacity and project affinity must all agree. */
 export function eligibleProfile(worker: WorkerRecord, task: Task, active: readonly Task[]): Profile | undefined {
+  const selector = task.repository ?? (task.executionMode === 'cli' ? task.project : undefined);
+  if (selector !== undefined && worker.config.repositoryIds !== undefined && !worker.config.repositoryIds.includes(selector) && !(task.repository === undefined && worker.config.legacyRepository)) return undefined;
   if (task.project !== worker.project || active.length >= worker.config.maxParallel + (worker.config.queueCapacity ?? 0)) return undefined;
   return worker.profiles.find(profile => {
     const providerMatches = task.provider === 'auto' || task.provider === profile.provider;

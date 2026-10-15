@@ -60,6 +60,14 @@ The last command consumes one JSON object on stdin:
 {"project":"demo","requirementRef":"[[Features/Customer portal]]"}
 ```
 
+To target another assigned Git checkout for native Codex work, include
+`"repository":"docs"` while retaining the configured line `project`. The value
+is a worker assignment ID, not a path or URL. The native note-input form accepts
+`--repository docs` alongside `--project` and `--wikilink`; file/stdin input carries
+that field inside its JSON. MCP `werk_task_create` accepts the same optional field.
+Without it, repository selection falls back to the task project. Existing pinned
+context verification still applies to the selected checkout.
+
 Use an unchanged idempotency key and payload to retry an uncertain submission;
 use a new key only for a deliberately new task. Read the returned task ID, then
 inspect it with `task get --id TASK_ID` and `task events --id TASK_ID --limit 100`.

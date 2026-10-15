@@ -35,8 +35,15 @@ export class CodexConversationModel implements StructuredModel {
         let event; try { event = JSON.parse(line); } catch { throw new ProviderModelError('protocol'); }
         if (!event || typeof event !== 'object' || typeof event.type !== 'string') throw new ProviderModelError('protocol');
         if (event.type === 'error' || event.type === 'turn.failed') throw new ProviderModelError('unavailable');
-        if (event.item && ['command_execution', 'file_change', 'mcp_tool_call', 'web_search'].includes(event.item.type)) throw new ProviderModelError('protocol');
-        if (event.type === 'item.completed' && event.item?.type === 'agent_message' && typeof event.item.text === 'string') replies.push(event.item.text);
+        if (!['thread.started', 'turn.started', 'turn.completed', 'item.started', 'item.updated', 'item.completed'].includes(event.type)) throw new ProviderModelError('protocol');
+        // Unknown items may add provider capabilities. Accept only known no-tools events.
+        if (event.type.startsWith('item.')) {
+          if (!event.item || typeof event.item !== 'object' || Array.isArray(event.item) || !['agent_message', 'reasoning', 'todo_list'].includes(event.item.type)) throw new ProviderModelError('protocol');
+          if (event.type === 'item.completed' && event.item.type === 'agent_message') {
+            if (typeof event.item.text !== 'string') throw new ProviderModelError('protocol');
+            replies.push(event.item.text);
+          }
+        } else if (event.item !== undefined) throw new ProviderModelError('protocol');
       }
       return parseModelResult(replies.join('\n\n'));
     });

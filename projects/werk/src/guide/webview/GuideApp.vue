@@ -191,7 +191,7 @@ const nodes: SpatialNode[] = [
     model: "workers",
     kind: "Worker",
     description:
-      "An enrolled process that executes eligible leased attempts, reports status and delivers durable evidence. Each worker has its own persistent identity and status view.",
+      "An independent workspace for local tasks, with optional enrollment in a production line. A connected worker executes eligible leased attempts and returns evidence to its Orchestrator. Each worker keeps its own identity, providers, repository assignments and local history.",
     facts: [
       [
         "Boundary",
@@ -346,12 +346,15 @@ const edges = [
                   </td>
                 </tr>
                 <tr>
-                  <td>Worker status</td>
+                  <td>Worker workspace</td>
                   <td>
-                    The worker process, configured slots, active attempts and
-                    local status.
+                    Chat, local task history, reviewable results, provider
+                    settings, assigned Git repositories and process status.
                   </td>
-                  <td>The owning line for authoritative task history.</td>
+                  <td>
+                    A local result for review, or the owning line for authoritative
+                    history of a task received from that line.
+                  </td>
                 </tr>
                 <tr>
                   <td>System guide</td>
@@ -551,9 +554,18 @@ const edges = [
                 <tr>
                   <td>Factory ≠ project</td>
                   <td>
-                    A Factory groups lines. A project selects repository/context
-                    within a line. Two isolated lines may use the same project
-                    identifier.
+                    A Factory groups lines. A project scopes line enrollment,
+                    routing and Vault context. Two isolated lines may use the
+                    same project identifier.
+                  </td>
+                </tr>
+                <tr>
+                  <td>Repository assignment</td>
+                  <td>
+                    A worker can watch and pull several assigned Git repositories.
+                    A task can name a repository assignment independently of its
+                    project; without one, the project ID is the default. Real Git
+                    tasks use retained worktrees inside the selected repository.
                   </td>
                 </tr>
                 <tr>

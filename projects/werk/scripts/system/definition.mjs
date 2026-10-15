@@ -1,4 +1,4 @@
-import { normalizeExecution, normalizeChat } from '../runtime/execution.mjs';
+import { normalizeExecution, normalizeChat, normalizeRepositories } from '../runtime/execution.mjs';
 import { constants } from 'node:fs';
 import { lstat, open } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -87,19 +87,22 @@ export function validateDefinition(value) {
     if (typeof line.project !== 'string' || !/^[A-Za-z0-9_-]{1,100}(?![\s\S])/.test(line.project)) throw error(`${label}.project: use 1–100 letters, digits, underscores or hyphens.`);
     object(line.orchestrator, ['port', 'webviewUrl'], `${label}.orchestrator`, ['port']);
     const publicUrl = line.orchestrator.webviewUrl === undefined ? undefined : webviewUrl(line.orchestrator.webviewUrl, `${label}.orchestrator.webviewUrl`);
-    object(line.workers, ['count', 'statusPort', 'execution', 'chat'], `${label}.workers`, ['count', 'statusPort']);
+    object(line.workers, ['count', 'statusPort', 'execution', 'chat', 'repositories'], `${label}.workers`, ['count', 'statusPort']);
     const chat = normalizeChat(line.workers.chat);
     if (chat && selected !== 'native') throw error(`${label}.workers.chat: Codex chat requires native Linux.`);
+    const repositories = normalizeRepositories(line.workers.repositories);
+    if (repositories?.items.length && selected !== 'native') throw error(`${label}.workers.repositories: managed assignments require native runtime; Docker fleet checkouts are not mounted.`);
     let execution;
     try { execution = normalizeExecution(line.workers.execution); } catch { throw error(`${label}.workers.execution: invalid live policy; use absolute Linux paths, bounded timeout and approved non-secret text paths.`); }
     if (execution && (selected !== 'native' || line.workers.count !== 1)) throw error(`${label}.workers.execution: live Codex requires native Linux with exactly one worker per line.`);
+    if (execution && !execution.codex.repository && !repositories?.items.length) throw error(`${label}.workers.execution: configure a repository or repository assignments.`);
     const orchestratorPort = port(line.orchestrator.port, `${label}.orchestrator.port`);
     const statusPort = port(line.workers.statusPort, `${label}.workers.statusPort`);
     const count = line.workers.count;
     if (!Number.isInteger(count) || count < 1 || count > 8 || statusPort + count - 1 > 65535) throw error(`${label}.workers: count must be 1–8 and the status port range must fit within 1–65535.`);
     reserve(orchestratorPort, `${label}.orchestrator.port`);
     for (let worker = 0; worker < count; worker++) reserve(statusPort + worker, `${label}.workers[${worker}].statusPort`);
-    return { id: lineId, name: name(line.name, `${label}.name`), factoryId, project: line.project, orchestrator: { port: orchestratorPort, ...(publicUrl ? { webviewUrl: publicUrl } : {}) }, workers: { count, statusPort, ...(execution ? { execution } : {}), ...(chat ? { chat } : {}) } };
+    return { id: lineId, name: name(line.name, `${label}.name`), factoryId, project: line.project, orchestrator: { port: orchestratorPort, ...(publicUrl ? { webviewUrl: publicUrl } : {}) }, workers: { count, statusPort, ...(execution ? { execution } : {}), ...(chat ? { chat } : {}), ...(repositories ? { repositories } : {}) } };
   });
   return { schemaVersion: 1, id, environment: selected, factory, productionLines };
 }

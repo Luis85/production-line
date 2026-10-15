@@ -23,6 +23,7 @@ import {
   profiles,
   identifier,
   workerPolicy,
+  repositoryScope,
 } from "../../shared/contracts.js";
 import { validateSnapshot } from "../../shared/snapshots.js";
 import type { OrchestratorOverview, TaskCounts } from "../../shared/factory.js";
@@ -585,13 +586,19 @@ export class Store implements OrchestratorRepository {
     w: WorkerRecord,
     claimKey: string = randomUUID(),
     queueCapacity?: number,
+    repositoryIds?: string[],
+    legacyRepository?: boolean,
   ): Task | null {
     if (typeof claimKey !== "string" || !/^[\w-]{1,100}$/.test(claimKey))
       throw new DomainError(
         "invalid_input",
         "requestId required: 1–100 letters, digits, _ or -",
       );
+    const scope = repositoryScope(repositoryIds, legacyRepository);
     return this.transaction(() => {
+      const stored = this.db.prepare("SELECT config FROM workers WHERE id=?").get(w.id);
+      if (!stored) throw new DomainError("unauthorized", "Worker registration no longer exists.");
+      w = { ...w, config: workerPolicy(JSON.parse(String(stored.config))) };
       const now = this.clock();
       this.db.prepare("UPDATE workers SET seen=? WHERE id=?").run(now, w.id);
       this.reapExpiredInsideTransaction();
@@ -602,14 +609,14 @@ export class Store implements OrchestratorRepository {
         const t = this.get(prior.task);
         return t.lease === prior.lease && t.status === "running" ? t : null;
       }
-      if (queueCapacity !== undefined) {
-        if (
+      if (queueCapacity !== undefined || repositoryIds !== undefined) {
+        if (queueCapacity !== undefined && (
           !Number.isInteger(queueCapacity) ||
           queueCapacity < 0 ||
           queueCapacity > 64
-        )
+        ))
           throw new DomainError("invalid_input", "queueCapacity: 0–64");
-        w = { ...w, config: { ...w.config, queueCapacity } };
+        w = { ...w, config: { ...w.config, ...(queueCapacity === undefined ? {} : { queueCapacity }), ...scope } };
         this.db
           .prepare("UPDATE workers SET config=? WHERE id=?")
           .run(JSON.stringify(w.config), w.id);
@@ -671,18 +678,20 @@ export class Store implements OrchestratorRepository {
               .all(row.id) as any[]
           ).map((item) => this.decode(item)),
         }));
+      const repositoryFilter = w.config.repositoryIds === undefined ? "" : " AND ((json_extract(payload,'$.repository') IS NULL AND (COALESCE(json_extract(payload,'$.executionMode'),'mock')='mock' OR ?=1)) OR COALESCE(json_extract(payload,'$.repository'),json_extract(payload,'$.project')) IN (SELECT value FROM json_each(?)))";
       // Iterate the indexed queue without loading the whole backlog into memory.
       let candidate: Task | undefined;
       for (const row of this.db
         .prepare(
           "SELECT * FROM tasks WHERE status='queued' AND json_extract(payload,'$.project')=? AND (" +
             predicates +
-            ") ORDER BY " +
+            ")" + repositoryFilter + " ORDER BY " +
             order,
         )
         .iterate(
           w.project,
           ...eligible.flatMap((profile) => [profile.mode, profile.provider]),
+          ...(w.config.repositoryIds === undefined ? [] : [w.config.legacyRepository ? 1 : 0, JSON.stringify(w.config.repositoryIds)]),
         )) {
         const task = this.decode(row);
         if (router.permits(task, w, workers, policy)) {
@@ -813,6 +822,8 @@ export class Store implements OrchestratorRepository {
           "conflict",
           "Before/after snapshots required before completion",
         );
+      if (t.requestGate && (t.requestGate.stage !== "done" || t.requestGate.status !== "passed"))
+        throw new DomainError("conflict", "Passed completion gate evidence is required before completion.");
       this.db
         .prepare("UPDATE tasks SET status=?,expires=NULL WHERE id=?")
         .run(live ? "review" : "simulated", id);

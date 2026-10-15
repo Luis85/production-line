@@ -140,3 +140,34 @@ test('partial Anthropic input components never masquerade as a measured full inp
     }
   }
 });
+
+
+test('Codex no-tools replies reject unknown events and tool items without accepting a later answer', posix, async t => {
+  const forbidden = [
+    ...['command_execution', 'file_change', 'mcp_tool_call', 'web_search', 'computer_action', 'tool_call'].map(type => ({ type: 'item.completed', item: { type } })),
+    { type: 'tool.completed', tool: { name: 'future-tool' } },
+    { type: 'item.completed', item: null },
+    { type: 'item.completed', item: { type: 'agent_message' } }
+  ];
+  for (const event of forbidden) {
+    const fixture = await cliFixture(t, [event, { type: 'item.completed', item: { type: 'agent_message', text: 'Do not accept this answer.' } }].map(JSON.stringify).join('\n'));
+    const model = modelFor({ ...connection('codex-cli'), executable: fixture.executable }, fixture.directory);
+    await assert.rejects(model.reply(messages, signal()), { name: 'ProviderModelError', code: 'protocol' });
+  }
+});
+
+test('Codex no-tools event validation preserves reasoning, task lists and observed usage', posix, async t => {
+  const events = [
+    { type: 'thread.started', thread_id: 'fixture' }, { type: 'turn.started' },
+    { type: 'item.started', item: { type: 'reasoning', text: 'Private reasoning.' } },
+    { type: 'item.updated', item: { type: 'todo_list', items: [] } },
+    { type: 'item.completed', item: { type: 'reasoning', text: 'Private reasoning.' } },
+    { type: 'item.completed', item: { type: 'agent_message', text: 'Accepted answer.' } },
+    { type: 'turn.completed', usage: { input_tokens: 3, cached_input_tokens: 0, output_tokens: 2 } }
+  ];
+  const fixture = await cliFixture(t, events.map(JSON.stringify).join('\n'));
+  const model = modelFor({ ...connection('codex-cli'), executable: fixture.executable }, fixture.directory);
+  let usage;
+  assert.equal(await model.reply(messages, signal(), value => { usage = value; }), 'Accepted answer.');
+  assert.equal(usage.inputTokens, 3); assert.equal(usage.outputTokens, 2);
+});

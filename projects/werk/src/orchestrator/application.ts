@@ -17,7 +17,7 @@ import {
   validateLineCapabilities,
   type RegisteredCapabilities,
 } from "../shared/capabilities.js";
-import { identifier, object, taskInput } from "../shared/contracts.js";
+import { identifier, object, taskInput, repositoryScope } from "../shared/contracts.js";
 import type { ContextManifest } from "../shared/context.js";
 import { assertPinnedIteration } from "./intake/iteration.js";
 import { DomainError } from "../shared/errors.js";
@@ -95,6 +95,8 @@ export interface OrchestratorRepository {
     worker: WorkerRecord,
     requestId: string,
     queueCapacity?: number,
+    repositoryIds?: string[],
+    legacyRepository?: boolean,
   ): Task | null;
   heartbeat(
     worker: WorkerRecord,
@@ -163,6 +165,8 @@ export class WorkerOperations {
     const body = object(input, "Assignment request", [
       "requestId",
       "queueCapacity",
+      "repositoryIds",
+      "legacyRepository",
     ]);
     if (
       typeof body.requestId !== "string" ||
@@ -180,11 +184,14 @@ export class WorkerOperations {
         Number(body.queueCapacity) > 64)
     )
       throw new DomainError("invalid_input", "queueCapacity: 0–64");
+    const scope = repositoryScope(body.repositoryIds, body.legacyRepository);
     return {
       task: this.repository.claim(
         this.identity,
         body.requestId,
         body.queueCapacity as number | undefined,
+        scope.repositoryIds,
+        scope.legacyRepository,
       ),
     };
   }
@@ -359,6 +366,7 @@ export class OrchestratorApplication {
     if (existing) return existing;
     object(input, "Bound requirement intake", [
       "project",
+      "repository",
       "requirementRef",
       "provider",
       "priority",
@@ -400,6 +408,7 @@ export class OrchestratorApplication {
       return this.repository.submitSuccessor(id, command);
     object((value as { input: unknown }).input, "Bound successor intake", [
       "project",
+      "repository",
       "requirementRef",
       "provider",
       "priority",

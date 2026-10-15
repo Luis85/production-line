@@ -6,7 +6,7 @@ import { openBrowser } from './browser.mjs';
 import { diagnose as maintenanceDiagnose } from './maintenance/backup.mjs';
 import { logOutputMode } from './service-logs.mjs';
 
-const help = `Werk local release runtime — Node.js 24.x, mock execution only
+const help = `Werk local release runtime — Node.js 24.x
 
 node werk.mjs up [--file PATH] [--state-dir PATH] [--no-open] [--no-update] [--json]\n  Start the complete Factory system (defaults to the packaged example YAML).\nnode werk.mjs setup [--state-dir PATH] [--project demo] [--port 3000]
                    [--worker-port 4100] [--workers 1] [--runtime native|docker] [--json]
@@ -14,7 +14,7 @@ node werk.mjs start [--state-dir PATH] [--log-output file|stream|both] [--no-ope
 node werk.mjs status|doctor|stop|open [--state-dir PATH] [--json]
 
 node werk.mjs update check|apply|status|enable|disable [--state-dir PATH] [--line] [--json]\nNative downloaded releases check for stable updates before startup. --no-update skips it.\n\nRun setup once, then start. The foreground launcher waits for a healthy orchestrator
-and mock worker before opening the Intake page. Ctrl+C or stop drains workers first.
+and configured workers before opening the Intake page. Ctrl+C or stop drains workers first.
 Default private state: .werk beside werk.mjs. Existing settings and credentials are
 preserved. Read WERK_ADMIN_TOKEN from credentials.json to sign in; never put it in a URL.
 --json produces redacted JSON; start emits lifecycle JSON lines and does not open a browser.
@@ -22,7 +22,7 @@ WERK_STATE_DIR supplies the state path; WERK_LOG_OUTPUT supplies start's log out
 Explicit flags override environment values. Empty variables use the defaults.
 file (default) keeps rotating private logs; stream emits service_log records to stdout
 without local supervisor logs; both does both. --json start output remains JSONL.
-This prebuilt release needs no npm install or build. Factory is an optional later service.
+This prebuilt release needs no npm install or build. The up command starts a Factory system; setup/start manage one production line.
 Exit 0 success, 2 invalid input/configuration, 1 failed runtime or doctor check.`;
 export function parse(arguments_, environment = process.env) {
   const args = [...arguments_], command = args.shift() ?? 'help', options = {};
@@ -81,7 +81,7 @@ export async function main(arguments_ = process.argv.slice(2), { stdout = value 
       await startRuntime(stateDir, { noOpen: jsonMode || Boolean(options['no-open']), opener, environment, logOutput: options['log-output'], emit: value => {
         if (jsonMode) print({ ok: true, ...value });
         else if (value.event === 'service_log' && options['log-output'] !== 'file') print(value);
-        else if (value.event === 'ready') stdout(`Werk is ready: ${value.url}\nMock workers: ${value.workers.length}. Sign in using WERK_ADMIN_TOKEN from ${stateDir}/credentials.json.\nCtrl+C stops this runtime; use node werk.mjs stop from another terminal.`);
+        else if (value.event === 'ready') stdout(`Werk is ready: ${value.url}\nWorkers: ${value.workers.length}. Sign in using WERK_ADMIN_TOKEN from ${stateDir}/credentials.json.\nCtrl+C stops this runtime; use node werk.mjs stop from another terminal.`);
         else if (value.event === 'browser' && !value.opened) stderr(`${value.reason} ${value.url}`);
         else if (['starting', 'stopping', 'stopped'].includes(value.event)) stdout(`Werk ${value.event}.`);
       } }); return 0;

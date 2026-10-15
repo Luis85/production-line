@@ -14,8 +14,9 @@ export function formatPlan(plan, { stateDir, file = 'system.yaml' } = {}) {
   for (const line of plan.productionLines) {
     lines.push(`  Line ${clean(line.name)} (${line.id}) → ${line.factoryId}`, `    Project: ${line.project} · orchestrator: ${line.orchestrator.url}`, `    Workers: ${line.workers.count} · status ports: ${line.workers.statusPorts.join(', ')} · execution: ${line.workers.execution?.mode ?? 'mock'}`);
     if (line.orchestrator.webviewUrl) lines.push(`    Public webview: ${line.orchestrator.webviewUrl}`);
+    if (line.workers.repositories?.items.length) lines.push(`    Repositories: ${line.workers.repositories.items.map(item => clean(item.id) + ' → ' + clean(item.path)).join(', ')} · poll every ${line.workers.repositories.pollMs} ms`);
     if (line.workers.chat) lines.push(`    Chat: Codex CLI at ${clean(line.workers.chat.codexExecutable)} · operator login · conversation only`);
-    if (line.workers.execution) lines.push(`    Live Codex: ${clean(line.workers.execution.codex.repository)} · allowed files: ${line.workers.execution.codex.allowedPaths.map(clean).join(', ')}`, '    Trusted tasks only; local patches require human review. Host file reads are not isolated.');
+    if (line.workers.execution) lines.push(`    Live Codex: ${clean(line.workers.execution.codex.repository ?? 'assigned repositories by task repository or project')} · allowed files: ${line.workers.execution.codex.allowedPaths.map(clean).join(', ')}`, '    Trusted tasks only; local patches require human review. Host file reads are not isolated.');
   }
   lines.push('', 'Execution defaults to simulation. A running worker with a matching profile is required to execute a task.');
   if (stateDir) lines.push(`State directory: ${clean(stateDir)}`, `Factory sign-in: WERK_FACTORY_ADMIN_TOKEN in ${clean(join(stateDir, 'factory/credentials.json'))}`, `Line sign-in: WERK_ADMIN_TOKEN in ${clean(join(stateDir, 'lines/<line-id>/credentials.json'))}`, 'Credentials are separate; enrollment tokens are for workers. Token values are never included in this preview.');

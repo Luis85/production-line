@@ -66,7 +66,7 @@ defineExpose({ focusInstructions });
           <p class="intake-help">{{ agent?.model ? 'This task keeps a copy of the selected instructions and model.' : 'Uses this connection’s configuration when the task starts.' }}</p>
         </div>
         <details class="intake-definition">
-          <summary>Agent definition · {{ definition?.name ?? 'optional' }}</summary>
+          <summary>Name &amp; agent definition · {{ definition?.name ?? 'optional' }}</summary>
           <div class="intake-field">
             <label for="new-task-definition">Agent definition</label>
             <USelect id="new-task-definition" v-model="intake.definitionId" :items="[{ value: 'none', label: 'No definition · use my instructions' }, ...state.definitions.map(item => ({ value: item.id, label: item.name }))]" class="w-full" />

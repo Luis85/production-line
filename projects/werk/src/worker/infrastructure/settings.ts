@@ -1,11 +1,13 @@
+import { defaultRepositoryConfiguration, validateRepositoryConfiguration, type RepositoryConfiguration } from '../application/repositories.js';
 import { defaultResourcePolicy, validateResourcePolicy, type ResourcePolicy } from '../application/resources.js';
 import { defaultExecutionPolicy, validateExecutionPolicy, type ExecutionPolicy } from '../application/execution-policy.js';
-import { join, isAbsolute } from 'node:path';
+import { join, isAbsolute, resolve } from 'node:path';
 import { object, text } from '../../shared/contracts.js';
 import { DomainError } from '../../shared/errors.js';
 import { atomicWrite, readBoundedFile } from './journal/files.js';
 import { findExecutable, providerIds, providerLabels, providerReady, type ProviderConnection, type ProviderId } from './providers.js';
 export interface WorkspaceSettings {
+  repositories: RepositoryConfiguration;
   resources: ResourcePolicy;
   execution: ExecutionPolicy;
   providers: ProviderConnection[];
@@ -19,9 +21,9 @@ export class WorkerSettings {
   private executionOverride?: ExecutionPolicy;
   private savedExecution = defaultExecutionPolicy();
   private executionSource: 'environment' | 'saved_settings' | 'default' = 'default';
-  constructor(directory: string, url = '', enrollmentToken = '', executable = '') {
+  constructor(directory: string, url = '', enrollmentToken = '', executable = '', repositories = defaultRepositoryConfiguration()) {
     this.directory = directory;
-    this.value = { resources: defaultResourcePolicy(), execution: defaultExecutionPolicy(), providers: providerIds.map(id => ({ id, executable: id === 'codex-cli' ? executable : '', model: '', apiKey: '' })), connection: { enabled: !!url, url, enrollmentToken }, board: { paused: false, maxParallel: 1, queueCapacity: 16, orchestratorQueue: 0, order: 'fifo' } };
+    this.value = { repositories: validateRepositoryConfiguration(repositories), resources: defaultResourcePolicy(), execution: defaultExecutionPolicy(), providers: providerIds.map(id => ({ id, executable: id === 'codex-cli' ? executable : '', model: '', apiKey: '' })), connection: { enabled: !!url, url, enrollmentToken }, board: { paused: false, maxParallel: 1, queueCapacity: 16, orchestratorQueue: 0, order: 'fifo' } };
   }
   async init() {
     const configured = process.env.WERK_WORKER_MAX_RUNTIME_MS;
@@ -33,11 +35,11 @@ export class WorkerSettings {
     }
     if (this.executionOverride) { this.value.execution = { ...this.executionOverride }; this.executionSource = 'environment'; }
   }
-  publicView() { return { executionSource: this.executionSource, resources: { ...this.value.resources }, execution: { ...this.value.execution }, providers: this.value.providers.map(({ apiKey, ...provider }) => ({ ...provider, label: providerLabels[provider.id], configured: providerReady({ ...provider, apiKey }), hasApiKey: !!apiKey, authentication: provider.id.endsWith('-cli') ? 'Host CLI login; not verified' : 'Private API key' })), connection: { enabled: this.value.connection.enabled, url: this.value.connection.url, hasEnrollmentToken: !!this.value.connection.enrollmentToken }, board: { ...this.value.board } }; }
+  publicView() { return { repositories: structuredClone(this.value.repositories), executionSource: this.executionSource, resources: { ...this.value.resources }, execution: { ...this.value.execution }, providers: this.value.providers.map(({ apiKey, ...provider }) => ({ ...provider, label: providerLabels[provider.id], configured: providerReady({ ...provider, apiKey }), hasApiKey: !!apiKey, authentication: provider.id.endsWith('-cli') ? 'Host CLI login; not verified' : 'Private API key' })), connection: { enabled: this.value.connection.enabled, url: this.value.connection.url, hasEnrollmentToken: !!this.value.connection.enrollmentToken }, board: { ...this.value.board } }; }
   provider(id: string) { const value = this.value.providers.find(item => item.id === id); if (!value) throw new DomainError('invalid_input', 'Choose a supported provider.'); return value; }
   async update(input: unknown) {
     const operation = this.writing.catch(() => {}).then(async () => {
-      const body = object(input, 'Settings', ['provider', 'connection', 'board', 'resources', 'execution']);
+      const body = object(input, 'Settings', ['provider', 'connection', 'board', 'resources', 'execution', 'repositories']);
       if (body.execution !== undefined && this.executionOverride) throw new DomainError('conflict', 'WERK_WORKER_MAX_RUNTIME_MS controls this worker. Change or remove that environment override and restart before editing the execution limit.');
       const next = structuredClone(this.value);
       if (body.provider) {
@@ -55,6 +57,7 @@ export class WorkerSettings {
         if (c.enrollmentToken) next.connection.enrollmentToken = text(c.enrollmentToken, 'Enrollment token', 4096);
       }
       if (body.board) next.board = { ...next.board, ...object(body.board, 'Taskboard', ['paused', 'maxParallel', 'queueCapacity', 'orchestratorQueue', 'order']) };
+      if (body.repositories !== undefined) next.repositories = validateRepositoryConfiguration(body.repositories, path => { if (!isAbsolute(path)) throw new DomainError('invalid_input', 'Repository path must be absolute on the worker machine.'); return resolve(path); });
       if (body.resources !== undefined) next.resources = { ...next.resources, ...object(body.resources, 'Resources', Object.keys(defaultResourcePolicy())) };
       if (body.execution !== undefined) next.execution = { ...next.execution, ...object(body.execution, 'Execution', ['maxRuntimeMs']) };
       const validated = this.validate(next); await this.persist(validated); this.value = validated;
@@ -62,12 +65,17 @@ export class WorkerSettings {
     });
     this.writing = operation; await operation; return this.publicView();
   }
-  private persist(value: WorkspaceSettings) { return atomicWrite(join(this.directory, 'workspace-settings.json'), JSON.stringify(this.executionOverride ? { ...value, execution: this.savedExecution } : value) + '\n'); }
+  private persist(value: WorkspaceSettings) {
+    const document = JSON.stringify(this.executionOverride ? { ...value, execution: this.savedExecution } : value) + '\n';
+    if (Buffer.byteLength(document) > 65536) throw new DomainError('invalid_input', 'Worker settings limit: 64 KiB. Use fewer or shorter repository assignments.');
+    return atomicWrite(join(this.directory, 'workspace-settings.json'), document);
+  }
   private validate(value: WorkspaceSettings): WorkspaceSettings {
     if (!value || !Array.isArray(value.providers) || value.providers.length !== 4 || new Set(value.providers.map(item => item.id)).size !== 4) throw new DomainError('invalid_input', 'Invalid provider configuration');
     for (const p of value.providers) {
       if (!providerIds.includes(p.id as ProviderId) || typeof p.executable !== 'string' || (p.executable && (!isAbsolute(p.executable) || /[\x00-\x1f]/.test(p.executable))) || p.executable.length > 4096 || typeof p.model !== 'string' || p.model.length > 200 || typeof p.apiKey !== 'string' || p.apiKey.length > 4096 || /[\r\n]/.test(p.apiKey)) throw new DomainError('invalid_input', 'Use an absolute CLI path and valid model/key.');
     }
+    value.repositories = validateRepositoryConfiguration(value.repositories === undefined ? this.value.repositories : value.repositories);
     value.resources = validateResourcePolicy(value.resources ?? defaultResourcePolicy());
     value.execution = validateExecutionPolicy(value.execution ?? defaultExecutionPolicy());
     const c = value.connection;

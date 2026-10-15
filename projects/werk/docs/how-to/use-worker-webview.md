@@ -87,7 +87,9 @@ API fallback that could silently change billing.
 On native Windows, CLI execution requires Windows PowerShell 5.1, its .NET
 Framework runtime, and host policy that permits `Add-Type` and nested Windows
 Job Objects. The worker invokes PowerShell from `SystemRoot` without changing
-execution policy. If process containment cannot be established, the provider is
+execution policy. Startup uses the worker account’s `PSModulePath`; its module
+directories must remain under operator control. The restricted provider
+environment is restored before launch. If process containment cannot be established, the provider is
 not started. Cancellation closes the supervisor's lifetime job and terminates
 its provider processes. On normal provider exit, remaining descendants are
 terminated before output is drained and the result is returned.
@@ -149,8 +151,10 @@ own disclosures. Replies render readable paragraphs, lists and fenced code,
 with copy actions; model HTML is never executed.
 You can draft a follow-up while work is queued or running and send it when the
 worker finishes. Use the composer or Ctrl/Command + Enter to submit a message. The stop action
-cancels the pending or active reply. Provider execution is bounded to two minutes
-once started; queue waiting is separate. Sessions hold at most 60 messages with
+cancels the pending or active reply. Each provider invocation uses the worker’s
+configured execution limit: six hours by default, configurable from one second
+to 24 hours. `WERK_WORKER_MAX_RUNTIME_MS` overrides saved settings. The limit
+starts when execution begins; queue waiting is separate. Sessions hold at most 60 messages with
 a 48,000-character input budget; user messages are limited to 8,000 characters
 and replies to 32,000. Up to 100 task sessions are retained. Deleting a task session
 requires confirmation; New task preserves the previous transcript. A failed save
@@ -161,11 +165,30 @@ Only the worker prompts the model. A Chat task does not automatically expose
 dashboard telemetry or repository files; use the file-task editor below to
 approve file input and generate a patch.
 
+## Assign and watch repositories
+
+In Dashboard, open **Git repositories → Manage repository assignments** to assign
+existing Git checkouts to this worker.
+Choose stable IDs and paths on the worker machine, then configure the remote,
+optional branch and watching. Finish queued/running work before changing the list.
+Repository status reports fetched commits and conditions that prevent a safe
+fast-forward. **Check & pull** refreshes an assignment without waiting for the
+polling interval. Use **Save assignments** to persist edits. Dirty changes and
+local/divergent commits are preserved.
+
+Each assigned coding task receives a detached worktree beneath the selected repository's
+`.werk/worktrees` directory. Worktrees are retained across restart. See
+[repository configuration](../reference/configuration.md#assigned-git-repositories)
+for startup seeds, saved-setting precedence, polling and cleanup.
+
 ## Run local coding tasks
 
-Choose **New task → Prepare a file task** in the interaction panel. The file editor has its own draft; edit its own instructions and choose its provider connection. Give it a title, an
-absolute repository directory on the worker machine, and an explicit list of
-relative file paths. The worker captures those files when accepting the task.
+Choose **New task → Prepare a file task** in the interaction panel. The file editor has its own draft; edit its instructions and choose its provider connection. Give it a title, a
+repository from the assigned list, and an explicit list of relative file paths.
+The worker captures those files from a pinned worktree when accepting the task.
+When no repositories are assigned, the absolute-directory input remains available.
+Git roots use worktrees; legacy non-Git directories retain bounded snapshot-only
+behavior without Git provenance.
 Switching task selection does not change this editor’s instructions or provider. Successful submission keeps the separate conversation draft. Access expiry retains the file editor in this tab; explicit Lock clears it.
 
 Only those snapshots and your instruction are sent to the chosen provider in
@@ -178,7 +201,10 @@ Local tasks are bounded file-change generation: up to 32 approved text files,
 supported. Secret-like paths, symlinks and path traversal are rejected. The
 provider returns complete changed file contents; the worker validates them and
 creates a unified patch. It never executes model-generated shell commands.
-Your checkout remains unchanged and tests are **not** run automatically.
+Your source checkout remains unchanged by the file task, and tests are **not** run
+automatically. The retained worktree contains its captured input; changed file
+contents remain in the review patch. Ordinary provider Chat still has no arbitrary
+filesystem or shell tools.
 
 In **History → File tasks**, choose **Review patch**, inspect the result and
 choose **Download patch**. **Open conversation** opens its dedicated transcript.

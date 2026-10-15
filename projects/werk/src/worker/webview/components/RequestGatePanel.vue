@@ -653,15 +653,17 @@ summary {
 .request-gate-table table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
   text-align: left;
   font-size: 13px;
 }
 .request-gate-table th,
 .request-gate-table td {
-  padding: 12px;
+  padding: 12px 8px;
   border-bottom: 1px solid var(--line, #3b4b56);
   vertical-align: top;
-  min-width: 120px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .request-gate-table small {
   display: block;

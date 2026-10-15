@@ -3,7 +3,7 @@ import { resolve, relative, join, isAbsolute, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { inputError, readPrivate, createPrivate } from '../config.mjs';
 
-const nodeImage = 'node:24.19.0-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df';
+const nodeImage = 'node:24.19.0-bookworm@sha256:4196d66a565c6f195728d9952f161f4adfe2ad753052a08b7ec7f1c5a6bda42b';
 const exists = path => lstat(path).catch(error => { if (error.code !== 'ENOENT') throw error; });
 async function plainFile(path) { const info = await exists(path); if (info && (!info.isFile() || info.isSymbolicLink())) throw inputError('Setup files must be regular files, not links: ' + path); return info; }
 async function seed(path, text) {

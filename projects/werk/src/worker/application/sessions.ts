@@ -74,12 +74,15 @@ export class WorkerSessions {
   private instances = new Map<string, WorkerConversation>();
   private changing = false;
   private changingProviders = false;
+  private activeOutsideChat: () => number;
   constructor(
     directory: string,
     settings: WorkerSettings,
     model: typeof modelFor = modelFor,
     requests?: WorkerRequestJournal,
+    activeOutsideChat: () => number = () => 0,
   ) {
+    this.activeOutsideChat = activeOutsideChat;
     this.requests = requests ?? new WorkerRequestJournal(directory);
     this.interactions = new WorkerInteractionJournal(directory);
     this.runs = new WorkerRunJournal(directory);
@@ -184,6 +187,13 @@ export class WorkerSessions {
         requests: this.requests,
         requestPolicy: () => this.requestPolicy?.(),
         notifyRequest: (id) => this.notifyRequest(id),
+        admit: () => {
+          if (
+            this.chatActive + this.activeOutsideChat() >=
+            this.settings.value.board.queueCapacity
+          )
+            throw new DomainError("conflict", "Worker task queue is full.");
+        },
         provider: () => {
           const connection = definitionConnection(
             this.settings.provider(record.provider),

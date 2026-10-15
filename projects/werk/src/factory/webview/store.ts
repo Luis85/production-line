@@ -56,6 +56,7 @@ export interface IntakeRecord {
   task: {
     title?: string;
     project: string;
+    repository?: string;
   };
   destination: ProductionLine | null;
   remoteTaskId: string | null;
@@ -124,6 +125,7 @@ export function createFactoryStore(fetcher: typeof fetch = fetch) {
     policyDrafts: new Map<string, RoutingPolicy>(),
     taskDraft: {
       project: "",
+      repository: "",
       reference: "",
       title: "",
       criteria: "",
@@ -331,6 +333,7 @@ export function createFactoryStore(fetcher: typeof fetch = fetch) {
       state.intakeFactory = "";
       state.taskDraft = {
         project: "",
+        repository: "",
         reference: "",
         title: "",
         criteria: "",
@@ -680,7 +683,8 @@ export function createFactoryStore(fetcher: typeof fetch = fetch) {
         lineId: draft.lineId || null,
         task: {
           project: draft.project,
-          provider: draft.provider,
+          ...(draft.repository.trim() ? { repository: draft.repository.trim() } : {}),
+          provider: draft.execution === "cli" ? "codex" : draft.provider,
           executionMode: draft.execution,
           priority: 1,
           ...(draft.reference.trim()

@@ -8,6 +8,7 @@ separately under `docs/handoff`; original source provenance is recorded in the
 
 | Record | Scope |
 | --- | --- |
+| [Werk 0.4.0 repository review](repository-review-2026-10-15.md) | Six-perspective review, multi-repository worktrees, routing and admission fixes, security and UI polish, native/Docker/Storybook qualification |
 | [CI recovery and independent polish](ci-recovery-polish.md) | Clean image builds, Windows portability and cleanup, truthful feature wait, cancellation accounting and access recovery |
 | [CI recovery browser walkthrough](ci-recovery-polish.html) | Shared-board states and before/after malformed access-expiry journeys |
 | [Unified worker, webviews and request gates](werk-unified-worker-review.md) | Shared Vue/Nuxt UI Kanban, deterministic request lifecycle, package comparison and integrated qualification |

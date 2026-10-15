@@ -41,8 +41,10 @@ export class RemoteRequestGates implements AttemptRequestGates {
       const accepted = prior.input.context as {
         context?: unknown;
         source?: unknown;
+        repository?: string;
       };
       if (
+        (accepted?.repository ?? null) !== (task.repository ?? null) ||
         prior.input.title !== task.title ||
         JSON.stringify(prior.input.criteria) !==
           JSON.stringify(task.criteria) ||
@@ -86,6 +88,7 @@ export class RemoteRequestGates implements AttemptRequestGates {
           taskId: task.id,
           context: task.context ?? null,
           source: task.source ?? null,
+          ...(task.repository ? { repository: task.repository } : {}),
         },
       },
       provider: this.provider(task),

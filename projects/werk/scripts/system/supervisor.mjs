@@ -63,7 +63,7 @@ export async function startSystem(stateDir, { noOpen = false, emit = () => {}, o
   async function launch(role, id, payload) {
     abort.signal.throwIfAborted();
     const child = spawn(process.execPath, [join(releaseRoot, 'scripts/system/child.mjs')], { cwd: releaseRoot, windowsHide: true,
-      env: runtimeEnvironment(environment, { liveProvider: role === 'line' && !!definition.productionLines.find(line => line.id === id && (line.workers.execution?.mode === 'cli' || line.workers.chat)) }), stdio: ['ignore', 'ignore', 'pipe', 'ipc'] });
+      env: runtimeEnvironment(environment, { gitAccess: role === 'line', liveProvider: role === 'line' && !!definition.productionLines.find(line => line.id === id && (line.workers.execution?.mode === 'cli' || line.workers.chat)) }), stdio: ['ignore', 'ignore', 'pipe', 'ipc'] });
     const item = { child, role, id, ready: false, closed: false }; captureServiceLogs(child.stderr, entry => event('service_log', { role, id, entry }));
     child.on('message', message => {
       if (message?.event === 'ready') item.ready = true;

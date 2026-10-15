@@ -87,6 +87,22 @@ test('HTTP adapter rejects malformed assignment envelopes and mismatched lease r
 });
 
 
+test('HTTP lease renewal preserves the exact optional repository selector',async()=>{
+  let response;
+  const client=new HttpWorkerGateway(identity.url,'',async()=>response).connect(identity);
+  const assigned={...task(),repository:'backend'};
+  response={...assigned,expiresAt:assigned.expiresAt+1000};
+  assert.equal((await client.heartbeat(assigned)).repository,'backend');
+  for(const repository of ['frontend',undefined]) {
+    response={...assigned,repository};
+    await assert.rejects(client.heartbeat(assigned),/different assignment/);
+  }
+  response={...task(),repository:'backend'};
+  await assert.rejects(client.heartbeat(task()),/different assignment/);
+  response={...task(),expiresAt:12000};
+  assert.equal((await client.heartbeat(task())).repository,undefined);
+});
+
 test('HTTP worker acknowledgements validate snapshot identity/digest and terminal lease ownership',async()=>{
   let response={ok:true};
   const client=new HttpWorkerGateway(identity.url,'',async()=>response).connect(identity);

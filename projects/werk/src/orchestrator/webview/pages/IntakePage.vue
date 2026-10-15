@@ -62,7 +62,7 @@ const importCommand = computed(() =>
           ><input
             id="project"
             v-model="s.intake.project"
-            pattern="[a-zA-Z0-9_-]{1,100}"
+            pattern="[a-zA-Z0-9_\-]{1,100}"
             maxlength="100"
             required
             @input="s.intake.projectEdited = true"
@@ -70,6 +70,19 @@ const importCommand = computed(() =>
           <p class="muted">
             Projekt dieser Linie: {{ s.overview?.project || "Nicht gemeldet" }}.
             Eigene Eingaben bleiben erhalten.
+          </p>
+          <label for="repository">Repository-Zuweisung (optional)</label
+          ><input
+            id="repository"
+            v-model="s.intake.repository"
+            pattern="[a-zA-Z0-9_\-]{1,100}"
+            maxlength="100"
+            aria-describedby="repository-hint"
+            placeholder="z. B. portal-ui"
+          />
+          <p id="repository-hint" class="muted">
+            Zuweisungs-ID aus dem Worker-Dashboard, kein Pfad oder Git-URL.
+            Leer nutzt die Projekt-ID. Der Vault-Kontext bleibt am Projekt gebunden.
           </p>
           <template v-if="!manual"
             ><label for="requirement-ref">Anforderung als Wikilink</label
@@ -154,6 +167,11 @@ const importCommand = computed(() =>
           }}
         </p>
         <p>Projekt: {{ s.intake.project }}</p>
+        <p>
+          Repository-Zuweisung:
+          {{ s.intake.repository.trim() || s.intake.project || "Noch kein Projekt" }}
+          {{ s.intake.repository.trim() ? "" : "(Projekt-Standard)" }}
+        </p>
         <ol>
           <li>Speichern im Orchestrator</li>
           <li>Reservierung durch passenden Worker</li>

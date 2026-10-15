@@ -63,6 +63,39 @@ node bin/apps/worker/cli.mjs feature list
 node bin/apps/worker/cli.mjs stop
 ```
 
+## Assign Git repositories
+
+In Dashboard, open **Git repositories → Manage repository assignments** and add
+each existing checkout.
+Give it a stable ID, its path on the worker machine, and its remote/branch policy.
+Enable watching to fetch and safely fast-forward clean checkouts. Drain queued
+and running tasks before changing assignments.
+
+Before the first start, you can seed the same assignments in
+`.werk/worker.json` with a top-level `repositories` object. Preserve its
+`features` settings. Saved private settings take precedence on later starts.
+See [repository configuration](../reference/configuration.md#assigned-git-repositories)
+for the JSON example, polling limits, status/sync API and retention behavior.
+
+Use **Run task** to select an assigned repository and approve its input files.
+The worker captures committed files in a task worktree beneath that repository's
+`.werk/worktrees` directory and returns a review patch. Feature-folder patch
+requests still target this installed project's directory; include it among the
+assignments when using that intake. Ordinary Chat only receives its supplied
+conversation input, and mock execution remains simulated.
+
+The default project Docker image includes Git. Custom images must also provide
+Git. Mount every assigned checkout writable. Enter container paths; the generated Compose file
+only mounts the installed project by default. Native host paths and Git login
+access are not automatically usable in the container. Existing generated Compose
+files are preserved by repeat setup; update their image explicitly to a reviewed
+Git-capable image when adopting repository tasks.
+
+Native workers use the operator account's Git configuration and retain its proxy,
+CA and `SSH_AUTH_SOCK` settings through the native line/system launchers. Set up
+Git authentication for that account before starting; the worker does not prompt
+for credentials. Keep the SSH agent available for the worker's lifetime.
+
 ## Choose or change the feature folder
 
 Choose the folder during setup with `init --features-dir requests/features`.
@@ -131,7 +164,7 @@ After setup, from the same project directory:
 docker compose -f .werk/compose.worker.yaml up -d
 ```
 
-The generated configuration uses a pinned Node 24 image and the prebuilt app;
+The generated configuration uses a pinned Node 24 image with Git and the prebuilt app;
 there is no npm install or image build. It mounts the project so dropped requests
 and results are visible on the host, mounts the app read-only, and binds the
 webview to loopback. Private state remains in `.werk/worker`.
@@ -165,7 +198,7 @@ from the destination project (replace the release-app path):
 docker run --rm --user "$(id -u):$(id -g)" \
   --mount "type=bind,src=/absolute/werk-release/bin/apps/worker,dst=/installer,readonly" \
   --mount "type=bind,src=$(pwd),dst=/project" --workdir /project \
-  node:24.19.0-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df \
+  node:24.19.0-bookworm@sha256:4196d66a565c6f195728d9952f161f4adfe2ad753052a08b7ec7f1c5a6bda42b \
   node /installer/cli.mjs init
 ```
 
@@ -175,7 +208,7 @@ On Windows, use Docker Desktop Linux containers and PowerShell:
 docker run --rm --user 1000:1000 `
   --mount "type=bind,src=C:\werk-release\bin\apps\worker,dst=/installer,readonly" `
   --mount "type=bind,src=$($PWD.Path),dst=/project" --workdir /project `
-  node:24.19.0-bookworm-slim@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee7ea7fbc29df `
+  node:24.19.0-bookworm@sha256:4196d66a565c6f195728d9952f161f4adfe2ad753052a08b7ec7f1c5a6bda42b `
   node /installer/cli.mjs init
 ```
 

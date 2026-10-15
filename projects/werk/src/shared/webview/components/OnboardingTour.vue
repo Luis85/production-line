@@ -9,7 +9,15 @@ import {
   hasActiveTour,
   type TourSnapshot,
 } from "../tour-controller";
-const props = defineProps<{ title: string; steps: TourStep[] }>();
+const props = withDefaults(
+  defineProps<{ title: string; steps: TourStep[]; locale?: "en" | "de" }>(),
+  { locale: "en" },
+);
+const labels = computed(() =>
+  props.locale === "de"
+    ? { back: "Zurück", next: "Weiter", finish: "Fertig", close: "Tour schließen", opening: "Ansicht wird geöffnet…", error: "Diese Ansicht konnte nicht geöffnet werden. Schließe die Tour und versuche es über die Seitennavigation erneut." }
+    : { back: "Back", next: "Next", finish: "Finish", close: "Close tour", opening: "Opening this view…", error: "This view could not be opened. Close the tour and retry from the page navigation." },
+);
 const open = defineModel<boolean>("open", { default: false });
 const state = shallowRef<TourSnapshot>({
   open: false,
@@ -46,9 +54,13 @@ async function reveal() {
     : null;
   highlighted?.classList.add("werk-tour-target");
 }
+const errorMessage = computed(() => state.value.error ? labels.value.error : "");
 const description = computed(() =>
-  [state.value.step?.text, state.value.error].filter(Boolean).join(" "),
+  [state.value.step?.text, errorMessage.value].filter(Boolean).join(" "),
 );
+function keepTourOpen(event: Event) {
+  event.preventDefault();
+}
 watch(open, (value) => {
   if (value) {
     trigger =
@@ -79,13 +91,25 @@ function next() {
     v-model:open="open"
     :title="state.step?.title ?? title"
     :description="description"
+    :modal="false"
+    :overlay="false"
+    :content="{ onInteractOutside: keepTourOpen }"
+    :ui="{ content: 'top-auto bottom-4 left-4 right-4 translate-x-0 translate-y-0 sm:left-auto sm:right-6 sm:bottom-6 sm:max-w-md' }"
   >
+    <template #close>
+      <UButton
+        icon="i-lucide-x"
+        color="neutral"
+        variant="ghost"
+        :aria-label="labels.close"
+      />
+    </template>
     <template #body
       ><p class="tour-progress">
         {{ title }} · {{ state.index + 1 }} / {{ steps.length }}
       </p>
-      <p v-if="state.busy" role="status">Opening this view…</p>
-      <p v-if="state.error" role="alert">{{ state.error }}</p></template
+      <p v-if="state.busy" role="status">{{ labels.opening }}</p>
+      <p v-if="errorMessage" role="alert">{{ errorMessage }}</p></template
     >
     <template #footer
       ><div class="tour-actions">
@@ -94,12 +118,12 @@ function next() {
           variant="outline"
           :disabled="state.busy || state.index === 0"
           @click="controller.go(state.index - 1)"
-          >Back</UButton
+          >{{ labels.back }}</UButton
         ><UButton :disabled="state.busy" @click="next">{{
-          state.index === steps.length - 1 ? "Finish" : "Next"
+          state.index === steps.length - 1 ? labels.finish : labels.next
         }}</UButton
         ><UButton color="neutral" variant="ghost" @click="open = false"
-          >Close tour</UButton
+          >{{ labels.close }}</UButton
         >
       </div></template
     >

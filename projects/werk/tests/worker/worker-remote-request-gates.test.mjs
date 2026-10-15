@@ -300,3 +300,15 @@ test("passed remote Done gate reconciles its historical held lease once and pres
   assert.deepEqual(f.entries.get("lease-1-after"), before);
   assert.equal(f.invocations(), 1);
 });
+
+test('remote repository selection is frozen in the accepted request and legacy requests retain their shape', async t => {
+  const f = await fixture(t), task = { ...assigned(), repository: 'backend' };
+  await f.deps.gates.ready(task);
+  assert.equal(f.requests.forTurn('remote-task-1', 'remote-task-1').input.context.repository, 'backend');
+  await assert.rejects(f.deps.gates.ready({ ...task, repository: 'frontend' }), /context changed/);
+  await assert.rejects(f.deps.gates.ready(assigned()), /context changed/);
+  const legacy = { ...assigned(), id: 'legacy' };
+  await f.deps.gates.ready(legacy);
+  assert.equal(Object.hasOwn(f.requests.forTurn('remote-legacy', 'remote-legacy').input.context, 'repository'), false);
+  await f.deps.gates.ready(legacy);
+});

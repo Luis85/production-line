@@ -50,6 +50,29 @@ not duplicate completion. This is not evidence of VM failover or a measured RTO.
 Automated maintenance commands reject Docker state and volume pointers; use the
 Docker procedure below for both volume contents and matching configuration.
 
+## Preserve assigned repositories and task worktrees
+
+The maintenance and automatic-update backups cover the selected runtime state
+directory. They do not include assigned Git checkouts or task worktrees outside
+that directory. State records can refer to those retained paths; restoring state
+alone cannot recover their files.
+
+Stop the worker and any other process that can write the assigned repositories.
+Keep a separate private filesystem backup of each complete checkout, including
+its `.werk/worktrees`, uncommitted files, and Git metadata. If the checkout uses
+a `.git` file, also preserve the actual common Git directory shown by
+`git rev-parse --path-format=absolute --git-common-dir` from that checkout. It
+contains the linked-worktree registrations and Werk ownership markers. A clone
+or push alone does not preserve uncommitted worktree changes.
+
+Restore repository data alongside the matching worker-state backup before
+resuming intake. Preserve the original paths where possible and verify
+`git worktree list` plus the retained task files. Moving repositories may require
+repairing Git worktree links and updating assignments while the task queue is
+drained. Do not run `git worktree prune` or remove retained directories during
+recovery before inspecting them. Protect these backups like the state backup:
+they can contain source code, task inputs and provider output.
+
 ## Diagnose a crash without deleting durable state
 
 `doctor` reports authenticated service/worker checks and available disk space.
@@ -81,7 +104,9 @@ lock-deletion command. A maintenance crash may itself leave locks containing
 3. For native or Linux Docker bind storage, copy the **complete** state directory, including configuration, credentials,
    SQLite database/WAL/SHM files, worker identities, snapshots and pending journals.
    Preserve ownership and restrictive access permissions.
-4. Store the backup privately, separately from the release you are replacing.
+4. Back up assigned checkouts and retained task worktrees using the [repository
+   procedure above](#preserve-assigned-repositories-and-task-worktrees).
+5. Store the backup privately, separately from the release you are replacing.
    Backups contain credentials and source/task evidence; do not commit them.
 
 ### Windows Docker named volume
