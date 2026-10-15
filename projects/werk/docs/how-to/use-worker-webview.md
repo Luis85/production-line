@@ -87,7 +87,9 @@ API fallback that could silently change billing.
 On native Windows, CLI execution requires Windows PowerShell 5.1, its .NET
 Framework runtime, and host policy that permits `Add-Type` and nested Windows
 Job Objects. The worker invokes PowerShell from `SystemRoot` without changing
-execution policy. If process containment cannot be established, the provider is
+execution policy. Startup uses the worker account’s `PSModulePath`; its module
+directories must remain under operator control. The restricted provider
+environment is restored before launch. If process containment cannot be established, the provider is
 not started. Cancellation closes the supervisor's lifetime job and terminates
 its provider processes. On normal provider exit, remaining descendants are
 terminated before output is drained and the result is returned.

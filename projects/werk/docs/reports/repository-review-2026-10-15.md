@@ -131,12 +131,15 @@ fails the invocation. Native Windows tests cover cancellation, parent exit with
 inherited or ignored pipes, bounded status checks, argument quoting and raw stdin.
 Native CI diagnostics located startup stalls in PowerShell `Add-Type` under the
 restricted environment, before provider launch. A compiler matrix reproduced the
-stall with restricted environments and succeeded with the standard Windows
-installation and architecture variables. The supervisor receives that fixed
-runtime-variable allowlist and a built-in Windows PowerShell module path. It
-restores the caller’s original values, removing additions, before creating the
-provider. Raw-stream pumps start after the suspended provider resumes. Native
-fixtures verify provider behavior and environment restoration.
+stall with restricted environments. A [focused native diagnostic](https://github.com/Luis85/production-line/actions/runs/38784001817)
+then confirmed that preserving the host’s PowerShell module path allows the
+actual helper to compile, restore the caller’s environment, contain the provider
+and complete successfully; substituting a built-in-only module path stalled.
+The supervisor receives a fixed allowlist of Windows installation/architecture
+variables and the host’s module path. It restores the caller’s original values,
+removing additions, before creating the provider. Raw-stream pumps start after
+the suspended provider resumes. Native fixtures verify provider behavior and
+environment restoration.
 
 The platform follow-up distinguishes a production fix from fixture corrections:
 
