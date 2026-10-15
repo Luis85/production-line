@@ -132,8 +132,8 @@ export function spawnProvider(executable: string, args: string[], cwd: string, e
   if (!systemRoot || !win32.isAbsolute(systemRoot)) throw Error('Windows SystemRoot is unavailable');
   const powershell = win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
   // Windows PowerShell needs its OS installation/architecture context to resolve
-  // and resolve built-in cmdlets and compile the helper. These wrapper-only values never broaden the
-  // provider's environment; restore the caller's values before creating it.
+  // built-in cmdlets and compile the helper. Restore the caller's environment
+  // before creating the provider so these wrapper-only values never broaden it.
   const supervisorEnv = { ...env }, restoreEnvironment: Record<string, string | null> = {};
   const setRuntimeValue = (key: string, value: string) => {
     const matches = Object.keys(supervisorEnv).filter(candidate => candidate.toLowerCase() === key.toLowerCase()).sort();
