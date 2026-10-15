@@ -90,10 +90,17 @@ test('Windows preserves empty, quoted and Unicode arguments and raw stdin withou
   const f = await treeFixture(t);
   const args = ['', 'two words', '"quoted"', 'ends\\', 'slash\\"quote', 'snow ☃ 日本語', '$value; & echo not-a-command', 'first\nsecond'];
   const input = 'first\0line\r\n雪\n'.repeat(20000);
-  const script = `const chunks=[];process.stdin.on('data',chunk=>chunks.push(chunk));process.stdin.on('end',()=>{const input=Buffer.concat(chunks);process.stderr.write('fixture-only diagnostics');process.stdout.write(JSON.stringify({args:process.argv.slice(1),modulePath:process.env.PSModulePath,bytes:input.length,hash:require('node:crypto').createHash('sha256').update(input).digest('hex')}));});`;
+  const runtimeKeys = ['ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432', 'CommonProgramFiles', 'CommonProgramFiles(x86)', 'CommonProgramW6432', 'PROCESSOR_ARCHITECTURE', 'PROCESSOR_ARCHITEW6432', 'NUMBER_OF_PROCESSORS', 'OS', 'PSModulePath'];
+  const callerEnvironment = providerEnvironment('claude');
+  const expectedRuntime = Object.fromEntries(runtimeKeys.flatMap(key => {
+    const original = Object.keys(callerEnvironment).sort().find(candidate => candidate.toLowerCase() === key.toLowerCase());
+    return original !== undefined && callerEnvironment[original] !== undefined ? [[key, callerEnvironment[original]]] : [];
+  }));
+  const script = `const chunks=[];process.stdin.on('data',chunk=>chunks.push(chunk));process.stdin.on('end',()=>{const input=Buffer.concat(chunks);process.stderr.write('fixture-only diagnostics');process.stdout.write(JSON.stringify({args:process.argv.slice(1),runtime:Object.fromEntries(${JSON.stringify(runtimeKeys)}.map(key=>[key,process.env[key]])),privateLaunchPresent:process.env.WERK_PROVIDER_LAUNCH!==undefined,bytes:input.length,hash:require('node:crypto').createHash('sha256').update(input).digest('hex')}));});`;
   const output = JSON.parse((await bounded(providerCommand(process.execPath, ['-e', script, '--', ...args], f.directory, f.controller.signal, input, true, 'claude'))).toString('utf8'));
   assert.deepEqual(output.args, args);
-  assert.equal(output.modulePath, undefined, 'supervisor-only module discovery does not change the provider environment');
+  assert.deepEqual(output.runtime, expectedRuntime, 'supervisor runtime context is restored before provider launch');
+  assert.equal(output.privateLaunchPresent, false, 'private supervisor launch data is removed before provider launch');
   assert.equal(output.bytes, Buffer.byteLength(input));
   assert.equal(output.hash, createHash('sha256').update(input).digest('hex'));
 });
