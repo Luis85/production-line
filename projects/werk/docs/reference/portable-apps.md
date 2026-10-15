@@ -5,8 +5,8 @@ The runtime release contains `bin/apps/factory`, `bin/apps/orchestrator` and
 Each includes its compiled application, webview, CLI and runtime dependencies.
 Only **Node.js 24.x** is required. No npm install, source checkout, Docker or sibling
 application is needed. CLI subscription providers additionally need their installed,
-authenticated executable on a Linux or macOS worker machine. Windows workers use
-API providers. API providers need a configured key and selected model.
+authenticated executable on the worker machine. Claude Code CLI runs on Linux,
+macOS and Windows; Codex CLI requires Linux or macOS. API providers need a configured key and selected model.
 
 From the destination project directory:
 

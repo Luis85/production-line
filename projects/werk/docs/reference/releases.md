@@ -1,7 +1,7 @@
 # Release artifacts and verification
 
-Version 0.3.0 is packaged as `werk-0.3.0.tar.gz` and `werk-0.3.0.zip`. Each archive
-has one top directory, `werk-0.3.0/`. Obtain it and `SHA256SUMS` from a delivery
+Version 0.3.1 is packaged as `werk-0.3.1.tar.gz` and `werk-0.3.1.zip`. Each archive
+has one top directory, `werk-0.3.1/`. Obtain it and `SHA256SUMS` from a delivery
 source you trust. Checksums detect corruption or mismatch; an unsigned checksum
 file does not independently authenticate its publisher.
 
