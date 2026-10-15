@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
-import WerkShell from "../../shared/webview/components/WerkShell.vue";
+import WorkerShell from "./components/WorkerShell.vue";
 import AccessPanel from "../../shared/webview/components/AccessPanel.vue";
 import ConnectionStatus from "../../shared/webview/components/ConnectionStatus.vue";
 import OnboardingTour from "../../shared/webview/components/OnboardingTour.vue";
@@ -18,20 +18,20 @@ const router = useRouter(),
   tourOpen = ref(false);
 const tourSteps: TourStep[] = [
   {
-    title: "Start a task in Chat",
+    title: "Start with your taskboard",
     text: "Choose New task and send its instructions. The first message queues a task; each follow-up stays in the same session.",
     target: ".page-heading",
-    activate: () => router.push("/chat"),
+    activate: () => router.push("/taskboard"),
   },
   {
     title: "Keep each task together",
     text: "Select a task to reopen its transcript. New task creates a separate session. This worker executes one task at a time; additional work waits in its queue.",
-    target: ".session-panel",
+    target: ".taskboard-groups",
   },
   {
-    title: "Produce a patch with Run task",
-    text: "Run task creates a separate file-task session using dedicated instructions and approved files. Review its patch before applying it to your checkout.",
-    target: ".run-task",
+    title: "Prepare a file task",
+    text: "In the New task tab, Prepare a file task creates a separate session with dedicated instructions and approved files. Review its patch before applying it to your checkout.",
+    target: ".task-interaction",
   },
   {
     title: "Follow your work",
@@ -52,7 +52,7 @@ const route = useRoute(),
   accessError = ref(""),
   showToken = ref(false);
 const links = [
-  { path: "/chat", label: "Chat", icon: "i-lucide-messages-square" },
+  { path: "/taskboard", label: "Taskboard", icon: "i-lucide-columns-2" },
   { path: "/history", label: "History", icon: "i-lucide-history" },
   { path: "/dashboard", label: "Dashboard", icon: "i-lucide-activity" },
 ];
@@ -169,10 +169,10 @@ watch(
         restarts. Lock it any time.</template
       >
     </AccessPanel>
-    <WerkShell
+    <WorkerShell
       v-else
       :links="links"
-      home-path="/chat"
+      home-path="/taskboard"
       home-label="Werk worker home"
       nav-label="Worker pages"
     >
@@ -277,7 +277,7 @@ watch(
             : "Waiting for worker data"
         }}<span>Werk · Worker workspace</span></template
       >
-    </WerkShell>
+    </WorkerShell>
     <OnboardingTour
       v-model:open="tourOpen"
       title="Worker tour"

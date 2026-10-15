@@ -123,6 +123,22 @@ test('release documentation must have a closed local link set',async t=>{
   await assert.rejects(packageRelease(root),/documentation link is not packaged/);
 });
 
+test('the shipped documentation links resolve against the real curated release files', async t => {
+  const { root, put } = await fixture(t);
+  for (const path of releaseDocs) {
+    await put(path, await readFile(new URL(`../../${path}`, import.meta.url), 'utf8'));
+  }
+  for (const template of ['readme.md.txt', 'agents.md.txt', 'docs-index.md.txt']) {
+    const path = `scripts/release/templates/${template}`;
+    await put(path, await readFile(new URL(`../../${path}`, import.meta.url), 'utf8'));
+  }
+  await packageRelease(root);
+  const files = unzipSync(await readFile(join(root, 'release/werk-0.1.0.zip')));
+  const guide = files['werk-0.1.0/docs/how-to/generate-storybook.md'];
+  assert.ok(guide, 'the release includes the linked Storybook and Pages guide');
+  assert.match(Buffer.from(guide).toString('utf8'), /## Host release documentation on GitHub Pages/);
+});
+
 test('extraction harness validates both archives, refuses existing destinations and detects corruption',async t=>{
   const {root}=await fixture(t);await packageRelease(root);
   for(const format of ['tar.gz','zip']) {

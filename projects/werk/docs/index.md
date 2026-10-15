@@ -31,7 +31,7 @@ follows [Diátaxis](https://diataxis.fr/).
 - [Answer questions and resume requests](how-to/answer-and-resume-worker.md): guarded answers, cancellation, checkpoints and event replay.
 - [Worker–model interaction contract](reference/model-interaction.md): capabilities, typed results, durable events and recovery.
 - [Markdown feature-request contract](reference/feature-requests.md)
-- [Use the worker webview](how-to/use-worker-webview.md): Chat, History and Dashboard.
+- [Use the worker webview](how-to/use-worker-webview.md): Taskboard, History and Dashboard.
 
 - [Operate, back up and replace a Linux VM](how-to/operate-linux-vm.md)
 
@@ -41,6 +41,7 @@ follows [Diátaxis](https://diataxis.fr/).
 - [Maintain the installed runtime](how-to/maintain-runtime.md)
 - [Upgrade, back up and restore](how-to/upgrade-backup.md)
 - [Operate with agents and scripts](how-to/operate-with-agents.md)
+- [Generate the storybook and screenshot storymaps](how-to/generate-storybook.md): code-derived UI coverage and repeatable release evidence.
 - [Develop and test from source](how-to/development.md)
 - [Set up a Factory hierarchy](how-to/factory.md)
 - [Operate source-checkout fleets](how-to/operations.md)
@@ -92,6 +93,8 @@ for the entity model and navigation. It explains the product without live API
 calls or administrative actions; use authenticated webviews for current state.
 
 ## Provenance, plans and evidence
+
+The [Flue framework review](reports/flue-framework-review.md) records the pinned upstream research and adopted execution-observation patterns.
 
 The pages above describe the maintained product. [Review reports](reports/index.md)
 record dated verification, not a promise that every environment has been tested.

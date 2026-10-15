@@ -55,14 +55,34 @@ export function parseModelResult(output: string): ModelResult {
   }
   return { type: 'needs_input', request: structuredClone(question) as unknown as ModelQuestion };
 }
+/** Usage cannot change an invocation's result; provider callbacks after settlement are ignored.
+ * Await the adapter even after abort so native process cleanup still owns the execution permit.
+ */
+export async function observeModelInvocation<T>(signal: AbortSignal, onUsage: ((usage: ProviderUsage) => void) | undefined, invoke: (observe: (usage: ProviderUsage) => void) => Promise<T>): Promise<T> {
+  if (signal.aborted) throw new ProviderModelError('cancelled');
+  let settled = false;
+  const observe = (usage: ProviderUsage) => {
+    if (settled || !onUsage) return;
+    try {
+      const delivery = onUsage(freeze(structuredClone(usage)));
+      // A void callback may return a promise at runtime. Do not await it or leak its diagnostics.
+      void Promise.resolve(delivery).catch(() => {});
+    } catch { /* Usage observers never replace the provider outcome. */ }
+  };
+  try {
+    const result = await invoke(observe);
+    if (signal.aborted) throw new ProviderModelError('cancelled');
+    return result;
+  } finally { settled = true; }
+}
 export async function executeModel(model: ConversationModel, request: ModelRequest, signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void): Promise<ModelResult> {
   if (signal.aborted) throw new ProviderModelError('cancelled');
   requireModelRequest(request, request?.provider?.id ?? '');
   const typed = model as Partial<StructuredModel>;
-  return typed.execute ? typed.execute(request, signal, onUsage) : parseModelResult(await model.reply(structuredClone(request.messages), signal, onUsage));
+  return observeModelInvocation(signal, onUsage, async observe => typed.execute ? typed.execute(request, signal, observe) : parseModelResult(await model.reply(structuredClone(request.messages), signal, observe)));
 }
 export async function legacyModelReply(model: StructuredModel, input: ChatMessage[], signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void): Promise<string> {
-  const result = await model.execute(prepareModelRequest(model, input), signal, onUsage);
+  const result = await executeModel(model, prepareModelRequest(model, input), signal, onUsage);
   return result.type === 'completed' ? result.text : JSON.stringify({ werkInteraction: result.request });
 }
 export function requireModelRequest(request: ModelRequest, providerId: string) {

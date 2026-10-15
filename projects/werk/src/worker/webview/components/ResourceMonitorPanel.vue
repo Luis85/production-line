@@ -33,7 +33,7 @@ async function loadEvents(more = false) {
  catch (failure) { if (current === historyGeneration && state.unlocked) error.value = (failure as Error).message; }
  finally { if (current === historyGeneration) historyBusy.value = false; }
 }
-async function openTask(sessionId: string) { if (opening.value) return; opening.value = true; try { if (await workspaceAction('/api/sessions', { action: 'select', id: sessionId })) await router.push('/chat'); else error.value = state.actionError || 'The task could not be opened.'; } finally { opening.value = false; } }
+async function openTask(sessionId: string) { if (opening.value) return; opening.value = true; try { if (await workspaceAction('/api/sessions', { action: 'select', id: sessionId })) await router.push({ path: '/taskboard', query: { session: sessionId } }); else error.value = state.actionError || 'The task could not be opened.'; } finally { opening.value = false; } }
 onMounted(() => { void load(); }); onActivated(() => { active = true; void load(); });
 onDeactivated(() => { active = false; generation++; historyGeneration++; loading.value = false; historyBusy.value = false; });
 watch(() => state.lastRead, () => { void load(); });

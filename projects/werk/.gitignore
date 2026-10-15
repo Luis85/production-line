@@ -13,3 +13,6 @@ backups/
 /.werk-system/
 
 **/.nuxt-ui/
+
+/storybook-static/
+/work/storybook-public/

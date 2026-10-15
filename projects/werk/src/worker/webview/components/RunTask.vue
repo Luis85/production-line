@@ -14,6 +14,7 @@ import UInput from '@nuxt/ui/components/Input.vue';
 import USelect from '@nuxt/ui/components/Select.vue';
 import UTextarea from '@nuxt/ui/components/Textarea.vue';
 import { state, workspaceAction } from '../store';
+withDefaults(defineProps<{ triggerLabel?: string }>(), { triggerLabel: 'Run task' });
 const { open, title, repository, paths, instruction, provider, definitionId, agent, adapt } = toRefs(editor);
 const busy = ref(false), submitted = ref(false), error = ref('');
 const definition = computed(() => state.definitions.find(item => item.id === definitionId.value));
@@ -55,11 +56,11 @@ async function run() {
         :aria-expanded="open"
         aria-controls="local-task-form"
         @click="toggleEditor"
-        >Run task</UButton
+        >{{ triggerLabel }}</UButton
       ><span class="muted">Prepare instructions and approved files for a review patch.</span>
     </div>
     <p v-if="submitted" role="status">
-      File task queued in its own session. <RouterLink to="/history">Open your taskboard →</RouterLink>
+      File task queued in its own session. <RouterLink to="/history">View file task history →</RouterLink>
     </p>
     <form v-if="open" id="local-task-form" class="settings-form" :aria-busy="busy" @submit.prevent="run">
       <fieldset :disabled="busy" class="contents">

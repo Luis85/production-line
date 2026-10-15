@@ -1,0 +1,10 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
+import { sourceInventory } from './source.mjs';
+const root = fileURLToPath(new URL('../../', import.meta.url));
+const inventory = await sourceInventory(root);
+const directory = resolve(root, 'work/storybook-public/storymap');
+await mkdir(directory, { recursive: true });
+await writeFile(resolve(directory, 'source.json'), JSON.stringify(inventory, null, 2) + '\n');
+console.log(`Indexed ${inventory.components.length} Vue elements and ${inventory.routes.length} route definitions (${inventory.sourceDigest.slice(0, 12)}).`);

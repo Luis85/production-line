@@ -74,8 +74,12 @@ Operational surfaces: background #111b22, text #edf4f7, secondary #b5c4cd,
 borders #3b4b56, action mint #8be0b8; system sans-serif 16px/1.6. Runtime controls
 have a 44px minimum height. At desktop widths of at least 1100px, the shared
 spatial layout expands orchestrator content to 1540px and Factory content to
-1760px. The worker has a Vue/Nuxt UI workspace with exactly three pages: Chat
-(default), History and Dashboard. Its Dashboard contains Monitoring & Status;
+1760px. The worker has a Vue/Nuxt UI workspace with three primary pages:
+Taskboard (default at `/taskboard`), History and Dashboard. Its horizontal worker
+header frames the selected third mockup direction: Running now above an
+asymmetric Needs you / Up next board, Completed and Drafts disclosures, and a
+right-hand task interaction panel. Dashboard contains Monitoring & Status and
+setup. `/chat` redirects to `/taskboard` with its query preserved;
 `/monitoring-status` redirects to `/dashboard`. Tables scroll when necessary
 instead of compressing identity and evidence beyond readability. The worker
 surface's composition is recorded in `src/worker/webview/DESIGN.md`.
@@ -139,23 +143,40 @@ read-only configuration context. Opening a saved task clears
 filters that could hide it. The concept also supports weekly ready-import and
 keeps unsent feature drafts scoped to the selected production line. Factory
 management shows portfolio context; line operations show the selected line.
-Worker Chat is the primary task-entry surface. New task prepares a dedicated
-session; its first message queues work on that worker, and follow-ups continue
-the same session. Explicit file tasks and remote assignments also have dedicated
-sessions. The Run task editor remains the path for approved local file inputs.
-History owns local task management and retained orchestrator evidence; it does
-not take authority over the orchestrator's task records. Dashboard shows local
-queued/running/review work, sessions, remote assignments, process health, slots,
-host observations and editable provider/enrollment settings. An unoccupied slot
-is not a promise that work can be scheduled. Local file-change tasks produce
-review patches; they do not silently apply changes or run project tests.
+Worker Taskboard is the first work surface after unlock. Cards combine session,
+file-task and project-request records by retained identity, preserving Chat,
+File task, Assigned and Project request labels. Needs you makes questions,
+decisions, rework, reviews and failures prominent; Up next shows queued work.
+The Running now strip follows the shared executor's current session. Completed
+and Drafts are secondary disclosures. The layout does not use several apparently
+active columns to imply parallel execution.
 
-One worker has exactly one execution slot shared by Chat, explicit file tasks
-and remote assignments. Queue capacity must never look like parallel execution.
-Pause holds every new start and lets the active task finish; it does not drain
-waiting assignments. Scale parallel work with separate native or Docker worker
-instances. Dashboard readings and task/session states distinguish waiting from
-running. Only the worker prompts an LLM; Factory and orchestrator route work.
+The right-hand panel offers New task and Follow up for the selected task.
+Submitting a new task creates one worker-owned session and sends its first
+message to the returned session ID. The UI coordinates these separate requests;
+an uncertain first-message acknowledgement keeps the draft and created identity
+for inspection rather than silently creating another task. Follow-ups preserve
+that identity. Explicit file tasks and remote assignments also own dedicated
+sessions. The file-task editor remains the path for approved local file inputs.
+History retains task management and execution evidence without taking authority
+over orchestrator-owned assignments. Dashboard holds provider and agent setup,
+enrollment, process health and diagnostics outside the task interaction panel.
+
+One worker has exactly one execution slot shared by chat, explicit file tasks
+and remote assignments. Queue capacity never implies parallel execution. Stop
+task stops the selected task through its supported controls. Pause new starts
+holds every new execution start while the active task finishes; it does not
+interrupt that model or drain waiting assignments. Pause updates stops automatic
+browser reads only. Scale parallel work with separate native or Docker workers.
+Only the worker prompts an LLM; Factory and orchestrator route work.
+
+Monitoring distinguishes recorded provider/model snapshots from configured
+file-task or definition snapshots. Missing actual model, usage, cost and progress
+remain unavailable; a previous attempt's model is not evidence of a new running
+turn's model. Saved events, checkpoints and retained run evidence explain observed
+state. Live prompt edits, native provider resume and token streaming are not
+advertised. Local file-change tasks produce review patches without silently
+applying changes or running project tests. Simulation remains explicitly labelled.
 
 Connection, loading, stale data and empty filters are distinct states. Operator
 tokens never enter URLs or browser storage. Factory/orchestrator views and their

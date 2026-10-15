@@ -29,7 +29,7 @@ contracts, and explanations describe the system and its limits.
 - [Answer questions and resume requests](how-to/answer-and-resume-worker.md): guarded answers, cancellation, checkpoints and event replay.
 - [Worker–model interaction contract](reference/model-interaction.md): capabilities, typed results, durable events and recovery.
 - [Markdown feature-request contract](reference/feature-requests.md)
-- [Use the worker webview](how-to/use-worker-webview.md): Chat, History and Dashboard.
+- [Use the worker webview](how-to/use-worker-webview.md): Taskboard, History and Dashboard.
 
 - [Operate, back up and replace a Linux VM](how-to/operate-linux-vm.md)
 
@@ -54,6 +54,7 @@ contracts, and explanations describe the system and its limits.
 - [Runtime operator CLI](reference/runtime-cli.md)
 - [Configuration, environment and state](reference/configuration.md)
 - [Release artifacts and verification](reference/releases.md)
+- [Illustrated Storybook and storymaps](reference/releases.md#illustrated-storybook-and-storymaps): versioned UI stories and screenshot evidence.
 - [Access roles and audit events](reference/access-control.md)
 - [Security and authority boundaries](reference/security.md)
 

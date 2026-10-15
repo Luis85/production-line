@@ -33,6 +33,49 @@ export async function newTask(options: { provider?: string; title?: string; defi
   const provider = current?.provider ?? state.settings?.providers.find(item => item.configured)?.id ?? 'codex-cli';
   return workspaceAction('/api/sessions', { action: 'create', title: 'New task', provider, ...options });
 }
+export type NewTaskOptions = { provider?: string; title?: string; definitionId?: string; agent?: string; useInstructionsOnly?: boolean };
+/** Create once, then dispatch only to the returned task. A failed dispatch remains a draft. */
+export async function createTaskAndSend(options: NewTaskOptions, message: string): Promise<{ sessionId?: string; queued: boolean }> {
+  if (!state.unlocked || state.workspaceBusy || !message.trim()) return { queued: false };
+  const access = accessGeneration;
+  state.workspaceBusy = true;
+  state.actionError = '';
+  generation++;
+  let sessionId: string | undefined, queued = false;
+  try {
+    const provider = options.provider ?? state.settings?.providers.find(item => item.configured)?.id ?? 'codex-cli';
+    const created: NonNullable<typeof state.sessions> = await request('/api/sessions', 'POST', {
+      action: 'create', title: message.trim().slice(0, 80), provider, ...options,
+    });
+    if (access !== accessGeneration) return { queued: false };
+    sessionId = created.selected;
+    if (!sessionId) throw Error('Task creation could not be confirmed. Refresh the board before trying again.');
+    generation++;
+    adoptSessions(created);
+    state.chat = null;
+    state.draft = message;
+    drafts.set(sessionId, message);
+    // The server rejects a changed shared selection instead of sending to another task.
+    const chat = await request('/api/chat', 'POST', { sessionId, message });
+    if (access !== accessGeneration) return { queued: false };
+    queued = true;
+    if (drafts.get(sessionId) === message) drafts.delete(sessionId);
+    if (state.sessions?.selected === sessionId) {
+      state.chat = chat;
+      if (state.draft === message) state.draft = '';
+    }
+  } catch (error) {
+    if (access === accessGeneration) state.actionError = sessionId
+      ? 'Task created, but its first message was not confirmed. Your instructions are kept with this task. Review its conversation before retrying. ' + (error as Error).message
+      : 'Task creation was not confirmed. Refresh the board before trying again. ' + (error as Error).message;
+  } finally {
+    if (access === accessGeneration) {
+      await readConversation(++generation, access);
+      if (access === accessGeneration) { state.workspaceBusy = false; await refresh(); }
+    }
+  }
+  return access === accessGeneration ? { sessionId, queued } : { queued: false };
+}
 export async function request(path: string, method = 'GET', body?: unknown) {
   const access = accessGeneration;
   const response = await fetch(path, { method, credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(10000), headers: { 'X-Werk-Request': 'webview', ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });

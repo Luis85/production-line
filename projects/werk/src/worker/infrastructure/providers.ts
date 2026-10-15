@@ -5,7 +5,7 @@ import { access } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { delimiter, isAbsolute, join } from 'node:path';
 import type { ChatMessage } from '../application/conversation.js';
-import { classifyProviderStatus, legacyModelReply, modelCapabilities, parseModelResult, ProviderModelError, requireModelRequest, type ModelRequest, type ModelResult, type StructuredModel } from '../application/model-contract.js';
+import { classifyProviderStatus, legacyModelReply, observeModelInvocation, modelCapabilities, parseModelResult, ProviderModelError, requireModelRequest, type ModelRequest, type ModelResult, type StructuredModel } from '../application/model-contract.js';
 import { CodexConversationModel } from './conversation.js';
 import { providerCommand } from './codex-adapter.js';
 import { ensureDirectory } from './journal/files.js';
@@ -31,8 +31,9 @@ export function modelFor(saved: ProviderConnection, directory: string, transport
     reply(messages: ChatMessage[], signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void) { return legacyModelReply(model, messages, signal, onUsage); },
     async execute(request: ModelRequest, signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void): Promise<ModelResult> {
       requireModelRequest(request, connection.id);
-      if (connection.id === 'claude-cli') return claudeReply(connection, directory, request, signal, onUsage);
-      return apiReply(connection, request, signal, transport, onUsage);
+      return observeModelInvocation(signal, onUsage, observe => connection.id === 'claude-cli'
+        ? claudeReply(connection, directory, request, signal, observe)
+        : apiReply(connection, request, signal, transport, observe));
     }
   };
   return model;

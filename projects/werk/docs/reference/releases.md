@@ -68,10 +68,48 @@ There is no automatic update command. Follow [upgrade and backup](../how-to/upgr
 The complete distribution is the unit of installation; do not copy only a CLI
 file and discard its shared code, dependencies, assets or runtime helpers.
 
+## Illustrated Storybook and storymaps
+
+Every qualified release also provides `werk-storybook-<version>.zip` and
+`STORYBOOK-SHA256SUMS`. Download both from the same release, compare the ZIP's
+SHA-256 with its exact checksum entry, then extract it into a new directory.
+The separate checksum file covers the visual documentation; `SHA256SUMS` remains
+reserved for the runtime archives and installer.
+
+Open `werk-storybook-<version>/storymap/index.html` for the illustrated system
+journeys and component inventory. It links desktop and mobile screenshots to the
+story and source element that produced them. To use the interactive Storybook,
+serve the extracted directory with a local static HTTP server and open its root
+`index.html`. This documentation archive is independent of the installed runtime
+and contains no provider credentials or running worker state.
+
+The embedded `storymap/qualification.json` identifies the package version, Git
+commit, source digest, component coverage, screenshot count and file hashes.
+Screenshots use deterministic simulation fixtures, so they establish UI coverage
+and behavior, not live-provider or deployment qualification. Publication requires
+all inventoried Vue elements to render in qualified stories, successful desktop
+and mobile captures, and no capture errors. Packaging rejects stale source or
+revision evidence, incomplete coverage, changed or unqualified output files,
+unsafe paths and symlinks.
+
+After release publication, the same qualified site is deployed to the repository's
+[GitHub Pages](https://luis85.github.io/production-line/), with the illustrated map
+at [/storymap/](https://luis85.github.io/production-line/storymap/). Both stable and
+prerelease publications refresh the hosted site. See the
+[one-time Pages setup and retry procedure](../how-to/generate-storybook.md#host-release-documentation-on-github-pages).
+Pull requests and manual branch runs do not deploy. The Pages job has its own
+status: a failed deployment leaves the previous site and the published release
+available.
+
 ## Maintainer build contract
 
-In the source checkout only, `npm run release:build` builds the applications and
-packages them. `npm run release:package` packages already-built distributions.
+In the source checkout only, install the locked browser with
+`npm exec -- playwright install --with-deps chromium`, then run
+`npm run release:build` to build and package the applications and qualified
+Storybook. `npm run release:package` packages already-built runtime distributions.
+`npm run storybook:ci` rebuilds the static Storybook and captures its stories;
+`npm run release:storybook` validates and packages that evidence separately.
+
 Use the source project's checks and fresh-extraction smoke tests before publishing.
 These commands are not required or available as an installation step in the lean
 release. Platform/runtime claims must match the checks actually performed for
@@ -85,6 +123,7 @@ installation jobs. Publication requires every gate:
 
 | Gate | Environment and acceptance |
 | --- | --- |
+| Storybook | Linux Chromium; source-derived component inventory, mounted-story coverage, system journeys, desktop/mobile screenshots, clean browser checks and integrity-bound documentation archive |
 | Native | Linux, macOS and Windows; both archive formats verified, standalone installer download over a local HTTP fixture, checksum verification and fresh extraction, first simulated task, isolated multi-line system, graceful stop and persistent restart |
 | Docker | Linux; single-line and whole-system launchers without host Node on the launcher PATH, readiness, simulated tasks and persistent restart |
 | Cloud-init | Ubuntu 24.04 x86_64 VM under QEMU; actual cloud-init boot, authenticated readiness, non-root service, private state, read-only release, loopback listeners, guide page, simulated task evidence and systemd stop/restart |
@@ -134,12 +173,16 @@ manual branch runs qualify candidates without publishing.
 3. Watch **Actions → Werk release**. The tag must match `package.json`, use a
    three-part version (optionally with a prerelease suffix), and point to a
    commit contained in `main`. Build, full checks, dependency audit, native
-   Linux/macOS/Windows, Docker and cloud-init VM qualification must all pass.
+   Linux/macOS/Windows, Docker, cloud-init VM and Storybook qualification must all pass.
 4. The publishing job uses GitHub's automatic `GITHUB_TOKEN` with `contents: write`.
-   No separate release secret is required. It uploads both archives, `install.mjs`
-   and `SHA256SUMS` to a draft, then publishes it. Stable versions are marked
+   No separate release secret is required. It uploads both runtime archives,
+   `install.mjs`, `SHA256SUMS`, the versioned Storybook ZIP and
+   `STORYBOOK-SHA256SUMS` to a draft, then publishes it. Stable versions are marked
    latest; versions such as `0.2.0-rc.1` are prereleases and never replace latest.
    Release notes include download/start commands.
+5. The **Publish released Storybook to GitHub Pages** job deploys the qualified
+   site after publication. Complete the one-time Pages setup linked above before
+   the first tag release; the **github-pages** environment reports its URL.
 
 The latest stable link intentionally does not change on every merge. Only tag a
 stable version that should become the new latest release; use prerelease tags

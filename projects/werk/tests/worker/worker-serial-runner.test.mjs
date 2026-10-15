@@ -25,16 +25,31 @@ test('configuration and direct runner reject multiple execution slots before own
 test('remote execution shares the session gate, retains waiting leases while paused, and records task evidence', { timeout: 30000 }, async t => {
   const directory = await mkdtemp(join(tmpdir(), 'werk-serial-runner-')), stop = new AbortController();
   const config = await configuration({ profiles: 'codex', 'poll-ms': '100', 'mock-ms': '1', 'retain-acknowledged-pairs': '0' });
-  let workspace, releaseChat, run, completed = false, executions = 0, renewals = 0;
+  let workspace, releaseChat, run, completed = false, executions = 0, renewals = 0, startupElapsed = 0;
+  const now = () => Date.now() + startupElapsed;
   const originalInit = WorkerWorkspace.prototype.init;
-  WorkerWorkspace.prototype.init = async function () { await originalInit.call(this); workspace = this; releaseChat = await this.executor.acquire('default', stop.signal); };
+  WorkerWorkspace.prototype.init = async function () {
+    await originalInit.call(this);
+    // Startup may outlast a short lease on CI; advance the injected clock without sleeping.
+    startupElapsed = 60000;
+    workspace = this; releaseChat = await this.executor.acquire('default', stop.signal);
+  };
   t.after(async () => { stop.abort(); releaseChat?.(); await run; WorkerWorkspace.prototype.init = originalInit; await rm(directory, { recursive: true, force: true }); });
-  const task = { id: 'serial-task', project: 'alpha', title: 'Keep the actual request', criteria: ['Record the outcome'], wikilinks: [], provider: 'codex', priority: 1, status: 'running', attempt: 1, workerId: 'worker-one', lease: 'serial-lease', expiresAt: Date.now() + 1500, createdAt: Date.now(), profile: config.profiles[0].id };
+  const task = { id: 'serial-task', project: 'alpha', title: 'Keep the actual request', criteria: ['Record the outcome'], wikilinks: [], provider: 'codex', priority: 1, status: 'running', attempt: 1, workerId: 'worker-one', lease: 'serial-lease', createdAt: now(), profile: config.profiles[0].id };
   let claimed = false;
-  const client = { async currentAssignments() { return claimed && !completed ? [task] : []; }, async claim() { if (claimed) return null; claimed = true; return task; }, async heartbeat() { renewals++; task.expiresAt = Date.now() + 1500; return task; }, async publishSnapshot() {}, async complete() { completed = true; }, async abandon() { completed = true; } };
+  const client = {
+    async currentAssignments() { return claimed && !completed ? [task] : []; },
+    async claim() {
+      if (claimed) return null;
+      // The orchestrator starts a lease when assigning work, after worker startup.
+      task.expiresAt = now() + 1500; claimed = true; return task;
+    },
+    async heartbeat() { renewals++; task.expiresAt = now() + 1500; return task; },
+    async publishSnapshot() {}, async complete() { completed = true; }, async abandon() { completed = true; },
+  };
   const gateway = { async register(profiles, policy) { assert.equal(policy.maxParallel, 1); return { id: 'worker-one', token: 'fixture-token', project: 'alpha' }; }, connect() { return client; } };
   const adapter = { mode: 'mock', async run() { executions++; assert.equal(workspace.executor.current, 'remote-serial-task'); return { kind: 'simulated', summary: 'Actual simulation' }; } };
-  run = runWorker({ ...config, stateDir: directory, url: 'http://orchestrator.invalid', enrollmentToken: 'fixture-enrollment', statusHost: '127.0.0.1', statusPort: 0 }, stop.signal, { gateway, adapter });
+  run = runWorker({ ...config, stateDir: directory, url: 'http://orchestrator.invalid', enrollmentToken: 'fixture-enrollment', statusHost: '127.0.0.1', statusPort: 0 }, stop.signal, { gateway, adapter, now });
   await until(() => workspace && claimed); await until(() => renewals >= 3); assert.equal(executions, 0, 'another task owns the shared execution slot');
   await workspace.settings.update({ board: { paused: true } }); releaseChat(); releaseChat = undefined;
   const before = renewals; await until(() => renewals > before); assert.equal(executions, 0, 'paused remote task retains its lease without starting');

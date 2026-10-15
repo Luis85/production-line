@@ -37,7 +37,7 @@ const chatTasks = computed(() => allChatTasks.value.filter(item =>
   [item.title, item.taskId, item.provider].join(' ').toLowerCase().includes(chatSearch.value.trim().toLowerCase())
 ).slice().sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)));
 function clearChatFilters() { chatSearch.value = ''; chatStatus.value = 'all'; chatArchive.value = 'all'; taskKind.value = 'all'; }
-async function openChat(id: string) { if (opening.value) return; opening.value = id; try { if (await workspaceAction('/api/sessions', { action: 'select', id })) await router.push('/chat'); } finally { opening.value = ''; } }
+async function openChat(id: string) { if (opening.value) return; opening.value = id; try { if (await workspaceAction('/api/sessions', { action: 'select', id })) await router.push({ path: '/taskboard', query: { session: id } }); } finally { opening.value = ''; } }
 const search = ref(''), filter = ref('all'), page = ref(1), selectedId = ref('');
 let inspectTrigger: HTMLElement | null = null;
 async function closeEvidence() {
@@ -84,7 +84,7 @@ watch(pages, value => { page.value = Math.min(page.value, value); });
     <section v-if="state.unlocked" class="monitor-section" aria-labelledby="chat-history-title">
       <div class="section-heading">
         <h2 id="chat-history-title" tabindex="-1">Task conversations</h2>
-        <UButton to="/chat" color="neutral" variant="outline">Open Chat</UButton>
+        <UButton to="/taskboard" color="neutral" variant="outline">Open taskboard</UButton>
       </div>
       <p class="page-note">
         Find conversations from chat, file tasks and orchestrator assignments. Open one to read its
@@ -139,7 +139,7 @@ watch(pages, value => { page.value = Math.min(page.value, value); });
           {{
             allChatTasks.length
               ? 'No conversations match these filters.'
-              : 'No saved conversations yet. Start with New task in Chat.'
+              : 'No saved conversations yet. Start with New task on the Taskboard.'
           }}
         </p>
         <UButton

@@ -163,9 +163,54 @@ jobs:
           path: ${{ runner.temp }}/werk-vm-qualification.json
           if-no-files-found: warn
           retention-days: 7
+  storybook:
+    name: Storybook and screenshot qualification
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      STORYBOOK_DISABLE_TELEMETRY: '1'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ${{ env.FORGE_PROJECT_PATH }}/package-lock.json
+      - run: npm ci --ignore-scripts
+      - name: Install the locked browser version and system libraries
+        run: npm exec -- playwright install --with-deps chromium
+      - name: Build the code-derived stories and qualify every component screenshot
+        run: npm run storybook:ci
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: werk-storybook-release-evidence
+          path: ${{ env.FORGE_PROJECT_PATH }}/storybook-static/storymap/
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Package only the qualified Storybook from this source revision
+        run: npm run release:storybook
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: werk-storybook-candidate
+          path: |
+            ${{ env.FORGE_PROJECT_PATH }}/release/werk-storybook-*.zip
+            ${{ env.FORGE_PROJECT_PATH }}/release/STORYBOOK-SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload the qualified site for GitHub Pages
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          name: werk-storybook-pages
+          path: ${{ env.FORGE_PROJECT_PATH }}/storybook-static
+          retention-days: 7
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [ build, native, docker, cloud-init ]
+    needs: [ build, native, docker, cloud-init, storybook ]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -174,6 +219,10 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: werk-release-candidate
+          path: release
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: werk-storybook-candidate
           path: release
       - name: Publish all verified assets before making the release visible
         working-directory: .
@@ -196,6 +245,8 @@ jobs:
           The installer requires Node.js 24 and tar. It verifies its pinned archive checksum, preserves existing installations, and starts a local Factory with two simulated production lines. Ctrl+C stops the system. See the bundled README for credentials, Docker startup and operation.
 
           For this exact version, use the installer from /releases/download/v$RELEASE_VERSION/install.mjs instead of /releases/latest/download/install.mjs. Prereleases do not change latest.
+
+          Download \`werk-storybook-$RELEASE_VERSION.zip\` and \`STORYBOOK-SHA256SUMS\` for the code-derived component stories, system journeys and desktop/mobile screenshots from this exact source revision. After checksum verification and extraction, open \`storymap/index.html\` for the illustrated map. The interactive Storybook can be served from the extracted directory with a local static HTTP server. All examples use simulated fixtures; screenshots are not live-provider qualification.
           EOF
           # Failed uploads leave a draft; reruns may repair only that unpublished draft.
           if gh release view "v$RELEASE_VERSION" --json isDraft > existing-release.json 2>/dev/null; then
@@ -203,9 +254,57 @@ jobs:
           else
             gh release create "v$RELEASE_VERSION" --verify-tag --draft --title "Werk $RELEASE_VERSION" --notes-file release-notes.md
           fi
-          gh release upload "v$RELEASE_VERSION" "release/werk-$RELEASE_VERSION.tar.gz" "release/werk-$RELEASE_VERSION.zip" release/install.mjs release/SHA256SUMS --clobber
+          gh release upload "v$RELEASE_VERSION" "release/werk-$RELEASE_VERSION.tar.gz" "release/werk-$RELEASE_VERSION.zip" release/install.mjs release/SHA256SUMS "release/werk-storybook-$RELEASE_VERSION.zip" release/STORYBOOK-SHA256SUMS --clobber
           if [[ "$RELEASE_VERSION" == *-* ]]; then
             gh release edit "v$RELEASE_VERSION" --draft=false --prerelease --latest=false --notes-file release-notes.md
           else
             gh release edit "v$RELEASE_VERSION" --draft=false --prerelease=false --latest --notes-file release-notes.md
           fi
+  pages:
+    name: Publish released Storybook to GitHub Pages
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [ publish, storybook ]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # Keep deployment in this workflow: releases made by GITHUB_TOKEN do not
+      # trigger a separate release-event workflow. Never rebuild after qualification.
+      - name: Keep retries from replacing a newer published release
+        id: freshness
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          RELEASES=$(gh api --paginate "repos/$GH_REPO/releases?per_page=100" --jq '.[] | select(.draft == false)')
+          CURRENT_TAG=$(jq -s -e -r --arg tag "$RELEASE_TAG" '
+            if length > 0 and any(.tag_name == $tag)
+            then max_by([.published_at, .id]).tag_name
+            else error("Published release is missing from the repository response") end
+          ' <<< "$RELEASES")
+          if [[ "$CURRENT_TAG" == "$RELEASE_TAG" ]]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping Pages for $RELEASE_TAG because $CURRENT_TAG was published more recently."
+          fi
+      - name: Check GitHub Pages configuration
+        if: steps.freshness.outputs.current == 'true'
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - name: Deploy the exact qualified release site
+        if: steps.freshness.outputs.current == 'true'
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+        with:
+          artifact_name: werk-storybook-pages
