@@ -1,4 +1,4 @@
-import { Lexer, type Token } from 'marked';
+import { Lexer, Tokenizer, type Token } from 'marked';
 import { parseModelResult } from './model-contract.js';
 // Pure transcript formatting shared by the worker runtime and its webview.
 // Model protocol replies stay unchanged in interaction evidence; the conversation shows a readable view.
@@ -49,61 +49,61 @@ function protectToken(token: string) {
   return (wrapped?.[1] ?? "") + codeSpan(inner) + (wrapped?.[1] ?? "") + tail;
 }
 
-function protectedInline(token: Token, depth = 0): boolean {
-  if (depth >= 8) return true;
-  if (['codespan', 'link', 'image', 'html', 'escape'].includes(token.type)) return true;
-  // Preserve authored emphasis containing code or links as one unit.
-  return 'tokens' in token && Array.isArray(token.tokens) && token.tokens.some(child => protectedInline(child, depth + 1));
-}
-function protectLine(line: string) {
-  // The shared renderer uses this same Markdown lexer. Preserve syntax-bearing spans,
-  // then protect prose as a whole so a glob misread as emphasis can still be repaired.
-  let tokens: Token[];
-  try { tokens = new Lexer({ gfm: true }).inlineTokens(line); }
-  catch { return line; }
-  let output = '', prose = '';
-  for (const token of tokens) {
-    if (protectedInline(token)) { output += prose.replace(pathCharacters, protectToken) + token.raw; prose = ''; }
-    else prose += token.raw;
-  }
-  return output + prose.replace(pathCharacters, protectToken);
+function protectedInline(token: Token) {
+  return ['codespan', 'link', 'image', 'html', 'escape', 'br'].includes(token.type);
 }
 
-const blockLine = /^\s{0,3}(?:[-*+]\s|\d{1,9}[.)]\s|#{1,6}\s|>|\||(?:-{3,}|={3,}|\*{3,}|_{3,})\s*$)/;
+function protectProse(prose: string, offset: number, source: string) {
+  return prose.replace(/\n/g, (newline, index: number) => {
+    const position = offset + index;
+    const line = source.slice(source.lastIndexOf('\n', position - 1) + 1, position);
+    const nextEnd = source.indexOf('\n', position + 1);
+    const next = source.slice(position + 1, nextEnd < 0 ? source.length : nextEnd);
+    return line.trim() && next.trim() && !/(?: {2}|\\)$/.test(line) ? '  \n' : newline;
+  }).replace(pathCharacters, protectToken);
+}
+
+function protectInline(tokens: Token[], source: string) {
+  let output = '', prose = '', offset = 0;
+  const flush = () => { output += protectProse(prose, offset - prose.length, source); prose = ''; };
+  for (const token of tokens) {
+    if (protectedInline(token)) { flush(); output += token.raw; }
+    else prose += token.raw;
+    offset += token.raw.length;
+  }
+  flush();
+  return output;
+}
+
+function protectBlock(token: Token) {
+  // Containers may hold nested code or reference definitions. Preserve their authored Markdown.
+  if ((token.type !== 'paragraph' && token.type !== 'heading') || !('tokens' in token) || !Array.isArray(token.tokens)) return token.raw;
+  const source = token.tokens.map(child => child.raw).join('');
+  if (!source || !('text' in token) || source !== token.text) return token.raw;
+  const start = token.raw.indexOf(source);
+  // Only replace an exact, unambiguous inline source; keep heading markers and trailing whitespace.
+  if (start < 0 || start !== token.raw.lastIndexOf(source)) return token.raw;
+  return token.raw.slice(0, start) + protectInline(token.tokens, source) + token.raw.slice(start + source.length);
+}
 
 /**
- * Model-written Markdown for a transcript: file paths and globs such as `src/**\/*.spec.ts`
- * become code spans instead of emphasis, and single line breaks inside prose are kept.
- * Fenced code blocks are left untouched.
+ * Format prose paths and soft line breaks using the document's resolved inline tokens.
+ * Authored code, links and block containers remain untouched, including nested fences.
  */
 export function readableMarkdown(value: string) {
-  const lines = value.replace(/\r\n?/g, "\n").split("\n");
-  let fence: string | null = null;
-  return lines
-    .map((line, index) => {
-      const marker = /^\s{0,3}(`{3,}|~{3,})/.exec(line)?.[1];
-      if (fence) {
-        if (marker && marker[0] === fence[0] && marker.length >= fence.length && /^\s{0,3}(?:`+|~+)\s*$/.test(line)) fence = null;
-        return line;
-      }
-      if (marker) {
-        fence = marker;
-        return line;
-      }
-      // Indented code and reference definitions are authored Markdown, not prose.
-      if (/^(?: {4}|\t)|^\s{0,3}\[[^\]]+\]:/.test(line)) return line;
-      const next = lines[index + 1];
-      const hardBreak =
-        line.trim() &&
-        next?.trim() &&
-        !blockLine.test(line) &&
-        !blockLine.test(next) &&
-        !/^(?: {4}|\t)/.test(next) &&
-        !/^\s{0,3}(`{3,}|~{3,})/.test(next) &&
-        !/(?: {2}|\\)$/.test(line);
-      return protectLine(line) + (hardBreak ? "  " : "");
-    })
-    .join("\n");
+  // Match the shared Markdown renderer’s literal fallback before invoking the lexer.
+  if (value.length > 32768) return value;
+  const source = value.replace(/\r\n?/g, '\n');
+  // This pass preserves emphasis delimiters as prose. Letting globs form emphasis
+  // can swallow later authored code spans before we have a chance to protect them.
+  const tokenizer = new Tokenizer();
+  tokenizer.emStrong = () => undefined;
+  tokenizer.del = () => undefined;
+  let tokens: Token[];
+  try { tokens = new Lexer({ gfm: true, tokenizer }).lex(source); }
+  catch { return source; }
+  if (tokens.map(token => token.raw).join('') !== source) return source;
+  return tokens.map(protectBlock).join('');
 }
 
 function lineList(value: string) {

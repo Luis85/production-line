@@ -138,3 +138,64 @@ test('ordinary and implementation prose render literal globs without changing st
     assert.doesNotMatch(html, /Changed files|patch is saved/);
   }
 });
+
+test('nested quoted and list code blocks retain their authored Markdown exactly', () => {
+  const authored = [
+    '> ```ts\n> const glob = "src/**/*.ts";\n> nextLine();\n> ```',
+    '> Outer quote\n>\n> > ~~~text\n> > src/**/*.ts\n> > ../docs/**/*.md\n> > ~~~',
+    '- Example\n  ```ts\n  const glob = "src/**/*.ts";\n  nextLine();\n  ```\n- Done',
+    '1. Example\n   > ```ts\n   > src/**/*.ts\n   > nextLine();\n   > ```',
+    '- Example\n\n      const glob = "src/**/*.ts";\n      nextLine();\n',
+    '> ```ts\n> src/**/*.ts\n> unfinished();',
+  ];
+  for (const text of authored) assert.equal(readableMarkdown(text), text);
+});
+
+test('multiline code spans preserve literal newlines while adjacent prose keeps readable breaks', async () => {
+  const literal = '\x60\x60first\n\x60src/**/*.ts\nlast\x60\x60';
+  const source = 'Before ' + literal + ' after.\nNext tests/**/*.ts.\n[guide](docs/guide.md)\nFinal line.';
+  const formatted = 'Before ' + literal + ' after.  \nNext `tests/**/*.ts`.  \n[guide](docs/guide.md)  \nFinal line.';
+  assert.equal(readableMarkdown(source), formatted);
+  assert.equal(readableMarkdown(formatted), formatted, 'Formatting must be idempotent across token boundaries.');
+  const html = await render(formatted);
+  assert.match(html, /<code>first \x60src\/\*\*\/\*\.ts last<\/code>/);
+  assert.match(html, /after\.<br>Next <code>tests\/\*\*\/\*\.ts<\/code>\.<br><span>guide<\/span><br>Final line\./);
+});
+
+test('reference links and their definitions resolve together without changing authored labels or destinations', async () => {
+  const authored = [
+    'Read [src/**/*.ts][guide].\n\n[guide]: ../docs/**/*.md "Docs"\n',
+    '[src/**/*.ts][]\n\n[src/**/*.ts]: ../docs/**/*.md\n',
+    'Use [src/**/*.ts].\n\n[src/**/*.ts]: ../docs/**/*.md\n',
+    '![src/**/*.svg][diagram]\n\n[diagram]: ../assets/**/*.svg\n',
+    '[guide]:\n  <../docs/**/*.md>\n  "Reference title"\n\n[the guide][guide]\n',
+  ];
+  for (const text of authored) assert.equal(readableMarkdown(text), text);
+  const source = 'Read [src/**/*.ts][guide] and tests/**/*.ts.\n\n[guide]: https://example.com/docs/**/*.md "Docs"\n';
+  const formatted = 'Read [src/**/*.ts][guide] and `tests/**/*.ts`.\n\n[guide]: https://example.com/docs/**/*.md "Docs"\n';
+  assert.equal(readableMarkdown(source), formatted);
+  assert.match(await render(formatted), /href="https:\/\/example.com\/docs\/\*\*\/\*\.md"[^>]*title="Docs">src\/\*\*\/\*\.ts<\/a>/);
+});
+
+test('heading syntax and authored hard breaks survive prose glob repair across emphasis tokens', () => {
+  const source = '  ## Review src/**/*.ts and tests/**/*.spec.ts  ##\n\nFirst src/**/*.ts  \nSecond tests/**/*.ts\\\nThird src/**/*.tsx\nFourth line.\n';
+  const formatted = '  ## Review `src/**/*.ts` and `tests/**/*.spec.ts`  ##\n\nFirst `src/**/*.ts`  \nSecond `tests/**/*.ts`\\\nThird `src/**/*.tsx`  \nFourth line.\n';
+  assert.equal(readableMarkdown(source), formatted);
+  assert.equal(readableMarkdown(formatted), formatted);
+  assert.equal(readableMarkdown('Title src/**/*.ts\n===\n'), 'Title `src/**/*.ts`\n===\n');
+});
+
+
+test('long assistant replies retain the renderer’s bounded literal fallback', async () => {
+  const source = ('Review src/**/*.ts and **literal** <script>example()</script>\r\n').repeat(700);
+  assert.ok(source.length > 32768);
+  assert.equal(readableMarkdown(source), source, 'Oversized text is returned unchanged before Markdown preprocessing.');
+  for (const context of [{}, { fileTask: 'implementation' }]) {
+    const reply = readableReply(source, context);
+    assert.deepEqual(reply, { kind: 'text', text: source });
+    const html = await render(reply.text);
+    assert.match(html, /class="markdown-literal"/);
+    assert.match(html, /&lt;script&gt;example\(\)&lt;\/script&gt;/);
+    assert.doesNotMatch(html, /<(?:code|strong|script)\b/);
+  }
+});

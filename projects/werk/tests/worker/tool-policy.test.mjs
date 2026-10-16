@@ -170,3 +170,20 @@ test('required feature checks are explicit, validated and survive a saved policy
   const definitions = Array.from({ length: 58 }, (_, i) => ({ ...definition, name: 'reserved_' + i }));
   assert.throws(() => validateToolPolicy({ ...required, mcp: [{ ...httpConnection(), secret: '', discoveredTools: definitions, allowedTools: definitions.map(item => item.name) }] }), /at most 64/, 'reserve the three candidate tools alongside file and command tools');
 });
+
+
+test('tool API keeps invocation budgets separate and saves, preserves or clears per-grant deadlines', async t => {
+  const f = await workspace(t); await f.worker.updateSettings({ board: { paused: true } });
+  const before = structuredClone(f.worker.settings.value.execution);
+  const command = { id: 'unit-tests', name: 'Unit tests', executable: process.execPath, args: ['--version'], enabled: true, verification: true, timeoutMs: 600000 };
+  const request = timeoutMs => ({ ...edit(f.worker.settings.toolPolicy()), builtins: { ...defaultToolPolicy().builtins, commands: [{ ...command, timeoutMs }] } });
+  const rejected = await f.api('/api/tool-access', request(3600001));
+  assert.equal(rejected.status, 400); assert.match(rejected.value.error, /timeout.*1000 to 3600000/);
+  const saved = await f.api('/api/tool-access', request(600000));
+  assert.equal(saved.status, 200); assert.equal(saved.value.builtins.commands[0].timeoutMs, 600000); assert.equal(saved.value.builtins.commands[0].verification, true);
+  assert.equal(saved.value.limits, undefined); assert.deepEqual(f.worker.settings.value.execution, before);
+  const oldClient = request(undefined); delete oldClient.builtins.commands[0].timeoutMs;
+  assert.equal((await f.api('/api/tool-access', oldClient)).value.builtins.commands[0].timeoutMs, 600000);
+  const cleared = await f.api('/api/tool-access', request(null)); assert.equal(cleared.status, 200); assert.equal('timeoutMs' in cleared.value.builtins.commands[0], false);
+  assert.equal(f.worker.capabilities().toolAccess.executionLimits, 'operator_configured_per_grant');
+});

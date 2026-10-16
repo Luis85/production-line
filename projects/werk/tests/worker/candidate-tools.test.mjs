@@ -25,7 +25,7 @@ async function fixture(t, options = {}) {
   const prepared = await createRepositoryWorktree(base, 'project', 'candidate', signal());
   const info = await lstat(prepared.path), identity = { dev: String(info.dev), ino: String(info.ino), birthtimeMs: info.birthtimeMs };
   let policy = defaultToolPolicy();
-  policy.builtins.files = true; policy.builtins.commands = [{ id: 'test', name: 'Project tests', executable: process.execPath, args: ['test.mjs'], enabled: true, verification: true }]; policy = validateToolPolicy(policy);
+  policy.builtins.files = true; policy.builtins.commands = [{ id: 'test', name: 'Project tests', executable: process.execPath, args: ['test.mjs'], enabled: true, verification: true, ...(options.presetTimeout === undefined ? {} : { timeoutMs: options.presetTimeout }) }]; policy = validateToolPolicy(policy);
   const scope = freezeDevelopmentScope(prepared.baseCommit, ['sum.mjs', 'remove.txt', 'new/notes.txt', 'empty.txt'], policy);
   let saved, rejectSave = false;
   const checkpoints = [];
@@ -34,7 +34,7 @@ async function fixture(t, options = {}) {
     verifyWorkspace: async abort => { const value = await createRepositoryWorktree(base, 'project', 'candidate', abort, prepared.baseCommit); assert.equal(value.path, prepared.path); assert.equal(value.reused, true); },
   });
   let candidate = create();
-  const broker = createToolRuntime({ policy, currentRevision: () => policy.revision, directory, worktree: prepared.path, worktreeIdentity: identity, development: candidate }); cleanup(t, () => broker.close());
+  const broker = createToolRuntime({ policy, currentRevision: () => policy.revision, directory, worktree: prepared.path, worktreeIdentity: identity, development: candidate, commandTimeoutMs: options.timeout ?? 10000 }); cleanup(t, () => broker.close());
   return { directory, repository, worktree: prepared.path, scope, identity, broker, checkpoints, get candidate() { return candidate; }, get saved() { return saved; }, get policy() { return policy; }, restart() { candidate = create(); }, failWrites() { rejectSave = true; }, revoke() { policy.builtins.files = false; policy.revision++; } };
 }
 async function apply(f, path, content) { const snapshot = await f.candidate.capture(signal()); return f.candidate.apply({ path, content, expectedHash: snapshot.files.find(file => file.path === path).hash }, signal()); }
@@ -192,4 +192,21 @@ test('required checks invoked through the generic command tool replace the same 
   const passed = await f.broker.call('werk_command_run', { preset: 'test' }, signal());
   assert.equal(passed.isError, undefined); assert.equal(unpack(passed).status, 'passed');
   assert.equal(f.saved.checks.length, 1); assert.equal(developmentVerified(f.scope, await f.candidate.capture(signal()), f.saved), true);
+});
+
+
+test('both required-check tool names enforce the frozen preset deadline and retain failed receipts', { timeout: process.platform === 'win32' ? 240000 : 120000 }, async t => {
+  const f = await fixture(t, { timeout: 10000, presetTimeout: 1000, script: 'setInterval(() => {}, 1000);' });
+  assert.equal(f.scope.checks[0].timeoutMs, 1000);
+  assert.equal(f.broker.manifest.limits.callTimeoutMs.werk_candidate_check, 1000);
+  assert.equal(f.broker.manifest.limits.presetTimeoutMs.test, 1000);
+  for (const name of ['werk_candidate_check', 'werk_command_run']) {
+    const result = await f.broker.call(name, { preset: 'test' }, signal());
+    assert.equal(result.isError, true); const receipt = unpack(result);
+    assert.equal(receipt.status, 'failed'); assert.match(receipt.stderr, /Verification stopped: timeout/);
+    assert.equal(f.saved.checks.length, 1); assert.equal(f.saved.checks[0].presetFingerprint, f.scope.checks[0].fingerprint);
+    assert.equal(f.saved.checks[0].status, 'failed');
+  }
+  f.policy.builtins.commands[0].timeoutMs = 2000;
+  await assert.rejects(f.candidate.check('test', signal()), /verification grants changed/);
 });

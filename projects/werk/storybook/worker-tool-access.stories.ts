@@ -11,7 +11,7 @@ function render(configured = false, blocked = false) {
   return () => ({ setup() {
     const fixture = installWorkerFixture('empty');
     state.settings!.board.paused = !blocked;
-    state.toolAccess = { schemaVersion: 1, revision: configured ? 3 : 0, builtins: { files: configured, commands: configured ? [{ id: 'check-types', name: 'Check project types', executable: '/example/bin/npm', args: ['run', 'typecheck'], enabled: true }] : [], cliTools: configured ? [{ id: 'harness', name: 'Project harness', description: 'Reads the project backlog and runs project checks.', enabled: true, executable: '/example/bin/node', args: ['bin/harness.mjs'], commands: [{ command: 'help', requireOneOf: [], refusedOptions: [] }, { command: 'backlog context', requireOneOf: [], refusedOptions: [] }, { command: 'backlog set', requireOneOf: ['--dry-run'], refusedOptions: [] }, { command: 'eol', requireOneOf: [], refusedOptions: ['--fix'] }], refusedOptions: ['--root', '--config', '--out'], maxArgs: 24, maxArgLength: 500, outputKiB: 48, truncationHint: 'Narrow the command with --limit or --format summary.' }] : [], webOrigins: configured ? ['https://docs.example.com'] : [] }, mcp: configured ? [{ id: 'documentation', name: 'Project documentation', transport: 'http', enabled: true, command: '', args: [], url: 'https://tools.example.com/mcp', secretEnv: '', hasSecret: true, allowedTools: ['search_docs'], discoveredTools: [{ name: 'search_docs', description: 'Search the project documentation available to this server.', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } }, { name: 'publish_note', description: 'Publish a note to the documentation server. This tool is not granted.', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } }] }] : [], canEdit: !blocked, saveBlockedReason: blocked ? 'Pause new starts and finish or stop queued and running work before changing tool access.' : null, workerNode: '/example/bin/node' };
+    state.toolAccess = { schemaVersion: 1, revision: configured ? 3 : 0, builtins: { files: configured, commands: configured ? [{ id: 'check-types', name: 'Check project types', executable: '/example/bin/npm', args: ['run', 'typecheck'], enabled: true, verification: true, timeoutMs: 300000 }] : [], cliTools: configured ? [{ id: 'harness', name: 'Project harness', description: 'Reads the project backlog and runs project checks.', enabled: true, executable: '/example/bin/node', args: ['bin/harness.mjs'], commands: [{ command: 'help', requireOneOf: [], refusedOptions: [] }, { command: 'backlog context', requireOneOf: [], refusedOptions: [] }, { command: 'backlog set', requireOneOf: ['--dry-run'], refusedOptions: [] }, { command: 'eol', requireOneOf: [], refusedOptions: ['--fix'] }], refusedOptions: ['--root', '--config', '--out'], maxArgs: 24, maxArgLength: 500, outputKiB: 48, truncationHint: 'Narrow the command with --limit or --format summary.', timeoutMs: 600000 }] : [], webOrigins: configured ? ['https://docs.example.com'] : [] }, mcp: configured ? [{ id: 'documentation', name: 'Project documentation', transport: 'http', enabled: true, command: '', args: [], url: 'https://tools.example.com/mcp', secretEnv: '', hasSecret: true, timeoutMs: 30000, allowedTools: ['search_docs'], discoveredTools: [{ name: 'search_docs', description: 'Search the project documentation available to this server.', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } }, { name: 'publish_note', description: 'Publish a note to the documentation server. This tool is not granted.', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } }] }] : [], canEdit: !blocked, saveBlockedReason: blocked ? 'Pause new starts and finish or stop queued and running work before changing tool access.' : null, workerNode: '/example/bin/node' };
     const fetchFixture: typeof fetch = (input, init) => {
       const path = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, window.location.href).pathname;
       if (path.startsWith('/api/tool-access')) return Promise.resolve(init?.method === 'POST' ? Response.json({ error: 'Illustrative fixture. Runtime changes are disabled.' }, { status: 409 }) : Response.json(state.toolAccess));
@@ -65,6 +65,53 @@ export const IncompleteCliGuard: Story = {
     const submit = canvasElement.querySelector<HTMLButtonElement>('.tool-save-actions button[type="submit"]');
     if (!error.textContent?.trim() || !submit?.disabled) throw Error('An incomplete CLI command guard must block saving with an explanation.');
     if (commands.value !== 'backlog set requires') throw Error('Invalid command guards must remain visible for correction.');
+    await ready({ canvasElement });
+  },
+};
+
+
+export const InheritedTimeouts: Story = {
+  name: 'Restore inherited tool timeouts',
+  parameters: { storymap: storymap('Blank timeout overrides restore the saved command cap or the 30-second MCP default. Clearing a timeout changes no grant or required-check authority.') },
+  render: render(true),
+  play: async ({ canvasElement }) => {
+    (await element(canvasElement, '.cli-limits') as HTMLDetailsElement).open = true;
+    for (const id of ['#tool-command-timeout-0', '#cli-timeout-0', '#mcp-timeout-0']) {
+      const field = await element(canvasElement, id) as HTMLInputElement;
+      field.value = ''; field.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    await nextTick();
+    if (!(await element(canvasElement, '#tool-command-timeout-help-0')).textContent?.includes('Effective cap: 300 s')) throw Error('A blank command timeout must inherit the saved command cap.');
+    if (!(await element(canvasElement, '#mcp-timeout-help-0')).textContent?.includes('Effective cap: 30 s')) throw Error('A blank MCP timeout must inherit 30 seconds.');
+    if (canvasElement.querySelector('#tool-window')) throw Error('Tool access must not introduce another invocation window.');
+    await ready({ canvasElement });
+  },
+};
+export const CappedTimeoutOverride: Story = {
+  name: 'Explain a shorter effective command cap',
+  parameters: { storymap: storymap('A per-command override cannot extend the saved worker command cap. MCP calls use their own override, and remaining invocation time can shorten either call.') },
+  render: render(true),
+  play: async ({ canvasElement }) => {
+    const field = await element(canvasElement, '#tool-command-timeout-0') as HTMLInputElement;
+    field.value = '600'; field.dispatchEvent(new Event('input', { bubbles: true }));
+    const mcp = await element(canvasElement, '#mcp-timeout-0') as HTMLInputElement;
+    mcp.value = '45'; mcp.dispatchEvent(new Event('input', { bubbles: true }));
+    await nextTick();
+    if (!(await element(canvasElement, '#tool-command-timeout-help-0')).textContent?.includes('Effective cap: 300 s')) throw Error('The command override must remain bounded by the worker cap.');
+    if (!(await element(canvasElement, '#mcp-timeout-help-0')).textContent?.includes('Effective cap: 45 s')) throw Error('MCP must use its configured override.');
+    await ready({ canvasElement });
+  },
+};
+export const InvalidMcpTimeout: Story = {
+  name: 'Correct an invalid MCP timeout draft',
+  parameters: { storymap: storymap('An HTTP MCP timeout beyond five minutes remains visible as an invalid draft. Saving stays disabled until corrected.') },
+  render: render(true),
+  play: async ({ canvasElement }) => {
+    const field = await element(canvasElement, '#mcp-timeout-0') as HTMLInputElement;
+    field.value = '301'; field.dispatchEvent(new Event('input', { bubbles: true }));
+    await nextTick();
+    const error = await element(canvasElement, '.tool-access .error-text[role="status"]');
+    if (!error.textContent?.includes('1–300 seconds') || !canvasElement.querySelector<HTMLButtonElement>('.tool-save-actions button[type="submit"]')?.disabled || field.value !== '301') throw Error('An invalid MCP timeout must keep its draft and prevent saving.');
     await ready({ canvasElement });
   },
 };

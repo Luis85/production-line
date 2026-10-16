@@ -413,6 +413,7 @@ export class LocalTaskboard {
           reply: model.reply.bind(model),
           configuration: structuredClone(base.provider),
           toolManifest: (model as Partial<StructuredModel>).toolManifest,
+          toolManifestFor: (model as Partial<StructuredModel>).toolManifestFor?.bind(model),
           executionPolicy: (model as Partial<StructuredModel>).executionPolicy,
         }
       : model;
@@ -422,6 +423,7 @@ export class LocalTaskboard {
             reply: model.reply.bind(model),
             configuration: this.sessions.requests.get(task.requestId).provider,
             toolManifest: (model as Partial<StructuredModel>).toolManifest,
+            toolManifestFor: (model as Partial<StructuredModel>).toolManifestFor?.bind(model),
             executionPolicy: (model as Partial<StructuredModel>).executionPolicy,
           } as ConversationModel)
         : replayModel,

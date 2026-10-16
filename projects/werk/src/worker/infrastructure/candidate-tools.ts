@@ -10,7 +10,7 @@ import { assertDevelopmentPolicy, validateDevelopmentState } from '../applicatio
 import { validateApprovedPaths } from '../application/approved-paths.js';
 import { repositoryGit } from './repositories-git.js';
 import { syncDirectory } from './journal/files.js';
-import { DEFAULT_COMMAND_TIMEOUT_MS } from '../application/execution-policy.js';
+import { resolveCommandTimeoutMs } from '../application/tool-limits.js';
 
 export class CandidateToolError extends Error {}
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
@@ -203,7 +203,7 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
       let stdout: Buffer = Buffer.alloc(0), stderr: Buffer = Buffer.alloc(0), exitCode: number | null = null, stopped = '';
       try {
         authorize(signal); await rootIdentity();
-        const result = await runApprovedToolProcess(preset.executable, preset.args, { cwd: root, signal, timeoutMs: options.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS, maxOutputBytes: 32768 });
+        const result = await runApprovedToolProcess(preset.executable, preset.args, { cwd: root, signal, timeoutMs: resolveCommandTimeoutMs(options.commandTimeoutMs, preset.timeoutMs), maxOutputBytes: 32768 });
         ({ stdout, stderr, exitCode } = result);
       } catch (error) {
         stopped = error instanceof ProcessRunError ? error.reason : 'unavailable';

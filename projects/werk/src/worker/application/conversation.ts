@@ -544,6 +544,7 @@ export class WorkerConversation {
               ...this.model,
               configuration: prior.dispatch.provider,
               toolManifest: (this.model as Partial<StructuredModel>).toolManifest,
+              toolManifestFor: (this.model as Partial<StructuredModel>).toolManifestFor?.bind(this.model),
               executionPolicy: (this.model as Partial<StructuredModel>).executionPolicy,
             } as ConversationModel,
             messages,
@@ -580,6 +581,7 @@ export class WorkerConversation {
                 ...this.model,
                 configuration: ancestor.dispatch.provider,
                 toolManifest: (this.model as Partial<StructuredModel>).toolManifest,
+                toolManifestFor: (this.model as Partial<StructuredModel>).toolManifestFor?.bind(this.model),
               executionPolicy: (this.model as Partial<StructuredModel>).executionPolicy,
               } as ConversationModel)
             : this.model;
@@ -592,6 +594,7 @@ export class WorkerConversation {
                 ...this.model,
                 configuration: gateRequest.provider,
                 toolManifest: (this.model as Partial<StructuredModel>).toolManifest,
+                toolManifestFor: (this.model as Partial<StructuredModel>).toolManifestFor?.bind(this.model),
               executionPolicy: (this.model as Partial<StructuredModel>).executionPolicy,
               } as ConversationModel)
             : this.model,

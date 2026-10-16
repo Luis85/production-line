@@ -8,7 +8,7 @@ Use this workflow when an attached model should change project code, run your ch
 2. Configure an attached provider under **Settings → Providers & accounts**. For a CLI provider, sign in using the stock CLI on the worker machine. Provider availability and sign-in do not grant repository tools.
 3. Pause new starts and drain queued/running work. In **Settings → Tools & MCP**, enable task-worktree file access.
 4. Add a fixed command preset for each check the feature must pass. Use an absolute executable path and a JSON array of fixed arguments. Enable the preset and mark **Required feature check**, then save.
-5. Review **Settings → Queue & duration**. The total task limit defaults to six hours. Tool execution defaults to 128 calls and five minutes per command. Set limits appropriate for the project's check suite, then resume new starts.
+5. Review **Settings → Queue & duration**. The total task limit defaults to six hours. Tool execution defaults to 128 calls and five minutes per command. Set limits appropriate for the project's check suite. Optional command/CLI timeouts in **Tools & MCP** can shorten the global command ceiling; MCP connections have their own deadlines. Resume new starts after saving.
 
 For a Node project with committed tests, a preset might use the worker machine's absolute Node executable and arguments `["--test", "test/slug.test.mjs"]`. A project script can run the build, tests and lint checks as one command, returning nonzero when any required step fails. On Windows use the actual executable/interpreter, not a `.cmd` shell wrapper. Prepare dependencies inside the worktree environment; a clean worktree does not automatically contain your checkout's untracked packages.
 

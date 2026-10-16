@@ -194,14 +194,18 @@ operator defaults, not every saved worker setting.
 
 Execution settings also include `maxToolCalls` (default 128, integer 1–512) and
 `commandTimeoutMs` (default 300000, integer 1000–3600000). Policies saved without
-these fields use those defaults. The command timeout applies to fixed commands,
-CLI tools and required feature checks; the total `maxRuntimeMs` deadline can end
-them sooner. External MCP calls retain 30 seconds and web fetches 10 seconds.
+these fields use those defaults. The command ceiling applies to fixed commands,
+CLI tools and required feature checks; an optional per-grant timeout can shorten
+it. The total `maxRuntimeMs` deadline can end any operation sooner. External MCP
+calls default to 30 seconds with optional per-connection timeouts; web fetches
+retain 10 seconds.
 There is no independent two-minute tool window. The UI exposes these fields under
 **Settings → Queue & duration → Tool execution limits**.
 
-Each prepared invocation freezes its duration and tool budgets; edits affect
-subsequent invocations. This includes queued work and retained dispatches.
+Each prepared dispatch freezes its duration and tool budgets, including while
+queued or when execution uses that saved dispatch. A newly prepared follow-up,
+answer or resume attempt captures current execution settings; it does not rewrite
+the earlier dispatch or inherit its budget indefinitely.
 See [long-running worker operations](../how-to/monitor-long-running-worker.md) for
 monitoring scope, warning thresholds, shutdown and recovery.
 
@@ -434,6 +438,28 @@ record actual command outcomes; every required check must pass on the final
 candidate. Existing proposal tasks are not converted by changing grants. See
 [implement a feature](../how-to/implement-feature.md).
 
+Per-grant timeouts are optional whole milliseconds. There is no separate
+`limits.windowMs` tool-policy setting:
+
+| Field | Omitted on a new grant | Numeric range |
+| --- | --- | --- |
+| `builtins.commands[].timeoutMs` | Inherit the accepted `execution.commandTimeoutMs` | 1,000–3,600,000 |
+| `builtins.cliTools[].timeoutMs` | Inherit the accepted `execution.commandTimeoutMs` | 1,000–3,600,000 |
+| `mcp[].timeoutMs` | 30,000 | 1,000–900,000 for stdio; 1,000–300,000 for HTTP |
+
+Command/CLI/required-check deadlines are capped by the frozen global command
+ceiling. MCP deadlines are independent of that ceiling. All calls remain bounded
+by cancellation and the remaining total invocation duration.
+
+For updates, an absent `timeoutMs` preserves an existing override for the same
+ID; `null` clears it. Explicit numeric defaults remain saved. This preservation
+also applies when an MCP destination changes, while its secrets and discovered
+grants follow the separate destination identity rule. Changing to HTTP with a
+retained timeout above 300,000 requires a valid replacement or explicit reset.
+A required check's fingerprint includes its timeout override when present;
+changing that override does not silently rewrite an accepted verification plan.
+See [execution limits](../how-to/manage-model-tools.md#execution-limits).
+
 Each entry in `builtins.cliTools` describes one command-line tool the model may
 call with its own arguments in the task worktree:
 
@@ -448,6 +474,7 @@ call with its own arguments in the task worktree:
 | `refusedOptions` | Up to 32 option names refused for every command, such as `--root`. |
 | `maxArgs`, `maxArgLength` | Model argument bounds: default 24 (1–64) and 500 characters (1–2,048). |
 | `outputKiB`, `truncationHint` | Returned output limit, default 32 (1–64), and the hint appended to truncated output. |
+| `timeoutMs` | Optional deadline, 1,000–3,600,000 milliseconds, capped by the accepted global command ceiling. Omitted new values inherit that ceiling. |
 
 Absolute paths, `~`, `file:` URLs, `@file` paths, `..` segments, the `--`
 terminator and control characters in model arguments are always refused, including
@@ -458,11 +485,13 @@ confine its filesystem access. At most
 eight CLI tools may be configured; each enabled CLI tool counts toward the
 64-tool limit. Documents without `cliTools`, including those written by 0.9.0,
 grant none. An empty list is omitted from the saved document so 0.9.0 can read it.
-Before rolling back to 0.9.0, remove all CLI tool entries, clear verification marks
-and save tool access while running the current version. Disabling them leaves
-configuration the older version does not understand. Reset tool budgets to 128
-calls and 300000 milliseconds and save; default budget fields are omitted from
-the saved settings for compatibility. If retained task state is incompatible,
+Before rolling back to 0.9.0, remove all CLI tool entries, clear verification
+marks and clear every per-grant timeout with `timeoutMs: null`, then save tool
+access while running the current version. Disabling entries, omitting existing
+overrides or explicitly saving numeric defaults leaves configuration the older
+version does not understand. Reset global tool budgets to 128 calls and 300000
+milliseconds and save; those global default budget fields are omitted from saved
+workspace settings for compatibility. If retained task state is incompatible,
 restore the pre-upgrade stopped-state backup.
 
 Tool changes require paused, drained execution and the current policy revision.

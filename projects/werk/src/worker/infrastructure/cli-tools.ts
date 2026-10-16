@@ -1,7 +1,7 @@
 import { runApprovedToolProcess } from './tool-process.js';
 import { ProcessRunError, type RunResult } from '../../shared/process/launcher.js';
 import { checkCliArguments, CliArgumentError, type ToolCliTool } from '../application/cli-tool-policy.js';
-import { DEFAULT_COMMAND_TIMEOUT_MS, MAX_COMMAND_TIMEOUT_MS } from '../application/execution-policy.js';
+import { resolveCommandTimeoutMs } from '../application/tool-limits.js';
 
 /** Messages are worker-owned and safe to return to the model. */
 export class CliToolError extends Error {}
@@ -43,8 +43,8 @@ function report(tool: ToolCliTool, result: RunResult, stopped: string): string {
  * policy. No shell is involved; the process starts in the task worktree with a
  * minimal environment, a deadline and contained process-tree cancellation.
  */
-export async function runCliTool(tool: ToolCliTool, value: unknown, cwd: string, signal: AbortSignal, timeoutMs = DEFAULT_COMMAND_TIMEOUT_MS): Promise<{ text: string; isError: boolean }> {
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_COMMAND_TIMEOUT_MS) throw new CliToolError('Invalid command timeout.');
+export async function runCliTool(tool: ToolCliTool, value: unknown, cwd: string, signal: AbortSignal, commandTimeoutMs?: number): Promise<{ text: string; isError: boolean }> {
+  const timeoutMs = resolveCommandTimeoutMs(commandTimeoutMs, tool.timeoutMs);
   let args: string[];
   try { ({ args } = checkCliArguments(tool, value)); }
   catch (error) { if (error instanceof CliArgumentError) throw new CliToolError(error.message); throw error; }

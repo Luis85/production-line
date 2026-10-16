@@ -1,7 +1,7 @@
 <script lang="ts">
 import { createToolAccessEditor } from '../tool-access-editor';
 import { state as workerState, toolAccessAction, toolAccessDiscover, refresh } from '../store';
-const editor = createToolAccessEditor({ view: () => workerState.toolAccess, unlocked: () => workerState.unlocked, epoch: () => workerState.draftEpoch, write: toolAccessAction, discover: toolAccessDiscover, refresh });
+const editor = createToolAccessEditor({ view: () => workerState.toolAccess, unlocked: () => workerState.unlocked, epoch: () => workerState.draftEpoch, write: toolAccessAction, discover: toolAccessDiscover, refresh, commandTimeoutMs: () => workerState.settings?.execution.commandTimeoutMs, executionBudgetMs: () => workerState.settings?.execution.maxRuntimeMs });
 </script>
 <script setup lang="ts">
 import { computed, ref } from 'vue';
@@ -12,6 +12,7 @@ import UBadge from '@nuxt/ui/components/Badge.vue';
 import McpConnectionsEditor from './McpConnectionsEditor.vue';
 import CliToolsEditor from './CliToolsEditor.vue';
 import { state, workspaceAction } from '../store';
+import { toolLimitSeconds } from '../tool-access-editor';
 const { draft, dirty, stale, locked, validation, canSave } = editor;
 const view = computed(() => state.toolAccess), pausing = ref(false);
 const effective = computed(() => {
@@ -43,6 +44,7 @@ async function pause() {
             <UTextarea id="tool-web-origins" v-model="draft.webOrigins" :rows="3" placeholder="https://docs.example.com" class="w-full" aria-describedby="tool-web-help" />
             <p id="tool-web-help" class="page-note">An empty list disables web access. Granted origins allow bounded reads; redirects do not expand the allowed destinations.</p>
           </section>
+          <p class="page-note">Set the overall attempt duration, total tool calls and command limit in <RouterLink to="/settings#queue">Queue &amp; duration</RouterLink>. Set individual tool timeouts below. Command and CLI deadlines stay within the worker command limit; remaining attempt time applies to every call.</p>
           <section class="commands-section" aria-labelledby="command-presets-title">
             <div class="section-heading"><h3 id="command-presets-title">Command presets</h3><UButton type="button" color="neutral" variant="outline" icon="i-lucide-plus" :disabled="draft.commands.length >= 16" @click="editor.addCommand">Add command</UButton></div>
             <p class="page-note">Grant exact executable paths and fixed arguments. The model chooses a preset; it cannot supply a new command or extra arguments. Use a CLI tool below when the model needs to pass arguments.</p>
@@ -53,6 +55,8 @@ async function pause() {
               <div class="command-fields"><div><label :for="`tool-command-name-${index}`">Command name</label><UInput :id="`tool-command-name-${index}`" v-model="command.name" required maxlength="100" class="w-full" /></div><div><label :for="`tool-command-id-${index}`">Command ID</label><UInput :id="`tool-command-id-${index}`" v-model="command.id" required maxlength="64" class="w-full" /></div></div>
               <label :for="`tool-command-path-${index}`">Executable · absolute path</label><UInput :id="`tool-command-path-${index}`" v-model="command.executable" required placeholder="/absolute/path/to/executable" class="w-full" />
               <label :for="`tool-command-args-${index}`">Fixed arguments · JSON array</label><UTextarea :id="`tool-command-args-${index}`" v-model="command.arguments" :rows="2" placeholder='["--version"]' class="w-full" />
+              <label :for="`tool-command-timeout-${index}`">Timeout override · seconds, optional</label><UInput :id="`tool-command-timeout-${index}`" v-model.number="command.timeoutSeconds" type="number" min="1" :max="toolLimitSeconds.commandMax" step="0.001" placeholder="Inherit worker limit" class="w-full timeout-input" :aria-describedby="`tool-command-timeout-help-${index}`" />
+              <p :id="`tool-command-timeout-help-${index}`" class="page-note">{{ editor.timeoutNote(command.timeoutSeconds, 'command') }}</p>
               <label class="check-label"><input v-model="command.enabled" type="checkbox"> Allow models to run this command</label>
               <label class="check-label"><input v-model="command.verification" type="checkbox" :aria-describedby="`tool-command-check-help-${index}`"> Required feature check</label>
               <p :id="`tool-command-check-help-${index}`" class="page-note">When enabled, this check must pass on the current changes before a new implementation request is ready for review. Use a test, lint or build command that exits when finished. Disabling the command excludes it from new requests.</p>
@@ -83,6 +87,7 @@ h2, h3 { margin: 0; color: var(--ui-text-highlighted); } h3 { font-size: 1rem; f
 .builtins-section, .commands-section { display: grid; gap: 10px; padding-block: 24px; border-bottom: 1px solid var(--ui-border); margin-bottom: 24px; }
 .access-scope, .authority-note, .access-notice { padding: 14px; background: var(--ui-bg-elevated); border-left: 2px solid var(--ui-border-accented); font-size: .8125rem; line-height: 1.6; }
 .file-grant { align-items: start; gap: 12px; padding-block: 14px; }
+.timeout-input { max-width: 16rem; }
 .file-grant input { margin-top: 4px; }
 .file-grant span { display: grid; gap: 4px; }
 .file-grant span span { font-weight: 400; color: var(--ui-text-muted); line-height: 1.5; }

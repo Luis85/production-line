@@ -18,7 +18,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
   - `feature setup --if-match REVISION` replaces exactly that revision.
 - `state_write_error` service events name the failing writer in `site` and include an allowlisted system error code such as `EPERM` or `EBUSY`.
 - New repository requests can implement features in their isolated worktree: explicitly approved file edits, required verification commands, repair loops and review patches generated from the actual candidate. Check receipts are tied to the candidate and appear in the webview and Markdown records; legacy requests retain proposal behavior.
-- Configurable tool-call and command-duration budgets accompany the task duration, including API loops and the CLI MCP bridge.
+- Configurable tool-call and command-duration budgets accompany the task duration, including API loops and the CLI MCP bridge. Optional per-command, CLI-tool and MCP deadlines are managed in **Settings → Tools & MCP**; a shared resolver enforces them within the accepted attempt budget and records effective limits in the model dispatch.
 - Project CLI tool grants let the model pass arguments to an approved executable in its task worktree, within allowed commands, required flags, refused options and argument/output limits. Tools start disabled and run without a shell. Configure them in **Settings → Tools & MCP** or with `tool-access get|set`; `tool-access discover` reads saved MCP tool catalogs without granting access.
 - Every worker task has a Markdown feature-request record with its instructions, progress, questions and results. Follow-ups update the same record, with saved state and recoverable synchronization errors visible in the webview.
 - A dedicated worker Settings page with focused navigation for providers and accounts, queue capacity, task duration, consumption, tool and MCP access, repositories, shared intake, execution profiles, agent definitions, project integration and optional orchestrator enrollment.
@@ -35,6 +35,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Fixed
 
+- Tool deadline edits retain existing overrides when older clients omit them, support an explicit reset to inheritance, and preserve queued dispatch compatibility. Codex and Claude CLI bridges receive the accepted execution deadline.
 - Completed proposal transcripts show the model summary and changed-file line counts, with a link to the retained patch. Legacy protocol replies render readably when task evidence identifies them; ordinary JSON examples remain code. Paths and globs stay literal, and stored raw replies remain available for inspection and continuation.
 - API provider responses support bounded gzip, deflate and Brotli decoding with consistent protocol errors, cancellation and connection cleanup. CLI request timeouts respect the configured deadline across the native Node and packaged HTTP adapters.
 - Managed authoring-script refresh cleans up after write/fsync failures, preserves ordinary file permissions and applies the same manifest size limit during planning and execution.

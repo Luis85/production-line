@@ -245,8 +245,11 @@ and HTTP, private credentials and explicit discovery.
 Grants are enforced through a common worker-owned catalog across supported local
 provider adapters. Operators pause and drain execution before saving; subsequent
 turns use the current policy, while saved dispatch evidence remains immutable.
-Tool results go to the selected model provider. Commands and MCP servers retain
-their account/service authority. Automated request reviewers remain tool-free.
+Operators set invocation budgets and optional per-grant timeouts so models can
+run long project checks such as unit tests. Command and CLI overrides remain
+capped by the accepted global command ceiling; every call remains bounded by
+the total invocation deadline. Tool results go to the selected model provider.
+Commands and MCP servers retain their account/service authority. Automated request reviewers remain tool-free.
 See [manage model tools](docs/how-to/manage-model-tools.md).
 
 ## Verified feature implementation

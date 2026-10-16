@@ -220,7 +220,7 @@ export class WorkerWorkspace {
       },
       events: { transport: "polling", streaming: false },
       capabilities: modelCapabilities,
-      toolAccess: { supported: true, management: "worker_global_revision", default: "none", scope: "local_model_invocations", repositoryFiles: "task_worktree_read_only", implementation: { supported: true, activation: "new_git_request_with_approved_paths_and_required_checks", writes: "approved_paths_in_owned_worktree", review: "actual_patch_and_matching_required_checks", humanMergeRequired: true }, cliTools: "argument_policy_in_task_worktree", revocation: "pause_and_drain_before_save" },
+      toolAccess: { supported: true, management: "worker_global_revision", default: "none", scope: "local_model_invocations", repositoryFiles: "task_worktree_read_only", implementation: { supported: true, activation: "new_git_request_with_approved_paths_and_required_checks", writes: "approved_paths_in_owned_worktree", review: "actual_patch_and_matching_required_checks", humanMergeRequired: true }, cliTools: "argument_policy_in_task_worktree", executionLimits: "operator_configured_per_grant", revocation: "pause_and_drain_before_save" },
       consumption: { supported: true, unit: 'tokens', periods: ['daily', 'monthly'], clock: 'UTC', scope: 'this_worker_model_invocations', enforcement: 'admission', personalUsageObserved: false },
       resources: {
         supported: true,

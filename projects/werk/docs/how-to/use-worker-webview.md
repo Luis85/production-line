@@ -178,11 +178,12 @@ paragraphs, nested lists, quotations, links, tables and code blocks. Code blocks
 keep their original text and offer **Copy code**; wide code and tables scroll
 within the reply on smaller screens. Saved replies use the same formatting.
 In completed model replies, file paths and globs such as `src/**/*.spec.ts`
-stay literal instead of turning into bold or italic text. A saved protocol reply in
-a retained file task, such as a checkpoint or an older proposal change set,
-appears as readable text; its stored form stays under **Raw model output**.
-Older stored text may be shortened. Ordinary JSON examples remain code blocks;
-they do not imply a saved patch or an active checkpoint.
+stay literal instead of turning into bold or italic text. A validated checkpoint
+in a retained file task, or a change set in a retained proposal task, appears as readable text; its stored form stays under **Raw model
+output**. Older stored text may be shortened. This display does not create a
+pending question or certify that the current saved patch matches an older reply.
+Ordinary JSON examples remain code blocks; they do not imply a saved patch or
+an active checkpoint.
 Your messages and failure notices remain literal text. Model HTML is never
 executed, and images appear as descriptive links rather than loading automatically.
 You can draft a follow-up while work is queued or running and send it when the

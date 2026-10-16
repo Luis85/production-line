@@ -6,14 +6,14 @@ import { ProcessRunError } from '../../shared/process/launcher.js';
 import type { ToolDefinition, ToolPolicy } from '../application/tool-policy.js';
 import { cliToolDescription, cliToolInputSchema, cliToolName } from '../application/cli-tool-policy.js';
 import { CliToolError, runCliTool } from './cli-tools.js';
-import { DEFAULT_COMMAND_TIMEOUT_MS } from '../application/execution-policy.js';
+import { resolveToolLimits, formatToolDuration, type ResolvedToolLimits } from '../application/tool-limits.js';
 import type { DevelopmentRuntime } from '../application/development.js';
 import { CandidateToolError } from './candidate-tools.js';
 import type { ToolResult, ToolWorktreeIdentity } from '../application/tool-runtime.js';
 
 export class BuiltinToolError extends Error {}
 export interface ToolOperation { definition: ToolDefinition; call(args: unknown, signal: AbortSignal): Promise<ToolResult>; }
-export interface BuiltinToolOptions { policy: ToolPolicy; directory: string; worktree?: string; worktreeIdentity?: ToolWorktreeIdentity; development?: DevelopmentRuntime; commandTimeoutMs?: number; fetch?: typeof globalThis.fetch; }
+export interface BuiltinToolOptions { policy: ToolPolicy; directory: string; worktree?: string; worktreeIdentity?: ToolWorktreeIdentity; development?: DevelopmentRuntime; commandTimeoutMs?: number; limits?: ResolvedToolLimits; fetch?: typeof globalThis.fetch; }
 const output = (data: unknown): ToolResult => ({ content: [{ type: 'text', text: typeof data === 'string' ? data : JSON.stringify(data) }] });
 const schema = (properties: Record<string, unknown>, required: string[] = []) => ({ type: 'object', properties, required, additionalProperties: false });
 const pathProperty = { type: 'string', maxLength: 1000, description: 'Relative path inside the task worktree. Defaults to its root.' };
@@ -138,6 +138,7 @@ class WorktreeReader {
 }
 
 export function builtinToolOperations(options: BuiltinToolOptions): ToolOperation[] {
+  const limits = options.limits ?? resolveToolLimits(options.policy, { commandTimeoutMs: options.commandTimeoutMs });
   const result: ToolOperation[] = [];
   const add = (name: string, description: string, inputSchema: Record<string, unknown>, call: ToolOperation['call']) => result.push({ definition: { name, description, inputSchema }, call });
   if (options.policy.builtins.files && options.worktree) {
@@ -172,7 +173,7 @@ export function builtinToolOperations(options: BuiltinToolOptions): ToolOperatio
     }));
   }
   const commands = options.policy.builtins.commands.filter(command => command.enabled);
-  if (commands.length) add('werk_command_run', 'Run one operator-approved executable with its fixed arguments, as the worker account. Starts in the task worktree or private chat workspace. Commands may change files or access resources outside that directory. No extra arguments or shell expansion.', schema({ preset: { type: 'string', enum: commands.map(command => command.id), description: commands.map(command => `${command.id}: ${command.name}`).join('; ') } }, ['preset']), async (value, signal) => {
+  if (commands.length) add('werk_command_run', 'Run one operator-approved executable with its fixed arguments, as the worker account. Starts in the task worktree or private chat workspace. Commands may change files or access resources outside that directory. No extra arguments or shell expansion.', schema({ preset: { type: 'string', enum: commands.map(command => command.id), description: commands.map(command => `${command.id}: ${command.name}${command.timeoutMs === undefined ? '' : ` (additional timeout cap ${formatToolDuration(command.timeoutMs)}; invocation limits may stop sooner)`}`).join('; ') } }, ['preset']), async (value, signal) => {
     const args = object(value, ['preset']); const preset = commands.find(command => command.id === args.preset);
     if (!preset) throw new BuiltinToolError('That command preset is not granted.');
     // A required check has one receipt regardless of the broker tool name used.
@@ -186,7 +187,7 @@ export function builtinToolOperations(options: BuiltinToolOptions): ToolOperatio
     if (!options.worktree) await mkdir(cwd, { recursive: true, mode: 0o700 });
     check(signal);
     try {
-      const command = await runApprovedToolProcess(preset.executable, preset.args, { cwd, signal, timeoutMs: options.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS, maxOutputBytes: 32768 });
+      const command = await runApprovedToolProcess(preset.executable, preset.args, { cwd, signal, timeoutMs: limits.presetTimeoutMs[preset.id], maxOutputBytes: 32768 });
       return output({ preset: preset.id, exitCode: command.exitCode, stdout: command.stdout.toString('utf8'), stderr: command.stderr.toString('utf8') });
     } catch (error) {
       if (error instanceof ProcessRunError) throw new BuiltinToolError(`Command stopped (${error.reason}); no automatic retry was made.`);
@@ -197,7 +198,7 @@ export function builtinToolOperations(options: BuiltinToolOptions): ToolOperatio
   const worktree = options.worktree;
   if (worktree) for (const tool of options.policy.builtins.cliTools.filter(item => item.enabled)) add(cliToolName(tool.id), cliToolDescription(tool), cliToolInputSchema(tool), async (value, signal) => {
     const args = object(value, ['args']);
-    try { const result = await runCliTool(tool, args.args, worktree, signal, options.commandTimeoutMs); return { content: [{ type: 'text', text: result.text }], ...(result.isError ? { isError: true } : {}) }; }
+    try { const result = await runCliTool(tool, args.args, worktree, signal, limits.cliTimeoutMs[tool.id]); return { content: [{ type: 'text', text: result.text }], ...(result.isError ? { isError: true } : {}) }; }
     catch (error) { if (error instanceof CliToolError) throw new BuiltinToolError(error.message); throw error; }
   });
   if (options.policy.builtins.webOrigins.length) add('werk_web_fetch', 'GET a public HTTP(S) URL on an operator-approved origin, without credentials or cookies. Redirects must also stay on approved origins. Returns at most 64 KiB.', schema({ url: { type: 'string', minLength: 1, maxLength: 4000 } }, ['url']), async (value, signal) => {
@@ -209,7 +210,7 @@ export function builtinToolOperations(options: BuiltinToolOptions): ToolOperatio
       return url;
     };
     let url = validate(input);
-    const deadline = AbortSignal.any([signal, AbortSignal.timeout(10000)]);
+    const deadline = AbortSignal.any([signal, AbortSignal.timeout(limits.webTimeoutMs)]);
     for (let redirects = 0; redirects <= 3; redirects++) {
       check(deadline);
       const response = await (options.fetch ?? globalThis.fetch)(url, { method: 'GET', redirect: 'manual', credentials: 'omit', headers: { Accept: 'text/*, application/json, application/xml' }, signal: deadline });

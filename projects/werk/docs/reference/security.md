@@ -74,6 +74,12 @@ without a shell, in the task worktree, with bounded time and output. The policy
 rejects model-supplied response files and ambiguous required-flag forms, but cannot
 prove the meaning of an unknown CLI grammar or detect option abbreviations,
 configuration files or symlinks a CLI reads itself.
+Optional command/CLI deadlines can shorten the frozen global command ceiling
+(up to one hour); MCP connections have separate deadlines up to 15 minutes for
+stdio or five minutes for HTTP. Raising a timeout extends how long granted work
+can run, not what it can access. The accepted total invocation deadline,
+per-call policy checks, cancellation and process-tree cleanup still apply.
+Manifest limit metadata is evidence and cannot override the accepted budget.
 Private MCP credentials stay in worker state, outside the public tool manifest.
 Tool output and repository content cannot authorize changes to grants. See
 [manage model tools](../how-to/manage-model-tools.md) for saving, revocation and

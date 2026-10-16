@@ -35,6 +35,7 @@ export function workspaceModelFactory(directory: string, settings: WorkerSetting
       get configuration() { return instance.configuration ?? { id: 'legacy', model: '', instruction: '' }; },
       get capabilities() { return instance.capabilities ?? modelCapabilities; },
       get toolManifest() { return instance.toolManifest; },
+      toolManifestFor(policy) { return instance.toolManifestFor ? instance.toolManifestFor(policy) : instance.toolManifest; },
       get executionPolicy() { return { maxToolCalls: settings.value.execution.maxToolCalls, commandTimeoutMs: settings.value.execution.commandTimeoutMs }; },
       reply: (...args) => legacyModelReply(budgeted!, ...args),
       execute: (...args) => executeModel(instance, ...args),

@@ -64,6 +64,7 @@ export function consumptionModel(model: ConversationModel | undefined, runtime: 
     get configuration() { return structured.configuration ?? { id: 'legacy', model: '', instruction: '' }; },
     get capabilities() { return structured.capabilities ?? modelCapabilities; },
     get toolManifest() { return structured.toolManifest; },
+    toolManifestFor(policy) { return structured.toolManifestFor ? structured.toolManifestFor(policy) : structured.toolManifest; },
     get executionPolicy() { return structured.executionPolicy; },
     reply(messages, signal, onUsage) { return legacyModelReply(wrapped, messages, signal, onUsage); },
     execute(request, signal, onUsage, outerControl) {

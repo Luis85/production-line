@@ -77,7 +77,7 @@ test('CLI tools are edited as one rule per line and saved as an argument policy'
   assert.equal(e.draft.cliTools[0].enabled, false, 'new CLI tools start disabled');
   Object.assign(e.draft.cliTools[0], { name: 'Harness', arguments: '["bin/harness.mjs"]', commands: 'help\nbacklog set requires --dry-run', refusedOptions: '--root, --config', enabled: true });
   let submitted; e.onWrite(async command => { submitted = command; return undefined; }); await e.save();
-  assert.deepEqual(submitted.builtins.cliTools, [{ id: 'cli-1', name: 'Harness', description: '', enabled: true, executable: '/opt/node/bin/node', args: ['bin/harness.mjs'], commands: [{ command: 'help', requireOneOf: [], refusedOptions: [] }, { command: 'backlog set', requireOneOf: ['--dry-run'], refusedOptions: [] }], refusedOptions: ['--root', '--config'], maxArgs: 24, maxArgLength: 500, outputKiB: 32, truncationHint: 'Narrow the command, for example with a filter, limit or summary option.' }]);
+  assert.deepEqual(submitted.builtins.cliTools, [{ id: 'cli-1', name: 'Harness', description: '', enabled: true, executable: '/opt/node/bin/node', args: ['bin/harness.mjs'], commands: [{ command: 'help', requireOneOf: [], refusedOptions: [] }, { command: 'backlog set', requireOneOf: ['--dry-run'], refusedOptions: [] }], refusedOptions: ['--root', '--config'], maxArgs: 24, maxArgLength: 500, outputKiB: 32, truncationHint: 'Narrow the command, for example with a filter, limit or summary option.', timeoutMs: null }]);
   e.resolveUncertain(); e.addCliTool();
   for (const [change, pattern] of [[{ executable: 'C:\\tools\\run.cmd' }, /\.bat or \.cmd/], [{ executable: 'node' }, /absolute executable/], [{ commands: '' }, /at least one command/], [{ commands: 'help\nhelp' }, /once/], [{ commands: 'a b c' }, /one or two words/], [{ refusedOptions: 'root' }, /option names/], [{ outputKiB: 65 }, /output limit/], [{ maxArgs: 0 }, /maximum arguments/]]) {
     Object.assign(e.draft.cliTools[0], { name: 'Other', executable: '/opt/node/bin/node', commands: 'help', refusedOptions: '', outputKiB: 32, maxArgs: 24, id: 'cli-2' }, change);
@@ -138,4 +138,72 @@ test('a required-check edit cannot overwrite a concurrent saved verification pla
   assert.equal(e.stale.value, true); assert.equal(e.draft.commands[0].verification, true);
   let writes = 0; e.onWrite(async () => { writes++; }); await e.save(); assert.equal(writes, 0);
   e.state.epoch++; assert.deepEqual(e.draft.commands, []);
+});
+
+
+test('timeouts inherit by default and explicit overrides preserve millisecond precision and verification', async t => {
+  const e = editor(t); e.state.view.workerNode = '/opt/node/bin/node';
+  e.addCommand(); Object.assign(e.draft.commands[0], { name: 'Tests', executable: '/usr/bin/node', arguments: '["--test"]', verification: true, enabled: true });
+  e.addCliTool(); Object.assign(e.draft.cliTools[0], { name: 'CLI', enabled: true });
+  assert.equal(e.draft.commands[0].timeoutSeconds, ''); assert.equal(e.draft.cliTools[0].timeoutSeconds, ''); assert.equal(e.draft.mcp[0].timeoutSeconds, '');
+  e.draft.commands[0].timeoutSeconds = '600'; e.draft.cliTools[0].timeoutSeconds = '1.501'; e.draft.mcp[0].timeoutSeconds = '45.125';
+  let submitted; e.onWrite(async command => { submitted = command; return undefined; }); await e.save();
+  assert.equal(Object.hasOwn(submitted, 'limits'), false, 'Tool access has no competing invocation window.');
+  assert.equal(submitted.builtins.commands[0].timeoutMs, 600000); assert.equal(submitted.builtins.commands[0].verification, true);
+  assert.equal(submitted.builtins.cliTools[0].timeoutMs, 1501); assert.equal(submitted.mcp[0].timeoutMs, 45125);
+});
+
+test('clearing a saved timeout sends explicit null for every grant and lost acknowledgement retries that exact reset', async t => {
+  const e = editor(t); e.state.view.workerNode = '/opt/node/bin/node'; e.addCommand(); e.addCliTool();
+  Object.assign(e.draft.commands[0], { name: 'Tests', executable: '/usr/bin/node', enabled: true, verification: true, timeoutSeconds: 3 });
+  Object.assign(e.draft.cliTools[0], { name: 'CLI', enabled: true, timeoutSeconds: 4 }); e.draft.mcp[0].timeoutSeconds = 5;
+  await e.save(); assert.equal(e.dirty.value, false);
+  e.draft.commands[0].timeoutSeconds = ''; e.draft.cliTools[0].timeoutSeconds = ''; e.draft.mcp[0].timeoutSeconds = '';
+  const sent = []; e.onWrite(async command => { sent.push(JSON.parse(JSON.stringify(command))); throw Error('Acknowledgement lost'); });
+  await e.save(); assert.equal(e.locked.value, true); await e.retry(); assert.deepEqual(sent[1], sent[0]);
+  assert.equal(sent[0].builtins.commands[0].timeoutMs, null); assert.equal(sent[0].builtins.cliTools[0].timeoutMs, null); assert.equal(sent[0].mcp[0].timeoutMs, null);
+  assert.equal(sent[0].builtins.commands[0].verification, true);
+});
+
+test('timeout bounds follow command and MCP transport ceilings without a second execution window', async t => {
+  const e = editor(t); e.state.view.workerNode = '/opt/node/bin/node'; e.addCommand(); e.addCliTool();
+  Object.assign(e.draft.commands[0], { name: 'Tests', executable: '/usr/bin/node' }); Object.assign(e.draft.cliTools[0], { name: 'CLI' });
+  for (const item of [e.draft.commands[0], e.draft.cliTools[0]]) {
+    item.timeoutSeconds = 3600; assert.equal(e.validation.value, '');
+    for (const invalid of [3600.001, 0.999, 1.0001, 'invalid', Infinity]) { item.timeoutSeconds = invalid; assert.match(e.validation.value, /1–3,600 seconds/); assert.equal(e.canSave.value, false); }
+    item.timeoutSeconds = '';
+  }
+  e.draft.mcp[0].timeoutSeconds = 300; assert.equal(e.validation.value, '');
+  e.draft.mcp[0].timeoutSeconds = 300.001; assert.match(e.validation.value, /1–300 seconds/);
+  Object.assign(e.draft.mcp[0], { transport: 'stdio', command: '/usr/bin/node', secretEnv: 'MCP_AUTH_TOKEN', timeoutSeconds: 900 });
+  assert.equal(e.validation.value, ''); e.draft.mcp[0].timeoutSeconds = 900.001; assert.match(e.validation.value, /1–900 seconds/);
+  e.draft.mcp[0].timeoutSeconds = ''; assert.equal(e.validation.value, '');
+});
+
+test('unchanged fractional overrides round-trip exactly and numeric input equivalence keeps a clean draft', async t => {
+  const e = editor(t); e.state.view.builtins.commands = [{ id: 'tests', name: 'Tests', executable: '/usr/bin/node', args: ['--test'], enabled: true, timeoutMs: 1501 }]; e.reload();
+  assert.equal(e.draft.commands[0].timeoutSeconds, 1.501);
+  e.draft.commands[0].timeoutSeconds = '1.501'; assert.equal(e.dirty.value, false);
+  e.draft.commands[0].timeoutSeconds = 'invalid'; assert.equal(e.dirty.value, true); assert.equal(e.canSave.value, false);
+  e.draft.commands[0].timeoutSeconds = '1.501'; e.draft.files = true;
+  let submitted; e.onWrite(async command => { submitted = command; return undefined; }); await e.save(); assert.equal(submitted.builtins.commands[0].timeoutMs, 1501);
+});
+
+test('concurrent timeout policy refresh keeps the draft and refuses stale saves until explicit reload', async t => {
+  const e = editor(t); e.draft.mcp[0].timeoutSeconds = 40;
+  e.state.view = { ...view(1), mcp: [{ ...connection(), timeoutMs: 60000 }] }; await nextTick();
+  assert.equal(e.draft.mcp[0].timeoutSeconds, 40); assert.equal(e.stale.value, true);
+  let writes = 0; e.onWrite(async () => { writes++; }); await e.save(); assert.equal(writes, 0);
+  e.reload(); assert.equal(e.draft.mcp[0].timeoutSeconds, 60); assert.equal(e.dirty.value, false);
+  e.draft.mcp[0].timeoutSeconds = ''; e.state.epoch++; assert.deepEqual(e.draft.mcp, []);
+});
+
+test('effective timeout guidance follows saved command and invocation caps without changing grant drafts', async t => {
+  const state = reactive({ command: 300000, invocation: 3600000 });
+  const e = createToolAccessEditor({ view: () => view(), unlocked: () => true, epoch: () => 0, write: async () => undefined, discover: async () => undefined, refresh: async () => {}, commandTimeoutMs: () => state.command, executionBudgetMs: () => state.invocation }); t.after(e.dispose);
+  assert.match(e.timeoutNote('', 'command'), /Effective cap: 300 s/); assert.match(e.timeoutNote(600, 'command'), /Effective cap: 300 s/);
+  assert.match(e.timeoutNote('', 'mcp'), /Effective cap: 30 s/); assert.match(e.timeoutNote(45, 'mcp'), /Effective cap: 45 s/);
+  state.command = 900000; assert.match(e.timeoutNote(600, 'command'), /Effective cap: 600 s/);
+  state.invocation = 15000; assert.match(e.timeoutNote(600, 'command'), /Effective cap: 15 s/); assert.match(e.timeoutNote(45, 'mcp'), /Effective cap: 15 s/);
+  assert.equal(e.draft.mcp[0].timeoutSeconds, ''); assert.equal(e.dirty.value, false);
 });

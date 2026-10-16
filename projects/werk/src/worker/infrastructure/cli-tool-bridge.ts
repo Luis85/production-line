@@ -43,7 +43,9 @@ process.stdin.setEncoding('utf8');
 process.stdin.on('data',part=>{buffered+=part;if(Buffer.byteLength(buffered)>1048576){process.exitCode=1;process.stdin.destroy();return}let newline;while((newline=buffered.indexOf('\n'))>=0){const line=buffered.slice(0,newline);buffered=buffered.slice(newline+1);if(line.trim())queue=queue.then(()=>handle(line))}});
 process.stdin.on('end',()=>queue.catch(()=>{process.exitCode=1}));
 `;
-export interface CliToolBridge { command: string; args: string[]; configFile: string; toolNames: string[]; codexConfig: string; }
+export interface CliToolBridge { command: string; args: string[]; configFile: string; toolNames: string[]; codexConfig: string; toolTimeoutMs: number; }
+/** Client waits follow the trusted runtime budget; saved manifest metadata never expands authority. */
+export const bridgeToolTimeoutMs = (runtime: ToolRuntime) => Math.max(1000, runtime.limits?.maxRuntimeMs ?? DEFAULT_MAX_RUNTIME_MS);
 /** Broker credentials remain in a private temporary file, never in model instructions, process arguments or durable dispatch. */
 export async function withCliToolBridge<T>(runtime: ToolRuntime | undefined, signal: AbortSignal, run: (bridge: CliToolBridge | undefined) => Promise<T>): Promise<T> {
   if (!runtime) return run(undefined);
@@ -55,6 +57,7 @@ export async function withCliToolBridge<T>(runtime: ToolRuntime | undefined, sig
   const directory = await mkdtemp(join(tmpdir(), 'werk-tool-bridge-'));
   const token = randomBytes(32).toString('hex'), cancellation = new AbortController();
   const bounded = AbortSignal.any([signal, cancellation.signal]);
+  const pending = new Set<Promise<unknown>>();
   let requests = 0, calls = 0;
   const server = createServer(async (request, response) => {
     try {
@@ -65,7 +68,11 @@ export async function withCliToolBridge<T>(runtime: ToolRuntime | undefined, sig
       const value = JSON.parse(Buffer.concat(chunks).toString('utf8'));
       let result;
       if (value?.method === 'tools/list') result = { tools: runtime.manifest.tools };
-      else if (value?.method === 'tools/call' && ++calls <= maxCalls) result = await invokeGrantedTool(runtime, value.params?.name, value.params?.arguments ?? {}, bounded);
+      else if (value?.method === 'tools/call' && ++calls <= maxCalls) {
+        const operation = invokeGrantedTool(runtime, value.params?.name, value.params?.arguments ?? {}, bounded);
+        pending.add(operation);
+        try { result = await operation; } finally { pending.delete(operation); }
+      }
       else { response.writeHead(400).end(); return; }
       response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(result));
     } catch { if (!response.headersSent) response.writeHead(403); response.end(); }
@@ -77,12 +84,13 @@ export async function withCliToolBridge<T>(runtime: ToolRuntime | undefined, sig
     const script = join(directory, 'bridge.mjs'), privateFile = join(directory, 'broker.json'), configFile = join(directory, 'mcp.json');
     await writeFile(script, bridgeSource, { mode: 0o600, flag: 'wx' });
     await writeFile(privateFile, JSON.stringify({ url: `http://127.0.0.1:${address.port}/`, token, timeoutMs }), { mode: 0o600, flag: 'wx' });
-    const command = process.execPath, args = [script, privateFile], toolNames = runtime.manifest.tools.map(tool => tool.name);
-    await writeFile(configFile, JSON.stringify({ mcpServers: { werk: { command, args, timeout: Math.max(1000, timeoutMs) } } }), { mode: 0o600, flag: 'wx' });
+    const command = process.execPath, args = [script, privateFile], toolNames = runtime.manifest.tools.map(tool => tool.name), toolTimeoutMs = bridgeToolTimeoutMs(runtime);
+    await writeFile(configFile, JSON.stringify({ mcpServers: { werk: { command, args, timeout: toolTimeoutMs } } }), { mode: 0o600, flag: 'wx' });
     const codexConfig = `mcp_servers.werk={command=${JSON.stringify(command)},args=${JSON.stringify(args)},enabled_tools=${JSON.stringify(toolNames)},required=true,tool_timeout_sec=${Math.max(1, Math.ceil(timeoutMs / 1000))}}`;
-    return await run({ command, args, configFile, toolNames, codexConfig });
+    return await run({ command, args, configFile, toolNames, codexConfig, toolTimeoutMs });
   } finally {
     cancellation.abort(); server.closeAllConnections();
+    await Promise.allSettled([...pending]);
     await new Promise<void>(resolve => server.close(() => resolve()));
     await rm(directory, { recursive: true, force: true });
   }

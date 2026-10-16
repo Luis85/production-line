@@ -32,7 +32,7 @@ const { draft, dirty, stale, locked, validation, canSave } = editor;
             <div class="policy-field"><label for="execution-tool-calls">Maximum tool calls per attempt</label><UInput id="execution-tool-calls" v-model.number="draft.values.maxToolCalls" type="number" min="1" max="512" step="1" required class="w-full" aria-describedby="execution-tool-calls-help" /><p id="execution-tool-calls-help" class="page-note">1–512 calls, including file reads, edits and checks. Default: 128.</p></div>
             <div class="policy-field"><label for="execution-command-seconds">Command timeout · seconds</label><UInput id="execution-command-seconds" v-model.number="draft.values.commandSeconds" type="number" min="1" max="3600" step="any" required class="w-full" aria-describedby="execution-command-seconds-help" /><p id="execution-command-seconds-help" class="page-note">1–3,600 seconds for each command preset, CLI tool or feature check. Default: 300 seconds (5 minutes). The remaining attempt duration may end it earlier.</p></div>
           </div>
-          <p class="page-note">MCP calls retain a 30-second timeout; web requests retain 10 seconds. Budget changes apply to future attempts.</p>
+          <p class="page-note">MCP calls default to 30 seconds; configure individual command and MCP timeouts in <RouterLink to="/settings#tool-access">Tools &amp; MCP</RouterLink>. Web requests retain 10 seconds. Budget changes apply to future attempts.</p>
         </details>
         <div class="policy-actions"><UButton type="submit" :loading="draft.busy" :disabled="!canSave">Save duration settings</UButton><UButton v-if="dirty || stale" type="button" color="neutral" variant="ghost" @click="editor.reload">Discard edits and reload</UButton></div>
       </fieldset>

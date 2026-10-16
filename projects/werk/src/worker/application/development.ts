@@ -1,3 +1,4 @@
+import { callTimeout } from './tool-limits.js';
 import { classifyDevelopmentEvidence } from './development-verification.js';
 import { createHash } from 'node:crypto';
 import { DomainError } from '../../shared/errors.js';
@@ -7,7 +8,7 @@ import type { ToolPolicy, ToolCommandPreset } from './tool-policy.js';
 import type { ToolWorktreeIdentity } from './tool-runtime.js';
 
 /** Frozen authority for a new repository implementation. Never inferred for saved proposal tasks. */
-export interface DevelopmentCheck { id: string; name: string; executable: string; args: string[]; fingerprint: string; }
+export interface DevelopmentCheck { id: string; name: string; executable: string; args: string[]; fingerprint: string; timeoutMs?: number; }
 export interface DevelopmentScope { schemaVersion: 1; mode: 'worktree'; baseCommit: string; approvedPaths: string[]; checks: DevelopmentCheck[]; }
 export interface DevelopmentCheckEvidence {
   presetId: string; presetFingerprint: string; candidateDigest: string;
@@ -36,11 +37,11 @@ export function developmentScopeView(scope: DevelopmentScope): DevelopmentScopeV
   return { schemaVersion: 1, mode: 'worktree', baseCommit: scope.baseCommit, approvedPaths: [...scope.approvedPaths], checks: scope.checks.map(({ id, name, fingerprint }) => ({ id, name, fingerprint })) };
 }
 /** Names participate so edits to the operator's frozen verification plan require a new request. */
-export function developmentCheckFingerprint(check: Pick<ToolCommandPreset, 'id' | 'name' | 'executable' | 'args'>): string {
-  return gateDigest({ id: check.id, name: check.name, executable: check.executable, args: check.args });
+export function developmentCheckFingerprint(check: Pick<ToolCommandPreset, 'id' | 'name' | 'executable' | 'args' | 'timeoutMs'>): string {
+  return gateDigest({ id: check.id, name: check.name, executable: check.executable, args: check.args, ...(check.timeoutMs === undefined ? {} : { timeoutMs: check.timeoutMs }) });
 }
 export function freezeDevelopmentScope(baseCommit: string | undefined, approvedPaths: readonly string[], policy: ToolPolicy): DevelopmentScope | undefined {
-  const checks = policy.builtins.commands.filter(item => item.enabled && item.verification).map(item => ({ id: item.id, name: item.name, executable: item.executable, args: [...item.args], fingerprint: developmentCheckFingerprint(item) })).sort((a, b) => a.id.localeCompare(b.id));
+  const checks = policy.builtins.commands.filter(item => item.enabled && item.verification).map(item => ({ id: item.id, name: item.name, executable: item.executable, args: [...item.args], fingerprint: developmentCheckFingerprint(item), ...(item.timeoutMs === undefined ? {} : { timeoutMs: item.timeoutMs }) })).sort((a, b) => a.id.localeCompare(b.id));
   if (!baseCommit || !policy.builtins.files || !checks.length) return;
   const scope: DevelopmentScope = { schemaVersion: 1, mode: 'worktree', baseCommit, approvedPaths: [...approvedPaths], checks };
   validateDevelopmentState(scope);
@@ -76,7 +77,7 @@ const date = (value: unknown): value is string => typeof value === 'string' && N
 export function validateDevelopmentState(scope: unknown, evidence?: unknown): asserts scope is DevelopmentScope {
   const invalid = () => new DomainError('conflict', 'Saved implementation authority or verification evidence is invalid. Retained files require inspection.');
   if (!object(scope) || scope.schemaVersion !== 1 || scope.mode !== 'worktree' || typeof scope.baseCommit !== 'string' || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(scope.baseCommit) || !Array.isArray(scope.checks) || !scope.checks.length || scope.checks.length > 32) throw invalid();
-  try { validateApprovedPaths(scope.approvedPaths); } catch { throw invalid(); }
+  try { validateApprovedPaths(scope.approvedPaths); for (const check of scope.checks) if (object(check)) callTimeout(check.timeoutMs, 'Required check'); } catch { throw invalid(); }
   if (scope.checks.some(check => !object(check) || typeof check.id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(check.id) || typeof check.name !== 'string' || !check.name.trim() || check.name.length > 120 || typeof check.executable !== 'string' || !check.executable.trim() || check.executable.length > 4096 || !Array.isArray(check.args) || check.args.length > 64 || check.args.some(arg => typeof arg !== 'string' || arg.length > 4000 || arg.includes('\0')) || !hash(check.fingerprint) || developmentCheckFingerprint(check as unknown as DevelopmentCheck) !== check.fingerprint) || new Set(scope.checks.map(check => check.id)).size !== scope.checks.length) throw invalid();
   if (evidence === undefined) return;
   if (!object(evidence) || evidence.schemaVersion !== 1 || evidence.candidateDigest !== null && !hash(evidence.candidateDigest) || !Array.isArray(evidence.changedPaths) || evidence.changedPaths.some(path => !(scope.approvedPaths as string[]).includes(path)) || new Set(evidence.changedPaths).size !== evidence.changedPaths.length || !date(evidence.updatedAt) || !Array.isArray(evidence.checks) || evidence.checks.length > 32) throw invalid();

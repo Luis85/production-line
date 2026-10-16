@@ -8,7 +8,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { defaultToolPolicy, updateToolPolicy } from '../../src/worker/dist/worker/application/tool-policy.js';
 import { createToolRuntime } from '../../src/worker/dist/worker/infrastructure/tool-runtime.js';
-import { withCliToolBridge } from '../../src/worker/dist/worker/infrastructure/cli-tool-bridge.js';
+import { bridgeToolTimeoutMs, withCliToolBridge } from '../../src/worker/dist/worker/infrastructure/cli-tool-bridge.js';
+import { claudeToolEnvironment } from '../../src/worker/dist/worker/infrastructure/providers.js';
 const signal = () => new AbortController().signal;
 const manifest = { revision: 1, tools: [{ name: 'fixture', description: 'Fixture', inputSchema: { type: 'object' } }] };
 
@@ -30,6 +31,9 @@ test('the real MCP bridge permits more than 32 tool calls and stops exactly at t
     assert.match(bridgeScript, /from 'node:http'/); assert.doesNotMatch(bridgeScript, /\bfetch\(/, 'global fetch has a hidden five-minute header deadline');
     const privateConfig = JSON.parse(await readFile(bridge.args[1], 'utf8'));
     assert.equal(privateConfig.timeoutMs, 450000);
+    assert.equal(bridge.toolTimeoutMs, 450000);
+    assert.deepEqual(claudeToolEnvironment(bridge), { MCP_TOOL_TIMEOUT: '450000' });
+    assert.equal(bridgeToolTimeoutMs({ manifest }), 21600000, 'legacy runtimes use the existing invocation default');
     assert.match(bridge.codexConfig, /required=true,tool_timeout_sec=450/);
     const config = JSON.parse(await readFile(bridge.configFile, 'utf8'));
     assert.equal(config.mcpServers.werk.timeout, 450000);
@@ -56,8 +60,7 @@ test('bridge child uses its bounded timeout and cleanup cancels the pending brok
       assert.equal((await pending).error.code, -32000);
     });
   });
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(cancelled, true);
+  assert.equal(cancelled, true, 'bridge settlement awaits the cancelled tool operation');
 });
 
 test('command timeout is independent of the total invocation deadline and does not revoke later calls', { timeout: 20000 }, async t => {

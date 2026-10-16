@@ -91,8 +91,9 @@ and each call must pass the tool's argument policy before a process starts:
 
 CLI tools start in the task worktree, without a shell, with the same minimal
 environment, configured command deadline and contained process-tree cancellation
-as command presets. Shell syntax such as `;`, `|`, `$HOME` or `%PATH%` reaches the
-CLI as literal text. The model receives the exit code, stdout and stderr; long
+as command presets. An optional per-tool timeout can shorten that deadline; see
+[execution limits](#execution-limits). Shell syntax such as `;`, `|`, `$HOME` or
+`%PATH%` reaches the CLI as literal text. The model receives the exit code, stdout and stderr; long
 output is cut at the configured limit with a hint about how to narrow the call.
 Requests without an approved task worktree have no CLI tools. In **New request**,
 use **Repository files · optional** to approve the repository and input paths;
@@ -203,16 +204,18 @@ A minimal CLI tool entry for a Node script in `bin/`:
 ```
 
 `description`, `refusedOptions`, `requireOneOf`, `maxArgs`, `maxArgLength`,
-`outputKiB` and `truncationHint` are optional. A request file, feature request or
-agent definition in the repository cannot add CLI tools. Grants exist only in the
+`outputKiB`, `truncationHint` and `timeoutMs` are optional. A request file, feature
+request or agent definition in the repository cannot add CLI tools. Grants exist only in the
 worker's private tool policy.
 
 Before rolling back to 0.9.0, use the current worker version to remove every CLI
-tool entry, clear every **Required feature check** mark and save tool access.
-Disabling entries alone is insufficient. Reset tool execution limits to 128 calls
-and 300 seconds and save duration settings; these defaults and the cleared grants
-omit the newer configuration fields. Restore the stopped-state backup from before
-the upgrade when retained task state is incompatible, using the
+tool entry, clear every **Required feature check** mark and clear all per-grant
+timeout overrides before saving tool access. In the API, send `timeoutMs: null`
+to clear an override; explicitly saving 30000 or another default value retains
+that field. Disabling entries or omitting existing timeout fields from an update
+is insufficient. Reset tool execution limits to 128 calls and 300 seconds and
+save duration settings; those global defaults are omitted from saved settings.
+Restore the stopped-state backup from before the upgrade when retained task state is incompatible, using the
 [portable update workflow](../reference/portable-apps.md#update-a-copied-app).
 
 ## Connect an MCP server
@@ -258,19 +261,96 @@ continuation behavior, see the [model interaction contract](../reference/model-i
 
 ## Execution limits
 
-Each model invocation can use at most 64 tool definitions. Under **Settings →
-Queue & duration → Tool execution limits**, set the maximum calls per attempt
-(default 128, range 1–512) and command timeout (default 300 seconds, range
-1–3,600 seconds). Calls include file reads, candidate edits and checks. Command
-presets, CLI tools and required feature checks share the command timeout.
+Each model invocation can use at most 64 tool definitions. Its existing execution
+budget controls the total duration, number of calls and command ceiling. There is
+no separate tool-policy window or two-minute timer. File reads, candidate edits
+and checks all count as tool calls.
 
-The existing total invocation limit bounds all model and tool work; there is no
-separate two-minute tool window. An invocation keeps its captured budgets even
-if settings change while it waits or runs. API providers may return a final
-answer after the last permitted tool call. External MCP calls retain a 30-second
-deadline and web fetches retain 10 seconds. Cancellation and the remaining total
-duration can stop any operation sooner. Timeouts do not automatically retry an
-operation, because a command or remote MCP tool may already have changed state.
+| Limit | Default | Configurable range | Where |
+| --- | --- | --- | --- |
+| Total invocation duration | 6 hours | 1 second to 24 hours | **Settings → Queue & duration**; `execution.maxRuntimeMs` |
+| Calls per invocation | 128 | 1–512 | **Queue & duration → Tool execution limits**; `execution.maxToolCalls` |
+| Global command ceiling | 300 seconds | 1–3,600 seconds | **Queue & duration → Tool execution limits**; `execution.commandTimeoutMs` |
+| Command preset or CLI tool override | Inherit the global command ceiling | 1–3,600 seconds | Each grant in **Settings → Tools & MCP**; optional `timeoutMs` |
+| Stdio MCP call timeout | 30 seconds | 1–900 seconds | Each connection; optional `timeoutMs` |
+| HTTP MCP call timeout | 30 seconds | 1–300 seconds | Each connection; optional `timeoutMs` |
+| Web fetch deadline | 10 seconds | Fixed | — |
+
+Command presets, project CLI tools and required feature checks use the smaller
+of their optional timeout and the invocation's captured global command ceiling.
+A larger per-grant value cannot raise that ceiling. MCP calls use their own
+connection timeout, independently of the command ceiling; it includes session
+startup, schema revalidation and the tool call. Every operation also stops when
+the total invocation deadline or cancellation signal ends it. API providers can
+return a final answer after the last permitted tool call.
+
+An already prepared dispatch keeps its captured budgets while queued or when
+execution uses that saved dispatch. A newly prepared follow-up, answer or resume
+attempt captures the current execution limits; it does not inherit the first
+turn's budgets forever. Saved provider/instruction and approved-file context stay
+with the task. Current tool grants still have to match; a saved manifest cannot
+restore revoked access. Timeouts do not automatically retry an operation, because
+a command or remote MCP tool may already have changed state.
+
+### Allow long project checks
+
+1. Pause new starts and finish or cancel queued and running work.
+2. In **Settings → Queue & duration**, set the global command ceiling and total
+   invocation duration to cover the intended checks and repair iterations.
+3. In **Settings → Tools & MCP**, leave command/CLI timeouts unset to inherit the
+   global ceiling, or set shorter deadlines for quick tools. Configure a longer
+   MCP timeout on the relevant connection when needed, within its transport limit.
+4. Save and resume new starts. Check the accepted task's evidence when diagnosing
+   an older queued request; new settings do not change its frozen budget.
+
+For example, a ten-minute check needs a global command ceiling of at least
+600 seconds and either no per-preset override or an override of at least
+600 seconds. The remaining invocation time may still end it sooner. Only choose
+limits appropriate for a command's unattended operation: a worktree does not
+confine an executable's host-account authority.
+
+From the portable CLI, edit a grant's `timeoutMs` in the `tool-access get` output
+before `tool-access set`. Values are whole milliseconds. On a revision-guarded
+update, omitting `timeoutMs` preserves the existing override for the same grant
+ID; `null` clears it. New grants without a value inherit the command ceiling or
+MCP's 30-second default. An explicit numeric value is saved even when it equals
+a default. A retained timeout above 300 seconds must be cleared or lowered when
+changing an MCP connection from stdio to HTTP. Changing a connection destination
+still clears its credentials and discovered grants as described above.
+
+The CLI providers' private MCP bridge waits for the trusted invocation duration,
+not a hard-coded short tool timer. Codex receives `tool_timeout_sec`; Claude Code
+receives both `MCP_TOOL_TIMEOUT` and the per-server timeout, in milliseconds, with
+automatic backgrounding disabled. The worker's actual call and invocation
+limits remain authoritative, including cancellation and process-tree cleanup.
+
+### Evidence and compatibility
+
+A prepared dispatch records resolved limits beside its tool definitions and
+policy revision. For example, a six-hour invocation with a 300-second command
+ceiling can record:
+
+```json
+"limits": {
+  "maxCalls": 128,
+  "windowMs": 21600000,
+  "callTimeoutMs": { "werk_command_run": 300000, "werk_cli_harness": 300000 },
+  "presetTimeoutMs": { "unit-tests": 300000, "lint": 30000 }
+}
+```
+
+`windowMs` records the total invocation budget; it does not grant a fresh budget
+when the first tool starts. It is not a field in `tool-access.json`.
+`callTimeoutMs` records resolved tool deadlines; the command-run entry uses the
+longest preset deadline and `presetTimeoutMs` records individual presets.
+Metadata is evidence, not authority: the accepted execution budget and current
+matching grants govern calls. Legacy dispatches without `limits` remain supported
+when their policy revision and exact tool definitions still match; missing
+metadata cannot widen their accepted budget. New manifests must match completely.
+
+Before rollback, clear the optional timeouts rather than saving their numeric
+defaults; see the compatibility steps above. Old worker versions do not understand
+these fields. Preserve a stopped-state backup before upgrading.
 
 File reads return at most 32 KiB per call and expose an offset for another chunk.
 Web and MCP results are bounded to 64 KiB. CLI tool output is cut at its
