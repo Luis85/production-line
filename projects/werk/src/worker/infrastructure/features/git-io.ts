@@ -42,7 +42,7 @@ async function publicationDirectory(storage: string, signal: AbortSignal) {
   // Keep the suffix bounded and create exclusively; never adopt a collision.
   for (let attempt = 0; attempt < 8; attempt++) {
     signal.throwIfAborted();
-    const path = join(storage, 'publish-' + randomBytes(6).toString('base64url').slice(0, 6));
+    const path = join(storage, 'p-' + randomBytes(6).toString('base64url').slice(0, 6));
     try { await mkdir(path, { mode: 0o700 }); return path; }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
   }
@@ -104,7 +104,11 @@ export class FeatureGitIo {
   }
   async worktree<T>(root: RepositoryRoot, commit: string, signal: AbortSignal, action: (path: string) => Promise<T>): Promise<T> {
     if (!commitId(commit)) throw new GitFeatureError('invalid_input', 'Publication requires a full source commit identifier.');
-    const storage = await ordinaryDirectory(join(this.options.stateDirectory, 'feature-git-worktrees'), true);
+    const directory = join(this.options.stateDirectory, 'worktrees');
+    // Git for Windows must open its .git file before long-path config is loaded.
+    // Compact generated names leave room for metadata; tracked files may be longer.
+    if (process.platform === 'win32' && join(directory, 'p-XXXXXX', '.git').length >= 260) throw new GitFeatureError('invalid_input', 'Use a shorter worker state directory for shared feature publication on Windows.');
+    const storage = await ordinaryDirectory(directory, true);
     const path = await publicationDirectory(storage, signal), identity = await lstat(path);
     let added = false;
     try {

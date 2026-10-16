@@ -74,7 +74,7 @@ test('publication retries a concurrent teammate commit and preserves both histor
   assert.equal(git(f.remote, 'show', 'main:teammate.txt'), 'concurrent work');
   git(f.remote, 'merge-base', '--is-ancestor', teammateCommit, result.head);
   assert.equal(git(f.repository, 'rev-parse', 'HEAD'), f.sourceCommit);
-  assert.deepEqual(await readdir(join(f.options.stateDirectory, 'feature-git-worktrees')), []);
+  assert.deepEqual(await readdir(join(f.options.stateDirectory, 'worktrees')), []);
 });
 
 test('a teammate edit to the same request stops stale publication without changing that edit', async t => {
@@ -193,11 +193,19 @@ test('deep publication and later task worktrees support committed receipt paths 
   git(parent, 'clone', '--', f.remote, repository); git(repository, 'config', 'core.longpaths', 'false');
   const stateDirectory = join(repository, '.werk', 'worker', 'shared-git', 'a'.repeat(64));
   const adapter = f.client({ repository, stateDirectory }), input = f.lifecycle('deep-first');
+  // Observe the actual paths while exercising the unmodified production runner.
+  const publicationPaths = [], originalGit = adapter.io.git.bind(adapter.io);
+  adapter.io.git = async (cwd, args, ...options) => {
+    if (args[0] === 'worktree' && args[1] === 'add') publicationPaths.push(args.at(-2));
+    return originalGit(cwd, args, ...options);
+  };
   const initialHead = git(repository, 'rev-parse', 'HEAD');
   const initialIndex = await readFile(join(repository, '.git', 'index'));
   const first = await adapter.publishLifecycle(input);
   const receipt = 'feature-reviews/_operations/' + hash(input.operationId) + '.json';
-  assert.ok(join(stateDirectory, 'feature-git-worktrees', 'publish-XXXXXX', receipt).length > 260);
+  assert.equal(publicationPaths.length, 1);
+  assert.ok(join(publicationPaths[0], '.git').length < 260);
+  assert.ok(join(publicationPaths[0], receipt).length > 260);
   const second = await adapter.publishLifecycle({ operationId: 'deep-second', request: { path: input.request.path, expectedRevision: hash(input.request.content), content: input.request.content.replace('status: claimed', 'status: completed') } });
   assert.notEqual(second.commit, first.commit);
   assert.equal(JSON.parse(git(f.remote, 'show', second.head + ':' + receipt)).operationId, input.operationId);
@@ -208,4 +216,17 @@ test('deep publication and later task worktrees support committed receipt paths 
   assert.equal(worktree.baseCommit, second.head); assert.equal(git(repository, 'rev-parse', 'HEAD'), initialHead);
   assert.deepEqual(await readFile(join(repository, '.git', 'index')), initialIndex);
   assert.equal(git(repository, 'config', '--local', 'core.longpaths'), 'false', 'Command-scoped support must not change operator Git configuration.');
+});
+
+
+test('Windows shared publication rejects an excessive metadata path before reserving a worktree', { skip: process.platform !== 'win32' }, async t => {
+  const f = await fixture(t), stateDirectory = join(f.directory, 'state-' + 'x'.repeat(120), 'nested-' + 'y'.repeat(120));
+  const adapter = f.client({ stateDirectory }), originalGit = adapter.io.git.bind(adapter.io); let checkoutAttempted = false;
+  adapter.io.git = async (...args) => {
+    if (args[1][0] === 'worktree' && args[1][1] === 'add') checkoutAttempted = true;
+    return originalGit(...args);
+  };
+  await assert.rejects(adapter.publishLifecycle(f.lifecycle('excessive-path')), /shorter worker state directory/);
+  assert.equal(checkoutAttempted, false); assert.equal(f.main(), f.sourceCommit);
+  await assert.rejects(readdir(join(stateDirectory, 'worktrees')), { code: 'ENOENT' });
 });
