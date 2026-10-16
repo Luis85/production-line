@@ -19,7 +19,7 @@ export function workspaceModelFactory(directory: string, settings: WorkerSetting
   return (connection, scope) => {
     const executionDirectory = !scope?.sessionId || scope.sessionId === 'default' ? directory : join(directory, 'sessions', scope.sessionId);
     const instance = model(connection, executionDirectory, undefined, scope ? {
-      tools: () => createToolRuntime({ policy: settings.toolPolicy(), currentRevision: () => settings.toolPolicy().revision, directory: executionDirectory, worktree: scope.worktree, worktreeIdentity: scope.worktreeIdentity }),
+      tools: () => createToolRuntime({ policy: settings.toolPolicy(), currentRevision: () => settings.toolPolicy().revision, directory: executionDirectory, worktree: scope.worktree, worktreeIdentity: scope.worktreeIdentity, repositories: () => settings.value.repositories.items }),
     } : undefined);
     return consumption ? consumptionModel(instance, consumption) : instance;
   };

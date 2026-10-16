@@ -24,6 +24,8 @@ const tools = (id: string) => props.editor.savedConnection(id)?.discoveredTools 
         <label :for="`mcp-command-${index}`">Server executable · absolute path</label><UInput :id="`mcp-command-${index}`" v-model="connection.command" required placeholder="/absolute/path/to/mcp-server" class="w-full" />
         <label :for="`mcp-args-${index}`">Fixed arguments · JSON array</label><UTextarea :id="`mcp-args-${index}`" v-model="connection.arguments" :rows="2" placeholder='["--project", "/path/to/project"]' class="w-full" />
         <p class="authority-note">Discovering tools starts this process as the worker’s account. It can access that account’s files and network independently of the file-tool grant.</p>
+        <label :for="`mcp-chat-${index}`">Working directory in chat</label><USelect :id="`mcp-chat-${index}`" v-model="connection.chatDirectory" :items="editor.chatDirectories(connection.chatDirectory)" class="w-full" :aria-describedby="`mcp-chat-help-${index}`" />
+        <p :id="`mcp-chat-help-${index}`" :class="connection.chatDirectory === 'workspace' ? 'page-note' : 'authority-note'">{{ connection.chatDirectory === 'workspace' ? 'Chat has no task worktree, so this server starts in an empty private folder without project files. Tasks always use their task worktree.' : 'Chat and discovery start this server in the live repository checkout, not an isolated worktree. A writing tool can change your working tree. Tasks still use their task worktree.' }}</p>
       </template>
       <template v-else>
         <label :for="`mcp-url-${index}`">MCP server address</label><UInput :id="`mcp-url-${index}`" v-model="connection.url" type="url" required placeholder="https://tools.example.com/mcp" class="w-full" />

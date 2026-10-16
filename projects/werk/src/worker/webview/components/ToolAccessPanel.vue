@@ -1,7 +1,7 @@
 <script lang="ts">
 import { createToolAccessEditor } from '../tool-access-editor';
 import { state as workerState, toolAccessAction, toolAccessDiscover, refresh } from '../store';
-const editor = createToolAccessEditor({ view: () => workerState.toolAccess, unlocked: () => workerState.unlocked, epoch: () => workerState.draftEpoch, write: toolAccessAction, discover: toolAccessDiscover, refresh });
+const editor = createToolAccessEditor({ view: () => workerState.toolAccess, unlocked: () => workerState.unlocked, epoch: () => workerState.draftEpoch, write: toolAccessAction, discover: toolAccessDiscover, refresh, repositories: () => workerState.settings?.repositories.items.map(item => item.id) ?? [] });
 </script>
 <script setup lang="ts">
 import { computed, ref } from 'vue';
@@ -9,6 +9,7 @@ import UButton from '@nuxt/ui/components/Button.vue';
 import UInput from '@nuxt/ui/components/Input.vue';
 import UTextarea from '@nuxt/ui/components/Textarea.vue';
 import UBadge from '@nuxt/ui/components/Badge.vue';
+import USelect from '@nuxt/ui/components/Select.vue';
 import McpConnectionsEditor from './McpConnectionsEditor.vue';
 import { state, workspaceAction } from '../store';
 const { draft, dirty, stale, locked, validation, canSave } = editor;
@@ -52,6 +53,8 @@ async function pause() {
               <div class="command-fields"><div><label :for="`tool-command-name-${index}`">Command name</label><UInput :id="`tool-command-name-${index}`" v-model="command.name" required maxlength="100" class="w-full" /></div><div><label :for="`tool-command-id-${index}`">Command ID</label><UInput :id="`tool-command-id-${index}`" v-model="command.id" required maxlength="64" class="w-full" /></div></div>
               <label :for="`tool-command-path-${index}`">Executable · absolute path</label><UInput :id="`tool-command-path-${index}`" v-model="command.executable" required placeholder="/absolute/path/to/executable" class="w-full" />
               <label :for="`tool-command-args-${index}`">Fixed arguments · JSON array</label><UTextarea :id="`tool-command-args-${index}`" v-model="command.arguments" :rows="2" placeholder='["--version"]' class="w-full" />
+              <label :for="`tool-command-chat-${index}`">Working directory in chat</label><USelect :id="`tool-command-chat-${index}`" v-model="command.chatDirectory" :items="editor.chatDirectories(command.chatDirectory)" class="w-full" :aria-describedby="`tool-command-chat-help-${index}`" />
+              <p :id="`tool-command-chat-help-${index}`" :class="command.chatDirectory === 'workspace' ? 'page-note' : 'authority-note'">{{ command.chatDirectory === 'workspace' ? 'Chat has no task worktree, so this command starts in an empty private folder without project files. Tasks always use their task worktree.' : 'Chat runs this command in the live repository checkout, not an isolated worktree. A writing command can change your working tree. Tasks still use their task worktree.' }}</p>
               <label class="check-label"><input v-model="command.enabled" type="checkbox"> Allow models to run this command</label>
             </div>
           </section>

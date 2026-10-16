@@ -1,8 +1,9 @@
 import { computed, reactive, watch } from 'vue';
 import type { ToolAccessView, ToolAccessUpdate, McpConnectionView } from '../application/tool-policy';
 
-export interface CommandDraft { id: string; name: string; executable: string; arguments: string; enabled: boolean; }
-export interface McpDraft { id: string; name: string; transport: 'stdio' | 'http'; enabled: boolean; command: string; arguments: string; url: string; secretEnv: string; secret: string; clearSecret: boolean; allowedTools: string[]; }
+/** `workspace` is the private chat workspace (saved as no chatDirectory); otherwise `repository:<id>`. */
+export interface CommandDraft { id: string; name: string; executable: string; arguments: string; enabled: boolean; chatDirectory: string; }
+export interface McpDraft { id: string; name: string; transport: 'stdio' | 'http'; enabled: boolean; command: string; arguments: string; url: string; secretEnv: string; secret: string; clearSecret: boolean; allowedTools: string[]; chatDirectory: string; }
 interface EditorPorts {
   view: () => ToolAccessView | null;
   unlocked: () => boolean;
@@ -10,7 +11,12 @@ interface EditorPorts {
   write: (command: ToolAccessUpdate) => Promise<ToolAccessView | undefined>;
   discover: (command: { id: string; expectedRevision: number }) => Promise<ToolAccessView | undefined>;
   refresh: () => Promise<unknown>;
+  /** IDs of the worker's current repository assignments, offered as opt-in chat directories. */
+  repositories?: () => readonly string[];
 }
+const privateWorkspace = 'workspace';
+const chatDirectoryOf = (item: { chatDirectory?: string }) => item.chatDirectory ?? privateWorkspace;
+const savedChatDirectory = (value: string) => value === privateWorkspace ? {} : { chatDirectory: value };
 const lines = (value: string) => value.split('\n').map(item => item.trim()).filter(Boolean);
 const json = (value: unknown) => JSON.stringify(value);
 function argumentsOf(value: string): string[] { const result: unknown = JSON.parse(value); if (!Array.isArray(result) || !result.every(item => typeof item === 'string')) throw Error('Arguments must be a JSON array of strings.'); return result; }
@@ -38,6 +44,8 @@ export function createToolAccessEditor(ports: EditorPorts) {
     if (draft.commands.length > 16 || draft.mcp.length > 8) return 'Use up to 16 command presets and eight MCP connections.';
     for (const command of draft.commands) if (!absolute(command.executable.trim())) return 'Enter an absolute executable path for every command preset.';
     for (const item of [...draft.commands, ...draft.mcp.filter(item => item.transport === 'stdio')]) { try { const args = argumentsOf(item.arguments); if (args.length > 32 || args.some(value => value.length > 2048 || /[\x00-\x1f\x7f]/.test(value))) throw Error(); } catch { return 'Use a JSON array of up to 32 strings for fixed arguments; each argument may contain up to 2,048 characters.'; } }
+    const assigned = ports.repositories?.() ?? [];
+    for (const item of [...draft.commands, ...draft.mcp.filter(item => item.transport === 'stdio')]) if (item.chatDirectory !== privateWorkspace && !assigned.includes(item.chatDirectory.slice('repository:'.length))) return `“${item.name || item.id}” uses a chat directory whose repository is no longer assigned. Choose an assigned repository or the private chat workspace.`;
     for (const connection of draft.mcp) {
       if (connection.transport === 'stdio' && !absolute(connection.command.trim())) return 'Enter an absolute executable path for each local MCP server.';
       if (connection.transport === 'stdio' && !/^[A-Z_][A-Z0-9_]{0,79}$/.test(connection.secretEnv)) return 'Use an uppercase environment variable name for each local MCP secret.';
@@ -55,9 +63,9 @@ export function createToolAccessEditor(ports: EditorPorts) {
   function destinationChanged(item: McpDraft) { const saved = savedConnection(item.id); let args: string[]; try { args = argumentsOf(item.arguments); } catch { return !!saved; } return !!saved && destination(saved) !== destination({ ...item, args }); }
   function accept(view: ToolAccessView, notice = '') {
     draft.files = view.builtins.files;
-    draft.commands = view.builtins.commands.map(item => ({ id: item.id, name: item.name, executable: item.executable, arguments: json(item.args), enabled: item.enabled }));
+    draft.commands = view.builtins.commands.map(item => ({ id: item.id, name: item.name, executable: item.executable, arguments: json(item.args), enabled: item.enabled, chatDirectory: chatDirectoryOf(item) }));
     draft.webOrigins = view.builtins.webOrigins.join('\n');
-    draft.mcp = view.mcp.map(item => ({ id: item.id, name: item.name, transport: item.transport, enabled: item.enabled, command: item.command, arguments: json(item.args), url: item.url, secretEnv: item.secretEnv, secret: '', clearSecret: false, allowedTools: [...item.allowedTools] }));
+    draft.mcp = view.mcp.map(item => ({ id: item.id, name: item.name, transport: item.transport, enabled: item.enabled, command: item.command, arguments: json(item.args), url: item.url, secretEnv: item.secretEnv, secret: '', clearSecret: false, allowedTools: [...item.allowedTools], chatDirectory: chatDirectoryOf(item) }));
     draft.revision = view.revision; draft.baseline = json(values()); draft.uncertain = null; draft.error = ''; draft.notice = notice;
   }
   function observe() {
@@ -72,15 +80,15 @@ export function createToolAccessEditor(ports: EditorPorts) {
   function addCommand() {
     if (locked.value || draft.commands.length >= 16) return;
     let n = 1; while ([...draft.commands, ...draft.mcp].some(item => item.id === `command-${n}`)) n++;
-    draft.commands.push({ id: `command-${n}`, name: '', executable: '', arguments: '[]', enabled: false }); draft.notice = '';
+    draft.commands.push({ id: `command-${n}`, name: '', executable: '', arguments: '[]', enabled: false, chatDirectory: privateWorkspace }); draft.notice = '';
   }
   function addMcp() {
     if (locked.value || draft.mcp.length >= 8) return;
     let n = 1; while ([...draft.commands, ...draft.mcp].some(item => item.id === `mcp-${n}`)) n++;
-    draft.mcp.push({ id: `mcp-${n}`, name: '', transport: 'stdio', enabled: false, command: '', arguments: '[]', url: '', secretEnv: 'MCP_AUTH_TOKEN', secret: '', clearSecret: false, allowedTools: [] }); draft.notice = '';
+    draft.mcp.push({ id: `mcp-${n}`, name: '', transport: 'stdio', enabled: false, command: '', arguments: '[]', url: '', secretEnv: 'MCP_AUTH_TOKEN', secret: '', clearSecret: false, allowedTools: [], chatDirectory: privateWorkspace }); draft.notice = '';
   }
   function command(): ToolAccessUpdate {
-    return { expectedRevision: draft.revision, builtins: { files: draft.files, commands: draft.commands.map(item => ({ id: item.id, name: item.name.trim(), executable: item.executable.trim(), args: argumentsOf(item.arguments), enabled: item.enabled })), webOrigins: lines(draft.webOrigins).map(value => new URL(value).origin) }, mcp: draft.mcp.map(item => ({ id: item.id, name: item.name.trim(), transport: item.transport, enabled: item.enabled, command: item.transport === 'stdio' ? item.command.trim() : '', args: item.transport === 'stdio' ? argumentsOf(item.arguments) : [], url: item.transport === 'http' ? item.url.trim() : '', secretEnv: item.transport === 'stdio' ? item.secretEnv : '', allowedTools: destinationChanged(item) ? [] : [...item.allowedTools], ...(item.secret ? { secret: item.secret } : {}), ...(item.clearSecret ? { clearSecret: true } : {}) })) };
+    return { expectedRevision: draft.revision, builtins: { files: draft.files, commands: draft.commands.map(item => ({ id: item.id, name: item.name.trim(), executable: item.executable.trim(), args: argumentsOf(item.arguments), enabled: item.enabled, ...savedChatDirectory(item.chatDirectory) })), webOrigins: lines(draft.webOrigins).map(value => new URL(value).origin) }, mcp: draft.mcp.map(item => ({ id: item.id, name: item.name.trim(), transport: item.transport, enabled: item.enabled, command: item.transport === 'stdio' ? item.command.trim() : '', args: item.transport === 'stdio' ? argumentsOf(item.arguments) : [], url: item.transport === 'http' ? item.url.trim() : '', secretEnv: item.transport === 'stdio' ? item.secretEnv : '', allowedTools: destinationChanged(item) ? [] : [...item.allowedTools], ...(item.secret ? { secret: item.secret } : {}), ...(item.clearSecret ? { clearSecret: true } : {}), ...(item.transport === 'stdio' ? savedChatDirectory(item.chatDirectory) : {}) })) };
   }
   async function send(submitted: ToolAccessUpdate) {
     if (!ports.unlocked() || draft.busy || draft.checking) return;
@@ -117,6 +125,11 @@ export function createToolAccessEditor(ports: EditorPorts) {
     } catch (failure) { if (epoch === ports.epoch() && ports.unlocked()) { draft.error = (failure as Error).message; await ports.refresh(); } }
     finally { if (epoch === ports.epoch()) { draft.busy = false; draft.discovering = ''; observe(); } }
   }
-  return { draft, dirty, stale, locked, validation, canSave, canDiscover, savedConnection, destinationChanged, reload, addCommand, addMcp, save, retry, check, resolveUncertain, discover, dispose: () => { stopView(); stopAccess(); stopEpoch(); } };
+  /** Select items: the private workspace first, then each assigned repository, plus a saved choice that is no longer assigned. */
+  function chatDirectories(current: string) {
+    const items = [{ label: 'Private chat workspace · no project files (default)', value: privateWorkspace }, ...(ports.repositories?.() ?? []).map(id => ({ label: `Live checkout of repository “${id}” · not isolated`, value: `repository:${id}` }))];
+    return items.some(item => item.value === current) ? items : [...items, { label: `Repository “${current.slice('repository:'.length)}” · no longer assigned`, value: current }];
+  }
+  return { draft, dirty, chatDirectories, stale, locked, validation, canSave, canDiscover, savedConnection, destinationChanged, reload, addCommand, addMcp, save, retry, check, resolveUncertain, discover, dispose: () => { stopView(); stopAccess(); stopEpoch(); } };
 }
 export type ToolAccessEditor = ReturnType<typeof createToolAccessEditor>;

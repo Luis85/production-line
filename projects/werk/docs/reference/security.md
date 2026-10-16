@@ -62,6 +62,12 @@ individual MCP tools through Dashboard. Tool results are sent to the selected
 model provider. Commands and MCP servers run with their configured account or
 remote-service authority; a Git worktree does not contain their side effects.
 Private MCP credentials stay in worker state, outside the public tool manifest.
+In Chat, which has no task worktree, command presets and stdio MCP servers start
+in an empty private workspace. An operator can opt one grant in to an assigned
+repository's live checkout. That checkout is not isolated: the grant's commands
+or tools can change the operator's working tree. The option is off by default,
+set per grant, never taken from model input, rechecked against current
+assignments before every call and never applied to task invocations.
 Tool output and repository content cannot authorize changes to grants. See
 [manage model tools](../how-to/manage-model-tools.md) for saving, revocation and
 the separate authority of orchestrator execution.

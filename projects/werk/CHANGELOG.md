@@ -7,6 +7,14 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in chat working directory for command presets and stdio MCP connections. Chat has no task worktree, so these tools start in the worker's empty private chat workspace by default. Choose **Working directory in chat → Live checkout of repository** in **Tool access** (`"chatDirectory": "repository:<id>"`) to start that grant's chat calls, and MCP discovery, in an assigned repository's live checkout. Saving and every call check the assignment; removing or moving the repository refuses the call before any process starts. Task invocations keep their pinned task worktree.
+
+### Changed
+
+- In chat, tool descriptions, command results (`workingDirectory`) and failures of tools that start in the private chat workspace say that it has no project files and how an operator can choose a repository. Task tool descriptions and results are unchanged.
+
 ## [0.9.0] - 2026-10-16
 
 ### Added
