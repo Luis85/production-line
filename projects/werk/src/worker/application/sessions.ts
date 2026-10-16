@@ -1,3 +1,4 @@
+import { createToolRuntime } from '../infrastructure/tool-runtime.js';
 import { WorkerRequestJournal } from "../infrastructure/journal/requests.js";
 import type { GatePolicy } from "./request-gates.js";
 import { WorkerInteractionJournal } from "../infrastructure/journal/interactions.js";
@@ -174,6 +175,8 @@ export class WorkerSessions {
         record.definition,
       ),
       directory,
+      undefined,
+      { tools: () => createToolRuntime({ policy: this.settings.toolPolicy(), currentRevision: () => this.settings.toolPolicy().revision, directory }) },
     );
     const conversation = new WorkerConversation(
       new FileConversationStore(directory),

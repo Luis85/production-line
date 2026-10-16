@@ -88,7 +88,7 @@ test('browser opening uses bounded platform commands without a shell or token-be
   for (const [platform, executable] of [['linux', 'xdg-open'], ['darwin', 'open'], ['win32', 'rundll32.exe']]) {
     let called;
     const result = await openBrowser('http://127.0.0.1:3000/', { platform, launch(command, args, options) { called = { command, args, options }; const child = new EventEmitter(); child.kill = () => {}; queueMicrotask(() => child.emit('close', 0)); return child; } });
-    assert.equal(result.opened, true); assert.equal(called.command, executable); assert.equal(called.options.shell, false); assert.ok(called.args.includes('http://127.0.0.1:3000/'));
+    assert.equal(result.opened, true); assert.equal(called.command, executable); assert.equal(called.options.shell, false); assert.equal(called.options.windowsHide, true); assert.ok(called.args.includes('http://127.0.0.1:3000/'));
   }
   let killed = false;
   assert.equal((await openBrowser('http://127.0.0.1:3000/', { timeoutMs: 10, launch() { const child = new EventEmitter(); child.kill = () => { killed = true; }; return child; } })).opened, false);

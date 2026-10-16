@@ -1,3 +1,8 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { currentToolManifest, withProviderTools } from './provider-tool-session.js';
+import { withCliToolBridge } from './cli-tool-bridge.js';
+import type { ToolRuntime } from '../application/tool-runtime.js';
 import { legacyModelReply, observeModelInvocation, modelCapabilities, parseModelResult, ProviderModelError, requireModelRequest, type ModelRequest, type StructuredModel } from '../application/model-contract.js';
 import type { ProviderUsage } from '../application/run-evidence.js';
 import { codexUsage } from './provider-usage.js';
@@ -18,17 +23,20 @@ export class FileConversationStore implements ConversationStore {
   write(value: Conversation) { return atomicWrite(join(this.directory, 'conversation.json'), JSON.stringify(value) + '\n'); }
 }
 export class CodexConversationModel implements StructuredModel {
-  readonly capabilities = modelCapabilities;
+  get capabilities() { return { ...modelCapabilities, tools: currentToolManifest(this.tools) ? 'granted' as const : 'none' as const }; }
+  get toolManifest() { return currentToolManifest(this.tools); }
   readonly configuration;
-  private executable: string; private directory: string;
-  constructor(executable: string, directory: string, instruction = '', model = '') { this.executable = executable; this.directory = directory; this.configuration = Object.freeze({ id: 'codex-cli', model, instruction }); }
+  private executable: string; private directory: string; private readonly tools?: () => ToolRuntime;
+  constructor(executable: string, directory: string, instruction = '', model = '', tools?: () => ToolRuntime) { this.executable = executable; this.directory = directory; this.tools = tools; this.configuration = Object.freeze({ id: 'codex-cli', model, instruction }); }
   reply(messages: ChatMessage[], signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void) { return legacyModelReply(this, messages, signal, onUsage); }
   async execute(request: ModelRequest, signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void) {
     requireModelRequest(request, 'codex-cli');
-    return observeModelInvocation(signal, onUsage, async observe => {
-      const cwd = join(resolve(this.directory), 'chat-workspace');
-      await ensureDirectory(cwd);
-      const output = await providerCommand(this.executable, ['exec', ...(request.provider.model ? ['--model', request.provider.model] : []), '--ignore-user-config', '--ephemeral', '--skip-git-repo-check', '--sandbox', 'read-only', '--json', '--disable', 'shell_tool', '--disable', 'unified_exec', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'code_mode', '--disable', 'multi_agent', '-c', 'approval_policy="never"', '-c', 'web_search="disabled"', '-c', 'project_doc_max_bytes=0', '-c', 'shell_environment_policy.inherit="none"', '-C', cwd, '-'], cwd, signal, request.renderedPrompt, true, 'codex', output => codexUsage(output, observe));
+    return observeModelInvocation(signal, onUsage, observe => withProviderTools(request, signal, this.tools, async (runtime, bounded) => {
+      const workspace = join(resolve(this.directory), 'chat-workspace');
+      await ensureDirectory(workspace);
+      const cwd = runtime ? await mkdtemp(join(tmpdir(), 'werk-codex-workspace-')) : workspace;
+      try {
+      const output = await withCliToolBridge(runtime, bounded, bridge => providerCommand(this.executable, ['exec', ...(request.provider.model ? ['--model', request.provider.model] : []), '--ignore-user-config', '--ephemeral', '--skip-git-repo-check', '--sandbox', 'read-only', '--json', '--disable', 'shell_tool', '--disable', 'unified_exec', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'code_mode', '--disable', 'multi_agent', '-c', 'approval_policy="never"', '-c', 'web_search="disabled"', '-c', 'project_doc_max_bytes=0', '-c', 'shell_environment_policy.inherit="none"', ...(bridge ? ['-c', bridge.codexConfig] : []), '-C', cwd, '-'], cwd, bounded, request.renderedPrompt, true, 'codex', output => codexUsage(output, observe)));
       const replies: string[] = [];
       for (const line of output.toString('utf8').split('\n')) {
         if (!line.trim()) continue;
@@ -36,9 +44,10 @@ export class CodexConversationModel implements StructuredModel {
         if (!event || typeof event !== 'object' || typeof event.type !== 'string') throw new ProviderModelError('protocol');
         if (event.type === 'error' || event.type === 'turn.failed') throw new ProviderModelError('unavailable');
         if (!['thread.started', 'turn.started', 'turn.completed', 'item.started', 'item.updated', 'item.completed'].includes(event.type)) throw new ProviderModelError('protocol');
-        // Unknown items may add provider capabilities. Accept only known no-tools events.
+        // Unknown native capabilities stay forbidden; MCP events must name this worker bridge and an exposed tool.
         if (event.type.startsWith('item.')) {
-          if (!event.item || typeof event.item !== 'object' || Array.isArray(event.item) || !['agent_message', 'reasoning', 'todo_list'].includes(event.item.type)) throw new ProviderModelError('protocol');
+          if (!event.item || typeof event.item !== 'object' || Array.isArray(event.item) || !['agent_message', 'reasoning', 'todo_list', ...(runtime ? ['mcp_tool_call'] : [])].includes(event.item.type)) throw new ProviderModelError('protocol');
+          if (event.item.type === 'mcp_tool_call' && (event.item.server !== 'werk' || !runtime?.manifest.tools.some(tool => tool.name === event.item.tool))) throw new ProviderModelError('protocol');
           if (event.type === 'item.completed' && event.item.type === 'agent_message') {
             if (typeof event.item.text !== 'string') throw new ProviderModelError('protocol');
             replies.push(event.item.text);
@@ -46,6 +55,7 @@ export class CodexConversationModel implements StructuredModel {
         } else if (event.item !== undefined) throw new ProviderModelError('protocol');
       }
       return parseModelResult(replies.join('\n\n'));
-    });
+      } finally { if (runtime) await rm(cwd, { recursive: true, force: true }); }
+    }));
   }
 }

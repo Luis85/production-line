@@ -305,3 +305,18 @@ do not expose repositories. Standalone project containers need a Git-enabled
 image, writable repository mounts and paths valid inside the container. Assigning
 repositories does not enable live model execution: mock tasks remain simulations,
 and ordinary provider Chat does not gain arbitrary filesystem or shell tools.
+
+## Local model tool access
+
+The unlocked worker Dashboard manages a separate private `tool-access.json` in
+the worker state directory. Missing configuration means no grants. The document
+records a numeric revision, read-only worktree-file access, fixed command presets,
+web origins, MCP connection details and discovered per-tool grants. Its credentials
+are redacted from authenticated views; they never enter the public status or
+model dispatch manifest. Preserve this file with the rest of stopped worker state.
+
+Tool changes require paused, drained execution and the current policy revision.
+Local Chat and approved-file task invocations resolve current grants; automated
+request reviewers stay tool-free. Repository assignment, provider sign-in and
+execution profiles do not implicitly grant tools. See
+[manage model tools](../how-to/manage-model-tools.md).

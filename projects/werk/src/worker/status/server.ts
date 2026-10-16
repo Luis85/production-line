@@ -159,6 +159,12 @@ export async function statusServer(
               await providers.check(workspace.settings.provider(body.id)),
             );
           }
+          if (req.method === "GET" && req.url === "/api/tool-access")
+            return json(res, 200, workspace.toolAccess());
+          if (req.method === "POST" && req.url === "/api/tool-access")
+            return json(res, 200, await workspace.updateToolAccess(await readJson(req)));
+          if (req.method === "POST" && req.url === "/api/tool-access/discover")
+            return json(res, 200, await workspace.discoverToolAccess(await readJson(req)));
           if (req.method === "GET" && req.url === "/api/repositories")
             return json(res, 200, workspace.repositoryStatus());
           if (req.method === "POST" && req.url === "/api/repositories")

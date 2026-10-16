@@ -80,11 +80,14 @@ export function runProcess(executable: string, args: string[], options: RunOptio
     child.stdin.on('error', () => { /* A child may exit without reading its input. */ });
     child.stdin.end(input);
     child.once('error', () => { failure ??= 'spawn'; });
+    // An exited leader can leave descendants holding its output pipes open. Stop
+    // the group on exit so close can drain captured output and settle the run.
+    // Windows contained launches already drain their job inside the supervisor.
+    child.once('exit', () => terminateProcess(child, 'SIGKILL'));
     child.once('close', code => {
       if (deadline) clearTimeout(deadline);
       if (killTimer) clearTimeout(killTimer);
       signal?.removeEventListener('abort', cancel);
-      terminateProcess(child, 'SIGKILL');
       const result = { exitCode: code, stdout: Buffer.concat(stdout), stderr: Buffer.concat(stderr) };
       if (signal?.aborted) failure = 'cancelled';
       if (!failure && code !== 0 && !options.allowNonZeroExit) failure = 'exit';

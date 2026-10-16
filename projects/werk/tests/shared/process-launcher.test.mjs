@@ -8,7 +8,17 @@ import { launchProcess, ProcessRunError, runProcess, terminateProcess } from '..
 
 const node = process.execPath;
 const env = { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot };
-const alive = pid => { try { process.kill(pid, 0); return true; } catch { return false; } };
+const alive = async pid => {
+  try {
+    process.kill(pid, 0);
+    if (process.platform === 'linux') {
+      // A killed orphan may await init's reap; a zombie cannot continue work.
+      const stat = await readFile(`/proc/${pid}/stat`, 'utf8');
+      return stat.slice(stat.lastIndexOf(')') + 2).split(' ')[0] !== 'Z';
+    }
+    return true;
+  } catch { return false; }
+};
 const rejectsWith = (operation, reason) => assert.rejects(operation, error => error instanceof ProcessRunError && error.reason === reason);
 
 test('runs with exactly the supplied environment and input, capturing stdout by default', async () => {
@@ -56,10 +66,26 @@ test('cancellation stops descendants of a plain launch on POSIX and of a contain
     assert.ok(grandchild, `${mode}: grandchild started`);
     controller.abort();
     await rejectsWith(running, 'cancelled');
-    for (let i = 0; i < 100 && alive(grandchild); i++) await delay(50);
-    assert.equal(alive(grandchild), false, `${mode}: grandchild stopped`);
+    for (let i = 0; i < 100 && await alive(grandchild); i++) await delay(50);
+    assert.equal(await alive(grandchild), false, `${mode}: grandchild stopped`);
   }
 });
+
+for (const inheritPipes of [false, true]) {
+  test(`successful POSIX leaders stop descendants with ${inheritPipes ? 'inherited' : 'ignored'} output before completing`, { skip: process.platform === 'win32' && 'POSIX process groups', timeout: 15000 }, async t => {
+    const directory = await mkdtemp(join(tmpdir(), 'werk-launcher-exit-'));
+    const controller = new AbortController(), pidFile = join(directory, 'grandchild.pid');
+    t.after(async () => { controller.abort(); await rm(directory, { recursive: true, force: true }); });
+    const script = `const c=require('node:child_process').spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:${JSON.stringify(inheritPipes ? ['ignore', 'inherit', 'inherit'] : 'ignore')}});c.unref();require('node:fs').writeFileSync(${JSON.stringify(pidFile)},String(c.pid));process.stdout.write('parent completed\\n');`;
+    const result = await runProcess(node, ['-e', script], { env, signal: controller.signal, maxOutputBytes: 4096, timeoutMs: 5000 });
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stdout.toString(), 'parent completed\n');
+    const grandchild = Number(await readFile(pidFile, 'utf8'));
+    assert.ok(grandchild, 'parent started its descendant');
+    for (let i = 0; i < 100 && await alive(grandchild); i++) await delay(50);
+    assert.equal(await alive(grandchild), false, 'descendant stopped after successful parent exit');
+  });
+}
 
 test('plain launches lead a POSIX process group and terminate cleanly', async () => {
   const child = launchProcess(node, ['-e', 'setInterval(()=>{},1000)'], { env });

@@ -212,3 +212,15 @@ paused intake and no queued or active work; registered workers retain their
 identity and history while synchronizing the change with their orchestrator.
 A saved pending change blocks new admission until acknowledged. Execution profiles
 remain separate from provider connections, model settings and agent definitions.
+
+## Worker-managed model tools
+
+Dashboard provides default-off grants for read-only task-worktree files, fixed
+command presets, allowed web origins and individually selected MCP tools. MCP
+connections support stdio and HTTP, private credentials and explicit discovery.
+Grants are enforced through a common worker-owned catalog across supported local
+provider adapters. Operators pause and drain execution before saving; subsequent
+turns use the current policy, while saved dispatch evidence remains immutable.
+Tool results go to the selected model provider. Commands and MCP servers retain
+their account/service authority. Automated request reviewers remain tool-free.
+See [manage model tools](docs/how-to/manage-model-tools.md).

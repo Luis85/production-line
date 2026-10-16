@@ -1,0 +1,90 @@
+import { classifyProviderStatus, parseModelResult, ProviderModelError, type ModelRequest } from '../application/model-contract.js';
+import type { ProviderUsage } from '../application/run-evidence.js';
+import type { ToolRuntime } from '../application/tool-runtime.js';
+import type { ProviderConnection } from './providers.js';
+import { providerUsage } from './provider-usage.js';
+import { invokeGrantedTool } from './provider-tool-session.js';
+const record = (value: unknown): value is Record<string, any> => !!value && typeof value === 'object' && !Array.isArray(value);
+function addUsage(previous: ProviderUsage | undefined, next: ProviderUsage): ProviderUsage {
+  if (!previous) return next;
+  const total = { ...next };
+  for (const key of ['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'providerReportedCostUsd'] as const) {
+    const value = previous[key] === null || next[key] === null ? null : previous[key]! + next[key]!;
+    total[key] = value !== null && Number.isFinite(value) && (key === 'providerReportedCostUsd' || Number.isSafeInteger(value)) ? value : null;
+  }
+  return total;
+}
+async function readResponse(response: Response, signal: AbortSignal) {
+  const reader = response.body?.getReader();
+  if (!reader) throw response.ok ? new ProviderModelError('protocol') : classifyProviderStatus(response.status);
+  const chunks: Uint8Array[] = []; let size = 0;
+  try {
+    for (;;) { const part = await reader.read(); if (part.done) break; size += part.value.length; if (size > 1048576) throw new ProviderModelError('protocol'); chunks.push(part.value); }
+  } catch (error) { if (error instanceof ProviderModelError) throw error; throw new ProviderModelError(signal.aborted ? 'cancelled' : 'unavailable'); }
+  finally { await reader.cancel().catch(() => {}); }
+  try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+  catch { throw response.ok ? new ProviderModelError('protocol') : classifyProviderStatus(response.status); }
+}
+/** Stateless tool loops: each turn replays this invocation only; server-side conversation storage stays off. */
+export async function apiReply(connection: ProviderConnection, request: ModelRequest, signal: AbortSignal, transport: typeof fetch, onUsage?: (usage: ProviderUsage) => void, runtime?: ToolRuntime) {
+  const openai = connection.id === 'openai-api';
+  const history: any[] = request.messages.map(({ role, text }) => ({ role, content: text }));
+  const definitions = runtime?.manifest.tools.map(tool => openai
+    ? { type: 'function', name: tool.name, description: tool.description, parameters: tool.inputSchema, strict: false }
+    : { name: tool.name, description: tool.description, input_schema: tool.inputSchema });
+  let calls = 0, usage: ProviderUsage | undefined;
+  const seenCallIds = new Set<string>();
+  for (let turn = 0; turn <= 32; turn++) {
+    if (signal.aborted) throw new ProviderModelError('cancelled');
+    const body = openai
+      ? { model: request.provider.model, instructions: request.protocolInstructions, store: false, max_output_tokens: 8192, input: history, ...(definitions ? { tools: definitions, parallel_tool_calls: false, include: ['reasoning.encrypted_content'] } : {}) }
+      : { model: request.provider.model, system: request.protocolInstructions, max_tokens: 8192, messages: history, ...(definitions ? { tools: definitions } : {}) };
+    if (Buffer.byteLength(JSON.stringify(body)) > 4194304) throw new ProviderModelError('protocol');
+    let response: Response;
+    try {
+      response = await transport(openai ? 'https://api.openai.com/v1/responses' : 'https://api.anthropic.com/v1/messages', {
+        method: 'POST', signal, redirect: 'error', headers: { 'content-type': 'application/json', ...(openai ? { authorization: `Bearer ${connection.apiKey}` } : { 'x-api-key': connection.apiKey, 'anthropic-version': '2023-06-01' }) }, body: JSON.stringify(body)
+      });
+    } catch { throw new ProviderModelError(signal.aborted ? 'cancelled' : 'unavailable'); }
+    const value = await readResponse(response, signal);
+    usage = addUsage(usage, providerUsage(openai ? 'openai' : 'anthropic', value)); onUsage?.(usage);
+    if (!record(value)) throw response.ok ? new ProviderModelError('protocol') : classifyProviderStatus(response.status);
+    if (!response.ok) throw classifyProviderStatus(response.status, value);
+    if (openai && value.status !== 'completed') throw new ProviderModelError('incomplete');
+    if (!openai && value.stop_reason === 'refusal') throw new ProviderModelError('refusal');
+    if (!openai && !['end_turn', 'stop_sequence', ...(runtime ? ['tool_use'] : [])].includes(value.stop_reason)) throw new ProviderModelError('incomplete');
+    const items = openai ? value.output : value.content;
+    if (!Array.isArray(items) || items.some(item => !record(item))) throw new ProviderModelError('protocol');
+    const toolType = openai ? 'function_call' : 'tool_use';
+    if (openai && items.some(item => !['message', 'reasoning', ...(runtime ? [toolType] : [])].includes(item.type))) throw new ProviderModelError('protocol');
+    const blocks = openai ? items.filter(item => item.type === 'message').flatMap(item => item.content ?? []) : items;
+    if (blocks.some(item => item?.type === 'refusal')) throw new ProviderModelError('refusal');
+    if (blocks.some(item => !record(item) || ![openai ? 'output_text' : 'text', 'thinking', 'redacted_thinking', ...(!openai && runtime ? [toolType] : [])].includes(item.type))) throw new ProviderModelError('protocol');
+    const textBlocks = blocks.filter(item => item.type === (openai ? 'output_text' : 'text'));
+    if (textBlocks.some(item => typeof item.text !== 'string')) throw new ProviderModelError('protocol');
+    const toolCalls = items.filter(item => item.type === toolType);
+    if (!toolCalls.length) {
+      if (!openai && value.stop_reason === 'tool_use') throw new ProviderModelError('protocol');
+      return parseModelResult(textBlocks.map(item => item.text).join('\n\n'));
+    }
+    if (!runtime || !openai && value.stop_reason !== 'tool_use' || calls + toolCalls.length > 32) throw new ProviderModelError('protocol');
+    const parsed = toolCalls.map(item => {
+      const id = openai ? item.call_id : item.id;
+      let args: unknown = item.input;
+      if (openai) { try { args = JSON.parse(item.arguments); } catch { throw new ProviderModelError('protocol'); } }
+      if (typeof id !== 'string' || !id || id.length > 256 || typeof item.name !== 'string' || !runtime.manifest.tools.some(tool => tool.name === item.name) || !record(args) || Buffer.byteLength(JSON.stringify(args)) > 65536 || seenCallIds.has(id)) throw new ProviderModelError('protocol');
+      return { id, name: item.name, args };
+    });
+    if (new Set(parsed.map(call => call.id)).size !== parsed.length) throw new ProviderModelError('protocol');
+    for (const call of parsed) seenCallIds.add(call.id);
+    calls += parsed.length;
+    if (openai) history.push(...items); else history.push({ role: 'assistant', content: items });
+    const results = [];
+    for (const call of parsed) {
+      const result = await invokeGrantedTool(runtime, call.name, call.args, signal);
+      results.push(openai ? { type: 'function_call_output', call_id: call.id, output: JSON.stringify(result) } : { type: 'tool_result', tool_use_id: call.id, content: result.content, ...(result.isError ? { is_error: true } : {}) });
+    }
+    if (openai) history.push(...results); else history.push({ role: 'user', content: results });
+  }
+  throw new ProviderModelError('protocol');
+}

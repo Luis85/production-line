@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import RepositoryPanel from '../components/RepositoryPanel.vue';
 import ExecutionProfilesPanel from '../components/ExecutionProfilesPanel.vue';
+import ToolAccessPanel from '../components/ToolAccessPanel.vue';
 import ProjectIntegrationsPanel from '../components/ProjectIntegrationsPanel.vue';
 import ResourceMonitorPanel from '../components/ResourceMonitorPanel.vue';
 import RunEvidencePanel from '../components/RunEvidencePanel.vue';
@@ -17,13 +18,13 @@ import DefinitionPanel from '../components/DefinitionPanel.vue';
 import { state, bytes, date, workspaceAction } from '../store';
 
 const router = useRouter(), route = useRoute();
-const providerDetails = ref<HTMLDetailsElement | null>(null), definitionDetails = ref<HTMLDetailsElement | null>(null), profileDetails = ref<HTMLDetailsElement | null>(null);
+const providerDetails = ref<HTMLDetailsElement | null>(null), definitionDetails = ref<HTMLDetailsElement | null>(null), profileDetails = ref<HTMLDetailsElement | null>(null), toolDetails = ref<HTMLDetailsElement | null>(null);
 async function openLinkedSettings() {
   if (route.path !== '/dashboard') return;
   const path = route.fullPath;
   await nextTick();
   if (route.fullPath !== path) return;
-  const target = route.hash === '#provider-connections' ? providerDetails.value : route.hash === '#agent-definitions' ? definitionDetails.value : route.hash === '#execution-profiles' ? profileDetails.value : null;
+  const target = route.hash === '#provider-connections' ? providerDetails.value : route.hash === '#agent-definitions' ? definitionDetails.value : route.hash === '#execution-profiles' ? profileDetails.value : route.hash === '#tool-access' ? toolDetails.value : null;
   if (!target) return;
   target.open = true;
   target.querySelector('summary')?.focus({ preventScroll: true });
@@ -76,6 +77,13 @@ async function openRunning() {
       <div><h1 tabindex="-1">Worker dashboard</h1><p>Current work, items to review and the health of this worker.</p></div>
       <UButton to="/taskboard" color="neutral" variant="outline" icon="i-lucide-layout-dashboard">Open taskboard</UButton>
     </div>
+    <nav class="setup-shortcuts" aria-label="Worker setup">
+      <span>Set up this worker</span>
+      <RouterLink to="/dashboard#provider-connections">Provider connections</RouterLink>
+      <RouterLink to="/dashboard#tool-access">Tool access</RouterLink>
+      <RouterLink to="/dashboard#execution-profiles">Execution profiles</RouterLink>
+      <RouterLink to="/dashboard#agent-definitions">Agent definitions</RouterLink>
+    </nav>
     <UAlert v-for="alert in state.monitoring?.alerts" :key="alert.code" :title="alert.message"
       :description="alert.remediation" color="warning" variant="soft" icon="i-lucide-triangle-alert" class="notice" />
 
@@ -84,7 +92,7 @@ async function openRunning() {
         <h2 id="activity-title">Work in progress</h2>
         <UButton color="neutral" variant="outline" :loading="queueBusy" :disabled="!state.settings"
           :icon="state.settings?.board.paused ? 'i-lucide-play' : 'i-lucide-pause'" @click="toggleQueue">
-          {{ state.settings?.board.paused ? 'Resume queue' : 'Pause queue' }}
+          {{ state.settings?.board.paused ? 'Resume new starts' : 'Pause new starts' }}
         </UButton>
       </div>
       <div class="execution-summary" :class="{ occupied: !!state.sessions?.execution.currentSessionId }">
@@ -138,6 +146,10 @@ async function openRunning() {
       <summary>Provider connections &amp; orchestrator enrollment</summary>
       <SettingsPanel />
       <RequestPolicyPanel />
+    </details>
+    <details id="tool-access" ref="toolDetails" class="monitor-section dashboard-disclosure">
+      <summary>Tool access</summary>
+      <ToolAccessPanel />
     </details>
     <details id="execution-profiles" ref="profileDetails" class="monitor-section dashboard-disclosure">
       <summary>Execution profiles</summary>
@@ -195,3 +207,11 @@ async function openRunning() {
     </details>
   </section>
 </template>
+
+<style scoped>
+.setup-shortcuts { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 24px; margin: -8px 0 24px; padding-block: 8px; border-block: 1px solid var(--ui-border); }
+.setup-shortcuts span { color: var(--ui-text-muted); font-size: .8125rem; }
+.setup-shortcuts a { display: inline-flex; align-items: center; min-height: 44px; color: var(--ui-primary); font-size: .875rem; text-underline-offset: 4px; }
+.setup-shortcuts a:hover { text-decoration: underline; }
+@media (max-width: 620px) { .setup-shortcuts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; } .setup-shortcuts span { grid-column: 1 / -1; padding-top: 8px; } }
+</style>

@@ -23,6 +23,11 @@ const missingAgent = computed(() => intake.definitionId !== 'none' && !agent.val
 const incompatible = computed(() => agent.value?.provider && !(intake.provider ?? '').startsWith(agent.value.provider === 'anthropic' ? 'claude' : 'codex') && intake.provider !== `${agent.value.provider}-api`);
 const canCreate = computed(() => state.unlocked && !state.workspaceBusy && !sending.value && connection.value?.configured && intake.message.trim() && !incompatible.value && !missingAgent.value && (!agent.value?.requiresAdaptation || intake.adapt));
 const model = computed(() => agent.value?.model || connection.value?.model || 'Provider default');
+const toolSummary = computed(() => {
+  const tools = state.toolAccess;
+  if (!tools) return 'Access not loaded';
+  return tools.builtins.files || tools.builtins.commands.some(item => item.enabled) || tools.builtins.webOrigins.length || tools.mcp.some(item => item.enabled && item.allowedTools.length) ? 'Grants configured' : 'All tools off';
+});
 watch(() => state.settings?.providers, () => {
   if (!intake.provider) intake.provider = state.settings?.providers.find(item => item.configured)?.id ?? state.settings?.providers[0]?.id;
 }, { immediate: true });
@@ -65,6 +70,7 @@ defineExpose({ focusInstructions });
           <div class="intake-model" aria-labelledby="new-task-model-label">{{ model }}</div>
           <p class="intake-help">{{ agent?.model ? 'This task keeps a copy of the selected instructions and model.' : 'Uses this connection’s configuration when the task starts.' }}</p>
         </div>
+        <p class="intake-tool-access">Tool access: {{ toolSummary }} · <RouterLink to="/dashboard#tool-access">Manage access</RouterLink><span v-if="state.toolAccess?.builtins.files">File tools need an approved file-task worktree.</span></p>
         <details class="intake-definition">
           <summary>Name &amp; agent definition · {{ definition?.name ?? 'optional' }}</summary>
           <div class="intake-field">
@@ -114,6 +120,8 @@ h3 { margin: 0; color: var(--ui-text-highlighted); font-size: 1.25rem; line-heig
 .intake-field label, .field-label { font-size: .8125rem; font-weight: 600; color: var(--ui-text-highlighted); }
 .intake-model { padding: 11px 13px; border: 1px solid var(--ui-border); border-radius: 7px; background: #132129; overflow-wrap: anywhere; font-size: .875rem; }
 .intake-help { margin: 0; color: var(--ui-text-muted); font-size: .75rem; line-height: 1.55; }
+.intake-tool-access { margin: -4px 0 22px; font-size: .75rem; color: var(--ui-text-muted); line-height: 1.6; }
+.intake-tool-access span { display: block; margin-top: 4px; }
 .intake-definition { margin: 0 0 28px; font-size: .8125rem; }
 .intake-definition > summary { padding: 4px 0; cursor: pointer; color: var(--ui-text-toned); }
 .intake-definition[open] > summary { margin-bottom: 18px; }

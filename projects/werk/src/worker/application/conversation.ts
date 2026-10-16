@@ -3,7 +3,7 @@ import type {
   RequestGatePort,
   WorkerRequest,
 } from "./request-gates.js";
-import type { ModelProvider } from "./model-contract.js";
+import type { ModelProvider, StructuredModel } from "./model-contract.js";
 import { DEFAULT_MAX_RUNTIME_MS } from "./execution-policy.js";
 import {
   unknownUsage,
@@ -543,6 +543,7 @@ export class WorkerConversation {
             {
               ...this.model,
               configuration: prior.dispatch.provider,
+              toolManifest: (this.model as Partial<StructuredModel>).toolManifest,
             } as ConversationModel,
             messages,
             "chat",
@@ -577,6 +578,7 @@ export class WorkerConversation {
             ? ({
                 ...this.model,
                 configuration: ancestor.dispatch.provider,
+                toolManifest: (this.model as Partial<StructuredModel>).toolManifest,
               } as ConversationModel)
             : this.model;
           request = prepareModelRequest(model, messages, "chat", maxRuntimeMs);
@@ -587,6 +589,7 @@ export class WorkerConversation {
             ? ({
                 ...this.model,
                 configuration: gateRequest.provider,
+                toolManifest: (this.model as Partial<StructuredModel>).toolManifest,
               } as ConversationModel)
             : this.model,
           next.messages.filter((item) => item.state === "complete"),
