@@ -13,6 +13,7 @@ import ChatPage from '../src/worker/webview/pages/ChatPage.vue';
 import TaskInteraction from '../src/worker/webview/components/TaskInteraction.vue';
 import FeatureRequestNote from '../src/worker/webview/components/FeatureRequestNote.vue';
 import MessageContent from '../src/worker/webview/components/MessageContent.vue';
+import AssistantMessage from '../src/worker/webview/components/AssistantMessage.vue';
 import NewTask from '../src/worker/webview/components/NewTask.vue';
 import SettingsPanel from '../src/worker/webview/components/SettingsPanel.vue';
 import DefinitionPanel from '../src/worker/webview/components/DefinitionPanel.vue';
@@ -392,5 +393,31 @@ export const InterruptedRequestPreparation: Story = {
     if (![...recovery.querySelectorAll('button')].some(button => button.textContent?.includes('New request'))) throw Error('Recovery must offer a new request.');
     if (context.canvasElement.querySelector('.followup-composer, .task-checkpoint, .request-controls, .composer-jump')) throw Error('A failed admission must not offer continuation without approved snapshots.');
     await ready(context.canvasElement);
+  },
+};
+
+export const FileTaskReply: Story = {
+  name: '40 · Read a file-task result',
+  parameters: { storymap: storymap('A saved file-task change set reads as its summary and a changed-file list. Paths and globs stay literal, file contents stay in the patch view, and the stored model output remains available, collapsed.', ['components/TaskInteraction', 'components/AssistantMessage', 'components/MessageContent'], '/taskboard') },
+  render: renderComponent(TaskInteraction, 'file-reply'),
+  play: async context => {
+    await followUp(context);
+    const message = await element(context.canvasElement, '.assistant-message');
+    if (!message.querySelector('code')?.textContent?.includes('**/*.spec.ts')) throw Error('File-task reply lost its literal glob');
+    if (message.querySelector('.message-content')?.textContent?.includes('"files"')) throw Error('File-task reply shows raw protocol JSON');
+    if (!message.querySelector('.patch-review-link') || !message.querySelector('.raw-output')) throw Error('File-task reply lost its patch link or raw output');
+    await ready(context.canvasElement);
+  },
+};
+
+export const JsonExampleReply: Story = {
+  name: '41 · Read a JSON example without artifact claims',
+  parameters: { storymap: storymap('An ordinary JSON example remains a code block. Its property names cannot claim a saved patch or create a checkpoint.', ['components/AssistantMessage', 'components/MessageContent'], '/taskboard') },
+  render: renderComponent(AssistantMessage, 'formatted', { text: JSON.stringify({ summary: 'Example schema, not executed work.', files: [{ path: 'example.json', content: 'Example content' }] }) }),
+  play: async ({ canvasElement }) => {
+    const message = await element(canvasElement, '.assistant-message');
+    await element(message, 'pre code');
+    if (!message.textContent?.includes('Example content') || message.textContent?.includes('patch is saved') || message.querySelector('.patch-review-link, .raw-output')) throw Error('Ordinary JSON acquired task artifact claims.');
+    await ready(canvasElement);
   },
 };

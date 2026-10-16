@@ -8,6 +8,7 @@ import NewTask from '../components/NewTask.vue';
 import SettingsPanel from '../components/SettingsPanel.vue';
 import DefinitionPanel from '../components/DefinitionPanel.vue';
 import MessageContent from '../components/MessageContent.vue';
+import AssistantMessage from '../components/AssistantMessage.vue';
 import { computed, nextTick, ref, watch } from 'vue';
 import UButton from '@nuxt/ui/components/Button.vue';
 import UTextarea from '@nuxt/ui/components/Textarea.vue';
@@ -35,6 +36,7 @@ watch(() => state.sessions?.selected, () => { creating.value = false; });
 const interaction = ref<InteractionView | null>(null), interactionBusy = ref(false);
 const checkpointBlocked = computed(() => !!interaction.value?.pending || !!interaction.value?.latestTurn && ['failed', 'cancelled', 'interrupted'].includes(interaction.value.phase));
 const current = computed(() => state.sessions?.records.find(item => item.id === state.sessions?.selected));
+const fileTask = computed(() => state.board?.tasks.find(item => item.sessionId === current.value?.id));
 const snapshot = computed(() => current.value?.definition);
 const available = computed(() => state.unlocked && state.chat?.available && !state.workspaceBusy && !interactionBusy.value && !checkpointBlocked.value && !current.value?.busy);
 const firstMessage = computed(() => !state.chat?.messages.length);
@@ -209,10 +211,15 @@ function keydown(event: KeyboardEvent) { if (event.key === 'Enter' && (event.ctr
                     : "Working on this task…"
                 }}
               </p>
+              <AssistantMessage
+                v-else-if="message.role === 'assistant' && message.state === 'complete'"
+                :file-task="fileTask ? fileTask.implementation ? 'implementation' : 'proposal' : undefined"
+                :text="message.text"
+              />
               <MessageContent
                 v-else
                 :text="message.text"
-                :markdown="message.role === 'assistant' && message.state === 'complete'"
+                :markdown="false"
                 :class="{ 'error-text': message.state === 'error' }"
               />
             </article>

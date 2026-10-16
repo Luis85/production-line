@@ -41,7 +41,7 @@ test('pure contracts reject adapter reached through another contract and compute
 });
 test('composition may load configured dependencies; pure application uses contracts and deterministic helpers', () => {
   assert.deepEqual(check('import(configuredAdapter);'), []);
-  assert.deepEqual(check("import type {Task} from '../../shared/contracts.js'; import {createHash} from 'node:crypto'; import './port.js';", 'worker/application/task.ts', { 'worker/application/port.ts': '' }), []);
+  assert.deepEqual(check("import type {Task} from '../../shared/contracts.js'; import {createHash} from 'node:crypto'; import {Lexer} from 'marked'; import './port.js';", 'worker/application/task.ts', { 'worker/application/port.ts': '' }), []);
 });
 test('Vue ordinary and setup scripts both enforce boundaries, with type-only edge metadata', () => {
   const code='<script lang="ts">import {a} from "../factory/private.js";</script><script setup lang="ts">import type {B} from "../orchestrator/private.js";</script><template>View</template>';

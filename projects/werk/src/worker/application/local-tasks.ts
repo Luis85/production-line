@@ -16,6 +16,7 @@ import {
 } from "./model-contract.js";
 import type { InteractionCommand, InteractionTurn } from "./interactions.js";
 import { unknownUsage } from "./run-evidence.js";
+import { lineChangeStats, patchReplyMessage } from "./readable-reply.js";
 import {
   definitionConnection,
   type DefinitionSnapshot,
@@ -545,6 +546,23 @@ export class LocalTaskboard {
       patch,
       changedFileCount: result.files.length as number,
     };
+  }
+  private completionMessage(task: LocalTask, summary: string, reply: string) {
+    // Candidate implementations return prose; only validated proposals use replacement JSON.
+    if (task.implementation) return reply;
+    const changes = JSON.parse(
+      reply.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, ""),
+    ).files as Array<{ path: string; content: string }>;
+    return patchReplyMessage(
+      summary,
+      changes.map((change) => ({
+        path: change.path,
+        ...lineChangeStats(
+          task.files.find((file) => file.path === change.path)?.content ?? "",
+          change.content,
+        ),
+      })),
+    );
   }
   private async writePatch(task: LocalTask, patch: string) {
     await this.storage.writePatch(task.id, patch);
@@ -1546,10 +1564,11 @@ export class LocalTaskboard {
             error: null,
           });
         });
+        // The raw change set stays in the interaction turn; the transcript gets a readable summary.
         await this.sessions.recordTask(
           task.sessionId,
           this.input(task),
-          result.text,
+          this.completionMessage(task, valid.summary, result.text),
         );
       } else if (result.type === 'completed') {
         await this.change(tasks => { Object.assign(tasks.find(item => item.id === id)!, { status: 'needs_rework', finishedAt: new Date().toISOString(), error: 'Required checks did not pass for the retained candidate. Continue explicitly to inspect, repair and verify it.' }); });

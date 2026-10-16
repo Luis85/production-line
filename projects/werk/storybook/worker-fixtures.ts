@@ -5,8 +5,13 @@ import { state } from '../src/worker/webview/store';
 export const fixtureTime = '2026-10-15T10:30:00.000Z';
 const startedAt = '2026-10-15T10:28:00.000Z';
 const initialState = JSON.parse(JSON.stringify(state));
-export type WorkerFixture = 'populated' | 'formatted' | 'empty' | 'running' | 'checkpoint' | 'failed' | 'history-error' | 'locked' | 'repository-pending' | 'repository-declined' | 'repository-local' | 'capacity-full' | 'capacity-blocked' | 'capacity-stale' | 'capacity-paused' | 'settings-ready' | 'tracking-read-error' | 'tracking-save-error' | 'admission-failed';
+export type WorkerFixture = 'populated' | 'formatted' | 'empty' | 'running' | 'checkpoint' | 'failed' | 'history-error' | 'locked' | 'repository-pending' | 'repository-declined' | 'repository-local' | 'capacity-full' | 'capacity-blocked' | 'capacity-stale' | 'capacity-paused' | 'settings-ready' | 'tracking-read-error' | 'tracking-save-error' | 'admission-failed' | 'file-reply';
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
+/** A file-task change set saved verbatim by Werk 0.9.0 and earlier; the transcript must not show it raw. */
+export const fileReplyFixture = JSON.stringify({
+  summary: 'Changed README.md only. The guidance now names the Taskboard.\n\n[OPEN] Specs belong under ../tests/unit/**/*.spec.ts; src/**/*.spec.ts is excluded from the build. Tests have not run.',
+  files: [{ path: 'README.md', content: '# Worker\nOpen the taskboard to add work or follow up on a task.\n' }],
+});
 /** A synthetic model reply for checking readable Markdown, never release validation evidence. */
 export const formattedReplyFixture = [
   '# Release review',
@@ -79,7 +84,7 @@ export function installWorkerFixture(variant: WorkerFixture = 'populated') {
   if (variant === 'failed') baseRecords.push(session('failed', 'Inspect the failed request', 'failed'));
   if (admissionFailed) Object.assign(baseRecords.find(item => item.id === 'file')!, { title: 'Recover interrupted request preparation', status: 'failed', messages: 1, interaction: interaction('file', 'idle') });
   const records = baseRecords.map(item => ({ ...item, ...(admissionFailed && item.id === 'file' ? { continuationBlockedReason: admissionFailureReason } : {}), featureRequest: variant === 'tracking-save-error' ? undefined : requestNote(item) }));
-  const selected = empty ? '' : admissionFailed ? 'file' : variant === 'checkpoint' ? 'decision' : running ? 'running' : variant === 'failed' ? 'failed' : 'completed';
+  const selected = empty ? '' : admissionFailed || variant === 'file-reply' ? 'file' : variant === 'checkpoint' ? 'decision' : running ? 'running' : variant === 'failed' ? 'failed' : 'completed';
   const current = records.find(item => item.id === selected);
   const providers = [
     { id: 'codex-cli', label: 'Codex CLI', executable: '/example/bin/codex', model: 'gpt-fixture', configured: true, hasApiKey: false, authentication: 'Host CLI login; not verified' },
@@ -112,7 +117,7 @@ export function installWorkerFixture(variant: WorkerFixture = 'populated') {
   const board = { settings: settings.board, tasks: empty ? [] : [{ ...file, files: file.files.map(item => ({ path: item.path, sha256: 'storybook-sha256' })), hasPatch: !!file.patch }], running: 0, persistenceError: false };
   const chat = { sessionId: selected, messages: empty ? [] : [
     { id: 'message-user', role: 'user', state: 'complete', at: startedAt, text: 'Review the task lifecycle and identify the next step.' },
-    { id: 'message-model', role: 'assistant', state: running ? 'pending' : variant === 'failed' ? 'error' : 'complete', at: fixtureTime, text: variant === 'formatted' ? formattedReplyFixture : variant === 'failed' ? 'The request was interrupted before a final response was saved. Inspect this attempt before continuing.' : variant === 'checkpoint' ? 'I need one decision before preparing the release checklist.' : '**Review ready — illustrative fixture**\n\nThe saved task context is retained. Review the navigation patch and confirm the release scope.\n\n```js\nconst nextStep = "Review the saved patch";\n```' },
+    { id: 'message-model', role: 'assistant', state: running ? 'pending' : variant === 'failed' ? 'error' : 'complete', at: fixtureTime, text: variant === 'formatted' ? formattedReplyFixture : variant === 'file-reply' ? fileReplyFixture : variant === 'failed' ? 'The request was interrupted before a final response was saved. Inspect this attempt before continuing.' : variant === 'checkpoint' ? 'I need one decision before preparing the release checklist.' : '**Review ready — illustrative fixture**\n\nThe saved task context is retained. Review the navigation patch and confirm the release scope.\n\n```js\nconst nextStep = "Review the saved patch";\n```' },
   ], available: true, busy: running, phase: running ? 'running' : 'idle', persistenceError: false };
   if (admissionFailed) chat.messages = [{ id: 'message-user', role: 'user', state: 'complete', at: startedAt, text: file.instruction }];
   const definition = { id: 'release-reviewer', name: 'Release reviewer', digest: 'storybook-definition', createdAt: fixtureTime, agents: [{ name: 'root', description: 'Inspect release acceptance criteria.', instruction: 'Review requirements before proposing work. Ask for missing decisions.', model: 'openai/gpt-fixture', provider: 'openai', unsupported: ['Filesystem tools require instructions-only adaptation.'], requiresAdaptation: true }] };

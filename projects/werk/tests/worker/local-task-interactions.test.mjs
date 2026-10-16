@@ -159,3 +159,19 @@ test('file tasks publish normalized cumulative usage events once without private
   assert.doesNotMatch(JSON.stringify(events), /PRIVATE-|checkout\.txt|Choose the retry policy/);
   assert.equal(events.at(-1).type, 'input_requested');
 });
+
+test('validated file result is recorded as a readable transcript message while the raw change set stays evidence', async t => {
+  const summary = 'Added toLanguage().\n\nTests belong in ../tests/unit/**/*.spec.ts; tsconfig excludes src/**/*.spec.ts.';
+  const content = 'before\nafter\nPRIVATE-FILE-BODY\n';
+  const reply = JSON.stringify({ summary, files: [{ path: 'checkout.txt', content }] });
+  const f = await fixture(t, async () => ({ type: 'completed', text: reply }));
+  const id = await f.create(); await f.settle(id, 'review');
+  const sessionId = f.board.detail(id).sessionId, turnId = f.sessions.interactions.view(sessionId).latestTurn.id;
+  const message = f.sessions.detail(sessionId).chat.messages.at(-1);
+  assert.equal(message.role, 'assistant'); assert.equal(message.state, 'complete');
+  assert.match(message.text, /^Added toLanguage\(\)\.\n\nTests belong in `\.\.\/tests\/unit\/\*\*\/\*\.spec\.ts`; tsconfig excludes `src\/\*\*\/\*\.spec\.ts`\./);
+  assert.match(message.text, /- `checkout\.txt` · 2 lines added, 0 removed/);
+  assert.doesNotMatch(message.text, /PRIVATE-FILE-BODY|"files"|\\n/);
+  assert.equal(f.sessions.interactions.turn(sessionId, turnId).result.text, reply);
+  assert.equal(f.board.detail(id).summary, summary);
+});

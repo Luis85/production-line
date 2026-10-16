@@ -106,7 +106,8 @@ export function boundaryViolations(graph, { sourceRoot, aliases = {}, pureShared
         if (edge.specifier === null) fail(file, edge, 'application-computed-dependency');
         else if (target && !applicationRoots.some(root => inside(root, target)) && !inside(join(sourceRoot, 'shared'), target)) fail(file, edge, 'application-adapter');
         else if (target && inside(join(sourceRoot, 'shared'), target) && !pure.has(target)) fail(file, edge, 'application-shared-adapter');
-        else if (!target && !['node:crypto', 'node:path', 'node:timers/promises', 'yaml'].includes(edge.specifier)) fail(file, edge, 'application-external-adapter');
+        // YAML and Markdown lexers are deterministic parsers; transport and direct I/O stay outside application.
+        else if (!target && !['node:crypto', 'node:path', 'node:timers/promises', 'yaml', 'marked'].includes(edge.specifier)) fail(file, edge, 'application-external-adapter');
       }
     }
   }

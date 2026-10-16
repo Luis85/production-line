@@ -128,6 +128,9 @@ test('a new implementation edits, fails a real check, repairs and verifies withi
   assert.equal(f.invocations, 1); assert.equal(receipts.length, 2);
   assert.notEqual(receipts[0].candidateDigest, receipts[1].candidateDigest);
   assert.equal(task.summary, 'Implemented the approved change and repaired the failing check. Ready for human review.');
+  assert.equal(f.sessions.detail(task.sessionId).chat.messages.at(-1).text, task.summary, 'A verified implementation retains its plain-text completion without parsing it as replacement JSON.');
+  assert.equal(f.board.view().persistenceError, false, 'Formatting must not create a false persistence failure after successful implementation.');
+  assert.equal(f.sessions.interactions.turn(task.sessionId, task.currentTurnId).result.text, task.summary);
   assert.match(task.patch, /-before\n\+after/);
   assert.equal(await readFile(join(task.worktree, 'approved.txt'), 'utf8'), 'after\n');
   assert.equal(await readFile(join(f.repository, 'approved.txt'), 'utf8'), 'before\n');

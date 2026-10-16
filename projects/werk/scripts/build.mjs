@@ -46,6 +46,8 @@ for (const app of apps) {
     await mkdir(join(staging, 'node_modules'), { recursive: true });
     await cp(join(root, 'node_modules/undici'), join(staging, 'node_modules/undici'), { recursive: true });
     if (app === 'worker') {
+      // Transcript projection shares the browser's Markdown lexer at runtime.
+      await cp(join(root, 'node_modules/marked'), join(staging, 'node_modules/marked'), { recursive: true });
       const { buildFeatureAuthoring } = await import('./release/feature-authoring.mjs');
       await buildFeatureAuthoring(root, staging);
     }
