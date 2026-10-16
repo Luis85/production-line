@@ -16,8 +16,8 @@ quota remains available for personal use.
 ## Configure in the webview
 
 Open **Dashboard → Consumption limits**, then **Configure consumption limits**.
-Enable **Limit this worker’s consumption**, choose **Daily (UTC)** or
-**Monthly (UTC)**, and enter the total allowance and worker percentage. Expand
+Enable **Limit this worker’s consumption**, choose the daily or monthly UTC
+period, and enter the total allowance and worker percentage. Expand
 **Model call reservation** to adjust the amount held before each invocation.
 Select **Save consumption limits**.
 

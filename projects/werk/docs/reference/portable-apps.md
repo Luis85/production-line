@@ -352,6 +352,35 @@ prompt. A successful `wait` means a stopped or operator-action state was observe
 Callers must inspect status and pending input before treating output as work success.
 
 
+## Worker consumption limits
+
+| Command | Contract |
+| --- | --- |
+| `consumption status` | Authenticated `GET /api/consumption`; current policy, UTC window, measured/reserved/remaining tokens and the reason new model calls are blocked. Makes no model request. |
+| `consumption configure --file PATH\|-` | `POST /api/settings`; save the complete policy under its `consumption` wrapper. |
+
+Example configuration, allocating half of a configured daily allowance:
+
+```json
+{"consumption":{"enabled":true,"period":"daily","allowance":1000000,"workerPercent":50,"perRunReservation":10000}}
+```
+
+Use `--state-dir` to select the same worker state as startup. Limits start disabled;
+usage starts with consumption accounting and is not backfilled. The period is `daily` or `monthly`
+using UTC calendar boundaries. The whole-token allowance must be positive, the
+worker percentage is 1–100, and the positive per-run reservation cannot exceed
+the worker's allocation. An optional `expectedConsumption` sibling contains the
+policy last read; a stale baseline conflicts instead of overwriting newer settings.
+
+Accepted work remains queued until enough budget is available. Eligible queued
+work resumes after the period reset or a policy change; a manually paused queue
+stays paused. Unknown final usage blocks new model calls while enforcement is
+on. An active response can exceed its reservation before reporting usage.
+This is one worker's configured token budget; personal use outside Werk and
+provider subscription balances are not measured. See
+[consumption configuration and recovery](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/worker-consumption-limits.md)
+for the webview, accounting fields and failure behavior.
+
 ## Worker attempt evidence and export
 
 Every worker-managed model attempt receives a durable run ID. Use `run list` to

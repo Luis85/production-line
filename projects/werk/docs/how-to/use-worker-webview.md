@@ -392,6 +392,14 @@ Standalone mode is healthy without an orchestrator. Node RSS excludes provider
 subprocesses; container host readings are not quota guarantees. Usage, cost,
 subscription balance and login status remain unknown unless actually measured.
 
+**Dashboard → Consumption limits** sets this worker's share of a configured
+daily or monthly token allowance. It shows measured usage, reservations,
+remaining tokens and the next UTC reset. Limits start disabled. When enabled,
+insufficient budget holds new model calls while accepted work stays queued;
+personal use outside the worker remains unmeasured. Follow
+[set a worker consumption limit](worker-consumption-limits.md) for setup and
+recovery from incomplete usage.
+
 Pages refresh every three seconds while visible; header controls pause readings
 or refresh manually. Failed reads retain the last observation with a stale-data
 warning; successful reads still update independently. A successful action remains
