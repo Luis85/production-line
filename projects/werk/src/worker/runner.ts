@@ -9,7 +9,7 @@ import { RemoteGateReconciler } from "./application/reconcile-request-gates.js";
 import { RemoteRequestGates } from "./application/remote-request-gates.js";
 import { AttemptLease } from "./application/lease.js";
 import { WorkerWorkspace } from "./status/workspace.js";
-import { serviceEvent } from "../shared/http/observability.js";
+import { serviceEvent, stateWriteError } from "../shared/http/observability.js";
 import { open, unlink, type FileHandle } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -332,8 +332,8 @@ async function runLockedWorker(
   // The status file is an observability snapshot: a transient write failure (for example a
   // Windows scanner briefly locking it) is reported and retried on the next poll, never fatal.
   const publishStatus = () =>
-    save().catch(() => {
-      serviceEvent("worker", "state_write_error", "error");
+    save().catch((error) => {
+      stateWriteError("worker", "status_snapshot", error);
     });
   const execute = async () => {
     await handle.writeFile(String(process.pid));
@@ -376,8 +376,8 @@ async function runLockedWorker(
       void workspace.features?.tick();
       workspace.executor.wake();
       workspace.reviews.tick();
-      void workspace.board.tick().catch(() => {
-        serviceEvent("worker", "state_write_error", "error");
+      void workspace.board.tick().catch((error) => {
+        stateWriteError("worker", "board_tick", error);
       });
     }, 250);
     while (!stopping.aborted) {
@@ -646,8 +646,8 @@ async function runLockedWorker(
                   state.state = operationalState();
                   await save();
                 })
-                .catch(() => {
-                  serviceEvent("worker", "state_write_error", "error");
+                .catch((error) => {
+                  stateWriteError("worker", "task_state", error);
                 });
               running.set(id, { task, promise });
             }
@@ -691,7 +691,7 @@ async function runLockedWorker(
       )),
       [...running.values()].map(entry => () => entry.promise),
       () => closeEvidence().catch(error => {
-        serviceEvent("worker", "state_write_error", "error");
+        stateWriteError("worker", "evidence_close", error);
         throw error;
       }),
       () => { state.state = "stopped"; return save(); },

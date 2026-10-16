@@ -178,3 +178,21 @@ test('standalone authoring runs through a symlinked parent and stays inert when 
     assert.equal(execFileSync(process.execPath, ['--input-type=module', '-e', code], { cwd: f.root, encoding: 'utf8' }).trim(), 'imported');
   }
 });
+
+test('repeated setup preserves an outdated committed authoring script but reports it', async () => {
+  const f = await fixture();
+  const path = join(f.root, '.werk/authoring/feature-request.mjs');
+  assert.deepEqual(f.installed.warnings, []);
+  // A Windows checkout may store the unchanged script with CRLF line endings.
+  await writeFile(path, script.replace(/\n/g, '\r\n'));
+  assert.deepEqual((await planFeatureAuthoring(f.root, { script })).warnings, []);
+  const older = '// Werk 0.7.0 authoring script without definitionRef support\n';
+  await writeFile(path, older);
+  const planned = await planFeatureAuthoring(f.root, { script });
+  assert.deepEqual(planned.warnings.map(warning => warning.code), ['authoring_script_outdated']);
+  assert.match(planned.warnings[0].message, /\.werk\/authoring\/feature-request\.mjs.*preserved.*src\/worker\/dist\/worker\/authoring\/feature-request\.mjs/);
+  const repeated = await initializeFeatureAuthoring(f.root, { script });
+  assert.deepEqual(repeated.warnings.map(warning => warning.code), ['authoring_script_outdated']);
+  assert.equal(repeated.files.find(file => file.path === '.werk/authoring/feature-request.mjs').status, 'preserved');
+  assert.equal(await readFile(path, 'utf8'), older);
+});

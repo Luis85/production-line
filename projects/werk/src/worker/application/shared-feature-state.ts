@@ -7,7 +7,12 @@ export const defaultSharedIntakeConfig = (): SharedIntakeConfig => ({ enabled: f
 export function validateSharedIntakeConfig(value: unknown): SharedIntakeConfig {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new DomainError('invalid_input', 'Shared intake requires a configuration object.');
   const d = value as Record<string, unknown>;
-  if (Object.keys(d).some(k => !['enabled', 'repositoryId', 'remote', 'branch', 'workflowPath', 'pollMs'].includes(k)) || typeof d.enabled !== 'boolean') throw new DomainError('invalid_input', 'Invalid shared intake configuration.');
+  const fields = ['enabled', 'repositoryId', 'remote', 'branch', 'workflowPath', 'pollMs'];
+  if (Object.keys(d).some(k => !fields.includes(k))) throw new DomainError('invalid_input', `Shared intake configuration accepts only ${fields.join(', ')}.`);
+  // Saving replaces the whole binding; a partial object would silently reset omitted fields.
+  const missing = fields.filter(k => !Object.hasOwn(d, k));
+  if (missing.length) throw new DomainError('invalid_input', `Shared intake configuration is incomplete; missing ${missing.join(', ')}. Send the complete config from shared status with your changes.`);
+  if (typeof d.enabled !== 'boolean') throw new DomainError('invalid_input', 'Shared intake enabled must be true or false.');
   if (typeof d.repositoryId !== 'string' || !/^[a-zA-Z0-9_-]{0,100}$/.test(d.repositoryId) || (d.enabled && !d.repositoryId)) throw new DomainError('invalid_input', 'Choose an assigned repository.');
   if (typeof d.remote !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$/.test(d.remote)) throw new DomainError('invalid_input', 'Choose a configured Git remote name.');
   if (typeof d.branch !== 'string' || d.branch.length > 200 || !/^[a-zA-Z0-9][a-zA-Z0-9_./-]*$/.test(d.branch) || d.branch.includes('..') || d.branch.includes('//') || d.branch.split('/').some(p => !p || p.startsWith('.') || p.endsWith('.') || p.endsWith('.lock'))) throw new DomainError('invalid_input', 'Use a valid Git intake branch name.');

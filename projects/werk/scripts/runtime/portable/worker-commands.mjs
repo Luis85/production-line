@@ -1,5 +1,7 @@
 import { open } from "node:fs/promises";
 import { inputError } from "../config.mjs";
+// Git fetch, claim and publication can outlast the default 10 s API wait on slow remotes.
+const GIT_REQUEST_TIMEOUT_MS = 120000;
 export function workerCommands(catalog) {
   catalog["feature setup"] = { local: true, required: [], options: ["project-dir", "features-dir"], mutating: true, description: "Install a standalone feature authoring kit without starting or installing a worker; preserve existing project files." };
   for (const action of ["create", "validate", "ready"]) catalog["feature author " + action] = {
@@ -80,6 +82,7 @@ export function workerCommands(catalog) {
   };
   catalog["repository sync"] = {
     ...action("/api/repositories", "sync", [], false, ["id"]),
+    timeoutMs: GIT_REQUEST_TIMEOUT_MS,
     description: "Fetch assigned repositories and fast-forward clean checkouts; --id selects one assignment.",
   };
   for (const name of ["accept", "decline"])
@@ -93,10 +96,13 @@ export function workerCommands(catalog) {
   };
   catalog["shared sync"] = {
     ...action("/api/shared-intake", "sync", [], false),
+    timeoutMs: GIT_REQUEST_TIMEOUT_MS,
     description: "Fetch the shared branch now and reconcile ready requests, claims and publications.",
   };
   catalog["shared configure"] = {
     ...action("/api/shared-intake", "configure", [], true),
+    timeoutMs: GIT_REQUEST_TIMEOUT_MS,
+    input: "The complete binding is required: enabled, repositoryId, remote, branch, workflowPath and pollMs. Start from the config returned by shared status.",
     example: { expectedRevision: 0, config: { enabled: true, repositoryId: "ASSIGNMENT_ID", remote: "origin", branch: "main", workflowPath: ".werk/feature-workflow.json", pollMs: 60000 } },
     description: "Save the shared intake binding from JSON file/stdin while new starts are paused and idle. Use expectedRevision from shared status; switching branches requires finished, published requests.",
   };

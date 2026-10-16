@@ -7,6 +7,24 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-10-16
+
+### Added
+
+- Portable client option `--request-timeout-ms` (1,000–600,000) overrides how long a command waits for the API.
+- `feature setup` and its plan warn with `authoring_script_outdated` when the committed `.werk/authoring/feature-request.mjs` differs from the bundled script. The guide explains how to compare and refresh it after an upgrade.
+- `state_write_error` service events name the failing writer in `site` and include an allowlisted system error code such as `EPERM` or `EBUSY`.
+
+### Changed
+
+- `shared sync`, `shared configure` and `repository sync` wait up to 120 s instead of 10 s. A client timeout now reports `"code":"timeout"` and says the operation may still be running.
+- `shared configure` names missing configuration fields instead of asking for an assigned repository.
+
+### Fixed
+
+- Portable CLI JSON input from `--file PATH` or `--file -` accepts a leading UTF-8 byte order mark, as written by Windows PowerShell 5.1 pipes.
+- Shared-intake, provider-account, Taskboard page and webview asset requests no longer log as route `unmatched`. Runtime log capture keeps every normalized worker route.
+
 ## [0.9.0] - 2026-10-16
 
 ### Added

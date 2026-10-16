@@ -71,3 +71,46 @@ test('current worker and context routes retain useful diagnostics through privat
   assert.equal(safeServiceLog({ ...events[0], route: '/v1/worker/tasks/' + secret + '/complete' }), null);
  } finally { await close(server); }
 });
+
+test('every route the worker status server registers has a known label that runtime logs retain', async () => {
+ const { routeName, serviceRoutes, stateWriteSites } = await import('../../../src/worker/dist/shared/http/observability.js');
+ const { relayedRoutes, relayedStateWriteSites } = await import('../../../scripts/runtime/service-logs.mjs');
+ const source = await readFile(new URL('../../../src/worker/status/server.ts', import.meta.url), 'utf8');
+ const registered = new Set([
+  ...[...source.matchAll(/req\.url === "([^"]+)"/g)].map(match => match[1]),
+  ...[...source.matchAll(/req\.url === '([^']+)'/g)].map(match => match[1]),
+  ...[...source.matchAll(/\[([^\]]*)\]\.includes\((?:req\.url|pagePath)\)/g)].flatMap(match => [...match[1].matchAll(/"([^"]+)"/g)].map(item => item[1])),
+ ]);
+ for (const expected of ['/api/shared-intake', '/api/providers/account', '/api/tool-access/discover', '/api/chat/clear', '/taskboard']) assert.ok(registered.has(expected), 'fixture parses ' + expected);
+ for (const path of registered) {
+  assert.equal(routeName(path), path, path + ' must not log as unmatched');
+  assert.ok(relayedRoutes.has(path), path + ' must survive runtime log filtering');
+ }
+ assert.equal(routeName('/assets/index-BJTjKv5U.js'), '/assets/:file');
+ assert.equal(routeName('/api/shared-intake?token=secret'), '/api/shared-intake');
+ assert.deepEqual([...relayedRoutes].sort(), [...serviceRoutes].sort());
+ assert.deepEqual([...relayedStateWriteSites].sort(), [...stateWriteSites].sort());
+});
+
+test('state write failures name their call site and system error code without paths or messages', async () => {
+ const { stateWriteError, safeErrorCode } = await import('../../../src/worker/dist/shared/http/observability.js');
+ const events = [], secret = 'C:/private/state/status.json';
+ stateWriteError('worker', 'status_snapshot', Object.assign(Error('EPERM: operation not permitted, rename ' + secret), { code: 'EPERM', path: secret }), entry => events.push(entry));
+ stateWriteError('worker', 'evidence_close', Object.assign(Error('locked'), { code: 'SQLITE_BUSY' }), entry => events.push(entry));
+ stateWriteError('worker', 'board_tick', Object.assign(Error('odd'), { code: secret }), entry => events.push(entry));
+ stateWriteError('worker', 'task_state', 'not an error', entry => events.push(entry));
+ assert.deepEqual(events.map(({ event, level, site, code }) => ({ event, level, site, code })), [
+  { event: 'state_write_error', level: 'error', site: 'status_snapshot', code: 'EPERM' },
+  { event: 'state_write_error', level: 'error', site: 'evidence_close', code: 'SQLITE_BUSY' },
+  { event: 'state_write_error', level: 'error', site: 'board_tick', code: undefined },
+  { event: 'state_write_error', level: 'error', site: 'task_state', code: undefined },
+ ]);
+ assert.equal(JSON.stringify(events).includes('private'), false);
+ assert.equal(safeErrorCode({ code: 'EBUSY' }), 'EBUSY');
+ const retained = safeServiceLog(events[0]);
+ assert.deepEqual([retained.site, retained.code], ['status_snapshot', 'EPERM']);
+ const forged = safeServiceLog({ ...events[0], site: secret, code: 'EPERM ' + secret });
+ assert.ok(forged);
+ assert.equal(JSON.stringify(forged).includes('private'), false);
+ assert.deepEqual([forged.site, forged.code], [undefined, undefined]);
+});
