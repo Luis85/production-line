@@ -17,7 +17,7 @@ const exec = promisify(execFile);
 async function gitSource(repo: string, branch: string): Promise<IterationSource> {
   const env = immutableGitEnvironment();
   const git = async (...args: string[]) => {
-    try { return (await exec('git', ['--no-replace-objects', '--no-optional-locks', '-C', repo, '-c', 'core.fsmonitor=false', ...args], { env, maxBuffer: 4 * 1024 * 1024, timeout: 10000, killSignal: 'SIGKILL' })).stdout; }
+    try { return (await exec('git', ['--no-replace-objects', '--no-optional-locks', '-C', repo, '-c', 'core.fsmonitor=false', ...args], { env, maxBuffer: 4 * 1024 * 1024, timeout: 10000, killSignal: 'SIGKILL', windowsHide: true })).stdout; }
     catch {
       throw new DomainError('invalid_input', `Cannot read iteration repository (${args[0]}): unavailable repository, timeout or output limit`);
     }
