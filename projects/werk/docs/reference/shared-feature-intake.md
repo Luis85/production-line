@@ -1,0 +1,278 @@
+# Shared Git feature intake contract
+
+Shared intake connects a worker-local repository binding to versioned Markdown
+requests, a template, stage-specific gate rules and an Obsidian Base. See
+[operating shared intake](../how-to/shared-feature-intake.md) and
+[offline authoring](../how-to/team-feature-authoring.md) for procedures.
+
+## Local binding and repository workflow
+
+The authenticated worker saves this connection in private state:
+
+```json
+{
+  "enabled": true,
+  "repositoryId": "project",
+  "remote": "origin",
+  "branch": "main",
+  "workflowPath": ".werk/feature-workflow.json",
+  "pollMs": 5000
+}
+```
+
+`repositoryId` must resolve to an assigned repository. `remote` names an existing
+Git remote; it is not a URL or credential. `branch` identifies the shared intake
+branch. `workflowPath` is repository-relative. `pollMs` is an integer from 1,000
+to 300,000. New workers start disabled. Disabling prevents new claims while owned
+work and its publication continue to reconcile. A retained repository binding
+continues to suppress legacy folder admission and mutations, including while
+disabled; legacy get/result/validate remain available. Explicitly saving disabled
+configuration with an empty repository ID restores local intake after owned work
+and publication have finished.
+
+Connection changes require the current configuration revision, paused and drained
+execution, and no active synchronization. The repository/remote/branch/workflow
+binding cannot change while owned work or publication remains unresolved.
+
+The default checked-in workflow is:
+
+```json
+{
+  "schemaVersion": 1,
+  "id": "feature-requests",
+  "requestsDirectory": "features",
+  "reviewDirectory": "feature-reviews",
+  "template": "features/_templates/feature-request.md",
+  "base": "Feature Requests.base",
+  "readyCheck": "fr-ready-check.json",
+  "doneCheck": "fr-done-check.json"
+}
+```
+
+Paths use safe repository-relative POSIX syntax. Request and review folders must
+be separate and cannot contain one another. Workflow files use distinct paths;
+the template must not appear as a normal root-level intake request. Paths cannot
+escape the repository or overlap private worker storage, installed applications
+or agent integration locations. Files are read as bounded ordinary UTF-8 Git
+blobs from an immutable full commit ID; symlinks and submodules are refused.
+
+Workflow configuration is limited to 16 KiB. Each check, template and Base is
+limited to 64 KiB. Missing or invalid required files block new intake instead of
+falling back to private worker defaults. Already owned requests retain their valid
+frozen workflow and can finish publication independently of changed defaults.
+
+## Request and template contract
+
+Shared mode accepts approved-file patch requests only. It retains the existing
+[Markdown frontmatter parser](feature-requests.md), with these additional rules:
+
+- `schemaVersion: 1`, a stable lowercase `id`, matching `templateId`, nonempty
+  bounded title, explicit `status: ready` and `mode: patch` are required for intake.
+  Offline validation also accepts `draft` without submitting it.
+- `paths` supplies 1–32 unique approved relative files. Names are bounded to 240
+  characters and follow the execution lane's portable non-secret path rules.
+  Dot-prefixed path components, traversal, credential/secret filenames and private
+  key extensions are rejected before a remote claim. New ordinary files are
+  allowed. Workflow configuration/checks/template/Base files and request/review
+  namespaces cannot be changed by the feature patch.
+- Goal, Context, Acceptance criteria and Verification plan headings are required.
+  Core text must be substantive after HTML comments and fenced examples are
+  excluded. Acceptance criteria contain 1–32 nonempty list items, each at most
+  1,000 characters. Duplicate headings are rejected.
+- Additional headings and frontmatter fields in the configured template become
+  required input. The template itself uses draft patch mode and a stable
+  `templateId`. Setup preserves team changes.
+- Custom request metadata is retained and rendered into an explicit context block
+  for the model. Body plus rendered metadata must fit 8,000 characters. Metadata
+  cannot grant tools, change execution policy or establish verification evidence.
+- New requests contain no worker-owned `werk` or `source` metadata. After claim,
+  `status` and `werk.shared` are lifecycle projections owned by the worker.
+
+Only Markdown files directly inside `requestsDirectory` are scanned;
+underscore-prefixed filenames and nested folders are excluded. Duplicate IDs in
+a scanned queue are reported. Accepted identity is scoped to the repository
+binding and retained privately; renaming or editing a claimed source is not a new
+execution request. Use a new ID for successor work.
+
+An omitted provider selects `codex-cli`. Requests can explicitly select
+`codex-cli`, `claude-cli`, `openai-api` or `anthropic-api`. Credentials, model
+configuration and supported instruction profiles come from the local worker.
+Accepted execution preserves its provider configuration. Locally granted model
+tools remain subject to current worker policy and per-call revocation checks;
+repository rules never grant permissions.
+
+## Ready and done JSON
+
+Each stage file has exactly `schemaVersion`, `id`, `version`, `stage` and `rules`.
+The schema version is `1`, version is a positive integer, and stage must match the
+configured file. Both `chat` and `patch` rule arrays are required; shared intake
+executes only patch requests. Rule facts, types and operators reuse the
+[request gate vocabulary](request-gates.md): `eq`, `neq`, `gte` and `lte`.
+
+For example, `fr-ready-check.json` can require two acceptance criteria:
+
+```json
+{
+  "schemaVersion": 1,
+  "id": "fr-ready-check",
+  "version": 1,
+  "stage": "ready",
+  "rules": {
+    "chat": [],
+    "patch": [
+      { "id": "two-criteria", "fact": "input.criteriaCount", "op": "gte", "value": 2 }
+    ]
+  }
+}
+```
+
+A valid `fr-done-check.json` can additionally require explicit operator acceptance
+of the known input and output before publication:
+
+```json
+{
+  "schemaVersion": 1,
+  "id": "fr-done-check",
+  "version": 1,
+  "stage": "done",
+  "rules": {
+    "chat": [],
+    "patch": [
+      { "id": "operator-reviewed-result", "fact": "operator.accepted", "op": "eq", "value": true }
+    ]
+  }
+}
+```
+
+This optional rule holds the result for the worker's existing guarded attestation
+control. It does not merge the eventual feature branch. The generated defaults
+use empty custom arrays and do not require this extra prepublication acceptance.
+
+Mandatory checks are always added. Readiness requires a title, a bounded message,
+at least one criterion, approved files and valid paths, in addition to template
+validation. Completion requires a durably completed result, nonempty output,
+valid patch protocol, a patch with at least one changed file, no pending input and
+no unresolved blocking findings. Custom rules cannot remove these checks.
+IDs beginning `werk-required-` are reserved. The combined policy permits at most
+32 rules per stage/kind: shared patch checks leave room for 26 custom ready rules
+and 25 custom done rules. The assembled policy retains the existing 64 KiB bound.
+
+Missing facts are `unknown` and fail closed, including `neq` comparisons. Offline
+validation cannot establish approved-file byte sizes; a rule using
+`input.approvedBytes` can therefore block offline readiness. Neither a Markdown
+checkbox nor model prose supplies `tests.passed` or `build.passed`. The current
+shared lane has no independent test/build fact producer, and model tool results
+are not automatically promoted into these facts. Requiring them leaves the result
+held until a supported trusted evidence source exists.
+
+The worker freezes the normalized policy, template, source commit, accepted input
+and SHA-256 hashes of workflow files before admission. Subsequent defaults do not
+change that generation. Shared requests disable automatic advisory review and
+model rework; changed input or policy needs a successor request.
+
+## Ownership, publication and recovery
+
+The worker persists a reservation before publishing a claim to the shared branch.
+Publication checks the observed request revision and uses ordinary fast-forward
+Git pushes. Before first task admission, the worker verifies the exact claimed
+bytes still exist on the current remote branch. A foreign claim, source edit or
+missing local journal cannot authorize another execution.
+
+The existing serial executor runs the accepted task in an owned worktree pinned
+to its source commit. Shared Git operations use separate worktrees and do not
+stage or reset the developer checkout. The assigned-repository watcher preserves
+that checkout while a shared repository binding exists, even when intake is disabled
+or all owned requests have finished. Its view exposes `checkoutPreserved`, and it
+can remain `behind`. Clearing the binding after owned work and publication finish
+allows normal clean-checkout fast-forwarding to resume if Watch remains enabled.
+Required repository assignments for unfinished work or publication are tracked
+separately; disabling an otherwise finished binding permits assignment removal,
+but does not authorize the watcher to change any checkout still assigned to it.
+
+Execution completion, completion-gate acceptance, publication and human merge are
+separate states. Typical projections are `ready`, `queued`, `running`,
+`waiting_input`, `needs_rework`, `checking`, `publishing` and `ready_for_review`;
+failures can appear as `failed`, `cancelled`, `interrupted` or `blocked`. Read the
+gate findings and `publication` field alongside the status.
+
+A passing completion evaluation must match the current request input revision,
+input hash, policy digest, run/turn identifiers and immutable output digest. The
+worker applies only the validated approved-file patch in an isolated publication
+worktree and pushes `werk/features/<feature-id>-<operation-suffix>`. It then
+publishes `<reviewDirectory>/<feature-id>-<publication-digest-prefix>.md` and the source
+lifecycle update. Feature branches are not automatically merged or approved.
+
+Private state stores the accepted snapshot and pending publication intent.
+Publication identities include the repository binding, source commit, feature ID and output digest.
+Git lifecycle receipts live under `<reviewDirectory>/_operations/`; feature commits
+also record operation identity. These support confirmation after an interrupted
+push response. Repeating synchronization retries publication without repeating
+known model execution. Uncertain or interrupted inference needs explicit operator
+handling and is not automatically replayed. Concurrent changes and conflicting
+branches remain visible instead of being force-pushed away.
+
+Retain the complete worker state for recovery. Copying only Git files to a new
+worker does not transfer execution ownership. The journal retains at most 100
+owned requests and is bounded to 16 MiB; removing public notes does not erase
+private deduplication history. Plan a separate worker/state for further work when
+that capacity is reached.
+
+## Authenticated worker API
+
+All routes use the worker webview's authenticated local API. Do not put the token
+in URLs or checked-in files. The portable CLI's `api` command can use the saved
+local token and a JSON request file.
+
+`GET /api/shared-intake` returns the current view without starting synchronization:
+configuration `revision`, `workerId`, `config`, `canEdit`, `blockedReason`, `state`,
+`error`, `lastSyncedAt`, observed `sourceCommit`, workflow paths/check digests and
+`requests`. State is `disabled`, `idle`, `syncing` or `error`. A request includes
+identity, owner, `isLocal`, status, source commit, update time, ready/done findings,
+feature branch, review-note path, local task ID and publication state
+(`pending`, `synced` or `error`). Read timestamps because observations may be stale.
+
+`POST /api/shared-intake` accepts one of these bodies:
+
+```json
+{
+  "action": "configure",
+  "expectedRevision": 0,
+  "config": {
+    "enabled": true,
+    "repositoryId": "project",
+    "remote": "origin",
+    "branch": "main",
+    "workflowPath": ".werk/feature-workflow.json",
+    "pollMs": 5000
+  }
+}
+```
+
+Replace `expectedRevision` with the value just read. Successful configuration
+increments the revision and returns the view. Stale revisions and busy
+configuration changes are rejected; refresh and reconcile rather than overwriting
+another edit.
+
+```json
+{ "action": "sync" }
+```
+
+Synchronization uses the saved connection and can claim work and publish updates.
+It returns the resulting view. An HTTP 200 response is not proof that every Git
+operation succeeded; inspect the view and each request's publication/error fields.
+
+```json
+{ "action": "note", "id": "fr-example" }
+```
+
+Note lookup returns `{ "path": "…", "markdown": "…" }` for a request in the
+current binding. It accepts a request ID, never an arbitrary filesystem path.
+Local retained notes can be available before publication is confirmed; remote
+notes are read at the last observed commit. Refresh if a remote note has not yet
+been observed.
+
+Unknown fields/actions are rejected. `configure` accepts no request ID;
+`sync` accepts no configuration/revision fields or ID. Unauthenticated access is
+rejected. Invalid input, stale/busy state, unavailable services and missing notes
+use the worker API's existing error handling. Configuration revisions guard local
+connection updates; Git publication operations retain separate durable receipts.

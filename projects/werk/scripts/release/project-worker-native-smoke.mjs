@@ -15,7 +15,9 @@ let started = false;
 try {
   const setup = await command(join(source, 'cli.mjs'), 'init', '--features-dir', 'requests/features');
   assert.equal(setup.featuresDirectory, join(project, 'requests/features'));
-  await assert.rejects(readFile(join(project, 'package.json')), { code: 'ENOENT' });
+  const manifest = JSON.parse(await readFile(join(project, 'package.json'), 'utf8'));
+  assert.equal(manifest.private, true); assert.equal(manifest.scripts['worker:status'], 'node bin/apps/worker/cli.mjs status');
+  assert.equal(manifest.dependencies, undefined);
   await assert.rejects(readFile(join(project, '.git/config')), { code: 'ENOENT' });
   const fixture = join(project, 'provider-fixture'), invocations = join(project, 'fixture-model-invocations');
   await writeFile(fixture, `#!${process.execPath}\nimport { appendFileSync } from 'node:fs';if(process.argv.includes('login')){console.log('Logged in using fixture');process.exit(0)}appendFileSync(${JSON.stringify(invocations)},'invoked\\n');let text='';for await(const p of process.stdin)text+=p;const reply=text.includes('QUESTION_FLOW')&&!text.includes('ANSWER_COMPLETE')?JSON.stringify({werkInteraction:{schemaVersion:1,kind:'question',message:'Which layout should the fixture retain?',choices:[{id:'existing',label:'Keep the existing layout'}]}}):text.includes('ESCALATION_FLOW')&&!text.includes('RESUME_COMPLETE')?JSON.stringify({werkInteraction:{schemaVersion:1,kind:'escalation',message:'The fixture requires an operator decision.',reason:'No authority to choose a new layout.'}}):text.includes('Implement the requested changes')?JSON.stringify({summary:'Fixture review',files:[{path:'approved.txt',content:'changed\\n'}]}):'Packaged feature protocol fixture completed.';console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:reply}}));\n`, { mode: 0o700 });

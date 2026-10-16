@@ -2,6 +2,7 @@ import { lstat, open, unlink, rename, readdir, realpath } from 'node:fs/promises
 import { resolve, relative, join, dirname, isAbsolute, sep } from 'node:path';
 import { createHash } from 'node:crypto';
 import { inputError, readPrivate } from '../config.mjs';
+import { planFeatureAuthoringMove, lockFeatureAuthoringMove, completeFeatureAuthoringMove } from './feature-folder-authoring.mjs';
 const digest = text => createHash('sha256').update(text).digest('hex');
 const exists = path => lstat(path).catch(error => { if (error.code !== 'ENOENT') throw error; });
 const pendingName = 'feature-folder-change.json';
@@ -40,9 +41,10 @@ export async function featureFolder(action, options) {
   if (source.path !== target.path && toExists && (!pending || fromExists)) throw inputError('Destination already exists. Choose a new folder; existing folders are never overwritten or merged.');
   if (!fromExists && !toExists) throw inputError('Feature folder is missing. Restore it before changing its path.');
   const folder = fromExists ? source.path : target.path;
+  const authoring = source.path === target.path && !pending ? null : await planFeatureAuthoringMove(project, source.relative, target.relative, pending?.authoring, !fromExists);
   const names = await readdir(folder);
   const locked = !!await exists(join(state, 'worker.lock')) || names.includes('_worker.lock') || !!await exists(join(state, 'portable.json'));
-  const plan = { projectDirectory: project, previousPath: source.relative, path: target.relative, directory: target.path, changed: source.path !== target.path, entries: names.length, requiresStoppedWorker: true, blocked: locked, configuration: configPath, nativeCommand: 'node bin/apps/worker/cli.mjs start', dockerCommand: 'docker compose -f .werk/compose.worker.yaml up -d' };
+  const plan = { projectDirectory: project, previousPath: source.relative, path: target.relative, directory: target.path, changed: source.path !== target.path, entries: names.length, requiresStoppedWorker: true, blocked: locked, configuration: configPath, authoring: authoring ? { configuration: '.werk/feature-workflow.json', base: authoring.next.base, template: authoring.next.template } : null, nativeCommand: 'node bin/apps/worker/cli.mjs start', dockerCommand: 'docker compose -f .werk/compose.worker.yaml up -d' };
   if (action === 'plan') return plan;
   if (locked) throw inputError('Stop the worker before changing its feature folder: worker stop, or docker compose -f .werk/compose.worker.yaml down. After a crash, verify it is stopped before clearing stale locks.');
   if (!plan.changed && !pending) return { ...plan, changed: false };
@@ -50,10 +52,13 @@ export async function featureFolder(action, options) {
   if (pending && ![pending.before, pending.after].includes(digest(raw))) throw inputError('Configuration changed during an interrupted move. Restore the original configuration before recovering.');
   const lockPath = join(state, 'worker.lock');
   const lock = await open(lockPath, 'wx', 0o600).catch(() => { throw inputError('Worker is running or another folder change is in progress. Stop it and retry.'); });
+  let releaseAuthoring;
   try {
+    if (authoring) releaseAuthoring = await lockFeatureAuthoringMove(project);
+    await planFeatureAuthoringMove(project, source.relative, target.relative, authoring?.checkpoint ?? null, !fromExists);
     await lock.writeFile(JSON.stringify({ operation: 'feature-folder-change', pid: process.pid })); await lock.sync();
     if (await readBoundedFile(configPath, 65536) !== raw) throw inputError('Configuration changed. Inspect feature folder get and retry.');
-    if (!pending) await atomicWrite(pendingPath, JSON.stringify({ schemaVersion: 1, from: source.relative, to: target.relative, before: digest(raw), after: digest(next) }) + '\n');
+    if (!pending || pending.authoring === undefined) await atomicWrite(pendingPath, JSON.stringify({ ...(pending ?? { schemaVersion: 1, from: source.relative, to: target.relative, before: digest(raw), after: digest(next) }), authoring: authoring?.checkpoint ?? null }) + '\n');
     // The checkpoint blocks project startup until the move and configuration agree.
     if (fromExists) {
       await realDirectory(dirname(target.path), true);
@@ -61,6 +66,7 @@ export async function featureFolder(action, options) {
       await rename(source.path, target.path);
       await syncDirectory(dirname(source.path)); await syncDirectory(dirname(target.path));
     }
+    await completeFeatureAuthoringMove(project, source.relative, target.relative, authoring?.checkpoint ?? null, atomicWrite);
     await atomicWrite(configPath, next);
     await unlink(pendingPath); await syncDirectory(settings);
     return { ...plan, blocked: false, preserved: 'Requests, results, templates and worker identity moved together. The next native or Docker start uses this path.' };
@@ -68,5 +74,5 @@ export async function featureFolder(action, options) {
     // Before the move, failure leaves the original folder/configuration intact.
     if (await exists(source.path) && !await exists(target.path) && await readBoundedFile(configPath, 65536) === raw) await unlink(pendingPath).catch(e => { if (e.code !== 'ENOENT') throw e; });
     throw error;
-  } finally { await lock.close(); await unlink(lockPath); }
+  } finally { try { await releaseAuthoring?.(); } finally { await lock.close(); await unlink(lockPath); } }
 }

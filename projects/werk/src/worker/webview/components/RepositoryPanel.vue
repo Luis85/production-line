@@ -53,18 +53,19 @@ async function sync(id: string) {
     else error.value = state.actionError || 'The repository could not be checked. Try again.';
   } finally { syncing.value = ''; }
 }
-const statusLabel = (value?: string) => ({ pending: 'Waiting for first check', syncing: 'Checking remote', ready: 'Up to date', dirty: 'Local changes · pull skipped', ahead: 'Local commits · pull skipped', diverged: 'Branches diverged · pull skipped', error: 'Check failed' }[value ?? ''] ?? 'Status unavailable');
+const statusLabel = (value?: string) => ({ pending: 'Waiting for first check', syncing: 'Checking remote', ready: 'Up to date', behind: 'Remote advanced · checkout preserved', dirty: 'Local changes · pull skipped', ahead: 'Local commits · pull skipped', diverged: 'Branches diverged · pull skipped', error: 'Check failed' }[value ?? ''] ?? 'Status unavailable');
 </script>
 
 <template>
   <section class="monitor-section repository-panel" aria-labelledby="repositories-title">
     <h2 id="repositories-title">Git repositories</h2>
-    <p class="page-note">Assign existing checkouts on the worker machine. Watched repositories are fetched and pulled when a fast-forward is safe. File tasks run in isolated Git worktrees.</p>
+    <p class="page-note">Assign existing checkouts on the worker machine. Watched repositories are fetched and pulled when a fast-forward is safe. Shared intake preserves its developer checkout. File tasks run in isolated Git worktrees.</p>
     <RepositoryDiscovery reconsider />
     <ul v-if="assigned.length" class="repository-list">
       <li v-for="item in assigned" :key="item.id">
-        <div class="section-heading"><h3 class="break-anywhere">{{ item.id }}</h3><UButton type="button" color="neutral" variant="outline" :loading="syncing === item.id" :disabled="!!syncing || busy || !state.unlocked" @click="sync(item.id)">Check &amp; pull</UButton></div>
+        <div class="section-heading"><h3 class="break-anywhere">{{ item.id }}</h3><UButton type="button" color="neutral" variant="outline" :loading="syncing === item.id" :disabled="!!syncing || busy || !state.unlocked" @click="sync(item.id)">{{ observed.find(row => row.id === item.id)?.checkoutPreserved ? 'Check remote' : 'Check & pull' }}</UButton></div>
         <p class="break-anywhere">{{ item.path }}</p>
+        <p v-if="observed.find(row => row.id === item.id)?.checkoutPreserved" class="page-note">Shared intake checks fetch the remote and leave this checkout unchanged.</p>
         <p>{{ statusLabel(observed.find(row => row.id === item.id)?.state) }}</p>
         <p class="page-note">{{ item.watch ? 'Watching' : 'Automatic checks paused' }} · {{ item.remote }} / {{ item.branch || 'current branch' }} · Last checked {{ date(observed.find(row => row.id === item.id)?.lastCheckedAt) }}</p>
         <p v-if="observed.find(row => row.id === item.id)?.error" class="error-text break-anywhere">{{ observed.find(row => row.id === item.id)?.error }}</p>

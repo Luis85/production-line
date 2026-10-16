@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue';
 import UButton from '@nuxt/ui/components/Button.vue';
 import UInput from '@nuxt/ui/components/Input.vue';
 import USelect from '@nuxt/ui/components/Select.vue';
+import ProviderAccountPanel from './ProviderAccountPanel.vue';
 import { state, workspaceAction, request, date } from '../store';
 defineProps<{ providerOnly?: boolean }>();
 let connectionGeneration = 0;
@@ -145,6 +146,7 @@ async function save(body: unknown) {
         <p v-if="check" role="status" class="provider-result" :class="{ 'error-text': ['signed-out', 'unavailable'].includes(check.authentication) }">
           {{ selected?.label }} · {{ date(check.checkedAt) }} · {{ check.message }}
         </p>
+        <ProviderAccountPanel v-if="provider.endsWith('-cli')" :provider-id="provider" :connection-key="selected?.executable || ''" :enabled="!dirty && !!selected?.configured" />
       </form>
       <form v-if="!providerOnly" class="settings-form" @submit.prevent="save({ connection: { enabled: true, url, enrollmentToken: enrollment } })">
         <h3>

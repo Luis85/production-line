@@ -1,3 +1,4 @@
+import { validateApprovedPaths } from '../application/approved-paths.js';
 import { verifyReviewArtifact } from './review-artifact.js';
 import { ProviderModelError } from '../application/model-contract.js';
 import { ProcessRunError, runProcess, type RunResult } from '../../shared/process/launcher.js';
@@ -15,9 +16,7 @@ export function codexConfiguration(value: unknown): CodexConfiguration {
     const config = value as Record<string, unknown>;
     if (Object.keys(config).some(key => !['executable', 'repository', 'allowedPaths'].includes(key)) ||
         typeof config.executable !== 'string' || !isAbsolute(config.executable) || (config.repository !== undefined && (typeof config.repository !== 'string' || !isAbsolute(config.repository)))) throw Error('Codex executable and optional legacy repository must be absolute operator-configured paths');
-    if (!Array.isArray(config.allowedPaths) || config.allowedPaths.length < 1 || config.allowedPaths.length > 32 || config.allowedPaths.some(path =>
-        typeof path !== 'string' || path.length > 240 || !/^[a-zA-Z0-9_./ -]+$/.test(path) || path.startsWith('-') || path.split('/').some(part => !part || part === '.' || part === '..' || part.startsWith('.')) || /(?:^|\/)(?:credentials?|secrets?|id_rsa|id_ed25519)(?:[./]|$)/i.test(path) || /\.(?:pem|key|p12|pfx)$/i.test(path))) throw Error('Codex allowedPaths must contain 1–32 safe relative non-secret file paths');
-    if (new Set(config.allowedPaths).size !== config.allowedPaths.length) throw Error('Codex allowedPaths must be unique');
+    validateApprovedPaths(config.allowedPaths, 'Codex allowedPaths');
     return { executable: config.executable, ...(typeof config.repository === 'string' ? { repository: config.repository } : {}), allowedPaths: config.allowedPaths as string[] };
 }
 

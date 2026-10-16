@@ -2,7 +2,7 @@
 
 Werk models a Factory with logical subfactories and independent production lines. Each line has its own orchestrator, workers and task history. Run the hierarchy from one YAML definition, or start a single line for a smaller deployment.
 
-**Simulation is the default.** Workers record mock attempts and evidence, ending tasks as `simulated`. Trusted operators can opt into [native Linux Codex execution](docs/how-to/run-codex-task.md), which produces a local patch and a `review` task. Human review, publication and merge remain explicit operator actions. Orchestrator execution in the supplied Docker and managed VM profiles remains simulated. Standalone worker Chat and approved-file tasks can use configured API providers, including in Docker.
+**Simulation is the default.** Workers record mock attempts and evidence, ending tasks as `simulated`. Trusted operators can opt into [native Linux Codex execution](docs/how-to/run-codex-task.md), which produces a local patch and a `review` task. Human review and merge remain explicit operator actions. Shared feature intake can publish configured feature branches and Obsidian review notes automatically. Orchestrator execution in the supplied Docker and managed VM profiles remains simulated. Standalone worker Chat and approved-file tasks can use configured API providers, including in Docker.
 
 ## Download and start
 
@@ -67,6 +67,25 @@ template and Docker Compose configuration. Copy the template, fill in the reques
 and set `status: ready`; frontmatter tracks the worker queue and links to results.
 Orchestrator assignments appear in the same folder. See [project worker setup](docs/how-to/project-worker.md)
 for Docker startup and [the request contract](docs/reference/feature-requests.md).
+
+## Shared feature requests for a distributed team
+
+Commit the project authoring kit, editable template, Obsidian Base, and
+`fr-ready-check.json` / `fr-done-check.json` to the team repository. Teammates use
+the **Create Feature Request** skill to draft and validate requests locally; they
+do not need a worker connection or installation.
+
+In the worker Dashboard, connect **Shared request intake** to an assigned repository
+and intake branch. The worker claims committed ready requests, executes in pinned
+worktrees, checks completion, and pushes a feature branch with an Obsidian review
+note. The developer checkout stays untouched; a person reviews before merging.
+See [shared intake setup](docs/how-to/shared-feature-intake.md) and
+[offline authoring](docs/how-to/team-feature-authoring.md).
+
+Portable workers include an npm-compatible `package.json` with their available
+entrypoints. Run `npm --prefix bin/apps/worker run` to list them; no npm install is
+needed. Provider connections in the webview also show the CLI account details
+reported on the worker machine, including Claude subscription information when available.
 
 ## A complete system from one YAML file
 
