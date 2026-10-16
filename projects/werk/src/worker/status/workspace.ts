@@ -1,3 +1,6 @@
+import { ProviderAccountChecks } from '../infrastructure/provider-account.js';
+import { SharedIntakeRuntime } from '../infrastructure/features/shared-intake-runtime.js';
+import type { SharedFeatureRecord } from '../application/shared-feature-state.js';
 import type { ToolAccessView } from '../application/tool-policy.js';
 import { discoverMcpTools, mcpTransportConfiguration, McpClientError } from '../infrastructure/tool-mcp.js';
 import type { ExecutionProfilesControl } from '../application/execution-profiles.js';
@@ -86,6 +89,8 @@ export class WorkerWorkspace {
   readonly executionProfiles?: ExecutionProfilesControl;
   private taskIndex: TaskIndex;
   readonly features?: FeatureRequests;
+  readonly sharedRuntime: SharedIntakeRuntime;
+  private providerAccounts = new ProviderAccountChecks();
   readonly repositories: RepositoryManager;
   readonly repositoryDiscovery: RepositoryDiscovery;
   private configurationUpdating = false;
@@ -152,6 +157,7 @@ export class WorkerWorkspace {
         automaticActions: false,
       },
       repositories: { supported: true, synchronization: "fetch_fast_forward_only", workspaces: "git_worktrees", publication: false },
+      sharedIntake: { supported: true, claims: 'remote_git_compare_and_swap', workspaces: 'isolated_worktrees', publication: 'feature_branches_and_obsidian_notes', humanMergeRequired: true },
       projectIntegrations: {
         supported: true,
         enabled: !!(
@@ -695,7 +701,7 @@ export class WorkerWorkspace {
       config.chatExecutable,
       config.repositories,
     );
-    this.repositories = new RepositoryManager(this.settings.value.repositories, { beforeRepositoryUse: item => this.repositoryDiscovery.assertAllowed(item.path) });
+    this.repositories = new RepositoryManager(this.settings.value.repositories, { beforeRepositoryUse: item => this.repositoryDiscovery.assertAllowed(item.path), preserveCheckout: item => this.sharedRuntime?.intake.binding?.repositoryId === item.id || (this.sharedRuntime?.intake.requiredRepositoryIds().includes(item.id) ?? false) });
     this.repositoryDiscovery = new RepositoryDiscovery(config.stateDir, config.integrationProjectDir ?? config.projectDir ?? process.cwd(), this.repositoryStop.signal, config.codex?.repository);
     this.sessions = new WorkerSessions(
       config.stateDir, this.settings, modelFor, undefined, () => this.board.active,
@@ -747,6 +753,19 @@ export class WorkerWorkspace {
           event === "resource_alert_resolved" ? "info" : "warn",
         ),
     });
+    this.sharedRuntime = new SharedIntakeRuntime({
+      stateDirectory: config.stateDir,
+      resolve: id => this.repositories.resolve(id),
+      allowed: path => this.repositoryDiscovery.assertAllowed(path),
+      canAdmit: () => this.acceptingTasks && !this.settings.value.board.paused && !this.configurationUpdating && !this.repositoriesUpdating && !this.executionProfiles?.pending(),
+      submit: record => this.submitSharedFeature(record),
+      inspect: id => {
+        try {
+          const task = this.board.detail(id);
+          return { status: task.status, summary: task.summary, patch: task.patch, request: task.requestId ? this.sessions.requests.get(task.requestId) : null, currentTurnId: task.currentTurnId, runId: task.runId, error: task.error };
+        } catch { return undefined; }
+      },
+    });
     if (config.features)
       this.features = new FeatureRequests(
         new MarkdownFeatureFolder(
@@ -764,6 +783,7 @@ export class WorkerWorkspace {
               : this.task({ id: record.sessionId, action }),
         },
         config.features.pollMs,
+        () => !this.sharedRuntime.intake.binding?.repositoryId,
       );
   }
   async init() {
@@ -784,6 +804,7 @@ export class WorkerWorkspace {
     }
     await this.settings.init();
     await this.repositoryDiscovery.init(this.settings.value.repositories.items);
+    await this.sharedRuntime.intake.init();
     await this.repositories.configure(this.settings.value.repositories);
     await this.repositories.init();
     await this.sessions.init();
@@ -793,6 +814,43 @@ export class WorkerWorkspace {
     await this.resources.init();
     this.resources.start();
     this.repositories.start();
+    this.sharedRuntime.intake.start();
+  }
+  async providerAccount(input: unknown) {
+    const body = object(input, 'Provider account check', ['id']);
+    return this.providerAccounts.check(this.settings.provider(identifier(body.id, 'provider ID')));
+  }
+  sharedIntakeView() {
+    const blocked = this.toolAccessBlockedReason()?.replaceAll('tool access', 'shared intake') ?? null;
+    return this.sharedRuntime.intake.view(blocked);
+  }
+  async sharedIntakeCommand(input: unknown) {
+    const body = object(input, 'Shared intake command', ['action', 'expectedRevision', 'config', 'id']);
+    if (body.action === 'configure') {
+      if (body.id !== undefined || !Number.isSafeInteger(body.expectedRevision)) throw new DomainError('invalid_input', 'Save shared intake with its current revision.');
+      await this.withIdleConfiguration(() => this.sharedRuntime.intake.configure(body.config, Number(body.expectedRevision)));
+      return this.sharedIntakeView();
+    }
+    if (body.config !== undefined || body.expectedRevision !== undefined) throw new DomainError('invalid_input', 'Configuration fields are only accepted when saving shared intake.');
+    if (body.action === 'sync' && body.id === undefined) {
+      if (!this.acceptingTasks || this.configurationUpdating || this.repositoriesUpdating) throw new DomainError('unavailable', 'Worker configuration is changing or the worker is stopping.');
+      await this.sharedRuntime.intake.sync();
+      return this.sharedIntakeView();
+    }
+    if (body.action === 'note') return this.sharedRuntime.intake.note(identifier(body.id, 'feature ID'));
+    throw new DomainError('invalid_input', 'Use configure, sync or note for shared intake.');
+  }
+  featureView() { return this.sharedRuntime.intake.binding?.repositoryId ? { enabled: false, reason: 'Shared repository intake is configured.' } : this.features?.view() ?? { enabled: false }; }
+  async featureList() { return this.sharedRuntime.intake.binding?.repositoryId ? this.featureView() : await this.features?.list() ?? { enabled: false }; }
+  async featureCommand(input: unknown) {
+    if (!this.features) throw new DomainError('conflict', 'Configure a feature folder first.');
+    if (this.sharedRuntime.intake.binding?.repositoryId && !['get', 'result', 'validate'].includes(String((input as { action?: unknown })?.action))) throw new DomainError('conflict', 'Shared Git intake owns new feature requests. Create and validate the request in the repository, then commit and push it.');
+    return this.features.action(input);
+  }
+  private async submitSharedFeature(record: SharedFeatureRecord) {
+    const input = record.accepted;
+    const assignment = this.repositories.resolve(record.binding.repositoryId);
+    await this.withRepositoryAdmission(() => this.board.create({ title: input.title, instruction: input.message, provider: input.provider, repository: assignment.path, paths: input.paths, priority: input.priority, definitionId: input.definitionId, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly }, { id: record.taskId!, hash: record.inputHash, policy: record.workflow.policy, criteria: input.criteria, repositoryId: record.binding.repositoryId, baseCommit: record.sourceCommit }));
   }
   repositoryStatus() {
     return { schemaVersion: 1, pollMs: this.settings.value.repositories.pollMs, items: this.repositories.view(), discovery: this.repositoryDiscovery.view() };
@@ -886,7 +944,7 @@ export class WorkerWorkspace {
     return this.toolAccess();
   }
   async withIdleConfiguration<T>(operation: () => Promise<T>): Promise<T> {
-    if (!this.acceptingTasks || this.configurationUpdating || !this.settings.value.board.paused || this.repositoriesUpdating || this.repositoryPreparations || this.sessions.busy || this.board.active || this.get().activeTasks.length || this.get().queuedTasks?.length)
+    if (!this.acceptingTasks || this.configurationUpdating || this.sharedRuntime.intake.busy || !this.settings.value.board.paused || this.repositoriesUpdating || this.repositoryPreparations || this.sessions.busy || this.board.active || this.get().activeTasks.length || this.get().queuedTasks?.length)
       throw new DomainError("conflict", "Pause intake and finish or cancel queued tasks and active replies before changing execution profiles.");
     this.configurationUpdating = true;
     try { return await operation(); } finally { this.configurationUpdating = false; }
@@ -965,6 +1023,13 @@ export class WorkerWorkspace {
       return this.settings.update(body);
     };
     if (input?.repositories !== undefined) {
+      const proposed = (input.repositories as { items?: { id?: unknown; path?: unknown }[] })?.items;
+      if (this.sharedRuntime.intake.busy) throw new DomainError('conflict', 'Wait for shared synchronization before changing repository assignments.');
+      if (Array.isArray(proposed)) for (const id of this.sharedRuntime.intake.requiredRepositoryIds()) {
+        const current = this.settings.value.repositories.items.find(item => item.id === id);
+        const next = proposed.find(item => item.id === id);
+        if (!next || next.path !== current?.path) throw new DomainError('conflict', 'Keep the repository assignment while shared intake is enabled or owns unfinished publication.');
+      }
       this.assertRepositoryChangeAllowed();
       this.repositoriesUpdating = true;
       try {
@@ -981,7 +1046,7 @@ export class WorkerWorkspace {
     this.repositoryStop.abort();
     // Abort Git preparation before awaiting feature intake, which may be waiting on it.
     await Promise.all([
-      this.features?.stopIntake(), this.repositories.close(), this.board.close(),
+      this.features?.stopIntake(), this.sharedRuntime.close(), this.providerAccounts.close(), this.repositories.close(), this.board.close(),
       this.reviews.close(), this.taskRequests,
     ]);
     await this.sessions.close({ retainEvidence: true });
@@ -1166,7 +1231,8 @@ export class WorkerWorkspace {
           }
         : null,
       repositories: this.repositoryStatus(),
-      features: this.features?.view() ?? { enabled: false },
+      features: this.featureView(),
+      sharedIntake: this.sharedIntakeView(),
       stateDirectory: resolve(this.config.stateDir),
       projectDirectory: this.config.projectDir
         ? resolve(this.config.projectDir)

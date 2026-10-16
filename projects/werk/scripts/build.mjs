@@ -41,6 +41,10 @@ for (const app of apps) {
       await cp(join(root,'node_modules/yaml'),join(staging,'node_modules/yaml'),{recursive:true});
       if (app === 'worker') await cp(join(root,'node_modules/undici'),join(staging,'node_modules/undici'),{recursive:true});
     }
+    if (app === 'worker') {
+      const { buildFeatureAuthoring } = await import('./release/feature-authoring.mjs');
+      await buildFeatureAuthoring(root, staging);
+    }
     // Replace only this generated distribution, so removed source files cannot survive a rebuild.
     await rm(dest, { recursive: true, force: true });
     await rename(staging, dest);

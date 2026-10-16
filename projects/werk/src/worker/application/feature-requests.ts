@@ -53,8 +53,8 @@ export class FeatureRequests {
   private errors: { file: string; message: string }[] = [];
   private work = Promise.resolve(); private scanning?: Promise<void>; private stopped = false;
   private initialized = false; private lastScan = 0; private lastSaved = ''; private fault: string | null = null;
-  private folder: FeatureFolderPort; private queue: FeatureQueuePort; private pollMs: number;
-  constructor(folder: FeatureFolderPort, queue: FeatureQueuePort, pollMs = 1000) { this.folder = folder; this.queue = queue; this.pollMs = pollMs; }
+  private folder: FeatureFolderPort; private queue: FeatureQueuePort; private pollMs: number; private canAdmit: () => boolean;
+  constructor(folder: FeatureFolderPort, queue: FeatureQueuePort, pollMs = 1000, canAdmit = () => true) { this.folder = folder; this.queue = queue; this.pollMs = pollMs; this.canAdmit = canAdmit; }
   async init() { this.index = await this.folder.load(); this.lastSaved = JSON.stringify(this.index); await this.folder.open(this.index.owner); this.initialized = true; }
   view() { return { enabled: true, directory: this.folder.directory, pollMs: this.pollMs, error: this.fault, errors: structuredClone(this.errors), records: this.index.records.map(({ input: _input, ...record }) => ({ ...record })) }; }
   async list() { await this.tick(true); return { ...this.view(), files: (await this.folder.scan()).map(({ input, ...file }) => ({ ...file, title: input?.title, mode: input?.mode, provider: input?.provider, archived: this.index.records.find(item => item.name === file.name)?.archived ?? false })) }; }
@@ -89,7 +89,7 @@ export class FeatureRequests {
     if (this.scanning) return this.scanning;
     if (!force && Date.now() - this.lastScan < this.pollMs) return Promise.resolve();
     this.lastScan = Date.now();
-    this.scanning = this.exclusive(async () => { try { await this.reconcile(true); this.fault = null; } catch { this.fault = 'Feature folder could not be synchronized. Check its permissions, state and available disk space.'; } }).finally(() => { this.scanning = undefined; });
+    this.scanning = this.exclusive(async () => { try { await this.reconcile(this.canAdmit()); this.fault = null; } catch { this.fault = 'Feature folder could not be synchronized. Check its permissions, state and available disk space.'; } }).finally(() => { this.scanning = undefined; });
     return this.scanning;
   }
   private async reconcile(admit: boolean) {

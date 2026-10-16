@@ -1,6 +1,12 @@
 import { open } from "node:fs/promises";
 import { inputError } from "../config.mjs";
 export function workerCommands(catalog) {
+  catalog["feature setup"] = { local: true, required: [], options: ["project-dir", "features-dir"], mutating: true, description: "Install a standalone feature authoring kit without starting or installing a worker; preserve existing project files." };
+  for (const action of ["create", "validate", "ready"]) catalog["feature author " + action] = {
+    local: true, required: action === "create" ? ["name", "title"] : ["file", ...(action === "ready" ? ["if-match"] : [])],
+    options: ["project-dir"], mutating: action !== "validate",
+    description: action === "ready" ? "Validate the current draft and mark it ready using its current SHA-256 revision, without a running worker." : action === "create" ? "Create a draft from the project's standalone authoring kit." : "Validate a request against the project's authoring checks without a worker API.",
+  };
   for (const name of ["get", "plan", "set"])
     catalog["feature folder " + name] = {
       local: true,

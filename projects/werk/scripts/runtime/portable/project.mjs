@@ -1,6 +1,8 @@
 import { cp, mkdir, open, lstat, readFile, realpath, readdir } from 'node:fs/promises';
 import { resolve, relative, join, isAbsolute, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { seedWorkerPackage } from './npm-package.mjs';
+import { setupFeatureAuthoring, planFeatureAuthoring } from './feature-authoring.mjs';
 import { inputError, readPrivate, createPrivate } from '../config.mjs';
 
 const nodeImage = 'node:24.19.0-bookworm@sha256:4196d66a565c6f195728d9952f161f4adfe2ad753052a08b7ec7f1c5a6bda42b';
@@ -45,12 +47,16 @@ export async function projectDefaults(options, launching = false) {
 export async function initializeWorker(root, options) {
   const project = await realpath(resolve(options['project-dir'] ?? process.cwd()));
   const { realDirectory } = await import(new URL('../../../src/worker/dist/worker/infrastructure/features/folder.js', import.meta.url));
-  const { featureTemplate } = await import(new URL('../../../src/worker/dist/worker/infrastructure/features/document.js', import.meta.url));
   const { configuration } = await import(new URL('../../../src/worker/dist/worker/config.js', import.meta.url));
   const config = join(project, '.werk/worker.json');
   const existingConfig = await readPrivate(config).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
-  const requested = options['features-dir'] ?? existingConfig?.features?.directory ?? 'features', inside = relative(project, resolve(project, requested));
+  const { readAuthoringFile } = await import(new URL('../../../src/worker/dist/worker/infrastructure/feature-authoring-files.js', import.meta.url));
+  const { validateFeatureWorkflow } = await import(new URL('../../../src/worker/dist/worker/application/feature-workflow.js', import.meta.url));
+  const workflowRaw = await readAuthoringFile(project, '.werk/feature-workflow.json', 16384);
+  const workflow = workflowRaw === undefined ? undefined : validateFeatureWorkflow(JSON.parse(workflowRaw));
+  const requested = options['features-dir'] ?? existingConfig?.features?.directory ?? workflow?.requestsDirectory ?? 'features', inside = relative(project, resolve(project, requested));
   if (!inside || inside === '..' || inside.startsWith('..' + sep) || isAbsolute(inside) || inside.split(sep).some(part => ['.werk', '.git', 'bin', 'node_modules'].includes(part))) throw inputError('Choose a feature folder inside the project, outside .werk, .git, bin and node_modules.');
+  if (workflow && workflow.requestsDirectory !== inside.split(sep).join('/')) throw inputError('The authoring workflow uses another feature folder. Use its configured folder or migrate the workflow explicitly before initializing a worker.');
   const featureDirectory = join(project, inside), app = join(project, 'bin/apps/worker');
   const state = join(project, '.werk/worker');
   const prior = await exists(app), source = await realpath(root);
@@ -62,6 +68,7 @@ export async function initializeWorker(root, options) {
   const port = Number(options.port ?? marker?.port ?? 4100);
   if (marker && marker.port !== port) throw inputError('Existing project port differs. Edit worker-project.json and compose.worker.yaml explicitly, or override the launch port.');
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw inputError('port must be 1–65535.');
+  await planFeatureAuthoring(root, project, { featuresDirectory: inside.split(sep).join('/') });
   // Validate every existing destination before installing; repeat setup preserves user edits.
   for (const file of ['worker-project.json', 'worker.json', 'compose.worker.yaml', '.gitignore']) await plainFile(join(project, '.werk', file));
   await realDirectory(join(project, '.werk'), true); await realDirectory(state, true);
@@ -70,7 +77,7 @@ export async function initializeWorker(root, options) {
   if (!prior) { await rejectLinks(root); await realDirectory(join(project, 'bin/apps'), true); await cp(root, app, { recursive: true, errorOnExist: true, force: false }); }
   if (!existingConfig) await createPrivate(config, { schemaVersion: 1, features: { directory: inside.split(sep).join('/'), provider: options.provider ?? 'codex-cli', pollMs: 1000 } });
   await seed(join(project, '.werk/worker-project.json'), JSON.stringify({ schemaVersion: 1, port }, null, 2) + '\n');
-  await seed(join(featureDirectory, '_templates/feature-request.md'), featureTemplate);
+  const authoring = await setupFeatureAuthoring(app, project, { featuresDirectory: inside.split(sep).join('/') });
   await ignore(join(project, '.werk/.gitignore'), ['worker/', 'provider-home/', 'agent-integrations.json', 'agent-integrations.pending.json', 'agent-integrations.lock']);
   await ignore(join(featureDirectory, '.gitignore'), ['_worker.lock', '_worker-owner.json', '_worker-status.md', '_results/', '_questions/', '_gates/']);
   const name = 'werk-worker-' + randomBytes(5).toString('hex');
@@ -108,10 +115,11 @@ services:
       retries: 6
 `;
   await seed(join(project, '.werk/compose.worker.yaml'), compose);
+  const npm = { ...await seedWorkerPackage(project), applicationManifest: join(app, 'package.json'), list: 'npm --prefix bin/apps/worker run', command: 'npm --prefix bin/apps/worker run worker -- COMMAND' };
   let integrations;
   try {
     const { seedProjectIntegrations } = await import(new URL('../../../src/worker/dist/worker/infrastructure/project-integrations.js', import.meta.url));
     integrations = await seedProjectIntegrations(project);
   } catch { integrations = { applied: false, unavailable: true, reason: 'Integration setup did not complete. Inspect integrations plan before syncing.' }; }
-  return { integrations, initialized: true, projectDirectory: project, application: app, stateDirectory: state, featuresDirectory: featureDirectory, template: join(featureDirectory, '_templates/feature-request.md'), configuration: config, commands: { run: 'node bin/apps/worker/cli.mjs run', start: 'node bin/apps/worker/cli.mjs start', status: 'node bin/apps/worker/cli.mjs status', docker: 'docker compose -f .werk/compose.worker.yaml up -d', dockerStop: 'docker compose -f .werk/compose.worker.yaml down' }, next: 'Connect a provider in the webview or use settings set --file provider.json and provider check --id PROVIDER. Create a draft with feature create, validate it, then submit with its current revision; or copy the template into the feature folder and set status: ready.' };
+  return { authoring, npm, integrations, initialized: true, projectDirectory: project, application: app, stateDirectory: state, featuresDirectory: featureDirectory, template: join(featureDirectory, '_templates/feature-request.md'), configuration: config, commands: { run: 'node bin/apps/worker/cli.mjs run', start: 'node bin/apps/worker/cli.mjs start', status: 'node bin/apps/worker/cli.mjs status', docker: 'docker compose -f .werk/compose.worker.yaml up -d', dockerStop: 'docker compose -f .werk/compose.worker.yaml down' }, next: 'Connect a provider in the webview or use settings set --file provider.json and provider check --id PROVIDER. Use feature author create to make a draft from the team template, fill it in, validate it with feature author validate, then queue it with feature author ready and its current revision.' };
 }

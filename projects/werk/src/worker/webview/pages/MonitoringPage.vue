@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import RepositoryPanel from '../components/RepositoryPanel.vue';
+import SharedIntakePanel from '../components/SharedIntakePanel.vue';
 import ExecutionProfilesPanel from '../components/ExecutionProfilesPanel.vue';
 import ToolAccessPanel from '../components/ToolAccessPanel.vue';
 import ProjectIntegrationsPanel from '../components/ProjectIntegrationsPanel.vue';
@@ -18,13 +19,13 @@ import DefinitionPanel from '../components/DefinitionPanel.vue';
 import { state, bytes, date, workspaceAction } from '../store';
 
 const router = useRouter(), route = useRoute();
-const providerDetails = ref<HTMLDetailsElement | null>(null), definitionDetails = ref<HTMLDetailsElement | null>(null), profileDetails = ref<HTMLDetailsElement | null>(null), toolDetails = ref<HTMLDetailsElement | null>(null);
+const providerDetails = ref<HTMLDetailsElement | null>(null), definitionDetails = ref<HTMLDetailsElement | null>(null), profileDetails = ref<HTMLDetailsElement | null>(null), toolDetails = ref<HTMLDetailsElement | null>(null), sharedIntakeDetails = ref<HTMLDetailsElement | null>(null);
 async function openLinkedSettings() {
   if (route.path !== '/dashboard') return;
   const path = route.fullPath;
   await nextTick();
   if (route.fullPath !== path) return;
-  const target = route.hash === '#provider-connections' ? providerDetails.value : route.hash === '#agent-definitions' ? definitionDetails.value : route.hash === '#execution-profiles' ? profileDetails.value : route.hash === '#tool-access' ? toolDetails.value : null;
+  const target = route.hash === '#provider-connections' ? providerDetails.value : route.hash === '#agent-definitions' ? definitionDetails.value : route.hash === '#execution-profiles' ? profileDetails.value : route.hash === '#tool-access' ? toolDetails.value : route.hash === '#shared-intake' ? sharedIntakeDetails.value : null;
   if (!target) return;
   target.open = true;
   target.querySelector('summary')?.focus({ preventScroll: true });
@@ -81,6 +82,7 @@ async function openRunning() {
       <span>Set up this worker</span>
       <RouterLink to="/dashboard#provider-connections">Provider connections</RouterLink>
       <RouterLink to="/dashboard#tool-access">Tool access</RouterLink>
+      <RouterLink to="/dashboard#shared-intake">Shared request intake</RouterLink>
       <RouterLink to="/dashboard#execution-profiles">Execution profiles</RouterLink>
       <RouterLink to="/dashboard#agent-definitions">Agent definitions</RouterLink>
     </nav>
@@ -139,6 +141,10 @@ async function openRunning() {
 
     <ResourceMonitorPanel v-if="state.unlocked" />
     <RepositoryPanel v-if="state.unlocked" />
+    <details id="shared-intake" ref="sharedIntakeDetails" class="monitor-section dashboard-disclosure">
+      <summary>Shared request intake</summary>
+      <SharedIntakePanel v-if="state.unlocked" />
+    </details>
     <ProjectIntegrationsPanel v-if="state.unlocked" />
     <RunEvidencePanel v-if="state.unlocked" compact />
     <FeatureRequestsPanel v-if="state.unlocked" compact />

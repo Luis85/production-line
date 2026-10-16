@@ -159,6 +159,8 @@ export async function statusServer(
               await providers.check(workspace.settings.provider(body.id)),
             );
           }
+          if (req.method === "POST" && req.url === "/api/providers/account")
+            return json(res, 200, await workspace.providerAccount(await readJson(req)));
           if (req.method === "GET" && req.url === "/api/tool-access")
             return json(res, 200, workspace.toolAccess());
           if (req.method === "POST" && req.url === "/api/tool-access")
@@ -177,11 +179,15 @@ export async function statusServer(
               200,
               await workspace.integrations(await readJson(req)),
             );
+          if (req.method === "GET" && req.url === "/api/shared-intake")
+            return json(res, 200, workspace.sharedIntakeView());
+          if (req.method === "POST" && req.url === "/api/shared-intake")
+            return json(res, 200, await workspace.sharedIntakeCommand(await readJson(req)));
           if (req.method === "GET" && req.url === "/api/features")
             return json(
               res,
               200,
-              (await workspace.features?.list()) ?? { enabled: false },
+              await workspace.featureList(),
             );
           if (req.method === "POST" && req.url === "/api/features") {
             if (!workspace.features)
@@ -189,7 +195,7 @@ export async function statusServer(
             return json(
               res,
               200,
-              await workspace.features.action(await readJson(req)),
+              await workspace.featureCommand(await readJson(req)),
             );
           }
           if (req.method === "GET" && req.url === "/api/definitions")

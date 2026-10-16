@@ -1,7 +1,7 @@
 import type { ToolWorktreeIdentity } from './tool-runtime.js';
 import { createToolRuntime } from '../infrastructure/tool-runtime.js';
 import type { StructuredModel } from './model-contract.js';
-import type { GateInput, WorkerRequest } from "./request-gates.js";
+import { gateDigest, validateGateInput, validateGatePolicy, type GateInput, type GatePolicy, type WorkerRequest } from "./request-gates.js";
 import { DEFAULT_MAX_RUNTIME_MS } from "./execution-policy.js";
 import {
   executeModel,
@@ -44,6 +44,37 @@ export interface LocalTaskWorkspaces {
     reused?: boolean;
   }>;
 }
+/** Trusted coordinator reservation; these fields are never accepted from a task HTTP body. */
+export interface LocalTaskSubmission {
+  id: string;
+  hash: string;
+  policy?: GatePolicy;
+  criteria?: string[];
+  repositoryId?: string;
+  baseCommit?: string;
+}
+function freezeSubmission(input: LocalTaskSubmission): LocalTaskSubmission {
+  const value = object(input, "Task reservation", ["id", "hash", "policy", "criteria", "repositoryId", "baseCommit"]);
+  if (typeof value.id !== "string" || !/^[a-z0-9-]{1,90}$/.test(value.id) ||
+      typeof value.hash !== "string" || !/^[a-f0-9]{64}$/.test(value.hash))
+    throw new DomainError("invalid_input", "Invalid feature task identity.");
+  if (value.repositoryId !== undefined && (typeof value.repositoryId !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(value.repositoryId)))
+    throw new DomainError("invalid_input", "Invalid reserved repository ID.");
+  if (value.baseCommit !== undefined && (typeof value.baseCommit !== "string" || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(value.baseCommit)))
+    throw new DomainError("invalid_input", "Task base must be a full Git commit identifier.");
+  return {
+    id: value.id,
+    hash: value.hash,
+    ...(value.policy === undefined ? {} : { policy: validateGatePolicy(value.policy) }),
+    ...(value.criteria === undefined ? {} : { criteria: validateGateInput({ kind: "patch", title: "", message: "", criteria: value.criteria }).criteria }),
+    ...(value.repositoryId === undefined ? {} : { repositoryId: value.repositoryId as string }),
+    ...(value.baseCommit === undefined ? {} : { baseCommit: value.baseCommit as string }),
+  };
+}
+function submissionContextHash(submission?: LocalTaskSubmission) {
+  const context = { policy: submission?.policy, criteria: submission?.criteria, repositoryId: submission?.repositoryId, baseCommit: submission?.baseCommit };
+  return Object.values(context).some(value => value !== undefined) ? gateDigest(context) : undefined;
+}
 export interface TaskFile {
   path: string;
   content: string;
@@ -55,6 +86,9 @@ export interface LocalTask {
   runId?: string;
   currentTurnId?: string;
   submissionHash?: string;
+  submissionContextHash?: string;
+  gatePolicy?: GatePolicy;
+  criteria?: string[];
   definition?: DefinitionSnapshot;
   id: string;
   title: string;
@@ -236,6 +270,7 @@ export class LocalTaskboard {
       kind: "patch",
       title: task.title,
       message: task.instruction,
+      ...(task.criteria === undefined ? {} : { criteria: structuredClone(task.criteria) }),
       files: task.files.map((file) => ({
         path: file.path,
         bytes: Buffer.byteLength(file.content),
@@ -269,7 +304,7 @@ export class LocalTaskboard {
       },
       input: this.gateInput(task),
       provider: profile,
-      policy: this.sessions.requestPolicy?.(),
+      policy: task.gatePolicy ?? this.sessions.requestPolicy?.(),
     });
     task.requestId = request.id;
     return request;
@@ -288,6 +323,7 @@ export class LocalTaskboard {
       taskId: task.id,
       title: task.title,
       instruction: task.instruction,
+      ...(task.criteria === undefined ? {} : { criteria: structuredClone(task.criteria) }),
       provider: task.provider,
       model: task.model,
       repository: task.repository,
@@ -303,7 +339,7 @@ export class LocalTaskboard {
     };
   }
   private originalPrompt(task: LocalTask) {
-    return `Implement the requested changes to the supplied files. Return ONLY a JSON object {"summary":"...","files":[{"path":"approved path","content":"complete new file content"}]}. Use only tools explicitly granted by the worker. Only include changed approved files. Claim tests were run only when a granted tool actually ran them. This creates a patch for human review.\nTask: ${task.title}\nInstruction: ${task.instruction}\nApproved file snapshots: ${JSON.stringify(task.files)}`;
+    return `Implement the requested changes to the supplied files. Return ONLY a JSON object {"summary":"...","files":[{"path":"approved path","content":"complete new file content"}]}. Use only tools explicitly granted by the worker. Only include changed approved files. Claim tests were run only when a granted tool actually ran them. This creates a patch for human review.\nTask: ${task.title}\nInstruction: ${task.instruction}${task.criteria?.length ? "\nAcceptance criteria: " + JSON.stringify(task.criteria) : ""}\nApproved file snapshots: ${JSON.stringify(task.files)}`;
   }
   private preparedRequest(
     task: LocalTask,
@@ -663,13 +699,14 @@ export class LocalTaskboard {
     this.writing = write;
     return write;
   }
-  async create(input: unknown, submission?: { id: string; hash: string }) {
+  async create(input: unknown, submission?: LocalTaskSubmission) {
+    const frozen = submission === undefined ? undefined : freezeSubmission(submission);
     // Serialize admission so duplicate durable IDs never prepare a second worktree.
     const operation = this.admitting
       .catch(() => {})
       .then(async () => {
         try {
-          return await this.createTask(input, submission);
+          return await this.createTask(input, frozen);
         } finally {
           this.admissionReserved = false;
         }
@@ -692,21 +729,14 @@ export class LocalTaskboard {
   }
   private async createTask(
     input: unknown,
-    submission?: { id: string; hash: string },
+    submission?: LocalTaskSubmission,
   ) {
     if (this.closed) throw new DomainError("unavailable", "Worker is stopping");
     if (submission) {
-      if (
-        !/^[a-z0-9-]{1,90}$/.test(submission.id) ||
-        !/^[a-f0-9]{64}$/.test(submission.hash)
-      )
-        throw new DomainError(
-          "invalid_input",
-          "Invalid feature task identity.",
-        );
       const existing = this.tasks.find((task) => task.id === submission.id);
       if (existing) {
-        if (existing.submissionHash !== submission.hash)
+        if (existing.submissionHash !== submission.hash ||
+            existing.submissionContextHash !== submissionContextHash(submission))
           throw new DomainError(
             "conflict",
             "Task ID belongs to different input.",
@@ -748,6 +778,10 @@ export class LocalTaskboard {
         "invalid_input",
         "Choose a repository assigned to this worker.",
       );
+    if (submission?.repositoryId !== undefined && assignment?.id !== submission.repositoryId)
+      throw new DomainError("conflict", "The task repository does not match its reserved assignment.");
+    if (submission?.baseCommit && !this.workspaces)
+      throw new DomainError("unavailable", "Pinned task admission requires the repository worktree service.");
     const config = codexConfiguration({
       executable: resolve("provider"),
       repository: assignment?.path ?? selector,
@@ -777,6 +811,7 @@ export class LocalTaskboard {
             this.workspaceController.signal,
             AbortSignal.timeout(30000),
           ]),
+          submission?.baseCommit,
         )
       : { repository: config.repository!, path: config.repository! };
     if (
@@ -787,6 +822,8 @@ export class LocalTaskboard {
         "conflict",
         "Assigned repository tasks require a committed Git worktree.",
       );
+    if (submission?.baseCommit && prepared.baseCommit !== submission.baseCommit)
+      throw new DomainError("conflict", "The prepared task worktree does not match its reserved source commit.");
     if (prepared.reused)
       throw new DomainError(
         "conflict",
@@ -839,7 +876,9 @@ export class LocalTaskboard {
     }
     if (this.closed) throw new DomainError("unavailable", "Worker is stopping");
     const task: LocalTask = {
-      ...(submission ? { submissionHash: submission.hash } : {}),
+      ...(submission ? { submissionHash: submission.hash, submissionContextHash: submissionContextHash(submission) } : {}),
+      ...(submission?.policy ? { gatePolicy: structuredClone(submission.policy) } : {}),
+      ...(submission?.criteria === undefined ? {} : { criteria: structuredClone(submission.criteria) }),
       ...(definition ? { definition } : {}),
       id,
       title,
@@ -871,7 +910,8 @@ export class LocalTaskboard {
         // Check within the serialized write as concurrent submissions may pass the initial fast path.
         const existing = tasks.find((item) => item.id === id);
         if (existing) {
-          if (existing.submissionHash !== submission?.hash)
+          if (existing.submissionHash !== submission?.hash ||
+              existing.submissionContextHash !== submissionContextHash(submission))
             throw new DomainError(
               "conflict",
               "Task ID belongs to different input.",
@@ -1014,6 +1054,7 @@ export class LocalTaskboard {
         );
       task.instruction = current.input.message;
       task.title = current.input.title;
+      task.criteria = current.input.criteria === undefined ? undefined : structuredClone(current.input.criteria);
       if (current.inputRevision > 1) {
         const previous = this.sessions.interactions.view(task.sessionId);
         if (previous.pending)

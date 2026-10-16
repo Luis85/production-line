@@ -204,3 +204,42 @@ test('worktree registration uses native paths and refuses a registration retarge
   await assert.rejects(manager.prepareWorktree(repo.id, 'registration-identity', signal()), /not registered/);
   assert.equal(await readFile(join(worktree.path, 'file.txt'), 'utf8'), 'retain task edits\n');
 });
+
+
+test('shared-bound watchers fetch without moving clean checkouts while ordinary assignments still fast-forward', async t => {
+  const f = await fixtures(t, 2), [shared, ordinary] = f.repositories; let preserve = true;
+  const manager = f.manager(undefined, { preserveCheckout: assignment => preserve && assignment.id === shared.id });
+  const original = git(shared.path, 'rev-parse', 'HEAD');
+  const [sharedHead, ordinaryHead] = await Promise.all([f.publish(0, 'shared remote update\n'), f.publish(1, 'ordinary remote update\n')]);
+  await manager.init();
+  assert.deepEqual(manager.view().map(item => item.state), ['behind', 'ready']);
+  assert.deepEqual(manager.view().map(item => item.checkoutPreserved), [true, false]);
+  assert.equal(manager.view()[0].behind, 1); assert.equal(manager.view()[0].lastPulledAt, null);
+  assert.equal(git(shared.path, 'rev-parse', 'HEAD'), original);
+  assert.equal(await readFile(join(shared.path, 'file.txt'), 'utf8'), 'initial\n');
+  assert.equal(git(ordinary.path, 'rev-parse', 'HEAD'), ordinaryHead);
+  preserve = false; await manager.sync(shared.id);
+  assert.equal(git(shared.path, 'rev-parse', 'HEAD'), sharedHead); assert.equal(manager.view()[0].state, 'ready');
+  assert.equal(manager.view()[0].checkoutPreserved, false);
+});
+
+test('shared pinned worktrees preserve a developer branch, dirty file and exact staging index without another fetch', async t => {
+  const f = await fixtures(t), repo = f.repositories[0], manager = f.manager(undefined, { preserveCheckout: () => true });
+  const original = git(repo.path, 'rev-parse', 'HEAD');
+  git(repo.path, 'checkout', '-b', 'developer-topic');
+  await writeFile(join(repo.path, 'file.txt'), 'staged developer edit\n'); git(repo.path, 'add', 'file.txt');
+  await writeFile(join(repo.path, 'file.txt'), 'unstaged developer edit\n');
+  const indexBefore = await readFile(join(repo.path, '.git', 'index'));
+  const source = await f.publish(0, 'frozen remote source\n');
+  await manager.sync();
+  assert.equal(manager.view()[0].state, 'dirty'); assert.equal(manager.view()[0].behind, 1);
+  assert.deepEqual(await readFile(join(repo.path, '.git', 'index')), indexBefore);
+  const checkedAt = manager.view()[0].lastCheckedAt;
+  git(repo.path, 'remote', 'set-url', 'origin', join(f.directory, 'offline-remote'));
+  const workspace = await manager.prepareWorktree(repo.id, 'shared-pinned-task', signal(), source);
+  assert.equal(workspace.baseCommit, source); assert.equal(await readFile(join(workspace.path, 'file.txt'), 'utf8'), 'frozen remote source\n');
+  assert.equal(manager.view()[0].lastCheckedAt, checkedAt, 'Pinned admission does not start another repository sync.');
+  assert.equal(git(repo.path, 'rev-parse', 'HEAD'), original); assert.equal(git(repo.path, 'branch', '--show-current'), 'developer-topic');
+  assert.equal(await readFile(join(repo.path, 'file.txt'), 'utf8'), 'unstaged developer edit\n');
+  assert.deepEqual(await readFile(join(repo.path, '.git', 'index')), indexBefore);
+});

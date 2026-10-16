@@ -24,6 +24,8 @@ follows [Diátaxis](https://diataxis.fr/).
 
 - [Assemble independent workers, orchestrators and Factories](how-to/assemble-independent-components.md)
 - [Install a project worker and use its feature folder](how-to/project-worker.md)
+- [Author feature requests with your team](how-to/team-feature-authoring.md): portable skill, editable template, shared checks and Obsidian queue; no worker connection required.
+- [Run shared Git feature requests](how-to/shared-feature-intake.md): local worker binding, durable claims, published feature branches and review notes.
 - [Integrate with Claude and Codex](how-to/project-agent-integrations.md): reviewed project skills and guarded synchronization.
 - [Monitor long-running workers](how-to/monitor-long-running-worker.md): duration budgets, resource warnings and durable alert history.
 - [Define readiness, completion and rework](how-to/rework-worker-requests.md): deterministic rules, human findings and bounded model review.
@@ -51,6 +53,8 @@ follows [Diátaxis](https://diataxis.fr/).
 - [Use Docker Agent harnesses and MCP](how-to/docker-agent.md)
 
 ## Reference — look up a contract
+
+- [Shared Git feature intake](reference/shared-feature-intake.md): checked-in workflow and check files, ownership, publication, recovery and authenticated API.
 
 - [Shared Vue webview architecture](reference/webview-architecture.md): reusable Nuxt UI layouts/components, state boundaries and independent builds.
 

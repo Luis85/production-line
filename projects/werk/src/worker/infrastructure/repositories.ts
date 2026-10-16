@@ -5,9 +5,10 @@ import { createRepositoryWorktree, repositoryGit, RepositoryGitError, repository
 
 export { prepareRepositoryWorktree } from './repositories-git.js';
 export type { RepositoryAssignment, RepositoryConfiguration, RepositoryWorktree };
-export type RepositoryState = 'pending' | 'syncing' | 'ready' | 'dirty' | 'ahead' | 'diverged' | 'error';
+export type RepositoryState = 'pending' | 'syncing' | 'ready' | 'dirty' | 'ahead' | 'behind' | 'diverged' | 'error';
 export interface RepositoryStatus extends RepositoryAssignment {
   state: RepositoryState;
+  checkoutPreserved: boolean;
   currentBranch: string | null;
   head: string | null;
   ahead: number | null;
@@ -30,17 +31,19 @@ export class RepositoryManager {
   private closed = false;
   private readonly timeoutMs: number;
   private readonly beforeRepositoryUse?: (assignment: RepositoryAssignment) => Promise<void>;
+  private readonly preserveCheckout?: (assignment: RepositoryAssignment) => boolean;
 
-  constructor(config: RepositoryConfiguration, options: { commandTimeoutMs?: number; beforeRepositoryUse?: (assignment: RepositoryAssignment) => Promise<void> } = {}) {
+  constructor(config: RepositoryConfiguration, options: { commandTimeoutMs?: number; beforeRepositoryUse?: (assignment: RepositoryAssignment) => Promise<void>; preserveCheckout?: (assignment: RepositoryAssignment) => boolean } = {}) {
     this.config = validateRepositoryConfiguration(config, path => resolve(path));
     this.timeoutMs = options.commandTimeoutMs ?? 30000;
     this.beforeRepositoryUse = options.beforeRepositoryUse;
+    this.preserveCheckout = options.preserveCheckout;
     if (!Number.isSafeInteger(this.timeoutMs) || this.timeoutMs < 1 || this.timeoutMs > 300000) throw new DomainError('invalid_input', 'Invalid Git command timeout.');
     this.resetStatuses();
   }
   private resetStatuses() {
     this.roots.clear(); this.statuses.clear();
-    for (const item of this.config.items) this.statuses.set(item.id, { ...item, state: 'pending', currentBranch: null, head: null, ahead: null, behind: null, lastCheckedAt: null, lastPulledAt: null, error: null });
+    for (const item of this.config.items) this.statuses.set(item.id, { ...item, state: 'pending', checkoutPreserved: false, currentBranch: null, head: null, ahead: null, behind: null, lastCheckedAt: null, lastPulledAt: null, error: null });
   }
   async configure(config: RepositoryConfiguration) {
     this.ensureOpen();
@@ -53,7 +56,7 @@ export class RepositoryManager {
     if (restart) { await this.init(); this.start(); }
   }
   async init() { this.ensureOpen(); await this.sync(); }
-  view(): RepositoryStatus[] { return [...this.statuses.values()].map(item => ({ ...item })); }
+  view(): RepositoryStatus[] { return [...this.statuses.values()].map(item => ({ ...item, checkoutPreserved: !!this.preserveCheckout?.(item) })); }
   resolve(selector: string): RepositoryAssignment {
     const item = this.config.items.find(item => item.id === selector || item.path === resolve(selector) || this.roots.get(item.id)?.path === resolve(selector));
     if (!item) throw new DomainError('invalid_input', 'Choose a repository assigned to this worker.');
@@ -85,11 +88,14 @@ export class RepositoryManager {
     this.ensureOpen(); const item = this.resolve(selector), bounded = AbortSignal.any([signal, this.shutdown.signal]);
     return this.enqueue(item.id, async () => {
       bounded.throwIfAborted();
-      await this.syncOne(item, bounded);
+      const pinnedShared = !!baseCommit && !!this.preserveCheckout?.(item);
+      // Shared intake has already fetched and frozen this commit. The developer's
+      // branch, staging area and connectivity are unrelated to its task workspace.
+      if (!pinnedShared) await this.syncOne(item, bounded);
       bounded.throwIfAborted();
       // A network failure leaves an inspectable status; local committed work remains available offline.
       const root = await this.inspectRoot(item, bounded);
-      if (item.branch && (await repositoryGit(root.path, ['branch', '--show-current'], bounded, this.timeoutMs)).trim() !== item.branch) throw new DomainError('conflict', 'Check out the assigned branch before starting a task.');
+      if (!pinnedShared && item.branch && (await repositoryGit(root.path, ['branch', '--show-current'], bounded, this.timeoutMs)).trim() !== item.branch) throw new DomainError('conflict', 'Check out the assigned branch before starting a task.');
       return createRepositoryWorktree(root, item.id, taskKey, bounded, baseCommit, this.timeoutMs);
     });
   }
@@ -117,12 +123,12 @@ export class RepositoryManager {
     status.state = 'syncing'; status.error = null; status.ahead = null; status.behind = null;
     try {
       signal.throwIfAborted();
-      const root = await this.inspectRoot(item, signal);
-      const git = (args: string[]) => repositoryGit(root.path, args, signal, this.timeoutMs);
+      const root = await this.inspectRoot(item, signal), preserve = !!this.preserveCheckout?.(item);
+      const git = (args: string[]) => repositoryGit(root.path, [...(preserve ? ['--no-optional-locks'] : []), ...args], signal, this.timeoutMs);
       status.head = (await git(['rev-parse', '--verify', 'HEAD'])).trim();
       const branch = (await git(['branch', '--show-current'])).trim(); status.currentBranch = branch || null;
-      if (!branch) throw new RepositoryProblem('The base checkout is detached. Check out the assigned branch before synchronization.');
-      if (item.branch && item.branch !== branch) throw new RepositoryProblem('The base checkout is on a different branch than its assignment.');
+      if (!branch && (!preserve || !item.branch)) throw new RepositoryProblem('The base checkout is detached. Check out the assigned branch before synchronization.');
+      if (!preserve && item.branch && item.branch !== branch) throw new RepositoryProblem('The base checkout is on a different branch than its assignment.');
       const remotes = (await git(['remote'])).trim().split('\n');
       if (!remotes.includes(item.remote)) throw new RepositoryProblem('The assigned Git remote does not exist. Local committed work remains available.');
       await git(['fetch', '--no-recurse-submodules', '--no-tags', '--', item.remote, `refs/heads/${item.branch ?? branch}`]);
@@ -138,6 +144,9 @@ export class RepositoryManager {
       if (status.ahead && status.behind) { status.state = 'diverged'; return; }
       if (status.ahead) { status.state = 'ahead'; return; }
       if (status.behind) {
+        // Enabling shared ownership while a fetch is in flight must also prevent
+        // the final merge. Disabling it does not change this operation's promise.
+        if (preserve || this.preserveCheckout?.(item)) { status.state = 'behind'; return; }
         await git(['merge', '--ff-only', '--no-edit', '--no-stat', '--no-autostash', remoteHead]);
         status.head = (await git(['rev-parse', '--verify', 'HEAD'])).trim();
         status.behind = 0; status.lastPulledAt = new Date().toISOString();

@@ -52,10 +52,14 @@ test('clean standalone build removes stale output and compiles nested shared mod
   const root=await mkdtemp(join(tmpdir(),'werk-build-'));
   try {
     await mkdir(join(root,'scripts'));await cp(new URL('../../scripts/build.mjs',import.meta.url),join(root,'scripts/build.mjs'));await cp(new URL('../../scripts/webviews.mjs',import.meta.url),join(root,'scripts/webviews.mjs'));
+    await mkdir(join(root,'scripts/release'));
+    await cp(new URL('../../scripts/release/feature-authoring.mjs',import.meta.url),join(root,'scripts/release/feature-authoring.mjs'));
     await writeFile(join(root,'package.json'),JSON.stringify({version:'0.1.0',engines:{node:'>=24.0.0 <25'}}));
     await mkdir(join(root,'src/worker/dist'),{recursive:true});await mkdir(join(root,'src/shared/nested'),{recursive:true});
     await writeFile(join(root,'src/worker/cli.ts'),'#!/usr/bin/env node\nimport { value } from "../shared/nested/value.js"; console.log(value);\n');
     await writeFile(join(root,'src/shared/nested/value.ts'),'export const value: string = "portable";\n');
+    await mkdir(join(root,'src/worker/authoring'));
+    await writeFile(join(root,'src/worker/authoring/cli.ts'),'import { parse } from "yaml"; import { value } from "../../shared/nested/value.js"; console.log(parse("value: " + value).value);\n');
     await writeFile(join(root,'src/worker/dist/stale.js'),'old build');
     await cp(new URL('../../src/shared/webview',import.meta.url),join(root,'src/shared/webview'),{recursive:true});
     await cp(new URL('../../src/worker/webview',import.meta.url),join(root,'src/worker/webview'),{recursive:true,filter:path=>!path.includes('.nuxt-ui')});
@@ -63,7 +67,11 @@ test('clean standalone build removes stale output and compiles nested shared mod
     await exec(process.execPath,[join(root,'scripts/build.mjs'),'worker','--dist-only']);
     await assert.rejects(access(join(root,'src/worker/dist/stale.js')));
     const target=join(root,'relocated');await cp(join(root,'src/worker/dist'),target,{recursive:true});
+    const authoring=join(root,'authoring-only.mjs');await cp(join(target,'worker/authoring/feature-request.mjs'),authoring);
     await rm(join(root,'src'),{recursive:true});
+    await rm(join(root,'node_modules'),{recursive:true,force:true});
+    await rm(join(target,'node_modules'),{recursive:true,force:true});
+    const standalone=await exec(process.execPath,[authoring],{cwd:tmpdir()});assert.equal(standalone.stdout.trim(),'portable');
     const result=await exec(process.execPath,[join(target,'worker/cli.js')],{cwd:tmpdir()});assert.equal(result.stdout.trim(),'portable');
     const webview=await readFile(join(target,'worker/public/index.html'),'utf8');assert.match(webview,/assets\/.*\.js/);
     const manifest=JSON.parse(await readFile(join(target,'package.json'),'utf8'));assert.equal(manifest.bin['werk-worker'],'worker/cli.js');
