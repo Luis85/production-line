@@ -92,7 +92,9 @@ test('fleet reuses credentials, exports custom URL and drains workers before ser
     await mkdir(join(root,'.state/fleet'),{recursive:true});
     await writeFile(join(root,'.state/fleet/credentials.json'),JSON.stringify(preserved));
     await writeFile(join(root,'src/orchestrator/dist/orchestrator/cli.js'),`const http=require('node:http'),fs=require('node:fs');const p=Number(process.argv[process.argv.indexOf('--port')+1]);const s=http.createServer((req,res)=>res.end('{}'));s.listen(p,'127.0.0.1');process.once('SIGTERM',()=>{fs.appendFileSync(${JSON.stringify(events)},'server\\n');s.close();});`);
-    await writeFile(join(root,'src/worker/dist/worker/cli.js'),`const fs=require('node:fs');fs.appendFileSync(${JSON.stringify(events)},'started\\n');const timer=setInterval(()=>{},1000);process.once('SIGTERM',()=>{fs.appendFileSync(${JSON.stringify(events)},'worker\\n');clearInterval(timer);});`);
+    // Install the shutdown handler before announcing readiness: the test signals as soon as it reads "started",
+    // and a SIGTERM delivered before the handler exists ends the worker without its drain record.
+    await writeFile(join(root,'src/worker/dist/worker/cli.js'),`const fs=require('node:fs');const timer=setInterval(()=>{},1000);process.once('SIGTERM',()=>{fs.appendFileSync(${JSON.stringify(events)},'worker\\n');clearInterval(timer);});fs.appendFileSync(${JSON.stringify(events)},'started\\n');`);
     const {spawn}=await import('node:child_process');
     const alias = join(root, 'project-alias'); await symlink(root, alias, 'dir');
     child=spawn(process.execPath,[join(alias,'scripts/fleet.mjs'),'--workers','1'],{env:{...process.env,WERK_DEV_PORT:String(port),WERK_STATUS_BASE:String(status)},stdio:'pipe'});
