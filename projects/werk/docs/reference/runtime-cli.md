@@ -112,6 +112,9 @@ worker’s local credentials; stdout is JSON and no command prompts for a choice
 | `repository sync [--id ASSIGNMENT_ID]` | Fetch and safely fast-forward one assignment, or all when omitted |
 | `repository accept --discovery-id ID` | Accept the exact detected checkout and save an assignment; requires idle work |
 | `repository decline --discovery-id ID` | Persist the choice not to use the detected checkout |
+| `shared status` | Inspect shared Git intake: binding, `revision`, workflow snapshot and requests, without fetching |
+| `shared sync` | Fetch the shared branch now and reconcile claims and publications |
+| `shared configure --file intake.json` | Save `{"expectedRevision":N,"config":{...}}` while new starts are paused and idle |
 | `profile list` | Read active profiles, current `configurationHash` and any pending update |
 | `profile set --file profiles.json` | Save a guarded profile update while paused and idle; `--file -` reads stdin |
 

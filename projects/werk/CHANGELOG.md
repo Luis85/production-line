@@ -7,6 +7,17 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-16
+
+### Added
+
+- `shared status`, `shared sync` and `shared configure` worker commands, so shared Git intake can be inspected and configured without the webview.
+
+### Fixed
+
+- The local feature folder no longer claims shared Git requests (files with a `templateId`). It leaves them unchanged and reports that shared intake must process them, so a sync tool cannot push local lifecycle metadata into a team request.
+- A Windows worker state directory that is too deep for Git worktree publication is rejected when shared intake is configured, with the measured length and a remedy, instead of after a request was claimed.
+
 ## [0.8.0] - 2026-10-16
 
 ### Added

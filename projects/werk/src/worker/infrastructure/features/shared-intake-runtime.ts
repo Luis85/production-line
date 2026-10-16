@@ -7,6 +7,8 @@ import type { FeatureWorkflowSnapshot } from '../../application/feature-workflow
 import { sharedHash } from '../../application/shared-feature-notes.js';
 import { SharedFeatureJournal } from '../journal/shared-features.js';
 import { GitFeatureRepository } from './git-repository.js';
+import { assertPublicationPath, GitFeatureError } from './git-io.js';
+import { DomainError } from '../../../shared/errors.js';
 import { loadFeatureWorkflowSnapshot, validateFeatureReadiness } from './workflow.js';
 import { sharedSource, renderSharedSource } from './shared-source.js';
 
@@ -33,6 +35,9 @@ export class SharedIntakeRuntime {
     const key = sharedHash(JSON.stringify([assignment.path, binding.remote, binding.branch, workflow.requestsDirectory, workflow.reviewDirectory, protectedPaths]));
     let repository = this.adapters.get(key);
     if (!repository) {
+      // Configuring an enabled binding builds this adapter, so a deep Windows state path fails here, before any claim.
+      try { assertPublicationPath(join(this.stateDirectory, 'shared-git', key), assignment.path); }
+      catch (error) { throw error instanceof GitFeatureError ? new DomainError(error.code === 'invalid_input' ? 'invalid_input' : 'conflict', error.message) : error; }
       repository = new GitFeatureRepository({ repository: assignment.path, remote: binding.remote, branch: binding.branch, requestsDirectory: workflow.requestsDirectory, reviewDirectory: workflow.reviewDirectory, protectedPaths, stateDirectory: join(this.stateDirectory, 'shared-git', key), workerId: this.intake.view().workerId });
       this.adapters.set(key, repository);
     }

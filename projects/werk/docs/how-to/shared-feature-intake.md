@@ -43,6 +43,18 @@ Install and start a [project worker](project-worker.md). In its Dashboard:
    shared requests**, choose the assigned repository, remote name, shared branch,
    workflow file and polling interval. Save, then resume new starts.
 
+Automation uses the same guarded path: `queue pause`, then `shared status` for the
+current `revision`, `shared configure --file intake.json` with
+`{"expectedRevision":N,"config":{"enabled":true,"repositoryId":"…","remote":"origin","branch":"…","workflowPath":".werk/feature-workflow.json","pollMs":60000}}`,
+then `queue resume`. On Windows, configuration checks that Git worktree paths under
+the worker state directory stay within Git's limits; a deep `--state-dir` is
+rejected before any request is claimed.
+
+Bind shared intake before teammates' ready requests reach the worker's checkout.
+The local feature folder never admits a request carrying a `templateId`: it leaves
+the file unchanged and reports it until shared intake processes it, so a vault or
+sync tool cannot push local lifecycle metadata back into a shared request.
+
 The default workflow file is `.werk/feature-workflow.json`. Its paths configure
 request and review-note folders, the template, the Obsidian Base and both check
 files. The local connection selects which repository and branch supply those
