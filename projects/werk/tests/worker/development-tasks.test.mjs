@@ -13,6 +13,10 @@ import { defaultGatePolicy } from '../../src/worker/dist/worker/application/requ
 import { SharedFeatureLifecycle } from '../../src/worker/dist/worker/application/shared-feature-lifecycle.js';
 
 const run = promisify(execFile), delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+// Native Windows containment adds process startup cost to each Git/check operation.
+const settleTimeoutMs = process.platform === 'win32' ? 120000 : 20000;
+const testTimeoutMs = process.platform === 'win32' ? 180000 : 120000;
+const multiPhaseTimeoutMs = process.platform === 'win32' ? 240000 : testTimeoutMs;
 const complete = text => ({ type: 'completed', text });
 const checkSource = "import assert from 'node:assert/strict'; import { readFileSync } from 'node:fs'; assert.equal(readFileSync('approved.txt', 'utf8'), 'after\\n'); console.log('Checked the actual edited source.');";
 async function git(directory, ...args) {
@@ -82,23 +86,27 @@ async function fixture(t, execute, { verification = true } = {}) {
       return board.view().tasks.at(-1).id;
     },
     async settle(id, expected) {
+      const started = performance.now(), deadline = started + settleTimeoutMs;
       await board.tick();
-      for (let attempt = 0; attempt < 2000; attempt++) {
+      for (;;) {
         const task = board.executionDetail(id);
         if (!['queued', 'running'].includes(task.status) && !sessions.executor.busy) {
           if (failures.length) throw failures[0];
           assert.equal(task.status, expected, task.error ?? 'Unexpected task outcome'); return task;
         }
-        await delay(10);
+        const remaining = deadline - performance.now();
+        if (remaining <= 0 || t.signal.aborted) break;
+        await delay(Math.min(25, remaining));
       }
       if (failures.length) throw failures[0];
-      throw Error('Task did not settle: ' + board.executionDetail(id).status);
+      const task = board.executionDetail(id);
+      throw Error(`Task ${id} did not settle after ${Math.round(performance.now() - started)} ms (limit ${settleTimeoutMs} ms): expected ${expected}, status ${task.status}, executor busy=${sessions.executor.busy}, provider invocations=${invocations}, test aborted=${t.signal.aborted}${task.error ? '; last error: ' + task.error : ''}`);
     },
     async restart(beforeOpen) { await board.close(); await sessions.close(); await beforeOpen?.(); await open(); },
   };
 }
 
-test('a new implementation edits, fails a real check, repairs and verifies within one provider invocation', { timeout: 120000 }, async t => {
+test('a new implementation edits, fails a real check, repairs and verifies within one provider invocation', { timeout: testTimeoutMs }, async t => {
   const receipts = [];
   const f = await fixture(t, async ({ runtime, request, signal }) => {
     assert.equal(request.policy.development, true);
@@ -140,7 +148,7 @@ const incomplete = {
   'failed checks': async ({ runtime, signal }) => { await edit(runtime, signal, 'broken\n'); await check(runtime, signal, true); },
   'source changed after a passing check': async ({ runtime, signal, task }) => { await edit(runtime, signal); await check(runtime, signal); await writeFile(join(task.worktree, 'approved.txt'), 'unchecked later edit\n'); },
 };
-for (const [label, attempt] of Object.entries(incomplete)) test(`${label} cannot turn a model completion claim into review`, { timeout: 120000 }, async t => {
+for (const [label, attempt] of Object.entries(incomplete)) test(`${label} cannot turn a model completion claim into review`, { timeout: testTimeoutMs }, async t => {
   const f = await fixture(t, async context => { await attempt(context); return complete('The model claims everything is complete.'); });
   const id = await f.create(), task = await f.settle(id, 'needs_rework');
   assert.equal(f.invocations, 1);
@@ -154,7 +162,7 @@ for (const [label, attempt] of Object.entries(incomplete)) test(`${label} cannot
   assert.equal(f.board.executionDetail(id).status, 'needs_rework'); assert.equal(f.invocations, 1);
 });
 
-test('known verified completion restores its review projection after restart without another provider call', { timeout: 120000 }, async t => {
+test('known verified completion restores its review projection after restart without another provider call', { timeout: testTimeoutMs }, async t => {
   const f = await fixture(t, async ({ runtime, signal }) => { await edit(runtime, signal); await check(runtime, signal); return complete('Verified change retained for review.'); });
   const id = await f.create(), task = await f.settle(id, 'review');
   const outputDigest = f.request(id).execution.outputDigest;
@@ -173,7 +181,7 @@ test('known verified completion restores its review projection after restart wit
   assert.equal(f.sessions.runs.list({ sessionId: task.sessionId }).rows.length, 1);
 });
 
-test('saved proposal tasks never gain implementation authority when required checks are enabled later', { timeout: 120000 }, async t => {
+test('saved proposal tasks never gain implementation authority when required checks are enabled later', { timeout: multiPhaseTimeoutMs }, async t => {
   const f = await fixture(t, async ({ runtime, request, invocation }) => {
     assert.equal(request.policy.development, undefined);
     assert.equal(runtime.manifest.tools.some(tool => tool.name.startsWith('werk_candidate_')), false);
@@ -194,7 +202,7 @@ test('saved proposal tasks never gain implementation authority when required che
   assert.equal(await readFile(join(f.repository, 'approved.txt'), 'utf8'), 'before\n');
 });
 
-test('implementation questions preserve candidate work and immutable result facts across restart and resume', { timeout: 120000 }, async t => {
+test('implementation questions preserve candidate work and immutable result facts across restart and resume', { timeout: multiPhaseTimeoutMs }, async t => {
   const f = await fixture(t, async ({ runtime, request, signal, invocation }) => {
     assert.equal(request.policy.development, true);
     if (invocation === 1) {
@@ -230,7 +238,7 @@ function useMinimalDonePolicy(f) {
   f.sessions.requests.setPolicy({ policy, expectedRevision: f.sessions.requests.policy().revision, operationId: 'minimal-completion-policy' });
 }
 
-test('custom completion rules cannot mark unverified implementation work done or hide shared rework', { timeout: 120000 }, async t => {
+test('custom completion rules cannot mark unverified implementation work done or hide shared rework', { timeout: testTimeoutMs }, async t => {
   const f = await fixture(t, async ({ runtime, signal }) => { await edit(runtime, signal); return complete('A nonempty summary without required checks.'); });
   useMinimalDonePolicy(f);
   const id = await f.create(), task = await f.settle(id, 'needs_rework'), request = f.request(id);
@@ -265,7 +273,7 @@ test('custom completion rules cannot mark unverified implementation work done or
   assert.equal(f.request(id).phase, 'needs_rework'); assert.equal(f.invocations, 1);
 });
 
-test('verified implementation satisfies a custom completion policy after its required check passes', { timeout: 120000 }, async t => {
+test('verified implementation satisfies a custom completion policy after its required check passes', { timeout: testTimeoutMs }, async t => {
   const f = await fixture(t, async ({ runtime, signal }) => { await edit(runtime, signal); await check(runtime, signal); return complete('Verified implementation summary.'); });
   useMinimalDonePolicy(f);
   const id = await f.create(); await f.settle(id, 'review');
@@ -275,7 +283,7 @@ test('verified implementation satisfies a custom completion policy after its req
   assert.equal(request.evaluations.filter(item => item.stage === 'done').at(-1).passed, true);
 });
 
-test('legacy proposal completion remains compatible with a custom policy when verification facts are absent', { timeout: 120000 }, async t => {
+test('legacy proposal completion remains compatible with a custom policy when verification facts are absent', { timeout: testTimeoutMs }, async t => {
   const f = await fixture(t, async () => complete(JSON.stringify({ summary: 'Legacy proposal summary.', files: [{ path: 'approved.txt', content: 'after\n' }] })), { verification: false });
   useMinimalDonePolicy(f);
   const id = await f.create(), task = await f.settle(id, 'review'), request = f.request(id);
