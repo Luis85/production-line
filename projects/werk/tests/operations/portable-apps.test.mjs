@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { stateDirectory } from '../../scripts/runtime/portable/lifecycle.mjs';
+import { ownWorkspace } from '../helpers/workspace-processes.mjs';
 const project = fileURLToPath(new URL('../../', import.meta.url));
 function invoke(file, cwd, args, body, environment = {}) {
   return new Promise((resolve, reject) => {
@@ -49,10 +50,9 @@ test('copied apps operate independently with agent tasks, durable state and late
     return result;
   };
   const ok = async (...args) => { const result = await invokeApp(...args); assert.equal(result.code, 0, result.stderr); assert.ok(result.data); return result.data; };
-  t.after(async () => {
+  await ownWorkspace(t, outer, async () => {
     for (const kind of ['worker', 'factory', 'orchestrator']) await invokeApp(kind, 'stop').catch(() => {});
     await invokeApp('worker', 'stop', ['--state-dir', '.werk/second']).catch(() => {});
-    await rm(outer, { recursive: true, force: true });
   });
   for (const kind of Object.keys(entries)) {
     const schema = await ok(kind, 'schema'); assert.equal(schema.application, kind); assert.ok(schema.commands.monitoring);

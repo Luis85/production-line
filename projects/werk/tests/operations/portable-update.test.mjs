@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs, { cp, mkdtemp, mkdir, readFile, readdir, realpath, writeFile, rm } from 'node:fs/promises';
+import fs, { cp, mkdtemp, mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
 import { join, dirname, relative, sep } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -10,6 +10,7 @@ import { createArchives } from '../../scripts/release/archives.mjs';
 import { digest } from '../../scripts/runtime/update/remote.mjs';
 import { verifyBackup } from '../../scripts/runtime/maintenance/snapshot.mjs';
 import { applyUpdate, checkUpdate, rollbackUpdate } from '../../scripts/runtime/portable/update.mjs';
+import { ownWorkspace } from '../helpers/workspace-processes.mjs';
 
 // Portable self-update operates on copied app folders; every fixture lives in a
 // temporary project with no source checkout, npm install or network access.
@@ -38,10 +39,9 @@ async function files(root, path = '') {
 async function workspace(t, label) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), `werk ${label} `)));
   const cleanups = [];
-  t.after(async () => {
-    for (const cleanup of cleanups.reverse()) await cleanup();
-    await rm(directory, { recursive: true, force: true });
-  });
+  // Stop through the app first; leftover detached workers (for example a restart that
+  // raced a timed-out test) are terminated before the workspace is removed.
+  await ownWorkspace(t, directory, async () => { for (const cleanup of cleanups.reverse()) await cleanup(); });
   const cwd = join(directory, 'project'), app = join(cwd, 'bin/apps/worker');
   await mkdir(dirname(app), { recursive: true }); await writeFile(join(directory, 'package.json'), '{"type":"commonjs"}');
   await cp(built, app, { recursive: true });

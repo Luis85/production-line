@@ -7,6 +7,10 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+### Fixed
+
+- Test fixtures that start portable apps no longer leave detached workers running on Windows after a failed, timed-out or interrupted run. Cleanup stops each app and then terminates any process still running from the fixture's temporary directory. It waits for those processes to exit before removing the directory.
+
 ## [0.9.0] - 2026-10-16
 
 ### Added

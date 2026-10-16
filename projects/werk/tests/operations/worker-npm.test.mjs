@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { workerNpmScripts, seedWorkerPackage } from '../../scripts/runtime/portable/npm-package.mjs';
 import { commands } from '../../scripts/runtime/portable/commands.mjs';
 import { updateCommands } from '../../scripts/runtime/portable/update-commands.mjs';
+import { ownWorkspace } from '../helpers/workspace-processes.mjs';
 
 const exec = promisify(execFile), installer = resolve('bin/apps/worker/cli.mjs');
 async function project(t, cleanup = true) {
@@ -59,7 +60,7 @@ test('root npm manifest is create-only and does not change project module semant
 
 test('installed npm commands forward arguments and share the caller project state without npm install', { timeout: 120000 }, async t => {
   const cwd = await project(t, false), entry = join(cwd, 'bin/apps/worker/cli.mjs'), state = 'state with spaces';
-  t.after(async () => { try { await cli(cwd, entry, 'stop', '--state-dir', state).catch(() => {}); } finally { await rm(cwd, { recursive: true, force: true }); } });
+  await ownWorkspace(t, cwd, () => cli(cwd, entry, 'stop', '--state-dir', state));
   const installed = await cli(cwd, installer, 'init');
   const app = installed.application;
   assert.equal(installed.npm.created, true);
