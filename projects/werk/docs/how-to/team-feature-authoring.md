@@ -131,7 +131,16 @@ node bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-rev
 
 Keep the profile YAML in the repository if the team reviews it, for example under
 `.werk/agents/project-reviewer.yaml`. Workers do not load it from the repository;
-the operator imports it after reviewing the preview, and again after a change.
+the operator imports it after reviewing the preview. After a reviewed change, the
+operator updates the profile in place on each worker, keeping the reference:
+
+```sh
+node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file update.json --dry-run
+node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file update.json --if-match REVISION
+```
+
+`update.json` contains `{"yaml":"YAML_TEXT"}`. Tasks created earlier keep the
+profile they accepted; later tasks use the update.
 Offline validation checks only the reference's format. A worker without the
 reference leaves the request ready and unclaimed, and shows the reason in its
 shared-intake view, until the operator assigns it. If the profile needs instructions-only

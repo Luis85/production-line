@@ -312,11 +312,19 @@ node bin/apps/worker/cli.mjs definition preview --file preview.json
 node bin/apps/worker/cli.mjs definition import --file definition.json
 node bin/apps/worker/cli.mjs definition list
 node bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-reviewer
+node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file update.json --dry-run
+node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file update.json --if-match REVISION
 node bin/apps/worker/cli.mjs definition delete --id DEFINITION_ID
 ```
 
 Preview input is `{"yaml":"YAML_TEXT"}`; import adds `"name":"Project reviewer"`
 and optionally a stable `"ref":"project-reviewer"`.
+`definition update` replaces the profile behind a reference in place: its ID and
+reference stay, and `update.json` contains `{"yaml":"YAML_TEXT"}` with an optional
+new `"name"`. `--dry-run` writes nothing and returns the current `revision`, the
+name and digest change, and added, removed and changed agents. Apply with
+`--if-match` set to the `revision` from the dry run or `definition list`; a changed
+profile is refused with exit 2. Existing tasks keep the snapshot they accepted.
 The returned definition ID can be added to `task create` or `file-task create`
 input as `"definitionId":"DEFINITION_ID","agent":"root"`. Shared or committed
 input should use `"definitionRef":"project-reviewer"` instead, which resolves on

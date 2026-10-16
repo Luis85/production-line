@@ -6,7 +6,25 @@ import type { DefinitionStorage } from './workspace-ports.js';
 import type { ProviderConnection } from './provider-contract.js';
 export interface DefinitionAgent { name: string; description: string; instruction: string; model: string; provider: 'openai' | 'anthropic' | ''; unsupported: string[]; requiresAdaptation: boolean; }
 /** `ref` is an operator-assigned stable name, unique per worker, that committed requests can use instead of the generated id. */
-export interface AgentDefinition { id: string; ref?: string; name: string; digest: string; createdAt: string; agents: DefinitionAgent[]; }
+export interface AgentDefinition { id: string; ref?: string; name: string; digest: string; createdAt: string; updatedAt?: string; agents: DefinitionAgent[]; }
+/** Guard for in-place updates: covers everything an update replaces (name and YAML content). */
+export function definitionRevision(definition: Pick<AgentDefinition, 'name' | 'digest'>): string { return createHash('sha256').update(JSON.stringify([definition.name, definition.digest])).digest('hex'); }
+const agentFields = ['description', 'instruction', 'model', 'provider', 'unsupported'] as const;
+/** Summarize what an update changes without exposing more than the definition view already does. */
+function definitionChanges(before: AgentDefinition, after: Pick<AgentDefinition, 'name' | 'digest' | 'agents'>) {
+  const names = (value: Pick<AgentDefinition, 'agents'>) => value.agents.map(agent => agent.name);
+  const changed = after.agents.flatMap(agent => {
+    const previous = before.agents.find(item => item.name === agent.name);
+    const fields = previous ? agentFields.filter(field => JSON.stringify(previous[field]) !== JSON.stringify(agent[field])) : [];
+    return fields.length ? [{ name: agent.name, fields: [...fields] }] : [];
+  });
+  return {
+    unchanged: before.name === after.name && before.digest === after.digest,
+    name: before.name === after.name ? null : { from: before.name, to: after.name },
+    digest: { from: before.digest, to: after.digest },
+    agents: { added: names(after).filter(name => !names(before).includes(name)), removed: names(before).filter(name => !names(after).includes(name)), changed },
+  };
+}
 export interface DefinitionSnapshot { definitionId: string; ref?: string; name: string; digest: string; agent: string; instruction: string; model: string; provider: DefinitionAgent['provider']; unsupported: string[]; adapted: boolean; }
 function invalid(message: string): never { throw new DomainError('invalid_input', message); }
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -99,13 +117,13 @@ export class WorkerDefinitions {
       const refs = value.filter(item => item.ref !== undefined).map(item => item.ref);
       if (refs.some(ref => typeof ref !== 'string' || !definitionReference.test(ref)) || new Set(refs).size !== refs.length) invalid('Invalid saved agent definition references.');
       for (const definition of value) {
-        if (!Array.isArray(definition.agents) || !definition.agents.length || definition.agents.length > 24 || new Set(definition.agents.map((agent: DefinitionAgent) => agent.name)).size !== definition.agents.length || !Number.isFinite(Date.parse(definition.createdAt))) invalid('Invalid saved agent definitions.');
+        if (!Array.isArray(definition.agents) || !definition.agents.length || definition.agents.length > 24 || new Set(definition.agents.map((agent: DefinitionAgent) => agent.name)).size !== definition.agents.length || !Number.isFinite(Date.parse(definition.createdAt)) || (definition.updatedAt !== undefined && !Number.isFinite(Date.parse(definition.updatedAt)))) invalid('Invalid saved agent definitions.');
         for (const agent of definition.agents) { if (typeof agent.description !== 'string' || agent.description.length > 1000 || typeof agent.requiresAdaptation !== 'boolean' || agent.requiresAdaptation !== (agent.unsupported?.length > 0)) invalid('Invalid saved agent definition.'); validateSnapshot({ definitionId: definition.id, name: definition.name, digest: definition.digest, agent: agent.name, instruction: agent.instruction, model: agent.model, provider: agent.provider, unsupported: agent.unsupported, adapted: agent.requiresAdaptation }); }
       }
       this.definitions = value;
     }
   }
-  view() { return { compatibility: 'instruction-profile' as const, definitions: structuredClone(this.definitions) }; }
+  view() { return { compatibility: 'instruction-profile' as const, definitions: this.definitions.map(item => ({ ...structuredClone(item), revision: definitionRevision(item) })) }; }
   /** Resolve once at task creation; the returned copy is what the task keeps, even if the reference later moves. */
   select(input: Record<string, unknown>): DefinitionSnapshot | undefined {
     const selection = definitionSelection(input);
@@ -123,8 +141,12 @@ export class WorkerDefinitions {
     return { definitionId: definition.id, ...(definition.ref ? { ref: definition.ref } : {}), name: definition.name, digest: definition.digest, agent: agent.name, instruction: agent.instruction, model: agent.model, provider: agent.provider, unsupported: [...agent.unsupported], adapted: agent.requiresAdaptation };
   }
   async action(input: unknown) {
-    const body = object(input, 'Agent definition', ['action', 'yaml', 'name', 'id', 'ref']);
+    const body = object(input, 'Agent definition', ['action', 'yaml', 'name', 'id', 'ref', 'revision', 'dryRun']);
     if (body.action === 'preview') return previewDefinition(body.yaml);
+    if (body.action === 'update' && body.dryRun === true) return this.update(this.definitions, body).preview;
+    if (body.dryRun !== undefined && (body.action !== 'update' || body.dryRun !== false)) invalid('dryRun is supported only by definition update and must be true or false.');
+    if (body.revision !== undefined && body.action !== 'update') invalid('A definition revision guards only definition update.');
+    let updated: Record<string, unknown> | undefined;
     const operation = this.writes.catch(() => {}).then(async () => {
       let next = structuredClone(this.definitions);
       if (body.action === 'import') {
@@ -144,13 +166,35 @@ export class WorkerDefinitions {
           for (const item of next) if (item.ref === ref) delete item.ref;
           target.ref = ref;
         }
+      } else if (body.action === 'update') {
+        const { target, replacement, preview } = this.update(next, body);
+        updated = { id: target.id, ref: preview.definition.ref, revision: preview.changes.unchanged ? preview.definition.revision : preview.definition.nextRevision, changes: preview.changes };
+        if (preview.changes.unchanged) return;
+        Object.assign(target, replacement);
       } else if (body.action === 'delete') {
         const id = identifier(body.id, 'Definition id'); if (!next.some(item => item.id === id)) throw new DomainError('not_found', 'Agent definition not found.');
         next = next.filter(item => item.id !== id);
-      } else invalid('Definition action: preview|import|ref|delete.');
+      } else invalid('Definition action: preview|import|ref|update|delete.');
       const saved = JSON.stringify(next); if (Buffer.byteLength(saved) > 2097152) throw new DomainError('conflict', 'Definition storage is full. Delete an unused definition.');
       await this.storage.write(saved); this.definitions = next;
     });
-    this.writes = operation; await operation; return this.view();
+    this.writes = operation; await operation; return updated ? { ...this.view(), updated } : this.view();
+  }
+  /**
+   * Replace the content behind a stable reference while keeping its id and reference.
+   * Tasks already created keep their accepted snapshot; only later selections see the update.
+   */
+  private update(definitions: AgentDefinition[], body: Record<string, unknown>) {
+    const ref = reference(body.ref, 'Definition reference'), target = definitions.find(item => item.ref === ref);
+    if (!target) throw new DomainError('not_found', `No agent definition on this worker uses the reference ${ref}. Import it with that reference first.`);
+    const revision = definitionRevision(target);
+    if (body.revision !== undefined || body.dryRun !== true) {
+      if (typeof body.revision !== 'string' || !/^[a-f0-9]{64}$/.test(body.revision)) invalid('Use the current definition revision from definition list or a definition update dry run.');
+      if (body.revision !== revision) throw new DomainError('conflict', `Definition ${ref} changed. Read its current revision and review the update again.`);
+    }
+    const parsed = previewDefinition(body.yaml);
+    const replacement = { name: body.name === undefined ? target.name : text(body.name, 'Definition name', 120), digest: createHash('sha256').update(String(body.yaml)).digest('hex'), agents: parsed.agents, updatedAt: new Date().toISOString() };
+    const changes = definitionChanges(target, replacement);
+    return { target, replacement, preview: { compatibility: 'instruction-profile' as const, dryRun: true, definition: { id: target.id, ref, name: replacement.name, revision, nextRevision: definitionRevision(replacement) }, changes, agents: parsed.agents } };
   }
 }
