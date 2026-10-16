@@ -155,8 +155,12 @@ than target the wrong session.
 
 Use **Board** or **List**, search by title or identity, and select a card to
 focus its conversation. Drafts and completed work remain available in their
-own disclosures. Replies render readable paragraphs, lists and fenced code,
-with copy actions; model HTML is never executed.
+own disclosures. Completed model replies render Markdown as readable headings,
+paragraphs, nested lists, quotations, links, tables and code blocks. Code blocks
+keep their original text and offer **Copy code**; wide code and tables scroll
+within the reply on smaller screens. Saved replies use the same formatting.
+Your messages and failure notices remain literal text. Model HTML is never
+executed, and images appear as descriptive links rather than loading automatically.
 You can draft a follow-up while work is queued or running and send it when the
 worker finishes. Use the composer or Ctrl/Command + Enter to submit a message. The stop action
 cancels the pending or active reply. Each provider invocation uses the worker’s

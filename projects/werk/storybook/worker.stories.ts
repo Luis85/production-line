@@ -8,6 +8,7 @@ import HistoryPage from '../src/worker/webview/pages/HistoryPage.vue';
 import MonitoringPage from '../src/worker/webview/pages/MonitoringPage.vue';
 import ChatPage from '../src/worker/webview/pages/ChatPage.vue';
 import TaskInteraction from '../src/worker/webview/components/TaskInteraction.vue';
+import MessageContent from '../src/worker/webview/components/MessageContent.vue';
 import NewTask from '../src/worker/webview/components/NewTask.vue';
 import SettingsPanel from '../src/worker/webview/components/SettingsPanel.vue';
 import DefinitionPanel from '../src/worker/webview/components/DefinitionPanel.vue';
@@ -16,7 +17,7 @@ import RequestPolicyPanel from '../src/worker/webview/components/RequestPolicyPa
 import RepositoryPanel from '../src/worker/webview/components/RepositoryPanel.vue';
 import ResourceMonitorPanel from '../src/worker/webview/components/ResourceMonitorPanel.vue';
 import StatusApp from '../src/worker/webview/status/StatusApp.vue';
-import { diagnosticFixture, installWorkerFixture, type WorkerFixture } from './worker-fixtures';
+import { diagnosticFixture, formattedReplyFixture, installWorkerFixture, type WorkerFixture } from './worker-fixtures';
 
 const meta = { title: 'Worker/Workspace', parameters: { layout: 'fullscreen' } } satisfies Meta;
 export default meta;
@@ -94,7 +95,7 @@ export const AnswerCheckpoint: Story = {
 export const FollowUp: Story = {
   name: '06 · Follow up on a completed task',
   parameters: { storymap: storymap('Follow-up retains the selected task and transcript. It does not create unrelated work or infer the model from new provider defaults.', ['components/TaskInteraction', 'components/MessageContent'], '/taskboard', 6) },
-  render: renderComponent(TaskInteraction), play: followUp,
+  render: renderComponent(TaskInteraction, 'formatted'), play: followUp,
 };
 export const FailedAttempt: Story = {
   name: '07 · Inspect and continue a failed attempt',
@@ -229,4 +230,33 @@ export const LocalRepositoryConsent: Story = {
   name: '26 · Use a local repository without a remote',
   parameters: { storymap: storymap('A local checkout can be assigned for file tasks while watching remains off. Adding a remote and enabling watching is a later operator choice.', ['components/RepositoryPanel', 'components/RepositoryDiscovery'], '/dashboard') },
   render: renderComponent(RepositoryPanel, 'repository-local'), play: settled,
+};
+
+export const FormattedModelReply: Story = {
+  name: '27 · Read a formatted model reply',
+  parameters: { storymap: storymap('A synthetic completed reply demonstrates readable headings, nested lists, quoted guidance, a scrollable evidence table, copyable code and a safe documentation link. The transcript is example data, not verification evidence.', ['components/MessageContent'], '/taskboard') },
+  render: renderComponent(MessageContent, 'formatted', { text: formattedReplyFixture }),
+  play: async ({ canvasElement }) => {
+    const message = await element(canvasElement, '.message-content.markdown');
+    const assertText = async (selector: string, expected: string) => {
+      const rendered = await element(message, selector);
+      if (!rendered.textContent?.includes(expected)) throw Error('Formatted reply lost ' + selector + ' content');
+      return rendered;
+    };
+    await assertText('h3', 'Release review');
+    await assertText('h4', 'Next steps');
+    await assertText('em', 'Illustrative fixture');
+    await assertText('strong', 'saved patch');
+    await assertText('ol > li', 'Inspect the proposed documentation change.');
+    await assertText('ol > li > ul > li', 'Confirm the task instructions are clear.');
+    await assertText('blockquote', 'does not prove that tests ran');
+    const table = await element(message, '.markdown-table-scroll[role="region"][tabindex="0"] table');
+    if (table.querySelectorAll('thead th[scope="col"]').length !== 3 || table.querySelectorAll('tbody tr').length !== 3) throw Error('Formatted reply evidence table lost its headers or rows');
+    const code = await element(message, 'pre[tabindex="0"] > code');
+    if (code.textContent?.trim() !== 'const nextStep = "Review the saved patch";') throw Error('Formatted reply changed its code example');
+    await assertText('.code-toolbar button', 'Copy code');
+    const link = await element(message, 'a') as HTMLAnchorElement;
+    if (link.href !== 'https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/use-worker-webview.md' || link.target !== '_blank' || !link.relList.contains('noopener') || !link.relList.contains('noreferrer')) throw Error('Formatted reply documentation link lost its destination or safe navigation attributes');
+    await ready(canvasElement);
+  },
 };

@@ -131,12 +131,12 @@ defineExpose({ openNewTask, focusConversation, focusControls });
           <InteractionPanel :current-status="current.status" @change="interaction = $event" @busy="interactionBusy = $event" />
         </details>
         <p v-if="firstMessage" class="followup-empty">Describe the outcome you need. The first message queues this task.</p>
-        <div v-else class="task-conversation" role="log" aria-live="polite" aria-relevant="additions text" aria-label="Task conversation">
+        <div v-else :key="current.id" class="task-conversation" role="log" aria-live="polite" aria-relevant="additions text" aria-label="Task conversation">
           <article v-for="message in state.chat?.messages" :key="message.id" class="task-message" :class="message.role">
             <div class="task-message-label"><UIcon :name="message.role === 'user' ? 'i-lucide-user-round' : 'i-lucide-sparkles'" /><strong>{{ message.role === 'user' ? 'You' : 'Worker model' }}</strong><time :datetime="message.at">{{ date(message.at) }}</time></div>
             <UBadge v-if="['error', 'cancelled'].includes(message.state)" :color="message.state === 'error' ? 'error' : 'neutral'" variant="subtle">{{ message.state === 'error' ? 'Failed' : 'Cancelled' }}</UBadge>
             <p v-if="message.state === 'pending'" class="pending-message">{{ phase === 'queued' ? state.settings?.board.paused ? 'Queued · new starts are paused.' : 'Queued · waiting for this worker.' : 'Working on this task…' }}</p>
-            <MessageContent v-else :text="message.text" :class="{ 'error-text': message.state === 'error' }" />
+            <MessageContent v-else :text="message.text" :markdown="message.role === 'assistant' && message.state === 'complete'" :class="{ 'error-text': message.state === 'error' }" />
           </article>
         </div>
         <p v-if="!state.chat?.available" class="interaction-notice">This connection is not ready. Open <RouterLink to="/dashboard#provider-connections">Dashboard</RouterLink> to configure it.</p>
@@ -199,7 +199,6 @@ h2 { margin: 0 0 18px; font-size: 1.5rem; line-height: 1.3; font-weight: 650; le
 .task-message-label :deep(.iconify) { color: #8be0b8; }
 .task-message-label time { color: var(--ui-text-muted); font-size: .625rem; margin-left: auto; }
 .task-message :deep(pre) { max-width: 100%; overflow: auto; font-size: .75rem; }
-.task-message :deep(table) { display: block; overflow-x: auto; max-width: 100%; }
 .pending-message, .followup-empty, .followup-guidance { font-size: .8125rem; line-height: 1.6; color: var(--ui-text-muted); margin: 12px 0; }
 .followup-composer { display: grid; gap: 9px; margin-top: 20px; }
 .followup-composer > label { font-weight: 600; font-size: .8125rem; }
