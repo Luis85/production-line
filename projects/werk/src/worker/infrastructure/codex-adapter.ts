@@ -1,7 +1,6 @@
 import { verifyReviewArtifact } from './review-artifact.js';
 import { ProviderModelError } from '../application/model-contract.js';
-import type { ChildProcess } from 'node:child_process';
-import { spawnProvider } from './provider-process.js';
+import { ProcessRunError, runProcess, type RunResult } from '../../shared/process/launcher.js';
 import { createHash } from 'node:crypto';
 import { access, cp, lstat, mkdir, opendir, realpath, rm } from 'node:fs/promises';
 import { constants } from 'node:fs';
@@ -23,14 +22,6 @@ export function codexConfiguration(value: unknown): CodexConfiguration {
 }
 
 const windowsEnvironment = ['SystemRoot', 'windir', 'SystemDrive', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'TEMP', 'TMP', 'PATHEXT', 'ComSpec', 'HOMEDRIVE', 'HOMEPATH', 'USERNAME', 'CLAUDE_CODE_GIT_BASH_PATH'];
-/** POSIX providers lead a detached process group; Windows has no groups and must not open a console window. */
-export function providerSpawnOptions() { return { detached: process.platform !== 'win32', windowsHide: true }; }
-/** Windows children are job-owning supervisors; terminating one closes its job and all descendants. */
-export function killProviderTree(child: ChildProcess, kind: NodeJS.Signals) {
-    if (!child.pid) return;
-    if (process.platform !== 'win32') { try { process.kill(-child.pid, kind); } catch { /* Group already exited. */ } return; }
-    if (child.exitCode === null && child.signalCode === null) try { child.kill(kind); } catch { /* Supervisor already exited. */ }
-}
 /** Provider diagnostics never become logs/evidence; operator authentication is inherited, never copied. */
 export function providerEnvironment(provider = 'codex'): NodeJS.ProcessEnv {
     const env: NodeJS.ProcessEnv = {};
@@ -41,32 +32,16 @@ export function providerEnvironment(provider = 'codex'): NodeJS.ProcessEnv {
     for (const key of Object.keys(process.env)) if (provider === 'codex' && key.startsWith('CODEX_') && process.env[key]) env[key] = process.env[key];
     return { ...env, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0' };
 }
-/** Kill the provider's process tree, including descendants, before resolving an interrupted operation. */
+/** Contained, bounded provider invocation; the shared launcher stops its whole process tree on cancellation. */
 export async function providerCommand(executable: string, args: string[], cwd: string, signal: AbortSignal, input?: string, capture = true, provider = 'codex', observeOutput?: (output: Buffer) => void): Promise<Buffer> {
     signal.throwIfAborted();
-    return new Promise((resolveResult, reject) => {
-        let bytes = 0, failed = false, ended = false, killTimer: ReturnType<typeof setTimeout> | undefined;
-        const output: Buffer[] = [];
-        const child = spawnProvider(executable, args, cwd, providerEnvironment(provider));
-        const kill = (kind: NodeJS.Signals) => killProviderTree(child, kind);
-        const interrupt = () => { failed = true; kill('SIGTERM'); killTimer ??= setTimeout(() => kill('SIGKILL'), 1000); };
-        const collect = (chunk: Buffer, stdout: boolean) => { bytes += chunk.length; if (bytes > 4 * 1024 * 1024) interrupt(); else if (stdout && capture) output.push(chunk); };
-        child.stdout.on('data', chunk => collect(chunk, true)); child.stderr.on('data', chunk => collect(chunk, false));
-        child.stdin.on('error', () => {}); child.stdin.end(input);
-        signal.addEventListener('abort', interrupt, { once: true });
-        child.once('error', () => { failed = true; });
-        child.once('close', code => {
-            if (ended) return; ended = true;
-            signal.removeEventListener('abort', interrupt); if (killTimer) clearTimeout(killTimer);
-            // A child must not leave a detached command running after its own exit.
-            kill('SIGKILL');
-            const captured = Buffer.concat(output);
-            // Numeric telemetry may exist even when execution fails; diagnostics never leave this callback.
-            try { observeOutput?.(captured); } catch { /* Telemetry must not mask process cleanup or outcome. */ }
-            if (failed || signal.aborted || code !== 0) reject(new ProviderModelError(signal.aborted ? 'cancelled' : 'unavailable'));
-            else resolveResult(captured);
-        });
-    });
+    let result: RunResult, failed = false;
+    try { result = await runProcess(executable, args, { cwd, env: providerEnvironment(provider), mode: 'contained', signal, input, maxOutputBytes: 4 * 1024 * 1024, captureStdout: capture }); }
+    catch (error) { if (!(error instanceof ProcessRunError)) throw error; result = error.result; failed = true; }
+    // Numeric telemetry may exist even when execution fails; diagnostics never leave this callback.
+    try { observeOutput?.(result.stdout); } catch { /* Telemetry must not mask process cleanup or outcome. */ }
+    if (failed || signal.aborted) throw new ProviderModelError(signal.aborted ? 'cancelled' : 'unavailable');
+    return result.stdout;
 }
 
 /** Narrow native-Linux adapter. A successful command produces a local patch requiring human review. */

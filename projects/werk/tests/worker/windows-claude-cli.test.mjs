@@ -8,7 +8,7 @@ import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { claudeArguments, modelFor } from '../../src/worker/dist/worker/infrastructure/providers.js';
-import { providerCommand, providerEnvironment, providerSpawnOptions } from '../../src/worker/dist/worker/infrastructure/codex-adapter.js';
+import { providerCommand, providerEnvironment } from '../../src/worker/dist/worker/infrastructure/codex-adapter.js';
 import { ProviderStatusChecks } from '../../src/worker/dist/worker/infrastructure/provider-status.js';
 
 const windows = { skip: process.platform !== 'win32' && 'Windows process and environment behavior' };
@@ -46,10 +46,6 @@ test('Claude arguments keep every isolation flag and pass instructions only as a
   assert.deepEqual(args.slice(-2), ['--system-prompt-file', '/private/system-prompt.md']);
   assert.equal(args.includes('--system-prompt'), false);
   assert.equal(claudeArguments('', '/p').includes('--model'), false);
-});
-
-test('provider processes are hidden and only POSIX providers lead a process group', () => {
-  assert.deepEqual(providerSpawnOptions(), { detached: process.platform !== 'win32', windowsHide: true });
 });
 
 test('Windows provider environment keeps the account profile but drops unrelated secrets', windows, t => {

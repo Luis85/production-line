@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { ProcessRunError, runProcess } from '../../shared/process/launcher.js';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import { lstat, mkdir, open, readFile, realpath, writeFile } from 'node:fs/promises';
@@ -13,33 +13,17 @@ export class RepositoryGitError extends Error {
 }
 
 /** Bounded, noninteractive Git; credentials and command diagnostics never enter status or evidence. */
-export function repositoryGit(cwd: string, args: string[], signal: AbortSignal, timeoutMs = 30000): Promise<string> {
+export async function repositoryGit(cwd: string, args: string[], signal: AbortSignal, timeoutMs = 30000): Promise<string> {
   signal.throwIfAborted();
-  return new Promise((accept, reject) => {
-    const detached = process.platform !== 'win32';
-    const child = spawn('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'submodule.recurse=false', '-c', 'protocol.ext.allow=never', ...args], {
-      cwd, detached, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never' }, stdio: ['ignore', 'pipe', 'pipe']
+  try {
+    const result = await runProcess('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'submodule.recurse=false', '-c', 'protocol.ext.allow=never', ...args], {
+      cwd, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never' }, signal, timeoutMs, maxOutputBytes: 2 * 1024 * 1024,
     });
-    const output: Buffer[] = [];
-    let bytes = 0, failed = false, expired = false, killTimer: ReturnType<typeof setTimeout> | undefined;
-    const kill = (kind: NodeJS.Signals) => { try { if (detached && child.pid) process.kill(-child.pid, kind); else child.kill(kind); } catch { /* Already exited. */ } };
-    const stop = () => { kill('SIGTERM'); killTimer ??= setTimeout(() => kill('SIGKILL'), 1000); killTimer.unref(); };
-    const deadline = setTimeout(() => { expired = true; stop(); }, timeoutMs); deadline.unref();
-    signal.addEventListener('abort', stop, { once: true });
-    if (signal.aborted) stop();
-    const collect = (chunk: Buffer, stdout: boolean) => {
-      bytes += chunk.length;
-      if (bytes > 2 * 1024 * 1024) { failed = true; stop(); }
-      else if (stdout) output.push(chunk);
-    };
-    child.stdout.on('data', chunk => collect(chunk, true)); child.stderr.on('data', chunk => collect(chunk, false));
-    child.once('error', () => { failed = true; });
-    child.once('close', code => {
-      clearTimeout(deadline); if (killTimer) clearTimeout(killTimer); signal.removeEventListener('abort', stop); kill('SIGKILL');
-      if (signal.aborted || expired || failed || code !== 0) reject(new RepositoryGitError(signal.aborted ? 'cancelled' : expired ? 'timeout' : 'failed'));
-      else accept(Buffer.concat(output).toString('utf8'));
-    });
-  });
+    return result.stdout.toString('utf8');
+  } catch (error) {
+    const reason = error instanceof ProcessRunError ? error.reason : 'spawn';
+    throw new RepositoryGitError(signal.aborted || reason === 'cancelled' ? 'cancelled' : reason === 'timeout' ? 'timeout' : 'failed');
+  }
 }
 
 export interface RepositoryRoot { path: string; commonDirectory: string; }

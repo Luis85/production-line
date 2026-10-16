@@ -1,9 +1,9 @@
-import { spawnProvider } from './provider-process.js';
+import { runProcess } from '../../shared/process/launcher.js';
 import { constants } from 'node:fs';
 import { access, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { killProviderTree, providerEnvironment } from './codex-adapter.js';
+import { providerEnvironment } from './codex-adapter.js';
 import { providerReady, type ProviderConnection, type ProviderId } from './providers.js';
 export interface ProviderStatus {
   id: ProviderId; configured: boolean; available: boolean;
@@ -12,19 +12,12 @@ export interface ProviderStatus {
   minimumVersion?: string; version?: string; compatibility?: 'minimum_met' | 'unsupported' | 'unknown';
 }
 async function statusCommand(connection: ProviderConnection, cwd: string, args = connection.id === 'codex-cli' ? ['login', 'status'] : ['auth', 'status']): Promise<{ code: number | null; output: string }> {
-  return new Promise((resolve, reject) => {
-    const child = spawnProvider(connection.executable, args, cwd, providerEnvironment(connection.id === 'codex-cli' ? 'codex' : 'claude'));
-    child.stdin.on('error', () => {}); child.stdin.end();
-    const output: Buffer[] = []; let bytes = 0, failed = false;
-    const kill = () => killProviderTree(child, 'SIGKILL');
-    const timer = setTimeout(() => { failed = true; kill(); }, 5000);
-    // Claude's machine-readable stdout must remain separate from startup diagnostics.
-    // Codex reports login status on stderr; both streams always count toward the limit.
-    const collect = (chunk: Buffer, stdout: boolean) => { bytes += chunk.length; if (bytes > 65536) { failed = true; kill(); } else if (stdout || connection.id === 'codex-cli') output.push(chunk); };
-    child.stdout.on('data', chunk => collect(chunk, true)); child.stderr.on('data', chunk => collect(chunk, false));
-    child.once('error', () => { failed = true; });
-    child.once('close', code => { clearTimeout(timer); kill(); if (failed) reject(Error('Provider status unavailable')); else resolve({ code, output: Buffer.concat(output).toString('utf8') }); });
-  });
+  // Claude's machine-readable stdout must remain separate from startup diagnostics.
+  // Codex reports login status on stderr; both streams always count toward the limit.
+  try {
+    const result = await runProcess(connection.executable, args, { cwd, env: providerEnvironment(connection.id === 'codex-cli' ? 'codex' : 'claude'), mode: 'contained', timeoutMs: 5000, maxOutputBytes: 65536, graceMs: 0, captureStderr: connection.id === 'codex-cli', allowNonZeroExit: true });
+    return { code: result.exitCode, output: Buffer.concat([result.stdout, result.stderr]).toString('utf8') };
+  } catch { throw Error('Provider status unavailable'); }
 }
 /** A bounded per-provider single-flight cache prevents repeated clicks from spawning unbounded processes. */
 export class ProviderStatusChecks {

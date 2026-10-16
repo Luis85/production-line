@@ -1,10 +1,9 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { immutableGitEnvironment } from '../infrastructure/git-environment.js';
 import { gitContextSource } from '../context/git-source.js';
 import { vaultRoot } from '../context/resolver.js';
 import { identifier } from '../../shared/contracts.js';
 import { DomainError } from '../../shared/errors.js';
+import { runProcess } from '../../shared/process/launcher.js';
 import { ApiError } from '../../shared/http/errors.js';
 import { request } from '../../shared/http/client.js';
 import type { Task } from '../../shared/contracts.js';
@@ -12,12 +11,10 @@ import type { TaskListResponse } from '../../shared/protocol.js';
 import { collectIteration, submitIteration, IMPORT_LIMITS } from './iteration.js';
 import type { IterationSource, IterationTaskGateway } from './iteration.js';
 
-const exec = promisify(execFile);
-
 async function gitSource(repo: string, branch: string): Promise<IterationSource> {
   const env = immutableGitEnvironment();
   const git = async (...args: string[]) => {
-    try { return (await exec('git', ['--no-replace-objects', '--no-optional-locks', '-C', repo, '-c', 'core.fsmonitor=false', ...args], { env, maxBuffer: 4 * 1024 * 1024, timeout: 10000, killSignal: 'SIGKILL', windowsHide: true })).stdout; }
+    try { return (await runProcess('git', ['--no-replace-objects', '--no-optional-locks', '-C', repo, '-c', 'core.fsmonitor=false', ...args], { env, maxOutputBytes: 4 * 1024 * 1024, timeoutMs: 10000, graceMs: 0 })).stdout.toString('utf8'); }
     catch {
       throw new DomainError('invalid_input', `Cannot read iteration repository (${args[0]}): unavailable repository, timeout or output limit`);
     }
