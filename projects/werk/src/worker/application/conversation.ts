@@ -544,6 +544,7 @@ export class WorkerConversation {
               ...this.model,
               configuration: prior.dispatch.provider,
               toolManifest: (this.model as Partial<StructuredModel>).toolManifest,
+              executionPolicy: (this.model as Partial<StructuredModel>).executionPolicy,
             } as ConversationModel,
             messages,
             "chat",
@@ -579,6 +580,7 @@ export class WorkerConversation {
                 ...this.model,
                 configuration: ancestor.dispatch.provider,
                 toolManifest: (this.model as Partial<StructuredModel>).toolManifest,
+              executionPolicy: (this.model as Partial<StructuredModel>).executionPolicy,
               } as ConversationModel)
             : this.model;
           request = prepareModelRequest(model, messages, "chat", maxRuntimeMs);
@@ -590,6 +592,7 @@ export class WorkerConversation {
                 ...this.model,
                 configuration: gateRequest.provider,
                 toolManifest: (this.model as Partial<StructuredModel>).toolManifest,
+              executionPolicy: (this.model as Partial<StructuredModel>).executionPolicy,
               } as ConversationModel)
             : this.model,
           next.messages.filter((item) => item.state === "complete"),

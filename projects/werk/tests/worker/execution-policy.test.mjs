@@ -8,7 +8,12 @@ import { defaultExecutionPolicy, validateExecutionPolicy } from '../../src/worke
 import { prepareModelRequest } from '../../src/worker/dist/worker/application/model-contract.js';
 import { providerTransport } from '../../src/worker/dist/worker/infrastructure/provider-transport.js';
 test('execution policy bounds are explicit and saved request budget is immutable', () => {
-  assert.equal(defaultExecutionPolicy().maxRuntimeMs, 21600000);
+  assert.deepEqual(defaultExecutionPolicy(), { maxRuntimeMs: 21600000, maxToolCalls: 128, commandTimeoutMs: 300000 });
+  assert.deepEqual(validateExecutionPolicy({ maxRuntimeMs: 1000 }), { maxRuntimeMs: 1000, maxToolCalls: 128, commandTimeoutMs: 300000 }, 'old saved policies adopt bounded tool defaults');
+  for (const maxToolCalls of [1, 128, 512]) assert.equal(validateExecutionPolicy({ maxRuntimeMs: 1000, maxToolCalls }).maxToolCalls, maxToolCalls);
+  for (const commandTimeoutMs of [1000, 300000, 3600000]) assert.equal(validateExecutionPolicy({ maxRuntimeMs: 1000, commandTimeoutMs }).commandTimeoutMs, commandTimeoutMs);
+  for (const maxToolCalls of [0, 513, 1.5, '128', null, NaN]) assert.throws(() => validateExecutionPolicy({ maxRuntimeMs: 1000, maxToolCalls }));
+  for (const commandTimeoutMs of [0, 999, 3600001, 1.5, '300000', null, NaN]) assert.throws(() => validateExecutionPolicy({ maxRuntimeMs: 1000, commandTimeoutMs }));
   for (const maxRuntimeMs of [1000, 21600000, 86400000]) assert.equal(validateExecutionPolicy({maxRuntimeMs}).maxRuntimeMs, maxRuntimeMs);
   for (const maxRuntimeMs of [0,999,86400001,1.5,'1000',NaN]) assert.throws(() => validateExecutionPolicy({maxRuntimeMs}));
   const request = prepareModelRequest({reply:async()=>''}, [], 'chat', 86400000);

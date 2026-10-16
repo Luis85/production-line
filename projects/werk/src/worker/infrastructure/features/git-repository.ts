@@ -170,8 +170,11 @@ export class GitFeatureRepository {
         const raw = (await this.io.output(worktree, ['diff', '--cached', '--raw', '-z', '--no-renames'], bounded)).split('\0').filter(Boolean);
         if (!raw.length || raw.length % 2 || raw.length > 64) throw new GitFeatureError('conflict', 'Feature patch must contain a bounded set of approved file changes.');
         for (let i = 0; i < raw.length; i += 2) {
-          const match = /^:(000000|100644|100755) (100644|100755) [a-f0-9]+ [a-f0-9]+ ([AM])$/.exec(raw[i]!);
-          if (!match || match[1] !== '000000' && match[1] !== match[2] || !input.approvedPaths.includes(raw[i + 1]!)) throw new GitFeatureError('conflict', 'Feature patch changed an unapproved path, file mode or file type.');
+          const match = /^:(000000|100644|100755) (000000|100644|100755) [a-f0-9]+ [a-f0-9]+ ([AMD])$/.exec(raw[i]!);
+          const regularChange = match && (match[3] === 'A' ? match[1] === '000000' && match[2] !== '000000'
+            : match[3] === 'D' ? match[1] !== '000000' && match[2] === '000000'
+              : match[1] !== '000000' && match[1] === match[2]);
+          if (!regularChange || !input.approvedPaths.includes(raw[i + 1]!)) throw new GitFeatureError('conflict', 'Feature patch changed an unapproved path, file mode or file type.');
         }
         const tree = (await this.io.output(worktree, ['write-tree'], bounded)).trim();
         return { tree, commit: prior ? null : await this.io.commit(worktree, input.sourceCommit, input.operationId, digest, bounded) };

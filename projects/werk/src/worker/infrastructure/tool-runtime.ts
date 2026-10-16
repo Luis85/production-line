@@ -3,6 +3,8 @@ import { mkdir } from 'node:fs/promises';
 import { lstatSync, realpathSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { ToolPolicy } from '../application/tool-policy.js';
+import type { DevelopmentRuntime } from '../application/development.js';
+import { DEFAULT_MAX_RUNTIME_MS, MAX_MAX_RUNTIME_MS, DEFAULT_MAX_TOOL_CALLS, MAX_TOOL_CALLS, DEFAULT_COMMAND_TIMEOUT_MS, MAX_COMMAND_TIMEOUT_MS } from '../application/execution-policy.js';
 import { ToolAccessError, type ToolManifest, type ToolResult, type ToolRuntime, type ToolWorktreeIdentity } from '../application/tool-runtime.js';
 import { builtinToolOperations, BuiltinToolError, type ToolOperation } from './builtin-tools.js';
 import { callMcpTool, mcpTransportConfiguration } from './tool-mcp.js';
@@ -15,8 +17,10 @@ export interface ToolRuntimeOptions {
   /** An approved, worker-owned task worktree, never a path supplied by the model. */
   worktree?: string;
   worktreeIdentity?: ToolWorktreeIdentity;
+  development?: DevelopmentRuntime;
   maxCalls?: number;
   maxRuntimeMs?: number;
+  commandTimeoutMs?: number;
   fetch?: typeof globalThis.fetch;
 }
 const freeze = <T>(value: T): T => {
@@ -33,9 +37,11 @@ export function mcpToolName(connection: string, tool: string): string {
 export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
   const policy = structuredClone(options.policy);
   const pinnedWorktree = options.worktreeIdentity ? { ...options.worktreeIdentity } : undefined;
-  const maxCalls = options.maxCalls ?? 32, maxRuntimeMs = options.maxRuntimeMs ?? 120000;
-  if (!Number.isSafeInteger(maxCalls) || maxCalls < 1 || maxCalls > 32 || !Number.isSafeInteger(maxRuntimeMs) || maxRuntimeMs < 1 || maxRuntimeMs > 3600000) throw new ToolAccessError('Invalid tool execution limits.');
-  const operations: ToolOperation[] = builtinToolOperations({ ...options, policy });
+  const maxCalls = options.maxCalls ?? DEFAULT_MAX_TOOL_CALLS;
+  const maxRuntimeMs = options.maxRuntimeMs ?? DEFAULT_MAX_RUNTIME_MS;
+  const commandTimeoutMs = options.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS;
+  if (!Number.isSafeInteger(maxCalls) || maxCalls < 1 || maxCalls > MAX_TOOL_CALLS || !Number.isSafeInteger(maxRuntimeMs) || maxRuntimeMs < 1 || maxRuntimeMs > MAX_MAX_RUNTIME_MS || !Number.isSafeInteger(commandTimeoutMs) || commandTimeoutMs < 1 || commandTimeoutMs > MAX_COMMAND_TIMEOUT_MS) throw new ToolAccessError('Invalid tool execution limits.');
+  const operations: ToolOperation[] = builtinToolOperations({ ...options, policy, commandTimeoutMs });
   for (const connection of policy.mcp.filter(item => item.enabled)) {
     const granted = connection.discoveredTools.filter(tool => connection.allowedTools.includes(tool.name));
     for (const tool of granted) operations.push({
@@ -68,6 +74,7 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
   };
   return {
     manifest,
+    limits: Object.freeze({ maxCalls, maxRuntimeMs, commandTimeoutMs }),
     call(name, args, signal) {
       let input: unknown;
       try {

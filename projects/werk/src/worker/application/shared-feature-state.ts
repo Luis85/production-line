@@ -2,6 +2,7 @@ import type { FeatureWorkflowSnapshot, SharedFeatureInput } from './feature-work
 import type { WorkerRequest } from './request-gates.js';
 import type { SharedFeatureView, SharedIntakeConfig } from './shared-intake-contract.js';
 import { DomainError } from '../../shared/errors.js';
+import type { DevelopmentEvidence, DevelopmentScopeView } from './development.js';
 
 export const defaultSharedIntakeConfig = (): SharedIntakeConfig => ({ enabled: false, repositoryId: '', remote: 'origin', branch: 'main', workflowPath: '.werk/feature-workflow.json', pollMs: 5000 });
 export function validateSharedIntakeConfig(value: unknown): SharedIntakeConfig {
@@ -56,6 +57,10 @@ export interface SharedExecution {
   status: string;
   summary: string | null;
   patch: string | null;
+  implementation?: DevelopmentScopeView;
+  developmentEvidence?: DevelopmentEvidence;
+  /** Private coordinator confirmation that patch, receipts and current attempt match. */
+  developmentVerified?: boolean;
   request: WorkerRequest | null;
   currentTurnId?: string;
   runId?: string;

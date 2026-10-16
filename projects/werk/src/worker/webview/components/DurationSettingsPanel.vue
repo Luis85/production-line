@@ -23,8 +23,17 @@ const { draft, dirty, stale, locked, validation, canSave } = editor;
           <div class="policy-field"><label for="resource-warning-hours">Warn after · hours</label><UInput id="resource-warning-hours" v-model.number="draft.values.warningHours" type="number" min="0.000001" max="24" step="any" required class="w-full" aria-describedby="duration-warning-help" /><p id="duration-warning-help" class="page-note">Reports elapsed time without stopping work. A warning does not mean the task is stuck.</p></div>
           <div class="policy-field"><label for="resource-maximum-hours">Maximum attempt duration · hours</label><UInput id="resource-maximum-hours" v-model.number="draft.values.maximumHours" :disabled="draft.baseline.fromEnvironment" type="number" min="0.000001" max="24" step="any" required class="w-full" aria-describedby="duration-maximum-help" /><p id="duration-maximum-help" class="page-note">Ends a new execution attempt when its time is up. Inspect the saved context before explicitly continuing.</p></div>
         </div>
-        <p v-if="draft.baseline.fromEnvironment" class="page-note">The maximum is set by <code>WERK_WORKER_MAX_RUNTIME_MS</code>. Change it in the worker environment and restart to update it. You can still edit the warning here.</p>
+        <p v-if="draft.baseline.fromEnvironment" class="page-note">The maximum is set by <code>WERK_WORKER_MAX_RUNTIME_MS</code>. Change it in the worker environment and restart to update it. You can still edit the warning and tool limits here.</p>
         <p class="page-note">Use hours, including decimals, from one second to 24 hours. New maximums apply to future attempts.</p>
+        <details class="tool-budget-options">
+          <summary>Tool execution limits</summary>
+          <p class="page-note">Bound how much tool work a model can perform in one attempt. These limits do not grant access to any tool.</p>
+          <div class="policy-grid">
+            <div class="policy-field"><label for="execution-tool-calls">Maximum tool calls per attempt</label><UInput id="execution-tool-calls" v-model.number="draft.values.maxToolCalls" type="number" min="1" max="512" step="1" required class="w-full" aria-describedby="execution-tool-calls-help" /><p id="execution-tool-calls-help" class="page-note">1–512 calls, including file reads, edits and checks. Default: 128.</p></div>
+            <div class="policy-field"><label for="execution-command-seconds">Command timeout · seconds</label><UInput id="execution-command-seconds" v-model.number="draft.values.commandSeconds" type="number" min="1" max="3600" step="any" required class="w-full" aria-describedby="execution-command-seconds-help" /><p id="execution-command-seconds-help" class="page-note">1–3,600 seconds for each command preset, CLI tool or feature check. Default: 300 seconds (5 minutes). The remaining attempt duration may end it earlier.</p></div>
+          </div>
+          <p class="page-note">MCP calls retain a 30-second timeout; web requests retain 10 seconds. Budget changes apply to future attempts.</p>
+        </details>
         <div class="policy-actions"><UButton type="submit" :loading="draft.busy" :disabled="!canSave">Save duration settings</UButton><UButton v-if="dirty || stale" type="button" color="neutral" variant="ghost" @click="editor.reload">Discard edits and reload</UButton></div>
       </fieldset>
       <p v-if="validation && dirty" role="status" class="error-text">{{ validation }}</p>
@@ -50,6 +59,10 @@ const { draft, dirty, stale, locked, validation, canSave } = editor;
 .policy-field label { font-weight: 600; }
 .policy-field p { margin: 0; }
 .policy-field :deep(input), .policy-field :deep(button), .policy-actions :deep(button) { min-height: 44px; }
+.tool-budget-options { margin-top: var(--space-6); border-top: 1px solid var(--ui-border); }
+.tool-budget-options summary { min-height: 44px; padding-block: var(--space-3); cursor: pointer; font-weight: 600; }
+.tool-budget-options > p { margin-block: var(--space-3); }
+.tool-budget-options .policy-grid { margin-block: var(--space-4); }
 .policy-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-6); }
 .settings-conflict { margin: var(--space-4) 0; padding: var(--space-4); background: var(--ui-bg-elevated); border: 1px solid var(--ui-border); border-radius: 12px; }
 .settings-conflict p { margin: 0; }

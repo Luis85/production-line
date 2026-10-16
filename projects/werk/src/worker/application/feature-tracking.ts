@@ -4,6 +4,8 @@ import type { InteractionTurn } from './interactions.js';
 import type { WorkerRequest } from './request-gates.js';
 import type { WorkerRun } from './run-evidence.js';
 import type { SessionView } from './workspace-view.js';
+import type { DevelopmentEvidence, DevelopmentScopeView } from './development.js';
+import { projectDevelopmentEvidence, renderDevelopmentEvidence, type DevelopmentReviewEvidence } from './development-notes.js';
 
 /** Inputs stay private. Projection below deliberately excludes dispatches, contexts and file contents. */
 export interface FeatureTrackingInput {
@@ -12,7 +14,7 @@ export interface FeatureTrackingInput {
   request?: WorkerRequest | null;
   turns?: readonly InteractionTurn[];
   runs?: readonly WorkerRun[];
-  local?: { instruction: string; summary: string | null; error: string | null; hasPatch: boolean; repository?: string; paths?: readonly string[] };
+  local?: { instruction: string; summary: string | null; error: string | null; hasPatch: boolean; repository?: string; paths?: readonly string[]; implementation?: DevelopmentScopeView; developmentEvidence?: DevelopmentEvidence };
   sourcePath?: string;
 }
 export interface FeatureTrackingRecord {
@@ -29,7 +31,7 @@ export interface FeatureTrackingProjection {
   pending: { kind: string; message: string; choices: string[]; reason?: string } | null;
   activity: Array<{ at: string; label: string; input: string; result: string | null }>;
   attempts: Array<{ id: string; attempt: number; purpose: string; outcome: string; startedAt: string | null; finishedAt: string | null }>;
-  result: string | null; hasPatch: boolean; approvedPaths: string[];
+  result: string | null; hasPatch: boolean; approvedPaths: string[]; development?: DevelopmentReviewEvidence;
 }
 export interface FeatureTrackingDocuments {
   readonly directory: string;
@@ -59,6 +61,12 @@ function remoteResult(text: string): string {
   } catch { /* Plain-text cancellation messages and follow-ups remain readable. */ }
   return clip(text);
 }
+function turnResult(turn: InteractionTurn, source: string, worktree: boolean): string | null {
+  if (turn.result?.type === 'needs_input') return clip(turn.result.request.message, 8000);
+  if (turn.result?.type !== 'completed') return null;
+  const legacyPatch = turn.dispatch?.operation === 'patch' && turn.dispatch.policy?.development !== true || source === 'local' && !turn.dispatch && !worktree;
+  return legacyPatch ? patchSummary(turn.result.text) : source === 'orchestrator' ? remoteResult(turn.result.text) : clip(turn.result.text);
+}
 export function projectFeatureTracking(input: FeatureTrackingInput): FeatureTrackingProjection | null {
   const { session, request, local } = input;
   const messages = input.messages ?? [], turns = [...(input.turns ?? [])].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -66,7 +74,7 @@ export function projectFeatureTracking(input: FeatureTrackingInput): FeatureTrac
   const instructions = local?.instruction ?? request?.input.message ?? (session.kind === 'local' ? undefined : messages.find(message => message.role === 'user')?.text ?? turns[0]?.input) ?? '';
   const activity: FeatureTrackingProjection['activity'] = turns.slice(-60).map(turn => ({
     at: turn.createdAt, label: `${turn.kind === 'answer' ? 'Answer' : turn.kind === 'resume' ? 'Continuation' : 'Instructions'} · ${stateLabel(turn.status)}`,
-    input: session.kind === 'local' && turn.dispatch?.operation !== 'chat' && (turn.kind === 'message' || turn.input.includes('Approved file snapshots:')) ? '' : clip(turn.input, 8000), result: turn.result?.type === 'completed' ? turn.dispatch?.operation === 'patch' || session.kind === 'local' && !turn.dispatch ? patchSummary(turn.result.text) : session.kind === 'orchestrator' ? remoteResult(turn.result.text) : clip(turn.result.text) : turn.result?.type === 'needs_input' ? clip(turn.result.request.message, 8000) : null,
+    input: session.kind === 'local' && turn.dispatch?.operation !== 'chat' && (turn.kind === 'message' || turn.input.includes('Approved file snapshots:')) ? '' : clip(turn.input, 8000), result: turnResult(turn, session.kind, !!local?.implementation),
   }));
   // Imported and remote sessions can have a transcript without local interaction turns.
   // Approved-file transcripts contain private snapshots, so they never enter this fallback.
@@ -76,7 +84,7 @@ export function projectFeatureTracking(input: FeatureTrackingInput): FeatureTrac
   const pending = session.interaction.pending;
   const latestReply = messages.filter(message => message.role === 'assistant' && message.state !== 'pending').at(-1);
   const completed = turns.findLast(turn => turn.result?.type === 'completed');
-  const completedResult = completed?.result?.type === 'completed' ? completed.dispatch?.operation === 'patch' || session.kind === 'local' && !completed.dispatch ? patchSummary(completed.result.text) : session.kind === 'orchestrator' ? remoteResult(completed.result.text) : clip(completed.result.text) : null;
+  const completedResult = completed ? turnResult(completed, session.kind, !!local?.implementation) : null;
   const result = completedResult ?? local?.summary ?? local?.error ?? session.continuationBlockedReason ?? (!turns.length && latestReply && session.kind !== 'local' ? session.kind === 'orchestrator' ? remoteResult(latestReply.text) : clip(latestReply.text) : null);
   return {
     sessionId: session.id, taskId: session.taskId, title: session.title, source: session.kind, provider: session.provider,
@@ -84,6 +92,7 @@ export function projectFeatureTracking(input: FeatureTrackingInput): FeatureTrac
     request: request ? { id: request.id, phase: request.phase, inputRevision: request.inputRevision, ready: gateResult(request, 'ready'), done: gateResult(request, 'done'), criteria: (request.input.criteria ?? []).map(value => clip(value, 2000)), findings: request.findings.filter(finding => finding.status === 'open').map(finding => `${finding.blocking ? 'Blocking' : 'Advisory'} ${finding.kind}: ${clip(finding.message, 2000)}`) } : null,
     pending: pending ? { kind: pending.kind, message: clip(pending.message, 8000), choices: (pending.choices ?? []).map(choice => clip(choice.label, 240)), ...(pending.reason ? { reason: clip(pending.reason, 2000) } : {}) } : null,
     activity, attempts: [...(input.runs ?? [])].sort((a, b) => (a.acceptedAt ?? a.startedAt ?? '').localeCompare(b.acceptedAt ?? b.startedAt ?? '') || a.attempt - b.attempt).slice(-60).map(run => ({ id: run.id, attempt: run.attempt, purpose: run.purpose ?? 'execution', outcome: run.outcome, startedAt: run.startedAt ?? null, finishedAt: run.after?.capturedAt ?? null })),
+    ...(local?.implementation ? { development: projectDevelopmentEvidence(local.implementation, local.developmentEvidence) } : {}),
     result: result === null || result === undefined ? null : clip(result), hasPatch: local?.hasPatch ?? false, approvedPaths: [...(local?.paths ?? request?.input.files?.map(file => file.path) ?? [])],
   };
 }
@@ -96,7 +105,8 @@ export function renderFeatureTracking(value: FeatureTrackingProjection, metadata
     `## Request\n\n${value.instructions || 'No instructions have been submitted yet.'}\n`,
     `## Progress\n\n- Task status: ${stateLabel(value.status)}\n- Request checks: ${value.request ? stateLabel(value.request.phase) : 'Not evaluated'}\n- Readiness: ${value.request?.ready ?? 'Not evaluated'}\n- Completion checks: ${value.request?.done ?? 'Not evaluated'}\n- Provider: ${line(value.provider)}\n- Task: \`${value.taskId}\`\n- Session: \`${value.sessionId}\`\n`,
   ];
-  if (value.hasPatch) paragraphs.push('A proposed patch is available in the worker. Human review is still required; this note does not mean files were changed or tests passed.\n');
+  if (value.development) paragraphs.push(renderDevelopmentEvidence(value.development));
+  if (value.hasPatch && !value.development) paragraphs.push('A proposed patch is available in the worker. Human review is still required; this note does not mean files were changed or tests passed.\n');
   if (value.sourcePath) paragraphs.push(`Original request: ${line(value.sourcePath)}\n`);
   if (value.approvedPaths.length) paragraphs.push('### Approved files\n\n' + value.approvedPaths.map(path => '- ' + line(path)).join('\n') + '\n');
   if (value.request?.criteria.length) paragraphs.push('## Acceptance criteria\n\n' + value.request.criteria.map(criterion => '- ' + line(criterion)).join('\n') + '\n');

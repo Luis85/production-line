@@ -1,13 +1,14 @@
 import { ProviderModelError, type ModelRequest } from '../application/model-contract.js';
 import type { ToolManifest, ToolRuntime } from '../application/tool-runtime.js';
-export interface ProviderOptions { tools?: () => ToolRuntime; }
-export function currentToolManifest(factory?: () => ToolRuntime): ToolManifest | undefined {
+export type ToolRuntimeFactory = (policy?: ModelRequest['policy']) => ToolRuntime;
+export interface ProviderOptions { tools?: ToolRuntimeFactory; }
+export function currentToolManifest(factory?: ToolRuntimeFactory): ToolManifest | undefined {
   const manifest = factory?.().manifest;
   return manifest?.tools.length ? structuredClone(manifest) : undefined;
 }
 /** The saved dispatch carries descriptions, never authority. Only the current runtime can execute tools. */
-export async function withProviderTools<T>(request: ModelRequest, signal: AbortSignal, factory: (() => ToolRuntime) | undefined, run: (runtime: ToolRuntime | undefined, signal: AbortSignal) => Promise<T>): Promise<T> {
-  const runtime = factory?.();
+export async function withProviderTools<T>(request: ModelRequest, signal: AbortSignal, factory: ToolRuntimeFactory | undefined, run: (runtime: ToolRuntime | undefined, signal: AbortSignal) => Promise<T>): Promise<T> {
+  const runtime = factory?.(request.policy);
   const bounded = request.policy.maxRuntimeMs ? AbortSignal.any([signal, AbortSignal.timeout(request.policy.maxRuntimeMs)]) : signal;
   try {
     if (request.policy.tools === 'granted' && (!runtime || JSON.stringify(request.toolManifest) !== JSON.stringify(runtime.manifest))) throw new ProviderModelError('tool_access');

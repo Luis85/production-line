@@ -7,6 +7,8 @@ export interface ToolManifest { revision: number; tools: ToolDefinition[]; }
 export interface ToolResult { content: { type: 'text'; text: string }[]; isError?: boolean; }
 export interface ToolRuntime {
   readonly manifest: ToolManifest;
+  /** Invocation-frozen execution ceilings; omitted by legacy adapter fixtures. */
+  readonly limits?: Readonly<{ maxCalls: number; maxRuntimeMs: number; commandTimeoutMs: number }>;
   call(name: string, args: unknown, signal: AbortSignal): Promise<ToolResult>;
   /** Idempotently cancel and await in-flight calls before releasing execution capacity. */
   close(): Promise<void>;

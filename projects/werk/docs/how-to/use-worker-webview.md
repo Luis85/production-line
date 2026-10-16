@@ -269,10 +269,18 @@ its original creation returns that same failed record without executing it.
 
 The file-change path supports up to 32 approved text files, 24 KiB per input file
 and 48,000 input characters in total. New files are supported; secret-like paths,
-symlinks and path traversal are rejected. Validated changed contents become a
-review patch. This path does not apply that patch or automatically run project
-tests. The retained worktree contains the captured input; commands and MCP tools
-remain governed by their separate saved grants. All work shares one execution slot.
+symlinks and path traversal are rejected. For a new Git-backed request with file
+access and at least one enabled **Required feature check** preset, the model can
+edit approved files in the worktree, run checks and repair failures. The worker
+generates the patch from the actual candidate and requires every frozen check to
+pass on that candidate. Inspect **Implementation evidence** in the selected task
+or History.
+
+Other requests retain the proposal-only workflow: validated returned contents
+become a patch without being applied or automatically tested. The composer
+explains available setup; the saved task records its accepted mode. Commands and
+MCP tools retain their separate saved grants. All work shares one execution slot.
+See [implement a feature](implement-feature.md) for setup and review.
 
 In **History → File tasks**, choose **Review patch**, inspect the result and
 choose **Download patch**. **Open conversation** opens its dedicated transcript.

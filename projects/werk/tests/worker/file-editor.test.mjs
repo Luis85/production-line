@@ -93,3 +93,31 @@ test('CRLF checkout source executes the real unified composer and preserves an a
   assert.ok(f.events.some(([event, id]) => event === 'created' && id === 'local-' + commands[0].id));
   assert.equal(f.state.draft, 'Existing follow-up draft');
 });
+
+
+test('the request composer reports CLI-only grants and returns to all tools off after revocation', async () => {
+  const f = await editorFixture(async () => undefined);
+  assert.equal(f.toolSummary.value, 'Access not loaded');
+  f.state.toolAccess = { builtins: { files: false, commands: [], cliTools: [{ id: 'project', enabled: true }], webOrigins: [] }, mcp: [] };
+  assert.equal(f.toolSummary.value, 'Grants configured');
+  f.state.toolAccess.builtins.cliTools[0].enabled = false;
+  assert.equal(f.toolSummary.value, 'All tools off');
+  delete f.state.toolAccess.builtins.cliTools;
+  assert.equal(f.toolSummary.value, 'All tools off', 'older snapshots grant no CLI access');
+});
+
+test('repository implementation preview requires file access and an enabled explicit fixed verification check', async () => {
+  const source = normalizeSource(await readFile(new URL('../../src/worker/webview/components/RunTask.vue', import.meta.url), 'utf8'));
+  const script = source.match(/<script setup[^>]*>([\s\S]*?)<\/script>/)[1];
+  const parsed = ts.createSourceFile('repository-options.ts', script, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
+  const body = ts.createPrinter().printFile(ts.factory.updateSourceFile(parsed, parsed.statements.filter(statement => !ts.isImportDeclaration(statement))));
+  const state = reactive({ settings: { repositories: { items: [] } }, toolAccess: null });
+  const values = new Function('computed', 'state', 'defineModel', ts.transpile(body, { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }) + '\nreturn { requiredChecks, implementationEnabled };')(computed, state, name => ref(name === 'enabled' ? true : ''));
+  assert.equal(values.implementationEnabled.value, false);
+  state.toolAccess = { builtins: { files: true, commands: [{ id: 'test', name: 'Tests', enabled: true }], cliTools: [{ id: 'cli', enabled: true }] } };
+  assert.equal(values.implementationEnabled.value, false, 'legacy presets and CLI grants do not become required checks');
+  state.toolAccess.builtins.commands[0].verification = true;
+  assert.equal(values.implementationEnabled.value, true); assert.equal(values.requiredChecks.value[0].name, 'Tests');
+  state.toolAccess.builtins.commands[0].enabled = false; assert.equal(values.implementationEnabled.value, false);
+  state.toolAccess.builtins.commands[0].enabled = true; state.toolAccess.builtins.files = false; assert.equal(values.implementationEnabled.value, false);
+});

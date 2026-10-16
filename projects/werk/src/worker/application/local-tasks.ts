@@ -1,3 +1,4 @@
+import { developmentCompletionValid, type DevelopmentCompletion, assertDevelopmentPolicy, developmentScopeView, developmentVerified, freezeDevelopmentScope, validateDevelopmentState, type DevelopmentFactory, type DevelopmentScope, type DevelopmentEvidence, type DevelopmentRuntime } from './development.js';
 import type { LocalTaskboardView } from './workspace-view.js';
 import type { ToolWorktreeIdentity } from './tool-runtime.js';
 import type { ModelFactory, ProviderId } from './provider-contract.js';
@@ -77,6 +78,10 @@ export interface TaskFile {
   existed: boolean;
 }
 export interface LocalTask {
+  implementation?: DevelopmentScope;
+  developmentEvidence?: DevelopmentEvidence;
+  /** Completed candidate is persisted before the immutable interaction result. */
+  developmentCompletion?: DevelopmentCompletion;
   requestId?: string;
   changedFileCount?: number;
   runId?: string;
@@ -166,11 +171,13 @@ export class LocalTaskboard {
   private persistenceError = false;
   private evidencePersistenceError = false;
   private model: ModelFactory;
+  private development?: DevelopmentFactory;
   constructor(settings: WorkerSettingsPort, sessions: WorkerSessions, dependencies: {
     model: ModelFactory;
     storage: LocalTaskStorage;
     files: ApprovedTaskFiles;
     workspaces?: LocalTaskWorkspaces;
+    development?: DevelopmentFactory;
   }) {
     this.storage = dependencies.storage;
     this.files = dependencies.files;
@@ -178,6 +185,7 @@ export class LocalTaskboard {
     this.sessions = sessions;
     this.model = dependencies.model;
     this.workspaces = dependencies.workspaces;
+    this.development = dependencies.development;
   }
   async init() {
     const saved = await this.storage.read();
@@ -204,6 +212,12 @@ export class LocalTaskboard {
         )
       )
         throw Error("Invalid taskboard");
+      for (const task of value) {
+        if (task.implementation) {
+          validateDevelopmentState(task.implementation, task.developmentEvidence);
+          if (task.implementation.baseCommit !== task.baseCommit || gateDigest(task.implementation.approvedPaths) !== gateDigest(task.files.map((file: TaskFile) => file.path))) throw Error('Saved implementation scope differs from its accepted worktree.');
+        } else if (task.developmentEvidence || task.developmentCompletion) throw Error('Development evidence requires accepted implementation authority.');
+      }
       this.tasks = value;
       for (const task of this.tasks) await this.recoverTask(task);
       for (const task of this.tasks) {
@@ -301,11 +315,13 @@ export class LocalTaskboard {
   }
   private outputFacts(
     valid: { patch: string; changedFileCount: number } | null,
+    task?: LocalTask,
   ) {
     return {
       "output.protocolValid": !!valid,
       "output.patchPresent": !!valid?.patch,
       "output.changedFileCount": valid?.changedFileCount ?? 0,
+      ...(task?.implementation ? { "output.verificationPassed": task.developmentCompletion?.verified === true && !!valid, "output.requiredCheckCount": task.implementation.checks.length, "output.candidateDigest": task.developmentCompletion?.candidateDigest ?? "" } : {}),
     };
   }
   private context(task: LocalTask) {
@@ -326,9 +342,11 @@ export class LocalTaskboard {
         : {}),
       files: structuredClone(task.files),
       definition: task.definition ?? null,
+      ...(task.implementation ? { implementation: developmentScopeView(task.implementation) } : {}),
     };
   }
   private originalPrompt(task: LocalTask) {
+    if (task.implementation) return `Implement this feature in the assigned isolated worktree. Use werk_candidate_status to inspect approved paths and their current hashes, werk_candidate_apply to update/create/delete only approved files, and werk_candidate_check for EVERY required check. Check results refer to the current candidate; after edits rerun checks. Repair failures within this invocation. Other granted commands may help investigation but do not replace required checks. Return a concise plain-text summary only after every required check passes. Human review is required; do not commit, push or merge. If blocked, use the interaction protocol.\nTask: ${task.title}\nInstruction: ${task.instruction}${task.criteria?.length ? '\nAcceptance criteria: ' + JSON.stringify(task.criteria) : ''}\nApproved file snapshots: ${JSON.stringify(task.files)}\nRequired checks: ${JSON.stringify(task.implementation.checks.map(({ id, name }) => ({ id, name })))}\nRetained candidate evidence: ${JSON.stringify(task.developmentEvidence ?? null)}`;
     return `Implement the requested changes to the supplied files. Return ONLY a JSON object {"summary":"...","files":[{"path":"approved path","content":"complete new file content"}]}. Use only tools explicitly granted by the worker. Only include changed approved files. Claim tests were run only when a granted tool actually ran them. This creates a patch for human review.\nTask: ${task.title}\nInstruction: ${task.instruction}${task.criteria?.length ? "\nAcceptance criteria: " + JSON.stringify(task.criteria) : ""}\nApproved file snapshots: ${JSON.stringify(task.files)}`;
   }
   private preparedRequest(
@@ -400,6 +418,7 @@ export class LocalTaskboard {
           reply: model.reply.bind(model),
           configuration: structuredClone(base.provider),
           toolManifest: (model as Partial<StructuredModel>).toolManifest,
+          executionPolicy: (model as Partial<StructuredModel>).executionPolicy,
         }
       : model;
     return prepareModelRequest(
@@ -408,6 +427,7 @@ export class LocalTaskboard {
             reply: model.reply.bind(model),
             configuration: this.sessions.requests.get(task.requestId).provider,
             toolManifest: (model as Partial<StructuredModel>).toolManifest,
+            executionPolicy: (model as Partial<StructuredModel>).executionPolicy,
           } as ConversationModel)
         : replayModel,
       messages,
@@ -415,9 +435,33 @@ export class LocalTaskboard {
       this.settings.value.execution.maxRuntimeMs,
     );
   }
+  private developmentRuntime(task: LocalTask, commandTimeoutMs?: number): DevelopmentRuntime | undefined {
+    if (!task.implementation) return;
+    validateDevelopmentState(task.implementation, task.developmentEvidence);
+    assertDevelopmentPolicy(task.implementation, this.settings.toolPolicy());
+    if (!this.development || !task.worktree || !task.worktreeIdentity) throw new DomainError('unavailable', 'Implementation tools are unavailable; the accepted worktree is retained.');
+    return this.development({ scope: structuredClone(task.implementation), worktree: task.worktree, worktreeIdentity: task.worktreeIdentity, repository: task.repository,
+      initialEvidence: task.developmentEvidence, commandTimeoutMs,
+      verifyWorkspace: signal => this.assertToolWorkspace(task, signal), currentPolicy: () => this.settings.toolPolicy(),
+      checkpoint: async evidence => {
+        validateDevelopmentState(task.implementation, evidence);
+        await this.change(tasks => { const current = tasks.find(item => item.id === task.id);
+          if (!current || current.currentTurnId !== task.currentTurnId || current.status !== 'running') throw new DomainError('conflict', 'This implementation attempt no longer owns its worktree.');
+          current.developmentEvidence = structuredClone(evidence);
+          delete current.developmentCompletion;
+        });
+        task.developmentEvidence = structuredClone(evidence);
+        delete task.developmentCompletion;
+      },
+    });
+  }
+  private restoredDevelopment(task: LocalTask, turn: InteractionTurn) {
+    if (!developmentCompletionValid(task) || task.developmentCompletion!.turnId !== turn.id || task.developmentCompletion!.runId !== turn.runId) return null;
+    return { patch: task.patch!, summary: task.summary ?? (turn.result?.type === 'completed' ? turn.result.text : ''), changedFileCount: task.developmentEvidence!.changedPaths.length };
+  }
   private async assertToolWorkspace(task: LocalTask, signal: AbortSignal) {
     const policy = this.settings.toolPolicy();
-    const granted = policy.builtins.files || policy.builtins.commands.some(item => item.enabled) || policy.builtins.webOrigins.length || policy.mcp.some(item => item.enabled && item.allowedTools.length);
+    const granted = policy.builtins.files || policy.builtins.commands.some(item => item.enabled) || policy.builtins.cliTools.some(item => item.enabled) || policy.builtins.webOrigins.length || policy.mcp.some(item => item.enabled && item.allowedTools.length);
     if (!granted || !task.worktree) return;
     const fail = () => new DomainError('conflict', 'The retained task worktree could not be verified. Create a new task before using tools; accepted file snapshots remain saved.');
     if (!task.worktreeIdentity || !task.baseCommit || !this.workspaces) throw fail();
@@ -445,7 +489,7 @@ export class LocalTaskboard {
     };
     const model = this.model(
       definitionConnection(connection, task.definition),
-      { worktree: task.worktree, worktreeIdentity: task.worktreeIdentity },
+      { worktree: task.worktree, worktreeIdentity: task.worktreeIdentity, development: this.developmentRuntime(task) },
     );
     if (!model)
       throw new DomainError(
@@ -562,7 +606,7 @@ export class LocalTaskboard {
             turn.id,
             turn.runId,
             turn.result,
-            this.outputFacts(null),
+            this.outputFacts(null, task),
           );
         task.status =
           turn.result.request.kind === "question"
@@ -575,15 +619,16 @@ export class LocalTaskboard {
         return;
       }
       if (turn.result?.type === "completed") {
-        const valid = this.validatedPatch(task, turn.result.text);
+        const valid = task.implementation ? this.restoredDevelopment(task, turn) : this.validatedPatch(task, turn.result.text);
         if (task.requestId && turn.runId)
           this.sessions.requests.recordResult(
             task.requestId,
             turn.id,
             turn.runId,
             turn.result,
-            this.outputFacts(valid),
+            this.outputFacts(valid, task),
           );
+        if (!valid) { task.status = 'needs_rework'; task.finishedAt = turn.finishedAt; task.error = 'Required checks did not pass for the retained candidate. Continue explicitly to inspect, repair and verify it.'; return; }
         await this.writePatch(task, valid.patch);
         Object.assign(task, valid, {
           status: "review",
@@ -629,8 +674,9 @@ export class LocalTaskboard {
   view(): LocalTaskboardView {
     return {
       settings: { ...this.settings.value.board },
-      tasks: this.tasks.map(({ files, instruction, patch, ...task }) => ({
+      tasks: this.tasks.map(({ files, instruction, patch, implementation, developmentCompletion, ...task }) => ({
         ...task,
+        ...(implementation ? { implementation: developmentScopeView(implementation) } : {}),
         files: files.map((file) => ({
           path: file.path,
           sha256: fingerprint(file.content),
@@ -856,6 +902,7 @@ export class LocalTaskboard {
           }
         : {}),
       files,
+      ...(!interruptedWorktree && this.development ? { implementation: freezeDevelopmentScope(prepared.baseCommit, allowedPaths, this.settings.toolPolicy()) } : {}),
       status: interruptedWorktree ? "failed" : "queued",
       priority: Number(body.priority ?? 1),
       createdAt: new Date().toISOString(),
@@ -1428,9 +1475,11 @@ export class LocalTaskboard {
         ...this.settings.provider(task.provider),
         model: task.model,
       };
+      const development = this.developmentRuntime(task, turn.dispatch.policy.commandTimeoutMs);
+      if (!!task.implementation !== (turn.dispatch.policy.development === true)) throw Error('Prepared implementation mode differs from accepted authority.');
       const model = this.model(
         definitionConnection(connection, task.definition),
-        { worktree: task.worktree, worktreeIdentity: task.worktreeIdentity },
+        { worktree: task.worktree, worktreeIdentity: task.worktreeIdentity, development },
       );
       if (!model) throw Error("Provider not configured");
       signal = AbortSignal.any([
@@ -1463,16 +1512,29 @@ export class LocalTaskboard {
         },
       );
       signal.throwIfAborted();
-      const valid =
-        result.type === "completed"
-          ? this.validatedPatch(task, result.text)
-          : null;
+      let valid: { summary: string; patch: string; changedFileCount: number } | null = null;
+      if (result.type === 'completed') {
+        if (development && task.implementation) {
+          const candidate = await development.capture(signal), evidence = development.evidence();
+          validateDevelopmentState(task.implementation, evidence);
+          const verified = developmentVerified(task.implementation, candidate, evidence);
+          const receipt = { turnId, runId, candidateDigest: candidate.digest, patchSha256: fingerprint(candidate.patch), evidenceDigest: gateDigest(evidence), verified };
+          if (candidate.patch) await this.writePatch(task, candidate.patch);
+          await this.change(tasks => { const current = tasks.find(item => item.id === id)!;
+            current.developmentEvidence = structuredClone(evidence); current.developmentCompletion = receipt;
+            current.patch = candidate.patch || null; current.summary = result.text; current.changedFileCount = candidate.changedPaths.length;
+          });
+          Object.assign(task, { developmentEvidence: evidence, developmentCompletion: receipt, patch: candidate.patch, summary: result.text });
+          if (verified) valid = { summary: result.text, patch: candidate.patch, changedFileCount: candidate.changedPaths.length };
+        } else valid = this.validatedPatch(task, result.text);
+      }
       outcome =
         result.type === "needs_input"
           ? result.request.kind === "question"
             ? "waiting_input"
             : "escalated"
-          : "review";
+          : valid ? "review" : "failed";
+      // Only verified candidates can reach review; failed checks retain their completed summary for explicit rework.
       // Only validated patch completions reach the durable completed state.
       // Questions persist their checkpoint before projections, and release the execution permit.
       this.sessions.interactions.complete(
@@ -1488,7 +1550,7 @@ export class LocalTaskboard {
           turnId,
           runId,
           result,
-          this.outputFacts(valid),
+          this.outputFacts(valid, task),
         );
       if (valid && result.type === "completed") {
         await this.writePatch(task, valid.patch);
@@ -1504,6 +1566,9 @@ export class LocalTaskboard {
           this.input(task),
           result.text,
         );
+      } else if (result.type === 'completed') {
+        await this.change(tasks => { Object.assign(tasks.find(item => item.id === id)!, { status: 'needs_rework', finishedAt: new Date().toISOString(), error: 'Required checks did not pass for the retained candidate. Continue explicitly to inspect, repair and verify it.' }); });
+        await this.sessions.recordTask(task.sessionId, this.input(task), result.text);
       } else if (result.type === "needs_input") {
         await this.change((tasks) => {
           Object.assign(tasks.find((item) => item.id === id)!, {
@@ -1528,7 +1593,7 @@ export class LocalTaskboard {
           knownResult = true;
           outcome =
             saved.result.type === "completed"
-              ? "review"
+              ? failed.implementation && !failed.developmentCompletion?.verified ? "failed" : "review"
               : saved.result.request.kind === "question"
                 ? "waiting_input"
                 : "escalated";

@@ -3,11 +3,16 @@ import { lstat, mkdir, open, opendir, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { runProcess, ProcessRunError } from '../../shared/process/launcher.js';
 import type { ToolDefinition, ToolPolicy } from '../application/tool-policy.js';
+import { cliToolDescription, cliToolInputSchema, cliToolName } from '../application/cli-tool-policy.js';
+import { CliToolError, runCliTool } from './cli-tools.js';
+import { DEFAULT_COMMAND_TIMEOUT_MS } from '../application/execution-policy.js';
+import type { DevelopmentRuntime } from '../application/development.js';
+import { CandidateToolError } from './candidate-tools.js';
 import type { ToolResult, ToolWorktreeIdentity } from '../application/tool-runtime.js';
 
 export class BuiltinToolError extends Error {}
 export interface ToolOperation { definition: ToolDefinition; call(args: unknown, signal: AbortSignal): Promise<ToolResult>; }
-export interface BuiltinToolOptions { policy: ToolPolicy; directory: string; worktree?: string; worktreeIdentity?: ToolWorktreeIdentity; fetch?: typeof globalThis.fetch; }
+export interface BuiltinToolOptions { policy: ToolPolicy; directory: string; worktree?: string; worktreeIdentity?: ToolWorktreeIdentity; development?: DevelopmentRuntime; commandTimeoutMs?: number; fetch?: typeof globalThis.fetch; }
 const output = (data: unknown): ToolResult => ({ content: [{ type: 'text', text: typeof data === 'string' ? data : JSON.stringify(data) }] });
 const schema = (properties: Record<string, unknown>, required: string[] = []) => ({ type: 'object', properties, required, additionalProperties: false });
 const pathProperty = { type: 'string', maxLength: 1000, description: 'Relative path inside the task worktree. Defaults to its root.' };
@@ -146,21 +151,54 @@ export function builtinToolOperations(options: BuiltinToolOptions): ToolOperatio
       const args = object(value, ['path', 'query', 'limit']); return output(await files.search(args.path, string(args.query, 1000), signal, number(args.limit, 50, 100)));
     });
   }
+  if (options.development && options.policy.builtins.files && options.worktree) {
+    const development = options.development;
+    const candidateCall = (call: ToolOperation['call']): ToolOperation['call'] => async (value, signal) => {
+      try { return await call(value, signal); } catch (error) { if (error instanceof CandidateToolError) throw new BuiltinToolError(error.message); throw error; }
+    };
+    add('werk_candidate_status', 'Inspect the current candidate and its required verification receipts. Returns approved file hashes for safe edits. A changed candidate invalidates earlier successful checks.', schema({}), candidateCall(async (value, signal) => {
+      object(value, []); const candidate = await development.capture(signal);
+      return output({ digest: candidate.digest, changedPaths: candidate.changedPaths, files: candidate.files, evidence: { ...development.evidence(), checks: development.evidence().checks.map(check => ({ ...check, stdout: check.stdout.slice(0, 512), stderr: check.stderr.slice(0, 512), truncated: check.truncated || check.stdout.length > 512 || check.stderr.length > 512 })) } });
+    }));
+    add('werk_candidate_apply', 'Apply one change to an explicitly approved candidate file in the pinned worktree. Use its current hash from werk_candidate_status; null hash means the file must not exist. Content null deletes the file. Every edit invalidates earlier checks; repository checkout and unapproved paths are untouched.', schema({ path: { type: 'string', maxLength: 240 }, content: { type: ['string', 'null'], maxLength: 24000 }, expectedHash: { type: ['string', 'null'], pattern: '^[a-f0-9]{64}$' } }, ['path', 'content', 'expectedHash']), candidateCall(async (value, signal) => {
+      const args = object(value, ['path', 'content', 'expectedHash']);
+      if (typeof args.path !== 'string' || args.content !== null && typeof args.content !== 'string' || args.expectedHash !== null && typeof args.expectedHash !== 'string') throw new BuiltinToolError('Supply an approved path, content or null, and the current expectedHash.');
+      return output(await development.apply({ path: args.path, content: args.content as string | null, expectedHash: args.expectedHash as string | null }, signal));
+    }));
+    add('werk_candidate_check', 'Run one frozen required verification command against the actual candidate worktree. Use the preset ID from the task verification plan. A check only passes when exit code is zero and candidate source is unchanged; all required checks must pass after the final edit.', schema({ preset: { type: 'string', maxLength: 64 } }, ['preset']), candidateCall(async (value, signal) => {
+      const args = object(value, ['preset']); const receipt = await development.check(string(args.preset, 64), signal);
+      return { ...output(receipt), ...(receipt.status === 'passed' ? {} : { isError: true }) };
+    }));
+  }
   const commands = options.policy.builtins.commands.filter(command => command.enabled);
   if (commands.length) add('werk_command_run', 'Run one operator-approved executable with its fixed arguments, as the worker account. Starts in the task worktree or private chat workspace. Commands may change files or access resources outside that directory. No extra arguments or shell expansion.', schema({ preset: { type: 'string', enum: commands.map(command => command.id), description: commands.map(command => `${command.id}: ${command.name}`).join('; ') } }, ['preset']), async (value, signal) => {
     const args = object(value, ['preset']); const preset = commands.find(command => command.id === args.preset);
     if (!preset) throw new BuiltinToolError('That command preset is not granted.');
+    // A required check has one receipt regardless of the broker tool name used.
+    if (options.development && preset.verification) {
+      try {
+        const receipt = await options.development.check(preset.id, signal);
+        return { ...output({ preset: preset.id, ...receipt }), ...(receipt.status === 'passed' ? {} : { isError: true }) };
+      } catch (error) { if (error instanceof CandidateToolError) throw new BuiltinToolError(error.message); throw error; }
+    }
     const cwd = options.worktree ?? join(options.directory, 'chat-workspace');
     if (!options.worktree) await mkdir(cwd, { recursive: true, mode: 0o700 });
     check(signal);
     const env = Object.fromEntries(['PATH', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'TMPDIR', 'LANG', 'LC_ALL'].flatMap(key => process.env[key] === undefined ? [] : [[key, process.env[key]]]));
     try {
-      const command = await runProcess(preset.executable, preset.args, { cwd, env, mode: 'contained', signal, timeoutMs: 30000, maxOutputBytes: 32768, captureStderr: true, allowNonZeroExit: true });
+      const command = await runProcess(preset.executable, preset.args, { cwd, env, mode: 'contained', signal, timeoutMs: options.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS, maxOutputBytes: 32768, captureStderr: true, allowNonZeroExit: true });
       return output({ preset: preset.id, exitCode: command.exitCode, stdout: command.stdout.toString('utf8'), stderr: command.stderr.toString('utf8') });
     } catch (error) {
       if (error instanceof ProcessRunError) throw new BuiltinToolError(`Command stopped (${error.reason}); no automatic retry was made.`);
       throw new BuiltinToolError('Command could not be started. Check its executable and working directory.');
     }
+  });
+  // CLI tools resolve relative fixed arguments such as bin/tool.mjs against a project, so chat without a worktree has none.
+  const worktree = options.worktree;
+  if (worktree) for (const tool of options.policy.builtins.cliTools.filter(item => item.enabled)) add(cliToolName(tool.id), cliToolDescription(tool), cliToolInputSchema(tool), async (value, signal) => {
+    const args = object(value, ['args']);
+    try { const result = await runCliTool(tool, args.args, worktree, signal, options.commandTimeoutMs); return { content: [{ type: 'text', text: result.text }], ...(result.isError ? { isError: true } : {}) }; }
+    catch (error) { if (error instanceof CliToolError) throw new BuiltinToolError(error.message); throw error; }
   });
   if (options.policy.builtins.webOrigins.length) add('werk_web_fetch', 'GET a public HTTP(S) URL on an operator-approved origin, without credentials or cookies. Redirects must also stay on approved origins. Returns at most 64 KiB.', schema({ url: { type: 'string', minLength: 1, maxLength: 4000 } }, ['url']), async (value, signal) => {
     const args = object(value, ['url']); const input = string(args.url, 4000);

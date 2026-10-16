@@ -41,7 +41,7 @@ async function reviewOptions() { optionsOpen.value = true; await nextTick(); opt
 const toolSummary = computed(() => {
   const tools = state.toolAccess;
   if (!tools) return 'Access not loaded';
-  return tools.builtins.files || tools.builtins.commands.some(item => item.enabled) || tools.builtins.webOrigins.length || tools.mcp.some(item => item.enabled && item.allowedTools.length) ? 'Grants configured' : 'All tools off';
+  return tools.builtins.files || tools.builtins.commands.some(item => item.enabled) || (tools.builtins.cliTools ?? []).some(item => item.enabled) || tools.builtins.webOrigins.length || tools.mcp.some(item => item.enabled && item.allowedTools.length) ? 'Grants configured' : 'All tools off';
 });
 watch(() => state.settings?.providers, () => {
   if (!intake.provider) intake.provider = state.settings?.providers.find(item => item.configured)?.id ?? state.settings?.providers[0]?.id;
@@ -104,7 +104,7 @@ defineExpose({ focusInstructions });
               <div class="intake-model" aria-labelledby="new-task-model-label">{{ model }}</div>
               <p class="intake-help">{{ agent?.model ? 'This task keeps a copy of the selected instructions and model.' : 'Uses this connection’s configuration when the task starts.' }}</p>
             </div>
-            <p class="intake-tool-access">Tool access: {{ toolSummary }} · <RouterLink to="/settings#tool-access">Manage access</RouterLink><span v-if="state.toolAccess?.builtins.files">Repository file access uses the approved files below.</span></p>
+            <p class="intake-tool-access">Tool access: {{ toolSummary }} · <RouterLink to="/settings#tool-access">Manage access</RouterLink><span v-if="state.toolAccess?.builtins.files">File reads use the task worktree. Edits stay within the approved paths below.</span></p>
             <div class="intake-field">
               <label for="new-task-name">Request name · optional</label>
               <UInput id="new-task-name" v-model="intake.title" :maxlength="120" placeholder="Named from your first message" class="w-full" />

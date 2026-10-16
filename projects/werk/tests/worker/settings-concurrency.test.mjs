@@ -103,3 +103,29 @@ test('authenticated settings API returns actionable 409 responses for stale queu
   }
   assert.equal(workspace.settings.value.board.queueCapacity, 24); assert.equal(workspace.settings.value.resources.longRunningMs, 1800000);
 });
+
+
+test('tool budgets reject stale atomic saves and remain editable under a duration environment override', async t => {
+  const { directory, settings } = await fixture(t);
+  const budget = value => ({ maxToolCalls: value.value.execution.maxToolCalls, commandTimeoutMs: value.value.execution.commandTimeoutMs });
+  const expectedToolBudget = budget(settings), expectedDuration = duration(settings);
+  assert.deepEqual(expectedToolBudget, { maxToolCalls: 128, commandTimeoutMs: 300000 });
+  const savedDefaults = JSON.parse(await readFile(join(directory, 'workspace-settings.json'), 'utf8')).execution;
+  assert.equal(savedDefaults.maxToolCalls, undefined); assert.equal(savedDefaults.commandTimeoutMs, undefined);
+  await settings.update({ execution: { maxToolCalls: 256, commandTimeoutMs: 600000 }, expectedToolBudget });
+  await assert.rejects(settings.update({ execution: { maxRuntimeMs: 7200000, maxToolCalls: 10 }, resources: { longRunningMs: 1000 }, expectedDuration, expectedToolBudget }), error => error.code === 'conflict');
+  assert.deepEqual(duration(settings), expectedDuration); assert.deepEqual(budget(settings), { maxToolCalls: 256, commandTimeoutMs: 600000 });
+  for (const body of [{ expectedToolBudget: budget(settings) }, { execution: { maxToolCalls: 10 }, expectedToolBudget: { maxToolCalls: 256 } }, { execution: { maxToolCalls: 513 }, expectedToolBudget: budget(settings) }, { execution: { commandTimeoutMs: 999 }, expectedToolBudget: budget(settings) }]) await assert.rejects(settings.update(body), error => error.code === 'invalid_input');
+  process.env.WERK_WORKER_MAX_RUNTIME_MS = '10800000';
+  const overridden = new WorkerSettings(directory); await overridden.init();
+  assert.deepEqual(budget(overridden), { maxToolCalls: 256, commandTimeoutMs: 600000 });
+  await overridden.update({ execution: { maxToolCalls: 64, commandTimeoutMs: 120000 }, expectedToolBudget: budget(overridden) });
+  assert.equal(overridden.value.execution.maxRuntimeMs, 10800000); assert.equal(overridden.publicView().executionSource, 'environment');
+  assert.equal(JSON.parse(await readFile(join(directory, 'workspace-settings.json'), 'utf8')).execution.maxRuntimeMs, expectedDuration.maxRuntimeMs);
+  const restarted = new WorkerSettings(directory); await restarted.init(); assert.deepEqual(budget(restarted), { maxToolCalls: 64, commandTimeoutMs: 120000 });
+  delete process.env.WERK_WORKER_MAX_RUNTIME_MS;
+  const restored = new WorkerSettings(directory); await restored.init(); assert.equal(restored.value.execution.maxRuntimeMs, expectedDuration.maxRuntimeMs);
+  await restored.update({ execution: expectedToolBudget });
+  const reset = JSON.parse(await readFile(join(directory, 'workspace-settings.json'), 'utf8')).execution;
+  assert.equal(reset.maxToolCalls, undefined); assert.equal(reset.commandTimeoutMs, undefined);
+});

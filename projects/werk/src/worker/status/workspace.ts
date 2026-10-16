@@ -11,7 +11,7 @@ import { ProviderStatusChecks } from '../infrastructure/provider-status.js';
 import { createWorkerSessions, createLocalTaskboard } from '../infrastructure/workspace-services.js';
 import { ProviderAccountChecks } from '../infrastructure/provider-account.js';
 import { SharedIntakeRuntime } from '../infrastructure/features/shared-intake-runtime.js';
-import type { SharedFeatureRecord } from '../application/shared-feature-state.js';
+import type { SharedExecution, SharedFeatureRecord } from '../application/shared-feature-state.js';
 import type { ToolAccessView } from '../application/tool-policy.js';
 import { discoverMcpTools, mcpTransportConfiguration, McpClientError } from '../infrastructure/tool-mcp.js';
 import type { ExecutionProfilesControl } from '../application/execution-profiles.js';
@@ -20,6 +20,7 @@ import type { RepositoryConfiguration } from '../application/repositories.js';
 import { RepositoryManager, prepareRepositoryWorktree } from '../infrastructure/repositories.js';
 import { requestGateSchema } from '../application/request-gate-schema.js';
 import { requestDispatchStatus } from '../application/request-dispatch.js';
+import { developmentCompletionValid, developmentScopeView } from '../application/development.js';
 import { RequestReviewManager } from "../application/request-review.js";
 import {
   defaultGatePolicy,
@@ -167,10 +168,14 @@ export class WorkerWorkspace {
       const runs = this.sessions.runs.list({ sessionId: session.id, limit: 100 }).rows;
       return { session, messages: publicTaskConversation(chat, local ? { instruction: local.instruction, paths: local.admissionFailure?.paths ?? local.files.map(file => file.path) } : undefined).messages, request: this.sessions.requests.forSession(session.id),
         turns: interaction.turns.map(turn => this.sessions.interactions.turn(session.id, turn.id)), runs,
-        ...(local ? { local: { instruction: local.instruction, summary: local.summary, error: local.error, hasPatch: !!local.patch, repository: local.repository, paths: local.files.map(file => file.path) } } : {}),
+        ...(local ? { local: { instruction: local.instruction, summary: local.summary, error: local.error, hasPatch: !!local.patch, repository: local.repository, paths: local.files.map(file => file.path), ...(local.implementation ? { implementation: developmentScopeView(local.implementation), developmentEvidence: local.developmentEvidence } : {}) } } : {}),
         ...(sourcePath ? { sourcePath } : {}),
       };
     });
+  }
+  taskboardDetail(id: string) {
+    const { implementation, developmentCompletion, ...task } = this.board.detail(id);
+    return { ...task, ...(implementation ? { implementation: developmentScopeView(implementation) } : {}) };
   }
   async taskboardAction(input: unknown) {
     if ((input as Record<string, unknown> | null)?.action === 'retry')
@@ -216,7 +221,7 @@ export class WorkerWorkspace {
       },
       events: { transport: "polling", streaming: false },
       capabilities: modelCapabilities,
-      toolAccess: { supported: true, management: "worker_global_revision", default: "none", scope: "local_model_invocations", repositoryFiles: "task_worktree_read_only", revocation: "pause_and_drain_before_save" },
+      toolAccess: { supported: true, management: "worker_global_revision", default: "none", scope: "local_model_invocations", repositoryFiles: "task_worktree_read_only", implementation: { supported: true, activation: "new_git_request_with_approved_paths_and_required_checks", writes: "approved_paths_in_owned_worktree", review: "actual_patch_and_matching_required_checks", humanMergeRequired: true }, cliTools: "argument_policy_in_task_worktree", revocation: "pause_and_drain_before_save" },
       consumption: { supported: true, unit: 'tokens', periods: ['daily', 'monthly'], clock: 'UTC', scope: 'this_worker_model_invocations', enforcement: 'admission', personalUsageObserved: false },
       resources: {
         supported: true,
@@ -869,12 +874,7 @@ export class WorkerWorkspace {
         try { definitionConnection(this.settings.provider(input.provider), this.definitions.select({ definitionId: input.definitionId, definitionRef: input.definitionRef, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly })); return undefined; }
         catch (error) { return error instanceof Error ? error.message : 'The selected agent definition is unavailable.'; }
       },
-      inspect: id => {
-        try {
-          const task = this.board.detail(id);
-          return { status: task.status, summary: task.summary, patch: task.patch, request: task.requestId ? this.sessions.requests.get(task.requestId) : null, currentTurnId: task.currentTurnId, runId: task.runId, error: task.error };
-        } catch { return undefined; }
-      },
+      inspect: id => this.inspectSharedFeature(id),
     });
     if (config.features)
       this.features = new FeatureRequests(
@@ -950,6 +950,14 @@ export class WorkerWorkspace {
     if (this.sharedRuntime.intake.binding?.repositoryId && !['get', 'result', 'validate'].includes(String((input as { action?: unknown })?.action))) throw new DomainError('conflict', 'Shared Git intake owns new feature requests. Create and validate the request in the repository, then commit and push it.');
     return this.features.action(input);
   }
+  private inspectSharedFeature(id: string): SharedExecution | undefined {
+    try {
+      const task = this.board.detail(id);
+      return { status: task.status, summary: task.summary, patch: task.patch,
+        ...(task.implementation ? { implementation: developmentScopeView(task.implementation), developmentEvidence: task.developmentEvidence, developmentVerified: developmentCompletionValid(task) } : {}),
+        request: task.requestId ? this.sessions.requests.get(task.requestId) : null, currentTurnId: task.currentTurnId, runId: task.runId, error: task.error };
+    } catch { return undefined; }
+  }
   private async submitSharedFeature(record: SharedFeatureRecord) {
     const input = record.accepted;
     const assignment = this.repositories.resolve(record.binding.repositoryId);
@@ -1009,7 +1017,7 @@ export class WorkerWorkspace {
   }
   toolAccess(): ToolAccessView {
     const saveBlockedReason = this.toolAccessBlockedReason();
-    return { ...this.settings.toolAccess(), canEdit: !saveBlockedReason, saveBlockedReason };
+    return { ...this.settings.toolAccess(), canEdit: !saveBlockedReason, saveBlockedReason, workerNode: process.execPath };
   }
   private toolAccessBlockedReason(): string | null {
     if (!this.acceptingTasks) return 'Worker is stopping.';

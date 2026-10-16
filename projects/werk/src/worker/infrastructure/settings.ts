@@ -23,7 +23,7 @@ export class WorkerSettings {
   value: WorkspaceSettings;
   private writing = Promise.resolve();
   private tools: ToolPolicy = defaultToolPolicy();
-  private executionOverride?: ExecutionPolicy;
+  private executionOverride?: Pick<ExecutionPolicy, 'maxRuntimeMs'>;
   private savedExecution = defaultExecutionPolicy();
   private executionSource: 'environment' | 'saved_settings' | 'default' = 'default';
   constructor(directory: string, url = '', enrollmentToken = '', executable = '', repositories = defaultRepositoryConfiguration()) {
@@ -38,7 +38,7 @@ export class WorkerSettings {
       for (const provider of this.value.providers) if (provider.id.endsWith('-cli') && !provider.executable) provider.executable = await findExecutable(provider.id === 'codex-cli' ? 'codex' : 'claude');
       this.value = this.validate(this.value); await this.persist(this.value);
     }
-    if (this.executionOverride) { this.value.execution = { ...this.executionOverride }; this.executionSource = 'environment'; }
+    if (this.executionOverride) { this.value.execution = { ...this.value.execution, maxRuntimeMs: this.executionOverride.maxRuntimeMs }; this.executionSource = 'environment'; }
     try { this.tools = validateToolPolicy(JSON.parse(await readBoundedFile(join(this.directory, 'tool-access.json'), 655360))); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
 
@@ -53,7 +53,10 @@ export class WorkerSettings {
   }
   private async saveToolPolicy(change: (previous: ToolPolicy) => ToolPolicy) {
     const operation = this.writing.catch(() => {}).then(async () => {
-      const next = change(this.tools), document = JSON.stringify(next) + '\n';
+      const next = change(this.tools);
+      // Omit an empty CLI tool list so a rolled-back 0.9.0 worker can still read the policy.
+      const { cliTools, ...builtins } = next.builtins;
+      const document = JSON.stringify(cliTools.length ? next : { ...next, builtins }) + '\n';
       if (Buffer.byteLength(document) > 655360) throw new DomainError('invalid_input', 'Tool configuration exceeds 640 KiB. Use fewer connections or smaller tool catalogs.');
       await atomicWrite(join(this.directory, 'tool-access.json'), document);
       this.tools = next;
@@ -64,8 +67,8 @@ export class WorkerSettings {
   provider(id: string) { const value = this.value.providers.find(item => item.id === id); if (!value) throw new DomainError('invalid_input', 'Choose a supported provider.'); return value; }
   async update(input: unknown) {
     const operation = this.writing.catch(() => {}).then(async () => {
-      const body = object(input, 'Settings', ['provider', 'connection', 'board', 'resources', 'execution', 'repositories', 'consumption', 'expectedConsumption', 'expectedBoard', 'expectedDuration']);
-      if (body.execution !== undefined && this.executionOverride) throw new DomainError('conflict', 'WERK_WORKER_MAX_RUNTIME_MS controls this worker. Change or remove that environment override and restart before editing the execution limit.');
+      const body = object(input, 'Settings', ['provider', 'connection', 'board', 'resources', 'execution', 'repositories', 'consumption', 'expectedConsumption', 'expectedBoard', 'expectedDuration', 'expectedToolBudget']);
+      if (body.execution !== undefined && object(body.execution, 'Execution', ['maxRuntimeMs', 'maxToolCalls', 'commandTimeoutMs']).maxRuntimeMs !== undefined && this.executionOverride) throw new DomainError('conflict', 'WERK_WORKER_MAX_RUNTIME_MS controls this worker. Change or remove that environment override and restart before editing the execution limit.');
       if (body.expectedConsumption !== undefined) {
         if (body.consumption === undefined) throw new DomainError('invalid_input', 'A consumption baseline requires a new consumption policy.');
         const expected = validateConsumptionPolicy(body.expectedConsumption);
@@ -93,6 +96,16 @@ export class WorkerSettings {
         if (execution.maxRuntimeMs !== this.value.execution.maxRuntimeMs || warning.longRunningMs !== this.value.resources.longRunningMs)
           throw new DomainError('conflict', 'Duration settings changed in another session. Reload the current duration settings before saving.');
       }
+      if (body.expectedToolBudget !== undefined) {
+        if (body.execution === undefined) throw new DomainError('invalid_input', 'A tool budget baseline requires tool execution settings to save.');
+        const patch = object(body.execution, 'Execution', ['maxRuntimeMs', 'maxToolCalls', 'commandTimeoutMs']);
+        if (patch.maxToolCalls === undefined && patch.commandTimeoutMs === undefined) throw new DomainError('invalid_input', 'A tool budget baseline requires tool execution settings to save.');
+        const expected = object(body.expectedToolBudget, 'Tool budget baseline', ['maxToolCalls', 'commandTimeoutMs']);
+        if (expected.maxToolCalls === undefined || expected.commandTimeoutMs === undefined) throw new DomainError('invalid_input', 'Use the complete tool budget baseline before saving.');
+        const checked = validateExecutionPolicy({ maxRuntimeMs: this.value.execution.maxRuntimeMs, ...expected });
+        if (checked.maxToolCalls !== this.value.execution.maxToolCalls || checked.commandTimeoutMs !== this.value.execution.commandTimeoutMs)
+          throw new DomainError('conflict', 'Tool execution limits changed in another session. Reload the current duration settings before saving.');
+      }
       const next = structuredClone(this.value);
       if (body.consumption !== undefined) next.consumption = validateConsumptionPolicy(body.consumption);
       if (body.provider) {
@@ -112,14 +125,18 @@ export class WorkerSettings {
       if (body.board) next.board = { ...next.board, ...object(body.board, 'Taskboard', ['paused', 'maxParallel', 'queueCapacity', 'orchestratorQueue', 'order']) };
       if (body.repositories !== undefined) next.repositories = validateRepositoryConfiguration(body.repositories, path => { if (!isAbsolute(path)) throw new DomainError('invalid_input', 'Repository path must be absolute on the worker machine.'); return resolve(path); });
       if (body.resources !== undefined) next.resources = { ...next.resources, ...object(body.resources, 'Resources', Object.keys(defaultResourcePolicy())) };
-      if (body.execution !== undefined) next.execution = { ...next.execution, ...object(body.execution, 'Execution', ['maxRuntimeMs']) };
+      if (body.execution !== undefined) next.execution = { ...next.execution, ...object(body.execution, 'Execution', ['maxRuntimeMs', 'maxToolCalls', 'commandTimeoutMs']) };
       const validated = this.validate(next); await this.persist(validated); this.value = validated;
-      if (body.execution !== undefined) { this.savedExecution = { ...validated.execution }; this.executionSource = 'saved_settings'; }
+      if (body.execution !== undefined) { this.savedExecution = { ...validated.execution, ...(this.executionOverride ? { maxRuntimeMs: this.savedExecution.maxRuntimeMs } : {}) }; this.executionSource = this.executionOverride ? 'environment' : 'saved_settings'; }
     });
     this.writing = operation; await operation; return this.publicView();
   }
   private persist(value: WorkspaceSettings) {
-    const document = JSON.stringify(this.executionOverride ? { ...value, execution: this.savedExecution } : value) + '\n';
+    const execution = { ...value.execution, ...(this.executionOverride ? { maxRuntimeMs: this.savedExecution.maxRuntimeMs } : {}) };
+    // Default tool budgets need no new saved fields; older releases can still read this configuration.
+    const { maxToolCalls, commandTimeoutMs, ...duration } = execution;
+    const defaults = defaultExecutionPolicy();
+    const document = JSON.stringify({ ...value, execution: { ...duration, ...(maxToolCalls !== defaults.maxToolCalls ? { maxToolCalls } : {}), ...(commandTimeoutMs !== defaults.commandTimeoutMs ? { commandTimeoutMs } : {}) } }) + '\n';
     if (Buffer.byteLength(document) > 65536) throw new DomainError('invalid_input', 'Worker settings limit: 64 KiB. Use fewer or shorter repository assignments.');
     return atomicWrite(join(this.directory, 'workspace-settings.json'), document);
   }

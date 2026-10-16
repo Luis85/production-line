@@ -113,7 +113,12 @@ variable, bounds, precedence and inspection commands, plus request-gate recovery
 semantics. `WERK_WORKER_MAX_RUNTIME_MS` controls each local model invocation,
 not the lifetime of a session or a CLI polling deadline. The default is six hours,
 with a validated one-second to 24-hour range; a process-environment override wins
-over saved private settings and must be removed/restarted before execution edits.
+over saved private settings and must be removed/restarted before duration edits.
+Tool budgets remain editable: `execution.maxToolCalls` defaults to 128 (1–512),
+and `execution.commandTimeoutMs` to 300000 (1000–3600000). The total duration
+still bounds each command. Settings → Queue & duration exposes these controls;
+API/CLI saves can include the complete `expectedToolBudget` pair to reject stale
+changes. Each invocation retains the budgets captured when it was prepared.
 Inspect `settings get` for `executionSource` and `resource status` for admission
 conditions. Resource snapshots measure the worker Node process, not provider
 subprocess totals or subscription balances. Fleet `workers.execution.timeoutMs`
@@ -475,6 +480,38 @@ This is one worker's configured token budget; personal use outside Werk and
 provider subscription balances are not measured. See
 [consumption configuration and recovery](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/worker-consumption-limits.md)
 for the webview, accounting fields and failure behavior.
+
+## Worker model tool access
+
+| Command | Contract |
+| --- | --- |
+| `tool-access get` | Authenticated `GET /api/tool-access`; current grants, revision, edit state and the worker's Node.js executable. MCP secrets are redacted. |
+| `tool-access set --file PATH\|-` | `POST /api/tool-access`; replace all grants while new starts are paused and the worker is idle. Accepts the edited `tool-access get` output (its `revision` becomes the guard) or `expectedRevision`, `builtins` and `mcp`. Omitted MCP connections and CLI tools are removed. |
+| `tool-access discover --id ID --if-match REVISION` | `POST /api/tool-access/discover`; read a saved MCP connection's catalog without granting tools. |
+
+`tool-access set` accepts exported JSON up to 1 MiB from a file or stdin. It removes
+known read-only fields (including discovered catalogs) before sending the write,
+which must still fit the API's 64 KiB limit. Other JSON commands remain limited
+to 64 KiB.
+
+An enabled fixed command preset with `verification: true` is a required feature
+check. Together with file access and an approved Git worktree, it enables candidate
+editing and checked implementation for new requests. The final patch reflects
+actual retained-worktree changes; old proposal tasks remain proposals. See
+[implement a feature](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/implement-feature.md).
+
+CLI tools require an approved task worktree and a saved operator grant. They let
+the model pass its own arguments to a project command, such as a Node script in
+`bin/`, within allowed commands, required flags and refused options. Configure
+them in **Settings → Tools & MCP** or with these commands. Discovery applies to
+MCP connections; it does not grant a CLI or MCP tool.
+
+Before rolling back to 0.9.0, use the current version to remove all CLI tool
+entries, clear verification marks and save tool access. Reset tool budgets to
+128 calls and 300000 milliseconds and save settings. Disabling entries alone
+does not remove the newer policy fields. Restore the pre-upgrade state backup
+when retained tasks are incompatible. See
+[give the model a project CLI](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/manage-model-tools.md#give-the-model-a-project-cli).
 
 ## Worker attempt evidence and export
 

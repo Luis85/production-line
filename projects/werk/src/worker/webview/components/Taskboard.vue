@@ -12,6 +12,7 @@ import UButton from "@nuxt/ui/components/Button.vue";
 import UInput from "@nuxt/ui/components/Input.vue";
 import USelect from "@nuxt/ui/components/Select.vue";
 import RequestGatePanel from "./RequestGatePanel.vue";
+import CandidateEvidence from "./CandidateEvidence.vue";
 import TaskKanban from "../../../shared/webview/components/TaskKanban.vue";
 import { state, workspaceAction, request, date } from "../store";
 import type { LocalTask } from "../../application/local-tasks";
@@ -414,6 +415,7 @@ function download() {
           <p v-if="detail.worktree" class="break-anywhere">Preserved worktree: <code>{{ detail.worktree }}</code></p>
         </div>
         <p v-if="detail.summary">{{ detail.summary }}</p>
+        <CandidateEvidence v-if="!detail.admissionFailure" :key="detail.id" :task="detail" />
         <p class="break-anywhere">{{ detail.repository }}</p>
         <ul>
           <li v-for="file in detail.files" :key="file.path">{{ file.path }}</li>
@@ -505,7 +507,7 @@ function download() {
           </UButton>
         </div>
         <p v-if="detail.patch" class="page-note">
-          Inspect this patch before applying it. Tests have not run. In your
+          Inspect this patch before applying it. <template v-if="!detail.implementation">This proposal has not been automatically applied or verified.</template> In your
           repository, use
           <code>git apply --check path/to/download.patch</code>
           before applying with

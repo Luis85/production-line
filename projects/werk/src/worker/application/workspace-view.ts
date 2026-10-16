@@ -6,6 +6,7 @@ import type { RepositoryConfiguration } from './repositories.js';
 import type { ResourcePolicy } from './resources.js';
 import type { ExecutionPolicy } from './execution-policy.js';
 import type { SessionRecord } from './sessions.js';
+import type { DevelopmentScopeView } from './development.js';
 import type { LocalTask } from './local-tasks.js';
 import type { InteractionView } from './interactions.js';
 import type { RequestPhase } from './request-gates.js';
@@ -33,7 +34,7 @@ export interface SessionView {
 }
 export interface LocalTaskboardView {
   settings: WorkerBoardSettings;
-  tasks: Array<Omit<LocalTask, 'files' | 'instruction' | 'patch'> & { files: Array<{ path: string; sha256: string }>; hasPatch: boolean; interaction: InteractionView; requestPhase?: RequestPhase; requestRevision?: number }>;
+  tasks: Array<Omit<LocalTask, 'files' | 'instruction' | 'patch' | 'implementation' | 'developmentCompletion'> & { implementation?: DevelopmentScopeView; files: Array<{ path: string; sha256: string }>; hasPatch: boolean; interaction: InteractionView; requestPhase?: RequestPhase; requestRevision?: number }>;
   persistenceError: boolean;
   running: number;
 }

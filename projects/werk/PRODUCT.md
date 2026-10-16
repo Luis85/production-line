@@ -238,12 +238,29 @@ remain separate from provider connections, model settings and agent definitions.
 
 ## Worker-managed model tools
 
-Settings → Tools & MCP provides default-off grants for read-only task-worktree
-files, fixed command presets, allowed web origins and individually selected MCP
-tools. MCP connections support stdio and HTTP, private credentials and explicit discovery.
+Settings → Tools & MCP provides default-off grants for task-worktree
+files, fixed command presets, project CLI tools with an argument policy, allowed
+web origins and individually selected MCP tools. MCP connections support stdio
+and HTTP, private credentials and explicit discovery.
 Grants are enforced through a common worker-owned catalog across supported local
 provider adapters. Operators pause and drain execution before saving; subsequent
 turns use the current policy, while saved dispatch evidence remains immutable.
 Tool results go to the selected model provider. Commands and MCP servers retain
 their account/service authority. Automated request reviewers remain tool-free.
 See [manage model tools](docs/how-to/manage-model-tools.md).
+
+## Verified feature implementation
+
+A new Git-backed request with explicit approved paths, file access and enabled
+required verification presets can implement a feature in its isolated worktree.
+The model inspects, edits, runs checks and repairs failures through the shared
+worker tool broker. Candidate digests and frozen command fingerprints bind
+verification to the actual review patch. New edits require fresh checks. Existing
+proposal requests retain their accepted contract.
+
+The UI explains available implementation capability before submission and shows
+the accepted mode, retained candidate, required checks and blockers afterward.
+Markdown progress and shared review notes retain human-readable verification
+evidence. Successful checks do not authorize a merge. Tool-call and command
+timeout limits are configurable separately from the total invocation duration.
+See [implement a feature](docs/how-to/implement-feature.md).

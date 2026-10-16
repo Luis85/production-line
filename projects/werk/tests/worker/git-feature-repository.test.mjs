@@ -120,6 +120,24 @@ test('a validated patch publishes a separate feature branch and never includes i
   git(f.repository, 'worktree', 'remove', '--force', task);
 });
 
+test('explicit approved regular-file deletion publishes once without deleting source or teammate files', async t => {
+  const f = await fixture(t), adapter = f.client();
+  const deletion = 'diff --git a/file.txt b/file.txt\ndeleted file mode 100644\n--- a/file.txt\n+++ /dev/null\n@@ -1 +0,0 @@\n-initial\n';
+  const input = { ...f.publication('delete-approved-file'), patch: deletion };
+  await assert.rejects(adapter.publishPatch({ ...input, approvedPaths: ['other.txt'] }), /unapproved path/);
+  assert.equal(git(f.remote, 'for-each-ref', '--format=%(refname)', 'refs/heads/werk'), '');
+  const main = await f.teammate('file.txt', 'newer teammate content\n');
+  const result = await adapter.publishPatch(input);
+  assert.equal(git(f.remote, 'ls-tree', '--name-only', result.commit, '--', 'file.txt'), '');
+  assert.equal(git(f.remote, 'diff', '--name-status', f.sourceCommit, result.commit), 'D\tfile.txt');
+  assert.equal(git(f.remote, 'rev-parse', result.commit + '^'), f.sourceCommit);
+  assert.equal(f.main(), main); assert.equal(git(f.remote, 'show', 'main:file.txt'), 'newer teammate content');
+  assert.equal(await readFile(join(f.repository, 'file.txt'), 'utf8'), 'initial\n');
+  const replay = await f.client().publishPatch(input);
+  assert.equal(replay.replayed, true); assert.equal(replay.commit, result.commit);
+  assert.equal(git(f.remote, 'rev-parse', result.branch), result.commit);
+});
+
 test('feature publication confirms a lost acknowledgement and preserves an existing conflicting branch', async t => {
   const f = await fixture(t), adapter = f.client(), push = adapter.io.push.bind(adapter.io);
   adapter.io.push = async (...args) => { await push(...args); throw Error('Lost acknowledgement'); };

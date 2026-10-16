@@ -4,12 +4,12 @@ import { reactive, nextTick } from 'vue';
 import { frontend, deferred } from '../ui/helpers/frontend-loader.mjs';
 const { createQueueSettingsEditor, createDurationSettingsEditor, queuePolicy, durationPolicy } = await frontend('src/worker/webview/worker-policy-editors.ts');
 const queue = (overrides = {}) => ({ queueCapacity: 16, orchestratorQueue: 0, order: 'fifo', ...overrides });
-const duration = (overrides = {}) => ({ longRunningMs: 3600000, maxRuntimeMs: 21600000, fromEnvironment: false, ...overrides });
+const duration = (overrides = {}) => ({ longRunningMs: 3600000, maxRuntimeMs: 21600000, maxToolCalls: 128, commandTimeoutMs: 300000, fromEnvironment: false, ...overrides });
 function editor(t, kind = 'queue', initial) {
   const state = reactive({ unlocked: true, epoch: 0, saved: initial ?? (kind === 'queue' ? queue() : duration()) });
   const commands = [];
   let write = async command => {
-    state.saved = kind === 'queue' ? command.board : { longRunningMs: command.resources.longRunningMs, maxRuntimeMs: command.execution?.maxRuntimeMs ?? state.saved.maxRuntimeMs, fromEnvironment: state.saved.fromEnvironment };
+    state.saved = kind === 'queue' ? command.board : { longRunningMs: command.resources.longRunningMs, maxRuntimeMs: command.execution?.maxRuntimeMs ?? state.saved.maxRuntimeMs, maxToolCalls: command.execution.maxToolCalls, commandTimeoutMs: command.execution.commandTimeoutMs, fromEnvironment: state.saved.fromEnvironment };
     return state.saved;
   }, refresh = async () => {};
   const create = kind === 'queue' ? createQueueSettingsEditor : createDurationSettingsEditor;
@@ -80,7 +80,7 @@ test('duration saves validate both fields and atomically submit warning, maximum
   assert.equal(e.commands.length, 0); e.draft.values.warningHours = 1 / 3600;
   e.draft.values.maximumHours = 25; assert.match(e.validation.value, /one second to 24 hours/);
   e.draft.values.maximumHours = 24; await e.save();
-  assert.deepEqual(e.commands[0], { resources: { longRunningMs: 1000 }, execution: { maxRuntimeMs: 86400000 }, expectedDuration: { longRunningMs: 3600000, maxRuntimeMs: 21600000 } });
+  assert.deepEqual(e.commands[0], { resources: { longRunningMs: 1000 }, execution: { maxRuntimeMs: 86400000, maxToolCalls: 128, commandTimeoutMs: 300000 }, expectedDuration: { longRunningMs: 3600000, maxRuntimeMs: 21600000 }, expectedToolBudget: { maxToolCalls: 128, commandTimeoutMs: 300000 } });
   assert.equal(e.dirty.value, false); assert.match(e.draft.notice, /New attempts/);
 });
 test('environment-controlled maximum stays authoritative and is omitted from warning-only saves', async t => {
@@ -88,7 +88,7 @@ test('environment-controlled maximum stays authoritative and is omitted from war
   const initial = durationPolicy(settings); assert.equal(initial.fromEnvironment, true);
   const e = editor(t, 'duration', initial); e.draft.values.warningHours = .5; e.draft.values.maximumHours = 25;
   assert.equal(e.validation.value, ''); await e.save();
-  assert.deepEqual(e.commands[0], { resources: { longRunningMs: 1800000 }, expectedDuration: { longRunningMs: 3600000, maxRuntimeMs: 7200000 } });
+  assert.deepEqual(e.commands[0], { resources: { longRunningMs: 1800000 }, execution: { maxToolCalls: 128, commandTimeoutMs: 300000 }, expectedDuration: { longRunningMs: 3600000, maxRuntimeMs: 7200000 }, expectedToolBudget: { maxToolCalls: 128, commandTimeoutMs: 300000 } });
   assert.equal(e.draft.values.maximumHours, 2);
 });
 test('duration authority changes make an in-progress draft stale until reloaded', async t => {
@@ -96,4 +96,34 @@ test('duration authority changes make an in-progress draft stale until reloaded'
   e.state.saved = duration({ maxRuntimeMs: 7200000, fromEnvironment: true }); await nextTick();
   assert.equal(e.stale.value, true); await e.save(); assert.equal(e.commands.length, 0);
   e.reload(); assert.equal(e.draft.baseline.fromEnvironment, true); assert.equal(e.draft.values.maximumHours, 2);
+});
+
+test('tool budget inputs reject invalid bounds and preserve the existing policy until one guarded save', async t => {
+  const e = editor(t, 'duration');
+  for (const value of ['', 0, 513, 1.5, Infinity]) { e.draft.values.maxToolCalls = value; assert.match(e.validation.value, /tool-call limit/); await e.save(); }
+  e.draft.values.maxToolCalls = 256;
+  for (const value of ['', 0, 3601, Infinity]) { e.draft.values.commandSeconds = value; assert.match(e.validation.value, /command timeout/); await e.save(); }
+  assert.equal(e.commands.length, 0);
+  e.draft.values.commandSeconds = 900; await e.save();
+  assert.deepEqual(e.commands[0].execution, { maxRuntimeMs: 21600000, maxToolCalls: 256, commandTimeoutMs: 900000 });
+  assert.deepEqual(e.commands[0].expectedToolBudget, { maxToolCalls: 128, commandTimeoutMs: 300000 });
+  assert.deepEqual(e.commands[0].expectedDuration, { longRunningMs: 3600000, maxRuntimeMs: 21600000 });
+  assert.equal(e.dirty.value, false);
+});
+test('concurrent tool-budget edits retain the duration draft and require explicit reconciliation', async t => {
+  const e = editor(t, 'duration'); e.draft.values.maximumHours = 8; e.draft.values.maxToolCalls = 64;
+  e.state.saved = duration({ commandTimeoutMs: 900000 }); await nextTick();
+  assert.equal(e.stale.value, true); await e.save(); assert.equal(e.commands.length, 0);
+  assert.equal(e.draft.values.maximumHours, 8); assert.equal(e.draft.values.maxToolCalls, 64);
+  e.reload(); assert.equal(e.draft.values.commandSeconds, 900); assert.equal(e.draft.values.maximumHours, 6);
+});
+test('lost tool-budget acknowledgement retries the original duration and budget guards even under an environment limit', async t => {
+  const e = editor(t, 'duration', duration({ fromEnvironment: true }));
+  e.draft.values.maxToolCalls = 64; e.draft.values.commandSeconds = 600;
+  e.onWrite(async () => { throw Error('Response lost'); }); await e.save();
+  const submitted = structuredClone(e.commands[0]);
+  assert.equal('maxRuntimeMs' in submitted.execution, false); assert.ok(e.draft.uncertain);
+  e.draft.values.maxToolCalls = 128;
+  e.onWrite(async () => duration({ fromEnvironment: true, maxToolCalls: 64, commandTimeoutMs: 600000 })); await e.retry();
+  assert.deepEqual(e.commands[1], submitted); assert.equal(e.draft.uncertain, null);
 });

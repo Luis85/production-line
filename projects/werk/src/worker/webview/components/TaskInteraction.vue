@@ -7,6 +7,7 @@ import UInput from '@nuxt/ui/components/Input.vue';
 import UTextarea from '@nuxt/ui/components/Textarea.vue';
 import TaskIntake from './TaskIntake.vue';
 import FeatureRequestNote from './FeatureRequestNote.vue';
+import CandidateEvidence from './CandidateEvidence.vue';
 import MessageContent from './MessageContent.vue';
 import RequestGatePanel from './RequestGatePanel.vue';
 import InteractionPanel from './InteractionPanel.vue';
@@ -27,6 +28,7 @@ onActivated(() => { active.value = true; });
 onDeactivated(() => { active.value = false; modelGeneration++; });
 onBeforeUnmount(() => { active.value = false; modelGeneration++; });
 const current = computed(() => state.sessions?.records.find(item => item.id === state.sessions?.selected));
+const fileTask = computed(() => state.board?.tasks.find(item => item.sessionId === current.value?.id));
 const failedAdmission = computed(() => {
   const task = state.board?.tasks.find(item => item.sessionId === current.value?.id);
   return current.value?.continuationBlockedReason || task?.admissionFailure
@@ -138,6 +140,8 @@ defineExpose({ openNewTask, focusConversation, focusControls });
           <button v-if="!checkpointBlocked && !failedAdmission" type="button" class="composer-jump" :disabled="busy || state.workspaceBusy" @click="focusComposer">{{ firstMessage ? 'Write task instructions' : 'Write a follow-up' }}<UIcon name="i-lucide-arrow-down" /></button>
         </header>
         <FeatureRequestNote v-if="current.id !== 'default' || current.requestId || current.messages" :key="current.id" :session="current" />
+        <CandidateEvidence v-if="fileTask && !failedAdmission" :key="fileTask.id" :task="fileTask" show-review-link />
+        <p v-if="fileTask?.error && !failedAdmission" class="interaction-notice error-text" role="status">{{ fileTask.error }}</p>
         <section v-if="failedAdmission" class="interaction-notice admission-recovery" role="status" aria-label="Request recovery">
           <p class="error-text">{{ failedAdmission.error }}</p>
           <p>The worker did not start this request. Inspect the preserved worktree, then create a new request to continue.</p>

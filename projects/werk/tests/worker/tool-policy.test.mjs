@@ -141,3 +141,32 @@ test('MCP discovery API returns actionable sanitized failures without saving a f
     assert.equal(f.worker.toolAccess().canEdit, true, 'discovery failure releases the configuration lock');
   }
 });
+
+test('tool API saves CLI tools only while paused and idle, explains invalid policies and offers the worker Node.js', async t => {
+  const f = await workspace(t);
+  const cliTool = { id: 'harness', name: 'Project harness', enabled: true, executable: process.execPath, args: ['bin/harness.mjs'], commands: [{ command: 'check' }, { command: 'backlog set', requireOneOf: ['--dry-run'] }], refusedOptions: ['--root'] };
+  const request = () => ({ ...edit(f.worker.settings.toolPolicy()), builtins: { ...defaultToolPolicy().builtins, cliTools: [cliTool] } });
+  assert.equal((await f.api('/api/tool-access', request())).status, 409, 'running workers cannot gain CLI tools');
+  await f.worker.updateSettings({ board: { paused: true } });
+  const invalid = await f.api('/api/tool-access', { ...request(), builtins: { ...defaultToolPolicy().builtins, cliTools: [{ ...cliTool, commands: [{ command: 'backlog set', requireOneOf: ['--root'] }] }] } });
+  assert.equal(invalid.status, 400); assert.match(invalid.value.error, /requires a flag that is also refused/);
+  const saved = await f.api('/api/tool-access', request());
+  assert.equal(saved.status, 200); assert.equal(saved.value.workerNode, process.execPath);
+  assert.deepEqual(saved.value.builtins.cliTools[0].commands[1], { command: 'backlog set', requireOneOf: ['--dry-run'], refusedOptions: [] });
+  assert.equal(saved.value.builtins.cliTools[0].maxArgs, 24);
+  assert.equal(f.worker.capabilities().toolAccess.cliTools, 'argument_policy_in_task_worktree');
+});
+
+
+test('required feature checks are explicit, validated and survive a saved policy round trip', () => {
+  const defaults = defaultToolPolicy();
+  const preset = { id: 'tests', name: 'Project tests', executable: process.execPath, args: ['--test'], enabled: true };
+  const update = verification => updateToolPolicy(defaults, { ...edit(defaults), builtins: { ...defaults.builtins, files: true, commands: [{ ...preset, ...verification }] } });
+  assert.deepEqual(update({}).builtins.commands[0], preset);
+  assert.deepEqual(update({ verification: false }).builtins.commands[0], preset);
+  const required = update({ verification: true });
+  assert.deepEqual(validateToolPolicy(JSON.parse(JSON.stringify(required))).builtins.commands[0], { ...preset, verification: true });
+  for (const verification of ['true', 1, null, {}, []]) assert.throws(() => update({ verification }), /Required feature check/);
+  const definitions = Array.from({ length: 58 }, (_, i) => ({ ...definition, name: 'reserved_' + i }));
+  assert.throws(() => validateToolPolicy({ ...required, mcp: [{ ...httpConnection(), secret: '', discoveredTools: definitions, allowedTools: definitions.map(item => item.name) }] }), /at most 64/, 'reserve the three candidate tools alongside file and command tools');
+});

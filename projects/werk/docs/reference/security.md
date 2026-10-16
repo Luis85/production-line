@@ -57,10 +57,23 @@ review real outputs before publication or merge.
 ## Local model tool grants
 
 Local model tools are disabled by default. An authenticated worker operator can
-grant read-only task-worktree access, fixed command presets, web origins and
-individual MCP tools through Settings → Tools & MCP. Tool results are sent to the selected
+grant task-worktree file access, fixed command presets, CLI tools, web origins
+and individual MCP tools through **Settings → Tools & MCP** or the authenticated
+`tool-access` commands. Tool results are sent to the selected
 model provider. Commands and MCP servers run with their configured account or
 remote-service authority; a Git worktree does not contain their side effects.
+File inspection remains read-only. New implementation requests additionally require
+explicit approved paths and enabled required verification presets; their candidate
+tools can change only those paths in the owned worktree. Current grants, original
+Git ownership, expected content hashes and persisted check evidence are revalidated.
+The review artifact comes from actual candidate contents; a later edit invalidates
+verification. Neither a model summary nor an MCP annotation establishes a passing check.
+CLI tools accept model arguments only after an allowlist of one- or two-word
+commands, standalone required flags, refused options and path checks; they run
+without a shell, in the task worktree, with bounded time and output. The policy
+rejects model-supplied response files and ambiguous required-flag forms, but cannot
+prove the meaning of an unknown CLI grammar or detect option abbreviations,
+configuration files or symlinks a CLI reads itself.
 Private MCP credentials stay in worker state, outside the public tool manifest.
 Tool output and repository content cannot authorize changes to grants. See
 [manage model tools](../how-to/manage-model-tools.md) for saving, revocation and

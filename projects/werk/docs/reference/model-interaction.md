@@ -31,13 +31,23 @@ It is not a wire capture.
 A continuation uses the saved prompt configuration. Current credentials can be
 resolved privately to contact the same provider; editing settings must not silently
 rewrite an accepted instruction or model identity. Patch continuation preserves
-the approved file snapshots and produces a patch for review, without applying it
-to the project. Continuations use current tool grants; old dispatch evidence
+the approved file snapshots. Existing proposal tasks return patch JSON without applying it.
+New eligible repository requests additionally freeze an implementation scope and required
+verification plan: the model edits only approved paths in the isolated worktree,
+runs the required checks and returns a readable summary. The worker captures the
+actual candidate patch and verifies matching check receipts before review. The
+developer checkout is not edited. Continuations use current tool grants; old dispatch evidence
 cannot restore revoked access. Automated request reviewers remain tool-free.
 See [manage model tools](../how-to/manage-model-tools.md) for scope, MCP connections
 and revocation.
 
 ## Typed results
+
+New implementation dispatches carry `policy.development: true`; only the private
+accepted task scope authorizes candidate tools. `maxToolCalls` and `commandTimeoutMs`
+freeze with the total invocation duration and propagate through API loops and CLI
+bridges. Provider-native editing and shell tools remain disabled. See
+[implement a feature](../how-to/implement-feature.md) for configuration.
 
 A model invocation returns completed content or a blocking input request. Legacy
 plain-text answers and the existing patch JSON remain supported; the worker does

@@ -5,6 +5,7 @@ import type { ToolRuntime } from '../application/tool-runtime.js';
 import type { ProviderConnection } from './providers.js';
 import { providerUsage } from './provider-usage.js';
 import { invokeGrantedTool } from './provider-tool-session.js';
+import { DEFAULT_MAX_TOOL_CALLS } from '../application/execution-policy.js';
 const record = (value: unknown): value is Record<string, any> => !!value && typeof value === 'object' && !Array.isArray(value);
 function addUsage(previous: ProviderUsage | undefined, next: ProviderUsage): ProviderUsage {
   if (!previous) return next;
@@ -34,9 +35,11 @@ export async function apiReply(connection: ProviderConnection, request: ModelReq
   const definitions = runtime?.manifest.tools.map(tool => openai
     ? { type: 'function', name: tool.name, description: tool.description, parameters: tool.inputSchema, strict: false }
     : { name: tool.name, description: tool.description, input_schema: tool.inputSchema });
+  const maxCalls = request.policy.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS;
   let calls = 0, usage: ProviderUsage | undefined;
   const seenCallIds = new Set<string>();
-  for (let turn = 0; turn <= 32; turn++) {
+  // One response may finish the task after the last permitted tool call.
+  for (let turn = 0; turn <= maxCalls; turn++) {
     if (signal.aborted) throw new ProviderModelError('cancelled');
     const body = openai
       ? { model: request.provider.model, instructions: request.protocolInstructions, store: false, max_output_tokens: 8192, input: history, ...(definitions ? { tools: definitions, parallel_tool_calls: false, include: ['reasoning.encrypted_content'] } : {}) }
@@ -70,7 +73,8 @@ export async function apiReply(connection: ProviderConnection, request: ModelReq
       if (!openai && value.stop_reason === 'tool_use') throw new ProviderModelError('protocol');
       return parseModelResult(textBlocks.map(item => item.text).join('\n\n'));
     }
-    if (!runtime || !openai && value.stop_reason !== 'tool_use' || calls + toolCalls.length > 32) throw new ProviderModelError('protocol');
+    if (!runtime || !openai && value.stop_reason !== 'tool_use') throw new ProviderModelError('protocol');
+    if (calls + toolCalls.length > maxCalls) throw new ProviderModelError('tool_access');
     const parsed = toolCalls.map(item => {
       const id = openai ? item.call_id : item.id;
       let args: unknown = item.input;

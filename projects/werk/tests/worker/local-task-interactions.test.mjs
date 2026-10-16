@@ -70,7 +70,7 @@ test('continuation retains the original provider profile and approved snapshots 
     if (++calls === 1) { assert.equal(request.policy.maxRuntimeMs, 6 * 60 * 60 * 1000); return question; }
     assert.equal(request.provider.model, 'original-model'); assert.equal(request.provider.instruction, 'Original provider instruction');
     assert.match(inputOf(request), /before\\n/); assert.doesNotMatch(inputOf(request), /outside-edit/);
-    assert.deepEqual(request.policy, { tools: 'none', filesystem: 'read_only', continuation: 'worker_context_replay', maxRuntimeMs: 2 * 60 * 60 * 1000 });
+    assert.deepEqual(request.policy, { tools: 'none', filesystem: 'read_only', continuation: 'worker_context_replay', maxRuntimeMs: 2 * 60 * 60 * 1000, maxToolCalls: 128, commandTimeoutMs: 300000 });
     return completed;
   });
   const id = await f.create(); await f.settle(id, 'waiting_input');

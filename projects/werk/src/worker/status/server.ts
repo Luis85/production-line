@@ -274,7 +274,7 @@ export async function statusServer(
             );
           if (req.method === "POST" && req.url === "/api/taskboard/detail") {
             const body = await readJson(req);
-            return json(res, 200, workspace.board.detail(String(body.id)));
+            return json(res, 200, workspace.taskboardDetail(String(body.id)));
           }
           if (req.method === "GET" && req.url === "/api/environment")
             return json(res, 200, await workspace.environment());

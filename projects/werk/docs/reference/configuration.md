@@ -184,14 +184,24 @@ operator contract. See [runtime layout](../explanation/runtime-layout.md).
 local model invocations: integer milliseconds from 1000 to 86400000. Absent, the
 saved private workspace execution setting applies, otherwise the default is six
 hours. Empty/invalid values fail startup. The private settings API exposes
-`executionSource` and rejects execution edits while the override is active; it
-preserves the saved value for later use after removing the override. Other local
+`executionSource` and rejects duration edits while the override is active; it
+preserves the saved duration for later use after removing the override. Tool
+budgets remain editable under that override. Other local
 settings, including resource thresholds and provider configuration, remain in the
 private state directory. Existing saved connection settings can replace startup
 connection defaults; the CLI-over-environment rule above concerns the listed
 operator defaults, not every saved worker setting.
 
-A dispatched invocation freezes its duration policy; edits affect later calls.
+Execution settings also include `maxToolCalls` (default 128, integer 1–512) and
+`commandTimeoutMs` (default 300000, integer 1000–3600000). Policies saved without
+these fields use those defaults. The command timeout applies to fixed commands,
+CLI tools and required feature checks; the total `maxRuntimeMs` deadline can end
+them sooner. External MCP calls retain 30 seconds and web fetches 10 seconds.
+There is no independent two-minute tool window. The UI exposes these fields under
+**Settings → Queue & duration → Tool execution limits**.
+
+Each prepared invocation freezes its duration and tool budgets; edits affect
+subsequent invocations. This includes queued work and retained dispatches.
 See [long-running worker operations](../how-to/monitor-long-running-worker.md) for
 monitoring scope, warning thresholds, shutdown and recovery.
 
@@ -205,12 +215,16 @@ so a concurrent policy change returns a conflict before anything is written:
 | --- | --- | --- |
 | Queue | `expectedBoard` | `queueCapacity`, `orchestratorQueue`, `order` |
 | Queue & duration | `expectedDuration` | `maxRuntimeMs`, `longRunningMs` |
+| Tool execution limits | `expectedToolBudget` | `maxToolCalls`, `commandTimeoutMs` |
 | Consumption | `expectedConsumption` | The complete saved consumption policy |
 
 A guarded queue edit sends only queue limits/order in `board`; pause is an
 independent `{board: {paused: boolean}}` action and cannot be overwritten by that
 editor's stale draft. Duration edits patch `execution.maxRuntimeMs` and/or
-`resources.longRunningMs`, preserving other resource thresholds. Legacy clients
+`resources.longRunningMs`, preserving other resource thresholds. Tool-budget
+edits patch `execution.maxToolCalls` and/or `execution.commandTimeoutMs` and use
+the complete `expectedToolBudget` pair. A combined duration/budget save validates
+both baselines before writing any fields. Legacy clients
 may omit these guards. Save acknowledgements and follow-up reads are separate:
 a failed refresh does not undo an acknowledged save.
 
@@ -407,13 +421,52 @@ and ordinary provider Chat does not gain arbitrary filesystem or shell tools.
 
 The unlocked **Settings → Tools & MCP** section manages a separate private
 `tool-access.json` in the worker state directory. Missing configuration means no grants. The document
-records a numeric revision, read-only worktree-file access, fixed command presets,
-web origins, MCP connection details and discovered per-tool grants. Its credentials
+records a numeric revision, worktree-file access, fixed command presets,
+CLI tools, web origins, MCP connection details and discovered per-tool grants. Its credentials
 are redacted from authenticated views; they never enter the public status or
 model dispatch manifest. Preserve this file with the rest of stopped worker state.
 
+A fixed command preset may set `verification: true` (omitted/false by default).
+The UI calls this **Required feature check**. Together with file access and an
+approved Git worktree, enabled verification presets define the frozen check plan
+for new implementation requests. Candidate tools edit only approved paths and
+record actual command outcomes; every required check must pass on the final
+candidate. Existing proposal tasks are not converted by changing grants. See
+[implement a feature](../how-to/implement-feature.md).
+
+Each entry in `builtins.cliTools` describes one command-line tool the model may
+call with its own arguments in the task worktree:
+
+| Field | Contract |
+| --- | --- |
+| `id` | 1–48 letters, digits, `_` or `-`. The model sees the tool as `werk_cli_<id>`. |
+| `name`, `description` | Display name (≤ 120 characters) and optional model-facing description (≤ 1,000). |
+| `enabled` | `false` keeps the configuration without offering the tool. |
+| `executable` | Absolute path on the worker machine; `.bat` and `.cmd` files are rejected. |
+| `args` | Up to 32 fixed leading arguments, for example `["bin/harness.mjs"]`. Relative paths resolve in the task worktree. |
+| `commands` | 1–64 rules. `command` is one or two literal words. Optional `requireOneOf` lists flags of which one must be present; optional `refusedOptions` adds refusals for that command. |
+| `refusedOptions` | Up to 32 option names refused for every command, such as `--root`. |
+| `maxArgs`, `maxArgLength` | Model argument bounds: default 24 (1–64) and 500 characters (1–2,048). |
+| `outputKiB`, `truncationHint` | Returned output limit, default 32 (1–64), and the hint appended to truncated output. |
+
+Absolute paths, `~`, `file:` URLs, `@file` paths, `..` segments, the `--`
+terminator and control characters in model arguments are always refused, including
+response-file and path values extracted from options. Required flags must be
+standalone and unique; assigned, negated and clustered forms cannot satisfy or
+override a required flag. These checks do not establish the CLI's behavior or
+confine its filesystem access. At most
+eight CLI tools may be configured; each enabled CLI tool counts toward the
+64-tool limit. Documents without `cliTools`, including those written by 0.9.0,
+grant none. An empty list is omitted from the saved document so 0.9.0 can read it.
+Before rolling back to 0.9.0, remove all CLI tool entries, clear verification marks
+and save tool access while running the current version. Disabling them leaves
+configuration the older version does not understand. Reset tool budgets to 128
+calls and 300000 milliseconds and save; default budget fields are omitted from
+the saved settings for compatibility. If retained task state is incompatible,
+restore the pre-upgrade stopped-state backup.
+
 Tool changes require paused, drained execution and the current policy revision.
-Local Chat and approved-file task invocations resolve current grants; automated
+Local request invocations resolve current grants; automated
 request reviewers stay tool-free. Repository assignment, provider sign-in and
 execution profiles do not implicitly grant tools. See
 [manage model tools](../how-to/manage-model-tools.md).
