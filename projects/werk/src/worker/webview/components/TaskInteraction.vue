@@ -8,6 +8,7 @@ import UTextarea from '@nuxt/ui/components/Textarea.vue';
 import TaskIntake from './TaskIntake.vue';
 import RunTask from './RunTask.vue';
 import MessageContent from './MessageContent.vue';
+import AssistantMessage from './AssistantMessage.vue';
 import RequestGatePanel from './RequestGatePanel.vue';
 import InteractionPanel from './InteractionPanel.vue';
 import type { InteractionTurn, InteractionView } from '../../application/interactions';
@@ -31,6 +32,12 @@ const busy = computed(() => sending.value || intakeBusy.value || interactionBusy
 const checkpointBlocked = computed(() => !!interaction.value?.pending || !!interaction.value?.latestTurn && ['failed', 'cancelled', 'interrupted'].includes(interaction.value.phase));
 const available = computed(() => state.unlocked && !!current.value && state.chat?.available && !state.workspaceBusy && !busy.value && !checkpointBlocked.value && !current.value?.busy && !state.chat?.busy && !executing.value);
 const firstMessage = computed(() => !state.chat?.messages.length);
+// The latest completed reply of a file task links to its retained patch.
+const patchReply = computed(() => {
+  const task = state.board?.tasks.find(item => item.sessionId === current.value?.id && item.hasPatch);
+  const reply = state.chat?.messages.findLast(message => message.role === 'assistant' && message.state === 'complete');
+  return task && reply ? { taskId: task.id, messageId: reply.id } : null;
+});
 const phase = computed(() => state.chat?.phase ?? 'idle');
 watch(busy, value => emit('busy', value));
 watch(() => current.value?.id, (id, previous) => {
@@ -140,7 +147,8 @@ defineExpose({ openNewTask, focusConversation, focusControls });
             <div class="task-message-label"><UIcon :name="message.role === 'user' ? 'i-lucide-user-round' : 'i-lucide-sparkles'" /><strong>{{ message.role === 'user' ? 'You' : 'Worker model' }}</strong><time :datetime="message.at">{{ date(message.at) }}</time></div>
             <UBadge v-if="['error', 'cancelled'].includes(message.state)" :color="message.state === 'error' ? 'error' : 'neutral'" variant="subtle">{{ message.state === 'error' ? 'Failed' : 'Cancelled' }}</UBadge>
             <p v-if="message.state === 'pending'" class="pending-message">{{ phase === 'queued' ? state.settings?.board.paused ? 'Queued · new starts are paused.' : 'Queued · waiting for this worker.' : 'Working on this task…' }}</p>
-            <MessageContent v-else :text="message.text" :markdown="message.role === 'assistant' && message.state === 'complete'" :class="{ 'error-text': message.state === 'error' }" />
+            <AssistantMessage v-else-if="message.role === 'assistant' && message.state === 'complete'" :text="message.text" :patch-task-id="patchReply?.messageId === message.id ? patchReply.taskId : undefined" />
+            <MessageContent v-else :text="message.text" :markdown="false" :class="{ 'error-text': message.state === 'error' }" />
           </article>
         </div>
         <p v-if="!state.chat?.available" class="interaction-notice">This connection is not ready. Open <RouterLink to="/dashboard#provider-connections">Dashboard</RouterLink> to configure it.</p>

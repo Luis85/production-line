@@ -160,7 +160,9 @@ approval payloads or gains tools from a progress event.
 ## Recovery and consumption
 
 The worker records a validated model result before updating its transcript,
-taskboard and request projections. After restart it can reconcile a known saved
+taskboard and request projections. For a file task, the interaction turn keeps the
+provider's change set unchanged; the transcript receives a readable summary with
+the changed paths and line counts instead of the protocol JSON. After restart it can reconcile a known saved
 result without making another model call. If the provider may have received the
 request but no result was durably saved, the worker marks the turn interrupted.
 A deliberate resume starts another invocation and may consume additional tokens.

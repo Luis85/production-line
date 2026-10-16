@@ -17,7 +17,7 @@ import RequestPolicyPanel from '../src/worker/webview/components/RequestPolicyPa
 import RepositoryPanel from '../src/worker/webview/components/RepositoryPanel.vue';
 import ResourceMonitorPanel from '../src/worker/webview/components/ResourceMonitorPanel.vue';
 import StatusApp from '../src/worker/webview/status/StatusApp.vue';
-import { diagnosticFixture, formattedReplyFixture, installWorkerFixture, type WorkerFixture } from './worker-fixtures';
+import { diagnosticFixture, fileReplyFixture, formattedReplyFixture, installWorkerFixture, type WorkerFixture } from './worker-fixtures';
 
 const meta = { title: 'Worker/Workspace', parameters: { layout: 'fullscreen' } } satisfies Meta;
 export default meta;
@@ -258,5 +258,18 @@ export const FormattedModelReply: Story = {
     const link = await element(message, 'a') as HTMLAnchorElement;
     if (link.href !== 'https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/use-worker-webview.md' || link.target !== '_blank' || !link.relList.contains('noopener') || !link.relList.contains('noreferrer')) throw Error('Formatted reply documentation link lost its destination or safe navigation attributes');
     await ready(canvasElement);
+  },
+};
+export const FileTaskReply: Story = {
+  name: '28 · Read a file-task result',
+  parameters: { storymap: storymap('A saved file-task change set reads as its summary and a changed-file list. Paths and globs stay literal, file contents stay in the patch view, and the stored model output remains available, collapsed.', ['components/TaskInteraction', 'components/AssistantMessage', 'components/MessageContent'], '/taskboard') },
+  render: renderComponent(TaskInteraction, 'file-reply'),
+  play: async context => {
+    await followUp(context);
+    const message = await element(context.canvasElement, '.assistant-message');
+    if (!message.querySelector('code')?.textContent?.includes('**/*.spec.ts')) throw Error('File-task reply lost its literal glob');
+    if (message.querySelector('.message-content')?.textContent?.includes('"files"')) throw Error('File-task reply shows raw protocol JSON');
+    if (!message.querySelector('.patch-review-link') || !message.querySelector('.raw-output') || !fileReplyFixture) throw Error('File-task reply lost its patch link or raw output');
+    await ready(context.canvasElement);
   },
 };

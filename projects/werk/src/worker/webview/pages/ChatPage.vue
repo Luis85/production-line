@@ -9,6 +9,7 @@ import NewTask from '../components/NewTask.vue';
 import SettingsPanel from '../components/SettingsPanel.vue';
 import DefinitionPanel from '../components/DefinitionPanel.vue';
 import MessageContent from '../components/MessageContent.vue';
+import AssistantMessage from '../components/AssistantMessage.vue';
 import { computed, nextTick, ref, watch } from 'vue';
 import UButton from '@nuxt/ui/components/Button.vue';
 import UTextarea from '@nuxt/ui/components/Textarea.vue';
@@ -210,10 +211,14 @@ function keydown(event: KeyboardEvent) { if (event.key === 'Enter' && (event.ctr
                     : "Working on this task…"
                 }}
               </p>
+              <AssistantMessage
+                v-else-if="message.role === 'assistant' && message.state === 'complete'"
+                :text="message.text"
+              />
               <MessageContent
                 v-else
                 :text="message.text"
-                :markdown="message.role === 'assistant' && message.state === 'complete'"
+                :markdown="false"
                 :class="{ 'error-text': message.state === 'error' }"
               />
             </article>

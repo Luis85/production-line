@@ -167,6 +167,10 @@ own disclosures. Completed model replies render Markdown as readable headings,
 paragraphs, nested lists, quotations, links, tables and code blocks. Code blocks
 keep their original text and offer **Copy code**; wide code and tables scroll
 within the reply on smaller screens. Saved replies use the same formatting.
+File paths and globs such as `src/**/*.spec.ts` in a reply stay literal instead
+of turning into bold or italic text. A saved protocol reply, such as a question
+checkpoint or a file-task change set from an older worker, appears as readable
+text; its stored form stays available under **Raw model output**.
 Your messages and failure notices remain literal text. Model HTML is never
 executed, and images appear as descriptive links rather than loading automatically.
 You can draft a follow-up while work is queued or running and send it when the
@@ -244,6 +248,9 @@ filesystem or shell tools.
 
 In **History → File tasks**, choose **Review patch**, inspect the result and
 choose **Download patch**. **Open conversation** opens its dedicated transcript.
+The transcript shows the model's summary and the changed files with added and
+removed line counts, never the full file contents; **Review proposed patch**
+under the latest reply opens the patch.
 A failed evidence read offers Retry without removing the task list.
 Review it, then check and apply it from the repository:
 

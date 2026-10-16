@@ -7,6 +7,10 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+### Fixed
+
+- Worker transcripts no longer show raw protocol JSON. A completed file task records the model's summary and its changed files with added and removed line counts, and links to the patch review; file contents stay in the patch. Paths and globs such as `src/**/*.spec.ts` stay literal instead of becoming bold text. Saved change sets, question checkpoints and attempt records from earlier versions are shown readably, with the stored text under **Raw model output**. The raw provider reply remains unchanged in the interaction evidence.
+
 ## [0.9.0] - 2026-10-16
 
 ### Added
