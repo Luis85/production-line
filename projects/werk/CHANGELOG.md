@@ -31,6 +31,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Fixed
 
+- On Windows, contained processes (command presets, MCP servers and provider CLIs) no longer receive PowerShell progress records (`#< CLIXML … <Objs …>`) from the job supervisor in their stderr. These appeared when the worker passes a minimal environment, because Windows PowerShell then prepares its modules on every launch.
 - Portable CLI JSON input from `--file PATH` or `--file -` accepts a leading UTF-8 byte order mark, as written by Windows PowerShell 5.1 pipes.
 - Shared-intake, provider-account, Taskboard page and webview asset requests no longer log as route `unmatched`. Runtime log capture keeps every normalized worker route.
 - CLI grants reject response-file and extracted-path escapes and ambiguous required flags; CLI-only grants revalidate retained Git worktree ownership. Exported MCP catalogs can round-trip through the tool-access CLI while preserving API size limits and secret handling.

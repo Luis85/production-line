@@ -6,6 +6,9 @@ import { win32 } from 'node:path';
 // exit kills the inner job before draining pipes. No cleanup relies on PID lookup.
 const supervisor = String.raw`
 $ErrorActionPreference = 'Stop'
+# With redirected streams, progress (such as first-use module preparation) would
+# reach the contained process's stderr as serialized CLIXML records.
+$ProgressPreference = 'SilentlyContinue'
 try {
   Add-Type -TypeDefinition @'
 using System;

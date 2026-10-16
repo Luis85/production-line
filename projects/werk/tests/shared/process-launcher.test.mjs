@@ -57,6 +57,16 @@ test('contained processes exchange small frames before stdin closes', { timeout:
   }
 });
 
+test('contained processes report only their own stderr, without supervisor progress records', { timeout: 30000 }, async () => {
+  // A minimal environment has no module analysis cache, so Windows PowerShell prepares modules on every launch.
+  const minimal = Object.fromEntries(['PATH', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP'].flatMap(key => process.env[key] === undefined ? [] : [[key, process.env[key]]]));
+  for (let run = 0; run < 2; run++) {
+    const result = await runProcess(node, ['-e', `console.error('x')`], { env: minimal, mode: 'contained', maxOutputBytes: 65536, captureStderr: true });
+    assert.equal(result.stderr.toString(), 'x\n');
+    assert.equal(result.stdout.toString(), '');
+  }
+});
+
 test('nonzero exits reject with captured output unless explicitly allowed', async () => {
   const script = `process.stdout.write('partial');process.stderr.write('why');process.exitCode=7;`;
   await assert.rejects(runProcess(node, ['-e', script], { env, maxOutputBytes: 4096 }), error => {
