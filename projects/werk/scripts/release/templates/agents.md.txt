@@ -70,3 +70,6 @@ Native startup checks stable GitHub releases by default. `update check` is read-
 skips one check, and `update disable` persists the policy. Keep using the original
 launcher and state/file arguments after activation. Read docs/reference/updates.md
 before recovery; never point an older release at newer un-restored state.
+Copied portable apps update with `node bin/apps/<app>/cli.mjs update apply` from the
+project directory. `--stop` stops a running instance through its graceful shutdown,
+which cancels running work: pause and drain the queue and get operator approval first.

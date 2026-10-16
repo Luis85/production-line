@@ -53,7 +53,7 @@ export async function install(config, options, { fetcher = fetch, log = console.
   const name = `werk-${config.version}`, archive = `${name}.tar.gz`;
   const parent = resolve(options.directory), destination = join(parent, name);
   await absent(destination);
-  try { execFileSync('tar', ['--version'], { stdio: 'ignore', timeout: 10000 }); }
+  try { execFileSync('tar', ['--version'], { stdio: 'ignore', timeout: 10000, windowsHide: true }); }
   catch { throw Error('tar is required on PATH (included in current Windows, macOS and most Linux systems).'); }
   await mkdir(parent, { recursive: true });
   const staging = await mkdtemp(join(parent, '.werk-install-'));
@@ -66,10 +66,10 @@ export async function install(config, options, { fetcher = fetch, log = console.
     // Use a relative archive name from its directory: GNU tar treats a Windows
     // drive colon in an absolute filename as remote-host syntax.
     // Reject paths outside the expected root before invoking the system extractor.
-    const listing = execFileSync('tar', ['-tzf', archive], { cwd: staging, encoding: 'utf8', maxBuffer: 2 * 1024 * 1024, timeout: 30000 });
+    const listing = execFileSync('tar', ['-tzf', archive], { cwd: staging, encoding: 'utf8', maxBuffer: 2 * 1024 * 1024, timeout: 30000, windowsHide: true });
     const paths = listing.trimEnd().split(/\r?\n/);
     if (paths.length > 11000 || paths.some(path => /[:\\\x00-\x1f\x7f]/.test(path) || !path.startsWith(`${name}/`) || path.replace(/\/$/, '').split('/').some(part => !part || part === '.' || part === '..'))) throw Error('Unsafe release archive paths');
-    execFileSync('tar', ['-xzf', archive], { cwd: staging, stdio: 'pipe', timeout: 60000 });
+    execFileSync('tar', ['-xzf', archive], { cwd: staging, stdio: 'pipe', timeout: 60000, windowsHide: true });
     const extracted = join(staging, name);
     const manifest = JSON.parse(await readFile(join(extracted, 'release-manifest.json'), 'utf8'));
     if (manifest.version !== config.version) throw Error('Release manifest version mismatch');

@@ -192,14 +192,14 @@ Forge generates `.github/workflows/werk--release.yml`. Edit the source, then run
 manual branch runs qualify candidates without publishing.
 
 1. Update `projects/werk/package.json` and its lockfile to the desired version in
-   a reviewed change (for example, `0.8.0`). Merge to `main` after checks pass.
+   a reviewed change (for example, `0.9.0`). Merge to `main` after checks pass.
 2. From a clean checkout of the merged commit, create and push its matching tag:
 
    ```sh
    git switch main
    git pull --ff-only origin main
-   git tag -a v0.8.0 -m "Werk 0.8.0"
-   git push origin v0.8.0
+   git tag -a v0.9.0 -m "Werk 0.9.0"
+   git push origin v0.9.0
    ```
 
 3. Watch **Actions → Werk release**. The tag must match `package.json`, use a

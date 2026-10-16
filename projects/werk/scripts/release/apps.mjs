@@ -12,6 +12,12 @@ export async function packageApp(root, kind) {
     await mkdir(join(staging, 'scripts/runtime'), { recursive: true });
     for (const file of ['config.mjs', 'execution.mjs', 'component.mjs', 'control.mjs']) await cp(join(root, 'scripts/runtime', file), join(staging, 'scripts/runtime', file));
     await cp(join(root, 'scripts/runtime/portable'), join(staging, 'scripts/runtime/portable'), { recursive: true });
+    // Self-update needs the stopped-state snapshot core, release discovery and the release installer/verifier.
+    // The verifier and installer sit beside remote.mjs: release packaging excludes nested "release" folders.
+    await mkdir(join(staging, 'scripts/runtime/maintenance'), { recursive: true }); await mkdir(join(staging, 'scripts/runtime/update'), { recursive: true });
+    await cp(join(root, 'scripts/runtime/maintenance/snapshot.mjs'), join(staging, 'scripts/runtime/maintenance/snapshot.mjs'));
+    await cp(join(root, 'scripts/runtime/update/remote.mjs'), join(staging, 'scripts/runtime/update/remote.mjs'));
+    for (const file of ['install.mjs', 'verify.mjs']) await cp(join(root, 'scripts/release', file), join(staging, 'scripts/runtime/update', file));
     const info = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
     await writeFile(join(staging, 'package.json'), JSON.stringify({ name: `@werk/${kind}-portable`, version: info.version, private: true, type: 'module', engines: info.engines, bin: { [`werk-${kind}`]: 'cli.mjs' }, ...(kind === 'worker' ? { scripts: workerNpmScripts() } : {}) }, null, 2) + '\n');
     await writeFile(join(staging, 'cli.mjs'), `#!/usr/bin/env node\nimport { main } from './scripts/runtime/portable/cli.mjs';\nawait main('${kind}');\n`);

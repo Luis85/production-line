@@ -7,6 +7,7 @@ import { join, resolve, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { workerNpmScripts, seedWorkerPackage } from '../../scripts/runtime/portable/npm-package.mjs';
 import { commands } from '../../scripts/runtime/portable/commands.mjs';
+import { updateCommands } from '../../scripts/runtime/portable/update-commands.mjs';
 
 const exec = promisify(execFile), installer = resolve('bin/apps/worker/cli.mjs');
 async function project(t, cleanup = true) {
@@ -37,7 +38,7 @@ test('worker npm scripts expose supported commands without install or build hook
   const manifest = JSON.parse(await readFile('bin/apps/worker/package.json', 'utf8'));
   assert.deepEqual(manifest.scripts, workerNpmScripts());
   const catalog = commands('worker');
-  for (const command of Object.keys(catalog)) assert.ok(manifest.scripts[command.replaceAll(' ', ':')], command);
+  for (const command of [...Object.keys(catalog), ...Object.keys(updateCommands)]) assert.ok(manifest.scripts[command.replaceAll(' ', ':')], command);
   for (const name of ['worker', 'start', 'run', 'status', 'stop', 'schema', 'feature:setup', 'feature:author:create', 'feature:author:validate', 'feature:author:ready']) assert.ok(manifest.scripts[name], name);
   for (const name of ['install', 'preinstall', 'postinstall', 'prepare', 'build']) assert.equal(manifest.scripts[name], undefined);
   assert.equal(manifest.dependencies, undefined); assert.equal(manifest.devDependencies, undefined);
@@ -49,6 +50,7 @@ test('root npm manifest is create-only and does not change project module semant
   const initial = JSON.parse(await readFile(path, 'utf8'));
   assert.equal(initial.private, true); assert.equal(initial.type, undefined); assert.equal(initial.dependencies, undefined);
   assert.equal(initial.scripts['worker:status'], 'node bin/apps/worker/cli.mjs status');
+  for (const command of Object.keys(updateCommands)) assert.equal(initial.scripts['worker:' + command.replaceAll(' ', ':')], 'node bin/apps/worker/cli.mjs ' + command);
   const customized = '{\n  "name": "existing-project", "type":"commonjs",\n  "scripts": {"worker":"node my-worker.js","test":"node custom-test.cjs"}\n}\n';
   await writeFile(path, customized);
   assert.equal((await seedWorkerPackage(cwd)).created, false);

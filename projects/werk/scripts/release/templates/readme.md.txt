@@ -29,8 +29,10 @@ Start with `node bin/apps/worker/cli.mjs start`, then inspect `schema` for task 
 management commands. Project worker `init` creates private `.env` and
 credential-free `.env.example`; each app also supports `env init`. Use the
 project's `WERK_WORKER_TOKEN` to unlock an installed worker. Process environment
-wins over dotenv and CLI launch flags win over environment defaults. See
-[portable apps](docs/reference/portable-apps.md) and
+wins over dotenv and CLI launch flags win over environment defaults. Update a copied
+app from the project directory with `node bin/apps/worker/cli.mjs update apply --stop`:
+it verifies the release, backs up state and keeps the previous folder for
+`update rollback`. See [portable apps](docs/reference/portable-apps.md) and
 [environment configuration](docs/reference/configuration.md#project-environment-files).
 
 ## A complete system from one YAML file

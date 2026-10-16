@@ -41,8 +41,10 @@ node /path/to/werk-release/bin/apps/worker/cli.mjs init --features-dir requests/
 
 If you already copied `bin/apps/worker`, run `node bin/apps/worker/cli.mjs init`.
 Repeat setup from the installed app; it preserves configuration and template edits.
-Setup refuses to overwrite a different installed app. Upgrades follow the
-[portable stop/back-up/replace/restart procedure](../reference/portable-apps.md).
+Setup refuses to overwrite a different installed app. Upgrade it in place with
+`node bin/apps/worker/cli.mjs update apply --stop`, which verifies the release, backs
+up the worker state and keeps the previous folder for rollback; see
+[update a copied app](../reference/portable-apps.md#update-a-copied-app).
 
 Start from the project directory:
 
