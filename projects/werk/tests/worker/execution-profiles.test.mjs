@@ -86,11 +86,14 @@ test('standalone HTTP editor authenticates, requires pause, rejects simultaneous
 
 test('registered edits recover old incomplete evidence, survive a lost acknowledgement and restart, and route new work with the same identity', {timeout:25000},async t=>{
   const path=await directory(t),config=await configuration({'poll-ms':'100','mock-ms':'1',profiles:'codex'});config.url='http://orchestrator.invalid';
-  let now=Date.now(), rejectAcknowledgement=true, registration, updateCalls=0;
+  let now=Date.now(), rejectAcknowledgement=true, registration, updateCalls=0, recoveryTaskId;
   const store=new Store(':memory:',1000,()=>now);cleanup(t,()=>store.close());
   const current=()=>store.worker(registration.token);
   const gateway={async register(profiles,policy){registration={...store.register('alpha',profiles,policy),project:'alpha'};return registration;},connect(){return {
-    async currentAssignments(){return store.current(current());},async claim(id,capacity,repos,legacy){return store.claim(current(),id,capacity,repos,legacy);},
+    async currentAssignments(){
+      // This manually seeded lease models orphaned journal evidence, not a runnable live assignment.
+      return store.current(current()).filter(task=>task.id!==recoveryTaskId);
+    },async claim(id,capacity,repos,legacy){return store.claim(current(),id,capacity,repos,legacy);},
     async heartbeat(task){return store.heartbeat(current(),task.id,task.lease,task.attempt);},async publishSnapshot(snapshot){return store.snapshot(current(),snapshot);},async complete(task){return store.finish(current(),task.id,task.lease,task.attempt);},async abandon(task){return store.abandon(current(),task.id,task.lease,task.attempt);},
     async updateProfiles(input){updateCalls++;const result=store.updateProfiles(current(),input);if(rejectAcknowledgement)throw Error('Lost response fixture');return result;}
   };}};
@@ -103,13 +106,28 @@ test('registered edits recover old incomplete evidence, survive a lost acknowled
   const localId=local.value.tasks[0].id;assert.equal((await worker.api('/api/taskboard/action',{id:localId,action:'cancel'})).status,200);
   // Model a terminal-write failure after its lease expires: no active execution remains, but a before snapshot still needs closure.
   const task=store.submit({project:'alpha',title:'Interrupted old attempt',criteria:['Done'],wikilinks:[],provider:'codex',priority:1},'old-incomplete');
+  recoveryTaskId=task.id;
   const assigned=store.claim(current(),'interrupted',0,[],false);
   const journal=new SnapshotJournal(path,old.configurationHash,config.systemPromptHash);await journal.init();
   await journal.persist(journal.capture(assigned,registration.id,config.profiles[0],{lastContact:null,heartbeatErrors:0},'before'));journal.close();
   now+=2000;store.reapExpired();
   // Block automatic retry of the recovered old task to keep this fixture focused on new-profile routing.
   store.db.prepare("UPDATE tasks SET status='blocked' WHERE id=?").run(task.id);
-  const response=await worker.api('/api/execution-profiles',{expectedConfigurationHash:old.configurationHash,profiles:replacement});assert.equal(response.status,200);
+  // A paused worker still polls existing leases. Its bounded admission guard may
+  // overlap this save; retry only a rejected, unchanged, completely idle edit.
+  await until(async()=>{
+    const response=await worker.api('/api/execution-profiles',{expectedConfigurationHash:old.configurationHash,profiles:replacement});
+    if(response.status===409){
+      assert.equal(response.value.error,'Pause intake and finish or cancel queued tasks and active replies before changing execution profiles.');
+      const [settings,status,profiles,board]=await Promise.all(['/api/settings','/status','/api/execution-profiles','/api/taskboard'].map(route=>worker.api(route)));
+      for(const result of [settings,status,profiles,board])assert.equal(result.status,200);
+      assert.equal(settings.value.board.paused,true);assert.deepEqual(status.value.activeTasks,[]);assert.deepEqual(status.value.queuedTasks??[],[]);
+      assert.equal(board.value.tasks.some(task=>['queued','running'].includes(task.status)),false);
+      assert.equal(profiles.value.configurationHash,old.configurationHash);assert.equal(profiles.value.state,'ready');assert.equal(profiles.value.pending,null);assert.equal(updateCalls,0);
+      return false;
+    }
+    assert.equal(response.status,200,JSON.stringify(response.value));return true;
+  });
   const recovered=JSON.parse(await readFile(join(path,'snapshots',assigned.lease,'after.json'),'utf8'));assert.equal(recovered.profileId,config.profiles[0].id);assert.equal(recovered.provenance.configurationHash,old.configurationHash);
   await until(()=>updateCalls>0);assert.deepEqual(current().profiles,replacement);
   assert.equal((await worker.api('/api/execution-profiles')).value.state,'pending');
