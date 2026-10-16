@@ -6,6 +6,7 @@ import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { GitFeatureRepository } from '../../src/worker/dist/worker/infrastructure/features/git-repository.js';
+import { prepareRepositoryWorktree } from '../../src/worker/dist/worker/infrastructure/repositories.js';
 
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.autocrlf=false', '-c', 'user.name=Werk Fixture', '-c', 'user.email=fixture@example.invalid', ...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 const hash = text => createHash('sha256').update(text).digest('hex');
@@ -180,4 +181,31 @@ test('feature patches cannot modify intake, review notes or frozen workflow asse
   for (const path of ['features/request.md', 'features/_templates/feature-request.md', 'feature-reviews/claimed.md', 'FEATURE-REVIEWS/claimed.md', 'fr-ready-check.json', 'fr-done-check.json', 'Feature Requests.base'])
     assert.throws(() => adapter.publishPatch({ ...f.publication(), approvedPaths: [path] }), /workflow configuration/);
   assert.equal(git(f.remote, 'for-each-ref', '--format=%(refname)', 'refs/heads/werk'), '');
+});
+
+
+test('deep publication and later task worktrees support committed receipt paths beyond Windows MAX_PATH', async t => {
+  const f = await fixture(t);
+  // Keep the worktree root below MAX_PATH while its tracked receipt exceeds it.
+  // Local false overrides runner defaults, so both Git wrappers must opt in.
+  const parent = join(f.directory, 'nested-' + 'x'.repeat(Math.max(8, 115 - f.directory.length)));
+  await mkdir(parent); const repository = join(parent, 'worker');
+  git(parent, 'clone', '--', f.remote, repository); git(repository, 'config', 'core.longpaths', 'false');
+  const stateDirectory = join(repository, '.werk', 'worker', 'shared-git', 'a'.repeat(64));
+  const adapter = f.client({ repository, stateDirectory }), input = f.lifecycle('deep-first');
+  const initialHead = git(repository, 'rev-parse', 'HEAD');
+  const initialIndex = await readFile(join(repository, '.git', 'index'));
+  const first = await adapter.publishLifecycle(input);
+  const receipt = 'feature-reviews/_operations/' + hash(input.operationId) + '.json';
+  assert.ok(join(stateDirectory, 'feature-git-worktrees', 'publish-XXXXXX', receipt).length > 260);
+  const second = await adapter.publishLifecycle({ operationId: 'deep-second', request: { path: input.request.path, expectedRevision: hash(input.request.content), content: input.request.content.replace('status: claimed', 'status: completed') } });
+  assert.notEqual(second.commit, first.commit);
+  assert.equal(JSON.parse(git(f.remote, 'show', second.head + ':' + receipt)).operationId, input.operationId);
+  assert.match(git(f.remote, 'show', second.head + ':' + input.request.path), /status: completed/);
+  const worktree = await prepareRepositoryWorktree(repository, 'later-feature-with-receipt', new AbortController().signal, second.head);
+  assert.ok(join(worktree.path, receipt).length > 260);
+  assert.equal(JSON.parse(await readFile(join(worktree.path, receipt), 'utf8')).operationId, input.operationId);
+  assert.equal(worktree.baseCommit, second.head); assert.equal(git(repository, 'rev-parse', 'HEAD'), initialHead);
+  assert.deepEqual(await readFile(join(repository, '.git', 'index')), initialIndex);
+  assert.equal(git(repository, 'config', '--local', 'core.longpaths'), 'false', 'Command-scoped support must not change operator Git configuration.');
 });

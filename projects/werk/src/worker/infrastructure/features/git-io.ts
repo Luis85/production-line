@@ -54,7 +54,7 @@ export class FeatureGitIo {
     const env = { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never', GIT_AUTHOR_NAME: 'Werk Worker', GIT_AUTHOR_EMAIL: 'worker@werk.invalid', GIT_COMMITTER_NAME: 'Werk Worker', GIT_COMMITTER_EMAIL: 'worker@werk.invalid' };
     for (const name of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES']) delete (env as NodeJS.ProcessEnv)[name];
     try {
-      return await runProcess('git', ['--literal-pathspecs', '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'core.autocrlf=false', '-c', 'core.eol=lf', '-c', 'submodule.recurse=false', '-c', 'protocol.ext.allow=never', '-c', 'commit.gpgSign=false', ...args], { cwd, env, signal, input, timeoutMs: 30000, maxOutputBytes: 2 * 1024 * 1024, allowNonZeroExit });
+      return await runProcess('git', ['--literal-pathspecs', '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'core.longpaths=true', '-c', 'core.autocrlf=false', '-c', 'core.eol=lf', '-c', 'submodule.recurse=false', '-c', 'protocol.ext.allow=never', '-c', 'commit.gpgSign=false', ...args], { cwd, env, signal, input, timeoutMs: 30000, maxOutputBytes: 2 * 1024 * 1024, allowNonZeroExit });
     } catch (error) {
       throw new GitFeatureError(signal.aborted || error instanceof ProcessRunError && error.reason === 'cancelled' ? 'cancelled' : 'unavailable', 'Shared feature Git operation failed. Check connectivity, host Git authentication and repository permissions.');
     }

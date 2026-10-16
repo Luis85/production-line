@@ -157,3 +157,24 @@ test('authoring setup and submission respect the shared write lock and reject co
     assert.match(await readFile(draft.fullPath, 'utf8'), /status: draft/);
   }
 });
+
+test('standalone authoring runs through a symlinked parent and stays inert when imported', { skip: process.platform === 'win32' }, async () => {
+  const f = await fixture();
+  const alias = join(scratch, 'invocation-alias');
+  await symlink(f.root, alias, 'dir');
+  const entry = join(alias, '.werk/authoring/feature-request.mjs');
+  const created = JSON.parse(execFileSync(process.execPath, [entry, 'create', '--name', 'aliased.md', '--title', 'Aliased invocation'], { cwd: alias, encoding: 'utf8' }));
+  assert.equal(created.status, 'draft');
+  assert.match(await readFile(join(f.root, created.path), 'utf8'), /title: Aliased invocation/);
+  assert.throws(() => execFileSync(process.execPath, [entry, 'validate', '--file', created.path], { cwd: alias, stdio: 'pipe' }), error => error.status === 2 && JSON.parse(error.stdout).valid === false);
+  const moduleUrl = pathToFileURL(entry).href;
+  const importer = join(f.root, 'import-only.mjs');
+  await writeFile(importer, 'await import(' + JSON.stringify(moduleUrl) + '); console.log("imported");\n');
+  const imported = execFileSync(process.execPath, [importer, 'create', '--name', 'must-not-exist.md', '--title', 'Not requested'], { cwd: f.root, encoding: 'utf8' });
+  assert.equal(imported.trim(), 'imported');
+  await assert.rejects(access(join(f.root, 'features/must-not-exist.md')), { code: 'ENOENT' });
+  for (const missing of [undefined, join(scratch, 'missing-entry.mjs')]) {
+    const code = 'process.argv[1] = ' + (missing === undefined ? 'undefined' : JSON.stringify(missing)) + '; await import(' + JSON.stringify(moduleUrl) + '); console.log("imported");';
+    assert.equal(execFileSync(process.execPath, ['--input-type=module', '-e', code], { cwd: f.root, encoding: 'utf8' }).trim(), 'imported');
+  }
+});

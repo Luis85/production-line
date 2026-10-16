@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import { realpathSync } from 'node:fs';
 import { open, rename, unlink } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { validateFeatureWorkflow, validateFeatureCheck, featureWorkflowPolicy, featureWorkflowPath as validatePath } from '../application/feature-workflow.js';
 import { validateFeatureReadiness, validateFeatureTemplate } from '../infrastructure/features/workflow.js';
 import { digest, parseFeature, requestName, type FeatureDocument } from '../infrastructure/features/document.js';
@@ -108,7 +109,14 @@ export async function runFeatureAuthoring(args: string[], directory = process.cw
   });
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Canonicalize both paths: macOS temp roots and symlinked directories may alias this file.
+function isAuthoringEntrypoint(): boolean {
+  if (!process.argv[1]) return false;
+  try { return realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)); }
+  catch { return false; }
+}
+
+if (isAuthoringEntrypoint()) {
   try {
     const result = await runFeatureAuthoring(process.argv.slice(2));
     console.log(JSON.stringify(result, null, 2));
