@@ -30,7 +30,7 @@ test('file task and session are one review item with their retained identities a
   const item = result.items[0];
   assert.equal(item.id, 'session:local-patch');
   assert.equal(item.taskId, 'patch'); assert.equal(item.localTaskId, 'patch');
-  assert.equal(item.sessionId, 'local-patch'); assert.equal(item.sourceLabel, 'File task');
+  assert.equal(item.sessionId, 'local-patch'); assert.equal(item.sourceLabel, 'Local request');
   assert.equal(item.group, 'attention'); assert.equal(item.status, 'review');
   assert.match(item.summary, /not been applied/);
   assert.deepEqual(item.primaryAction, { kind: 'session', label: 'Open task', sessionId: 'local-patch', href: '/taskboard?session=local-patch' });

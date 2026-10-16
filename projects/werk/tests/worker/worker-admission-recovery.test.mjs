@@ -41,7 +41,7 @@ async function fixture(t, execute) {
   const f = {
     directory, repository, settings, calls,
     get sessions() { return sessions; }, get board() { return board; },
-    get workspace() { return { acceptingTasks: true, settings, sessions, board, reviews: { tick() {}, cancel() {} } }; },
+    get workspace() { return Object.assign(Object.create(WorkerWorkspace.prototype), { acceptingTasks: true, settings, sessions, board, reviews: { tick() {}, cancel() {} } }); },
     command(id, action, extra = {}, operationId = crypto.randomUUID()) {
       return { requestId: id, expectedRevision: sessions.requests.get(id).revision, operationId, action, ...extra };
     },

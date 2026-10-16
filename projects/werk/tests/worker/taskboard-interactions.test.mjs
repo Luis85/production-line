@@ -100,3 +100,21 @@ test('failed-conversation links focus results on navigation and activation witho
   f.route.path = '/history'; f.route.query.taskState = 'all'; await nextTick(); await nextTick();
   assert.deepEqual(f.focused, []);
 });
+
+
+test('failed admission evidence stays inspectable but never retries its unaccepted file snapshot', async t => {
+  const f = await fixture(t, 'components/Taskboard.vue');
+  const task = f.state.board.tasks[1];
+  Object.assign(task, { admissionFailure: { paths: ['src/main.ts'] }, error: 'Inspect the preserved worktree, then create a new request.', worktree: '/worktrees/retained', files: [] });
+  await f.inspect('b', event);
+  assert.equal(f.detail.value.worktree, '/worktrees/retained');
+  await f.action({ id: 'b', action: 'retry' });
+  assert.equal(f.calls.length, 0);
+  // The detail receipt also guards a retry if a later summary no longer contains it.
+  f.state.board.tasks = f.state.board.tasks.filter(item => item.id !== 'b');
+  await f.action({ id: 'b', action: 'retry' });
+  assert.equal(f.calls.length, 0);
+  await f.openConversation();
+  assert.equal(f.calls[0].body.id, 'local-b');
+  assert.deepEqual(f.navigations, [{ path: '/taskboard', query: { session: 'local-b' } }]);
+});

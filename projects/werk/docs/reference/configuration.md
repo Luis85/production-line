@@ -195,6 +195,35 @@ A dispatched invocation freezes its duration policy; edits affect later calls.
 See [long-running worker operations](../how-to/monitor-long-running-worker.md) for
 monitoring scope, warning thresholds, shutdown and recovery.
 
+## Worker queue and guarded settings saves
+
+The private `GET /api/settings` response supplies each editor's saved baseline.
+`POST /api/settings` supports optional comparison fields; the webview sends them
+so a concurrent policy change returns a conflict before anything is written:
+
+| Editor | Baseline field | Compared values |
+| --- | --- | --- |
+| Queue | `expectedBoard` | `queueCapacity`, `orchestratorQueue`, `order` |
+| Queue & duration | `expectedDuration` | `maxRuntimeMs`, `longRunningMs` |
+| Consumption | `expectedConsumption` | The complete saved consumption policy |
+
+A guarded queue edit sends only queue limits/order in `board`; pause is an
+independent `{board: {paused: boolean}}` action and cannot be overwritten by that
+editor's stale draft. Duration edits patch `execution.maxRuntimeMs` and/or
+`resources.longRunningMs`, preserving other resource thresholds. Legacy clients
+may omit these guards. Save acknowledgements and follow-up reads are separate:
+a failed refresh does not undo an acknowledged save.
+
+The session view includes an optional `capacity` snapshot (schema version 1),
+returned through the existing `GET /api/chat/session` poll. It reports one shared
+execution slot, local admission occupancy including preparation/resume
+reservations, and the separate accepted remote-assignment buffer. Unadmitted
+ready notes and retained finished tasks are not local occupancy. Reducing a limit
+preserves accepted work and may leave it above the new limit. The snapshot also
+carries its capture time, manual pause and consumption blocker; these observations
+do not reserve admission or predict completion time. Stale data cannot establish
+current readiness.
+
 ## Editable execution profiles
 
 The private worker endpoint `GET /api/execution-profiles` returns
@@ -252,7 +281,7 @@ branch yourself, then enable watching through repository settings. A first commi
 is required before task worktrees can be created.
 
 Both decisions persist privately in `repository-discovery.json`. Decline hides
-the Taskboard prompt; Dashboard lets the operator reconsider. Acceptance requires
+the Taskboard prompt; Settings → Repositories lets the operator reconsider. Acceptance requires
 idle queues and preparations; decline can be recorded while unrelated work runs.
 Existing explicit repository assignments, including a matching configured legacy
 Codex repository, count as authorization. Explicitly assigning a skipped checkout
@@ -348,7 +377,7 @@ worktree preparation still validates the selected repository and pinned commit.
 Repository assignment changes require queued and running tasks to be drained.
 Saved private worker settings take precedence over the initial file seed on later
 starts; editing startup JSON does not overwrite saved assignments. Inspect or edit
-them in Dashboard's **Git repositories** section or use `settings get` /
+them in **Settings → Repositories** or use `settings get` /
 `settings set` on the worker CLI.
 
 Authenticated `GET /api/repositories` returns
@@ -376,8 +405,8 @@ and ordinary provider Chat does not gain arbitrary filesystem or shell tools.
 
 ## Local model tool access
 
-The unlocked worker Dashboard manages a separate private `tool-access.json` in
-the worker state directory. Missing configuration means no grants. The document
+The unlocked **Settings → Tools & MCP** section manages a separate private
+`tool-access.json` in the worker state directory. Missing configuration means no grants. The document
 records a numeric revision, read-only worktree-file access, fixed command presets,
 web origins, MCP connection details and discovered per-tool grants. Its credentials
 are redacted from authenticated views; they never enter the public status or

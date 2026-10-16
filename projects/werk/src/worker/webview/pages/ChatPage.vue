@@ -4,7 +4,6 @@ import RequestGatePanel from '../components/RequestGatePanel.vue';
 import InteractionPanel from '../components/InteractionPanel.vue';
 import type { InteractionView } from '../../application/interactions';
 import SessionPanel from '../components/SessionPanel.vue';
-import RunTask from '../components/RunTask.vue';
 import NewTask from '../components/NewTask.vue';
 import SettingsPanel from '../components/SettingsPanel.vue';
 import DefinitionPanel from '../components/DefinitionPanel.vue';
@@ -151,7 +150,7 @@ function keydown(event: KeyboardEvent) { if (event.key === 'Enter' && (event.ctr
           <UAlert
             v-if="state.settings?.board.paused"
             title="Worker queue is paused"
-            description="You can queue work now. Open Dashboard and resume the queue when you want this worker to start waiting tasks."
+            description="You can queue work now. Open Taskboard and resume the queue when you want this worker to start waiting tasks."
             color="warning"
             variant="soft"
             class="notice"
@@ -205,7 +204,7 @@ function keydown(event: KeyboardEvent) { if (event.key === 'Enter' && (event.ctr
                 {{
                   phase === "queued"
                     ? state.settings?.board.paused
-                      ? "Queued · this worker’s queue is paused. Resume the queue in Dashboard to start waiting tasks."
+                      ? "Queued · this worker’s queue is paused. Resume the queue in Taskboard to start waiting tasks."
                       : "Queued · waiting for this worker’s next execution slot"
                     : "Working on this task…"
                 }}
@@ -300,7 +299,6 @@ function keydown(event: KeyboardEvent) { if (event.key === 'Enter' && (event.ctr
               >Plan an implementation</UButton
             >
           </div>
-          <RunTask />
         </template>
       </div>
     </div>

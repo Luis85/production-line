@@ -7,6 +7,30 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-16
+
+### Added
+
+- Every worker task has a Markdown feature-request record with its instructions, progress, questions and results. Follow-ups update the same record, with saved state and recoverable synchronization errors visible in the webview.
+- A dedicated worker Settings page with focused navigation for providers and accounts, queue capacity, task duration, consumption, tool and MCP access, repositories, shared intake, execution profiles, agent definitions, project integration and optional orchestrator enrollment.
+- A shared capacity readout on the taskboard: one execution slot, actual accepted chat/file work and available places, separate remote assignments, and explicit pause or consumption blockers.
+
+### Changed
+
+- Worker navigation now separates Taskboard, Metrics, History and Settings. Existing dashboard setup bookmarks continue to open the corresponding settings section.
+- One request composer handles instructions and optional approved repository files. Provider, model, tool and agent options disclose when needed; retries retain the original request identity. Task and conversation navigation remains accessible on narrow screens.
+- Metrics prioritizes consumption and retained execution measurements, with coverage and scope labels, followed by worker health and host resources.
+
+### Fixed
+
+- Interrupted repository preparation can recover through the same request identity when its retained worktree is unchanged. Edited worktrees are preserved with a failed request and explicit recovery guidance.
+- Open request notes retain their rendered contents across unchanged background snapshots.
+- Background polling no longer repeatedly replaces button labels or icons with loading indicators, shifts their width, or temporarily disables valid actions. Deliberate refreshes and saves retain visible feedback.
+- The taskboard no longer reports availability while consumption blocks new starts, or treats executor waiters as the complete worker queue.
+- Queue and duration settings detect competing edits, retain unsaved drafts and protect the queue's independent pause state.
+- Task freshness updates independently of optional history reads. Stale capacity stays explicitly labelled, and late settings responses cannot replace newer acknowledged configuration.
+- Worker resource descriptions distinguish whole-machine measurements from the Node process, and small-screen controls retain clear labels and keyboard access.
+
 ## [0.9.0] - 2026-10-16
 
 ### Added

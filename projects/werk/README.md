@@ -75,7 +75,7 @@ Commit the project authoring kit, editable template, Obsidian Base, and
 the **Create Feature Request** skill to draft and validate requests locally; they
 do not need a worker connection or installation.
 
-In the worker Dashboard, connect **Shared request intake** to an assigned repository
+In **Settings → Shared request intake**, connect the worker to an assigned repository
 and intake branch. The worker claims committed ready requests, executes in pinned
 worktrees, checks completion, and pushes a feature branch with an Obsidian review
 note. The developer checkout stays untouched; a person reviews before merging.
@@ -197,7 +197,7 @@ Shared contracts remain in `src/shared`. Source and tests are grouped by concern
 
 The complete source check also requires Python 3 on Linux/macOS for the infrastructure safety suite. The downloaded native runtime has no host Python dependency.
 
-The [worker webview](docs/how-to/use-worker-webview.md) opens on the taskboard, with task interaction to its right, plus History and Dashboard pages. Optional native Linux Codex chat uses the worker account’s existing login.
+The [worker webview](docs/how-to/use-worker-webview.md) opens on the taskboard, with one interaction for instructions and optional repository-file approval, plus Metrics, History and Settings pages. Every task has automatic Markdown feature-request tracking; follow-ups keep its record. Optional native Linux Codex chat uses the worker account’s existing login.
 
 ## Generated UI reference
 

@@ -1,3 +1,7 @@
+import { publicTaskConversation } from '../application/public-task-transcript.js';
+import { FeatureTracking, type FeatureTrackingInput } from '../application/feature-tracking.js';
+import { MarkdownFeatureTracking } from '../infrastructure/features/tracking.js';
+import { validateApprovedPaths } from '../application/approved-paths.js';
 import { WorkerConsumption } from '../application/consumption.js';
 import { consumptionModel } from '../application/consumption-model.js';
 import { WorkerConsumptionJournal } from '../infrastructure/journal/consumption.js';
@@ -95,6 +99,7 @@ export class WorkerWorkspace {
   readonly executionProfiles?: ExecutionProfilesControl;
   private taskIndex: TaskIndex;
   readonly features?: FeatureRequests;
+  readonly featureTracking: FeatureTracking;
   readonly sharedRuntime: SharedIntakeRuntime;
   private providerAccounts = new ProviderAccountChecks();
   private providerStatuses = new ProviderStatusChecks();
@@ -122,10 +127,62 @@ export class WorkerWorkspace {
   get executor() {
     return this.sessions.executor;
   }
+  /** Keep Markdown projections current before acknowledging task commands, including partial failures. */
+  async withFeatureTracking<T>(action: () => Promise<T>): Promise<T> {
+    try { return await action(); } finally { await this.featureTracking.sync(); }
+  }
+  taskDetail(id: string) {
+    const detail = this.sessions.detail(id);
+    const task = detail.session.kind === 'local' ? this.board.view().tasks.find(item => item.sessionId === id) : undefined;
+    const local = task && this.board.detail(task.id);
+    return { ...detail, chat: publicTaskConversation(detail.chat, local ? { instruction: local.instruction, paths: local.admissionFailure?.paths ?? local.files.map(file => file.path) } : undefined) };
+  }
+  chatSnapshot(id = this.sessions.current.id) { return this.taskDetail(id).chat; }
+  async cancelChat() {
+    const id = this.sessions.current.id;
+    await this.withFeatureTracking(() => this.chat.cancel());
+    return this.chatSnapshot(id);
+  }
+  async chatSession() {
+    await this.featureTracking.sync();
+    return { sessions: this.sessions.view(), chat: this.chatSnapshot() };
+  }
+  async featureTrackingCommand(input: unknown) {
+    const body = object(input, 'Feature tracking command', ['action', 'sessionId']);
+    if (body.action !== 'get') throw new DomainError('invalid_input', 'Use get with a task session ID.');
+    const id = identifier(body.sessionId, 'sessionId');
+    this.sessions.detail(id);
+    await this.featureTracking.sync();
+    return this.featureTracking.get(id);
+  }
+  private featureTrackingSnapshot(): FeatureTrackingInput[] {
+    const sources = new Map(this.features?.view().records.map(record => [record.sessionId, join(this.config.features!.directory, record.name)]) ?? []);
+    const tasks = new Map(this.board.view().tasks.map(task => [task.sessionId, task.id]));
+    return this.sessions.details().map(({ session, chat }) => {
+      const interaction = session.interaction;
+      const taskId = tasks.get(session.id), local = taskId ? this.board.detail(taskId) : undefined;
+      const sharedSource = taskId ? this.sharedRuntime.intake.sourceForTask(taskId) : undefined;
+      const sourceRepository = sharedSource && this.settings.value.repositories.items.find(item => item.id === sharedSource.repositoryId);
+      const sourcePath = sharedSource ? sourceRepository ? join(sourceRepository.path, sharedSource.path) : sharedSource.path : sources.get(session.id);
+      const runs = this.sessions.runs.list({ sessionId: session.id, limit: 100 }).rows;
+      return { session, messages: publicTaskConversation(chat, local ? { instruction: local.instruction, paths: local.admissionFailure?.paths ?? local.files.map(file => file.path) } : undefined).messages, request: this.sessions.requests.forSession(session.id),
+        turns: interaction.turns.map(turn => this.sessions.interactions.turn(session.id, turn.id)), runs,
+        ...(local ? { local: { instruction: local.instruction, summary: local.summary, error: local.error, hasPatch: !!local.patch, repository: local.repository, paths: local.files.map(file => file.path) } } : {}),
+        ...(sourcePath ? { sourcePath } : {}),
+      };
+    });
+  }
   async taskboardAction(input: unknown) {
     if ((input as Record<string, unknown> | null)?.action === 'retry')
       return this.withRepositoryAdmission(() => this.board.action(input));
     return this.board.action(input);
+  }
+  private assertTaskCanContinue(sessionId: string) {
+    const reason = this.sessions.view().records.find(session => session.id === sessionId)?.continuationBlockedReason;
+    if (reason) throw new DomainError('conflict', reason);
+    const task = this.board.view().tasks.find(task => task.sessionId === sessionId);
+    if (task?.admissionFailure)
+      throw new DomainError('conflict', task.error ?? 'This interrupted request has no accepted file snapshots. Inspect its retained worktree and create a new request.');
   }
   async startChat(message: unknown) {
     if (this.configurationUpdating || this.executionProfiles?.pending())
@@ -137,7 +194,10 @@ export class WorkerWorkspace {
       this.settings.value.board.queueCapacity
     )
       throw new DomainError("conflict", "Worker task queue is full.");
-    return this.sessions.start(message);
+    const id = this.sessions.current.id;
+    this.assertTaskCanContinue(id);
+    await this.withFeatureTracking(() => this.sessions.start(message, id));
+    return this.chatSnapshot(id);
   }
   capabilities() {
     return {
@@ -264,6 +324,7 @@ export class WorkerWorkspace {
         "conflict",
         "Remote assignments require an explicit upstream successor with a fresh lease and pinned context.",
       );
+    if (['propose', 'accept_candidate', 'execute'].includes(action)) this.assertTaskCanContinue(before.owner.sessionId);
     const result = gates.command(initial as unknown as RequestCommand);
     if (!result.duplicate && action === "cancel")
       this.reviews.cancel(requestId);
@@ -464,6 +525,7 @@ export class WorkerWorkspace {
       identifier(body.turnId, "turnId");
       if (body.message !== undefined) text(body.message, "Continuation", 8000);
     }
+    this.assertTaskCanContinue(sessionId);
     const command = body as unknown as InteractionCommand;
     const interactions = this.sessions.interactions;
     const view = interactions.view(sessionId);
@@ -550,6 +612,7 @@ export class WorkerWorkspace {
           "definitionRef",
           "agent",
           "useInstructionsOnly",
+          "files",
         ]);
         if (
           !["create", "get", "send", "cancel", "retry"].includes(
@@ -562,7 +625,7 @@ export class WorkerWorkspace {
           );
         if (
           body.action !== "create" &&
-          (body.definitionId !== undefined ||
+          (body.files !== undefined || body.definitionId !== undefined ||
             body.definitionRef !== undefined ||
             body.agent !== undefined ||
             body.useInstructionsOnly !== undefined)
@@ -579,6 +642,7 @@ export class WorkerWorkspace {
         if (body.action === "cancel") return this.sessions.cancelTask(id);
         if (this.configurationUpdating || this.executionProfiles?.pending())
           throw new DomainError("conflict", "Finish the execution profile change before starting new work.");
+        if (body.action !== 'create') this.assertTaskCanContinue(id);
         let requestMessage = body.message;
         if (body.action === "retry") {
           const detail = this.sessions.detail(id);
@@ -597,12 +661,15 @@ export class WorkerWorkspace {
         }
         const message = text(requestMessage, "message", 8000);
         if (body.action === "create") {
+          const files = body.files === undefined ? undefined : object(body.files, 'Approved task files', ['repository', 'paths']);
+          const approved = files ? { repository: text(files.repository, 'repository', 4096), paths: validateApprovedPaths(files.paths) } : undefined;
+          if (approved && !/^[a-z0-9-]{1,90}$/.test(id)) throw new DomainError('invalid_input', 'File task IDs use 1–90 lowercase letters, digits or hyphens.');
           const selection = definitionSelection(body);
           const title = text(body.title, "title", 120),
             provider = this.settings.provider(String(body.provider));
           const existing = this.sessions
             .view()
-            .records.find((item) => item.id === id);
+            .records.find((item) => item.id === (approved ? "local-" + id : id));
           const savedDefinition = existing?.definition;
           const definition =
             savedDefinition &&
@@ -620,10 +687,21 @@ export class WorkerWorkspace {
                 title,
                 provider: provider.id,
                 message,
+                ...(approved ? { files: approved } : {}),
                 ...(definition ? { definition } : {}),
               }),
             )
             .digest("hex");
+          const fileTask = this.board.view().tasks.find(task => task.id === id);
+          if (approved) {
+            if (this.sessions.view().records.some(session => session.id === id) || existing && (existing.kind !== 'local' || !fileTask && existing.submissionHash !== submissionHash))
+              throw new DomainError('conflict', 'Task id already belongs to different input.');
+            await this.withRepositoryAdmission(() => this.board.create({ title, instruction: message, provider: provider.id, ...approved,
+              definitionId: body.definitionId, definitionRef: body.definitionRef, agent: body.agent, useInstructionsOnly: body.useInstructionsOnly,
+            }, { id, hash: submissionHash }));
+            return this.sessions.detail(this.board.detail(id).sessionId);
+          }
+          if (fileTask || this.sessions.view().records.some(session => session.id === 'local-' + id && session.kind === 'local')) throw new DomainError('conflict', 'Task id already belongs to different input.');
           if (existing) {
             const detail = this.sessions.detail(id);
             if (
@@ -662,7 +740,9 @@ export class WorkerWorkspace {
       () => {},
       () => {},
     );
-    return operation;
+    const detail = await this.withFeatureTracking(() => operation);
+    const { directory, lastSyncedAt, error } = this.featureTracking.status();
+    return { ...this.taskDetail(detail.session.id), featureTracking: { directory, lastSyncedAt, error } };
   }
   private token = "";
   private historyCache?: {
@@ -725,6 +805,7 @@ export class WorkerWorkspace {
     this.repositoryDiscovery = new RepositoryDiscovery(config.stateDir, config.integrationProjectDir ?? config.projectDir ?? process.cwd(), this.repositoryStop.signal, config.codex?.repository);
     this.sessions = createWorkerSessions(
       config.stateDir, this.settings, modelFor, undefined, () => this.board.active, this.consumption,
+      { remote: () => { const status = this.get(); return { waiting: status.queuedTasks?.length ?? null, running: status.activeTasks.length }; } },
     );
     this.board = createLocalTaskboard(
       config.stateDir,
@@ -733,6 +814,10 @@ export class WorkerWorkspace {
       { prepareWorktree: (selector, key, signal, commit) => this.prepareTaskWorkspace(selector, key, signal, commit) },
       undefined, this.consumption,
     );
+    this.featureTracking = new FeatureTracking(new MarkdownFeatureTracking(
+      config.features ? join(config.features.directory, '_tasks') : join(config.stateDir, 'feature-requests'), config.stateDir,
+    ), () => this.featureTrackingSnapshot());
+    this.sessions.featureTracking = this.featureTracking;
     this.reviews = new RequestReviewManager({
       gates: this.sessions.requests,
       executor: this.executor,
@@ -824,6 +909,7 @@ export class WorkerWorkspace {
     await this.board.init();
     await this.taskIndex.init();
     await this.features?.init();
+    await this.featureTracking.init();
     await this.resources.init();
     this.resources.start();
     this.repositories.start();
@@ -868,6 +954,7 @@ export class WorkerWorkspace {
     const input = record.accepted;
     const assignment = this.repositories.resolve(record.binding.repositoryId);
     await this.withRepositoryAdmission(() => this.board.create({ title: input.title, instruction: input.message, provider: input.provider, repository: assignment.path, paths: input.paths, priority: input.priority, definitionId: input.definitionId, definitionRef: input.definitionRef, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly }, { id: record.taskId!, hash: record.inputHash, policy: record.workflow.policy, criteria: input.criteria, repositoryId: record.binding.repositoryId, baseCommit: record.sourceCommit }));
+    await this.featureTracking.sync();
   }
   repositoryStatus() {
     return { schemaVersion: 1, pollMs: this.settings.value.repositories.pollMs, items: this.repositories.view(), discovery: this.repositoryDiscovery.view() };
@@ -1078,6 +1165,7 @@ export class WorkerWorkspace {
     this.evidenceClosing ??= settleCleanup(
       () => this.features?.close(),
       () => this.resources.close(),
+      () => this.featureTracking.close(),
       [() => this.sessions.runs.close(), () => this.sessions.interactions.close(), () => this.sessions.requests.close(), () => this.consumption.close()],
     );
     return this.evidenceClosing;
@@ -1092,6 +1180,7 @@ export class WorkerWorkspace {
       task.title,
       task.provider === "claude" ? "claude-cli" : "codex-cli",
     );
+    await this.featureTracking.sync();
     this.historyCache = undefined;
   }
   private async submitFeature(record: FeatureRecord) {
@@ -1124,6 +1213,7 @@ export class WorkerWorkspace {
         agent: input.agent,
         useInstructionsOnly: input.useInstructionsOnly,
       });
+    await this.featureTracking.sync();
   }
   private executionEvidence(sessionId: string, runId?: string) {
     const run = runId
@@ -1252,6 +1342,7 @@ export class WorkerWorkspace {
       repositories: this.repositoryStatus(),
       features: this.featureView(),
       sharedIntake: this.sharedIntakeView(),
+      featureTracking: this.featureTracking.status(),
       stateDirectory: resolve(this.config.stateDir),
       projectDirectory: this.config.projectDir
         ? resolve(this.config.projectDir)

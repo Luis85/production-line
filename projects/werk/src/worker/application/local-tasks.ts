@@ -36,6 +36,8 @@ export interface LocalTaskWorkspaces {
     path: string;
     baseCommit?: string;
     reused?: boolean;
+    /** True only when an owned checkout still matches its pinned committed inputs. */
+    pristine?: boolean;
   }>;
 }
 /** Trusted coordinator reservation; these fields are never accepted from a task HTTP body. */
@@ -93,6 +95,9 @@ export interface LocalTask {
   repository: string;
   repositoryId?: string;
   worktree?: string;
+  worktreeKey?: string;
+  /** No approved snapshots exist: retain the failed request without allowing execution. */
+  admissionFailure?: { paths: string[] };
   worktreeIdentity?: ToolWorktreeIdentity;
   baseCommit?: string;
   files: TaskFile[];
@@ -211,9 +216,10 @@ export class LocalTaskboard {
           "local",
           task.title,
           task.provider,
-          undefined,
+          task.submissionHash,
           task.definition,
         );
+        if (task.admissionFailure) await this.sessions.blockContinuation(task.sessionId, task.error ?? 'This interrupted request has no accepted file snapshots. Inspect its retained worktree and create a new request.');
         this.sessions.protectTask(task.sessionId, true);
         if (
           !previous ||
@@ -422,11 +428,16 @@ export class LocalTaskboard {
     // Check before the preparation port: a missing directory must never be recreated here.
     await verifyIdentity();
     const selector = task.repositoryId && this.settings.value.repositories.items.some(item => item.id === task.repositoryId) ? task.repositoryId : task.repository;
-    const retained = await this.workspaces.prepareWorktree(selector, task.id, signal, task.baseCommit);
+    const retained = await this.workspaces.prepareWorktree(selector, task.worktreeKey ?? task.id, signal, task.baseCommit);
     if (!retained.reused || retained.path !== task.worktree || retained.repository !== task.repository || retained.baseCommit !== task.baseCommit || retained.repositoryId !== task.repositoryId) throw fail();
     await verifyIdentity();
   }
+  private assertAcceptedSnapshots(task: LocalTask) {
+    if (task.admissionFailure)
+      throw new DomainError("conflict", task.error ?? "This interrupted request has no accepted file snapshots. Inspect its retained worktree and create a new request.");
+  }
   private async prepareTurn(task: LocalTask, turn: InteractionTurn) {
+    this.assertAcceptedSnapshots(task);
     await this.assertToolWorkspace(task, AbortSignal.any([this.workspaceController.signal, AbortSignal.timeout(30000)]));
     const connection = {
       ...this.settings.provider(task.provider),
@@ -503,6 +514,10 @@ export class LocalTaskboard {
     await this.storage.writePatch(task.id, patch);
   }
   private async recoverTask(task: LocalTask) {
+    if (task.admissionFailure) {
+      task.status = "failed";
+      return;
+    }
     if (task.requestId) {
       const request = this.sessions.requests.get(task.requestId);
       if (
@@ -600,7 +615,7 @@ export class LocalTaskboard {
     return (
       task.instruction +
       "\nApproved paths: " +
-      task.files.map((file) => file.path).join(", ")
+      (task.admissionFailure?.paths ?? task.files.map((file) => file.path)).join(", ")
     );
   }
   get active() {
@@ -780,10 +795,15 @@ export class LocalTaskboard {
     this.assertAdmissionCapacity(this.tasks);
     this.admissionReserved = true;
     const id = submission?.id ?? randomUUID();
+    // Bind interrupted preparation to the exact trusted command and frozen policy.
+    // Legacy tasks keep their original key; the persisted key also verifies tool access.
+    const worktreeKey = submission
+      ? `${id}-${submission.hash}-${submissionContextHash(submission) ?? "default"}`
+      : id;
     const prepared: Awaited<ReturnType<LocalTaskWorkspaces["prepareWorktree"]>> = this.workspaces
       ? await this.workspaces.prepareWorktree(
           assignment?.id ?? selector,
-          id,
+          worktreeKey,
           AbortSignal.any([
             this.workspaceController.signal,
             AbortSignal.timeout(30000),
@@ -801,18 +821,24 @@ export class LocalTaskboard {
       );
     if (submission?.baseCommit && prepared.baseCommit !== submission.baseCommit)
       throw new DomainError("conflict", "The prepared task worktree does not match its reserved source commit.");
-    if (prepared.reused)
+    if (prepared.reused && !submission)
       throw new DomainError(
         "conflict",
         "This task worktree already exists. Inspect the retained task before submitting again.",
       );
-    const { repository, path: snapshotRoot, files } = await this.files.snapshot(prepared, allowedPaths);
+    const interruptedWorktree = prepared.reused && prepared.pristine !== true;
+    // Never turn modified or unverifiable retained contents into a fresh approval.
+    // A durable failed receipt lets the operator leave an otherwise endless retry.
+    const { repository, path: snapshotRoot, files } = interruptedWorktree
+      ? { repository: prepared.repository, path: prepared.path, files: [] }
+      : await this.files.snapshot(prepared, allowedPaths);
     if (this.closed) throw new DomainError("unavailable", "Worker is stopping");
     const task: LocalTask = {
       ...(submission ? { submissionHash: submission.hash, submissionContextHash: submissionContextHash(submission) } : {}),
       ...(submission?.policy ? { gatePolicy: structuredClone(submission.policy) } : {}),
       ...(submission?.criteria === undefined ? {} : { criteria: structuredClone(submission.criteria) }),
       ...(definition ? { definition } : {}),
+      ...(interruptedWorktree ? { admissionFailure: { paths: [...allowedPaths] } } : {}),
       id,
       title,
       instruction,
@@ -824,16 +850,19 @@ export class LocalTaskboard {
         ? {
             repositoryId: prepared.repositoryId,
             worktree: snapshotRoot,
-            worktreeIdentity: await this.files.identity(snapshotRoot),
+            worktreeKey,
+            ...(interruptedWorktree ? {} : { worktreeIdentity: await this.files.identity(snapshotRoot) }),
             baseCommit: prepared.baseCommit,
           }
         : {}),
       files,
-      status: "queued",
+      status: interruptedWorktree ? "failed" : "queued",
       priority: Number(body.priority ?? 1),
       createdAt: new Date().toISOString(),
-      finishedAt: null,
-      error: null,
+      finishedAt: interruptedWorktree ? new Date().toISOString() : null,
+      error: interruptedWorktree
+        ? "Admission was interrupted and the retained worktree has changed or cannot be proven unchanged. No file snapshots were accepted. Inspect the preserved worktree, then create a new request to approve current repository files. This request cannot be resumed."
+        : null,
       summary: null,
       patch: null,
       archived: false,
@@ -857,11 +886,16 @@ export class LocalTaskboard {
           "local",
           task.title,
           task.provider,
-          undefined,
+          task.submissionHash,
           task.definition,
         );
+        if (task.admissionFailure) await this.sessions.blockContinuation(task.sessionId, task.error ?? 'This interrupted request has no accepted file snapshots. Inspect its retained worktree and create a new request.');
         this.sessions.protectTask(task.sessionId, true);
         await this.sessions.prepareTask(task.sessionId, this.input(task));
+        if (task.admissionFailure) {
+          tasks.push(task);
+          return;
+        }
         const request = this.ensureRequest(task);
         if (!this.sessions.requests.evaluate(request.id, "ready").passed) {
           task.status = "needs_rework";
@@ -947,6 +981,8 @@ export class LocalTaskboard {
   private async executeOwnedRequest(id: string) {
     if (this.closed) throw new DomainError("unavailable", "Worker is stopping.");
     const request = this.sessions.requests.get(id);
+    const retainedTask = this.tasks.find(task => task.sessionId === request.owner.sessionId);
+    if (retainedTask) this.assertAcceptedSnapshots(retainedTask);
     if (request.owner.remote || request.input.kind !== "patch")
       throw new DomainError(
         "conflict",
@@ -1063,6 +1099,7 @@ export class LocalTaskboard {
         const task = tasks.find((item) => item.sessionId === body.sessionId);
         if (!task)
           throw new DomainError("not_found", "File-task session not found.");
+        this.assertAcceptedSnapshots(task);
         const prior =
           body.turnId ??
           this.sessions.interactions.view(task.sessionId).pending?.turnId;
@@ -1194,6 +1231,7 @@ export class LocalTaskboard {
     const id = String(body.id);
     if (body.action === "retry") {
       const task = this.detail(id);
+      this.assertAcceptedSnapshots(task);
       if (
         !["failed", "cancelled"].includes(task.status) ||
         this.running.has(id)

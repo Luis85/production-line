@@ -5,6 +5,7 @@ import type { ToolAccessView, ToolAccessUpdate } from '../application/tool-polic
 import type { ExecutionProfilesView } from '../application/execution-profiles';
 import type { WorkerSettingsView, SessionView, LocalTaskboardView } from '../application/workspace-view';
 import { reactive } from 'vue';
+import type { CapacityFreshness } from './worker-capacity';
 import type { Status } from '../status/server';
 import type { WorkerWorkspace } from '../status/workspace';
 import type { WorkerConversation } from '../application/conversation';
@@ -19,6 +20,7 @@ export const state = reactive({
   history: null as Awaited<ReturnType<WorkerWorkspace['history']>> | null,
   chat: null as ReturnType<WorkerConversation['snapshot']> | null,
   monitoring: null as ReturnType<typeof workerMonitoring> | null,
+  sessionsReadAt: '', sessionsStale: false, refreshingManually: false,
   definitions: [] as AgentDefinition[], draftEpoch: 0, partialError: '', refreshRevision: 0, accessChecked: false, accessMessage: '', workspaceBusy: false, unlocked: false, paused: false, loading: false, error: '', actionError: '', lastRead: '', draft: '',
 });
 // Read revisions invalidate stale snapshots; access revisions also invalidate private results.
@@ -30,6 +32,13 @@ function adoptSessions(sessions: NonNullable<typeof state.sessions>) {
     state.draft = drafts.get(sessions.selected) ?? '';
   }
   state.sessions = sessions;
+  state.sessionsReadAt = new Date().toISOString();
+  state.sessionsStale = false;
+}
+/** Freshness follows the authoritative capacity response, independent of optional panels. */
+export function getCapacityFreshness(): CapacityFreshness {
+  if (!state.sessions?.capacity || !state.sessionsReadAt) return 'unknown';
+  return state.paused || state.sessionsStale || !!state.error || Date.now() - Date.parse(state.sessionsReadAt) > 15000 ? 'stale' : 'fresh';
 }
 export function taskStatus(value: string) { return ({ draft: 'Draft', queued: 'Queued', running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Stopped', interrupted: 'Interrupted', waiting_input: 'Waiting for your answer', escalated: 'Decision needed' }[value] ?? value); }
 export interface DefinitionAgent { name: string; description: string; instruction: string; model: string; provider: string; unsupported: string[]; requiresAdaptation: boolean; }
@@ -39,48 +48,34 @@ export async function newTask(options: { provider?: string; title?: string; defi
   const provider = current?.provider ?? state.settings?.providers.find(item => item.configured)?.id ?? 'codex-cli';
   return workspaceAction('/api/sessions', { action: 'create', title: 'New task', provider, ...options });
 }
-export type NewTaskOptions = { provider?: string; title?: string; definitionId?: string; agent?: string; useInstructionsOnly?: boolean };
-/** Create once, then dispatch only to the returned task. A failed dispatch remains a draft. */
-export async function createTaskAndSend(options: NewTaskOptions, message: string): Promise<{ sessionId?: string; queued: boolean }> {
-  if (!state.unlocked || state.workspaceBusy || !message.trim()) return { queued: false };
+export interface FeatureRequestCommand {
+  action: 'create'; id: string; title: string; message: string; provider: string;
+  definitionId?: string; agent?: string; useInstructionsOnly?: boolean;
+  files?: { repository: string; paths: string[] };
+}
+export interface FeatureRequestDetail { session: SessionView['records'][number]; chat: NonNullable<typeof state.chat>; featureTracking?: SessionView['featureTracking']; }
+/** One durable admission owns its first message; replaying its exact command cannot dispatch twice. */
+export async function createFeatureRequest(command: FeatureRequestCommand): Promise<FeatureRequestDetail | undefined> {
+  if (!state.unlocked || state.workspaceBusy) return;
   const access = accessGeneration;
-  state.workspaceBusy = true;
-  state.actionError = '';
-  generation++;
-  let sessionId: string | undefined, queued = false;
+  state.workspaceBusy = true; state.actionError = ''; const current = ++generation;
+  let accepted: FeatureRequestDetail | undefined;
   try {
-    const provider = options.provider ?? state.settings?.providers.find(item => item.configured)?.id ?? 'codex-cli';
-    const created: NonNullable<typeof state.sessions> = await request('/api/sessions', 'POST', {
-      action: 'create', title: message.trim().slice(0, 80), provider, ...options,
-    });
-    if (access !== accessGeneration) return { queued: false };
-    sessionId = created.selected;
-    if (!sessionId) throw Error('Task creation could not be confirmed. Refresh the board before trying again.');
+    const result: FeatureRequestDetail = await request('/api/tasks', 'POST', JSON.parse(JSON.stringify(command)));
+    if (access !== accessGeneration || !state.unlocked) return;
+    if (!result?.session?.id || !result.chat) throw Error('The worker did not confirm the created request. Retry the same request to recover its result.');
+    // Preserve admission evidence if later reads fail, without changing anyone's selected conversation.
+    if (current === generation && state.sessions) {
+      if (result.featureTracking) state.sessions.featureTracking = result.featureTracking;
+      if (!state.sessions.records.some(record => record.id === result.session.id)) state.sessions.records.push(result.session);
+    }
     generation++;
-    adoptSessions(created);
-    state.chat = null;
-    state.draft = message;
-    drafts.set(sessionId, message);
-    // The server rejects a changed shared selection instead of sending to another task.
-    const chat = await request('/api/chat', 'POST', { sessionId, message });
-    if (access !== accessGeneration) return { queued: false };
-    queued = true;
-    if (drafts.get(sessionId) === message) drafts.delete(sessionId);
-    if (state.sessions?.selected === sessionId) {
-      state.chat = chat;
-      if (state.draft === message) state.draft = '';
-    }
-  } catch (error) {
-    if (access === accessGeneration) state.actionError = sessionId
-      ? 'Task created, but its first message was not confirmed. Your instructions are kept with this task. Review its conversation before retrying. ' + (error as Error).message
-      : 'Task creation was not confirmed. Refresh the board before trying again. ' + (error as Error).message;
-  } finally {
-    if (access === accessGeneration) {
-      await readConversation(++generation, access);
-      if (access === accessGeneration) { state.workspaceBusy = false; await refresh(); }
-    }
+    accepted = result;
+  } catch (error) { if (access === accessGeneration && state.unlocked) throw error; }
+  finally {
+    if (access === accessGeneration) { state.workspaceBusy = false; await refresh(); }
   }
-  return access === accessGeneration ? { sessionId, queued } : { queued: false };
+  return access === accessGeneration && state.unlocked ? accepted : undefined;
 }
 export async function request<T = any>(path: string, method = 'GET', body?: unknown): Promise<T> {
   const access = accessGeneration;
@@ -91,7 +86,7 @@ export async function request<T = any>(path: string, method = 'GET', body?: unkn
 }
 function relock() {
   if (state.sessions?.selected) drafts.set(state.sessions.selected, state.draft);
-  generation++; accessGeneration++; state.unlocked = false; state.environment = null; state.executionProfiles = null; state.toolAccess = null; state.consumption = null; state.consumptionError = ''; state.history = null; state.chat = null; state.settings = null; state.sessions = null; state.board = null; state.definitions = []; state.actionError = ''; state.workspaceBusy = false;
+  generation++; accessGeneration++; state.unlocked = false; state.environment = null; state.executionProfiles = null; state.toolAccess = null; state.consumption = null; state.consumptionError = ''; state.history = null; state.chat = null; state.settings = null; state.sessions = null; state.sessionsReadAt = ''; state.sessionsStale = false; state.board = null; state.definitions = []; state.actionError = ''; state.workspaceBusy = false;
 }
 export async function lock() {
   try { await request('/api/access', 'DELETE'); state.draftEpoch++; relock(); state.draft = ''; drafts.clear(); state.accessMessage = 'This browser is locked and unsent drafts were cleared. Running tasks continue on the worker.'; }
@@ -110,6 +105,7 @@ export async function unlock(candidate: string) {
 export async function refresh() {
   if (state.loading || !state.unlocked) return;
   state.loading = true; const current = generation;
+  if (state.sessionsReadAt && Date.now() - Date.parse(state.sessionsReadAt) > 15000) state.sessionsStale = true;
   try {
     const results = await Promise.allSettled([request('/status'), request('/monitoring'), request('/api/environment'), request('/api/history'), request('/api/chat/session'), request('/api/settings'), request('/api/taskboard'), request('/api/definitions'), request('/api/execution-profiles'), request('/api/tool-access'), request('/api/consumption')]);
     if (current !== generation) return;
@@ -119,6 +115,7 @@ export async function refresh() {
     if (environment.status === 'fulfilled') state.environment = environment.value;
     if (history.status === 'fulfilled') state.history = history.value;
     if (pair.status === 'fulfilled') { state.chat = pair.value.chat; adoptSessions(pair.value.sessions); }
+    else state.sessionsStale = true;
     if (settings.status === 'fulfilled') state.settings = settings.value;
     if (board.status === 'fulfilled') state.board = board.value;
     if (definitions.status === 'fulfilled') state.definitions = definitions.value.definitions;
@@ -136,12 +133,18 @@ export async function refresh() {
   } catch (error) { if (current === generation) state.error = error instanceof Error ? error.message : 'Worker could not be reached. Check the process and retry.'; }
   finally { state.loading = false; }
 }
+/** Only explicit refreshes animate action buttons; scheduled reads stay visually quiet. */
+export async function refreshFromUser() {
+  if (state.loading || state.refreshingManually || !state.unlocked) return;
+  state.refreshingManually = true;
+  try { await refresh(); } finally { state.refreshingManually = false; }
+}
 async function readConversation(applied: number, access: number) {
   try {
     const pair = await request('/api/chat/session');
     if (applied === generation && access === accessGeneration) { state.chat = pair.chat; adoptSessions(pair.sessions); }
   } catch {
-    if (access === accessGeneration) state.partialError = 'Your action was saved, but the task conversation could not be refreshed. Refresh to see the latest state.';
+    if (access === accessGeneration) { state.sessionsStale = true; state.partialError = 'Your action was saved, but the task conversation could not be refreshed. Refresh to see the latest state.'; }
   }
 }
 export async function chatAction(action: 'send' | 'cancel') {
@@ -220,15 +223,21 @@ async function toolAccessMutation(path: string, body: unknown): Promise<ToolAcce
 export const toolAccessAction = (body: ToolAccessUpdate) => toolAccessMutation('/api/tool-access', body);
 export const toolAccessDiscover = (body: { id: string; expectedRevision: number }) => toolAccessMutation('/api/tool-access/discover', body);
 
-/** Settings writes use the saved policy as a guard; unrelated polling cannot replace an acknowledgement. */
+/** Consumption shares guarded settings transport while returning its own policy acknowledgement. */
 export async function consumptionAction(body: ConsumptionCommand) {
+  return (await guardedSettingsAction(body))?.consumption;
+}
+
+/** Guarded forms need conflict status and their acknowledgement, even if its full snapshot is older. */
+export async function guardedSettingsAction(body: unknown): Promise<WorkerSettingsView | undefined> {
   if (!state.unlocked) return;
-  const access = accessGeneration;
+  const current = generation, access = accessGeneration;
   try {
     const result: WorkerSettingsView = await request('/api/settings', 'POST', body);
     if (access !== accessGeneration || !state.unlocked) return;
-    state.settings = result; generation++;
+    if (current === generation) state.settings = result;
+    generation++;
     await refresh();
-    if (access === accessGeneration && state.unlocked) return result.consumption;
+    if (access === accessGeneration && state.unlocked) return result;
   } catch (error) { if (access === accessGeneration && state.unlocked) throw error; }
 }

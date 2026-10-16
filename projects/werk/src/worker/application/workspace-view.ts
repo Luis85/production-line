@@ -1,3 +1,5 @@
+import type { FeatureTrackingRecord, FeatureTrackingStatus } from './feature-tracking.js';
+import type { WorkerCapacitySnapshot } from './worker-capacity.js';
 import type { ConsumptionPolicy } from './consumption.js';
 import type { ProviderConnection } from './provider-contract.js';
 import type { RepositoryConfiguration } from './repositories.js';
@@ -23,9 +25,11 @@ export interface WorkerSettingsView {
   board: WorkerBoardSettings;
 }
 export interface SessionView {
+  featureTracking?: Pick<FeatureTrackingStatus, 'directory' | 'lastSyncedAt' | 'error'>;
+  capacity?: WorkerCapacitySnapshot;
   selected: string;
   execution: { currentSessionId: string | null; queued: number; maxParallel: number };
-  records: Array<SessionRecord & { requestId?: string; requestPhase?: RequestPhase; requestRevision?: number; status: string; interaction: InteractionView; busy: boolean; messages: number }>;
+  records: Array<SessionRecord & { featureRequest?: FeatureTrackingRecord; requestId?: string; requestPhase?: RequestPhase; requestRevision?: number; status: string; interaction: InteractionView; busy: boolean; messages: number }>;
 }
 export interface LocalTaskboardView {
   settings: WorkerBoardSettings;

@@ -13,37 +13,43 @@ import UInput from "@nuxt/ui/components/Input.vue";
 import UBadge from "@nuxt/ui/components/Badge.vue";
 import UAlert from "@nuxt/ui/components/Alert.vue";
 import UIcon from "@nuxt/ui/components/Icon.vue";
-import { state, refresh, unlock, lock, date, checkAccess } from "./store";
+import { state, refresh, refreshFromUser, unlock, lock, date, checkAccess } from "./store";
 const router = useRouter(),
   tourOpen = ref(false);
 const tourSteps: TourStep[] = [
   {
     title: "Start with your taskboard",
-    text: "Choose New task and send its instructions. The first message queues a task; each follow-up stays in the same session.",
+    text: "Describe what you need in New request. Every request has a Markdown progress record, and follow-ups stay with the same request.",
     target: ".page-heading",
     activate: () => router.push("/taskboard"),
   },
   {
     title: "Keep each task together",
-    text: "Select a task to reopen its transcript. New task creates a separate session. This worker executes one task at a time; additional work waits in its queue.",
+    text: "Select a task to reopen its transcript. New request creates a separate session. This worker executes one task at a time; additional work waits in its queue.",
     target: ".taskboard-groups",
   },
   {
-    title: "Prepare a file task",
-    text: "In the New task tab, Prepare a file task creates a separate session with dedicated instructions and approved files. Review its patch before applying it to your checkout.",
+    title: "Include repository changes",
+    text: "Use the same instructions for all work. When repository changes are needed, allow file changes and choose the repository and approved paths. Review the resulting patch before applying it.",
     target: ".task-interaction",
   },
   {
     title: "Follow your work",
-    text: "History contains chat tasks, file-task results and orchestrator attempts. Open a chat task to continue it, or inspect a file task to review its patch.",
+    text: "History keeps completed work and execution attempts. Open a request to inspect its progress record, results and any patch awaiting review.",
     target: ".taskboard",
     activate: () => router.push("/history"),
   },
   {
-    title: "Inspect and configure",
-    text: "The dashboard shows queues, sessions and host health. Configure model connections here, or enroll with an orchestrator later. This worker also runs on its own.",
+    title: "Understand usage and health",
+    text: "Metrics brings together this worker’s consumption, retained run measurements and host health. Missing measurements stay unavailable.",
     target: ".page-heading",
     activate: () => router.push("/dashboard"),
+  },
+  {
+    title: "Configure your worker",
+    text: "Settings groups providers and accounts, queue limits, consumption, tools and project connections. Choose a section; unsaved edits stay in this tab while you navigate.",
+    target: ".settings-content",
+    activate: () => router.push("/settings"),
   },
 ];
 const route = useRoute(),
@@ -53,8 +59,9 @@ const route = useRoute(),
   showToken = ref(false);
 const links = [
   { path: "/taskboard", label: "Taskboard", icon: "i-lucide-columns-2" },
+  { path: "/dashboard", label: "Metrics", icon: "i-lucide-activity" },
   { path: "/history", label: "History", icon: "i-lucide-history" },
-  { path: "/dashboard", label: "Dashboard", icon: "i-lucide-activity" },
+  { path: "/settings", label: "Settings", icon: "i-lucide-settings-2" },
 ];
 const connected = computed(
   () =>
@@ -193,19 +200,19 @@ watch(
           </div>
         </div></template
       >
-      <template #sidebarFooter
+      <template #mode
         ><UBadge
           :color="state.status?.mode === 'cli' ? 'primary' : 'warning'"
           variant="subtle"
           >{{
             state.status?.mode === "cli"
-              ? "Live task execution"
+              ? "Assignments: live Codex"
               : state.status
-                ? "Orchestrator: simulation"
+                ? "Assignments: simulation"
                 : "Mode unavailable"
           }}</UBadge
         >
-        <p>One worker. Its model, work and environment.</p></template
+      </template
       >
       <template #status
         ><ConnectionStatus
@@ -222,8 +229,9 @@ watch(
           color="neutral"
           variant="ghost"
           icon="i-lucide-compass"
+          aria-label="Tour"
           @click="tourOpen = true"
-          >Tour</UButton
+          ><span class="worker-tour-label">Tour</span></UButton
         ><UButton
           color="neutral"
           variant="ghost"
@@ -238,8 +246,8 @@ watch(
           variant="ghost"
           icon="i-lucide-refresh-cw"
           aria-label="Refresh worker"
-          :loading="state.loading"
-          @click="refresh()"
+          :loading="state.refreshingManually"
+          @click="refreshFromUser()"
         /><UButton
           v-if="state.unlocked"
           color="neutral"

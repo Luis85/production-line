@@ -37,6 +37,7 @@ export interface RepositoryWorktree {
   path: string;
   baseCommit: string;
   reused: boolean;
+  pristine?: boolean;
 }
 export async function repositoryRoot(path: string, signal: AbortSignal, timeoutMs = 30000): Promise<RepositoryRoot> {
   const root = await realpath(path);
@@ -116,7 +117,12 @@ export async function createRepositoryWorktree(root: RepositoryRoot, repositoryI
   if (exists) {
     if (!owner) throw Error('Task worktree already exists without ownership metadata.');
     await ownedWorktree(path, owner, root, signal, timeoutMs);
-    return { repositoryId, repository: root.path, path, baseCommit: owner.baseCommit, reused: true };
+    // Include ignored and untracked files: either can change approved snapshots.
+    // Refuse index flags that could hide changes from Git's worktree comparison.
+    const index = await repositoryGit(path, ['ls-files', '-v', '-z'], signal, timeoutMs);
+    const ordinaryIndex = index.split('\0').filter(Boolean).every(entry => entry.startsWith('H '));
+    const pristine = ordinaryIndex && !(await repositoryGit(path, ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignored'], signal, timeoutMs)).length;
+    return { repositoryId, repository: root.path, path, baseCommit: owner.baseCommit, reused: true, pristine };
   }
   if (!owner) {
     const commit = (await repositoryGit(root.path, ['rev-parse', '--verify', `${baseCommit ?? 'HEAD'}^{commit}`], signal, timeoutMs)).trim();

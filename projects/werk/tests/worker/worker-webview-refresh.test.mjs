@@ -198,3 +198,37 @@ test('tool discovery conflicts remain visible and late discovery cannot repopula
   const discovering = toolAccessDiscover({ expectedRevision: 0, id: 'docs' }); await lock(); pending.resolve(response({ revision: 1, mcp: [{ id: 'private' }] }));
   assert.equal(await discovering, undefined); assert.equal(state.toolAccess, null);
 });
+
+
+test('capacity freshness follows task reads independently of optional history and paused updates', async t => {
+  const { state, refresh, getCapacityFreshness } = await store(t), data = payloads();
+  state.unlocked = true;
+  data['/api/chat/session'].sessions.capacity = { schemaVersion: 1 };
+  globalThis.fetch = async path => path === '/api/history' ? response({ error: 'History unavailable' }, 500) : response(data[path]);
+  await refresh();
+  assert.equal(getCapacityFreshness(), 'fresh');
+  assert.ok(state.sessionsReadAt);
+  state.paused = true; assert.equal(getCapacityFreshness(), 'stale'); state.paused = false;
+  const previousRead = state.sessionsReadAt;
+  globalThis.fetch = async path => path === '/api/chat/session' ? response({ error: 'Task state unavailable' }, 500) : response(data[path]);
+  await refresh();
+  assert.equal(state.sessionsReadAt, previousRead);
+  assert.equal(getCapacityFreshness(), 'stale');
+  globalThis.fetch = async path => response(data[path]); await refresh();
+  assert.equal(getCapacityFreshness(), 'fresh');
+  state.sessionsReadAt = '2020-01-01T00:00:00.000Z'; assert.equal(getCapacityFreshness(), 'stale');
+});
+
+
+test('scheduled refresh keeps action feedback quiet while explicit refresh has a pending state', async t => {
+  const { state, refresh, refreshFromUser } = await store(t), data = payloads(), reads = [];
+  state.unlocked = true;
+  globalThis.fetch = path => new Promise(resolve => reads.push(() => resolve(response(data[path]))));
+  const background = refresh();
+  assert.equal(state.loading, true); assert.equal(state.refreshingManually, false);
+  await refreshFromUser(); assert.equal(state.refreshingManually, false, 'A running background read is coalesced');
+  reads.splice(0).forEach(resolve => resolve()); await background;
+  const manual = refreshFromUser(); assert.equal(state.refreshingManually, true);
+  reads.splice(0).forEach(resolve => resolve()); await manual;
+  assert.equal(state.refreshingManually, false);
+});

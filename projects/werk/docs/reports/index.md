@@ -8,6 +8,7 @@ separately under `docs/handoff`; original source provenance is recorded in the
 
 | Record | Scope |
 | --- | --- |
+| [Worker experience and universal request tracking](worker-experience-review.md) | Product-perspective review, unified Markdown requests, capacity, metrics, settings, stable controls and desktop/mobile evidence |
 | [Architecture and shared boundaries](architecture-review-2026-10-16.md) | Application ports, typed interaction contracts, lifecycle/Git/HTTP mechanics, AST guards, build provenance and explicit remaining debt |
 | [Windows project worker retrospective](windows-project-worker-retrospective.md) | Native Windows rollout friction across 0.3–0.7, fixes and open improvements |
 | [Werk 0.4.0 repository review](repository-review-2026-10-15.md) | Six-perspective review, multi-repository worktrees, routing and admission fixes, security and UI polish, native/Docker/Storybook qualification |

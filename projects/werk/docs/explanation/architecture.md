@@ -95,8 +95,8 @@ retain their destination. Repository import is the primary team workflow and
 manual submissions are an explicit alternative.
 
 `src/worker` owns polling, the execution adapter boundary, local journals,
-configuration, snapshots and an authenticated Vue workspace with Taskboard, History
-and Dashboard. Local chat, file tasks and parent assignments
+configuration, snapshots and an authenticated Vue workspace with Taskboard, Metrics,
+History and Settings. Local chat, file tasks and parent assignments
 share one execution slot. Basic status, health and metrics remain public read-only
 endpoints. Assigned repositories provide retained per-task worktrees. The native
 Linux Codex assignment adapter executes in one of these worktrees and manages

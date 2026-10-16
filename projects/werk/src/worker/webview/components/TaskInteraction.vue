@@ -6,13 +6,15 @@ import UIcon from '@nuxt/ui/components/Icon.vue';
 import UInput from '@nuxt/ui/components/Input.vue';
 import UTextarea from '@nuxt/ui/components/Textarea.vue';
 import TaskIntake from './TaskIntake.vue';
-import RunTask from './RunTask.vue';
+import FeatureRequestNote from './FeatureRequestNote.vue';
 import MessageContent from './MessageContent.vue';
 import RequestGatePanel from './RequestGatePanel.vue';
 import InteractionPanel from './InteractionPanel.vue';
 import type { InteractionTurn, InteractionView } from '../../application/interactions';
-import { state, chatAction, date, request, taskStatus, workspaceAction } from '../store';
-const emit = defineEmits<{ busy: [boolean] }>();
+import { state, chatAction, date, request, taskStatus, workspaceAction, getCapacityFreshness } from '../store';
+import { buildWorkerCapacityView } from '../worker-capacity';
+const emit = defineEmits<{ busy: [boolean]; board: [] }>();
+const capacity = computed(() => buildWorkerCapacityView(state.sessions?.capacity, getCapacityFreshness()));
 const mode = ref<'new' | 'followup'>('new');
 const controlsOpen = ref(false), evidenceOpen = ref(false), gateDetails = ref<HTMLDetailsElement | null>(null);
 const intake = ref<InstanceType<typeof TaskIntake> | null>(null);
@@ -25,11 +27,17 @@ onActivated(() => { active.value = true; });
 onDeactivated(() => { active.value = false; modelGeneration++; });
 onBeforeUnmount(() => { active.value = false; modelGeneration++; });
 const current = computed(() => state.sessions?.records.find(item => item.id === state.sessions?.selected));
+const failedAdmission = computed(() => {
+  const task = state.board?.tasks.find(item => item.sessionId === current.value?.id);
+  return current.value?.continuationBlockedReason || task?.admissionFailure
+    ? { error: current.value?.continuationBlockedReason ?? task?.error, worktree: task?.worktree }
+    : undefined;
+});
 const connection = computed(() => state.settings?.providers.find(item => item.id === current.value?.provider));
 const executing = computed(() => !!current.value && state.sessions?.execution.currentSessionId === current.value.id);
 const busy = computed(() => sending.value || intakeBusy.value || interactionBusy.value || settingsBusy.value);
 const checkpointBlocked = computed(() => !!interaction.value?.pending || !!interaction.value?.latestTurn && ['failed', 'cancelled', 'interrupted'].includes(interaction.value.phase));
-const available = computed(() => state.unlocked && !!current.value && state.chat?.available && !state.workspaceBusy && !busy.value && !checkpointBlocked.value && !current.value?.busy && !state.chat?.busy && !executing.value);
+const available = computed(() => state.unlocked && !!current.value && state.chat?.available && !state.workspaceBusy && !busy.value && !checkpointBlocked.value && !failedAdmission.value && !current.value?.busy && !state.chat?.busy && !executing.value);
 const firstMessage = computed(() => !state.chat?.messages.length);
 const phase = computed(() => state.chat?.phase ?? 'idle');
 watch(busy, value => emit('busy', value));
@@ -64,6 +72,7 @@ async function focusControls() {
   gateDetails.value?.querySelector('summary')?.focus({ preventScroll: true });
   gateDetails.value?.scrollIntoView({ block: 'nearest' });
 }
+async function focusComposer() { await nextTick(); const composer = document.getElementById('chat-message'); composer?.focus({ preventScroll: true }); composer?.scrollIntoView({ block: 'center' }); }
 function toggleEvidence(event: Event) {
   if (!checkpointBlocked.value) evidenceOpen.value = (event.target as HTMLDetailsElement).open;
 }
@@ -72,7 +81,8 @@ async function created(sessionId: string) {
   if (state.sessions?.selected !== sessionId) {
     const creationError = state.actionError;
     const selected = await workspaceAction('/api/sessions', { action: 'select', id: sessionId });
-    if (selected && creationError) state.actionError = creationError;
+    if (!selected) { state.actionError = 'Your request was created, but could not be opened. Select it on the taskboard. ' + state.actionError; return; }
+    if (creationError) state.actionError = creationError;
   }
   mode.value = 'followup'; await nextTick(); document.getElementById('chat-message')?.focus();
 }
@@ -110,14 +120,13 @@ defineExpose({ openNewTask, focusConversation, focusControls });
 </script>
 <template>
   <aside class="task-interaction" aria-labelledby="task-interaction-title">
-    <h2 id="task-interaction-title" tabindex="-1">Task interaction</h2>
+    <header class="interaction-heading"><h2 id="task-interaction-title" tabindex="-1">Task interaction</h2><button type="button" class="back-to-board" @click="emit('board')"><UIcon name="i-lucide-arrow-up" />Back to taskboard</button></header>
     <div class="interaction-tabs" role="tablist" aria-label="Task interaction mode" @keydown="tabKey">
-      <button id="new-task-tab" role="tab" :aria-selected="mode === 'new'" :tabindex="mode === 'new' ? 0 : -1" aria-controls="new-task-pane" :disabled="busy || state.workspaceBusy" @click="switchMode('new')"><UIcon name="i-lucide-plus" />New task</button>
+      <button id="new-task-tab" role="tab" :aria-selected="mode === 'new'" :tabindex="mode === 'new' ? 0 : -1" aria-controls="new-task-pane" :disabled="busy || state.workspaceBusy" @click="switchMode('new')"><UIcon name="i-lucide-plus" />New request</button>
       <button id="followup-task-tab" role="tab" :aria-selected="mode === 'followup'" :tabindex="mode === 'followup' ? 0 : -1" aria-controls="followup-task-pane" :disabled="!current || busy || state.workspaceBusy" @click="switchMode('followup')"><UIcon name="i-lucide-message-circle" />Follow up</button>
     </div>
     <div v-show="mode === 'new'" id="new-task-pane" role="tabpanel" aria-labelledby="new-task-tab">
-      <TaskIntake ref="intake" @created="created" @busy="intakeBusy = $event" />
-      <div class="file-task-entry"><RunTask trigger-label="Prepare a file task" /></div>
+      <TaskIntake ref="intake" @created="created" @busy="intakeBusy = $event" /><p v-if="state.actionError" class="error-text" role="alert">{{ state.actionError }}</p>
     </div>
     <div v-show="mode === 'followup'" id="followup-task-pane" role="tabpanel" aria-labelledby="followup-task-tab">
       <template v-if="current">
@@ -125,28 +134,36 @@ defineExpose({ openNewTask, focusConversation, focusControls });
           <div class="pinned-task-meta"><UIcon name="i-lucide-pin" /><span>Selected task</span><UBadge :color="['waiting_input', 'escalated', 'review', 'needs_rework'].includes(current.status) ? 'warning' : current.status === 'running' ? 'primary' : 'neutral'" variant="subtle">{{ taskStatus(current.status) }}</UBadge></div>
           <h3 id="chat-task-title" tabindex="-1">{{ current.title }}</h3>
           <p>{{ connection?.label ?? current.provider }}<span v-if="savedModel"> · {{ savedModel }}</span></p>
-          <p class="model-source">{{ savedModel ? 'Model recorded in the latest conversation request' : modelError ? 'Saved conversation model unavailable · refresh this worker to retry' : 'Conversation model not yet recorded' }}</p>
+          <p class="model-source">{{ failedAdmission ? 'No model call started for this request' : savedModel ? 'Model recorded in the latest conversation request' : modelError ? 'Saved conversation model unavailable · refresh this worker to retry' : 'Conversation model not yet recorded' }}</p>
+          <button v-if="!checkpointBlocked && !failedAdmission" type="button" class="composer-jump" :disabled="busy || state.workspaceBusy" @click="focusComposer">{{ firstMessage ? 'Write task instructions' : 'Write a follow-up' }}<UIcon name="i-lucide-arrow-down" /></button>
         </header>
-        <p v-if="state.settings?.board.paused" class="interaction-notice" role="status">New starts are paused. Queued work waits until you resume the queue.</p>
+        <FeatureRequestNote v-if="current.id !== 'default' || current.requestId || current.messages" :key="current.id" :session="current" />
+        <section v-if="failedAdmission" class="interaction-notice admission-recovery" role="status" aria-label="Request recovery">
+          <p class="error-text">{{ failedAdmission.error }}</p>
+          <p>The worker did not start this request. Inspect the preserved worktree, then create a new request to continue.</p>
+          <p v-if="failedAdmission.worktree">Preserved worktree: <code>{{ failedAdmission.worktree }}</code></p>
+          <UButton type="button" color="neutral" variant="outline" :disabled="busy || state.workspaceBusy" @click="openNewTask">New request</UButton>
+        </section>
+        <p v-if="capacity.startBlocked || capacity.stale || capacity.state === 'unknown'" class="interaction-notice" role="status">{{ capacity.description }}</p>
         <p v-if="state.chat?.persistenceError" class="interaction-notice error-text" role="alert">This reply could not be saved. Check disk space and state-directory permissions before restarting.</p>
         <p v-if="state.paused && state.chat?.busy" class="interaction-notice" role="status">Task updates are paused. Resume updates in the header to see progress.</p>
-        <details class="task-checkpoint" :class="{ 'has-checkpoint': checkpointBlocked }" :open="checkpointBlocked || evidenceOpen" @toggle="toggleEvidence">
+        <details v-if="!failedAdmission" class="task-checkpoint" :class="{ 'has-checkpoint': checkpointBlocked }" :open="checkpointBlocked || evidenceOpen" @toggle="toggleEvidence">
           <summary>Saved task context &amp; evidence</summary>
           <InteractionPanel :current-status="current.status" @change="interaction = $event" @busy="interactionBusy = $event" />
         </details>
-        <p v-if="firstMessage" class="followup-empty">Describe the outcome you need. The first message queues this task.</p>
-        <div v-else :key="current.id" class="task-conversation" role="log" aria-live="polite" aria-relevant="additions text" aria-label="Task conversation">
+        <p v-if="firstMessage && !failedAdmission" class="followup-empty">Describe the outcome you need. The worker records it in this feature request.</p>
+        <div v-else-if="!firstMessage" :key="current.id" class="task-conversation" role="log" aria-live="polite" aria-relevant="additions text" aria-label="Task conversation" tabindex="0">
           <article v-for="message in state.chat?.messages" :key="message.id" class="task-message" :class="message.role">
             <div class="task-message-label"><UIcon :name="message.role === 'user' ? 'i-lucide-user-round' : 'i-lucide-sparkles'" /><strong>{{ message.role === 'user' ? 'You' : 'Worker model' }}</strong><time :datetime="message.at">{{ date(message.at) }}</time></div>
             <UBadge v-if="['error', 'cancelled'].includes(message.state)" :color="message.state === 'error' ? 'error' : 'neutral'" variant="subtle">{{ message.state === 'error' ? 'Failed' : 'Cancelled' }}</UBadge>
-            <p v-if="message.state === 'pending'" class="pending-message">{{ phase === 'queued' ? state.settings?.board.paused ? 'Queued · new starts are paused.' : 'Queued · waiting for this worker.' : 'Working on this task…' }}</p>
+            <p v-if="message.state === 'pending'" class="pending-message">{{ phase === 'queued' ? capacity.stale ? 'Queued · refresh to see current start conditions.' : capacity.startBlocked ? 'Queued · new model calls are on hold.' : 'Queued · waiting for this worker.' : capacity.stale ? 'Last reported: task in progress.' : 'Working on this task…' }}</p>
             <MessageContent v-else :text="message.text" :markdown="message.role === 'assistant' && message.state === 'complete'" :class="{ 'error-text': message.state === 'error' }" />
           </article>
         </div>
-        <p v-if="!state.chat?.available" class="interaction-notice">This connection is not ready. Open <RouterLink to="/dashboard#provider-connections">Dashboard</RouterLink> to configure it.</p>
-        <p v-if="checkpointBlocked" class="followup-guidance" role="status">Use the answer or resume controls above to continue. Your follow-up draft stays here.</p>
-        <p v-else-if="current.busy || state.chat?.busy || executing" class="followup-guidance">{{ executing && !current.busy && !state.chat?.busy ? 'This task is still active. Draft a follow-up now; send it when the worker finishes.' : 'Draft a follow-up now; send it when this task finishes.' }} New task queues separate work.</p>
-        <form class="followup-composer" @submit.prevent="act('send')">
+        <p v-if="!failedAdmission && !state.chat?.available" class="interaction-notice">This connection is not ready. Open <RouterLink to="/settings#provider-connections">Settings</RouterLink> to configure it.</p>
+        <p v-if="!failedAdmission && checkpointBlocked" class="followup-guidance" role="status">Use the answer or resume controls above to continue. Your follow-up draft stays here.</p>
+        <p v-else-if="!failedAdmission && (current.busy || state.chat?.busy || executing)" class="followup-guidance">{{ executing && !current.busy && !state.chat?.busy ? 'This task is still active. Draft a follow-up now; send it when the worker finishes.' : 'Draft a follow-up now; send it when this task finishes.' }} New request queues separate work.</p>
+        <form v-if="!failedAdmission" class="followup-composer" @submit.prevent="act('send')">
           <label for="chat-message">{{ firstMessage ? 'Task instructions' : 'Follow-up for this task' }}</label>
           <UTextarea id="chat-message" v-model="state.draft" :rows="4" :maxrows="10" autoresize :maxlength="8000" :disabled="sending || state.workspaceBusy" :placeholder="firstMessage ? 'Describe the outcome you need…' : 'Add context or revise what this task should do next…'" class="w-full" aria-describedby="followup-draft-note" @keydown="keydown" />
           <p id="followup-draft-note" class="followup-draft-note">{{ state.draft.length.toLocaleString() }} / 8,000 · Ctrl / ⌘ + Enter to send</p>
@@ -156,8 +173,8 @@ defineExpose({ openNewTask, focusConversation, focusControls });
           </div>
           <p v-if="state.actionError" class="error-text" role="alert">{{ state.actionError }}</p>
         </form>
-        <p class="draft-privacy">Drafts stay with each task in this tab until you reload or lock it.</p>
-        <details v-if="current.requestId" ref="gateDetails" class="task-secondary request-controls" :open="controlsOpen" @toggle="controlsOpen = ($event.target as HTMLDetailsElement).open">
+        <p v-if="!failedAdmission" class="draft-privacy">Drafts stay with each task in this tab until you reload or lock it.</p>
+        <details v-if="current.requestId && !failedAdmission" ref="gateDetails" class="task-secondary request-controls" :open="controlsOpen" @toggle="controlsOpen = ($event.target as HTMLDetailsElement).open">
           <summary>Request review &amp; controls</summary>
           <RequestGatePanel :request-id="current.requestId" :session-id="current.id" />
         </details>
@@ -183,9 +200,11 @@ defineExpose({ openNewTask, focusConversation, focusControls });
 </template>
 <style scoped>
 .task-interaction { min-width: 0; color: var(--ui-text); }
-h2 { margin: 0 0 18px; font-size: 1.5rem; line-height: 1.3; font-weight: 650; letter-spacing: -.02em; color: var(--ui-text-highlighted); }
+.interaction-heading { margin-bottom: var(--space-4); }
+.back-to-board { display: none; }
+h2 { margin: 0; font-size: 1.5rem; line-height: 1.3; font-weight: 650; letter-spacing: -.02em; color: var(--ui-text-highlighted); }
 .interaction-tabs { display: grid; grid-template-columns: 1fr 1fr; padding: 3px; gap: 3px; border: 1px solid #3a4c56; border-radius: 9px; margin-bottom: 28px; background: #14232b; }
-.interaction-tabs button { display: flex; align-items: center; justify-content: center; gap: 10px; border-radius: 6px; min-height: 39px; padding: 7px; font-size: .8125rem; cursor: pointer; }
+.interaction-tabs button { display: flex; align-items: center; justify-content: center; gap: 10px; border-radius: 6px; min-height: 44px; padding: 7px; font-size: .8125rem; cursor: pointer; }
 .interaction-tabs button[aria-selected="true"] { color: #09221c; background: #8be0b8; font-weight: 650; }
 .interaction-tabs button:disabled { opacity: .5; cursor: default; }
 .interaction-tabs :deep(.iconify) { width: 19px; height: 19px; }
@@ -194,45 +213,45 @@ h2 { margin: 0 0 18px; font-size: 1.5rem; line-height: 1.3; font-weight: 650; le
 .pinned-task-meta > :last-child { margin-left: auto; }
 .pinned-task h3 { margin: 12px 0 8px; font-size: 1.125rem; line-height: 1.4; font-weight: 650; overflow-wrap: anywhere; color: var(--ui-text-highlighted); }
 .pinned-task p { margin: 0; color: var(--ui-text-muted); font-size: .8125rem; overflow-wrap: anywhere; }
-.pinned-task .model-source { margin-top: 5px; font-size: .6875rem; color: var(--ui-text-dimmed); }
-.interaction-notice { padding: 12px; margin: 12px 0; font-size: .8125rem; line-height: 1.6; background: #26332e; border-left: 2px solid #8be0b8; border-radius: 0 6px 6px 0; }
+.pinned-task .model-source { margin-top: var(--space-2); font-size: .75rem; color: var(--ui-text-muted); }
+.composer-jump, .back-to-board { align-items: center; gap: var(--space-2); min-height: 44px; color: var(--ui-primary); font-size: .8125rem; cursor: pointer; }
+.composer-jump { display: inline-flex; margin-top: var(--space-2); }
+.composer-jump:disabled { opacity: .5; cursor: default; }
+.interaction-notice { padding: 12px; margin: 12px 0; font-size: .8125rem; line-height: 1.6; background: #26332e; border: 1px solid #405b4e; border-radius: 8px; }
+.admission-recovery p { margin-bottom: var(--space-3); overflow-wrap: anywhere; }
+.admission-recovery code { display: block; margin-top: var(--space-1); }
+.admission-recovery button { min-height: 44px; }
 .task-conversation { margin-block: 20px; min-width: 0; max-height: 540px; overflow-y: auto; scrollbar-gutter: stable; overscroll-behavior: contain; }
-.task-message { margin-bottom: 20px; padding: 3px 0; font-size: .8125rem; line-height: 1.6; overflow-wrap: anywhere; }
+.task-message { margin-bottom: 20px; padding: 3px 0; font-size: .9375rem; line-height: 1.7; overflow-wrap: anywhere; }
 .task-message.user { padding: 14px; border-radius: 8px; background: #1d303b; }
 .task-message-label { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 9px; }
 .task-message-label :deep(.iconify) { color: #8be0b8; }
-.task-message-label time { color: var(--ui-text-muted); font-size: .625rem; margin-left: auto; }
+.task-message-label time { color: var(--ui-text-muted); font-size: .75rem; margin-left: auto; }
 .task-message :deep(pre) { max-width: 100%; overflow: auto; font-size: .75rem; }
 .pending-message, .followup-empty, .followup-guidance { font-size: .8125rem; line-height: 1.6; color: var(--ui-text-muted); margin: 12px 0; }
 .followup-composer { display: grid; gap: 9px; margin-top: 20px; }
 .followup-composer > label { font-weight: 600; font-size: .8125rem; }
-.followup-composer :deep(textarea) { background: #111e26; font-size: .875rem; line-height: 1.6; }
+.followup-composer :deep(textarea) { background: #111e26; font-size: 1rem; line-height: 1.6; }
 .followup-draft-note { font-size: .6875rem; color: var(--ui-text-muted); margin: 0; }
 .followup-actions { display: flex; justify-content: flex-end; margin-top: 7px; }
-.followup-actions button { min-height: 42px; }
+.followup-actions button { min-height: 44px; }
 .draft-privacy { font-size: .6875rem; line-height: 1.5; color: var(--ui-text-dimmed); margin: 14px 0 24px; }
 .task-checkpoint { margin-bottom: 18px; font-size: .8125rem; }
-.task-checkpoint > summary { cursor: pointer; color: var(--ui-text-muted); padding-block: 5px; }
+.task-checkpoint > summary { cursor: pointer; color: var(--ui-text-muted); min-height: 44px; padding-block: var(--space-3); }
 .task-checkpoint.has-checkpoint > summary { display: none; }
 .task-checkpoint.has-checkpoint :deep(.interaction-panel) { margin-top: 0; padding-top: 0; border-top: 0; }
 .request-controls :deep(.request-gate-panel) { margin-top: 16px; }
 .task-secondary { border-top: 1px solid var(--ui-border); padding-block: 15px; font-size: .8125rem; }
-.task-secondary summary { cursor: pointer; }
+.task-secondary summary { min-height: 44px; padding-block: var(--space-3); cursor: pointer; }
 .task-secondary p { margin-block: 12px; color: var(--ui-text-muted); font-size: .75rem; }
 .task-secondary pre { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .75rem; }
 .task-secondary .settings-form { margin-top: 15px; }
-.file-task-entry { border-top: 1px solid var(--ui-border); margin-top: 24px; padding-top: 18px; }
-.file-task-entry :deep(.run-task) { margin: 0; padding: 0; border: 0; }
-.file-task-entry :deep(.run-task > .actions) { align-items: flex-start; flex-direction: column; gap: 7px; }
-.file-task-entry :deep(.run-task > .actions > button) { border: 0; box-shadow: none; padding-inline: 0; background: transparent; color: var(--ui-primary); font-size: .875rem; }
-.file-task-entry :deep(.run-task > .actions > .muted) { font-size: .75rem; line-height: 1.6; }
-.file-task-entry :deep(.settings-form) { margin-top: 18px; }
 :deep(.interaction-panel), :deep(.request-gate-panel) { font-size: .8125rem; }
 :deep(.interaction-panel .facts) { grid-template-columns: 1fr; }
 :deep(.interaction-panel .section-heading) { align-items: flex-start; flex-wrap: wrap; }
 :deep(.interaction-panel h3) { font-size: .9375rem; }
 :deep(.interaction-panel button) { max-width: 100%; white-space: normal; }
 a { color: var(--ui-primary); }
-@media (max-width: 1000px) { .task-conversation { max-height: none; overflow: visible; } }
+@media (max-width: 1000px) { .interaction-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); } .back-to-board { display: inline-flex; } .task-conversation { max-height: 55dvh; overflow-y: auto; } }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
 </style>

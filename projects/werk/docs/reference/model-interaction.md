@@ -3,7 +3,11 @@
 The local worker owns prompt state and continuation. The adapter translates a
 versioned request to a supported provider and returns a typed result. This contract
 covers local Chat, approved-file tasks and their feature requests. Original remote
-orchestrator executions retain their lease and execution authority.
+orchestrator executions retain their lease and execution authority. The unified
+webview composer exposes optional approved-file permission without changing these
+execution contracts. Every task also has a generated Markdown progress record;
+follow-ups and checkpoints update it without replacing authoritative source notes
+or the private journal. See [automatic task tracking](feature-requests.md#automatic-task-tracking).
 
 ## Capabilities and dispatch
 

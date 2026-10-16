@@ -1,3 +1,4 @@
+import type { WorkerCapacityContext } from '../application/worker-capacity.js';
 import type { ConsumptionRuntime } from '../application/consumption.js';
 import { consumptionModel } from '../application/consumption-model.js';
 import { join } from 'node:path';
@@ -25,10 +26,11 @@ export function workspaceModelFactory(directory: string, settings: WorkerSetting
   };
 }
 export function createWorkerDefinitions(directory: string) { return new WorkerDefinitions(definitionStorage(directory)); }
-export function createWorkerSessions(directory: string, settings: WorkerSettingsPort, model: typeof modelFor = modelFor, requests?: RequestJournal, activeOutsideChat: () => number = () => 0, consumption?: ConsumptionRuntime) {
+export function createWorkerSessions(directory: string, settings: WorkerSettingsPort, model: typeof modelFor = modelFor, requests?: RequestJournal, activeOutsideChat: () => number = () => 0, consumption?: ConsumptionRuntime, capacity?: Pick<WorkerCapacityContext, 'remote'>) {
   return new WorkerSessions(settings, {
     model: workspaceModelFactory(directory, settings, model, consumption), storage: sessionCatalogStorage(directory),
     consumptionBlocked: consumption ? () => consumption.status().blocked : undefined,
+    capacity: capacity ? { remote: capacity.remote, consumption: () => consumption?.status() ?? null } : undefined,
     requests: requests ?? new WorkerRequestJournal(directory), interactions: new WorkerInteractionJournal(directory), runs: new WorkerRunJournal(directory),
     definitions: createWorkerDefinitions(directory), activeOutsideChat,
   });

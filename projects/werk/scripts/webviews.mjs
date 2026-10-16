@@ -10,7 +10,7 @@ export function webviewConfig(root, outDir, standalone = false) {
     configFile: false, root, base: standalone ? './' : '/',
     plugins: [vue(), ui({ dts: false, autoImport: false, components: false, colorMode: false,
       ui: { colors: { primary: 'emerald', neutral: 'slate' } },
-      icon: { clientBundle: { scan: true, icons: ['lucide:shield-check'], sizeLimitKb: 256 } } })],
+      icon: { clientBundle: { scan: { globInclude: ['**/*.{vue,jsx,tsx,md,mdc,mdx,yml,yaml,ts}'] }, icons: ['lucide:shield-check'], sizeLimitKb: 256 } } })],
     build: { target: 'es2022', emptyOutDir: true, outDir,
       ...(standalone ? { cssCodeSplit: false, assetsInlineLimit: Infinity, rollupOptions: { output: { inlineDynamicImports: true } } } : {}) }
   };

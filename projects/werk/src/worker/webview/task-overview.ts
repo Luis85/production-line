@@ -73,7 +73,7 @@ interface Evidence {
   featureFile?: FeatureFile;
   history?: HistoryRow;
 }
-const sourceLabels: Record<TaskOverviewSource, string> = { chat: 'Chat', file: 'File task', assigned: 'Assigned', project: 'Project request' };
+const sourceLabels: Record<TaskOverviewSource, string> = { chat: 'Local request', file: 'Local request', assigned: 'Assigned', project: 'Project request' };
 const labels: Record<string, string> = {
   draft: 'Draft', queued: 'Queued', running: 'Running', completed: 'Turn completed', done: 'Request done',
   review: 'Review required', failed: 'Failed', interrupted: 'Interrupted', cancelled: 'Stopped',

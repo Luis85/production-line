@@ -32,9 +32,10 @@ real Git PR operations in this starter.
 | Analyze | What can be compared reliably? | Portfolio filters, sample counts, latest-window disclosure and unknown cost/quality states |
 | Review delivery | Is the feature accepted? | Target workflow requires human review and verified feature-PR merge; mock status never implies this |
 
-The worker has three workspaces: **Chat** creates or continues a task, **History**
-finds conversations and local file-task evidence, and **Dashboard** shows current
-work, queue controls and operational health. A standalone worker owns its local
+The worker separates four needs: **Taskboard** creates or continues tasks and
+shows capacity, **Metrics** shows operational observations, **History** finds saved
+work and evidence, and **Settings** provides focused configuration sections.
+A standalone worker owns its local
 tasks, provider connections and sessions. Chat, file tasks and parent assignments
 share one execution slot; queued work does not add capacity. Parent-assigned work
 remains under the owning orchestrator's authority. Local patches require human

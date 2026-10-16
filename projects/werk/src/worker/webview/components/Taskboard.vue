@@ -17,10 +17,7 @@ import { state, workspaceAction, request, date } from "../store";
 import type { LocalTask } from "../../application/local-tasks";
 const route = useRoute(),
   router = useRouter();
-const capacity = ref(16),
-  remoteQueue = ref(0),
-  order = ref("fifo"),
-  busy = ref(false),
+const busy = ref(false),
   archived = ref(false),
   detail = ref<LocalTask | null>(null),
   removing = ref(false),
@@ -152,17 +149,6 @@ function clearFilters() {
   status.value = "all";
   archived.value = true;
 }
-watch(
-  () => !!state.settings,
-  (value) => {
-    if (value && state.settings) {
-      capacity.value = state.settings.board.queueCapacity;
-      remoteQueue.value = state.settings.board.orchestratorQueue;
-      order.value = state.settings.board.order;
-    }
-  },
-  { immediate: true },
-);
 async function readDetail(id: string, focus = false) {
   const revision = ++detailRevision;
   detailLoading.value = true;
@@ -230,6 +216,8 @@ onDeactivated(() => {
 });
 async function action(body: { id: string; action: string; priority?: number }) {
   if (busy.value) return;
+  const failedAdmission = state.board?.tasks.find(item => item.id === body.id)?.admissionFailure || (detail.value?.id === body.id && detail.value.admissionFailure);
+  if (body.action === "retry" && failedAdmission) return;
   busy.value = true;
   actionError.value = "";
   try {
@@ -276,20 +264,6 @@ async function openConversation() {
     busy.value = false;
   }
 }
-async function save() {
-  busy.value = true;
-  try {
-    await workspaceAction("/api/settings", {
-      board: {
-        queueCapacity: capacity.value,
-        orchestratorQueue: remoteQueue.value,
-        order: order.value,
-      },
-    });
-  } finally {
-    busy.value = false;
-  }
-}
 function download() {
   if (!detail.value?.patch) return;
   const url = URL.createObjectURL(
@@ -312,8 +286,8 @@ function download() {
       <div>
         <h2 id="taskboard-title" tabindex="-1">File tasks</h2>
         <p class="page-note">
-          Patch-producing tasks from Prepare a file task in Task interaction. Each owns a separate
-          session and runs in this worker’s shared queue.
+          Requests with permission to change approved repository files. Each request keeps a Markdown
+          record of its progress and results.
         </p>
       </div>
       <UButton
@@ -367,8 +341,8 @@ function download() {
     </p>
     <div v-if="!allTasks.length" class="compact-empty">
       <p>
-        No file tasks yet. Choose Prepare a file task in Task interaction to receive a patch for
-        review.
+        No file changes requested yet. Choose New request on the taskboard, then open Repository files
+        to allow changes and receive a patch for review.
       </p>
       <UButton to="/taskboard" color="neutral" variant="outline">Open taskboard</UButton>
     </div>
@@ -430,11 +404,15 @@ function download() {
         </p>
         <p>{{ detail.instruction }}</p>
         <RequestGatePanel
-          v-if="detail.requestId"
+          v-if="detail.requestId && !detail.admissionFailure"
           :request-id="detail.requestId"
           :session-id="detail.sessionId"
         />
         <p v-if="detail.error" class="error-text">{{ detail.error }}</p>
+        <div v-if="detail.admissionFailure" class="notice" role="status">
+          <p>This request stopped before approved file snapshots were saved. Inspect the preserved worktree, then use New request on the taskboard to continue.</p>
+          <p v-if="detail.worktree" class="break-anywhere">Preserved worktree: <code>{{ detail.worktree }}</code></p>
+        </div>
         <p v-if="detail.summary">{{ detail.summary }}</p>
         <p class="break-anywhere">{{ detail.repository }}</p>
         <ul>
@@ -476,7 +454,7 @@ function download() {
             {{ detail.priority === 2 ? "Normal priority" : "Raise priority" }}
           </UButton>
           <UButton
-            v-if="['failed', 'cancelled'].includes(detail.status)"
+            v-if="!detail.admissionFailure && ['failed', 'cancelled'].includes(detail.status)"
             :disabled="busy"
             @click="action({ id: detail.id, action: 'retry' })"
           >
@@ -540,58 +518,7 @@ function download() {
         </details>
       </template>
     </section>
-    <details class="monitor-section">
-      <summary>Configure worker queue</summary>
-      <form class="settings-form" @submit.prevent="save">
-        <div class="settings-grid">
-          <div>
-            <label for="local-capacity"
-              >Chat + file-task capacity · queued + running</label
-            >
-            <UInput
-              id="local-capacity"
-              v-model.number="capacity"
-              type="number"
-              min="1"
-              max="64"
-              required
-              class="w-full"
-            />
-          </div>
-          <div>
-            <label for="remote-queue">Extra orchestrator queue places</label>
-            <UInput
-              id="remote-queue"
-              v-model.number="remoteQueue"
-              type="number"
-              min="0"
-              max="64"
-              required
-              class="w-full"
-            />
-          </div>
-          <div>
-            <label for="queue-order">File-task start order</label>
-            <USelect
-              id="queue-order"
-              v-model="order"
-              :items="[
-                { label: 'First in, first out', value: 'fifo' },
-                { label: 'High priority first', value: 'priority' },
-              ]"
-              class="w-full"
-            />
-          </div>
-        </div>
-        <p class="page-note">
-          This worker executes one task at a time across chat, file tasks and
-          orchestrator assignments. Add more workers to run tasks in parallel.
-          Extra queue places hold orchestrator assignments while their leases
-          are renewed; lowering capacity keeps accepted work.
-        </p>
-        <UButton type="submit" :loading="busy">Save queue settings</UButton>
-      </form>
-    </details>
+    <p class="page-note">Queue capacity and task duration are managed in <RouterLink to="/settings#queue">Settings</RouterLink>.</p>
     <section v-if="state.status?.queuedTasks?.length" class="monitor-section">
       <h3>Waiting from the orchestrator</h3>
       <ul class="profile-list">

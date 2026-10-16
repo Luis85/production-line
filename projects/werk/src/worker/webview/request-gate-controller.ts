@@ -18,7 +18,11 @@ export interface GateControllerState {
   view: WorkerRequest | null;
   rows: RequestSummary[];
   selected: string;
+  /** Visible initial/manual reload; background revalidation stays quiet. */
   loading: boolean;
+  refreshing: boolean;
+  loaded: boolean;
+  stale: boolean;
   busy: boolean;
   error: string;
   notice: string;
@@ -52,6 +56,9 @@ export const initialGateState = (): GateControllerState => ({
   rows: [],
   selected: "",
   loading: false,
+  refreshing: false,
+  loaded: false,
+  stale: false,
   busy: false,
   error: "",
   notice: "",
@@ -61,6 +68,7 @@ export class RequestGateController {
   private generation = 0;
   private disposed = false;
   private active = true;
+  private forceDetail = false;
   private dependencies: Dependencies;
   constructor(dependencies: Dependencies) {
     this.dependencies = dependencies;
@@ -86,6 +94,9 @@ export class RequestGateController {
       view: null,
       rows: [],
       loading: false,
+      refreshing: false,
+      loaded: false,
+      stale: false,
       busy: false,
       error: "",
       notice: "",
@@ -111,13 +122,18 @@ export class RequestGateController {
       this.disposed || !this.active ||
       !context.unlocked ||
       !context.sessionId ||
-      state.loading ||
       state.busy
     )
       return;
+    if (state.refreshing) {
+      if (force) { state.loading = true; this.forceDetail = true; }
+      return;
+    }
     const generation = ++this.generation,
       owner = context.sessionId;
-    state.loading = true;
+    state.refreshing = true;
+    state.loading = force || !state.loaded;
+    this.forceDetail = force;
     try {
       const list = (await this.dependencies.api({
         action: "list",
@@ -139,33 +155,44 @@ export class RequestGateController {
       const id = this.identity;
       if (!id) {
         state.view = null;
+        state.loaded = true;
+        state.stale = false;
         state.error = "";
         this.dependencies.changed(null);
         return;
       }
       const summary = list.rows.find((row) => row.id === id);
       if (
-        !force &&
+        !this.forceDetail &&
+        !state.stale &&
         state.view?.id === id &&
         (!summary || summary.revision === state.view.revision)
       ) {
         state.error = "";
         return;
       }
+      if (state.view?.id !== id || (summary && summary.revision !== state.view.revision))
+        state.stale = true;
       const result = (await this.dependencies.api({
         action: "get",
         requestId: id,
       })) as WorkerRequest;
       if (!this.valid(generation, owner) || id !== this.identity) return;
       state.view = result;
+      state.loaded = true;
+      state.stale = false;
       state.error = "";
       this.dependencies.changed(result);
     } catch (failure) {
-      if (this.valid(generation, owner))
+      if (this.valid(generation, owner)) {
+        state.stale = true;
         state.error = (failure as Error).message;
+      }
     } finally {
-      if (generation === this.generation && !this.disposed)
+      if (generation === this.generation && !this.disposed) {
         state.loading = false;
+        state.refreshing = false;
+      }
     }
   }
   async mutate(fields: GateCommandFields) {
@@ -175,6 +202,7 @@ export class RequestGateController {
       !this.dependencies.current().unlocked ||
       state.busy ||
       state.loading ||
+      state.stale ||
       operations.has(state.view.id)
     )
       return;
@@ -191,7 +219,10 @@ export class RequestGateController {
     const { state, operations } = this.dependencies,
       context = this.dependencies.current();
     if (this.disposed || !this.active || !context.unlocked || state.busy) return;
-    const generation = this.generation;
+    // A guarded action supersedes a read begun from the previous revision.
+    const generation = ++this.generation;
+    state.refreshing = false;
+    state.loading = false;
     state.busy = true;
     state.error = "";
     state.notice = "";
@@ -209,6 +240,8 @@ export class RequestGateController {
       )
         return;
       state.view = result.request;
+      state.loaded = true;
+      state.stale = false;
       this.dependencies.changed(result.request);
       state.notice =
         result.dispatch?.state === "not_admitted"
@@ -228,8 +261,10 @@ export class RequestGateController {
         operations.get(command.requestId)?.operationId === command.operationId
       )
         operations.delete(command.requestId);
-      if (this.valid(generation, context.sessionId))
+      if (this.valid(generation, context.sessionId)) {
+        if (status === 409) state.stale = true;
         state.error = (failure as Error).message;
+      }
     } finally {
       if (generation === this.generation && !this.disposed) state.busy = false;
     }

@@ -69,3 +69,49 @@ test('deactivation preserves uncertain mutation retry identity without adopting 
   assert.equal(f.operationCount, 1); assert.equal(f.operations.size, 0);
   assert.deepEqual(f.calls.filter(call => call.action === 'execute')[0], f.calls.filter(call => call.action === 'execute')[1]);
 });
+
+
+test('background gate polls keep valid controls steady while manual refresh remains visible', async () => {
+  const current = record(), pending = deferred(); let polls = 0;
+  const f = fixture(command => command.action === 'list' ? ++polls === 1 ? list([current]) : pending.promise : current);
+  await f.controller.load(true);
+  const read = f.controller.load();
+  assert.equal(f.state.refreshing, true); assert.equal(f.state.loading, false); assert.equal(f.state.stale, false); assert.equal(f.state.busy, false);
+  await f.controller.load(true); assert.equal(f.state.loading, true);
+  pending.resolve(list([current])); await read;
+  assert.equal(f.state.loading, false); assert.equal(f.state.refreshing, false);
+  assert.equal(f.calls.filter(command => command.action === 'get').length, 2);
+});
+test('an empty request list does not reopen its loading panel on each background poll', async () => {
+  const pending = deferred(); let polls = 0;
+  const f = fixture(() => ++polls === 1 ? list([]) : pending.promise);
+  await f.controller.load(true); const read = f.controller.load();
+  assert.equal(f.state.view, null); assert.equal(f.state.loaded, true); assert.equal(f.state.loading, false);
+  pending.resolve(list([])); await read;
+});
+test('a guarded gate mutation remains actionable during polling and fences the old read', async () => {
+  const current = record(), poll = deferred(), saved = deferred(); let reads = 0;
+  const f = fixture(command => command.action === 'list' ? ++reads === 1 ? list([current]) : poll.promise : command.action === 'get' ? current : saved.promise);
+  await f.controller.load(true); const read = f.controller.load();
+  const mutation = f.controller.mutate({ action: 'execute' });
+  assert.equal(f.state.busy, true); assert.equal(f.state.loading, false); assert.equal(f.operationCount, 1);
+  saved.resolve({ request: record(current.id, 2), duplicate: false }); await mutation;
+  poll.resolve(list([current])); await read;
+  assert.equal(f.state.view.revision, 2); assert.equal(f.state.busy, false); assert.equal(f.operations.size, 0);
+});
+test('observed request revision changes block mutations until the new detail is available', async () => {
+  const current = record(), newer = record(current.id, 2), detail = deferred(); let reads = 0;
+  const f = fixture(command => command.action === 'list' ? list([++reads === 1 ? current : newer]) : reads === 1 ? current : detail.promise);
+  await f.controller.load(true); const read = f.controller.load(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.state.loading, false); assert.equal(f.state.stale, true);
+  await f.controller.mutate({ action: 'execute' }); assert.equal(f.operationCount, 0);
+  detail.resolve(newer); await read; assert.equal(f.state.stale, false); assert.equal(f.state.view.revision, 2);
+});
+test('failed gate revalidation preserves the view but blocks changes until recovery', async () => {
+  const current = record(); let failed = false;
+  const f = fixture(command => failed ? Promise.reject(Error('Offline')) : command.action === 'list' ? list([current]) : current);
+  await f.controller.load(true); failed = true; await f.controller.load();
+  assert.equal(f.state.view.id, current.id); assert.equal(f.state.stale, true);
+  await f.controller.mutate({ action: 'execute' }); assert.equal(f.operationCount, 0);
+  failed = false; await f.controller.load(); assert.equal(f.state.stale, false); assert.equal(f.state.error, '');
+});

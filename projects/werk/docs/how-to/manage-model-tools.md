@@ -1,6 +1,6 @@
 # Manage model tools from the worker
 
-Open **Dashboard → Tool access** in the unlocked worker webview. Its setup
+Open **Settings → Tools & MCP** in the unlocked worker webview. Its setup
 shortcut opens the editor directly. Tool access is separate from provider sign-in,
 execution profiles and agent definitions. All grants start disabled, including
 after upgrading an existing worker.

@@ -58,7 +58,7 @@ review real outputs before publication or merge.
 
 Local model tools are disabled by default. An authenticated worker operator can
 grant read-only task-worktree access, fixed command presets, web origins and
-individual MCP tools through Dashboard. Tool results are sent to the selected
+individual MCP tools through Settings → Tools & MCP. Tool results are sent to the selected
 model provider. Commands and MCP servers run with their configured account or
 remote-service authority; a Git worktree does not contain their side effects.
 Private MCP credentials stay in worker state, outside the public tool manifest.

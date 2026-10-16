@@ -29,7 +29,7 @@ does not bypass branch protection or merge feature branches.
 
 ## Connect the worker
 
-Install and start a [project worker](project-worker.md). In its Dashboard:
+Install and start a [project worker](project-worker.md). In its Settings:
 
 1. Assign the local Git repository. Accept the detected installation repository
    if appropriate, or add the repository explicitly.
@@ -39,7 +39,7 @@ Install and start a [project worker](project-worker.md). In its Dashboard:
    to the local worker.
 3. Review [model tool access](manage-model-tools.md). Shared requests inherit the
    worker's granted tools; a checked-in request or check file cannot grant access.
-4. Pause new starts and finish or cancel queued and running work. In **Connect
+4. Pause new starts and finish or cancel queued and running work. In **Shared request intake → Connect
    shared requests**, choose the assigned repository, remote name, shared branch,
    workflow file and polling interval. Save, then resume new starts.
 

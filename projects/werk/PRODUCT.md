@@ -15,20 +15,23 @@ visual navigation, dedicated dashboards, focused editors and a replayable tour.
 
 ## Worker Scope
 
-The worker uses Vue with Nuxt UI and three primary pages: Taskboard, History
-and Dashboard. Taskboard (`/taskboard`) opens after unlock. The selected third
-mockup direction puts the task overview first: a Running now strip above an
-asymmetric Needs you / Up next board, with Completed and Drafts disclosed below.
-Chat tasks, approved-file tasks, assigned work and project requests retain their
-source labels and identifiers without appearing as duplicate cards.
+The worker uses Vue with Nuxt UI and four primary pages: Taskboard
+(`/taskboard`), Metrics (`/dashboard`), History (`/history`) and Settings
+(`/settings`). Taskboard opens after unlock. It keeps current work, Needs you
+and Up next beside a task-scoped interaction panel; completed work and drafts
+remain available without duplicating task identities across sources.
 
-A task-scoped interaction panel sits to the right. Its New task and Follow up
-modes add work or continue the selected task; the panel does not become a general
-assistant or a configuration workspace. History retains conversations, file-task
-management, project requests and execution evidence. Dashboard carries health,
-environment, provider connections, agent definitions and optional orchestrator
-enrollment. The legacy `/chat` route redirects to `/taskboard` while preserving
-its query; `/monitoring-status` continues to redirect to `/dashboard`.
+New request starts with the operator's instructions. Task options disclose the
+provider, optional name and reusable agent definition. Follow up continues the
+selected task. Taskboard shows execution and admission capacity. Metrics presents
+observed consumption and health. History retains conversations, review patches
+and execution evidence; Settings
+owns provider accounts, queue/duration policy, tools, repositories, shared intake,
+profiles and optional orchestrator enrollment.
+
+The legacy `/chat` route preserves its query when redirecting to Taskboard.
+`/monitoring-status` opens Metrics; earlier Dashboard setup bookmarks redirect
+to their corresponding Settings sections.
 
 ## Worker Access
 
@@ -54,30 +57,47 @@ The worker is installed on a machine and works independently. It can use local
 Claude Code / Codex subscription logins or provider APIs. An orchestrator is
 optional and can be configured later. Each worker executes exactly one task at a
 time across Chat, explicit local file tasks and remote orchestrator assignments.
-Its queue can hold more work, but does not add execution slots. Parallel work
+Local admission counts queued/running chat and file work, including preparation
+reservations. Accepted remote assignments use a separate buffer; ready notes not
+yet admitted are not occupied places. These counts never add execution slots.
+Stale observations do not establish availability. Parallel work
 requires separate worker instances, each with its own native state directory or
 Docker volume and webview port.
 
-Every task owns a dedicated worker-managed LLM session. The first message in
-New task queues that task; follow-up messages use the same session. Explicit
-file tasks and remote assignments also receive dedicated sessions. The UI handles
-creation and the first message as one submission workflow, dispatching only to
-the returned session ID. These remain separate server requests: if the first
-message is not confirmed, retain the instructions with the created task and ask
-the operator to inspect its conversation before retrying. Do not silently create
-a second task or claim that an ambiguous submission was rejected.
+Every task owns a dedicated worker-managed session and an automatically maintained
+Markdown feature-request record. Follow-ups, answers and retries keep that record.
+The unified interaction starts with instructions; approved repository-file work is
+an optional permission, never an opt-in to persistence. Source notes retain their
+own intake authority; the generated record reports progress without replacing them.
+
+Creation and admission remain distinct from Markdown synchronization. An accepted
+task stays accepted if its record needs saving or a write fails; show that state
+and retry synchronization without creating duplicate work. Confirm a saved record
+only after its write succeeds. New request sends one idempotent create command
+with a stable identity and the original instructions/permissions. An uncertain
+acknowledgement retains that exact command for Retry same request; it must not
+silently create new work or substitute edited input.
 
 Stop task targets the selected execution or checkpoint. Pause new starts holds
 the shared queue while the active task finishes. Pause updates only pauses this
 browser's automatic reads. None of these controls is a live edit to an in-flight
 model prompt. The worker is the only component that prompts an LLM; Factory and
-orchestrator own routing, not model execution. The taskboard retains access to
-the file-task editor for approved inputs and review patches.
+orchestrator own routing, not model execution. Repository-file approval lives in
+the same task interaction; generated patches still require human review.
+
+## Worker Settings
+
+Settings sections save independently and retain unsaved edits while navigating
+in the current tab. Queue, duration and consumption editors compare the saved
+baseline before replacing policy; another operator's change produces a conflict
+instead of an unseen overwrite. A lost acknowledgement requires inspecting the
+saved result before retrying. Existing requirements to pause or drain work still
+apply where needed before changing providers, repositories, profiles or tools.
 
 ## Worker Provider and Agent Definitions
 
-Provider connections belong to the worker. Dashboard owns saved connection
-settings, local Codex or Claude sign-in commands and checks of saved connections.
+Provider connections belong to the worker. Settings → Providers & accounts owns
+saved settings, local Codex or Claude sign-in commands and checks of saved connections.
 Taskboard links there when a connection needs setup. CLI sign-in must belong to
 the user running the worker;
 Docker workers need access inside their container. API credentials are stored
@@ -86,9 +106,9 @@ not prove successful authentication; a connection check does not establish
 subscription quota or model access.
 
 Operators can preview and import Docker Agent YAML as instruction/model profiles,
-then select a definition and one named agent when creating a new task. The Run
-task file editor has its own definition and agent selection. Import is
-inert: it does not run Docker, tools, hooks or delegated teams. Unsupported
+then select a definition and one named agent when creating a request, with or
+without approved repository files. Import is inert: it does not run Docker, tools,
+hooks or delegated teams. Unsupported
 features are listed and require explicit instructions-only acceptance for that
 task. Supported model selections require a matching worker provider. Each task
 keeps its own definition snapshot, including instructions, model selection and
@@ -155,7 +175,9 @@ an editable frontmatter-plus-Markdown request template. Drafts remain inactive;
 ready files enter the existing serial queue after stable-save detection. Durable
 IDs, immutable accepted input and admission replay prevent duplicate execution.
 Lifecycle frontmatter, a queue summary and readable result/patch files support
-operators who do not open the webview. Orchestrator assignments are mirrored into
+operators who do not open the webview. These intake files are distinct from the
+automatic per-task Markdown progress records, which exist even without a watched
+feature folder. Orchestrator assignments are mirrored into
 the same folder while retaining orchestrator lease/routing authority.
 
 The template and custom request metadata remain editable. One worker state owns
@@ -204,9 +226,10 @@ checkout, including linked worktrees. An unassigned detected repository appears
 as an optional consent prompt after unlock. Accepting adds a repository assignment;
 watching starts only when a branch and remote are available. Coding tasks use
 retained worktrees. Declining is remembered across restarts and can be reconsidered
-in Dashboard. Detection does not search parent folders or contact remotes.
+in Settings → Repositories. Detection does not search parent folders or contact
+remotes.
 
-Dashboard also edits execution profile IDs and providers within the worker’s
+Settings → Execution profiles edits profile IDs and providers within the worker’s
 configured execution mode. Profiles share one execution slot. Changes require
 paused intake and no queued or active work; registered workers retain their
 identity and history while synchronizing the change with their orchestrator.
@@ -215,9 +238,9 @@ remain separate from provider connections, model settings and agent definitions.
 
 ## Worker-managed model tools
 
-Dashboard provides default-off grants for read-only task-worktree files, fixed
-command presets, allowed web origins and individually selected MCP tools. MCP
-connections support stdio and HTTP, private credentials and explicit discovery.
+Settings → Tools & MCP provides default-off grants for read-only task-worktree
+files, fixed command presets, allowed web origins and individually selected MCP
+tools. MCP connections support stdio and HTTP, private credentials and explicit discovery.
 Grants are enforced through a common worker-owned catalog across supported local
 provider adapters. Operators pause and drain execution before saving; subsequent
 turns use the current policy, while saved dispatch evidence remains immutable.

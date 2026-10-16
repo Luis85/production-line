@@ -62,9 +62,9 @@ test('clean standalone build removes stale output and compiles nested shared mod
     await mkdir(join(root,'src/worker/authoring'));
     await writeFile(join(root,'src/worker/authoring/cli.ts'),'import { parse } from "yaml"; import { value } from "../../shared/nested/value.js"; console.log(parse("value: " + value).value);\n');
     await writeFile(join(root,'src/worker/dist/stale.js'),'old build');
-    // The worker webview shares pure consumption policy with the application.
+    // The worker webview shares pure consumption and approved-file policy with the application.
     await mkdir(join(root,'src/worker/application'),{recursive:true});
-    for (const file of ['consumption.ts','run-evidence.ts']) await cp(new URL('../../src/worker/application/' + file,import.meta.url),join(root,'src/worker/application',file));
+    for (const file of ['consumption.ts','run-evidence.ts','approved-paths.ts']) await cp(new URL('../../src/worker/application/' + file,import.meta.url),join(root,'src/worker/application',file));
     await cp(new URL('../../src/shared/errors.ts',import.meta.url),join(root,'src/shared/errors.ts'));
     await cp(new URL('../../src/shared/webview',import.meta.url),join(root,'src/shared/webview'),{recursive:true});
     await cp(new URL('../../src/worker/webview',import.meta.url),join(root,'src/worker/webview'),{recursive:true,filter:path=>!path.includes('.nuxt-ui')});

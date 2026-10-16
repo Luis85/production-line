@@ -78,7 +78,7 @@ Taskboard before using it. Review `repository status`, then explicitly choose
 The saved choice survives restart; acceptance adds an assignment. No remote or
 detached HEAD leaves watching off. Discovery never selects an unrelated ancestor.
 
-Use Dashboard's **Git repositories** section or
+Use **Settings → Repositories** or
 `settings set --file repositories.json` with a top-level
 `repositories` object: `{pollMs: 30000, items: [{id, path, remote, branch?, watch}]}`.
 Assign existing local Git checkouts; the worker watches/fetches each enabled
@@ -94,7 +94,7 @@ in their existing `repository` field. Assigning repositories does not change
 mock execution or give provider Chat arbitrary filesystem tools. See the
 [configuration contract](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/configuration.md#assigned-git-repositories).
 
-Execution profiles are editable in **Dashboard → Execution profiles** or through
+Execution profiles are editable in **Settings → Execution profiles** or through
 `profile list` / `profile set --file profiles.json`. Keep the current mode and
 one shared execution slot. Pause and drain work first; registered workers persist
 changes until their orchestrator acknowledges them. See the
@@ -277,8 +277,15 @@ not mean completion: inspect `session.status`, `chat.busy` and message outcomes.
 All chat, file work and remote assignments execute serially. Queue places add waiting
 capacity; multiple isolated worker instances provide parallel execution.
 
-For local files use `file-task create --file file-task.json` with an explicit
-repository and approved paths:
+Every task also receives an automatically synchronized Markdown feature-request
+record. Follow-ups, checkpoints and retries retain that session's record. Source
+intake files and private execution journals remain authoritative; a pending/failed
+Markdown sync does not reject an already accepted task. See
+[automatic task tracking](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/feature-requests.md#automatic-task-tracking).
+
+The webview uses one request composer with optional repository-file permission.
+The compatible CLI keeps `file-task create --file file-task.json` for the bounded
+approved-file execution contract. Supply an explicit repository and paths:
 
 ```json
 {"title":"Explain the acceptance rule","instruction":"Add a comment explaining the rule.","provider":"codex-cli","repository":"/absolute/project","paths":["acceptance.txt"]}

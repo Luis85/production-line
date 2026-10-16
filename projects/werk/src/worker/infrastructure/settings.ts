@@ -64,13 +64,34 @@ export class WorkerSettings {
   provider(id: string) { const value = this.value.providers.find(item => item.id === id); if (!value) throw new DomainError('invalid_input', 'Choose a supported provider.'); return value; }
   async update(input: unknown) {
     const operation = this.writing.catch(() => {}).then(async () => {
-      const body = object(input, 'Settings', ['provider', 'connection', 'board', 'resources', 'execution', 'repositories', 'consumption', 'expectedConsumption']);
+      const body = object(input, 'Settings', ['provider', 'connection', 'board', 'resources', 'execution', 'repositories', 'consumption', 'expectedConsumption', 'expectedBoard', 'expectedDuration']);
       if (body.execution !== undefined && this.executionOverride) throw new DomainError('conflict', 'WERK_WORKER_MAX_RUNTIME_MS controls this worker. Change or remove that environment override and restart before editing the execution limit.');
       if (body.expectedConsumption !== undefined) {
         if (body.consumption === undefined) throw new DomainError('invalid_input', 'A consumption baseline requires a new consumption policy.');
         const expected = validateConsumptionPolicy(body.expectedConsumption);
         if ((Object.keys(expected) as Array<keyof ConsumptionPolicy>).some(key => expected[key] !== this.value.consumption[key]))
           throw new DomainError('conflict', 'Consumption limits changed in another session. Reload the current limits before saving.');
+      }
+      if (body.expectedBoard !== undefined) {
+        if (body.board === undefined) throw new DomainError('invalid_input', 'A queue baseline requires queue settings to save.');
+        const fields = ['queueCapacity', 'orchestratorQueue', 'order'] as const;
+        // Pause is an independent operational action, never part of a queue editor's stale snapshot.
+        const patch = object(body.board, 'Queue settings', [...fields]);
+        if (!fields.some(key => patch[key] !== undefined)) throw new DomainError('invalid_input', 'A queue baseline requires queue settings to save.');
+        const expected = object(body.expectedBoard, 'Queue settings baseline', [...fields]);
+        if (fields.some(key => expected[key] === undefined)) throw new DomainError('invalid_input', 'Use the complete queue settings baseline before saving.');
+        this.validateBoard({ ...this.value.board, ...expected });
+        if (fields.some(key => expected[key] !== this.value.board[key]))
+          throw new DomainError('conflict', 'Queue settings changed in another session. Reload the current queue settings before saving.');
+      }
+      if (body.expectedDuration !== undefined) {
+        const resources = body.resources === undefined ? undefined : object(body.resources, 'Resources', Object.keys(defaultResourcePolicy()));
+        if (body.execution === undefined && resources?.longRunningMs === undefined) throw new DomainError('invalid_input', 'A duration baseline requires an execution limit or long-running warning to save.');
+        const expected = object(body.expectedDuration, 'Duration baseline', ['maxRuntimeMs', 'longRunningMs']);
+        const execution = validateExecutionPolicy({ maxRuntimeMs: expected.maxRuntimeMs });
+        const warning = validateResourcePolicy({ ...defaultResourcePolicy(), longRunningMs: expected.longRunningMs });
+        if (execution.maxRuntimeMs !== this.value.execution.maxRuntimeMs || warning.longRunningMs !== this.value.resources.longRunningMs)
+          throw new DomainError('conflict', 'Duration settings changed in another session. Reload the current duration settings before saving.');
       }
       const next = structuredClone(this.value);
       if (body.consumption !== undefined) next.consumption = validateConsumptionPolicy(body.consumption);
@@ -117,8 +138,10 @@ export class WorkerSettings {
       if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash || !['', '/'].includes(url.pathname)) throw new DomainError('invalid_input', 'Use an HTTP(S) origin without credentials or a path.');
       c.url = url.origin;
     }
-    const b = value.board;
-    if (!b || typeof b.paused !== 'boolean' || !['fifo', 'priority'].includes(b.order) || !Number.isInteger(b.maxParallel) || b.maxParallel !== 1 || !Number.isInteger(b.queueCapacity) || b.queueCapacity < 1 || b.queueCapacity > 64 || !Number.isInteger(b.orchestratorQueue) || b.orchestratorQueue < 0 || b.orchestratorQueue > 64) throw new DomainError('invalid_input', 'Workers execute one task at a time; local queue: 1–64; orchestrator queue: 0–64.');
+    this.validateBoard(value.board);
     return value;
+  }
+  private validateBoard(b: WorkspaceSettings['board']) {
+    if (!b || typeof b.paused !== 'boolean' || !['fifo', 'priority'].includes(b.order) || !Number.isInteger(b.maxParallel) || b.maxParallel !== 1 || !Number.isInteger(b.queueCapacity) || b.queueCapacity < 1 || b.queueCapacity > 64 || !Number.isInteger(b.orchestratorQueue) || b.orchestratorQueue < 0 || b.orchestratorQueue > 64) throw new DomainError('invalid_input', 'Workers execute one task at a time; local queue: 1–64; orchestrator queue: 0–64.');
   }
 }

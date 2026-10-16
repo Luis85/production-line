@@ -244,7 +244,8 @@ test("queue rejection does not create a worktree or poison retry of a durable fe
   await f.board.action({ id: blocker, action: "cancel" });
   await f.board.create(f.input(), submission);
   assert.equal(f.prepared.length, 2);
-  assert.equal(f.prepared[1].taskKey, submission.id);
+  assert.equal(f.prepared[1].taskKey, f.board.detail(submission.id).worktreeKey);
+  assert.match(f.prepared[1].taskKey, new RegExp(`^${submission.id}-${submission.hash}-`));
   assert.equal(f.board.detail(submission.id).status, "queued");
   assert.equal(f.board.active, 1, "The admission reservation is released once the task is queued.");
 });

@@ -6,7 +6,7 @@ import UInput from '@nuxt/ui/components/Input.vue';
 import USelect from '@nuxt/ui/components/Select.vue';
 import ProviderAccountPanel from './ProviderAccountPanel.vue';
 import { state, workspaceAction, request, date } from '../store';
-defineProps<{ providerOnly?: boolean }>();
+defineProps<{ providerOnly?: boolean; connectionOnly?: boolean }>();
 let connectionGeneration = 0;
 const check = ref<{ message: string; authentication: string; checkedAt: string } | null>(null), checking = ref(false), copied = ref(false);
 const provider = ref<ProviderId>('codex-cli'), executable = ref(''), model = ref(''), key = ref(''), clearKey = ref(false), url = ref(''), enrollment = ref(''), busy = ref(false), message = ref('');
@@ -67,14 +67,12 @@ async function save(body: unknown) {
 </script>
 <template>
   <section v-if="state.unlocked" class="monitor-section">
-    <h2 v-if="!providerOnly">
+    <h2 v-if="!providerOnly && !connectionOnly">
       Connections
     </h2>
-    <div class="settings-grid" :class="{ 'provider-only': providerOnly }">
-      <form class="settings-form" @submit.prevent="save({ provider: { id: provider, executable, model, apiKey: key, clearApiKey: clearKey } })">
-        <h3>
-          Model provider
-        </h3>
+    <div class="settings-grid" :class="{ 'provider-only': providerOnly || connectionOnly }">
+      <form v-if="!connectionOnly" class="settings-form" @submit.prevent="save({ provider: { id: provider, executable, model, apiKey: key, clearApiKey: clearKey } })">
+        <h2>Provider connections &amp; accounts</h2>
         <div v-if="providerNotice" role="status">
           <p class="page-note">
             {{ providerNotice }}
@@ -149,9 +147,7 @@ async function save(body: unknown) {
         <ProviderAccountPanel v-if="provider.endsWith('-cli')" :provider-id="provider" :connection-key="selected?.executable || ''" :enabled="!dirty && !!selected?.configured" />
       </form>
       <form v-if="!providerOnly" class="settings-form" @submit.prevent="save({ connection: { enabled: true, url, enrollmentToken: enrollment } })">
-        <h3>
-          Optional orchestrator
-        </h3>
+        <h2>Optional orchestrator</h2>
         <div v-if="connectionNotice" role="status">
           <p class="page-note">
             {{ connectionNotice }}

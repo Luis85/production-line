@@ -16,6 +16,7 @@ import UInput from '@nuxt/ui/components/Input.vue';
 import USelect from '@nuxt/ui/components/Select.vue';
 import UBadge from '@nuxt/ui/components/Badge.vue';
 import { state } from '../store';
+const props = withDefaults(defineProps<{ readonly?: boolean; editorOpen?: boolean }>(), { readonly: false, editorOpen: false });
 const { draft, dirty, stale, locked, validation, canSave, workerAllowance } = consumptionEditor;
 const report = computed(() => state.consumption);
 const count = (value: number) => value.toLocaleString();
@@ -26,7 +27,7 @@ const blockedMessage = computed(() => {
     case 'accounting_unavailable': return 'Usage accounting is unavailable. New model calls are blocked to avoid losing consumption records. Check the worker storage and restart after resolving the error.';
     case 'unmeasured_usage': return 'A model call did not report complete usage. New model calls are blocked for this period because the remaining allowance cannot be verified. Review the run evidence; the block clears at the next UTC reset.';
     case 'exhausted': return 'This worker has used its share for this period. New model calls stay blocked until the next UTC reset or you increase the saved allowance.';
-    case 'insufficient_reservation': return 'The remaining share is smaller than the reservation for another model call. Wait for the next UTC reset or review the allowance and reservation below.';
+    case 'insufficient_reservation': return 'The remaining share is smaller than the reservation for another model call. Wait for the next UTC reset or review the allowance and reservation in Settings.';
     default: return '';
   }
 });
@@ -34,12 +35,13 @@ const hasMeasurements = computed(() => !!report.value?.accountingAvailable);
 </script>
 
 <template>
-  <section id="consumption-limits" class="monitor-section consumption-panel" aria-labelledby="consumption-title">
+  <section id="consumption-limits" class="monitor-section consumption-panel" :class="{ 'consumption-summary': props.readonly }" aria-labelledby="consumption-title">
     <div class="section-heading">
-      <h2 id="consumption-title" tabindex="-1">Consumption limits</h2>
-      <UBadge :color="report?.blocked ? 'warning' : 'neutral'" variant="subtle">{{ stateLabel }}</UBadge>
+      <h2 id="consumption-title" tabindex="-1">{{ props.readonly ? 'Consumption this period' : 'Consumption limits' }}</h2>
+      <div class="consumption-heading-actions"><UBadge :color="report?.blocked ? 'warning' : 'neutral'" variant="subtle">{{ stateLabel }}</UBadge><UButton v-if="props.readonly" to="/settings#consumption-limits" color="neutral" variant="outline" icon="i-lucide-settings-2">Manage limits</UButton></div>
     </div>
-    <p class="page-note">Set this worker’s share of a daily or monthly token allowance. Usage in your everyday tools is not measured here.</p>
+    <p v-if="props.readonly" class="page-note">Reported input and output tokens for this UTC period. Usage in your everyday tools is not measured here.</p>
+    <p v-else class="page-note">Set this worker’s share of a daily or monthly token allowance. Usage in your everyday tools is not measured here.</p>
     <p v-if="state.consumptionError" role="alert" class="error-text">{{ state.consumptionError }} Last loaded values may be stale.</p>
     <p v-if="blockedMessage" class="consumption-warning" role="status">{{ blockedMessage }}</p>
     <template v-if="report">
@@ -57,7 +59,7 @@ const hasMeasurements = computed(() => !!report.value?.accountingAvailable);
     </template>
     <p v-else class="page-note">Consumption data is not available yet. Refresh to load this worker’s allowance and usage.</p>
 
-    <details class="consumption-editor">
+    <details v-if="!props.readonly" class="consumption-editor" :open="props.editorOpen">
       <summary>Configure consumption limits</summary>
       <form v-if="draft.baseline" :aria-busy="draft.busy" @submit.prevent="consumptionEditor.save">
         <fieldset :disabled="locked" class="consumption-fields">
@@ -89,8 +91,8 @@ const hasMeasurements = computed(() => !!report.value?.accountingAvailable);
         <div class="consumption-actions"><UButton type="button" color="neutral" variant="outline" :disabled="draft.checking || !state.unlocked" :loading="draft.busy" @click="consumptionEditor.retry">Retry same save</UButton><UButton type="button" color="neutral" variant="ghost" :disabled="draft.busy || draft.checking || !state.unlocked" @click="consumptionEditor.reload">Discard edits and reload</UButton></div>
       </div>
     </details>
-    <p v-if="draft.notice" role="status">{{ draft.notice }}</p>
-    <UButton v-if="!report || state.consumptionError || !draft.baseline || draft.uncertain" type="button" color="neutral" variant="outline" :loading="draft.checking" :disabled="draft.busy || !state.unlocked" @click="consumptionEditor.check">Refresh consumption</UButton>
+    <p v-if="!props.readonly && draft.notice" role="status">{{ draft.notice }}</p>
+    <UButton v-if="!report || state.consumptionError || !props.readonly && (!draft.baseline || draft.uncertain)" type="button" color="neutral" variant="outline" :loading="draft.checking" :disabled="draft.busy || !state.unlocked" @click="consumptionEditor.check">Refresh consumption</UButton>
   </section>
 </template>
 
@@ -98,6 +100,8 @@ const hasMeasurements = computed(() => !!report.value?.accountingAvailable);
 .consumption-panel { min-width: 0; scroll-margin-top: var(--space-6); }
 .consumption-panel .section-heading { flex-wrap: wrap; }
 .consumption-panel h2 { margin: 0; }
+.consumption-heading-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
+.consumption-heading-actions :deep(a) { min-height: 44px; }
 .consumption-panel p { max-width: 75ch; }
 .consumption-facts dd, .consumption-share { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .consumption-facts dd { text-align: right; }
@@ -112,6 +116,12 @@ const hasMeasurements = computed(() => !!report.value?.accountingAvailable);
 .consumption-field :deep(input), .consumption-field :deep(button), .consumption-actions :deep(button) { min-height: 44px; }
 .consumption-advanced .consumption-field { max-width: 360px; }
 .consumption-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-4); }
+.consumption-summary .consumption-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-6); margin-top: var(--space-4); }
+.consumption-summary .consumption-facts > div { display: flex; flex-direction: column; gap: var(--space-2); padding: 0 0 var(--space-4); }
+.consumption-summary .consumption-facts dd { text-align: left; margin: 0; font-size: 1.25rem; font-weight: 600; }
+.consumption-summary .consumption-facts > div:last-child dd { font-size: 1rem; font-weight: 400; }
+.consumption-summary .section-heading { gap: var(--space-3); }
+@media (max-width: 1000px) { .consumption-summary .consumption-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); } }
 @media (max-width: 760px) { .consumption-form-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 480px) { .consumption-facts > div { display: block; } .consumption-facts dd { text-align: left; margin-top: var(--space-1); } .consumption-actions { flex-direction: column; align-items: stretch; } .consumption-actions :deep(button) { justify-content: center; } }
 </style>

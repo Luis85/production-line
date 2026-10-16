@@ -68,7 +68,7 @@ Keep `.werk/agent-integrations.pending.json` and the ownership manifest intact,
 inspect a fresh plan, then retry guarded sync. Recovery reconciles only writes
 proven by that checkpoint and file hashes; unknown edits remain conflicts.
 
-The worker Dashboard presents the same installed paths and guarded plan/apply
+**Settings → Project integration** presents the same installed paths and guarded plan/apply
 workflow. Integrations are available only for its configured project root;
 requests cannot choose an arbitrary target folder.
 
@@ -89,7 +89,7 @@ Use `nextAfter` as the next event cursor, follow `hasMore`, and handle `gap`
 when older retained events are unavailable. These commands inspect observations;
 they do not make provider calls.
 
-Open Dashboard’s resource monitor to inspect the latest sample and active
+Open the resource monitor in **Metrics** to inspect the latest sample and active
 warnings. Samples arrive every 10 seconds. Its memory, heap and CPU scope is the
 Worker Node process; provider subprocesses are excluded. State-filesystem disk
 availability and effective memory/CPU capacity provide context. Warning events

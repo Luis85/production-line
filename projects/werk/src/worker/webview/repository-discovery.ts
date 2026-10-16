@@ -23,8 +23,8 @@ export function useRepositoryDiscovery(reconsider = false) {
       if (result) {
         acknowledged.value = found.id; acknowledgedAction.value = action;
         notice.value = action === 'accept'
-          ? 'Repository added. Select it when preparing a file task; manage it in Dashboard.'
-          : 'Repository skipped. You can use it later from Dashboard → Git repositories.';
+          ? 'Repository added. Select it when preparing a file task; manage it in Settings.'
+          : 'Repository skipped. You can use it later from Settings → Repositories.';
       } else error.value = state.actionError || 'Your choice could not be saved. Refresh and try again.';
     } finally { if (attempt === revision) busy.value = false; }
   }

@@ -35,7 +35,7 @@ follows [Diátaxis](https://diataxis.fr/).
 - [Answer questions and resume requests](how-to/answer-and-resume-worker.md): guarded answers, cancellation, checkpoints and event replay.
 - [Worker–model interaction contract](reference/model-interaction.md): capabilities, typed results, durable events and recovery.
 - [Markdown feature-request contract](reference/feature-requests.md)
-- [Use the worker webview](how-to/use-worker-webview.md): Taskboard, History and Dashboard.
+- [Use the worker webview](how-to/use-worker-webview.md): Taskboard, Metrics, History and Settings.
 - [Manage model tools](how-to/manage-model-tools.md): built-in grants, MCP connections and revocation.
 - [Set a worker consumption limit](how-to/worker-consumption-limits.md): daily/monthly token allowance, worker share, reservations and recovery.
 

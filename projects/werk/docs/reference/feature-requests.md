@@ -5,6 +5,66 @@ view. Each request is one UTF-8 `.md` file with YAML frontmatter and a Markdown
 body. The worker's existing serial executor owns the work; watching a folder does
 not add a parallel model process. See [project setup](../how-to/project-worker.md).
 
+## Automatic task tracking
+
+Every worker task receives an Obsidian-compatible Markdown feature-request progress
+record automatically. Repository-file permissions and watched-folder intake are
+separate choices; neither is required to retain this record. Follow-ups, answers,
+continuations and retries use the same session record rather than creating a new
+feature request for each model call.
+
+| Worker configuration | Generated record location |
+| --- | --- |
+| Configured `features.directory` | `<features.directory>/_tasks/fr-<stable-session-hash>.md` |
+| No configured feature folder | `<stateDir>/feature-requests/fr-<stable-session-hash>.md` |
+
+The filename uses a stable 24-character session hash. Generated frontmatter marks
+`type: feature-request` and `source: worker-tracking`; a source path is retained
+when available. These files are progress projections, separate from the original
+local/shared intake note or orchestrator assignment. They are not watched intake:
+editing them does not submit work, answer a checkpoint or approve completion.
+
+Records separate task status, request phase, gate evaluations, pending input,
+recorded outcomes and attempts. A completed model turn is not proof of passed project tests,
+applied changes or human acceptance; simulations stay explicit. The webview shows
+the confirmed filename and saved time only when synchronization succeeds. Pending
+or failed synchronization remains visible and retryable; accepted work stays in
+the durable worker journals and must not be duplicated to recover a Markdown
+write. The worker retries synchronization automatically.
+
+The unified webview submits authenticated `POST /api/tasks` with
+`{action: "create", id, title, message, provider}`, optional agent selectors, and
+optional `files: {repository, paths}`. Replaying the same ID and input is
+idempotent; changed input conflicts. The response contains `{session, chat,
+featureTracking}`. Approved-file execution returns its own `local-<id>` session
+identity; use the returned ID for subsequent actions. These are the same retained
+task/patch contracts used by the compatible CLI commands.
+
+Recovery of interrupted file preparation reuses only an owned pristine worktree
+bound to the exact durable command. A changed or unverified checkout is preserved:
+creation returns the retained failed session and its tracking state, while the
+file task records `admissionFailure.paths`, an empty `files` array, its error and
+worktree path. No snapshots or new execution are accepted. Replaying creation
+returns that failed identity; execution retry, resume and follow-up commands
+conflict. Inspect the preserved checkout, then create a new request to approve
+current repository files. The failed record survives restart.
+
+The authenticated `GET /api/feature-tracking` endpoint synchronizes and returns
+`{directory, lastSyncedAt, error, records}`. `POST /api/feature-tracking` with
+`{action: "get", sessionId}` returns that retained session's saved record plus
+`markdown`. Record metadata includes `sessionId`, `taskId`, `filename`, `path`,
+`revision`, `updatedAt` and `status`. The existing session view carries the same
+confirmed metadata as `records[].featureRequest`, with the synchronization
+summary in `featureTracking`. A previous successful record can remain visible
+alongside a later sync error; its timestamp is the saved observation, not proof
+that current progress has been written.
+
+Generated notes retain bounded activity/outcome excerpts and attempt references;
+full execution evidence stays in the worker. They omit approved file contents,
+private model dispatch/context and raw patches. Synchronizing these local files
+does not itself commit or push them; shared intake keeps its own lifecycle and
+review-note publication contract.
+
 ## Template and configuration
 
 `worker init` installs `features/_templates/feature-request.md`. Customize it;
@@ -41,7 +101,8 @@ The installed `.werk/worker.json` configures the watcher:
 ```
 
 `features.directory` enables intake; without it or `--features-dir`, existing
-workers do not scan or create a feature folder. Relative paths resolve against
+workers do not scan or create an intake feature folder. Automatic task tracking
+still uses the worker state directory. Relative paths resolve against
 `--project-dir` when supplied, otherwise the working directory. The portable
 worker launched from an initialized project discovers `.werk/worker.json`.
 `feature folder get` reports the saved path; `feature folder plan --path requests`
