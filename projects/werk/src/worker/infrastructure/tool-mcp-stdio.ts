@@ -72,7 +72,10 @@ export function openMcpStdio(config: Extract<McpTransportConfiguration, { transp
   child.once('exit', () => { terminate(child, 'SIGKILL'); });
   child.once('close', () => {
     closed = true; signal.removeEventListener('abort', cancel); closeResolve();
-    if (pending || size) fail(new McpClientError('protocol'));
+    // A contained Windows launch can fail through its supervisor's exit, without a child error.
+    // An unanswered request means unavailable; partial protocol output remains malformed.
+    if (size) fail(new McpClientError('protocol'));
+    else if (pending) fail(new McpClientError('unavailable'));
     else failure ??= new McpClientError('unavailable');
   });
   const cancel = () => fail(abortFailure(signal));

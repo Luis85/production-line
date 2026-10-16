@@ -64,6 +64,16 @@ test('stdio detects malformed frames, excessive stderr, and spawn failures witho
   });
 });
 
+test('stdio distinguishes a startup exit without a response from a truncated protocol frame', { timeout: 30000 }, async () => {
+  const startup = "process.stdin.once('data',()=>process.stderr.write('fixture startup diagnostic private-mcp-token',()=>process.exit(125)))";
+  await assert.rejects(discoverMcpTools({ ...stdio, args: ['-e', startup] }), error => {
+    assert.ok(error instanceof McpClientError); assert.equal(error.reason, 'unavailable');
+    assert.doesNotMatch(error.message, /fixture startup diagnostic|private-mcp-token/); return true;
+  });
+  const truncated = "process.stdin.once('data',()=>process.stdout.write('{\"jsonrpc\":\"2.0\",',()=>process.exit(125)))";
+  await rejectsWith(discoverMcpTools({ ...stdio, args: ['-e', truncated] }), 'protocol');
+});
+
 test('stdio deadline and cancellation terminate a descendant process before returning', { timeout: 40000 }, async t => {
   const directory = await mkdtemp(join(tmpdir(), 'werk-mcp-cancel-')); t.after(() => rm(directory, { recursive: true, force: true }));
   const pidFile = join(directory, 'child.pid');

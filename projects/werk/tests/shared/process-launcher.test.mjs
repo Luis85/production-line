@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createInterface } from 'node:readline';
 import { setTimeout as delay } from 'node:timers/promises';
 import { launchProcess, ProcessRunError, runProcess, terminateProcess } from '../../src/worker/dist/shared/process/launcher.js';
 
@@ -30,6 +31,30 @@ test('runs with exactly the supplied environment and input, capturing stdout by 
     assert.deepEqual(JSON.parse(result.stdout.toString()), { input: 'hello', secret: null, chosen: 'yes' });
     assert.equal(result.stderr.length, 0);
   } finally { if (previous === undefined) delete process.env.WERK_LAUNCHER_SECRET; else process.env.WERK_LAUNCHER_SECRET = previous; }
+});
+
+test('contained processes exchange small frames before stdin closes', { timeout: 20000 }, async t => {
+  const script = `require('node:readline').createInterface({input:process.stdin}).on('line',line=>process.stdout.write(JSON.stringify({reply:line})+'\\n'));`;
+  const child = launchProcess(node, ['-e', script], { env, mode: 'contained' });
+  const output = createInterface({ input: child.stdout }), lines = output[Symbol.asyncIterator]();
+  const closed = new Promise((resolve, reject) => { child.once('close', code => resolve(code)); child.once('error', reject); });
+  // Timeout must stop the supervisor too, so a failed handshake cannot leak a child.
+  const stop = () => terminateProcess(child);
+  t.signal.addEventListener('abort', stop, { once: true });
+  try {
+    for (const frame of ['first small request', 'second small request']) {
+      child.stdin.write(frame + '\n');
+      const response = await lines.next();
+      assert.equal(response.done, false, 'the child responds while its input pipe stays open');
+      assert.deepEqual(JSON.parse(response.value), { reply: frame });
+      assert.equal(child.stdin.writableEnded, false);
+    }
+    child.stdin.end();
+    assert.equal(await closed, 0, 'EOF still permits a normal drained exit');
+  } finally {
+    output.close(); terminateProcess(child); await closed.catch(() => {});
+    t.signal.removeEventListener('abort', stop);
+  }
 });
 
 test('nonzero exits reject with captured output unless explicitly allowed', async () => {
