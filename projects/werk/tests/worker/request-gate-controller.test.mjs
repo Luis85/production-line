@@ -49,3 +49,23 @@ test('persisted execute intent with no admission reports its dispatch receipt an
   const current = record(); const f = fixture(command => command.action === 'list' ? list([current]) : command.action === 'get' ? current : { request: record(current.id, 2), duplicate: false, dispatch: { inputRevision: 1, state: 'not_admitted', note: 'Input retained. Queue is full; execute later using a new guarded operation.' } });
   await f.controller.load(true); await f.controller.mutate({ action: 'execute' }); assert.equal(f.operations.size, 0); assert.match(f.state.notice, /Queue is full/); assert.doesNotMatch(f.state.notice, /started/); await f.controller.mutate({ action: 'execute' }); assert.equal(f.operationCount, 2); assert.equal(f.calls.at(-1).expectedRevision, 2);
 });
+
+test('cached gate page rejects late reads and resumes from its selected request', async () => {
+  const pending = deferred(), current = record(); let first = true;
+  const f = fixture(command => command.action === 'get' ? current : first ? (first = false, pending.promise) : list([current]));
+  const read = f.controller.load(true); f.controller.suspend(); pending.resolve(list([current])); await read;
+  assert.equal(f.state.view, null); assert.equal(f.state.loading, false);
+  await f.controller.load(true); assert.equal(f.calls.length, 1);
+  f.controller.resume(); await f.controller.load(true); assert.equal(f.state.view.id, current.id); assert.equal(f.calls.length, 3);
+});
+test('deactivation preserves uncertain mutation retry identity without adopting its late response', async () => {
+  const pending = deferred(), current = record(); let mutations = 0;
+  const f = fixture(command => command.action === 'list' ? list([current]) : command.action === 'get' ? current : ++mutations === 1 ? pending.promise : { request: record(current.id, 2), duplicate: true });
+  await f.controller.load(true); const mutation = f.controller.mutate({ action: 'execute' });
+  const operation = f.operations.get(current.id); f.controller.suspend(); pending.reject(Error('Lost response')); await mutation;
+  assert.equal(f.state.view, null); assert.equal(f.operations.get(current.id), operation);
+  await f.controller.send(operation); assert.equal(mutations, 1);
+  f.controller.resume(); await f.controller.load(true); await f.controller.send(operation);
+  assert.equal(f.operationCount, 1); assert.equal(f.operations.size, 0);
+  assert.deepEqual(f.calls.filter(call => call.action === 'execute')[0], f.calls.filter(call => call.action === 'execute')[1]);
+});

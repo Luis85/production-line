@@ -1,6 +1,6 @@
+import { HttpRequestLifecycle, trackHttpRequests } from '../../shared/http/server-lifecycle.js';
 import type { ResourceStatus } from "../application/resources.js";
 import { WorkerAccess } from "./access.js";
-import { ProviderStatusChecks } from "../infrastructure/provider-status.js";
 import { readFile } from "node:fs/promises";
 import { readJson, rejectRequest } from "../../shared/http/server.js";
 import {
@@ -139,9 +139,9 @@ export async function statusServer(
         workspace.accessScope,
       )
     : undefined;
-  const providers = new ProviderStatusChecks();
+  const requests = new HttpRequestLifecycle();
   const server = createServer(
-    observeHttp("worker", async (req, res) => {
+    observeHttp("worker", requests.wrap(async (req, res) => {
       try {
         if (workspace && req.url?.startsWith("/api/")) {
           if (await access!.route(req, res)) return;
@@ -156,7 +156,7 @@ export async function statusServer(
             return json(
               res,
               200,
-              await providers.check(workspace.settings.provider(body.id)),
+              await workspace.providerStatus(body),
             );
           }
           if (req.method === "POST" && req.url === "/api/providers/account")
@@ -409,8 +409,9 @@ export async function statusServer(
             : "Worker data could not be read or saved. Check the state directory and retry.",
         });
       }
-    }),
+    })),
   );
+  trackHttpRequests(server, requests);
   server.requestTimeout = 15000;
   server.headersTimeout = 10000;
   await new Promise<void>((resolve, reject) => {

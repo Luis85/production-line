@@ -1,3 +1,7 @@
+import { loadWebviewToken } from '../infrastructure/webview-token.js';
+import { settleCleanup } from '../../shared/lifecycle.js';
+import { ProviderStatusChecks } from '../infrastructure/provider-status.js';
+import { createWorkerSessions, createLocalTaskboard } from '../infrastructure/workspace-services.js';
 import { ProviderAccountChecks } from '../infrastructure/provider-account.js';
 import { SharedIntakeRuntime } from '../infrastructure/features/shared-intake-runtime.js';
 import type { SharedFeatureRecord } from '../application/shared-feature-state.js';
@@ -34,13 +38,12 @@ import {
 import { MarkdownFeatureFolder } from "../infrastructure/features/folder.js";
 import { definitionConnection } from "../application/definitions.js";
 import { WorkerSettings } from "../infrastructure/settings.js";
-import { WorkerSessions } from "../application/sessions.js";
-import { LocalTaskboard } from "../application/local-tasks.js";
+import type { WorkerSessions } from "../application/sessions.js";
+import type { LocalTaskboard } from "../application/local-tasks.js";
 import { TaskIndex } from "../infrastructure/task-index.js";
 import { object, text, identifier, type Task } from "../../shared/contracts.js";
 import {
   createHash,
-  randomBytes,
   randomUUID,
   timingSafeEqual,
 } from "node:crypto";
@@ -91,6 +94,7 @@ export class WorkerWorkspace {
   readonly features?: FeatureRequests;
   readonly sharedRuntime: SharedIntakeRuntime;
   private providerAccounts = new ProviderAccountChecks();
+  private providerStatuses = new ProviderStatusChecks();
   readonly repositories: RepositoryManager;
   readonly repositoryDiscovery: RepositoryDiscovery;
   private configurationUpdating = false;
@@ -521,6 +525,9 @@ export class WorkerWorkspace {
   }
   private taskRequests = Promise.resolve();
   private acceptingTasks = true;
+  private draining?: Promise<void>;
+  private closing?: Promise<void>;
+  private evidenceClosing?: Promise<void>;
   /** Address sessions directly; automation never changes the browser's selected task. */
   async task(input: unknown) {
     const operation = this.taskRequests
@@ -658,6 +665,7 @@ export class WorkerWorkspace {
     stateDir: string;
     url?: string;
     enrollmentToken?: string;
+    webviewToken?: string;
     projectDir?: string;
     integrationProjectDir?: string;
     codex?: { repository?: string };
@@ -676,6 +684,7 @@ export class WorkerWorkspace {
       stateDir: string;
       url?: string;
       enrollmentToken?: string;
+      webviewToken?: string;
       projectDir?: string;
       integrationProjectDir?: string;
       codex?: { repository?: string };
@@ -703,10 +712,10 @@ export class WorkerWorkspace {
     );
     this.repositories = new RepositoryManager(this.settings.value.repositories, { beforeRepositoryUse: item => this.repositoryDiscovery.assertAllowed(item.path), preserveCheckout: item => this.sharedRuntime?.intake.binding?.repositoryId === item.id || (this.sharedRuntime?.intake.requiredRepositoryIds().includes(item.id) ?? false) });
     this.repositoryDiscovery = new RepositoryDiscovery(config.stateDir, config.integrationProjectDir ?? config.projectDir ?? process.cwd(), this.repositoryStop.signal, config.codex?.repository);
-    this.sessions = new WorkerSessions(
+    this.sessions = createWorkerSessions(
       config.stateDir, this.settings, modelFor, undefined, () => this.board.active,
     );
-    this.board = new LocalTaskboard(
+    this.board = createLocalTaskboard(
       config.stateDir,
       this.settings,
       this.sessions,
@@ -788,20 +797,7 @@ export class WorkerWorkspace {
   }
   async init() {
     await ensureDirectory(this.config.stateDir);
-    try {
-      this.token = (
-        await readBoundedFile(join(this.config.stateDir, "webview-token"), 128)
-      ).trim();
-      if (!/^[a-f0-9]{64}$/.test(this.token))
-        throw Error("Invalid worker webview token");
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      this.token = randomBytes(32).toString("hex");
-      await atomicWrite(
-        join(this.config.stateDir, "webview-token"),
-        this.token + "\n",
-      );
-    }
+    this.token = await loadWebviewToken(this.config.stateDir, this.config.webviewToken);
     await this.settings.init();
     await this.repositoryDiscovery.init(this.settings.value.repositories.items);
     await this.sharedRuntime.intake.init();
@@ -815,6 +811,10 @@ export class WorkerWorkspace {
     this.resources.start();
     this.repositories.start();
     this.sharedRuntime.intake.start();
+  }
+  async providerStatus(input: unknown) {
+    const body = object(input, 'Provider status check', ['id']);
+    return this.providerStatuses.check(this.settings.provider(String(body.id)));
   }
   async providerAccount(input: unknown) {
     const body = object(input, 'Provider account check', ['id']);
@@ -1041,31 +1041,29 @@ export class WorkerWorkspace {
     }
     return update();
   }
-  async close(options: { deferEvidence?: boolean } = {}) {
+  close(options: { deferEvidence?: boolean } = {}): Promise<void> {
     this.acceptingTasks = false;
     this.repositoryStop.abort();
-    // Abort Git preparation before awaiting feature intake, which may be waiting on it.
-    await Promise.all([
-      this.features?.stopIntake(), this.sharedRuntime.close(), this.providerAccounts.close(), this.repositories.close(), this.board.close(),
-      this.reviews.close(), this.taskRequests,
-    ]);
-    await this.sessions.close({ retainEvidence: true });
-    if (!options.deferEvidence) await this.closeEvidence();
+    // Abort Git preparation before awaiting intake; preserve evidence until remote assignments drain.
+    this.draining ??= settleCleanup(
+      [() => this.features?.stopIntake(), () => this.sharedRuntime.close(), () => this.providerAccounts.close(), () => this.providerStatuses.close(),
+       () => this.repositories.close(), () => this.board.close(), () => this.reviews.close(), () => this.taskRequests],
+      () => this.sessions.close({ retainEvidence: true }),
+    );
+    if (options.deferEvidence) return this.draining;
+    this.closing ??= settleCleanup(() => this.draining, () => this.closeEvidence());
+    return this.closing;
   }
   /** Runner calls this after remote assignments have also drained their final session writes. */
-  async closeEvidence() {
-    try {
-      await this.features?.close();
-    } finally {
-      try {
-        await this.resources.close();
-      } finally {
-        this.sessions.runs.close();
-        this.sessions.interactions.close();
-        this.sessions.requests.close();
-      }
-    }
+  closeEvidence(): Promise<void> {
+    this.evidenceClosing ??= settleCleanup(
+      () => this.features?.close(),
+      () => this.resources.close(),
+      [() => this.sessions.runs.close(), () => this.sessions.interactions.close(), () => this.sessions.requests.close()],
+    );
+    return this.evidenceClosing;
   }
+
   async rememberTask(task: Task) {
     await this.taskIndex.remember(task);
     await this.features?.rememberRemote(task);

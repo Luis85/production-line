@@ -1,9 +1,7 @@
-import { DatabaseSync } from 'node:sqlite';
+import type { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
-import { chmod, lstat, open } from 'node:fs/promises';
-import { join } from 'node:path';
 import { DomainError } from '../../../shared/errors.js';
-import { ensureDirectory } from './files.js';
+import { openPrivateJournal } from './database.js';
 import type { InteractionAdmission, InteractionEvent, InteractionEventPage, InteractionEventType, InteractionPhase, InteractionStore, InteractionTurn, InteractionTurnSummary, InteractionView, PendingInteraction } from '../../application/interactions.js';
 import type { ModelRequest, ModelResult } from '../../application/model-contract.js';
 import type { ProviderUsage } from '../../application/run-evidence.js';
@@ -26,18 +24,9 @@ export class WorkerInteractionJournal implements InteractionStore {
 
   async init() {
     if (this.db) return;
-    await ensureDirectory(this.directory);
-    const file = join(this.directory, 'worker-interactions.sqlite');
-    for (const path of [file, file + '-wal', file + '-shm']) {
-      const stat = await lstat(path).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
-      if (stat && (!stat.isFile() || stat.isSymbolicLink())) throw Error('Interaction storage must be a regular file.');
-    }
-    const reserved = await open(file, 'ax', 0o600).catch(error => { if (error.code !== 'EEXIST') throw error; return null; });
-    await reserved?.close();
-    this.db = new DatabaseSync(file);
+    this.db = await openPrivateJournal(this.directory, 'worker-interactions.sqlite', 'Interaction storage must be a regular file.');
     try {
-      await chmod(file, 0o600);
-      this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;
+      this.db.exec(`
         CREATE TABLE IF NOT EXISTS interaction_sessions (id TEXT PRIMARY KEY, revision INTEGER NOT NULL, phase TEXT NOT NULL, pending TEXT);
         CREATE TABLE IF NOT EXISTS interaction_turns (sequence INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, session_id TEXT NOT NULL, run_id TEXT UNIQUE, status TEXT NOT NULL, payload TEXT NOT NULL);
         CREATE INDEX IF NOT EXISTS interaction_turns_session ON interaction_turns(session_id, sequence);

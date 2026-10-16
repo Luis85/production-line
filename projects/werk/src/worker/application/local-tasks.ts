@@ -1,5 +1,8 @@
+import type { LocalTaskboardView } from './workspace-view.js';
 import type { ToolWorktreeIdentity } from './tool-runtime.js';
-import { createToolRuntime } from '../infrastructure/tool-runtime.js';
+import type { ModelFactory, ProviderId } from './provider-contract.js';
+import type { WorkerSettingsPort, LocalTaskStorage, ApprovedTaskFiles } from './workspace-ports.js';
+import { validateApprovedPaths } from './approved-paths.js';
 import type { StructuredModel } from './model-contract.js';
 import { gateDigest, validateGateInput, validateGatePolicy, type GateInput, type GatePolicy, type WorkerRequest } from "./request-gates.js";
 import { DEFAULT_MAX_RUNTIME_MS } from "./execution-policy.js";
@@ -15,18 +18,9 @@ import {
   type DefinitionSnapshot,
 } from "./definitions.js";
 import { randomUUID, createHash } from "node:crypto";
-import { isAbsolute, join, resolve, relative } from "node:path";
-import { realpath, lstat } from "node:fs/promises";
+import { isAbsolute, resolve } from "node:path";
 import { object, text } from "../../shared/contracts.js";
 import { DomainError } from "../../shared/errors.js";
-import {
-  atomicWrite,
-  ensureDirectory,
-  readBoundedFile,
-} from "../infrastructure/journal/files.js";
-import { codexConfiguration } from "../infrastructure/codex-adapter.js";
-import { modelFor, type ProviderId } from "../infrastructure/providers.js";
-import type { WorkerSettings } from "../infrastructure/settings.js";
 import type { WorkerSessions } from "./sessions.js";
 import type { ConversationModel } from "./conversation.js";
 /** Repository adapters prepare committed worktrees; plain folders remain a legacy fallback. */
@@ -119,12 +113,6 @@ export interface LocalTask {
   patch: string | null;
   archived: boolean;
 }
-async function worktreeIdentity(path: string): Promise<ToolWorktreeIdentity> {
-  const info = await lstat(path);
-  if (!info.isDirectory() || info.isSymbolicLink() || await realpath(path) !== path)
-    throw new DomainError('conflict', 'The retained task worktree changed. Create a new task before using tools.');
-  return { dev: String(info.dev), ino: String(info.ino), birthtimeMs: info.birthtimeMs };
-}
 const fingerprint = (value: string) =>
   createHash("sha256").update(value).digest("hex");
 function patchFile(file: TaskFile, content: string) {
@@ -153,8 +141,9 @@ function patchFile(file: TaskFile, content: string) {
 }
 /** Explicit tasks generate bounded, reviewable patches; provider output is never executed as shell code. */
 export class LocalTaskboard {
-  private directory: string;
-  private settings: WorkerSettings;
+  private storage: LocalTaskStorage;
+  private files: ApprovedTaskFiles;
+  private settings: WorkerSettingsPort;
   private sessions: WorkerSessions;
   private tasks: LocalTask[] = [];
   private writing = Promise.resolve();
@@ -171,27 +160,24 @@ export class LocalTaskboard {
   private closed = false;
   private persistenceError = false;
   private evidencePersistenceError = false;
-  private model: typeof modelFor;
-  constructor(
-    directory: string,
-    settings: WorkerSettings,
-    sessions: WorkerSessions,
-    modelOrWorkspaces: typeof modelFor | LocalTaskWorkspaces = modelFor,
-    workspaces?: LocalTaskWorkspaces,
-  ) {
-    this.directory = directory;
+  private model: ModelFactory;
+  constructor(settings: WorkerSettingsPort, sessions: WorkerSessions, dependencies: {
+    model: ModelFactory;
+    storage: LocalTaskStorage;
+    files: ApprovedTaskFiles;
+    workspaces?: LocalTaskWorkspaces;
+  }) {
+    this.storage = dependencies.storage;
+    this.files = dependencies.files;
     this.settings = settings;
     this.sessions = sessions;
-    this.model =
-      typeof modelOrWorkspaces === "function" ? modelOrWorkspaces : modelFor;
-    this.workspaces =
-      typeof modelOrWorkspaces === "function" ? workspaces : modelOrWorkspaces;
+    this.model = dependencies.model;
+    this.workspaces = dependencies.workspaces;
   }
   async init() {
-    try {
-      const value = JSON.parse(
-        await readBoundedFile(join(this.directory, "taskboard.json"), 16777216),
-      );
+    const saved = await this.storage.read();
+    if (saved !== undefined) {
+      const value = JSON.parse(saved);
       if (
         !Array.isArray(value) ||
         value.length > 100 ||
@@ -240,8 +226,6 @@ export class LocalTaskboard {
           );
       }
       await this.persist(this.tasks);
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
     for (const record of this.sessions.view().records)
       if (
@@ -285,7 +269,7 @@ export class LocalTaskboard {
       this.settings.provider(task.provider),
       task.definition,
     );
-    const actual = this.model(connection, this.directory) as
+    const actual = this.model(connection) as
       | (ConversationModel & {
           configuration?: { id: string; model: string; instruction: string };
         })
@@ -432,7 +416,7 @@ export class LocalTaskboard {
     const fail = () => new DomainError('conflict', 'The retained task worktree could not be verified. Create a new task before using tools; accepted file snapshots remain saved.');
     if (!task.worktreeIdentity || !task.baseCommit || !this.workspaces) throw fail();
     const verifyIdentity = async () => {
-      let actual; try { actual = await worktreeIdentity(task.worktree!); } catch { throw fail(); }
+      let actual; try { actual = await this.files.identity(task.worktree!); } catch { throw fail(); }
       if (actual.dev !== task.worktreeIdentity!.dev || actual.ino !== task.worktreeIdentity!.ino || actual.birthtimeMs !== task.worktreeIdentity!.birthtimeMs) throw fail();
     };
     // Check before the preparation port: a missing directory must never be recreated here.
@@ -450,9 +434,7 @@ export class LocalTaskboard {
     };
     const model = this.model(
       definitionConnection(connection, task.definition),
-      this.directory,
-      undefined,
-      { tools: () => createToolRuntime({ policy: this.settings.toolPolicy(), currentRevision: () => this.settings.toolPolicy().revision, directory: this.directory, worktree: task.worktree, worktreeIdentity: task.worktreeIdentity }) },
+      { worktree: task.worktree, worktreeIdentity: task.worktreeIdentity },
     );
     if (!model)
       throw new DomainError(
@@ -518,11 +500,7 @@ export class LocalTaskboard {
     };
   }
   private async writePatch(task: LocalTask, patch: string) {
-    await ensureDirectory(join(this.directory, "local-review"));
-    await atomicWrite(
-      join(this.directory, "local-review", task.id + ".patch"),
-      patch,
-    );
+    await this.storage.writePatch(task.id, patch);
   }
   private async recoverTask(task: LocalTask) {
     if (task.requestId) {
@@ -633,7 +611,7 @@ export class LocalTaskboard {
       ).length
     );
   }
-  view() {
+  view(): LocalTaskboardView {
     return {
       settings: { ...this.settings.value.board },
       tasks: this.tasks.map(({ files, instruction, patch, ...task }) => ({
@@ -671,7 +649,7 @@ export class LocalTaskboard {
         "conflict",
         "Taskboard storage is full. Delete old tasks to free space.",
       );
-    await atomicWrite(join(this.directory, "taskboard.json"), body);
+    await this.storage.write(body);
     this.persistenceError = false;
   }
   private change(operation: (tasks: LocalTask[]) => void | Promise<void>) {
@@ -782,11 +760,9 @@ export class LocalTaskboard {
       throw new DomainError("conflict", "The task repository does not match its reserved assignment.");
     if (submission?.baseCommit && !this.workspaces)
       throw new DomainError("unavailable", "Pinned task admission requires the repository worktree service.");
-    const config = codexConfiguration({
-      executable: resolve("provider"),
-      repository: assignment?.path ?? selector,
-      allowedPaths: body.paths,
-    });
+    const repositoryPath = assignment?.path ?? selector;
+    if (!isAbsolute(repositoryPath)) throw new DomainError("invalid_input", "Repository must be an absolute project folder or assigned repository.");
+    const allowedPaths = validateApprovedPaths(body.paths);
     if (
       body.priority !== undefined &&
       body.priority !== 1 &&
@@ -813,7 +789,7 @@ export class LocalTaskboard {
           ]),
           submission?.baseCommit,
         )
-      : { repository: config.repository!, path: config.repository! };
+      : { repository: repositoryPath, path: repositoryPath };
     if (
       assignment &&
       (prepared.repositoryId !== assignment.id || !prepared.baseCommit)
@@ -829,51 +805,7 @@ export class LocalTaskboard {
         "conflict",
         "This task worktree already exists. Inspect the retained task before submitting again.",
       );
-    const repository = await realpath(prepared.repository),
-      snapshotRoot = await realpath(prepared.path),
-      files: TaskFile[] = [];
-    if (prepared.baseCommit && snapshotRoot === repository)
-      throw new DomainError(
-        "conflict",
-        "Git task snapshots require a separate worktree.",
-      );
-    let bytes = 0;
-    for (const path of config.allowedPaths) {
-      const parts = path.split("/");
-      for (let i = 1; i <= parts.length; i++) {
-        const entry = join(snapshotRoot, ...parts.slice(0, i));
-        const info = await lstat(entry).catch((error) => {
-          if (error.code !== "ENOENT") throw error;
-          return null;
-        });
-        if (
-          info?.isSymbolicLink() ||
-          (info && i < parts.length && !info.isDirectory())
-        )
-          throw new DomainError(
-            "invalid_input",
-            "Approved files cannot contain symlinks.",
-          );
-      }
-      const absolute = resolve(snapshotRoot, path);
-      if (relative(snapshotRoot, absolute).startsWith(".."))
-        throw new DomainError("invalid_input", "File outside repository");
-      let content = "",
-        existed = true;
-      try {
-        content = await readBoundedFile(absolute, 24000);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-        existed = false;
-      }
-      bytes += content.length;
-      if (bytes > 48000 || content.includes("\0"))
-        throw new DomainError(
-          "invalid_input",
-          "Task input must be text, at most 48,000 characters in total.",
-        );
-      files.push({ path, content, existed });
-    }
+    const { repository, path: snapshotRoot, files } = await this.files.snapshot(prepared, allowedPaths);
     if (this.closed) throw new DomainError("unavailable", "Worker is stopping");
     const task: LocalTask = {
       ...(submission ? { submissionHash: submission.hash, submissionContextHash: submissionContextHash(submission) } : {}),
@@ -891,7 +823,7 @@ export class LocalTaskboard {
         ? {
             repositoryId: prepared.repositoryId,
             worktree: snapshotRoot,
-            worktreeIdentity: await worktreeIdentity(snapshotRoot),
+            worktreeIdentity: await this.files.identity(snapshotRoot),
             baseCommit: prepared.baseCommit,
           }
         : {}),
@@ -1459,9 +1391,7 @@ export class LocalTaskboard {
       };
       const model = this.model(
         definitionConnection(connection, task.definition),
-        this.directory,
-        undefined,
-        { tools: () => createToolRuntime({ policy: this.settings.toolPolicy(), currentRevision: () => this.settings.toolPolicy().revision, directory: this.directory, worktree: task.worktree, worktreeIdentity: task.worktreeIdentity }) },
+        { worktree: task.worktree, worktreeIdentity: task.worktreeIdentity },
       );
       if (!model) throw Error("Provider not configured");
       signal = AbortSignal.any([

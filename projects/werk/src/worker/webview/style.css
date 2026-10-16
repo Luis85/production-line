@@ -1114,29 +1114,6 @@ meter::-moz-meter-bar {
 .message-label time {
   font-size: 0.7rem;
 }
-.code-block {
-  margin: 16px 0;
-  border: 1px solid var(--ui-border);
-  border-radius: 8px;
-  overflow: hidden;
-}
-.code-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 4px 12px;
-  background: #17232c;
-  font-size: 0.75rem;
-  color: var(--ui-text-muted);
-}
-.code-block pre {
-  margin: 0;
-  border-radius: 0;
-  padding: 16px;
-  white-space: pre;
-  overflow-wrap: normal;
-}
 .pending-message {
   color: var(--ui-text-muted);
 }

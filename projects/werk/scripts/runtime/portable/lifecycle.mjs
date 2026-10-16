@@ -133,14 +133,14 @@ export async function run(kind, state, root, options, internal) {
       const { runWorker } = await import(new URL(`../../../src/worker/dist/worker/runner.js`, import.meta.url));
       const { configuration } = await import(new URL(`../../../src/worker/dist/worker/config.js`, import.meta.url));
       const effective = await configuration(options);
-      worker = runWorker({ ...effective, stateDir: state, url: options.url, enrollmentToken: process.env.WERK_ENROLLMENT_TOKEN ?? '', projectDir: options['project-dir'], integrationProjectDir: await configuredProjectRoot(options), statusHost: options.host ?? '127.0.0.1', statusPort: Number(options.port ?? 4100) }, abort.signal, { ready: async address => {
+      worker = runWorker({ ...effective, stateDir: state, url: options.url, enrollmentToken: process.env.WERK_ENROLLMENT_TOKEN ?? '', webviewToken: process.env.WERK_WORKER_TOKEN, projectDir: options['project-dir'], integrationProjectDir: await configuredProjectRoot(options), statusHost: options.host ?? '127.0.0.1', statusPort: Number(options.port ?? 4100) }, abort.signal, { ready: async address => {
         const host = address.address === '0.0.0.0' || address.address === '::' ? '127.0.0.1' : address.address;
         await onReady({ url: `http://${host.includes(':') ? '[' + host + ']' : host}:${address.port}`, credentialsFile: join(state, 'webview-token') });
       } });
       await worker;
       await close();
     } else {
-      await runComponent(kind, Object.entries({ 'state-dir': state, host: options.host ?? '127.0.0.1', port: options.port ?? (kind === 'factory' ? '3100' : '3000'), ...(options.project ? { project: options.project } : {}) }).flatMap(([key, value]) => ['--' + key, value]), { ready: onReady });
+      await runComponent(kind, Object.entries({ 'state-dir': state, host: options.host ?? '127.0.0.1', port: options.port ?? (kind === 'factory' ? '3100' : '3000'), ...(options.project ? { project: options.project } : {}) }).flatMap(([key, value]) => ['--' + key, value]), { ready: onReady, environmentLoaded: true });
     }
   } catch (error) { abort.abort(); await close().catch(() => {}); throw error; }
 }

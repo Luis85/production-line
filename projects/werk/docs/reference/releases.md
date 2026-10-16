@@ -1,7 +1,7 @@
 # Release artifacts and verification
 
-Version 0.7.1 is packaged as `werk-0.7.1.tar.gz` and `werk-0.7.1.zip`. Each archive
-has one top directory, `werk-0.7.1/`. Obtain it and `SHA256SUMS` from a delivery
+Version 0.8.1 is packaged as `werk-0.8.1.tar.gz` and `werk-0.8.1.zip`. Each archive
+has one top directory, `werk-0.8.1/`. Obtain it and `SHA256SUMS` from a delivery
 source you trust. Checksums detect corruption or mismatch; an unsigned checksum
 file does not independently authenticate its publisher.
 
@@ -37,9 +37,9 @@ After manual extraction or installation, run `node werk.mjs up` from the install
 ## Verify before extraction
 
 Compare the SHA-256 of your chosen archive with its exact entry in `SHA256SUMS`.
-For example, Linux provides `sha256sum werk-0.7.0.tar.gz`, macOS provides
-`shasum -a 256 werk-0.7.0.tar.gz`, and PowerShell provides
-`Get-FileHash ./werk-0.7.0.zip -Algorithm SHA256`. A mismatch means stop and obtain
+For example, Linux provides `sha256sum werk-0.8.0.tar.gz`, macOS provides
+`shasum -a 256 werk-0.8.0.tar.gz`, and PowerShell provides
+`Get-FileHash ./werk-0.8.0.zip -Algorithm SHA256`. A mismatch means stop and obtain
 the correct artifact. Extract into a new directory; do not overwrite a running
 installation or its state.
 
@@ -53,7 +53,8 @@ It neither publishes a release nor creates a VM. The quick-start URL becomes ava
 
 The root contains `werk.mjs`, the Docker shell/PowerShell launchers, release
 Compose/image definitions (including the Windows named-volume overlay), runtime support scripts, prebuilt application `dist`
-trees, release documentation and `release-manifest.json`. The distribution
+trees, release documentation, the maintained [CHANGELOG](../../CHANGELOG.md) and
+`release-manifest.json`. The distribution
 contains no user state, credentials, provider login, imported source ZIP or npm
 development environment. Native use requires Node 24; Docker use requires
 Docker/Compose and a shell. Neither path requires building the source project.
@@ -104,12 +105,42 @@ available.
 
 ## Maintainer build contract
 
-In the source checkout only, install the locked browser with
+Maintain [CHANGELOG.md](../../CHANGELOG.md) as part of every release. During
+development, curate meaningful user-facing bullets under `[Unreleased]`. Before
+tagging, move the finished changes into the first dated entry,
+`[<version>] - YYYY-MM-DD`, using the release date in Europe/Berlin. Update the
+root package and lockfile version to match. Keep unreleased work in its own section;
+do not invent historical release entries.
+
+From the source checkout:
+
+```sh
+npm run changelog:check
+npm run changelog:notes
+npm run changelog:notes -- --out release/RELEASE-NOTES.md
+```
+
+The check requires a unique, dated current-version entry in the right position
+with meaningful Keep a Changelog bullets. On a tagged GitHub run, the tag must
+match the package version. `changelog:notes` extracts that exact entry; its
+optional `--version` must still equal the package version. Fix a missing, empty,
+duplicated or mismatched entry before packaging or tagging.
+
+Install the locked browser with
 `npm exec -- playwright install --with-deps chromium`, then run
 `npm run release:build` to build and package the applications and qualified
-Storybook. `npm run release:package` packages already-built runtime distributions.
+Storybook. `npm run release:package` packages already-built runtime distributions,
+validates the changelog before producing output, writes the candidate's
+`RELEASE-NOTES.md` sidecar and includes the full changelog in both archives.
 `npm run storybook:ci` rebuilds the static Storybook and captures its stories;
 `npm run release:storybook` validates and packages that evidence separately.
+
+The release workflow checks the changelog before dependency installation. Its
+publication step uses the staged candidate notes and appends the existing
+installation/qualification guidance, so the published release describes the same
+candidate that passed the artifact gates. This does not add a separate published
+asset. The notes remain a candidate sidecar consumed by publication; the full
+changelog travels inside the runtime archives.
 
 Use the source project's checks and fresh-extraction smoke tests before publishing.
 These commands are not required or available as an installation step in the lean
@@ -140,7 +171,7 @@ QEMU, `cloud-localds`, OpenSSH, OpenSSL, curl and `nc` (netcat):
 
 ```text
 node scripts/release/extract.mjs release /tmp/werk-candidate
-node scripts/release/cloud-init-smoke.mjs --root /tmp/werk-candidate/werk-0.7.0 --archives release
+node scripts/release/cloud-init-smoke.mjs --root /tmp/werk-candidate/werk-0.8.0 --archives release
 ```
 
 The gate downloads the official Ubuntu Noble cloud image and checks its digest
@@ -161,14 +192,14 @@ Forge generates `.github/workflows/werk--release.yml`. Edit the source, then run
 manual branch runs qualify candidates without publishing.
 
 1. Update `projects/werk/package.json` and its lockfile to the desired version in
-   a reviewed change (for example, `0.7.0`). Merge to `main` after checks pass.
+   a reviewed change (for example, `0.8.0`). Merge to `main` after checks pass.
 2. From a clean checkout of the merged commit, create and push its matching tag:
 
    ```sh
    git switch main
    git pull --ff-only origin main
-   git tag -a v0.7.0 -m "Werk 0.7.0"
-   git push origin v0.7.0
+   git tag -a v0.8.0 -m "Werk 0.8.0"
+   git push origin v0.8.0
    ```
 
 3. Watch **Actions → Werk release**. The tag must match `package.json`, use a

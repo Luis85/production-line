@@ -5,7 +5,7 @@ import { syncBuiltinESMExports } from 'node:module';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { GitFeatureRepository } from '../../src/worker/dist/worker/infrastructure/features/git-repository.js';
 import { prepareRepositoryWorktree } from '../../src/worker/dist/worker/infrastructure/repositories.js';
 
@@ -202,9 +202,15 @@ test('deep publication and later task worktrees support committed receipt paths 
   const diagnostics = [], originalSpawn = childProcess.spawn;
   const spy = t.mock.method(childProcess, 'spawn', function (executable, args, options) {
     const child = Reflect.apply(originalSpawn, this, [executable, args, options]);
-    const command = Array.isArray(args) ? args.indexOf('worktree') : -1;
-    if (executable === 'git' && [repository, taskRepository].includes(options?.cwd) && command >= 0 && args[command + 1] === 'add') {
-      const diagnostic = { targetLength: args.at(-2).length, gitDirBytes: Buffer.byteLength(join(args.at(-2), '.git')), exitCode: null, stderr: '' }; diagnostics.push(diagnostic);
+    let invoked = executable, commandArgs = args;
+    if ([repository, taskRepository].includes(options?.cwd) && options?.env?.WERK_PROVIDER_LAUNCH) {
+      // The Windows job supervisor carries the original command as data. Observe it without substituting execution.
+      const launch = JSON.parse(Buffer.from(options.env.WERK_PROVIDER_LAUNCH, 'base64').toString('utf8'));
+      invoked = launch.executable; commandArgs = launch.arguments;
+    }
+    const command = Array.isArray(commandArgs) ? commandArgs.indexOf('worktree') : -1;
+    if ((invoked === 'git' || basename(invoked).toLowerCase() === 'git.exe') && [repository, taskRepository].includes(options?.cwd) && command >= 0 && commandArgs[command + 1] === 'add') {
+      const diagnostic = { targetLength: commandArgs.at(-2).length, gitDirBytes: Buffer.byteLength(join(commandArgs.at(-2), '.git')), exitCode: null, stderr: '' }; diagnostics.push(diagnostic);
       child.stderr.on('data', chunk => { diagnostic.stderr = (diagnostic.stderr + chunk.toString('utf8')).slice(0, 8192); });
       child.once('close', code => { diagnostic.exitCode = code; });
     }

@@ -1,3 +1,4 @@
+import { readResponseBody, ResponseBodyLimitError } from '../../shared/http/response-body.js';
 import { identifier } from '../../shared/contracts.js';
 import type { ProductionLine } from '../../shared/factory.js';
 import type { IntakeTask, LineDelivery } from '../application/intake.js';
@@ -15,12 +16,14 @@ export class HttpLineDelivery implements LineDelivery {
       headers: { authorization: 'Bearer ' + credential, 'content-type': 'application/json', 'idempotency-key': 'factory:' + item.id }, body: JSON.stringify(task),
     });
     if (!response.ok) { await response.body?.cancel(); throw Error('Delivery not acknowledged'); }
-    const reader = response.body?.getReader(), chunks: Uint8Array[] = []; let size = 0;
-    if (!reader) throw Error('Empty acknowledgement');
-    try {
-      for (;;) { const result = await reader.read(); if (result.done) break; size += result.value.length; if (size > 65536) { await reader.cancel(); throw Error('Oversized acknowledgement'); } chunks.push(result.value); }
-    } finally { reader.releaseLock(); }
-    const result = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    if (!response.body) throw Error('Empty acknowledgement');
+    let bytes: Uint8Array;
+    try { bytes = await readResponseBody(response.body, 65536); }
+    catch (error) {
+      if (error instanceof ResponseBodyLimitError) throw Error('Oversized acknowledgement');
+      throw error;
+    }
+    const result = JSON.parse(Buffer.from(bytes).toString('utf8'));
     if (result.project !== item.task.project) throw Error('Wrong project acknowledgement');
     return identifier(result.id, 'taskId');
   }

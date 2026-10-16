@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import UButton from "@nuxt/ui/components/Button.vue";
 import SpatialMap from "../../../shared/webview/components/SpatialMap.vue";
 import LineInteractionPanel from "../../../shared/webview/components/LineInteractionPanel.vue";
+import type { InteractionTask, LineSubmissionReceipt } from '../../../shared/webview/line-interaction';
 import { count, time, handoff, type FactoryStore } from "../store";
 import type { SpatialNode } from "../../../shared/webview/types";
 const props = defineProps<{ store: FactoryStore }>(),
@@ -98,6 +99,12 @@ const nodes = computed<SpatialNode[]>(() =>
     ] as [string, unknown][],
   })),
 );
+async function submitInteraction(task: InteractionTask, key: string): Promise<LineSubmissionReceipt> {
+  const target = line.value;
+  if (!target) throw new Error('Select a production line before submitting.');
+  const result = await props.store.api<{ id: string; status: string }>('/v1/intake', { method: 'POST', body: { factoryId: target.factoryId, lineId: target.id, task }, key });
+  return { kind: 'factory', id: result.id, status: result.status === 'delivered' ? 'delivered' : 'pending' };
+}
 </script>
 <template>
   <section class="line-dashboard" aria-labelledby="line-dashboard-title">
@@ -175,14 +182,7 @@ const nodes = computed<SpatialNode[]>(() =>
               { method: 'POST', body },
             )
         "
-        :submit="
-          (task, key) =>
-            store.api('/v1/intake', {
-              method: 'POST',
-              body: { factoryId: line!.factoryId, lineId: line!.id, task },
-              key,
-            })
-        "
+        :submit="submitInteraction"
       />
     </template>
   </section>

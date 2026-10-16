@@ -1,3 +1,4 @@
+import { boundedSignal, requestJson } from '../../shared/webview/http';
 import { computed, reactive } from "vue";
 import type {
   Factory,
@@ -155,7 +156,7 @@ export function createFactoryStore(fetcher: typeof fetch = fetch) {
   ): Promise<T> {
     const own = session,
       token = options.token ?? state.token;
-    const response = await fetcher(path, {
+    return requestJson<T>(path, {
       method: options.method ?? "GET",
       headers: {
         Authorization: "Bearer " + token,
@@ -165,42 +166,21 @@ export function createFactoryStore(fetcher: typeof fetch = fetch) {
         ...(options.key ? { "Idempotency-Key": options.key } : {}),
       },
       cache: "no-store",
-      signal: options.signal
-        ? AbortSignal.any([options.signal, AbortSignal.timeout(12000)])
-        : AbortSignal.timeout(12000),
+      signal: boundedSignal(options.signal, 12000),
       ...(options.body !== undefined
         ? { body: JSON.stringify(options.body) }
         : {}),
+    }, {
+      fetcher,
+      onResponse: response => {
+        if (response.status === 401 && options.token === undefined && own === session) {
+          disconnect(true);
+          state.error = 'Zugangstoken nicht mehr gültig. Bitte erneut verbinden; ungespeicherte Eingaben bleiben erhalten.';
+        }
+      },
+      invalidJson: status => 'Der Server antwortet nicht mit gültigem JSON (HTTP ' + status + ').',
+      failure: status => 'HTTP ' + status,
     });
-    // Authentication status is authoritative even when a proxy returns a non-JSON body.
-    if (
-      response.status === 401 &&
-      options.token === undefined &&
-      own === session
-    ) {
-      disconnect(true);
-      state.error =
-        "Zugangstoken nicht mehr gültig. Bitte erneut verbinden; ungespeicherte Eingaben bleiben erhalten.";
-    }
-    let result;
-    try {
-      result = await response.json();
-    } catch {
-      throw Object.assign(
-        Error(
-          "Der Server antwortet nicht mit gültigem JSON (HTTP " +
-            response.status +
-            ").",
-        ),
-        { status: response.status },
-      );
-    }
-    if (!response.ok) {
-      throw Object.assign(Error(result?.error ?? "HTTP " + response.status), {
-        status: response.status,
-      });
-    }
-    return result;
   }
   function descendants(id = state.scope) {
     const result = new Set(id ? [id] : state.factories.map((f) => f.id));

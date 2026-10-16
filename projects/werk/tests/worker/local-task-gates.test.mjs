@@ -11,8 +11,8 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WorkerSettings } from "../../src/worker/dist/worker/infrastructure/settings.js";
-import { WorkerSessions } from "../../src/worker/dist/worker/application/sessions.js";
-import { LocalTaskboard } from "../../src/worker/dist/worker/application/local-tasks.js";
+import { WorkerSessions } from './application-fixtures.mjs';
+import { LocalTaskboard } from './application-fixtures.mjs';
 import { defaultGatePolicy } from "../../src/worker/dist/worker/application/request-gates.js";
 import { modelCapabilities } from "../../src/worker/dist/worker/application/model-contract.js";
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));

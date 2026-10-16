@@ -69,13 +69,20 @@ test('login input is bounded and failed attempts are throttled without leaking t
 
 test('worker status server routes browser access and provider checks through the authenticated boundary', async t => {
   const { statusServer } = await import('../../src/worker/dist/worker/status/server.js');
+  const { ProviderStatusChecks } = await import('../../src/worker/dist/worker/infrastructure/provider-status.js');
+  const providerStatuses = new ProviderStatusChecks();
   const workspace = {
     authenticate(token) { if (token !== operatorToken) throw new ApiError(401, 'Incorrect worker token'); },
     settings: { publicView() { return { configured: true }; }, provider(id) { if (id !== 'openai-api') throw new ApiError(400, 'Unsupported provider'); return { id, executable: '', apiKey: '', model: '' }; } },
+    providerStatus(body) { return providerStatuses.check(this.settings.provider(body.id)); },
     definitions: { view() { return { records: [] }; } }
   };
   const server = await statusServer(() => ({}), '127.0.0.1', 0, undefined, workspace);
-  t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); }));
+  t.after(async () => {
+    server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+    await providerStatuses.close();
+  });
   const base = `http://127.0.0.1:${server.address().port}`, headers = { 'content-type': 'application/json', 'x-werk-request': 'webview', origin: base };
   const response = await fetch(base + '/api/access', { method: 'POST', headers, body: JSON.stringify({ token: operatorToken }) }); assert.equal(response.status, 200);
   const cookie = response.headers.get('set-cookie').split(';')[0];

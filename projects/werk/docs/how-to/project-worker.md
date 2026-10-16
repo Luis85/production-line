@@ -20,6 +20,8 @@ node /path/to/werk-release/bin/apps/worker/cli.mjs init
 
 This copies the self-contained app to `bin/apps/worker` and creates:
 
+- `.env`: private local access token and worker launch defaults.
+- `.env.example`: credential-free keys/placeholders suitable for the team.
 - `.werk/worker.json`: feature-folder and default-provider configuration.
 - `.werk/worker-project.json`: project startup defaults.
 - `.werk/compose.worker.yaml`: a standalone Docker worker.
@@ -50,9 +52,25 @@ node bin/apps/worker/cli.mjs run
 
 The worker discovers the project configuration, watches the feature folder and
 opens its local listener on port 4100 (or the chosen port). Open the printed URL
-and [connect a provider](use-worker-webview.md#connect-claude-or-codex).
+and unlock with `WERK_WORKER_TOKEN` from the project's private `.env`, then
+[connect a provider](use-worker-webview.md#connect-claude-or-codex).
 The printed credential file path is local; its token is not printed or placed in
 the URL. `run` stays in the terminal; Ctrl+C closes the worker.
+
+Edit the project `.env` to configure `WERK_WORKER_HOST`, `WERK_WORKER_PORT`,
+`WERK_WORKER_STATE_DIR` or `WERK_WORKER_CONFIG`. Explicit CLI launch options win;
+process environment overrides the file. Relative environment paths are rooted in
+the project. Existing private settings, including an enrolled orchestrator
+connection, keep their documented precedence. See
+[project environment files](../reference/configuration.md#project-environment-files)
+for all keys and token rotation.
+
+Setup preserves existing values and never prints credentials. Keep `.env` private
+and untracked; commit only `.env.example` if useful for the team. To adopt an
+existing installed worker without repeating installation, run
+`node bin/apps/worker/cli.mjs env init --state-dir /absolute/worker-state`.
+Use that worker's real state directory to retain its access token. Stop and restart
+after an intentional token/configuration change.
 
 For background operation:
 
@@ -140,9 +158,9 @@ from elsewhere. The saved path is shared by native and Docker startup.
 For Docker without host Node:
 
 ```sh
-docker compose -f .werk/compose.worker.yaml down
-docker compose -f .werk/compose.worker.yaml run --rm --no-deps worker node bin/apps/worker/cli.mjs feature folder set --path requests/features
-docker compose -f .werk/compose.worker.yaml up -d
+docker compose --env-file .env -f .werk/compose.worker.yaml down
+docker compose --env-file .env -f .werk/compose.worker.yaml run --rm --no-deps worker node bin/apps/worker/cli.mjs feature folder set --path requests/features
+docker compose --env-file .env -f .werk/compose.worker.yaml up -d
 ```
 
 Stop the worker before changing the path; do not start it or edit its configuration
@@ -181,18 +199,21 @@ See the [request fields, statuses and recovery rules](../reference/feature-reque
 After setup, from the same project directory:
 
 ```sh
-docker compose -f .werk/compose.worker.yaml up -d
+docker compose --env-file .env -f .werk/compose.worker.yaml up -d
 ```
 
 The generated configuration uses a pinned Node 24 image with Git and the prebuilt app;
 there is no npm install or image build. It mounts the project so dropped requests
 and results are visible on the host, mounts the app read-only, and binds the
-webview to loopback. Private state remains in `.werk/worker`.
+webview to loopback. The container reads the mounted project `.env`; Compose uses
+`--env-file .env` for the host-port interpolation. The container listener remains
+port 4100. Keep relative project state/config paths or choose paths visible inside
+the container. Default private state remains in `.werk/worker`.
 
 ```sh
-docker compose -f .werk/compose.worker.yaml logs --tail 100 worker
-docker compose -f .werk/compose.worker.yaml exec -T worker node bin/apps/worker/cli.mjs feature list
-docker compose -f .werk/compose.worker.yaml down
+docker compose --env-file .env -f .werk/compose.worker.yaml logs --tail 100 worker
+docker compose --env-file .env -f .werk/compose.worker.yaml exec -T worker node bin/apps/worker/cli.mjs feature list
+docker compose --env-file .env -f .werk/compose.worker.yaml down
 ```
 
 The generated user defaults to the setup user's UID/GID. Set `WERK_UID` and

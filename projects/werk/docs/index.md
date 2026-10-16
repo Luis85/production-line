@@ -1,6 +1,8 @@
 # Werk documentation
 
-Werk coordinates software-factory tasks, with simulation by default and opt-in native Linux Codex execution for trusted operators. Start with a tutorial to
+Werk coordinates software-factory tasks, with simulated assignments by default,
+opt-in native Linux Codex assignments, and local API/CLI workers with shared Git
+feature intake. See [execution modes](explanation/modes.md) for their boundaries. Start with a tutorial to
 run a task; use a how-to guide for a specific operation, reference pages for exact
 contracts, and explanations for the design and its limits. This organization
 follows [Diátaxis](https://diataxis.fr/).

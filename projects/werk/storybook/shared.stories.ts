@@ -1,3 +1,5 @@
+import type { WorkerInteractionResponse } from '../src/shared/worker-interaction';
+import type { LineSubmissionReceipt } from '../src/shared/webview/line-interaction';
 import type { Meta, StoryObj } from '@storybook/vue3-vite';
 import { nextTick, ref } from 'vue';
 import UButton from '@nuxt/ui/components/Button.vue';
@@ -11,6 +13,8 @@ import TaskKanban from '../src/shared/webview/components/TaskKanban.vue';
 import SpatialMap from '../src/shared/webview/components/SpatialMap.vue';
 import OnboardingTour from '../src/shared/webview/components/OnboardingTour.vue';
 import LineInteractionPanel from '../src/shared/webview/components/LineInteractionPanel.vue';
+import MessageContent from '../src/shared/webview/components/MessageContent.vue';
+import { formattedReplyFixture } from './worker-fixtures';
 import WerkShell from '../src/shared/webview/components/WerkShell.vue';
 import type { KanbanColumn, KanbanTask } from '../src/shared/webview/task-kanban';
 import type { SpatialNode } from '../src/shared/webview/types';
@@ -118,11 +122,11 @@ export const Tour: Story = {
 
 const interactionRender = () => ({ components: { LineInteractionPanel }, setup() {
   const open = ref(true);
-  const request = async () => ({ chat: { available: true, busy: false, phase: 'completed', messages: [
+  const request = async (): Promise<WorkerInteractionResponse> => ({ workerId: 'story-worker', chat: { available: true, busy: false, phase: 'completed', messages: [
     { id: 'request-1', role: 'user', text: 'Add validation for duplicate supplier records.' },
-    { id: 'reply-1', role: 'assistant', text: 'The implementation is ready for review. Please check how duplicate names are matched.' },
+    { id: 'reply-1', role: 'assistant', state: 'complete', text: '# Review ready\n\nThe **implementation** is ready for review.\n\n- Check duplicate names.\n\n| Check | Result |\n| --- | --- |\n| Matching | Review required |\n\n```js\nconst literal = "&amp; <b>exact</b>";\n```\n\n[Review guide](https://example.com/review).\n\n<img src=x onerror=alert(1)>' },
   ] }, sessions: { selected: 'story-task-104', records: [{ id: 'story-task-104', title: 'Validate supplier imports', status: 'completed' }] } });
-  const submit = async () => ({ task: { id: 'FT-107', status: 'queued' } });
+  const submit = async (): Promise<LineSubmissionReceipt> => ({ kind: 'line', id: 'FT-107' });
   return { open, request, submit };
 }, template: '<LineInteractionPanel v-model:open="open" title="Product line interaction" project="atlas" :can-write="true" :request="request" :submit="submit" />' });
 export const ConnectWorker: Story = {
@@ -137,6 +141,10 @@ export const FollowUp: Story = {
     await fillInput(document.body, '#interaction-worker-token', 'documentation-fixture-only');
     await clickButton(document.body, 'Connect model session');
     await findElement(document.body, '#interaction-message');
+    await findElement(document.body, '.interaction-transcript .markdown h3');
+    await findElement(document.body, '.interaction-transcript table');
+    await findElement(document.body, '.interaction-transcript pre[tabindex="0"]');
+    if (document.querySelector('.interaction-transcript img, .interaction-transcript script, .interaction-transcript [onerror]')) throw Error('Transcript must render HTML as text.');
     await fillInput(document.body, '#interaction-message', 'Also include the case where names differ only in letter case.');
   },
 };
@@ -148,5 +156,15 @@ export const SubmitLineTask: Story = {
     await fillInput(document.body, '#interaction-title', 'Validate supplier imports');
     await fillInput(document.body, '#interaction-criteria', 'Reject rows without a supplier name.\nFlag duplicate names for human review.');
     await nextTick();
+  },
+};
+
+export const FormattedReply: Story = {
+  parameters: shared('The same bounded Markdown renderer formats model replies in every application. Raw HTML remains text, images do not fetch, and code keeps its literal contents.', 'MessageContent'),
+  render: () => ({ components: { MessageContent }, setup: () => ({ text: formattedReplyFixture }), template: '<main style="padding:24px;max-width:850px"><MessageContent :text="text" /></main>' }),
+  play: async () => {
+    await findElement(document.body, '.message-content table');
+    await findElement(document.body, '.message-content pre[tabindex="0"]');
+    if (document.querySelector('.message-content img, .message-content script')) throw Error('Model replies must not execute HTML or fetch images.');
   },
 };

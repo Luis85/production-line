@@ -1,18 +1,18 @@
 import type { Snapshot } from "../../shared/snapshots.js";
 import type { Task } from "../../shared/contracts.js";
 import type { RequestGateEvidence } from "../../shared/request-gate.js";
-import type { WorkerRequestJournal } from "../infrastructure/journal/requests.js";
+import type { RequestCatalog } from "./journal-ports.js";
 import type { AttemptJournal, WorkerClient, WorkerIdentity } from "./ports.js";
 /** Reconcile a newly passed Done gate with its previously released remote lease. */
 export class RemoteGateReconciler {
-  private readonly requests: Pick<WorkerRequestJournal, "list" | "get">;
+  private readonly requests: RequestCatalog;
   private readonly journal: Pick<AttemptJournal, "read">;
   private readonly acknowledged = new Set<string>();
   private readonly verifyReview?: (snapshot: Snapshot) => Promise<void>;
   private after = 0;
   private nextAt = 0;
   constructor(
-    requests: Pick<WorkerRequestJournal, "list" | "get">,
+    requests: RequestCatalog,
     journal: Pick<AttemptJournal, "read">,
     verifyReview?: (snapshot: Snapshot) => Promise<void>,
   ) {

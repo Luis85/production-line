@@ -10,10 +10,15 @@ export class SqliteIntakeStore implements IntakeRepository {
   private readonly db: DatabaseSync;
   constructor(path: string) {
     this.db = new DatabaseSync(path);
-    this.db.exec(`PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
-      CREATE TABLE IF NOT EXISTS intake(id TEXT PRIMARY KEY,factory TEXT NOT NULL,idem TEXT UNIQUE NOT NULL,digest TEXT NOT NULL,payload TEXT NOT NULL,status TEXT NOT NULL,updated INTEGER NOT NULL);
-      CREATE INDEX IF NOT EXISTS intake_pending ON intake(status,updated);
-      CREATE TABLE IF NOT EXISTS policy(factory TEXT PRIMARY KEY,payload TEXT NOT NULL);`);
+    try {
+      this.db.exec(`PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
+        CREATE TABLE IF NOT EXISTS intake(id TEXT PRIMARY KEY,factory TEXT NOT NULL,idem TEXT UNIQUE NOT NULL,digest TEXT NOT NULL,payload TEXT NOT NULL,status TEXT NOT NULL,updated INTEGER NOT NULL);
+        CREATE INDEX IF NOT EXISTS intake_pending ON intake(status,updated);
+        CREATE TABLE IF NOT EXISTS policy(factory TEXT PRIMARY KEY,payload TEXT NOT NULL);`);
+    } catch (error) {
+      try { this.db.close(); } catch { /* Keep the schema/open failure as the primary error. */ }
+      throw error;
+    }
   }
   close() { this.db.close(); }
   policy(factoryId: string): FactoryRoutingPolicy {

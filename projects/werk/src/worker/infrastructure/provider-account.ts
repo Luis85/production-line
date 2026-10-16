@@ -1,10 +1,7 @@
 import { constants } from 'node:fs';
-import { access, mkdtemp, rm } from 'node:fs/promises';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
-import { runProcess } from '../../shared/process/launcher.js';
-import { providerEnvironment } from './codex-adapter.js';
-import type { ProviderConnection, ProviderId } from './providers.js';
+import { access } from 'node:fs/promises';
+import { runProviderProbe } from './provider-process.js';
+import type { ProviderConnection, ProviderId } from '../application/provider-contract.js';
 import type { ProviderAccountStatus } from '../application/provider-account.js';
 
 const identity = () => ({ account: null, email: null, organization: null, subscription: null, authMethod: null });
@@ -57,14 +54,11 @@ export class ProviderAccountChecks {
     if (process.platform === 'win32' && connection.id === 'codex-cli') return this.unavailable(connection.id, 'Codex CLI account checks require a native Linux or macOS worker.');
     if (!connection.executable) return this.unavailable(connection.id, 'Save the provider CLI executable before checking its account.');
     try { await access(connection.executable, constants.X_OK); } catch { return this.unavailable(connection.id, 'The saved CLI executable cannot be run by the worker account.'); }
-    let directory: string | undefined;
     try {
-      directory = await mkdtemp(join(tmpdir(), 'werk-provider-account-'));
       const args = connection.id === 'codex-cli' ? ['login', 'status'] : ['auth', 'status', '--json'];
-      const result = await runProcess(connection.executable, args, { cwd: directory, env: providerEnvironment(connection.id === 'codex-cli' ? 'codex' : 'claude'), mode: 'contained', signal: this.controller.signal, timeoutMs: 5000, maxOutputBytes: 16384, graceMs: 0, captureStderr: connection.id === 'codex-cli', allowNonZeroExit: true });
+      const result = await runProviderProbe(connection.executable, connection.id === 'codex-cli' ? 'codex' : 'claude', args, { signal: this.controller.signal, timeoutMs: 5000, maxOutputBytes: 16384 });
       return parseProviderAccount(connection.id, result.exitCode, result.stdout.toString('utf8'), result.stderr.toString('utf8'));
     } catch { return this.unavailable(connection.id, 'The account check failed, timed out or returned too much output. Retry after checking the CLI installation.'); }
-    finally { if (directory) await rm(directory, { recursive: true, force: true }).catch(() => {}); }
   }
   async close() { this.controller.abort(); await Promise.allSettled([...this.pending.values()].map(item => item.operation)); this.cached.clear(); }
 }

@@ -119,6 +119,7 @@ export function createHttpHandler(dependencies: HttpDependencies) {
   return async (
     request: IncomingMessage,
     response: ServerResponse,
+    signal?: AbortSignal,
   ): Promise<void> => {
     try {
       const target = new URL(request.url ?? "/", "http://localhost");
@@ -227,7 +228,7 @@ export function createHttpHandler(dependencies: HttpDependencies) {
           200,
           await interactWithWorker(await readJson(request), (id) => {
             application.workerDetail(id);
-          }),
+          }, signal),
         );
       if (path === "/v1/routing") {
         queryFields(target.searchParams, []);

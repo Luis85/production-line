@@ -1,3 +1,5 @@
+import { settleCleanup } from '../shared/lifecycle.js';
+import { drainHttpServer, HttpRequestLifecycle, trackHttpRequests } from '../shared/http/server-lifecycle.js';
 import { serveWebviewAsset } from '../shared/http/webview-assets.js';
 import { loadAccessFile, accessAuthorization, type AccessDocument } from '../shared/http/access.js';
 import type { AuditSink } from '../shared/http/audit.js';
@@ -45,73 +47,63 @@ export async function startServer(config: ServerConfig) {
   const access = config.access ?? await loadAccessFile(config.accessFile ?? process.env.WERK_ACCESS_FILE);
   accessAuthorization(config.adminToken, access, [config.enrollmentToken]);
   const monitoring = config.monitoring ?? monitoringThresholds(process.env);
-  const contextIntake = config.context ? new BoundContextIntake(config.project, config.context) : undefined;
   const [intake, concept, guide] = await Promise.all(
     ['index.html', 'concept.html', 'guide.html'].map(file => readFile(new URL('./public/' + file, import.meta.url), 'utf8')),
   );
-  const store = new Store(config.db, config.leaseMs);
-  const application = new OrchestratorApplication(store, config.project, contextIntake, monitoring);
-  const handler = createHttpHandler({
-    application,
-    schemaVersion: SCHEMA_VERSION,
-    authorize: tokenAuthorization(config.adminToken, config.enrollmentToken, access),
-    audit: config.audit,
-    views: { intake, concept, guide },
-    reportError: () => serviceEvent('orchestrator', 'internal_error', 'error'),
-  });
-  const server = createServer(observeHttp('orchestrator', async (request, response) => {
-    if (await serveWebviewAsset(request, response, new URL('./public/', import.meta.url))) return;
-    await handler(request, response);
-  }));
-  server.requestTimeout = 15000;
-  server.headersTimeout = 10000;
-  server.keepAliveTimeout = 5000;
-  server.maxRequestsPerSocket = 1000;
+  const requests = new HttpRequestLifecycle();
+  let contextIntake: BoundContextIntake | undefined;
+  let store: Store | undefined;
+  let server: ReturnType<typeof createServer> | undefined;
+  let reaper: ReturnType<typeof setInterval> | undefined;
+  let closing: Promise<void> | undefined;
+  const close = () => {
+    if (closing) return closing;
+    if (reaper) clearInterval(reaper);
+    // Stop admission and start the configured grace period at the close call, before any await.
+    const drained = drainHttpServer(server, shutdownTimeoutMs);
+    return closing = settleCleanup(
+      [() => drained, () => contextIntake?.close()],
+      () => store?.close(),
+    );
+  };
   try {
+    contextIntake = config.context ? new BoundContextIntake(config.project, config.context) : undefined;
+    store = new Store(config.db, config.leaseMs);
+    const application = new OrchestratorApplication(store, config.project, contextIntake, monitoring);
+    const handler = createHttpHandler({
+      application,
+      schemaVersion: SCHEMA_VERSION,
+      authorize: tokenAuthorization(config.adminToken, config.enrollmentToken, access),
+      audit: config.audit,
+      views: { intake, concept, guide },
+      reportError: () => serviceEvent('orchestrator', 'internal_error', 'error'),
+    });
+    server = createServer(observeHttp('orchestrator', requests.wrap(async (request, response, signal) => {
+      if (await serveWebviewAsset(request, response, new URL('./public/', import.meta.url))) return;
+      await handler(request, response, signal);
+    })));
+    trackHttpRequests(server, requests);
+    server.requestTimeout = 15000;
+    server.headersTimeout = 10000;
+    server.keepAliveTimeout = 5000;
+    server.maxRequestsPerSocket = 1000;
     await new Promise<void>((resolve, reject) => {
+      const listening = server!;
       const failed = (error: Error) => reject(error);
-      server.once('error', failed);
-      server.listen(config.port, config.host, () => {
-        server.off('error', failed);
+      listening.once('error', failed);
+      listening.listen(config.port, config.host, () => {
+        listening.off('error', failed);
         resolve();
       });
     });
+    const activeStore = store;
+    reaper = setInterval(() => {
+      try { activeStore.reapExpired(); }
+      catch { serviceEvent('orchestrator', 'lease_reaper_error', 'error'); }
+    }, Math.max(10, Math.min(1000, store.ttl))).unref();
+    return { server, store, close };
   } catch (error) {
-    await contextIntake?.close();
-    store.close();
+    await close().catch(() => {});
     throw error;
   }
-
-  const reaper = setInterval(() => {
-    try { store.reapExpired(); }
-    catch (error) {
-      serviceEvent('orchestrator', 'lease_reaper_error', 'error');
-    }
-  }, Math.max(10, Math.min(1000, store.ttl))).unref();
-
-  let closing: Promise<void> | undefined;
-  return {
-    server,
-    store,
-    close: () => {
-      if (closing) return closing;
-      clearInterval(reaper);
-      const contextClosed = contextIntake?.close() ?? Promise.resolve();
-      closing = new Promise<void>((resolve, reject) => {
-        // Active or partially uploaded requests must not indefinitely hold the process and database open.
-        const deadline = setTimeout(() => server.closeAllConnections(), shutdownTimeoutMs).unref();
-        server.close(error => {
-          clearTimeout(deadline);
-          void contextClosed.then(() => {
-            try {
-              store.close();
-              error ? reject(error) : resolve();
-            } catch (closeError) { reject(closeError); }
-          }, reject);
-        });
-        server.closeIdleConnections();
-      });
-      return closing;
-    },
-  };
 }

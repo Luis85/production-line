@@ -4,18 +4,18 @@ import type { Task, Adapter } from "../../shared/contracts.js";
 import type { RequestGateEvidence } from "../../shared/request-gate.js";
 import type { AttemptRequestGates } from "./ports.js";
 import type { ModelProvider } from "./model-contract.js";
-import type { WorkerRequestJournal } from "../infrastructure/journal/requests.js";
+import type { RemoteRequestGatePort } from "./journal-ports.js";
 import type { GateEvaluation, WorkerRequest } from "./request-gates.js";
 
 type Result = Awaited<ReturnType<Adapter["run"]>>;
 /** A remote lease has its own snapshot pair; the request remains stable across reassignment. */
 export class RemoteRequestGates implements AttemptRequestGates {
-  private readonly journal: WorkerRequestJournal;
+  private readonly journal: RemoteRequestGatePort;
   private readonly origin: string;
   private readonly provider: (task: Task) => ModelProvider;
   private readonly approvedPaths: readonly string[];
   constructor(
-    journal: WorkerRequestJournal,
+    journal: RemoteRequestGatePort,
     origin: string,
     provider: (task: Task) => ModelProvider,
     approvedPaths: readonly string[] = [],

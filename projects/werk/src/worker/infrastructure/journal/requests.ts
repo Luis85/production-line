@@ -1,9 +1,7 @@
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from "node:crypto";
-import { chmod, lstat, open } from "node:fs/promises";
-import { join } from "node:path";
 import { DomainError } from "../../../shared/errors.js";
-import { ensureDirectory } from "./files.js";
+import { openPrivateJournal } from './database.js';
 import {
   defaultGatePolicy,
   evaluateGate,
@@ -194,26 +192,10 @@ export class WorkerRequestJournal implements RequestGatePort {
   }
   async init() {
     if (this.db) return;
-    await ensureDirectory(this.directory);
-    const file = join(this.directory, "worker-requests.sqlite");
-    for (const candidate of [file, file + "-wal", file + "-shm"]) {
-      const stat = await lstat(candidate).catch((error) => {
-        if (error.code !== "ENOENT") throw error;
-        return null;
-      });
-      if (stat && (!stat.isFile() || stat.isSymbolicLink()))
-        throw Error("Request journal must be a regular file.");
-    }
-    const reserved = await open(file, "ax", 0o600).catch((error) => {
-      if (error.code !== "EEXIST") throw error;
-      return null;
-    });
-    await reserved?.close();
-    this.db = new DatabaseSync(file);
+    this.db = await openPrivateJournal(this.directory, 'worker-requests.sqlite', 'Request journal must be a regular file.');
     try {
-      await chmod(file, 0o600);
       this.db
-        .exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;
+        .exec(`
         CREATE TABLE IF NOT EXISTS worker_requests(sequence INTEGER PRIMARY KEY AUTOINCREMENT,id TEXT UNIQUE NOT NULL,session_id TEXT NOT NULL,root_turn_id TEXT NOT NULL,phase TEXT NOT NULL,payload TEXT NOT NULL,UNIQUE(session_id,root_turn_id));
         CREATE TABLE IF NOT EXISTS request_generations(request_id TEXT NOT NULL,input_revision INTEGER NOT NULL,payload TEXT NOT NULL,PRIMARY KEY(request_id,input_revision));
         CREATE TABLE IF NOT EXISTS request_turns(session_id TEXT NOT NULL,turn_id TEXT NOT NULL,request_id TEXT NOT NULL,input_revision INTEGER NOT NULL,PRIMARY KEY(session_id,turn_id));

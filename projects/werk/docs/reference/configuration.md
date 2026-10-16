@@ -8,6 +8,74 @@ an explicit runtime choice; sharing a format is not permission to run both at on
 For a Factory hierarchy, use the [system definition](system-definition.md) and
 its separate `.werk-system/<id>` state. The format below configures one line.
 
+## Project environment files
+
+Independent Factory, orchestrator and worker apps support a project-root `.env`
+and a credential-free `.env.example`. Project worker `init` creates them
+automatically. For any copied app, initialize its section explicitly:
+
+```sh
+node bin/apps/worker/cli.mjs env init --project-dir /absolute/project --state-dir /absolute/project/.werk/worker
+node bin/apps/orchestrator/cli.mjs env init --project-dir /absolute/project --state-dir /absolute/project/.werk/orchestrator
+node bin/apps/factory/cli.mjs env init --project-dir /absolute/project --state-dir /absolute/project/.werk/factory
+```
+
+Each app reads only its supported keys from `.env` in `--project-dir`, otherwise
+its current working directory. The portable CLI loads it for launches and local
+client commands. The root launcher's `factory run` and `orchestrator run`
+commands use the same boundary. Use the portable worker CLI for project dotenv
+loading; lower-level worker commands still accept process environment directly.
+Managed `up`/`system` deployments retain their separate state/YAML configuration.
+
+| Application | Supported project keys | Defaults when initializing |
+| --- | --- | --- |
+| Worker | `WERK_WORKER_TOKEN`, `WERK_WORKER_STATE_DIR`, `WERK_WORKER_HOST`, `WERK_WORKER_PORT`, `WERK_WORKER_CONFIG`, `WERK_WORKER_ORCHESTRATOR_URL`, `WERK_WORKER_MAX_RUNTIME_MS`, `WERK_ENROLLMENT_TOKEN` | `.werk/worker`, `127.0.0.1`, `4100`; optional config/upstream/duration keys are documented in the example |
+| Orchestrator | `WERK_ADMIN_TOKEN`, `WERK_ENROLLMENT_TOKEN`, `WERK_ORCHESTRATOR_STATE_DIR`, `WERK_ORCHESTRATOR_HOST`, `WERK_ORCHESTRATOR_PORT`, `WERK_ORCHESTRATOR_PROJECT` | `.werk/orchestrator`, `127.0.0.1`, `3000`, project `demo` |
+| Factory | `WERK_FACTORY_ADMIN_TOKEN`, `WERK_FACTORY_STATE_DIR`, `WERK_FACTORY_HOST`, `WERK_FACTORY_PORT` | `.werk/factory`, `127.0.0.1`, `3100` |
+
+Explicit CLI launch options override namespaced environment defaults; the process
+environment overrides `.env`. These launch defaults then precede saved project
+startup defaults and built-in values. Relative environment `STATE_DIR`/`CONFIG`
+paths resolve against the selected project directory. Worker private settings
+have their own update contracts: for example, a saved orchestrator connection can
+still replace its startup URL, and saved repository assignments override file
+seeds. An environment URL does not silently replace that saved connection.
+
+Only supported assignments are interpreted. Unknown keys and existing comments
+are preserved. Duplicate supported keys, invalid supported syntax and multiline
+values are rejected. Optional quotes, `export` and comments are supported;
+`${VAR}` and `$(command)` stay literal and are never expanded or executed. Files
+must be regular, stable UTF-8 files of at most 64 KiB. A credential-bearing `.env`
+must be private on POSIX; reads do not silently repair permissions.
+
+Initialization appends missing keys and preserves existing bytes/values. Missing
+local tokens use an explicit process value, then existing selected private state,
+then a newly generated value. Worker access and component admin/enrollment tokens
+are 64 lowercase hexadecimal characters; worker enrollment accepts 24–4096
+characters and may be omitted or blank for standalone operation.
+`.env.example` contains commented placeholders, never generated credentials.
+Setup appends `.env` and `!.env.example` ignore rules before writing secrets,
+refuses tracked `.env` mutations and symlink/hardlink destinations, and can tighten
+an ordinary untracked `.env` to mode 0600. Native Windows inherits ACLs; protect
+that file using the worker account's access controls. Results contain file paths
+and added key names, never token values.
+
+Stop an app before intentionally rotating its local access token. Change the
+supported token in `.env` or the higher-precedence process environment, then
+restart; startup synchronizes it to the private credential state used by local
+clients. Changing a line project still requires compatible saved state; a dotenv edit
+is not an identity migration. Removing an environment assignment preserves the
+last saved token.
+Deleting only the saved worker `webview-token` does not rotate an active
+environment override. Worker enrollment credentials remain separate from its
+webview access token and do not replace an already registered worker identity.
+
+A portable client with explicit remote `--url` requires an explicit `--token-file`
+or process `WERK_APP_TOKEN`; project `.env` never supplies that credential.
+`status` and `stop` with explicit `--state-dir` bypass project dotenv loading so
+an invalid local file cannot prevent recovery. Use the same state directory that
+owns the running process.
+
 ## Native operator environment defaults
 
 | Variable | Consumer / default |

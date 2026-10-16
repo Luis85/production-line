@@ -5,8 +5,8 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WorkerSettings } from '../../src/worker/dist/worker/infrastructure/settings.js';
-import { WorkerSessions } from '../../src/worker/dist/worker/application/sessions.js';
-import { LocalTaskboard } from '../../src/worker/dist/worker/application/local-tasks.js';
+import { WorkerSessions } from './application-fixtures.mjs';
+import { LocalTaskboard } from './application-fixtures.mjs';
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(fn) { for(let n=0;n<400;n++){if(await fn())return;await delay(10);}throw Error('Timed out'); }
 async function fixture(t, model) {
