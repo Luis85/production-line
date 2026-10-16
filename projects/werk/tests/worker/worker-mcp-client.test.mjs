@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -40,7 +40,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
 const stdio = { transport: 'stdio', executable: process.execPath, args: ['-e', stdioScript], env: { FIXTURE_TOKEN: 'private-mcp-token' } };
 
 test('stdio initializes, discovers, calls only a grant and uses a contained minimal environment', { timeout: 30000 }, async t => {
-  const directory = await mkdtemp(join(tmpdir(), 'werk-mcp-')); t.after(() => rm(directory, { recursive: true, force: true }));
+  const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-mcp-'))); t.after(() => rm(directory, { recursive: true, force: true }));
   let launched = 0, terminated = 0;
   const dependencies = {
     environment: { ...process.env, WERK_ADMIN_TOKEN: 'ambient-worker-secret', HOME: '/ambient/account', NODE_OPTIONS: '--bad-option' },
