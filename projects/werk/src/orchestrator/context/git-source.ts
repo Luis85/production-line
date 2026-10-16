@@ -20,7 +20,7 @@ export async function gitContextSource(repo: string, commit: string, signal?: Ab
         assertContextActive(signal);
         try {
             return (await exec('git', ['--no-replace-objects', '--no-optional-locks', '-C', repository, '-c', 'core.fsmonitor=false', ...args],
-                { env, encoding: 'buffer', maxBuffer, timeout: 10000, signal, killSignal: 'SIGKILL' })).stdout;
+                { env, encoding: 'buffer', maxBuffer, timeout: 10000, signal, killSignal: 'SIGKILL', windowsHide: true })).stdout;
         } catch {
             assertContextActive(signal);
             throw new DomainError('invalid_input', `Cannot read pinned Git object (${args[0]}): unavailable object, repository, timeout or output limit`);

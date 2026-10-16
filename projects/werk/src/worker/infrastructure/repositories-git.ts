@@ -18,7 +18,7 @@ export function repositoryGit(cwd: string, args: string[], signal: AbortSignal, 
   return new Promise((accept, reject) => {
     const detached = process.platform !== 'win32';
     const child = spawn('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'submodule.recurse=false', '-c', 'protocol.ext.allow=never', ...args], {
-      cwd, detached, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never' }, stdio: ['ignore', 'pipe', 'pipe']
+      cwd, detached, windowsHide: true, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never' }, stdio: ['ignore', 'pipe', 'pipe']
     });
     const output: Buffer[] = [];
     let bytes = 0, failed = false, expired = false, killTimer: ReturnType<typeof setTimeout> | undefined;
