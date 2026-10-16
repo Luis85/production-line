@@ -88,4 +88,5 @@ test('assigned repository choices retain a complete path while submitting only t
   assert.equal(fixture.canSubmit.value, true);
   await fixture.run();
   assert.equal(submitted.repository, 'web');
+  assert.equal(submitted.background, true, 'The webview answers at once and shows worktree preparation on the board.');
 });

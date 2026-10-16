@@ -212,7 +212,8 @@ polling interval. Use **Save assignments** to persist edits. Dirty changes and
 local/divergent commits are preserved.
 
 Each assigned coding task receives a detached worktree beneath the selected repository's
-`.werk/worktrees` directory. Worktrees are retained across restart. See
+`.werk/worktrees` directory, or beneath **Task worktree folder** when set to an
+absolute folder outside the checkouts. Worktrees are retained across restart. See
 [repository configuration](../reference/configuration.md#assigned-git-repositories)
 for startup seeds, saved-setting precedence, polling and cleanup.
 
@@ -221,6 +222,10 @@ for startup seeds, saved-setting precedence, polling and cleanup.
 Choose **New task → Prepare a file task** in the interaction panel. The file editor has its own draft; edit its instructions and choose its provider connection. Give it a title, a
 repository from the assigned list, and an explicit list of relative file paths.
 The worker captures those files from a pinned worktree when accepting the task.
+Submission returns at once; the file task board shows **Preparing its Git
+worktree…** until the task appears, or the reason it could not be created with a
+**Dismiss** button. Deleting a task also removes its worktree when it has no
+uncommitted or untracked changes; clear the checkbox in the confirmation to keep it.
 When no repositories are assigned, the absolute-directory input remains available.
 Git roots use worktrees; the detected project checkout still requires the saved
 consent above. Legacy non-Git directories retain bounded snapshot-only behavior

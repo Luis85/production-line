@@ -262,6 +262,10 @@ export async function statusServer(
               202,
               await workspace.board.create(await readJson(req)),
             );
+          if (req.method === "GET" && req.url === "/api/worktrees")
+            return json(res, 200, await workspace.worktrees());
+          if (req.method === "POST" && req.url === "/api/worktrees")
+            return json(res, 200, await workspace.pruneWorktrees(await readJson(req)));
           if (req.method === "POST" && req.url === "/api/taskboard/action")
             return json(
               res,

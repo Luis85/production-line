@@ -4,7 +4,7 @@ import type { RepositoryConfiguration } from './repositories.js';
 import type { ResourcePolicy } from './resources.js';
 import type { ExecutionPolicy } from './execution-policy.js';
 import type { SessionRecord } from './sessions.js';
-import type { LocalTask } from './local-tasks.js';
+import type { LocalTask, LocalTaskPreparation } from './local-tasks.js';
 import type { InteractionView } from './interactions.js';
 import type { RequestPhase } from './request-gates.js';
 
@@ -30,6 +30,8 @@ export interface SessionView {
 export interface LocalTaskboardView {
   settings: WorkerBoardSettings;
   tasks: Array<Omit<LocalTask, 'files' | 'instruction' | 'patch'> & { files: Array<{ path: string; sha256: string }>; hasPatch: boolean; interaction: InteractionView; requestPhase?: RequestPhase; requestRevision?: number }>;
+  /** Background admissions (`background: true`) until their task appears, or failed with a reason. Absent from older workers. */
+  preparations?: LocalTaskPreparation[];
   persistenceError: boolean;
   running: number;
 }

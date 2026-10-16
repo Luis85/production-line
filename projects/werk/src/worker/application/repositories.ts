@@ -2,12 +2,13 @@ import { identifier, object, text } from '../../shared/contracts.js';
 import { ValidationError } from '../../shared/errors.js';
 
 export interface RepositoryAssignment { id: string; path: string; remote: string; branch?: string; watch: boolean; }
-export interface RepositoryConfiguration { pollMs: number; items: RepositoryAssignment[]; }
+/** `worktreeDirectory` is an optional absolute folder outside every checkout for new task worktrees. */
+export interface RepositoryConfiguration { pollMs: number; items: RepositoryAssignment[]; worktreeDirectory?: string; }
 export const defaultRepositoryConfiguration = (): RepositoryConfiguration => ({ pollMs: 30000, items: [] });
 
 /** Validate assignment policy without accessing a repository or performing Git operations. */
 export function validateRepositoryConfiguration(input: unknown, normalizePath: (path: string) => string = path => path): RepositoryConfiguration {
-  const value = object(input === undefined ? {} : input, 'Repositories', ['pollMs', 'items']);
+  const value = object(input === undefined ? {} : input, 'Repositories', ['pollMs', 'items', 'worktreeDirectory']);
   const pollMs = value.pollMs === undefined ? 30000 : value.pollMs;
   if (!Number.isSafeInteger(pollMs) || Number(pollMs) < 1000 || Number(pollMs) > 3600000)
     throw new ValidationError('repositories.pollMs must be an integer between 1000 and 3600000.');
@@ -37,5 +38,12 @@ export function validateRepositoryConfiguration(input: unknown, normalizePath: (
     ids.add(id); paths.add(path);
     return { id, path, remote, ...(branch ? { branch } : {}), watch };
   });
-  return { pollMs: Number(pollMs), items };
+  let worktreeDirectory: string | undefined;
+  if (value.worktreeDirectory !== undefined && value.worktreeDirectory !== '') {
+    const sourcePath = text(value.worktreeDirectory, 'Task worktree directory', 1024);
+    if (/[\x00-\x1f\x7f]/.test(sourcePath)) throw new ValidationError('Task worktree directory must not contain control characters.');
+    worktreeDirectory = normalizePath(sourcePath);
+    if (!/^(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(worktreeDirectory)) throw new ValidationError('Task worktree directory must be absolute on the worker machine.');
+  }
+  return { pollMs: Number(pollMs), items, ...(worktreeDirectory ? { worktreeDirectory } : {}) };
 }

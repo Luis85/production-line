@@ -176,7 +176,7 @@ export async function workspaceAction(path: string, body: unknown): Promise<any>
       const adoptResult = current === generation, applied = ++generation;
       if (path === '/api/repositories') {
         if (adoptResult && state.environment) state.environment.repositories = result;
-        if (adoptResult && state.settings) state.settings.repositories = { pollMs: result.pollMs, items: result.items.map(({ id, path, remote, branch, watch }: WorkerSettingsView['repositories']['items'][number]) => ({ id, path, remote, watch, ...(branch ? { branch } : {}) })) };
+        if (adoptResult && state.settings) state.settings.repositories = { ...(state.settings.repositories.worktreeDirectory ? { worktreeDirectory: state.settings.repositories.worktreeDirectory } : {}), pollMs: result.pollMs, items: result.items.map(({ id, path, remote, branch, watch }: WorkerSettingsView['repositories']['items'][number]) => ({ id, path, remote, watch, ...(branch ? { branch } : {}) })) };
       } else if (adoptResult && path === '/api/settings') state.settings = result;
       else if (adoptResult && path !== '/api/sessions') state.board = result;
       if (path === '/api/settings' || path === '/api/sessions') await readConversation(applied, access);

@@ -45,7 +45,8 @@ async function run() {
   if (!canSubmit.value) return;
   busy.value = true; error.value = '';
   const epoch = state.draftEpoch;
-  const body = { title: title.value.trim(), instruction: instruction.value, provider: provider.value, ...(definition.value ? { definitionId: definition.value.id, agent: agent.value, useInstructionsOnly: adapt.value } : {}), repository: repository.value.trim(), paths: paths.value.split('\n').map(item => item.trim()).filter(Boolean) };
+  // Background admission answers at once; the board shows worktree preparation and any failure reason.
+  const body = { background: true, title: title.value.trim(), instruction: instruction.value, provider: provider.value, ...(definition.value ? { definitionId: definition.value.id, agent: agent.value, useInstructionsOnly: adapt.value } : {}), repository: repository.value.trim(), paths: paths.value.split('\n').map(item => item.trim()).filter(Boolean) };
   try {
     const result = await workspaceAction('/api/taskboard', body);
     if (state.draftEpoch !== epoch) return;
@@ -70,7 +71,7 @@ async function run() {
       ><span class="muted">Prepare instructions and approved files for a review patch.</span>
     </div>
     <p v-if="submitted" role="status">
-      File task queued in its own session. <RouterLink to="/history">View file task history →</RouterLink>
+      File task accepted. Its Git worktree is prepared in the background; the file task board shows progress or the reason it failed. <RouterLink to="/history">View file task history →</RouterLink>
     </p>
     <form v-if="open" id="local-task-form" class="settings-form" :aria-busy="busy" @submit.prevent="run" @keydown.esc.stop.prevent="closeEditor">
       <fieldset :disabled="busy" class="contents">

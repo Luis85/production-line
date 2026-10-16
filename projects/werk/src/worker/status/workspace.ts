@@ -13,7 +13,8 @@ import { discoverMcpTools, mcpTransportConfiguration, McpClientError } from '../
 import type { ExecutionProfilesControl } from '../application/execution-profiles.js';
 import { RepositoryDiscovery } from '../infrastructure/repository-discovery.js';
 import type { RepositoryConfiguration } from '../application/repositories.js';
-import { RepositoryManager, prepareRepositoryWorktree } from '../infrastructure/repositories.js';
+import { RepositoryManager, prepareRepositoryWorktree, RepositoryGitError, WorktreeProblem, WORKTREE_CHECKOUT_TIMEOUT_MS } from '../infrastructure/repositories.js';
+import { removeRepositoryWorktree, repositoryRoot, worktreeName } from '../infrastructure/repositories-git.js';
 import { requestGateSchema } from '../application/request-gate-schema.js';
 import { requestDispatchStatus } from '../application/request-dispatch.js';
 import { RequestReviewManager } from "../application/request-review.js";
@@ -90,6 +91,12 @@ export function chatConfiguration(value: unknown): string | undefined {
       "Codex chat currently requires native Linux",
     );
   return raw.codexExecutable;
+}
+/** Worktree policy and Git failures carry fixed, path-free messages; show them instead of a generic 500. */
+function worktreeFailure(error: unknown) {
+  if (error instanceof WorktreeProblem) return new DomainError("conflict", error.message);
+  if (error instanceof RepositoryGitError) return new DomainError(error.reason === "failed" ? "conflict" : "unavailable", error.message);
+  return error;
 }
 export class WorkerWorkspace {
   readonly executionProfiles?: ExecutionProfilesControl;
@@ -730,7 +737,11 @@ export class WorkerWorkspace {
       config.stateDir,
       this.settings,
       this.sessions,
-      { prepareWorktree: (selector, key, signal, commit) => this.prepareTaskWorkspace(selector, key, signal, commit) },
+      {
+        prepareWorktree: (selector, key, signal, commit) => this.prepareTaskWorkspace(selector, key, signal, commit),
+        verifyWorktree: (selector, key, signal, commit) => this.prepareTaskWorkspace(selector, key, signal, commit, true),
+        removeWorktree: (selector, key, signal, expected) => this.removeTaskWorkspace(selector, key, signal, expected),
+      },
       undefined, this.consumption,
     );
     this.reviews = new RequestReviewManager({
@@ -976,14 +987,14 @@ export class WorkerWorkspace {
       this.repositoryPreparations--;
     }
   }
-  private async prepareTaskWorkspace(selector: string, key: string, signal: AbortSignal, commit?: string) {
+  private async prepareTaskWorkspace(selector: string, key: string, signal: AbortSignal, commit?: string, verify = false) {
     if (!this.acceptingTasks || this.repositoriesUpdating || this.configurationUpdating || this.executionProfiles?.pending())
       throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
     signal = AbortSignal.any([signal, this.repositoryStop.signal]);
     this.repositoryPreparations++;
     try {
       if (this.settings.value.repositories.items.length)
-        return await this.repositories.prepareWorktree(selector, key, signal, commit);
+        return await (verify ? this.repositories.verifyWorktree(selector, key, signal, commit) : this.repositories.prepareWorktree(selector, key, signal, commit));
       // Legacy approved-file tasks may still use an ordinary, non-Git project folder.
       if (!isAbsolute(selector)) throw new DomainError("invalid_input", "Choose an assigned repository or an absolute project folder.");
       const repository = await realpath(selector);
@@ -992,8 +1003,71 @@ export class WorkerWorkspace {
         if (error.code === "ENOENT") return null;
         throw error;
       });
-      return metadata ? await prepareRepositoryWorktree(repository, key, signal, commit) : { repository, path: repository };
+      return metadata ? await prepareRepositoryWorktree(repository, key, signal, commit, { checkoutTimeoutMs: WORKTREE_CHECKOUT_TIMEOUT_MS, ...(verify ? { reuseOnly: true } : {}) }) : { repository, path: repository };
+    } catch (error) { throw worktreeFailure(error); }
+    finally { this.repositoryPreparations--; }
+  }
+  private async removeTaskWorkspace(selector: string, key: string, signal: AbortSignal, expected: { path: string; baseCommit: string; discardChanges: boolean }) {
+    if (!this.acceptingTasks || this.repositoriesUpdating || this.configurationUpdating)
+      throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
+    signal = AbortSignal.any([signal, this.repositoryStop.signal]);
+    const options = { expect: { taskKey: key, path: expected.path, baseCommit: expected.baseCommit }, discardChanges: expected.discardChanges, checkoutTimeoutMs: WORKTREE_CHECKOUT_TIMEOUT_MS };
+    this.repositoryPreparations++;
+    try {
+      if (this.settings.value.repositories.items.length)
+        return await this.repositories.removeWorktree(selector, { taskKey: key }, signal, options);
+      const root = await repositoryRoot(selector, signal);
+      await this.repositoryDiscovery.assertAllowed(root.path);
+      return await removeRepositoryWorktree(root, worktreeName("local", key), signal, 30000, options);
+    } catch (error) { throw worktreeFailure(error); }
+    finally { this.repositoryPreparations--; }
+  }
+  /** Owned task worktrees of assigned repositories, with the file task that still uses each. */
+  async worktrees() {
+    const users = new Map(this.board.view().tasks.filter(task => task.worktree).map(task => [task.worktree!, task.id]));
+    const repositories = await this.repositories.worktrees(AbortSignal.any([AbortSignal.timeout(120000), this.repositoryStop.signal]));
+    return {
+      worktreeDirectory: this.settings.value.repositories.worktreeDirectory ?? null,
+      repositories: repositories.map(item => ({ ...item, worktrees: item.worktrees.map(worktree => ({ ...worktree, taskId: worktree.path ? users.get(worktree.path) ?? null : null })) })),
+    };
+  }
+  /**
+   * Remove retained worktrees that no file task uses. Clean ones only, unless the
+   * operator confirms discarding changes; a dry run reports without removing.
+   */
+  async pruneWorktrees(input: unknown) {
+    const body = object(input, "Worktree prune", ["action", "id", "repositoryId", "dryRun", "discardChanges"]);
+    if (body.action !== "prune") throw new DomainError("invalid_input", "Worktree action: prune");
+    if (body.id !== undefined && (typeof body.id !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(body.id))) throw new DomainError("invalid_input", "Use a worktree name from worktrees list.");
+    if (body.repositoryId !== undefined) identifier(body.repositoryId, "Repository id");
+    for (const flag of ["dryRun", "discardChanges"]) if (body[flag] !== undefined && typeof body[flag] !== "boolean") throw new DomainError("invalid_input", `${flag} must be true or false.`);
+    const dryRun = body.dryRun === true;
+    if (!this.acceptingTasks || this.repositoriesUpdating || this.configurationUpdating)
+      throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
+    // Running work and admissions may be creating or using a worktree that no task records yet.
+    if (!dryRun && (this.repositoryPreparations || this.board.active || this.sharedRuntime.intake.busy || this.get().activeTasks.length || this.get().queuedTasks?.length))
+      throw new DomainError("conflict", "Finish or cancel queued and running tasks before pruning task worktrees; a dry run is available now.");
+    const listing = await this.worktrees(), results: Array<Record<string, unknown>> = [];
+    this.repositoryPreparations++;
+    try {
+      for (const repository of listing.repositories) {
+        if (body.repositoryId !== undefined && repository.repositoryId !== body.repositoryId) continue;
+        for (const worktree of repository.worktrees) {
+          if (body.id !== undefined && worktree.name !== body.id) continue;
+          const entry = { repositoryId: repository.repositoryId, name: worktree.name, path: worktree.path ?? null, taskKey: worktree.taskKey ?? null };
+          if (worktree.taskId) { if (body.id !== undefined) results.push({ ...entry, outcome: "kept", reason: "A file task uses this worktree. Delete the task to remove it." }); continue; }
+          if (worktree.state === "invalid") { results.push({ ...entry, outcome: "kept", reason: "Its ownership record is invalid. Review it manually." }); continue; }
+          try {
+            results.push({ ...entry, ...await this.repositories.removeWorktree(repository.repositoryId, { name: worktree.name }, AbortSignal.any([AbortSignal.timeout(WORKTREE_CHECKOUT_TIMEOUT_MS), this.repositoryStop.signal]), { dryRun, discardChanges: body.discardChanges === true }) });
+          } catch (error) {
+            const failure = worktreeFailure(error);
+            results.push({ ...entry, outcome: "kept", reason: failure instanceof DomainError ? failure.message : "The worktree could not be removed." });
+          }
+        }
+      }
     } finally { this.repositoryPreparations--; }
+    if (body.id !== undefined && !results.length) throw new DomainError("not_found", "No retained task worktree has this name.");
+    return { dryRun, results, errors: listing.repositories.filter(item => item.error).map(item => ({ repositoryId: item.repositoryId, error: item.error })) };
   }
   async updateSettings(body: unknown) {
     const input = body as Record<string, unknown>;

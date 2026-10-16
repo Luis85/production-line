@@ -7,6 +7,24 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+### Added
+
+- File tasks accept `"background": true`: the request returns immediately and the board lists the admission under `preparations` with its phase, or the specific reason it failed, until the task appears. The webview uses it for **Run task**.
+- Deleting a file task removes its Git worktree when it is clean and verifiably owned (identity pin, ownership marker, registration, base commit). `removeWorktree` and `discardChanges` options, also as `file-task delete --remove-worktree|--discard-changes`; changed worktrees are kept with a reason unless discarding is confirmed.
+- `worktrees list` and `worktrees prune [--id] [--repository] [--discard-changes true] [--dry-run]` worker commands and `/api/worktrees` list and remove task worktrees that no file task uses, such as leftovers of interrupted admissions.
+- Optional `repositories.worktreeDirectory` (Dashboard: **Task worktree folder**) places new task worktrees outside the checkouts, so project tools do not scan them. Existing worktrees are still found at their recorded location.
+
+### Changed
+
+- Task worktrees check out with Git's parallel checkout (at most 8 workers); a 12,000-file tree took 12 s instead of 33 s on Windows 11.
+- One 120-second budget now covers a file task's whole worktree admission; it used to restart for each phase, letting admission run past its 30-second limit. `worktree add` gets up to 5 minutes within it instead of the 30-second Git metadata timeout.
+- Admission verifies the new worktree for tool use without fetching the repository a second time.
+- Worktree preparation failures report their reason (for example a Windows path limit) with HTTP 409/503 instead of a generic 500.
+
+### Fixed
+
+- Task worktree removal never runs Git on a worktree containing symbolic links or junctions: Git for Windows deletes the junction target's files, also in ignored folders and without `--force`.
+
 ## [0.9.0] - 2026-10-16
 
 ### Added

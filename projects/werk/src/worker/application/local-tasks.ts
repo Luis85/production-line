@@ -37,6 +37,30 @@ export interface LocalTaskWorkspaces {
     baseCommit?: string;
     reused?: boolean;
   }>;
+  /** Re-verify a retained worktree without fetching or creating it; adapters without it use prepareWorktree. */
+  verifyWorktree?: LocalTaskWorkspaces["prepareWorktree"];
+  /** Remove an owned, clean task worktree after the identity pin was checked. */
+  removeWorktree?(
+    selector: string,
+    taskKey: string,
+    signal: AbortSignal,
+    expected: { path: string; baseCommit: string; discardChanges: boolean },
+  ): Promise<{ outcome: "removed" | "would_remove" | "kept"; reason?: string }>;
+}
+/** One budget covers queueing, fetch, checkout and verification of a new task worktree. */
+const ADMISSION_TIMEOUT_MS = 120000;
+/** Background admission does not hold an HTTP request open, so large checkouts get more time. */
+const BACKGROUND_ADMISSION_TIMEOUT_MS = 600000;
+/** In-memory admission accepted with `background: true`; never persisted across restarts. */
+export interface LocalTaskPreparation {
+  id: string;
+  title: string;
+  repository: string;
+  state: "preparing" | "failed";
+  phase: "waiting" | "worktree" | "admission";
+  error: string | null;
+  createdAt: string;
+  finishedAt: string | null;
 }
 /** Trusted coordinator reservation; these fields are never accepted from a task HTTP body. */
 export interface LocalTaskSubmission {
@@ -149,6 +173,7 @@ export class LocalTaskboard {
   private writing = Promise.resolve();
   private admitting = Promise.resolve();
   private admissionReserved = false;
+  private preparations: LocalTaskPreparation[] = [];
   private continuationReservations = 0;
   private continuations = new Set<Promise<unknown>>();
   private workspaces?: LocalTaskWorkspaces;
@@ -409,7 +434,7 @@ export class LocalTaskboard {
       this.settings.value.execution.maxRuntimeMs,
     );
   }
-  private async assertToolWorkspace(task: LocalTask, signal: AbortSignal) {
+  private async assertToolWorkspace(task: LocalTask, signal: AbortSignal, verifyOnly = false) {
     const policy = this.settings.toolPolicy();
     const granted = policy.builtins.files || policy.builtins.commands.some(item => item.enabled) || policy.builtins.webOrigins.length || policy.mcp.some(item => item.enabled && item.allowedTools.length);
     if (!granted || !task.worktree) return;
@@ -422,12 +447,13 @@ export class LocalTaskboard {
     // Check before the preparation port: a missing directory must never be recreated here.
     await verifyIdentity();
     const selector = task.repositoryId && this.settings.value.repositories.items.some(item => item.id === task.repositoryId) ? task.repositoryId : task.repository;
-    const retained = await this.workspaces.prepareWorktree(selector, task.id, signal, task.baseCommit);
+    // Admission just synchronized this repository; repeating its fetch adds seconds without changing the pins.
+    const retained = await (verifyOnly && this.workspaces.verifyWorktree ? this.workspaces.verifyWorktree.bind(this.workspaces) : this.workspaces.prepareWorktree.bind(this.workspaces))(selector, task.id, signal, task.baseCommit);
     if (!retained.reused || retained.path !== task.worktree || retained.repository !== task.repository || retained.baseCommit !== task.baseCommit || retained.repositoryId !== task.repositoryId) throw fail();
     await verifyIdentity();
   }
-  private async prepareTurn(task: LocalTask, turn: InteractionTurn) {
-    await this.assertToolWorkspace(task, AbortSignal.any([this.workspaceController.signal, AbortSignal.timeout(30000)]));
+  private async prepareTurn(task: LocalTask, turn: InteractionTurn, admission?: AbortSignal) {
+    await this.assertToolWorkspace(task, admission ?? AbortSignal.any([this.workspaceController.signal, AbortSignal.timeout(30000)]), !!admission);
     const connection = {
       ...this.settings.provider(task.provider),
       model: task.model,
@@ -605,7 +631,7 @@ export class LocalTaskboard {
   }
   get active() {
     return (
-      Number(this.admissionReserved) + this.continuationReservations +
+      Number(this.admissionReserved) + this.continuationReservations + this.waitingPreparations +
       this.tasks.filter((task) =>
         ["queued", "running"].includes(task.status),
       ).length
@@ -630,9 +656,14 @@ export class LocalTaskboard {
             }
           : {}),
       })),
+      preparations: this.preparations.map((item) => ({ ...item })),
       persistenceError: this.persistenceError || this.evidencePersistenceError,
       running: this.tasks.filter((task) => task.status === "running").length,
     };
+  }
+  /** Accepted background admissions hold their queue slot until they start preparing. */
+  private get waitingPreparations() {
+    return this.preparations.filter((item) => item.state === "preparing" && item.phase === "waiting").length;
   }
   detail(id: string) {
     const task = this.tasks.find((item) => item.id === id);
@@ -679,6 +710,8 @@ export class LocalTaskboard {
   }
   async create(input: unknown, submission?: LocalTaskSubmission) {
     const frozen = submission === undefined ? undefined : freezeSubmission(submission);
+    if (!frozen && (input as Record<string, unknown> | null)?.background === true)
+      return this.createInBackground(input);
     // Serialize admission so duplicate durable IDs never prepare a second worktree.
     const operation = this.admitting
       .catch(() => {})
@@ -692,36 +725,57 @@ export class LocalTaskboard {
     this.admitting = operation.then(() => {}, () => {});
     return operation;
   }
-  private assertAdmissionCapacity(tasks: LocalTask[]) {
-    if (tasks.length >= 100)
+  /**
+   * Validate and reserve now; prepare the worktree in the same serialized admission
+   * chain afterwards. The task appears once admitted; a failure stays visible with
+   * its reason until the operator deletes the preparation entry.
+   */
+  private createInBackground(input: unknown) {
+    if (this.closed) throw new DomainError("unavailable", "Worker is stopping");
+    const { title, selector } = this.admissionInput(input);
+    // The admission currently preparing is not in `tasks` yet but holds a slot.
+    this.assertAdmissionCapacity(this.tasks, Number(this.admissionReserved));
+    const preparation: LocalTaskPreparation = {
+      id: randomUUID(), title, repository: selector, state: "preparing", phase: "waiting",
+      error: null, createdAt: new Date().toISOString(), finishedAt: null,
+    };
+    const failed = this.preparations.filter((item) => item.state === "failed");
+    if (failed.length >= 20) this.preparations.splice(this.preparations.indexOf(failed[0]), 1);
+    this.preparations.push(preparation);
+    this.admitting = this.admitting
+      .catch(() => {})
+      .then(async () => {
+        try {
+          preparation.phase = "worktree";
+          await this.createTask(input, undefined, { id: preparation.id, budgetMs: BACKGROUND_ADMISSION_TIMEOUT_MS, preparation });
+          this.preparations.splice(this.preparations.indexOf(preparation), 1);
+        } catch (error) {
+          Object.assign(preparation, {
+            state: "failed",
+            finishedAt: new Date().toISOString(),
+            error: error instanceof DomainError ? error.message : "The task could not be admitted. Check the repository status and worker log, then create it again.",
+          });
+        } finally {
+          this.admissionReserved = false;
+        }
+      });
+    return { ...this.view(), preparationId: preparation.id };
+  }
+  private assertAdmissionCapacity(tasks: LocalTask[], reserved = 0) {
+    if (tasks.length + this.waitingPreparations + reserved >= 100)
       throw new DomainError(
         "conflict",
         "Taskboard holds 100 tasks. Delete an old task first.",
       );
     if (
       tasks.filter((item) => ["queued", "running"].includes(item.status)).length +
-        this.sessions.chatActive + this.continuationReservations >=
+        this.sessions.chatActive + this.continuationReservations + this.waitingPreparations + reserved >=
       this.settings.value.board.queueCapacity
     )
       throw new DomainError("conflict", "Local task queue is full.");
   }
-  private async createTask(
-    input: unknown,
-    submission?: LocalTaskSubmission,
-  ) {
-    if (this.closed) throw new DomainError("unavailable", "Worker is stopping");
-    if (submission) {
-      const existing = this.tasks.find((task) => task.id === submission.id);
-      if (existing) {
-        if (existing.submissionHash !== submission.hash ||
-            existing.submissionContextHash !== submissionContextHash(submission))
-          throw new DomainError(
-            "conflict",
-            "Task ID belongs to different input.",
-          );
-        return this.view();
-      }
-    }
+  /** Synchronous request validation shared by foreground and background admission. */
+  private admissionInput(input: unknown, submission?: LocalTaskSubmission) {
     const body = object(input, "Local task", [
       "title",
       "instruction",
@@ -733,7 +787,10 @@ export class LocalTaskboard {
       "definitionRef",
       "agent",
       "useInstructionsOnly",
+      "background",
     ]);
+    if (body.background !== undefined && typeof body.background !== "boolean")
+      throw new DomainError("invalid_input", "background must be true or false.");
     const title = text(body.title, "Title", 200),
       instruction = text(body.instruction, "Instruction", 8000);
     const definition = this.sessions.definitions.select(body);
@@ -775,22 +832,54 @@ export class LocalTaskboard {
         "unavailable",
         "The assigned repository worktree service is unavailable.",
       );
+    return { body, title, instruction, definition, provider, selector, assignment, repositoryPath, allowedPaths };
+  }
+  private async createTask(
+    input: unknown,
+    submission?: LocalTaskSubmission,
+    options: { id?: string; budgetMs?: number; preparation?: LocalTaskPreparation } = {},
+  ) {
+    if (this.closed) throw new DomainError("unavailable", "Worker is stopping");
+    if (submission) {
+      const existing = this.tasks.find((task) => task.id === submission.id);
+      if (existing) {
+        if (existing.submissionHash !== submission.hash ||
+            existing.submissionContextHash !== submissionContextHash(submission))
+          throw new DomainError(
+            "conflict",
+            "Task ID belongs to different input.",
+          );
+        return this.view();
+      }
+    }
+    const { body, title, instruction, definition, provider, selector, assignment, repositoryPath, allowedPaths } = this.admissionInput(input, submission);
     // Reserve capacity before preparing a durable worktree. Chat admission reads
     // board.active, so a concurrent chat cannot consume this task's queue slot.
     this.assertAdmissionCapacity(this.tasks);
     this.admissionReserved = true;
-    const id = submission?.id ?? randomUUID();
-    const prepared: Awaited<ReturnType<LocalTaskWorkspaces["prepareWorktree"]>> = this.workspaces
-      ? await this.workspaces.prepareWorktree(
-          assignment?.id ?? selector,
-          id,
-          AbortSignal.any([
-            this.workspaceController.signal,
-            AbortSignal.timeout(30000),
-          ]),
-          submission?.baseCommit,
-        )
-      : { repository: repositoryPath, path: repositoryPath };
+    const id = submission?.id ?? options.id ?? randomUUID();
+    // One deadline covers repository queueing, fetch, checkout and the tool
+    // workspace verification below; each phase used to get its own 30 s budget.
+    const budgetMs = options.budgetMs ?? ADMISSION_TIMEOUT_MS, deadline = AbortSignal.timeout(budgetMs);
+    const admission = AbortSignal.any([this.workspaceController.signal, deadline]);
+    const timedOut = (error: unknown) => {
+      if (!this.workspaceController.signal.aborted && deadline.aborted) return new DomainError("unavailable", `Task worktree preparation did not finish within ${budgetMs / 1000} seconds. Check the repository status, then create the task again.`);
+      return error;
+    };
+    let prepared: Awaited<ReturnType<LocalTaskWorkspaces["prepareWorktree"]>>;
+    try {
+      prepared = this.workspaces
+        ? await this.workspaces.prepareWorktree(
+            assignment?.id ?? selector,
+            id,
+            admission,
+            submission?.baseCommit,
+          )
+        : { repository: repositoryPath, path: repositoryPath };
+    } catch (error) {
+      throw timedOut(error);
+    }
+    if (options.preparation) options.preparation.phase = "admission";
     if (
       assignment &&
       (prepared.repositoryId !== assignment.id || !prepared.baseCommit)
@@ -890,7 +979,7 @@ export class LocalTaskboard {
             request.inputRevision,
           );
           try {
-            await this.prepareTurn(task, accepted.turn);
+            await this.prepareTurn(task, accepted.turn, admission);
           } catch (error) {
             task.status = "failed";
             task.error =
@@ -975,7 +1064,7 @@ export class LocalTaskboard {
       if (
         tasks.filter((item) => ["queued", "running"].includes(item.status)).length +
           this.sessions.chatActive + Number(this.admissionReserved) +
-          this.continuationReservations >=
+          this.continuationReservations + this.waitingPreparations >=
         this.settings.value.board.queueCapacity
       )
         throw new DomainError("conflict", "Local task queue is full.");
@@ -1190,8 +1279,21 @@ export class LocalTaskboard {
     return this.sessions.interactions.view(body.sessionId);
   }
   async action(input: unknown, expectedInteractionRevision?: number) {
-    const body = object(input, "Task action", ["id", "action", "priority"]);
+    const body = object(input, "Task action", ["id", "action", "priority", "removeWorktree", "discardChanges"]);
     const id = String(body.id);
+    for (const flag of ["removeWorktree", "discardChanges"] as const)
+      if (body[flag] !== undefined && (body.action !== "delete" || typeof body[flag] !== "boolean"))
+        throw new DomainError("invalid_input", `${flag} is a true/false option of the delete action.`);
+    const preparation = this.preparations.find((item) => item.id === id);
+    if (preparation && !this.tasks.some((task) => task.id === id)) {
+      if (body.action !== "delete")
+        throw new DomainError("conflict", "This task is still being admitted. Delete a failed preparation or wait for the task.");
+      if (preparation.state === "preparing")
+        throw new DomainError("conflict", "The task worktree is still being prepared. Wait for it to finish or fail.");
+      this.preparations.splice(this.preparations.indexOf(preparation), 1);
+      return this.view();
+    }
+    let worktree: { outcome: "removed" | "kept" | "not_applicable"; reason?: string } | undefined;
     if (body.action === "retry") {
       const task = this.detail(id);
       if (
@@ -1325,10 +1427,44 @@ export class LocalTaskboard {
           );
         if (body.action === "archive" || body.action === "restore")
           task.archived = body.action === "archive";
-        else tasks.splice(tasks.indexOf(task), 1);
+        else {
+          // Serialized with every task change, so a retry cannot start while its worktree is removed.
+          worktree = await this.removeTaskWorktree(task, body.removeWorktree as boolean | undefined, body.discardChanges === true);
+          tasks.splice(tasks.indexOf(task), 1);
+        }
       } else throw new DomainError("invalid_input", "Unknown task action");
     });
-    return this.view();
+    return worktree ? { ...this.view(), worktree } : this.view();
+  }
+  /**
+   * Delete cleanup. Omitted `removeWorktree` removes only a clean, verifiably owned
+   * worktree and otherwise keeps it with the reason; `true` makes removal required;
+   * `false` keeps it. Discarding changes needs explicit `discardChanges`.
+   */
+  private async removeTaskWorktree(task: LocalTask, requested: boolean | undefined, discardChanges: boolean) {
+    if (requested === false || !task.worktree || !task.baseCommit)
+      return { outcome: "not_applicable" as const };
+    const keep = (reason: string) => {
+      if (requested) throw new DomainError("conflict", `${reason} The task was not deleted; delete it with removeWorktree false to keep the worktree.`);
+      return { outcome: "kept" as const, reason };
+    };
+    if (!this.workspaces?.removeWorktree) return keep("This worker cannot remove task worktrees.");
+    // The identity pin is checked before Git sees the path: a replaced directory or
+    // link at the recorded location is never removed. A missing directory is only
+    // unregistered from Git.
+    let identity: ToolWorktreeIdentity | undefined;
+    try { identity = await this.files.identity(task.worktree); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") return keep("The task worktree changed after it was created; review it manually."); }
+    if (identity && (!task.worktreeIdentity || identity.dev !== task.worktreeIdentity.dev || identity.ino !== task.worktreeIdentity.ino || identity.birthtimeMs !== task.worktreeIdentity.birthtimeMs))
+      return keep("The task worktree changed after it was created; review it manually.");
+    const selector = task.repositoryId && this.settings.value.repositories.items.some((item) => item.id === task.repositoryId) ? task.repositoryId : task.repository;
+    let result;
+    try {
+      result = await this.workspaces.removeWorktree(selector, task.id, AbortSignal.any([this.workspaceController.signal, AbortSignal.timeout(BACKGROUND_ADMISSION_TIMEOUT_MS)]), { path: task.worktree, baseCommit: task.baseCommit, discardChanges });
+    } catch (error) {
+      return keep(error instanceof DomainError ? error.message : "The task worktree could not be removed.");
+    }
+    return result.outcome === "removed" ? { outcome: "removed" as const } : keep(result.reason ?? "The task worktree was kept.");
   }
   async tick() {
     if (this.closed) return;

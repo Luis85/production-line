@@ -119,7 +119,10 @@ for the JSON example, polling limits, status/sync API and retention behavior.
 
 Use **Run task** to select an assigned repository and approve its input files.
 The worker captures committed files in a task worktree beneath that repository's
-`.werk/worktrees` directory and returns a review patch. Feature-folder patch
+`.werk/worktrees` directory and returns a review patch. If project tools such as a
+vault linter scan that folder, set `repositories.worktreeDirectory` to a short
+absolute folder outside the checkout. Deleting a file task removes its clean
+worktree; `worktrees list` and `worktrees prune --dry-run` find leftovers. Feature-folder patch
 requests still target this installed project's directory; include it among the
 assignments when using that intake. Ordinary Chat only receives its supplied
 conversation input, and mock execution remains simulated.

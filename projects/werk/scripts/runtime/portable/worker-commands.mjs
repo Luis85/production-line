@@ -87,6 +87,20 @@ export function workerCommands(catalog) {
       ...action("/api/repositories", name, ["discovery-id"], false, [], { "discovery-id": "discoveryId" }),
       description: "Record the explicit choice for the exact detected installation repository. Read repository status for its discovery id first.",
     };
+  catalog["worktrees list"] = {
+    method: "GET", path: "/api/worktrees",
+    description: "List task worktrees this worker created in assigned repositories, with location, state (present|missing|incomplete|locked|unregistered|invalid) and the file task still using each. Reads ownership records only.",
+  };
+  catalog["worktrees prune"] = {
+    ...action("/api/worktrees", "prune", [], false, ["id", "repository", "discard-changes", "dry-run"]),
+    flags: {
+      id: "Worktree name from worktrees list; default every worktree no file task uses",
+      repository: "Assignment ID to limit pruning to",
+      "discard-changes": "true also removes worktrees with uncommitted/untracked files or an interrupted checkout; default false",
+      "dry-run": "Report what would be removed without changing anything",
+    },
+    description: "Remove retained task worktrees that no file task uses through git worktree remove. Clean only unless --discard-changes true; never removes worktrees with commits, locks, links or junctions. Requires no queued or running work; --dry-run works anytime.",
+  };
   catalog["shared status"] = {
     method: "GET", path: "/api/shared-intake",
     description: "Inspect shared Git intake: binding, current revision, workflow snapshot and request lifecycle, without fetching.",
@@ -434,9 +448,14 @@ export function workerCommands(catalog) {
       name,
       ["id", ...(name === "priority" ? ["priority"] : [])],
       false,
-      [],
-      { priority: "priority" },
+      name === "delete" ? ["remove-worktree", "discard-changes"] : [],
+      name === "delete" ? { "remove-worktree": "removeWorktree", "discard-changes": "discardChanges" } : { priority: "priority" },
     );
+  catalog["file-task delete"].flags = {
+    id: "File task ID",
+    "remove-worktree": "Omitted: remove its Git worktree when clean, otherwise keep it and report why; true: deletion fails unless removed; false: keep it",
+    "discard-changes": "true also removes uncommitted/untracked files in the worktree; default false",
+  };
   catalog["queue get"] = {
     method: "GET",
     path: "/api/sessions",
@@ -503,7 +522,7 @@ export function workerCommands(catalog) {
           item.action,
         ) &&
         !name.endsWith(" get");
-      item.destructive = item.action === "delete";
+      item.destructive = item.action === "delete" || item.action === "prune";
     }
   }
   return catalog;
@@ -570,6 +589,19 @@ export async function workerBody(command, body, options) {
   if (command.path === "/api/interactions")
     return interactionBody(command, body, options);
   if (command.path === "/api/runs") return workerRunBody(command, options);
+  if (command.path === "/api/worktrees" && command.action === "prune") {
+    const result = { action: "prune" };
+    if (options.id !== undefined) {
+      if (!/^[A-Za-z0-9_-]{1,64}$/.test(options.id)) throw inputError("Invalid --id; use a worktree name from worktrees list.");
+      result.id = options.id;
+    }
+    if (options.repository !== undefined) result.repositoryId = options.repository;
+    if (options["discard-changes"] !== undefined) {
+      if (!["true", "false"].includes(options["discard-changes"])) throw inputError("--discard-changes must be true or false.");
+      result.discardChanges = options["discard-changes"] === "true";
+    }
+    return result;
+  }
   if (command.fixedBody) return command.fixedBody;
   if (command.wait === "file-task") return { id: options.id };
   if (!command.action) return body;
@@ -586,7 +618,12 @@ export async function workerBody(command, body, options) {
     ...(options.id ? { id: options.id } : {}),
   };
   for (const [option, field] of Object.entries(command.fields ?? {}))
-    if (options[option] !== undefined) result[field] = options[option];
+    if (options[option] !== undefined) {
+      if (["remove-worktree", "discard-changes"].includes(option)) {
+        if (!["true", "false"].includes(options[option])) throw inputError("--" + option + " must be true or false.");
+        result[field] = options[option] === "true";
+      } else result[field] = options[option];
+    }
   if (options.markdown) result.markdown = await readMarkdown(options.markdown);
   return result;
 }
