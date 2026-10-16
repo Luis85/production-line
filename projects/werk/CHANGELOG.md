@@ -7,6 +7,18 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-16
+
+### Added
+
+- Portable Factory, orchestrator and worker apps update themselves with `update check|apply|status|rollback|restore`. `apply` verifies the release against its `SHA256SUMS` (or an extracted release with `--from`), refuses a running instance unless `--stop` is given, takes a verified state backup, replaces the app folder by renames that keep the previous folder, and restarts only an instance it stopped.
+- Portable instances record their launch directory and options so an update can restart them unchanged.
+
+### Changed
+
+- Stopped-state backup and verification are shared by native maintenance and portable updates.
+- Release installation runs `tar` without opening a console window on Windows.
+
 ## [0.8.0] - 2026-10-16
 
 ### Added

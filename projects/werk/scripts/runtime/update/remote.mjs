@@ -22,10 +22,7 @@ export async function download(url, { fetcher = fetch, limit = 16384, timeout = 
   }
   return Buffer.concat(chunks);
 }
-export async function latest(options = {}) {
-  // Read a single stable-latest checksum document, then pin every asset by version.
-  // No token, API quota or downloaded executable is needed for discovery.
-  const bytes = await download(`https://github.com/${repository}/releases/latest/download/SHA256SUMS`, options);
+function describe(bytes) {
   const entries = new Map();
   for (const line of bytes.toString('utf8').trimEnd().split('\n')) {
     const match = /^([a-f0-9]{64})  ([A-Za-z0-9.-]+)\r?$/.exec(line);
@@ -37,5 +34,17 @@ export async function latest(options = {}) {
   const version = archive.slice(5, -7); versionParts(version);
   if (entries.size !== 3 || !entries.has(`werk-${version}.zip`) || !entries.has('install.mjs')) throw Error('Release assets do not describe one complete stable version.');
   return { version, repository, sha256: entries.get(archive), url: `https://github.com/${repository}/releases/tag/v${version}` };
+}
+export async function latest(options = {}) {
+  // Read a single stable-latest checksum document, then pin every asset by version.
+  // No token, API quota or downloaded executable is needed for discovery.
+  return describe(await download(`https://github.com/${repository}/releases/latest/download/SHA256SUMS`, options));
+}
+export async function published(version, options = {}) {
+  // An explicitly requested stable version reads that tag's own checksum document.
+  versionParts(version);
+  const release = describe(await download(`https://github.com/${repository}/releases/download/v${version}/SHA256SUMS`, options));
+  if (release.version !== version) throw Error('Release checksums describe a different version.');
+  return release;
 }
 export const digest = value => createHash('sha256').update(value).digest('hex');

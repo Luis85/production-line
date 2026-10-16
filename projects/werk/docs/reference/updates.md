@@ -114,7 +114,9 @@ separate system; it does not discover previous installations.
 ## Deployment scope
 
 Automatic activation and backup apply to native whole-system and single-line
-installations. Docker wrappers and managed VM deployment tooling retain their
+installations. Portable apps copied into other projects (`bin/apps/<app>`) update themselves with
+their own [guarded update command](portable-apps.md#update-a-copied-app), which uses the
+same checksum discovery, release verification and verified state backups. Docker wrappers and managed VM deployment tooling retain their
 pinned-release, stopped-state upgrade procedures. Generated VM services set
 `WERK_UPDATES=external`, which bypasses the update manager and its writable sibling
 directory entirely. Preserve that variable when manually replacing a managed VM release; no host Node dependency is added

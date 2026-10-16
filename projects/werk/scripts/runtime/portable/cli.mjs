@@ -8,6 +8,7 @@ import { workerBody, workerOutput, waitForWorker } from './worker-commands.mjs';
 import { commands } from './commands.mjs';
 import { loadEnvironment, environmentDefaults, seedEnvironment } from './environment.mjs';
 import { run, start, status, stop, stateDirectory } from './lifecycle.mjs';
+import { updateCommands, updateHelp, checkUpdate, updateStatus, applyUpdate, rollbackUpdate, restoreBackup } from './update.mjs';
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 export async function main(kind, argv = process.argv.slice(2)) {
   const { args, validateOptions, input, integer } = await import(new URL(`../../../src/${kind}/dist/shared/cli.js`, import.meta.url));
@@ -17,12 +18,27 @@ export async function main(kind, argv = process.argv.slice(2)) {
     // JSON is the default; accept a familiar explicit flag without a value.
     const dryRun = argv.includes('--dry-run');
     if (argv.filter(value => value === '--dry-run').length > 1) throw inputError('--dry-run must occur once.');
-    const parsed = args(argv.filter(value => value !== '--json' && value !== '--dry-run')), cmd = parsed.commands.join(' ');
+    // Update switches are valueless like --json; the shared parser requires option values.
+    const switches = argv[0] === 'update' ? ['--stop', '--no-restart'] : [];
+    if (switches.some(flag => argv.filter(value => value === flag).length > 1)) throw inputError('Update switches must occur once.');
+    const flags = Object.fromEntries(switches.filter(flag => argv.includes(flag)).map(flag => [flag.slice(2), true]));
+    const parsed = args(argv.filter(value => value !== '--json' && value !== '--dry-run' && !switches.includes(value))), cmd = parsed.commands.join(' ');
     let o = parsed.options;
     const catalog = commands(kind);
     if (dryRun && !(kind === 'worker' && cmd === 'integrations sync')) throw inputError('--dry-run is supported only by integrations sync.');
     if (!cmd || o.help || cmd === 'help' || cmd === 'schema') {
-      console.log(JSON.stringify({ schemaVersion: 1, application: kind, node: '24.x', usage: `node bin/apps/${kind}/cli.mjs COMMAND [--state-dir PATH] [--json]`, lifecycle: { run: 'Foreground; Ctrl+C drains and closes', start: 'Detached; returns when ready', status: 'Authenticated process identity and webview URL', stop: 'Graceful authenticated shutdown; preserves state' }, environment: { initialize: 'env init [--project-dir PATH] [--state-dir PATH]', file: '.env in the project directory (current directory by default)', precedence: 'Process environment overrides .env; explicit command options override environment defaults', credentials: 'Initialization returns file paths and key names only. Read the private .env locally.' }, launchOptions: ['state-dir', 'host', 'port', 'project-dir', ...(kind === 'worker' ? ['config', 'url', 'features-dir', 'poll-ms', 'mock-ms'] : kind === 'orchestrator' ? ['project'] : [])], clientOptions: ['state-dir', 'project-dir', 'url', 'token-file', 'file', 'id', 'key'], input: 'JSON --file PATH or --file - (stdin), maximum 64 KiB. Local credentials resolved privately from state; remote URL requires explicit token-file or WERK_APP_TOKEN.', commands: catalog, ...(kind === 'worker' ? { executionPolicy: { environment: 'WERK_WORKER_MAX_RUNTIME_MS', scope: 'Local model invocations; frozen per dispatch, not total session age or polling timeout', defaultMs: 21600000, minimumMs: 1000, maximumMs: 86400000, precedence: 'Validated environment override, then saved private settings, then default', inspect: 'settings get: execution and executionSource; resource status: admission policy', update: 'settings set with execution; rejected while environment override is active' }, requestGates: { inspect: 'request get and request events', completion: 'Model completion, Request Done and applied/merged changes are distinct', dispatch: 'Inspect current-generation dispatch state; identical command receipt replay never admits new work', recovery: 'If not admitted and still ready, read current revision and issue a new guarded execute with a new key', guide: 'docs/how-to/rework-worker-requests.md' }, projectSetup: { command: 'init [--project-dir PATH] [--features-dir features] [--provider codex-cli] [--port 4100]', featureFolder: 'feature folder get | plan --path requests/features | set --path requests/features', template: 'feature template (prints Markdown without a running worker)', authoring: 'feature setup | feature author create | feature author validate | feature author ready (offline; no running worker required)', npm: 'npm --prefix bin/apps/worker run lists scripts; append -- before command options. No npm install required.', behavior: 'Installs a project-local app, config, authoring kit, npm entrypoints and Docker Compose file; preserves existing files and project package.json.' } } : {}), api: 'api --path /local/path [--method GET|POST|PUT|PATCH|DELETE] [--file PATH|-] [--key KEY]', exitCodes: { 0: 'success', 1: 'operational failure', 2: 'input/API rejection' } }, null, 2)); return;
+      console.log(JSON.stringify({ schemaVersion: 1, application: kind, node: '24.x', usage: `node bin/apps/${kind}/cli.mjs COMMAND [--state-dir PATH] [--json]`, lifecycle: { run: 'Foreground; Ctrl+C drains and closes', start: 'Detached; returns when ready', status: 'Authenticated process identity and webview URL', stop: 'Graceful authenticated shutdown; preserves state' }, environment: { initialize: 'env init [--project-dir PATH] [--state-dir PATH]', file: '.env in the project directory (current directory by default)', precedence: 'Process environment overrides .env; explicit command options override environment defaults', credentials: 'Initialization returns file paths and key names only. Read the private .env locally.' }, launchOptions: ['state-dir', 'host', 'port', 'project-dir', ...(kind === 'worker' ? ['config', 'url', 'features-dir', 'poll-ms', 'mock-ms'] : kind === 'orchestrator' ? ['project'] : [])], clientOptions: ['state-dir', 'project-dir', 'url', 'token-file', 'file', 'id', 'key'], input: 'JSON --file PATH or --file - (stdin), maximum 64 KiB. Local credentials resolved privately from state; remote URL requires explicit token-file or WERK_APP_TOKEN.', commands: catalog, ...(kind === 'worker' ? { executionPolicy: { environment: 'WERK_WORKER_MAX_RUNTIME_MS', scope: 'Local model invocations; frozen per dispatch, not total session age or polling timeout', defaultMs: 21600000, minimumMs: 1000, maximumMs: 86400000, precedence: 'Validated environment override, then saved private settings, then default', inspect: 'settings get: execution and executionSource; resource status: admission policy', update: 'settings set with execution; rejected while environment override is active' }, requestGates: { inspect: 'request get and request events', completion: 'Model completion, Request Done and applied/merged changes are distinct', dispatch: 'Inspect current-generation dispatch state; identical command receipt replay never admits new work', recovery: 'If not admitted and still ready, read current revision and issue a new guarded execute with a new key', guide: 'docs/how-to/rework-worker-requests.md' }, projectSetup: { command: 'init [--project-dir PATH] [--features-dir features] [--provider codex-cli] [--port 4100]', featureFolder: 'feature folder get | plan --path requests/features | set --path requests/features', template: 'feature template (prints Markdown without a running worker)', authoring: 'feature setup | feature author create | feature author validate | feature author ready (offline; no running worker required)', npm: 'npm --prefix bin/apps/worker run lists scripts; append -- before command options. No npm install required.', behavior: 'Installs a project-local app, config, authoring kit, npm entrypoints and Docker Compose file; preserves existing files and project package.json.' } } : {}), api: 'api --path /local/path [--method GET|POST|PUT|PATCH|DELETE] [--file PATH|-] [--key KEY]', update: updateHelp, exitCodes: { 0: 'success', 1: 'operational failure', 2: 'input/API rejection' } }, null, 2)); return;
+    }
+    if (parsed.commands[0] === 'update') {
+      const spec = updateCommands[cmd];
+      if (!spec) throw inputError('Unknown update command. Use update check|status|apply|rollback|restore.');
+      validateOptions(o, spec.options);
+      for (const name of Object.keys(flags)) if (!spec.flags.includes(name)) throw inputError(`--${name} is not valid for ${cmd}.`);
+      if (cmd === 'update check') { console.log(JSON.stringify(await checkUpdate(kind, root, o))); return; }
+      if (cmd === 'update restore') {
+        if (!o.from || !o.to) throw inputError('--from BACKUP and --to NEW_STATE_DIRECTORY required.');
+        console.log(JSON.stringify(await restoreBackup(o.from, o.to))); return;
+      }
     }
     if (kind === 'worker' && cmd === 'feature setup') {
       validateOptions(o, ['project-dir', 'features-dir']);
@@ -54,7 +70,7 @@ export async function main(kind, argv = process.argv.slice(2)) {
     }
     if (kind === 'worker' && cmd === 'init') { validateOptions(o, ['project-dir', 'features-dir', 'provider', 'port']); console.log(JSON.stringify(await initializeWorker(root, o))); return; }
     if (kind === 'worker' && cmd === 'feature template') { validateOptions(o, []); const { featureTemplate } = await import(new URL('../../../src/worker/dist/worker/infrastructure/features/document.js', import.meta.url)); process.stdout.write(featureTemplate); return; }
-    const launching = ['run', '_run', 'start'].includes(cmd), recovery = ['status', 'stop'].includes(cmd);
+    const launching = ['run', '_run', 'start'].includes(cmd), recovery = ['status', 'stop', 'update status', 'update apply', 'update rollback'].includes(cmd);
     // Explicit state recovery remains available even when project environment files need repair.
     if (!(recovery && o['state-dir'] !== undefined) && !(o.url && !launching)) {
       const directory = resolve(o['project-dir'] ?? process.cwd());
@@ -68,12 +84,18 @@ export async function main(kind, argv = process.argv.slice(2)) {
       if (o['state-dir'] === undefined) o = { ...o, 'state-dir': join(directory, '.werk', kind) };
     }
     const state = await stateDirectory(kind, root, o['state-dir']);
+    if (['update status', 'update apply', 'update rollback'].includes(cmd)) {
+      const options = { ...o, ...flags }, context = { projectDir: o['project-dir'], log: message => console.error(JSON.stringify({ event: 'update_progress', message })) };
+      const value = cmd === 'update status' ? await updateStatus(kind, root, state) : await (cmd === 'update apply' ? applyUpdate : rollbackUpdate)(kind, root, state, options, context);
+      console.log(JSON.stringify(value)); if (value.ok === false) process.exitCode = 1; return;
+    }
     if (['run', '_run', 'start'].includes(cmd)) {
       validateOptions(o, ['state-dir', 'host', 'port', 'project-dir', ...(kind === 'worker' ? ['config', 'url', 'features-dir', 'poll-ms', 'mock-ms'] : kind === 'orchestrator' ? ['project'] : [])]);
       if (o.port !== undefined) integer(o.port, 'port', 0, 65535);
       if (cmd === '_run' && !process.send) throw inputError('Internal launch requires an IPC parent. Use run or start.');
       if (cmd === 'start') console.log(JSON.stringify(await start(kind, state, root, argv.slice(1))));
-      else await run(kind, state, root, o, cmd === '_run');
+      // Record how this instance was launched so a guarded update can restart it identically.
+      else await run(kind, state, root, o, cmd === '_run', { mode: cmd === '_run' ? 'start' : 'run', cwd: process.cwd(), args: argv.slice(1) });
       return;
     }
     if (cmd === 'status' || cmd === 'stop') {

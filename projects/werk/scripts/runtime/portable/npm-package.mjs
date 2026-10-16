@@ -6,7 +6,7 @@ import { commands } from './commands.mjs';
 export function workerNpmScripts(project = false) {
   const entry = project ? 'node bin/apps/worker/cli.mjs' : 'node scripts/runtime/portable/npm-entry.mjs';
   const prefix = project ? 'worker:' : '';
-  const names = new Set(['help', 'schema', 'init', 'env init', 'run', 'start', 'status', 'stop', 'api', ...Object.keys(commands('worker'))]);
+  const names = new Set(['help', 'schema', 'init', 'env init', 'run', 'start', 'status', 'stop', 'api', 'update check', 'update status', 'update apply', 'update rollback', ...Object.keys(commands('worker'))]);
   return { worker: entry, ...Object.fromEntries([...names].map(command => [prefix + command.replaceAll(' ', ':'), `${entry} ${command}`])) };
 }
 

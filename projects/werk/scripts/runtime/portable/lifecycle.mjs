@@ -92,7 +92,7 @@ export async function stateDirectory(kind, root, value) {
   if (!inside || (inside !== '..' && !inside.startsWith('..' + sep) && !isAbsolute(inside))) throw inputError('Keep --state-dir outside the copied app folder so upgrades preserve state.');
   return state;
 }
-export async function run(kind, state, root, options, internal) {
+export async function run(kind, state, root, options, internal, launch = null) {
   const before = await status(kind, state);
   if (before.state !== 'stopped') throw inputError(before.action ?? 'Application already running.');
   const abort = new AbortController();
@@ -121,7 +121,7 @@ export async function run(kind, state, root, options, internal) {
     const runId = randomBytes(32).toString('hex'), controlToken = randomBytes(32).toString('hex');
     const snapshot = () => ({ state: closing ? 'stopping' : 'running', runId, project: options.project ?? null, mode: 'mixed', url: info.url, workers: kind === 'worker' ? 1 : 0 });
     control = await createControl({ runId, controlToken, snapshot, stop: onSignal });
-    identity = { schemaVersion: 1, kind, runId, controlToken, pid: process.pid, controlPort: control.address().port, children: [], url: info.url };
+    identity = { schemaVersion: 1, kind, runId, controlToken, pid: process.pid, controlPort: control.address().port, children: [], url: info.url, ...(launch ? { launch } : {}) };
     await createPrivate(metadataPath(state), identity);
     const data = { ...snapshot(), kind, stateDirectory: state, credentialsFile: info.credentialsFile };
     ready = true;

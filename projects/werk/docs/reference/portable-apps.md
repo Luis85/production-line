@@ -141,10 +141,92 @@ State defaults to `.werk/<app>` under the invoking project, outside the copied a
 Use a separate state directory and port for each instance. Keep state private and
 out of Git; it includes credentials, transcripts, SQLite databases and results.
 Detached operational logs are in `<state>/portable.log`; apply your log retention
-policy while stopped. To update: stop, back up state, replace the complete app folder
-with a verified release copy, then start with the same state and launch options.
-The portable CLI does not automatically replace itself. Copying runtime files never
-copies provider credentials or task history. Stop all writers before backing up.
+policy while stopped. To update, use the guarded [update command](#update-a-copied-app).
+Copying runtime files never copies provider credentials or task history. Stop all
+writers before backing up.
+
+## Update a copied app
+
+A copied app folder from 0.9.0 onward replaces itself with a verified release.
+Run update commands from the project directory, never from inside the app folder:
+
+```sh
+node bin/apps/worker/cli.mjs update check
+node bin/apps/worker/cli.mjs update apply --stop
+node bin/apps/worker/cli.mjs update status
+node bin/apps/worker/cli.mjs update rollback --stop
+```
+
+`check` reads the stable `SHA256SUMS` from GitHub and reports `current`, `target`
+and `available` without changing files. `--version X.Y.Z` selects that release's
+own checksum file instead of the latest. `apply` downloads the pinned archive into
+a temporary directory outside the project, checks its SHA-256 against `SHA256SUMS`,
+extracts it and verifies the complete release inventory, exactly like `install.mjs`.
+The release must declare update protocol 1 and state format 1, and must be newer:
+an older `--version` is refused (use `rollback`). Without network access, extract a
+release you verified yourself and pass `--from /path/werk-X.Y.Z`; its own release
+manifest is verified.
+
+Before anything changes, `apply` copies the release's `bin/apps/<app>` into a
+staging folder beside the app, verifies every staged file against the release
+manifest and runs the staged CLI once. Then it:
+
+1. refuses while the selected instance runs, unless `--stop` was given; `--stop`
+   uses the normal graceful `stop`, which drains or cancels running work, so pause
+   the queue and let work finish first;
+2. holds the instance's application lock so it cannot start during the update;
+3. copies the complete state directory into a new, checksum-verified backup at
+   `<state>.updates/backups/<UTC timestamp>-<previous version>` (skipped for a
+   state directory without files);
+4. renames the current folder to `bin/apps/.<app>-update/<version>-<timestamp>`
+   and the staged folder into place. Both renames stay on one volume; if the second
+   fails, the previous folder is moved back;
+5. restarts the instance only if this command stopped it. A `start`ed instance is
+   restarted with its recorded working directory and options. Instances started by
+   0.8 or earlier recorded none: they restart with the state directory, project
+   defaults and previous port. A foreground `run` is left for its terminal or
+   service manager. `--no-restart` skips the restart.
+
+The JSON result names the new version, the retained folder, the backup and the
+restart outcome. A failed restart exits 1 after a successful replacement; start the
+app manually. If the update fails after stopping the app, the previous version is
+started again unless `--no-restart` was given. Progress records go to stderr.
+
+The state directory is never modified, and project files, `.env`, feature folders
+and agent integrations are not written. Review `integrations plan` after updating
+for new templates. `bin/apps/.<app>-update/` and `<state>.updates/` contain a
+`.gitignore` that excludes them from Git; backups contain credentials, so keep
+them private. Retained folders and backups are not deleted automatically; remove
+old ones after the new version is confirmed. Files you added inside the app folder
+remain in the retained folder only.
+
+`rollback` swaps back the folder retained by the last update or rollback, so a
+second rollback returns to the newer version. It never changes state. If the newer
+version already changed state, stop the app, restore the update's backup into a
+new directory and start with that state:
+
+```sh
+node bin/apps/worker/cli.mjs update restore --from .werk/worker.updates/backups/BACKUP --to .werk/worker-restored
+node bin/apps/worker/cli.mjs start --state-dir .werk/worker-restored
+```
+
+`update status` lists the installed version, running state, retained folders and
+last operation. Explicit `--state-dir` and `--project-dir` select the instance as for
+`status`. Only one update per app folder runs at a time
+(`bin/apps/.<app>-update/update.lock`); after a crash, verify that process exited
+before removing that lock.
+
+The command checks one instance. Stop every other instance that runs from the same
+app folder (for example a second worker state, or the Docker Compose worker, which
+mounts the folder read-only) before updating, then recreate the container. On
+Windows, a terminal, editor, indexer or antivirus scan holding a file in the app
+folder blocks the rename; the update retries for ten seconds and then fails without
+replacing anything. Downloads and extraction use the system temporary directory to
+keep paths short.
+
+Version 0.8.0 and earlier have no `update` command. Upgrade those once by hand: stop,
+back up the state directory, replace the complete app folder with a verified 0.9.0
+or later copy, then start with the same state and launch options.
 
 ## Give a worker tasks from an AI agent or CI
 
