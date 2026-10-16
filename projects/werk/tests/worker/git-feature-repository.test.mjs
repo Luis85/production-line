@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import childProcess, { execFileSync } from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -193,6 +194,28 @@ test('deep publication and later task worktrees support committed receipt paths 
   git(parent, 'clone', '--', f.remote, repository); git(repository, 'config', 'core.longpaths', 'false');
   const stateDirectory = join(repository, '.werk', 'worker', 'shared-git', 'a'.repeat(64));
   const adapter = f.client({ repository, stateDirectory }), input = f.lifecycle('deep-first');
+  // Observe only this controlled local checkout's stderr, without replacing the
+  // production runner, arguments, environment, cancellation or output limits.
+  const diagnostics = [], originalSpawn = childProcess.spawn;
+  const spy = t.mock.method(childProcess, 'spawn', function (executable, args, options) {
+    const child = Reflect.apply(originalSpawn, this, [executable, args, options]);
+    const command = Array.isArray(args) ? args.indexOf('worktree') : -1;
+    if (executable === 'git' && options?.cwd === repository && command >= 0 && args[command + 1] === 'add') {
+      const diagnostic = { targetLength: args.at(-2).length, exitCode: null, stderr: '' }; diagnostics.push(diagnostic);
+      child.stderr.on('data', chunk => { diagnostic.stderr = (diagnostic.stderr + chunk.toString('utf8')).slice(0, 8192); });
+      child.once('close', code => { diagnostic.exitCode = code; });
+    }
+    return child;
+  });
+  syncBuiltinESMExports();
+  t.after(() => { spy.mock.restore(); syncBuiltinESMExports(); });
+  async function checkoutDiagnostic(operation) {
+    try { return await operation(); }
+    catch (error) {
+      const detail = JSON.stringify(diagnostics.map(value => ({ ...value, stderr: value.stderr.replaceAll(f.directory, '<fixture>').replaceAll(f.directory.replaceAll('\\', '/'), '<fixture>') })));
+      throw new Error('Controlled Git checkout diagnostic: ' + detail, { cause: error });
+    }
+  }
   // Observe the actual paths while exercising the unmodified production runner.
   const publicationPaths = [], originalGit = adapter.io.git.bind(adapter.io);
   adapter.io.git = async (cwd, args, ...options) => {
@@ -201,16 +224,17 @@ test('deep publication and later task worktrees support committed receipt paths 
   };
   const initialHead = git(repository, 'rev-parse', 'HEAD');
   const initialIndex = await readFile(join(repository, '.git', 'index'));
-  const first = await adapter.publishLifecycle(input);
+  const first = await checkoutDiagnostic(() => adapter.publishLifecycle(input));
+  assert.equal(diagnostics.length, 1); assert.equal(diagnostics[0].exitCode, 0);
   const receipt = 'feature-reviews/_operations/' + hash(input.operationId) + '.json';
   assert.equal(publicationPaths.length, 1);
   assert.ok(join(publicationPaths[0], '.git').length < 260);
   assert.ok(join(publicationPaths[0], receipt).length > 260);
-  const second = await adapter.publishLifecycle({ operationId: 'deep-second', request: { path: input.request.path, expectedRevision: hash(input.request.content), content: input.request.content.replace('status: claimed', 'status: completed') } });
+  const second = await checkoutDiagnostic(() => adapter.publishLifecycle({ operationId: 'deep-second', request: { path: input.request.path, expectedRevision: hash(input.request.content), content: input.request.content.replace('status: claimed', 'status: completed') } }));
   assert.notEqual(second.commit, first.commit);
   assert.equal(JSON.parse(git(f.remote, 'show', second.head + ':' + receipt)).operationId, input.operationId);
   assert.match(git(f.remote, 'show', second.head + ':' + input.request.path), /status: completed/);
-  const worktree = await prepareRepositoryWorktree(repository, 'later-feature-with-receipt', new AbortController().signal, second.head);
+  const worktree = await checkoutDiagnostic(() => prepareRepositoryWorktree(repository, 'later-feature-with-receipt', new AbortController().signal, second.head));
   assert.ok(join(worktree.path, receipt).length > 260);
   assert.equal(JSON.parse(await readFile(join(worktree.path, receipt), 'utf8')).operationId, input.operationId);
   assert.equal(worktree.baseCommit, second.head); assert.equal(git(repository, 'rev-parse', 'HEAD'), initialHead);
