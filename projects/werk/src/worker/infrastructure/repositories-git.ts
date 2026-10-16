@@ -144,10 +144,13 @@ async function ownedWorktree(path: string, owner: Ownership, root: RepositoryRoo
 }
 // Parallel checkout writes independent files concurrently; on Windows NTFS this
 // measured about 2.5x faster for a 12,000-file tree. Git before 2.32 ignores it.
-// Its helper processes receive the absolute administration directory as GIT_DIR,
-// which Git for Windows rejects above 220 bytes, so long paths check out serially.
+// Git child processes of a worktree receive its absolute administration directory
+// as GIT_DIR, which Git for Windows rejects above 220 bytes (PATH_MAX - 40).
+const childGitDirTooLong = (root: RepositoryRoot, name: string) =>
+  process.platform === 'win32' && Buffer.byteLength(join(root.commonDirectory, 'worktrees', name)) > 216;
+// Parallel checkout uses such children, so long paths check out serially.
 const checkoutWorkers = (root: RepositoryRoot, name: string) =>
-  process.platform === 'win32' && Buffer.byteLength(join(root.commonDirectory, 'worktrees', name)) > 216 ? 1 : Math.min(8, Math.max(1, availableParallelism()));
+  childGitDirTooLong(root, name) ? 1 : Math.min(8, Math.max(1, availableParallelism()));
 
 /** Retain owned worktrees, including interrupted edits, and never reset or overwrite an existing path. */
 export async function createRepositoryWorktree(root: RepositoryRoot, repositoryId: string, taskKey: string, signal: AbortSignal, baseCommit?: string, timeoutMs = 30000, options: WorktreeOptions = {}): Promise<RepositoryWorktree> {
@@ -287,7 +290,9 @@ export async function removeRepositoryWorktree(root: RepositoryRoot, name: strin
     } else {
       changes = (await repositoryGit(path, ['status', '--porcelain=v1', '-z', '--untracked-files=all'], signal, removeTimeout)).split('\0').filter(Boolean).length;
       if (changes && !options.discardChanges) return kept('The worktree has uncommitted or untracked changes. Confirm discarding them to remove it.', changes);
-      if (changes) forced = 1;
+      // Git's own cleanliness check runs `git status` as such a child; the status
+      // above already established that this worktree is clean.
+      if (changes || childGitDirTooLong(root, name)) forced = 1;
     }
   } else if (listed?.locked !== undefined) return kept('The missing worktree is locked. Unlock it in Git after review.');
   if (options.dryRun) return { name, path, outcome: 'would_remove', ...(changes === undefined ? {} : { changes }) };
