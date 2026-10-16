@@ -1,4 +1,3 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { win32 } from 'node:path';
 
 // The supervisor owns an outer lifetime job before creating a child. A suspended
@@ -122,12 +121,12 @@ public static class WerkProviderJob {
 }
 `;
 
-/** Launch through Windows containment without evaluating executable paths or arguments as script. */
-export function spawnProvider(executable: string, args: string[], cwd: string, env: NodeJS.ProcessEnv): ChildProcessWithoutNullStreams {
-  if (executable.includes('\0') || args.some(arg => arg.includes('\0')))
-    throw new TypeError('Provider executable and arguments cannot contain NUL');
-  if (process.platform !== 'win32')
-    return spawn(executable, args, { cwd, env, detached: true, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+/**
+ * Windows launch plan for a contained process: Windows PowerShell runs the job
+ * supervisor above, which creates the real executable inside a kill-on-close job.
+ * Paths and arguments travel as base64 JSON, never as script text.
+ */
+export function windowsContainment(executable: string, args: string[], env: NodeJS.ProcessEnv): { executable: string; args: string[]; env: NodeJS.ProcessEnv } {
   const systemRoot = process.env.SystemRoot;
   if (!systemRoot || !win32.isAbsolute(systemRoot)) throw Error('Windows SystemRoot is unavailable');
   const powershell = win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
@@ -144,8 +143,9 @@ export function spawnProvider(executable: string, args: string[], cwd: string, e
   for (const key of ['ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432', 'CommonProgramFiles', 'CommonProgramFiles(x86)', 'CommonProgramW6432', 'PROCESSOR_ARCHITECTURE', 'PROCESSOR_ARCHITEW6432', 'NUMBER_OF_PROCESSORS', 'OS'])
     if (process.env[key]) setRuntimeValue(key, process.env[key]!);
   if (process.env.PSModulePath) setRuntimeValue('PSModulePath', process.env.PSModulePath);
-  return spawn(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(supervisor, 'utf16le').toString('base64')], {
-    cwd, env: { ...supervisorEnv, WERK_PROVIDER_LAUNCH: Buffer.from(JSON.stringify({ executable, arguments: args, restoreEnvironment }), 'utf8').toString('base64') },
-    detached: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
-  });
+  return {
+    executable: powershell,
+    args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(supervisor, 'utf16le').toString('base64')],
+    env: { ...supervisorEnv, WERK_PROVIDER_LAUNCH: Buffer.from(JSON.stringify({ executable, arguments: args, restoreEnvironment }), 'utf8').toString('base64') },
+  };
 }

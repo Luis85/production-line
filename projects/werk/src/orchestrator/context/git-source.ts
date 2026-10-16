@@ -1,12 +1,10 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { realpath } from 'node:fs/promises';
 import { immutableGitEnvironment } from '../infrastructure/git-environment.js';
 import { DomainError } from '../../shared/errors.js';
+import { runProcess } from '../../shared/process/launcher.js';
 import { CONTEXT_LIMITS, assertContextActive } from './resolver.js';
 import type { ContextSource, ContextFile } from './resolver.js';
 
-const exec = promisify(execFile);
 /** Only immutable Git object reads; no checkout, rev syntax, filters, hooks or lazy fetch. */
 export async function gitContextSource(repo: string, commit: string, signal?: AbortSignal): Promise<ContextSource> {
     assertContextActive(signal);
@@ -19,8 +17,8 @@ export async function gitContextSource(repo: string, commit: string, signal?: Ab
     const git = async (args: string[], maxBuffer = 4 * 1024 * 1024): Promise<Buffer> => {
         assertContextActive(signal);
         try {
-            return (await exec('git', ['--no-replace-objects', '--no-optional-locks', '-C', repository, '-c', 'core.fsmonitor=false', ...args],
-                { env, encoding: 'buffer', maxBuffer, timeout: 10000, signal, killSignal: 'SIGKILL', windowsHide: true })).stdout;
+            return (await runProcess('git', ['--no-replace-objects', '--no-optional-locks', '-C', repository, '-c', 'core.fsmonitor=false', ...args],
+                { env, maxOutputBytes: maxBuffer, timeoutMs: 10000, signal, graceMs: 0 })).stdout;
         } catch {
             assertContextActive(signal);
             throw new DomainError('invalid_input', `Cannot read pinned Git object (${args[0]}): unavailable object, repository, timeout or output limit`);

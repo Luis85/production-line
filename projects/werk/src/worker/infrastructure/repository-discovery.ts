@@ -1,13 +1,11 @@
-import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { lstat, realpath } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
-import { promisify } from 'node:util';
 import type { RepositoryAssignment } from '../application/repositories.js';
 import { DomainError } from '../../shared/errors.js';
 import { atomicWrite, readBoundedFile } from './journal/files.js';
+import { runProcess } from '../../shared/process/launcher.js';
 
-const execute = promisify(execFile);
 const validRemote = (name: string) => /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name) && !name.endsWith('.lock') && !name.includes('..');
 interface Candidate { id: string; path: string; commonDirectory: string; currentBranch: string | null; remote: string | null; }
 interface Decision { version: 1; id: string; decision: 'accepted' | 'declined'; repositoryId?: string; }
@@ -26,7 +24,7 @@ async function inspect(path: string, signal: AbortSignal): Promise<Candidate | n
     if (metadata.isSymbolicLink() || (!metadata.isFile() && !metadata.isDirectory())) return null;
     // Do not allow ambient GIT_DIR/GIT_WORK_TREE/config injection to redirect this inspection.
     const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.toUpperCase().startsWith('GIT_')));
-    const git = async (...args: string[]) => (await execute('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', ...args], { cwd: root, env: { ...env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never', GIT_OPTIONAL_LOCKS: '0' }, encoding: 'utf8', maxBuffer: 65536, timeout: Math.min(timeoutMs, 5000), windowsHide: true, signal: bounded })).stdout.trim();
+    const git = async (...args: string[]) => (await runProcess('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', ...args], { cwd: root, env: { ...env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never', GIT_OPTIONAL_LOCKS: '0' }, maxOutputBytes: 65536, timeoutMs: Math.min(timeoutMs, 5000), graceMs: 0, signal: bounded })).stdout.toString('utf8').trim();
     if (await realpath(await git('rev-parse', '--show-toplevel')) !== root) return null;
     const commonDirectory = await realpath(await git('rev-parse', '--path-format=absolute', '--git-common-dir'));
     const common = await lstat(commonDirectory);
