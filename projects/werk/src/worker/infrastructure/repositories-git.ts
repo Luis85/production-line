@@ -2,7 +2,7 @@ import { ProcessRunError, runProcess } from '../../shared/process/launcher.js';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import { lstat, mkdir, open, readFile, realpath, writeFile } from 'node:fs/promises';
-import { isAbsolute, join, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 
 export class RepositoryGitError extends Error {
   readonly reason: 'failed' | 'timeout' | 'cancelled';
@@ -41,6 +41,12 @@ export async function repositoryRoot(path: string, signal: AbortSignal, timeoutM
   if (await realpath(top) !== root) throw Error('Assign the Git repository root, not a subdirectory.');
   const commonDirectory = await realpath((await repositoryGit(root, ['rev-parse', '--path-format=absolute', '--git-common-dir'], signal, timeoutMs)).trim());
   return { path: root, commonDirectory };
+}
+
+/** Git passes this argument to a child's GIT_DIR, whose Windows byte limit is stricter than filesystem paths. */
+export function repositoryWorktreeArgument(repository: string, worktree: string): string {
+  const candidate = relative(repository, worktree);
+  return !isAbsolute(candidate) && Buffer.byteLength(candidate) < Buffer.byteLength(worktree) ? candidate : worktree;
 }
 
 async function directory(parent: string, name: string) {
@@ -93,6 +99,8 @@ export async function createRepositoryWorktree(root: RepositoryRoot, repositoryI
   const werk = await directory(root.path, '.werk'), worktrees = await directory(werk, 'worktrees');
   await excludeWorktrees(root, signal, timeoutMs);
   const metadata = await directory(root.commonDirectory, 'werk-worktrees'), path = join(worktrees, name), marker = join(metadata, `${name}.json`);
+  const argument = repositoryWorktreeArgument(root.path, path);
+  if (process.platform === 'win32' && (join(path, '.git').length >= 260 || Buffer.byteLength(join(argument, '.git')) > 220)) throw Error('Use a shorter repository path for task worktrees on Windows.');
   let owner: Ownership | undefined;
   const markerInfo = await lstat(marker).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
   if (markerInfo) {
@@ -113,7 +121,7 @@ export async function createRepositoryWorktree(root: RepositoryRoot, repositoryI
     await writeFile(marker, JSON.stringify(owner) + '\n', { flag: 'wx', mode: 0o600 });
   }
   signal.throwIfAborted();
-  await repositoryGit(root.path, ['worktree', 'add', '--detach', '--', path, owner.baseCommit], signal, timeoutMs);
+  await repositoryGit(root.path, ['worktree', 'add', '--detach', '--', argument, owner.baseCommit], signal, timeoutMs);
   await ownedWorktree(path, owner, root, signal, timeoutMs);
   return { repositoryId, repository: root.path, path, baseCommit: owner.baseCommit, reused: false };
 }

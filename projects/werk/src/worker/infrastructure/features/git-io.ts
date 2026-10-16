@@ -3,7 +3,7 @@ import { constants } from 'node:fs';
 import { lstat, mkdir, open, readdir, realpath } from 'node:fs/promises';
 import { isAbsolute, join, parse, resolve, sep } from 'node:path';
 import { runProcess, ProcessRunError } from '../../../shared/process/launcher.js';
-import { repositoryRoot, type RepositoryRoot } from '../repositories-git.js';
+import { repositoryRoot, repositoryWorktreeArgument, type RepositoryRoot } from '../repositories-git.js';
 
 export class GitFeatureError extends Error {
   readonly code: 'conflict' | 'invalid_input' | 'unavailable' | 'cancelled';
@@ -104,15 +104,15 @@ export class FeatureGitIo {
   }
   async worktree<T>(root: RepositoryRoot, commit: string, signal: AbortSignal, action: (path: string) => Promise<T>): Promise<T> {
     if (!commitId(commit)) throw new GitFeatureError('invalid_input', 'Publication requires a full source commit identifier.');
-    const directory = join(this.options.stateDirectory, 'worktrees');
-    // Git for Windows must open its .git file before long-path config is loaded.
-    // Compact generated names leave room for metadata; tracked files may be longer.
-    if (process.platform === 'win32' && join(directory, 'p-XXXXXX', '.git').length >= 260) throw new GitFeatureError('invalid_input', 'Use a shorter worker state directory for shared feature publication on Windows.');
+    const directory = join(this.options.stateDirectory, 'worktrees'), candidate = join(directory, 'p-XXXXXX');
+    // Git opens its metadata before long-path config and bounds a child's GIT_DIR
+    // to 220 UTF-8 bytes on Windows. A relative argument preserves the same path.
+    if (process.platform === 'win32' && (join(candidate, '.git').length >= 260 || Buffer.byteLength(join(repositoryWorktreeArgument(root.path, candidate), '.git')) > 220)) throw new GitFeatureError('invalid_input', 'Use a shorter worker state directory for shared feature publication on Windows.');
     const storage = await ordinaryDirectory(directory, true);
     const path = await publicationDirectory(storage, signal), identity = await lstat(path);
     let added = false;
     try {
-      await this.output(root.path, ['worktree', 'add', '--detach', '--', path, commit], signal); added = true;
+      await this.output(root.path, ['worktree', 'add', '--detach', '--', repositoryWorktreeArgument(root.path, path), commit], signal); added = true;
       if ((await this.output(path, ['status', '--porcelain=v1', '-z', '--untracked-files=all'], signal)).length) throw new GitFeatureError('conflict', 'Publication worktree is not clean.');
       return await action(path);
     } finally {
