@@ -48,7 +48,8 @@ for (const id of ['openai-api', 'anthropic-api']) {
     let turn = 0; const observed = { calls: [], closed: 0 };
     const model = modelFor(connection(id), '/unused', async () => Response.json(call(id, id === 'openai-api' ? { call_id: 'call_' + ++turn } : { id: 'call_' + ++turn })), { tools: runtimeFactory(observed) });
     await assert.rejects(executeModel(model, prepareModelRequest(model, messages), new AbortController().signal), { code: 'protocol' });
-    assert.equal(observed.calls.length, 32); assert.equal(turn, 33); assert.equal(observed.closed, 1);
+    // The fixture runtime reports no budget; the loop still stops after the 32-call budget plus a refusal and an answer round.
+    assert.equal(observed.calls.length, 34); assert.equal(turn, 34); assert.equal(observed.closed, 1);
     for (const cancelled of [false, true]) {
       const controller = new AbortController(), denied = { calls: [], closed: 0 };
       const model = modelFor(connection(id), '/unused', async () => Response.json(call(id)), { tools: runtimeFactory(denied, { async call() { if (cancelled) controller.abort(); throw Error('PRIVATE_TOOL_DIAGNOSTIC'); } }) });

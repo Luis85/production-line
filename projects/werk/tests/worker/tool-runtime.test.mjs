@@ -126,7 +126,7 @@ test('chat commands use private scratch and permission changes or call limits st
   const runtime = createToolRuntime({ policy, currentRevision: () => policy.revision, directory, maxCalls: 1 });
   t.after(() => runtime.close());
   assert.equal(decoded(await runtime.call('werk_command_run', { preset: 'cwd' }, signal())).stdout.trim(), join(directory, 'chat-workspace'));
-  await assert.rejects(runtime.call('werk_command_run', { preset: 'cwd' }, signal()), /tool-call limit/);
+  assert.match(await denied(runtime.call('werk_command_run', { preset: 'cwd' }, signal())), /^Tool budget exhausted \(1 call \/ 120 s window\): the 1-call limit of this invocation is reached\. No further tool calls will run/);
   const stale = createToolRuntime({ policy, currentRevision: () => policy.revision, directory });
   t.after(() => stale.close()); policy.revision++;
   await assert.rejects(stale.call('werk_command_run', { preset: 'cwd' }, signal()), /permissions changed/);
@@ -151,8 +151,9 @@ test('a tool deadline aborts its command and later queued work cannot revive the
   });
   const runtime = createToolRuntime({ policy, currentRevision: () => 0, directory, maxRuntimeMs: 30 });
   t.after(() => runtime.close());
-  await assert.rejects(runtime.call('werk_command_run', { preset: 'wait' }, signal()), /cancelled/);
-  await assert.rejects(runtime.call('werk_command_run', { preset: 'wait' }, signal()), /cancelled/);
+  assert.match(await denied(runtime.call('werk_command_run', { preset: 'wait' }, signal())), /window ended while this call was running/);
+  assert.match(await denied(runtime.call('werk_command_run', { preset: 'wait' }, signal())), /tool window of this invocation ended after 1 of 32 calls/);
+  assert.deepEqual(runtime.budget().exhausted, { reason: 'window', maxCalls: 32, windowMs: 30, callsUsed: 1, refusedCalls: 2 });
 });
 
 test('web access enforces exact origins on every redirect, strips ambient credentials and bounds responses', async t => {

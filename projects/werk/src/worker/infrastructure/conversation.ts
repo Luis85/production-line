@@ -59,6 +59,6 @@ export class CodexConversationModel implements StructuredModel {
       }
       return parseModelResult(replies.join('\n\n'));
       } finally { if (runtime) await rm(cwd, { recursive: true, force: true }); }
-    }));
+    }, control));
   }
 }

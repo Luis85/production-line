@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import { lstatSync, realpathSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { ToolPolicy } from '../application/tool-policy.js';
-import { ToolAccessError, type ToolManifest, type ToolResult, type ToolRuntime, type ToolWorktreeIdentity } from '../application/tool-runtime.js';
+import { ToolAccessError, type ToolBudgetEvidence, type ToolManifest, type ToolResult, type ToolRuntime, type ToolWorktreeIdentity } from '../application/tool-runtime.js';
 import { builtinToolOperations, BuiltinToolError, type ToolOperation } from './builtin-tools.js';
 import { callMcpTool, mcpTransportConfiguration } from './tool-mcp.js';
 
@@ -27,6 +27,28 @@ const freeze = <T>(value: T): T => {
 export function mcpToolName(connection: string, tool: string): string {
   const suffix = createHash('sha256').update(JSON.stringify([connection, tool])).digest('hex').slice(0, 12);
   return 'mcp_' + connection.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 16) + '_' + tool.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 24) + '_' + suffix;
+}
+
+const windowText = (ms: number) => ms >= 1000 ? `${Math.floor(ms / 1000)} s` : `${ms} ms`;
+const remainingText = (ms: number) => ms >= 1000 ? `${Math.floor(ms / 1000)} s` : 'less than 1 s';
+const callText = (count: number) => `${count} ${count === 1 ? 'call' : 'calls'}`;
+const finish = 'Finish with the information you have, or ask the operator with a werkInteraction question.';
+/**
+ * Budget note appended as its own text item once a quarter or less of the calls or of the tool
+ * window remains. Earlier results stay unchanged. The text holds counts and durations only.
+ */
+export function toolBudgetNote(remainingCalls: number, maxCalls: number, remainingMs: number, windowMs: number): string | undefined {
+  if (remainingCalls <= 0) return `Tool budget: 0 of ${callText(maxCalls)} remain in this invocation. No further tool calls will run. ${finish}`;
+  if (remainingCalls * 4 > maxCalls && remainingMs * 4 > windowMs) return;
+  return `Tool budget: ${remainingCalls} of ${callText(maxCalls)} and ${remainingText(Math.max(0, remainingMs))} of the ${windowText(windowMs)} tool window remain.`;
+}
+/** Model-facing refusal for budget exhaustion. It is a normal tool error, never a lost tool. */
+export function toolBudgetMessage(reason: ToolBudgetEvidence['reason'], maxCalls: number, windowMs: number, callsUsed: number, inFlight = false): string {
+  const limits = `${callText(maxCalls)} / ${windowText(windowMs)} window`;
+  const cause = inFlight ? `the ${windowText(windowMs)} tool window ended while this call was running, so it was stopped and its result is unavailable`
+    : reason === 'calls' ? `the ${maxCalls}-call limit of this invocation is reached`
+    : `the ${windowText(windowMs)} tool window of this invocation ended after ${callsUsed} of ${callText(maxCalls)}`;
+  return `Tool budget exhausted (${limits}): ${cause}. No further tool calls will run in this invocation. ${finish}`;
 }
 
 /** No processes or network sessions are created until the model invokes a granted tool. */
@@ -53,10 +75,9 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
   const manifest: ToolManifest = freeze({ revision: policy.revision, tools: structuredClone(operations.map(operation => operation.definition)) });
   const lifetime = new AbortController();
   const pending = new Set<Promise<ToolResult>>();
-  let calls = 0, deadline: AbortSignal | undefined, closed = false;
+  let calls = 0, refused = 0, startedAt = 0, deadline: AbortSignal | undefined, closed = false, exhausted: ToolBudgetEvidence['reason'] | undefined;
   let previous: Promise<unknown> = Promise.resolve();
-  const authorize = (signal: AbortSignal) => {
-    if (closed || signal.aborted) throw new ToolAccessError('Tool execution was cancelled or its invocation ended.');
+  const grants = () => {
     let revision; try { revision = options.currentRevision(); } catch { throw new ToolAccessError(); }
     if (revision !== policy.revision) throw new ToolAccessError('Tool permissions changed. Start a new invocation to use the current grants.');
     if (options.worktree && pinnedWorktree) {
@@ -66,30 +87,51 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
       } catch { throw new ToolAccessError('The retained task worktree changed. Create a new task before using its tools.'); }
     }
   };
+  const authorize = (signal: AbortSignal) => {
+    if (closed || signal.aborted) throw new ToolAccessError('Tool execution was cancelled or its invocation ended.');
+    grants();
+  };
+  // Only the shared tool window ended: cancellation, revocation and invocation end still reject.
+  const windowEnded = (signal: AbortSignal) => !!deadline?.aborted && !closed && !signal.aborted && !lifetime.signal.aborted;
+  const refuse = (reason: ToolBudgetEvidence['reason'], inFlight = false): ToolResult => {
+    refused++; exhausted ??= reason;
+    return { content: [{ type: 'text', text: toolBudgetMessage(reason, maxCalls, maxRuntimeMs, calls, inFlight) }], isError: true };
+  };
+  // A separate text item keeps structured (JSON) tool output parseable and the 128 KiB check on the tool's own output.
+  const noted = (result: ToolResult): ToolResult => {
+    const note = toolBudgetNote(maxCalls - calls, maxCalls, maxRuntimeMs - (Date.now() - startedAt), maxRuntimeMs);
+    return note ? { ...result, content: [...result.content, { type: 'text', text: note }] } : result;
+  };
   return {
     manifest,
+    budget: () => ({ maxCalls, windowMs: maxRuntimeMs, callsUsed: calls, refusedCalls: refused, exhausted: exhausted ? { reason: exhausted, maxCalls, windowMs: maxRuntimeMs, callsUsed: calls, refusedCalls: refused } : null }),
     call(name, args, signal) {
       let input: unknown;
       try {
         authorize(signal);
         if (!catalog.has(name)) throw new ToolAccessError('This tool is not granted for the current invocation.');
-        if (++calls > maxCalls) throw new ToolAccessError('The invocation reached its tool-call limit.');
+        if (deadline?.aborted) return Promise.resolve(refuse('window'));
+        if (calls >= maxCalls) return Promise.resolve(refuse('calls'));
+        calls++;
         if (Buffer.byteLength(JSON.stringify(args) ?? '') > 65536) throw new ToolAccessError('Tool arguments exceeded the 64 KiB limit.');
         input = structuredClone(args);
       } catch (error) { return Promise.reject(error instanceof ToolAccessError ? error : new ToolAccessError('Invalid tool arguments.')); }
-      deadline ??= AbortSignal.timeout(maxRuntimeMs);
+      if (!deadline) { startedAt = Date.now(); deadline = AbortSignal.timeout(maxRuntimeMs); }
       const combined = AbortSignal.any([signal, lifetime.signal, deadline]);
       // Serialize calls so command side effects and file reads have a defined order.
       const operation = previous.then(async (): Promise<ToolResult> => {
+        if (windowEnded(signal)) { grants(); return refuse('window'); }
         authorize(combined);
         try {
           const result = await catalog.get(name)!.call(input, combined);
+          if (windowEnded(signal)) { grants(); return refuse('window', true); }
           authorize(combined);
           if (!result || !Array.isArray(result.content) || result.content.some(item => !item || item.type !== 'text' || typeof item.text !== 'string') || Buffer.byteLength(JSON.stringify(result)) > 131072) throw new BuiltinToolError('Tool result exceeded the 128 KiB limit or had an unsupported format.');
-          return result;
+          return noted(result);
         } catch (error) {
+          if (windowEnded(signal)) { grants(); return refuse('window', true); }
           authorize(combined);
-          return { content: [{ type: 'text', text: error instanceof BuiltinToolError ? error.message : 'Tool execution failed. Check the saved connection, command, or worktree and try again.' }], isError: true };
+          return noted({ content: [{ type: 'text', text: error instanceof BuiltinToolError ? error.message : 'Tool execution failed. Check the saved connection, command, or worktree and try again.' }], isError: true });
         }
       });
       previous = operation.catch(() => {});

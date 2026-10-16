@@ -34,7 +34,7 @@ export async function withCliToolBridge<T>(runtime: ToolRuntime | undefined, sig
   const directory = await mkdtemp(join(tmpdir(), 'werk-tool-bridge-'));
   const token = randomBytes(32).toString('hex'), cancellation = new AbortController();
   const bounded = AbortSignal.any([signal, cancellation.signal]);
-  let requests = 0, calls = 0;
+  let requests = 0;
   const server = createServer(async (request, response) => {
     try {
       const credential = Buffer.from(request.headers.authorization ?? ''), expected = Buffer.from('Bearer ' + token);
@@ -44,7 +44,9 @@ export async function withCliToolBridge<T>(runtime: ToolRuntime | undefined, sig
       const value = JSON.parse(Buffer.concat(chunks).toString('utf8'));
       let result;
       if (value?.method === 'tools/list') result = { tools: runtime.manifest.tools };
-      else if (value?.method === 'tools/call' && ++calls <= 32) result = await invokeGrantedTool(runtime, value.params?.name, value.params?.arguments ?? {}, bounded);
+      // The runtime owns the call budget and answers calls beyond it with a normal tool error the CLI shows the model;
+      // the 256-request cap above remains the bridge's hard bound.
+      else if (value?.method === 'tools/call') result = await invokeGrantedTool(runtime, value.params?.name, value.params?.arguments ?? {}, bounded);
       else { response.writeHead(400).end(); return; }
       response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(result));
     } catch { if (!response.headersSent) response.writeHead(403); response.end(); }

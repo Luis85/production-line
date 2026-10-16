@@ -7,6 +7,15 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+### Changed
+
+- Model tool results tell the model when its tool budget runs low. Once a quarter or less of the 32 calls or of the 120-second tool window remains, each result ends with a separate note, such as "Tool budget: 5 of 32 calls and 38 s of the 120 s tool window remain."
+
+### Fixed
+
+- An exhausted tool budget no longer removes tools silently or fails the invocation. Calls beyond the limit or after the tool window, and calls stopped when the window ends, return a clear tool error telling the model to finish or ask the operator. API adapters allow one more response to finish. The Claude Code and Codex bridge returns the error instead of dropping the call.
+- Budget exhaustion is recorded as a `tool_budget_exhausted` interaction event and a `toolBudget` field on the turn, with counts only, and is shown with the latest turn's consumption.
+
 ## [0.9.0] - 2026-10-16
 
 ### Added

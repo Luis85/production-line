@@ -36,7 +36,9 @@ export async function apiReply(connection: ProviderConnection, request: ModelReq
     : { name: tool.name, description: tool.description, input_schema: tool.inputSchema });
   let calls = 0, usage: ProviderUsage | undefined;
   const seenCallIds = new Set<string>();
-  for (let turn = 0; turn <= 32; turn++) {
+  // One request per granted call, one whose calls the runtime may refuse with its budget message, and the final answer.
+  const maxCalls = runtime?.budget?.().maxCalls ?? 32;
+  for (let turn = 0; turn <= maxCalls + 1; turn++) {
     if (signal.aborted) throw new ProviderModelError('cancelled');
     const body = openai
       ? { model: request.provider.model, instructions: request.protocolInstructions, store: false, max_output_tokens: 8192, input: history, ...(definitions ? { tools: definitions, parallel_tool_calls: false, include: ['reasoning.encrypted_content'] } : {}) }
@@ -70,7 +72,9 @@ export async function apiReply(connection: ProviderConnection, request: ModelReq
       if (!openai && value.stop_reason === 'tool_use') throw new ProviderModelError('protocol');
       return parseModelResult(textBlocks.map(item => item.text).join('\n\n'));
     }
-    if (!runtime || !openai && value.stop_reason !== 'tool_use' || calls + toolCalls.length > 32) throw new ProviderModelError('protocol');
+    // Calls beyond the budget reach the runtime, which refuses them without executing anything. A model that
+    // already received that refusal and still requests tools gets no further round.
+    if (!runtime || !openai && value.stop_reason !== 'tool_use' || toolCalls.length > 32 || calls + toolCalls.length > maxCalls + 32 || runtime.budget?.().exhausted) throw new ProviderModelError('protocol');
     const parsed = toolCalls.map(item => {
       const id = openai ? item.call_id : item.id;
       let args: unknown = item.input;

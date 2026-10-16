@@ -68,7 +68,7 @@ export function consumptionModel(model: ConversationModel | undefined, runtime: 
     execute(request, signal, onUsage, outerControl) {
       requireModelRequest(request, wrapped.configuration.id);
       return withConsumption(runtime, request.provider.id, signal, (bounded, observe, control) =>
-        executeModel(model, request, bounded, observe, { beforeCall() { outerControl?.beforeCall(); control.beforeCall(); } }), onUsage);
+        executeModel(model, request, bounded, observe, { beforeCall() { outerControl?.beforeCall(); control.beforeCall(); }, observeToolBudget: outerControl?.observeToolBudget }), onUsage);
     },
   };
   return wrapped;
