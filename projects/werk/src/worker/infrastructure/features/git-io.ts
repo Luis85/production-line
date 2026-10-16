@@ -1,6 +1,6 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import { lstat, mkdir, mkdtemp, open, readdir, realpath } from 'node:fs/promises';
+import { lstat, mkdir, open, readdir, realpath } from 'node:fs/promises';
 import { isAbsolute, join, parse, resolve, sep } from 'node:path';
 import { runProcess, ProcessRunError } from '../../../shared/process/launcher.js';
 import { repositoryRoot, type RepositoryRoot } from '../repositories-git.js';
@@ -36,6 +36,17 @@ export async function ordinaryDirectory(value: string, create = false) {
   }
   if (await realpath(absolute) !== absolute) throw new GitFeatureError('conflict', 'Shared feature storage identity changed.');
   return absolute;
+}
+async function publicationDirectory(storage: string, signal: AbortSignal) {
+  // Windows' temporary-directory API has a shorter path limit than mkdir.
+  // Keep the suffix bounded and create exclusively; never adopt a collision.
+  for (let attempt = 0; attempt < 8; attempt++) {
+    signal.throwIfAborted();
+    const path = join(storage, 'publish-' + randomBytes(6).toString('base64url').slice(0, 6));
+    try { await mkdir(path, { mode: 0o700 }); return path; }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
+  }
+  throw new GitFeatureError('unavailable', 'Unable to reserve a private publication worktree. Retry publication.');
 }
 export interface GitBlob { revision: string; content: string; mode: string; }
 export interface GitIoOptions { repository: string; remote: string; stateDirectory: string; }
@@ -94,7 +105,7 @@ export class FeatureGitIo {
   async worktree<T>(root: RepositoryRoot, commit: string, signal: AbortSignal, action: (path: string) => Promise<T>): Promise<T> {
     if (!commitId(commit)) throw new GitFeatureError('invalid_input', 'Publication requires a full source commit identifier.');
     const storage = await ordinaryDirectory(join(this.options.stateDirectory, 'feature-git-worktrees'), true);
-    const path = await mkdtemp(join(storage, 'publish-')), identity = await lstat(path);
+    const path = await publicationDirectory(storage, signal), identity = await lstat(path);
     let added = false;
     try {
       await this.output(root.path, ['worktree', 'add', '--detach', '--', path, commit], signal); added = true;
