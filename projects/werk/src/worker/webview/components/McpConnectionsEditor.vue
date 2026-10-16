@@ -34,6 +34,7 @@ const tools = (id: string) => props.editor.savedConnection(id)?.discoveredTools 
       <UInput :id="`mcp-secret-${index}`" v-model="connection.secret" type="password" autocomplete="new-password" :disabled="connection.clearSecret" :placeholder="editor.savedConnection(connection.id)?.hasSecret && !editor.destinationChanged(connection) ? 'Secret saved · leave blank to keep' : 'No secret saved'" class="w-full" />
       <label v-if="editor.savedConnection(connection.id)?.hasSecret" class="check-label"><input v-model="connection.clearSecret" type="checkbox" :disabled="!!connection.secret"> Remove saved secret</label>
       <p v-if="editor.destinationChanged(connection)" class="connection-change" role="status">Changing the server destination clears its saved secret and tool grants. Save, discover tools and review access again. Enter a replacement secret above if needed.</p>
+      <label :for="`mcp-timeout-${index}`">Timeout per tool call · seconds, up to {{ connection.transport === 'http' ? 300 : 900 }}</label><UInput :id="`mcp-timeout-${index}`" v-model.number="connection.timeoutSeconds" type="number" min="1" :max="connection.transport === 'http' ? 300 : 900" step="1" class="w-full timeout-input" />
       <label class="check-label enable-connection"><input v-model="connection.enabled" type="checkbox"> Enable this connection for granted model tools</label>
       <div class="discovery-actions">
         <UButton type="button" color="neutral" variant="outline" icon="i-lucide-search" :loading="editor.draft.discovering === connection.id" :disabled="!editor.canDiscover.value || !editor.savedConnection(connection.id)" @click="editor.discover(connection.id)">Discover tools</UButton>
@@ -55,6 +56,7 @@ h3 { font-size: 1rem; } h4 { font-size: .9375rem; overflow-wrap: anywhere; }
 .mcp-connection { margin-top: 20px; padding: 20px; border: 1px solid var(--ui-border); border-radius: 10px; min-width: 0; display: grid; gap: 10px; }
 .connection-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .connection-fields > div { display: grid; gap: 8px; min-width: 0; }
+.timeout-input { max-width: 16rem; }
 label, legend { font-size: .8125rem; font-weight: 600; color: var(--ui-text-highlighted); }
 .check-label { min-height: 44px; font-weight: 500; gap: 10px; }
 .authority-note, .connection-change { font-size: .8125rem; line-height: 1.6; padding: 12px; background: var(--ui-bg-elevated); border-left: 2px solid var(--ui-border-accented); margin: 2px 0 10px; overflow-wrap: anywhere; }

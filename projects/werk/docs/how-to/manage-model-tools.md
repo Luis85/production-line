@@ -75,7 +75,8 @@ and each call must pass the tool's argument policy before a process starts:
   and 2,048), and 32 KiB of returned output by default (up to 64 KiB).
 
 CLI tools start in the task worktree, without a shell, with the same minimal
-environment, 30-second deadline and contained process-tree cancellation as
+environment, per-call deadline (30 seconds by default, see
+[execution limits](#execution-limits)) and contained process-tree cancellation as
 command presets. Shell syntax such as `;`, `|`, `$HOME` or `%PATH%` reaches the
 CLI as literal text. The model receives the exit code, stdout and stderr; long
 output is cut at the configured limit with a hint about how to narrow the call.
@@ -228,10 +229,99 @@ continuation behavior, see the [model interaction contract](../reference/model-i
 ## Execution limits
 
 Each model invocation can use at most 64 tool definitions and make 32 calls.
-Tools share a two-minute window beginning with the first call. Each command, CLI
-tool or MCP call has a 30-second deadline; web fetches have a 10-second deadline. The
-worker invocation limit still applies. Timeouts do not automatically retry an
-operation, because a command or remote MCP tool may already have changed state.
+All tool calls of one invocation share a **tool window** that begins with the
+first call. Each command preset, CLI tool and MCP connection also has its own
+**timeout** per call. Web fetches have a fixed 10-second deadline, and file tools
+are bounded only by the window. Timeouts do not automatically retry an operation,
+because a command or remote MCP tool may already have changed state.
+
+| Limit | Default | Configurable range | Where |
+| --- | --- | --- | --- |
+| Tool window per invocation | 120 seconds | 10 seconds to 24 hours | **Tool access → Execution limits**; `limits.windowMs` |
+| Command preset timeout | 30 seconds | 1 second to 15 minutes | Each preset; `timeoutMs` |
+| CLI tool timeout | 30 seconds | 1 second to 15 minutes | Each CLI tool, under **Limits, timeout and truncation hint**; `timeoutMs` |
+| Stdio MCP call timeout | 30 seconds | 1 second to 15 minutes | Each connection; `timeoutMs` |
+| HTTP MCP call timeout | 30 seconds | 1 second to 5 minutes | Each connection; `timeoutMs` |
+| Calls per invocation | 32 | Fixed | — |
+| Web fetch deadline | 10 seconds | Fixed | — |
+
+A timeout can't exceed the tool window; the editor and API refuse such a policy
+rather than shortening it. The worker's invocation limit
+(`execution.maxRuntimeMs`, 6 hours by default) still stops the whole model turn,
+so it also bounds the window. The Dashboard notes when the window is longer than
+the invocation limit. An MCP timeout covers the whole call: starting the session,
+re-checking the granted tool's schema and the call itself. HTTP MCP calls are
+limited to 5 minutes because the worker's HTTP client stops waiting for a
+response after 5 minutes.
+
+Unchanged limits keep the 0.9.0 behavior: the defaults equal the former fixed
+values, the model sees the same tool descriptions, and `tool-access.json` omits
+them.
+
+### Allow long project checks
+
+Unit tests, typechecks and builds often take longer than 30 seconds. To let a
+model run them:
+
+1. Pause new starts and finish or cancel queued and running work.
+2. Open **Dashboard → Tool access**. Under **Execution limits**, set a tool window
+   that covers every check the model may run in one turn, for example 1,200
+   seconds for a 2-minute unit-test run, a typecheck and a few reruns.
+3. Raise the timeout of each preset, CLI tool or stdio MCP connection that runs a
+   long check, for example 300 seconds for a unit-test preset. Leave quick tools
+   at their default so a hung call stops early.
+4. Save and resume new starts.
+
+From the portable CLI, add `limits` and `timeoutMs` to the `tool-access get`
+output before `tool-access set`. Omitted values use the defaults:
+
+```json
+{
+  "limits": { "windowMs": 1200000 },
+  "builtins": {
+    "commands": [
+      { "id": "unit-tests", "name": "Unit tests", "executable": "/usr/bin/npm", "args": ["test"], "enabled": true, "timeoutMs": 300000 }
+    ]
+  }
+}
+```
+
+When a timeout is longer than 30 seconds, the model-facing tool description names
+it, for example `unit-tests: Unit tests (stops after 300 s)`, so the model can
+expect a long check to finish. The worker sizes the CLI providers' own MCP wait
+to the tool window plus 30 seconds: Codex receives `tool_timeout_sec` and Claude
+Code receives `MCP_TOOL_TIMEOUT`.
+
+Raising limits doesn't change who can run what. The same grants, worktree
+checks and per-call policy checks apply. Cancelling a task or stopping the worker
+still stops the managed process tree immediately. The cost is
+time: a model can keep a command and its child processes running for up to the
+configured timeout, and the invocation's tool window for all calls together.
+Only raise limits for commands you would let run unattended for that long.
+
+### Evidence
+
+Each invocation records the limits it enforced in its dispatch manifest, next to
+the tool definitions and policy revision:
+
+```json
+"limits": {
+  "maxCalls": 32,
+  "windowMs": 1200000,
+  "callTimeoutMs": { "werk_command_run": 300000, "werk_cli_harness": 600000 },
+  "presetTimeoutMs": { "unit-tests": 300000, "lint": 30000 }
+}
+```
+
+`callTimeoutMs` lists each tool with its own deadline; for `werk_command_run` it
+is the longest preset and `presetTimeoutMs` lists each preset. Dispatches saved
+by earlier workers have no `limits`.
+
+### Roll back with raised limits
+
+A 0.9.0 or earlier worker can't read a `tool-access.json` that contains raised
+limits or timeouts and refuses to start. Before rolling back, reset every limit to its
+default and save. Default values are omitted from the saved file.
 
 File reads return at most 32 KiB per call and expose an offset for another chunk.
 Web and MCP results are bounded to 64 KiB. CLI tool output is cut at its

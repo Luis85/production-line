@@ -66,6 +66,10 @@ CLI tools accept model arguments only after an allowlist of one- or two-word
 commands, required preview flags, refused options and path checks; they run
 without a shell, in the task worktree, with bounded time and output. The policy
 cannot detect option abbreviations or configuration files a CLI reads itself.
+Operators can raise per-grant timeouts (up to 15 minutes) and the shared tool
+window for long project checks. Raised limits extend how long granted commands
+and their child processes may run, not what they may access; cancellation still
+stops the process tree and each call still checks the current policy revision.
 Private MCP credentials stay in worker state, outside the public tool manifest.
 Tool output and repository content cannot authorize changes to grants. See
 [manage model tools](../how-to/manage-model-tools.md) for saving, revocation and

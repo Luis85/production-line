@@ -1,6 +1,7 @@
 import type { ToolDefinition, ToolMcpConnection } from '../application/tool-policy.js';
 import { openMcpHttp, validateMcpEndpoint } from './tool-mcp-http.js';
 import { openMcpStdio } from './tool-mcp-stdio.js';
+import { toolTimeLimits } from '../application/tool-limits.js';
 import { MCP_PROTOCOL_VERSIONS, MCP_REQUEST_LIMIT, McpClientError, plainObject, type McpClientOptions, type McpSession, type McpTransportConfiguration } from './tool-mcp-protocol.js';
 export { McpClientError } from './tool-mcp-protocol.js';
 export type { McpClientOptions, McpClientDependencies, McpTransportConfiguration } from './tool-mcp-protocol.js';
@@ -55,7 +56,7 @@ async function listTools(session: McpSession): Promise<ToolDefinition[]> {
 async function withSession<T>(config: McpTransportConfiguration, options: McpClientOptions, defaultTimeout: number, operation: (session: McpSession) => Promise<T>): Promise<T> {
   validateConfiguration(config);
   const timeout = options.timeoutMs ?? defaultTimeout;
-  if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 120000) throw new McpClientError('configuration');
+  if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > toolTimeLimits.callMaxMs) throw new McpClientError('configuration');
   const controller = new AbortController();
   const cancel = () => controller.abort(new McpClientError('cancelled'));
   options.signal?.addEventListener('abort', cancel, { once: true });
@@ -116,7 +117,7 @@ export async function callMcpTool(config: McpTransportConfiguration, name: strin
   if (!plainObject(args)) throw new McpClientError('protocol');
   try { if (Buffer.byteLength(JSON.stringify(args)) > MCP_REQUEST_LIMIT - 1024) throw new McpClientError('output_limit'); }
   catch (error) { throw error instanceof McpClientError ? error : new McpClientError('protocol'); }
-  return withSession(config, options, 30000, async session => {
+  return withSession(config, options, toolTimeLimits.callDefaultMs, async session => {
     const actual = (await listTools(session)).find(tool => tool.name === name);
     if (!actual || canonical(actual.inputSchema) !== canonical(granted.inputSchema)) throw new McpClientError('changed');
     return toolResult(await session.request('tools/call', { name, arguments: args }), config);

@@ -10,6 +10,11 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 ### Added
 
 - Worker CLI tools: grant a project command-line tool, such as `node bin/harness.mjs`, that the model calls with its own arguments in the task worktree. Each tool has allowed one- or two-word commands, flags required for writing commands (for example `--dry-run`), refused options and argument bounds. Calls run without a shell under the command-preset process limits. Configure CLI tools in **Dashboard → Tool access** or with the new `tool-access get|set|discover` worker commands. All CLI tools start disabled.
+- Configurable model tool execution limits, so a model can run real project checks such as unit tests and builds. Set a timeout per command preset, CLI tool and MCP connection (up to 15 minutes; 5 minutes for HTTP MCP) and the tool window shared by one invocation (up to the 24-hour invocation maximum) in **Dashboard → Tool access → Execution limits** or with `limits` and `timeoutMs` in `tool-access set`. Defaults remain 30 seconds per call and a 2-minute window. Each dispatch manifest records the enforced `limits`, and the Codex and Claude Code CLI bridges wait for the configured window.
+
+### Changed
+
+- The CLI tool bridge forwards granted calls over `node:http` instead of `fetch`, so a permitted long call is no longer cut off after 2 minutes.
 
 ## [0.9.0] - 2026-10-16
 

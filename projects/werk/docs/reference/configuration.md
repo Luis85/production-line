@@ -383,6 +383,18 @@ CLI tools, web origins, MCP connection details and discovered per-tool grants. I
 are redacted from authenticated views; they never enter the public status or
 model dispatch manifest. Preserve this file with the rest of stopped worker state.
 
+Execution limits are optional; omitted values use the defaults and are not
+written:
+
+| Field | Contract |
+| --- | --- |
+| `limits.windowMs` | Time shared by all tool calls of one model invocation, from the first call: default 120,000 (10,000–86,400,000). The invocation limit `execution.maxRuntimeMs` still applies. |
+| `builtins.commands[].timeoutMs` | Command preset deadline: default 30,000 (1,000–900,000). |
+| `mcp[].timeoutMs` | MCP call deadline, including session start: default 30,000; 1,000–900,000 for stdio and 1,000–300,000 for HTTP. |
+
+Every timeout must be at most `limits.windowMs`. See
+[execution limits](../how-to/manage-model-tools.md#execution-limits).
+
 Each entry in `builtins.cliTools` describes one command-line tool the model may
 call with its own arguments in the task worktree:
 
@@ -397,6 +409,7 @@ call with its own arguments in the task worktree:
 | `refusedOptions` | Up to 32 option names refused for every command, such as `--root`. |
 | `maxArgs`, `maxArgLength` | Model argument bounds: default 24 (1–64) and 500 characters (1–2,048). |
 | `outputKiB`, `truncationHint` | Returned output limit, default 32 (1–64), and the hint appended to truncated output. |
+| `timeoutMs` | Per-call deadline in milliseconds: default 30,000 (1,000–900,000), no longer than `limits.windowMs`. |
 
 Absolute paths, `~`, `file:` URLs, `@file` paths, `..` segments, the `--`
 terminator and control characters in model arguments are always refused. At most

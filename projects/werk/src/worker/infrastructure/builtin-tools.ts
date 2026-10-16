@@ -2,7 +2,8 @@ import { constants, realpathSync, statSync } from 'node:fs';
 import { lstat, mkdir, open, opendir, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { runProcess, ProcessRunError } from '../../shared/process/launcher.js';
-import type { ToolDefinition, ToolPolicy } from '../application/tool-policy.js';
+import type { CommandPreset, ToolDefinition, ToolPolicy } from '../application/tool-policy.js';
+import { formatToolDuration, toolTimeLimits } from '../application/tool-limits.js';
 import { cliToolDescription, cliToolInputSchema, cliToolName } from '../application/cli-tool-policy.js';
 import { CliToolError, runCliTool } from './cli-tools.js';
 import type { ToolResult, ToolWorktreeIdentity } from '../application/tool-runtime.js';
@@ -149,7 +150,9 @@ export function builtinToolOperations(options: BuiltinToolOptions): ToolOperatio
     });
   }
   const commands = options.policy.builtins.commands.filter(command => command.enabled);
-  if (commands.length) add('werk_command_run', 'Run one operator-approved executable with its fixed arguments, as the worker account. Starts in the task worktree or private chat workspace. Commands may change files or access resources outside that directory. No extra arguments or shell expansion.', schema({ preset: { type: 'string', enum: commands.map(command => command.id), description: commands.map(command => `${command.id}: ${command.name}`).join('; ') } }, ['preset']), async (value, signal) => {
+  // A raised deadline is named so the model can expect a long check to finish; defaults keep the 0.9.0 text.
+  const presetLabel = (command: CommandPreset) => `${command.id}: ${command.name}${command.timeoutMs === toolTimeLimits.callDefaultMs ? '' : ` (stops after ${formatToolDuration(command.timeoutMs)})`}`;
+  if (commands.length) add('werk_command_run', 'Run one operator-approved executable with its fixed arguments, as the worker account. Starts in the task worktree or private chat workspace. Commands may change files or access resources outside that directory. No extra arguments or shell expansion.', schema({ preset: { type: 'string', enum: commands.map(command => command.id), description: commands.map(presetLabel).join('; ') } }, ['preset']), async (value, signal) => {
     const args = object(value, ['preset']); const preset = commands.find(command => command.id === args.preset);
     if (!preset) throw new BuiltinToolError('That command preset is not granted.');
     const cwd = options.worktree ?? join(options.directory, 'chat-workspace');
@@ -157,10 +160,10 @@ export function builtinToolOperations(options: BuiltinToolOptions): ToolOperatio
     check(signal);
     const env = Object.fromEntries(['PATH', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'TMPDIR', 'LANG', 'LC_ALL'].flatMap(key => process.env[key] === undefined ? [] : [[key, process.env[key]]]));
     try {
-      const command = await runProcess(preset.executable, preset.args, { cwd, env, mode: 'contained', signal, timeoutMs: 30000, maxOutputBytes: 32768, captureStderr: true, allowNonZeroExit: true });
+      const command = await runProcess(preset.executable, preset.args, { cwd, env, mode: 'contained', signal, timeoutMs: preset.timeoutMs, maxOutputBytes: 32768, captureStderr: true, allowNonZeroExit: true });
       return output({ preset: preset.id, exitCode: command.exitCode, stdout: command.stdout.toString('utf8'), stderr: command.stderr.toString('utf8') });
     } catch (error) {
-      if (error instanceof ProcessRunError) throw new BuiltinToolError(`Command stopped (${error.reason}); no automatic retry was made.`);
+      if (error instanceof ProcessRunError) throw new BuiltinToolError(`Command stopped (${error.reason}${error.reason === 'timeout' ? ` after ${formatToolDuration(preset.timeoutMs)}` : ''}); no automatic retry was made.`);
       throw new BuiltinToolError('Command could not be started. Check its executable and working directory.');
     }
   });

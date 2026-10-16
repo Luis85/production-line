@@ -4,6 +4,8 @@ import { lstatSync, realpathSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { ToolPolicy } from '../application/tool-policy.js';
 import { ToolAccessError, type ToolManifest, type ToolResult, type ToolRuntime, type ToolWorktreeIdentity } from '../application/tool-runtime.js';
+import { defaultToolLimits, toolTimeLimits } from '../application/tool-limits.js';
+import { cliToolName } from '../application/cli-tool-policy.js';
 import { builtinToolOperations, BuiltinToolError, type ToolOperation } from './builtin-tools.js';
 import { callMcpTool, mcpTransportConfiguration } from './tool-mcp.js';
 
@@ -16,6 +18,7 @@ export interface ToolRuntimeOptions {
   worktree?: string;
   worktreeIdentity?: ToolWorktreeIdentity;
   maxCalls?: number;
+  /** Test override for the policy's shared tool window. */
   maxRuntimeMs?: number;
   fetch?: typeof globalThis.fetch;
 }
@@ -29,28 +32,49 @@ export function mcpToolName(connection: string, tool: string): string {
   return 'mcp_' + connection.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 16) + '_' + tool.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 24) + '_' + suffix;
 }
 
+/** Saved policies are validated; an injected policy without deadlines gets the defaults, never an unbounded call. */
+function withDeadlines(policy: ToolPolicy): ToolPolicy {
+  const partial = policy as Partial<ToolPolicy>;
+  policy.limits = partial.limits ?? defaultToolLimits();
+  for (const item of [...policy.builtins.commands, ...(policy.builtins.cliTools ?? []), ...policy.mcp]) (item as { timeoutMs?: number }).timeoutMs ??= toolTimeLimits.callDefaultMs;
+  return policy;
+}
+/** Evidence of the deadlines this invocation enforces, keyed by model-facing tool name. */
+function manifestLimits(policy: ToolPolicy, names: string[], mcp: Map<string, number>, maxCalls: number, windowMs: number): NonNullable<ToolManifest['limits']> {
+  const callTimeoutMs: Record<string, number> = {};
+  const presets = policy.builtins.commands.filter(item => item.enabled);
+  for (const name of names) {
+    if (name === 'werk_command_run') callTimeoutMs[name] = Math.max(...presets.map(item => item.timeoutMs));
+    else if (name === 'werk_web_fetch') callTimeoutMs[name] = toolTimeLimits.webFetchMs;
+    else if (mcp.has(name)) callTimeoutMs[name] = mcp.get(name)!;
+    else { const tool = policy.builtins.cliTools.find(item => item.enabled && cliToolName(item.id) === name); if (tool) callTimeoutMs[name] = tool.timeoutMs; }
+  }
+  return { maxCalls, windowMs, callTimeoutMs, ...(names.includes('werk_command_run') ? { presetTimeoutMs: Object.fromEntries(presets.map(item => [item.id, item.timeoutMs])) } : {}) };
+}
 /** No processes or network sessions are created until the model invokes a granted tool. */
 export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
-  const policy = structuredClone(options.policy);
+  const policy = withDeadlines(structuredClone(options.policy));
   const pinnedWorktree = options.worktreeIdentity ? { ...options.worktreeIdentity } : undefined;
-  const maxCalls = options.maxCalls ?? 32, maxRuntimeMs = options.maxRuntimeMs ?? 120000;
-  if (!Number.isSafeInteger(maxCalls) || maxCalls < 1 || maxCalls > 32 || !Number.isSafeInteger(maxRuntimeMs) || maxRuntimeMs < 1 || maxRuntimeMs > 3600000) throw new ToolAccessError('Invalid tool execution limits.');
+  const maxCalls = options.maxCalls ?? toolTimeLimits.maxCalls, maxRuntimeMs = options.maxRuntimeMs ?? policy.limits.windowMs;
+  if (!Number.isSafeInteger(maxCalls) || maxCalls < 1 || maxCalls > toolTimeLimits.maxCalls || !Number.isSafeInteger(maxRuntimeMs) || maxRuntimeMs < 1 || maxRuntimeMs > toolTimeLimits.windowMaxMs) throw new ToolAccessError('Invalid tool execution limits.');
   const operations: ToolOperation[] = builtinToolOperations({ ...options, policy });
+  const mcpTimeouts = new Map<string, number>();
   for (const connection of policy.mcp.filter(item => item.enabled)) {
     const granted = connection.discoveredTools.filter(tool => connection.allowedTools.includes(tool.name));
+    for (const tool of granted) mcpTimeouts.set(mcpToolName(connection.id, tool.name), connection.timeoutMs);
     for (const tool of granted) operations.push({
       definition: { ...tool, name: mcpToolName(connection.id, tool.name), description: `[${connection.name}] ${tool.description}` },
       call: async (args, signal) => {
         const directory = options.worktree ?? join(options.directory, 'chat-workspace');
         if (!options.worktree) await mkdir(directory, { recursive: true, mode: 0o700 });
-        return callMcpTool(mcpTransportConfiguration(connection), tool.name, args, granted, { signal, directory, timeoutMs: 30000 });
+        return callMcpTool(mcpTransportConfiguration(connection), tool.name, args, granted, { signal, directory, timeoutMs: connection.timeoutMs });
       }
     });
   }
   if (operations.length > 64) throw new ToolAccessError('At most 64 tools may be granted for one invocation.');
   const catalog = new Map(operations.map(operation => [operation.definition.name, operation]));
   if (catalog.size !== operations.length) throw new ToolAccessError('Tool names are not unique.');
-  const manifest: ToolManifest = freeze({ revision: policy.revision, tools: structuredClone(operations.map(operation => operation.definition)) });
+  const manifest: ToolManifest = freeze({ revision: policy.revision, tools: structuredClone(operations.map(operation => operation.definition)), limits: manifestLimits(policy, operations.map(operation => operation.definition.name), mcpTimeouts, maxCalls, maxRuntimeMs) });
   const lifetime = new AbortController();
   const pending = new Set<Promise<ToolResult>>();
   let calls = 0, deadline: AbortSignal | undefined, closed = false;

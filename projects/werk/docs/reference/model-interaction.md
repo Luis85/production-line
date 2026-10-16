@@ -12,7 +12,8 @@ contract. The current adapters expose structured questions through Werk protocol
 version 1 and report usage when the provider supplies it. They declare
 `continuation: worker_context_replay`, `nativeResume: false`, `streaming: false`
 and default to `tools: none`. An invocation with an operator-granted catalog
-records `tools: granted` and its public tool manifest. These describe the wrapper,
+records `tools: granted` and its public tool manifest, including the tool window,
+call limit and per-tool deadlines it enforced (`limits`). These describe the wrapper,
 not everything the provider brand or its other SDKs can do.
 
 `ModelRequest` contains its schema/protocol version, chat or patch operation,

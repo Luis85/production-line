@@ -222,6 +222,7 @@ connections support stdio and HTTP, private credentials and explicit discovery.
 Grants are enforced through a common worker-owned catalog across supported local
 provider adapters. Operators pause and drain execution before saving; subsequent
 turns use the current policy, while saved dispatch evidence remains immutable.
-Tool results go to the selected model provider. Commands and MCP servers retain
+Operators set per-grant timeouts and a shared tool window so models can run long
+project checks such as unit tests. Tool results go to the selected model provider. Commands and MCP servers retain
 their account/service authority. Automated request reviewers remain tool-free.
 See [manage model tools](docs/how-to/manage-model-tools.md).

@@ -44,6 +44,8 @@ export function modelFor(saved: ProviderConnection, directory: string, transport
   };
   return model;
 }
+/** Claude Code reads its MCP tool-call wait from MCP_TOOL_TIMEOUT; it follows the invocation's tool window. */
+export const claudeToolEnvironment = (bridge?: CliToolBridge): NodeJS.ProcessEnv => bridge ? { MCP_TOOL_TIMEOUT: String(bridge.toolTimeoutMs) } : {};
 /** Native tools stay disabled. Explicit MCP grants use separate hook, memory and configuration controls. */
 export function claudeArguments(model: string, promptFile: string, bridge?: CliToolBridge) {
   return ['--print', '--output-format', 'json', ...(!bridge ? ['--safe-mode'] : ['--settings', JSON.stringify({ disableAllHooks: true, autoMemoryEnabled: false, enabledPlugins: {} })]), '--restricted', '--tools', '', '--strict-mcp-config', '--mcp-config', bridge?.configFile ?? '{"mcpServers":{}}', ...(bridge ? ['--allowedTools', ...bridge.toolNames.map(name => 'mcp__werk__' + name)] : []), '--setting-sources', '', '--no-session-persistence', '--disable-slash-commands', ...(model ? ['--model', model] : []), '--system-prompt-file', promptFile];
@@ -62,7 +64,7 @@ async function claudeReply(connection: ProviderConnection, directory: string, re
       return providerCommand(connection.executable, claudeArguments(request.provider.model, promptFile, bridge), cwd, signal, JSON.stringify(request.messages.map(({ role, text }) => ({ role, content: text }))), true, 'claude', output => {
       let response; try { response = JSON.parse(output.toString('utf8')); } catch { return; }
       if (response?.type === 'result') onUsage?.(providerUsage('claude', response));
-      });
+      }, claudeToolEnvironment(bridge));
     });
   } finally { await rm(promptDirectory, { recursive: true, force: true }); }
   let value; try { value = JSON.parse(result.toString('utf8')); } catch { throw new ProviderModelError('protocol'); }

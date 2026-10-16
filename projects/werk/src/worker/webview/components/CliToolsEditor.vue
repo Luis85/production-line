@@ -26,11 +26,12 @@ const workerNode = () => props.editor.workerNode();
       <UTextarea :id="`cli-commands-${index}`" v-model="tool.commands" :rows="6" :placeholder="'help\nbacklog context\nbacklog set requires --dry-run\neol refuses --fix --hook'" class="w-full mono" :aria-describedby="`cli-commands-help-${index}`" />
       <p :id="`cli-commands-help-${index}`" class="page-note">Start each line with one or two command words. Add <code>requires</code> and flags to allow a writing command only with one of those flags, and <code>refuses</code> and options to block options for that command.</p>
       <label :for="`cli-refused-${index}`">Refused options · all commands</label><UInput :id="`cli-refused-${index}`" v-model="tool.refusedOptions" placeholder="--root --config --out" class="w-full" />
-      <details class="cli-limits"><summary>Limits and truncation hint</summary>
+      <details class="cli-limits"><summary>Limits, timeout and truncation hint</summary>
         <div class="cli-fields three">
           <div><label :for="`cli-max-args-${index}`">Maximum arguments</label><UInput :id="`cli-max-args-${index}`" v-model.number="tool.maxArgs" type="number" min="1" max="64" step="1" class="w-full" /></div>
           <div><label :for="`cli-max-length-${index}`">Maximum argument length</label><UInput :id="`cli-max-length-${index}`" v-model.number="tool.maxArgLength" type="number" min="1" max="2048" step="1" class="w-full" /></div>
           <div><label :for="`cli-output-${index}`">Output limit · KiB</label><UInput :id="`cli-output-${index}`" v-model.number="tool.outputKiB" type="number" min="1" max="64" step="1" class="w-full" /></div>
+          <div><label :for="`cli-timeout-${index}`">Timeout · seconds, up to 900</label><UInput :id="`cli-timeout-${index}`" v-model.number="tool.timeoutSeconds" type="number" min="1" max="900" step="1" class="w-full" /></div>
         </div>
         <label :for="`cli-hint-${index}`">Hint after truncated output</label><UInput :id="`cli-hint-${index}`" v-model="tool.truncationHint" maxlength="300" class="w-full" />
       </details>
@@ -45,7 +46,7 @@ h3 { font-size: 1rem; } h4 { font-size: .9375rem; overflow-wrap: anywhere; }
 .section-heading { flex-wrap: wrap; gap: 12px; }
 .cli-tool { margin-top: 10px; padding: 20px; border: 1px solid var(--ui-border); border-radius: 10px; min-width: 0; display: grid; gap: 10px; }
 .cli-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.cli-fields.three { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-block: 12px; }
+.cli-fields.three { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-block: 12px; }
 .cli-fields > div { display: grid; gap: 8px; min-width: 0; }
 .executable-row { display: flex; gap: 12px; align-items: center; min-width: 0; }
 label { font-size: .8125rem; font-weight: 600; color: var(--ui-text-highlighted); }

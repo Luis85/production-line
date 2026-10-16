@@ -16,10 +16,10 @@ export function providerEnvironment(provider = 'codex'): NodeJS.ProcessEnv {
     return { ...env, ...(provider === 'claude' ? { CLAUDE_CODE_DISABLE_CLAUDE_MDS: '1' } : {}), GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0' };
 }
 /** Contained, bounded provider invocation; the shared launcher stops its whole process tree on cancellation. */
-export async function providerCommand(executable: string, args: string[], cwd: string, signal: AbortSignal, input?: string, capture = true, provider = 'codex', observeOutput?: (output: Buffer) => void): Promise<Buffer> {
+export async function providerCommand(executable: string, args: string[], cwd: string, signal: AbortSignal, input?: string, capture = true, provider = 'codex', observeOutput?: (output: Buffer) => void, environment: NodeJS.ProcessEnv = {}): Promise<Buffer> {
     signal.throwIfAborted();
     let result: RunResult, failed = false;
-    try { result = await runProcess(executable, args, { cwd, env: providerEnvironment(provider), mode: 'contained', signal, input, maxOutputBytes: 4 * 1024 * 1024, captureStdout: capture }); }
+    try { result = await runProcess(executable, args, { cwd, env: { ...providerEnvironment(provider), ...environment }, mode: 'contained', signal, input, maxOutputBytes: 4 * 1024 * 1024, captureStdout: capture }); }
     catch (error) { if (!(error instanceof ProcessRunError)) throw error; result = error.result; failed = true; }
     // Numeric telemetry may exist even when execution fails; diagnostics never leave this callback.
     try { observeOutput?.(result.stdout); } catch { /* Telemetry must not mask process cleanup or outcome. */ }

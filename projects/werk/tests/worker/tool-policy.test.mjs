@@ -156,3 +156,15 @@ test('tool API saves CLI tools only while paused and idle, explains invalid poli
   assert.equal(saved.value.builtins.cliTools[0].maxArgs, 24);
   assert.equal(f.worker.capabilities().toolAccess.cliTools, 'argument_policy_in_task_worktree');
 });
+
+test('tool API saves execution limits, explains invalid deadlines and reports configurable limits', async t => {
+  const f = await workspace(t); await f.worker.updateSettings({ board: { paused: true } });
+  const command = { id: 'unit-tests', name: 'Unit tests', executable: process.execPath, args: ['--version'], enabled: true, timeoutMs: 600000 };
+  const request = limits => ({ ...edit(f.worker.settings.toolPolicy()), ...(limits ? { limits } : {}), builtins: { ...defaultToolPolicy().builtins, commands: [command] } });
+  const rejected = await f.api('/api/tool-access', request());
+  assert.equal(rejected.status, 400); assert.match(rejected.value.error, /timeout \(600 s\) exceeds the tool window \(120 s\)/);
+  const saved = await f.api('/api/tool-access', request({ windowMs: 900000 }));
+  assert.equal(saved.status, 200); assert.deepEqual(saved.value.limits, { windowMs: 900000 }); assert.equal(saved.value.builtins.commands[0].timeoutMs, 600000);
+  assert.equal((await f.api('/api/tool-access')).value.limits.windowMs, 900000);
+  assert.equal(f.worker.capabilities().toolAccess.executionLimits, 'operator_configured_per_grant');
+});

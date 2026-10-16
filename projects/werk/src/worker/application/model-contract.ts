@@ -1,5 +1,6 @@
 import type { ToolManifest } from './tool-runtime.js';
 import { DEFAULT_MAX_RUNTIME_MS, MAX_MAX_RUNTIME_MS } from './execution-policy.js';
+import { toolTimeLimits } from './tool-limits.js';
 import type { ChatMessage, ConversationModel } from './conversation.js';
 import type { ProviderUsage } from './run-evidence.js';
 export interface ModelCapabilities { continuation: 'worker_context_replay'; nativeResume: false; streaming: false; tools: 'none' | 'granted'; structuredQuestions: 'werk_protocol_v1'; usage: 'provider_reported_when_available'; usageScope: 'invocation'; cost: 'provider_reported_estimate_or_unavailable'; }
@@ -94,11 +95,21 @@ export async function legacyModelReply(model: StructuredModel, input: ChatMessag
   const result = await executeModel(model, prepareModelRequest(model, input), signal, onUsage);
   return result.type === 'completed' ? result.text : JSON.stringify({ werkInteraction: result.request });
 }
+const deadline = (value: unknown, max: number) => Number.isSafeInteger(value) && Number(value) >= 1 && Number(value) <= max;
+const deadlines = (value: unknown, keys: (key: string) => boolean) => object(value) && Object.entries(value).every(([key, ms]) => keys(key) && deadline(ms, toolTimeLimits.callMaxMs));
+/** Dispatches saved before configurable limits have none; when present they describe only this manifest's tools. */
+function validManifestLimits(manifest: ToolManifest): boolean {
+  const limits = manifest.limits, names = new Set(Array.isArray(manifest.tools) ? manifest.tools.map(tool => tool?.name) : []);
+  return object(limits) && Object.keys(limits).every(key => ['maxCalls', 'windowMs', 'callTimeoutMs', 'presetTimeoutMs'].includes(key))
+    && deadline(limits.maxCalls, toolTimeLimits.maxCalls) && deadline(limits.windowMs, toolTimeLimits.windowMaxMs)
+    && deadlines(limits.callTimeoutMs, key => names.has(key))
+    && (limits.presetTimeoutMs === undefined || (names.has('werk_command_run') && deadlines(limits.presetTimeoutMs, key => /^[a-zA-Z0-9_-]{1,64}$/.test(key))));
+}
 export function requireModelRequest(request: ModelRequest, providerId: string) {
   if (!object(request) || request.schemaVersion !== 1 || request.interactionProtocol !== 1 || !object(request.provider) || request.provider.id !== providerId || typeof request.provider.model !== 'string' || request.provider.model.length > 200 || typeof request.provider.instruction !== 'string' || request.provider.instruction.length > 64000 || !['chat', 'patch'].includes(request.operation) || !object(request.policy) || !['none', 'granted'].includes(request.policy.tools as string) || request.policy.filesystem !== (request.policy.tools === 'granted' ? 'worker_grants' : 'read_only') || request.policy.continuation !== 'worker_context_replay' || !object(request.capabilities) || Object.entries(modelCapabilities).some(([key, value]) => request.capabilities[key as keyof ModelCapabilities] !== (key === 'tools' ? request.policy.tools : value)) || !Array.isArray(request.messages) || request.messages.length > 60 || request.messages.some(item => !object(item) || !['user', 'assistant'].includes(item.role as string) || typeof item.text !== 'string' || item.text.length > 1048576) || typeof request.renderedPrompt !== 'string' || request.renderedPrompt.length > 2097152 || typeof request.protocolInstructions !== 'string' || request.protocolInstructions.length > 128000) throw new ProviderModelError('protocol');
   if (request.policy.tools === 'granted') {
     const manifest = request.toolManifest;
-    if (!object(manifest) || Object.keys(manifest).some(key => !['revision', 'tools'].includes(key)) || !Number.isSafeInteger(manifest.revision) || manifest.revision < 0 || !Array.isArray(manifest.tools) || !manifest.tools.length || manifest.tools.length > 64 || JSON.stringify(manifest).length > 131072 || manifest.tools.some(tool => !object(tool) || Object.keys(tool).some(key => !['name', 'description', 'inputSchema'].includes(key)) || typeof tool.name !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(tool.name) || typeof tool.description !== 'string' || tool.description.length > 8000 || !object(tool.inputSchema)) || new Set(manifest.tools.map(tool => tool.name)).size !== manifest.tools.length) throw new ProviderModelError('protocol');
+    if (!object(manifest) || Object.keys(manifest).some(key => !['revision', 'tools', 'limits'].includes(key)) || (manifest.limits !== undefined && !validManifestLimits(manifest)) || !Number.isSafeInteger(manifest.revision) || manifest.revision < 0 || !Array.isArray(manifest.tools) || !manifest.tools.length || manifest.tools.length > 64 || JSON.stringify(manifest).length > 131072 || manifest.tools.some(tool => !object(tool) || Object.keys(tool).some(key => !['name', 'description', 'inputSchema'].includes(key)) || typeof tool.name !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(tool.name) || typeof tool.description !== 'string' || tool.description.length > 8000 || !object(tool.inputSchema)) || new Set(manifest.tools.map(tool => tool.name)).size !== manifest.tools.length) throw new ProviderModelError('protocol');
   } else if (request.toolManifest !== undefined) throw new ProviderModelError('protocol');
   // Short positive budgets are supported only by internally injected test fixtures. Public settings require at least one second.
   if (request.policy.maxRuntimeMs !== undefined && (!Number.isSafeInteger(request.policy.maxRuntimeMs) || request.policy.maxRuntimeMs < 1 || request.policy.maxRuntimeMs > MAX_MAX_RUNTIME_MS)) throw new ProviderModelError('protocol');

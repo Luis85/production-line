@@ -1,9 +1,9 @@
 import { runProcess, ProcessRunError, type RunResult } from '../../shared/process/launcher.js';
 import { checkCliArguments, CliArgumentError, type ToolCliTool } from '../application/cli-tool-policy.js';
+import { formatToolDuration } from '../application/tool-limits.js';
 
 /** Messages are worker-owned and safe to return to the model. */
 export class CliToolError extends Error {}
-const TIMEOUT_MS = 30000;
 /** Output beyond this stops the process; the returned text is cut to the tool's own limit. */
 const CAPTURE_BYTES = 1024 * 1024;
 /** Leaves room for escaping inside the runtime's 128 KiB result limit. */
@@ -52,13 +52,13 @@ export async function runCliTool(tool: ToolCliTool, value: unknown, cwd: string,
   const env: NodeJS.ProcessEnv = Object.fromEntries(['PATH', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'TMPDIR', 'LANG', 'LC_ALL'].flatMap(key => process.env[key] === undefined ? [] : [[key, process.env[key]]]));
   Object.assign(env, { NO_COLOR: '1', FORCE_COLOR: '0', TERM: 'dumb' });
   try {
-    const result = await runProcess(tool.executable, [...tool.args, ...args], { cwd, env, mode: 'contained', signal, timeoutMs: TIMEOUT_MS, maxOutputBytes: CAPTURE_BYTES, captureStderr: true, allowNonZeroExit: true });
+    const result = await runProcess(tool.executable, [...tool.args, ...args], { cwd, env, mode: 'contained', signal, timeoutMs: tool.timeoutMs, maxOutputBytes: CAPTURE_BYTES, captureStderr: true, allowNonZeroExit: true });
     return { text: report(tool, result, ''), isError: false };
   } catch (error) {
     if (!(error instanceof ProcessRunError) || error.reason === 'spawn') throw new CliToolError('The CLI tool could not be started. Check its executable, fixed arguments and the task worktree.');
     if (error.reason === 'cancelled') throw new CliToolError('Tool execution was cancelled.');
     // Partial output helps the model narrow the next call; no automatic retry is made.
-    const stopped = error.reason === 'timeout' ? `stopped after ${TIMEOUT_MS / 1000} seconds; no automatic retry was made` : 'stopped after producing more than 1 MiB of output';
+    const stopped = error.reason === 'timeout' ? `stopped after its ${formatToolDuration(tool.timeoutMs)} timeout; no automatic retry was made` : 'stopped after producing more than 1 MiB of output';
     return { text: report(tool, error.result, stopped), isError: error.reason === 'timeout' };
   }
 }

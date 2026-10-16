@@ -1,4 +1,5 @@
 import { DomainError } from '../../shared/errors.js';
+import { callTimeout, formatToolDuration, toolTimeLimits } from './tool-limits.js';
 
 /**
  * A project command-line tool the model may call with its own arguments. The
@@ -18,6 +19,8 @@ export interface ToolCliTool {
   executable: string; args: string[];
   commands: CliCommandRule[]; refusedOptions: string[];
   maxArgs: number; maxArgLength: number; outputKiB: number; truncationHint: string;
+  /** Per-call deadline; the process tree is stopped when it passes. */
+  timeoutMs: number;
 }
 export const cliToolLimits = Object.freeze({ tools: 8, rules: 64, options: 32, required: 8, maxArgs: 64, maxArgLength: 2048, outputKiB: 64, description: 8000 });
 export const cliToolDefaults = Object.freeze({ maxArgs: 24, maxArgLength: 500, outputKiB: 32, truncationHint: 'Narrow the command, for example with a filter, limit or summary option.' });
@@ -53,7 +56,7 @@ function fields(value: unknown, allowed: string[], label: string): Record<string
 
 /** Validate a stored or submitted CLI tool; optional limits receive documented defaults. */
 export function validateCliTool(value: unknown, absolute: (value: unknown, label: string) => string): ToolCliTool {
-  const input = fields(value, ['id', 'name', 'description', 'enabled', 'executable', 'args', 'commands', 'refusedOptions', 'maxArgs', 'maxArgLength', 'outputKiB', 'truncationHint'], 'CLI tool');
+  const input = fields(value, ['id', 'name', 'description', 'enabled', 'executable', 'args', 'commands', 'refusedOptions', 'maxArgs', 'maxArgLength', 'outputKiB', 'truncationHint', 'timeoutMs'], 'CLI tool');
   const id = text(input.id, 'CLI tool ID', 48);
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) invalid('CLI tool IDs use 1–48 letters, digits, underscores and hyphens.');
   const executable = absolute(input.executable, 'CLI tool executable');
@@ -82,6 +85,7 @@ export function validateCliTool(value: unknown, absolute: (value: unknown, label
     maxArgLength: integer(input.maxArgLength, cliToolDefaults.maxArgLength, 1, cliToolLimits.maxArgLength, 'Maximum argument length'),
     outputKiB: integer(input.outputKiB, cliToolDefaults.outputKiB, 1, cliToolLimits.outputKiB, 'Output limit (KiB)'),
     truncationHint: text(input.truncationHint ?? cliToolDefaults.truncationHint, 'truncation hint', 300, true),
+    timeoutMs: callTimeout(input.timeoutMs, `CLI tool "${id}"`),
   };
   if (cliToolDescription(tool).length > cliToolLimits.description) invalid(`The generated description for CLI tool "${id}" exceeds ${cliToolLimits.description} characters. Shorten its description or allow fewer commands.`);
   return tool;
@@ -103,6 +107,8 @@ export function cliToolDescription(tool: ToolCliTool): string {
     limited.length ? `${limited.join('; ')}.` : '',
     `Refused everywhere: absolute paths, "~", file: URLs, ".." path segments, the "--" terminator and control characters. At most ${tool.maxArgs} arguments of up to ${tool.maxArgLength} characters.`,
     `Returns the exit code, stdout and stderr, limited to ${tool.outputKiB} KiB. Output reflects the checked-out task worktree, not your proposed patch.`,
+    // Default deadlines keep the 0.9.0 description; a raised deadline tells the model a long check is expected to finish.
+    tool.timeoutMs !== toolTimeLimits.callDefaultMs ? `Each call stops after ${formatToolDuration(tool.timeoutMs)}.` : '',
   ].filter(Boolean).join(' ');
 }
 export function cliToolInputSchema(tool: ToolCliTool): Record<string, unknown> {

@@ -1,7 +1,7 @@
 <script lang="ts">
 import { createToolAccessEditor } from '../tool-access-editor';
 import { state as workerState, toolAccessAction, toolAccessDiscover, refresh } from '../store';
-const editor = createToolAccessEditor({ view: () => workerState.toolAccess, unlocked: () => workerState.unlocked, epoch: () => workerState.draftEpoch, write: toolAccessAction, discover: toolAccessDiscover, refresh });
+const editor = createToolAccessEditor({ view: () => workerState.toolAccess, unlocked: () => workerState.unlocked, epoch: () => workerState.draftEpoch, write: toolAccessAction, discover: toolAccessDiscover, refresh, executionBudgetMs: () => workerState.settings?.execution.maxRuntimeMs });
 </script>
 <script setup lang="ts">
 import { computed, ref } from 'vue';
@@ -12,7 +12,8 @@ import UBadge from '@nuxt/ui/components/Badge.vue';
 import McpConnectionsEditor from './McpConnectionsEditor.vue';
 import CliToolsEditor from './CliToolsEditor.vue';
 import { state, workspaceAction } from '../store';
-const { draft, dirty, stale, locked, validation, canSave } = editor;
+import { toolLimitSeconds } from '../tool-access-editor';
+const { draft, dirty, stale, locked, validation, windowNote, canSave } = editor;
 const view = computed(() => state.toolAccess), pausing = ref(false);
 const effective = computed(() => {
   const value = view.value;
@@ -43,6 +44,14 @@ async function pause() {
             <UTextarea id="tool-web-origins" v-model="draft.webOrigins" :rows="3" placeholder="https://docs.example.com" class="w-full" aria-describedby="tool-web-help" />
             <p id="tool-web-help" class="page-note">An empty list disables web access. Granted origins allow bounded reads; redirects do not expand the allowed destinations.</p>
           </section>
+          <section class="builtins-section" aria-labelledby="tool-limits-title">
+            <h3 id="tool-limits-title">Execution limits</h3>
+            <label for="tool-window">Tool window · seconds</label>
+            <UInput id="tool-window" v-model.number="draft.windowSeconds" type="number" :min="toolLimitSeconds.windowMin" :max="toolLimitSeconds.windowMax" step="1" class="w-full window-input" aria-describedby="tool-window-help" />
+            <p id="tool-window-help" class="page-note">All tool calls of one model turn share this time, starting with the first call. Each command, CLI tool and MCP connection also has its own timeout, which cannot exceed the window. The default is 120 seconds; raise both for long project checks such as unit tests or builds.</p>
+            <p v-if="windowNote" role="status" class="access-notice">{{ windowNote }}</p>
+            <p class="authority-note">Longer limits let a model keep commands running and consume machine time for longer. Cancelling or stopping work still stops the whole process tree immediately.</p>
+          </section>
           <section class="commands-section" aria-labelledby="command-presets-title">
             <div class="section-heading"><h3 id="command-presets-title">Command presets</h3><UButton type="button" color="neutral" variant="outline" icon="i-lucide-plus" :disabled="draft.commands.length >= 16" @click="editor.addCommand">Add command</UButton></div>
             <p class="page-note">Grant exact executable paths and fixed arguments. The model chooses a preset; it cannot supply a new command or extra arguments. Use a CLI tool below when the model needs to pass arguments.</p>
@@ -53,6 +62,7 @@ async function pause() {
               <div class="command-fields"><div><label :for="`tool-command-name-${index}`">Command name</label><UInput :id="`tool-command-name-${index}`" v-model="command.name" required maxlength="100" class="w-full" /></div><div><label :for="`tool-command-id-${index}`">Command ID</label><UInput :id="`tool-command-id-${index}`" v-model="command.id" required maxlength="64" class="w-full" /></div></div>
               <label :for="`tool-command-path-${index}`">Executable · absolute path</label><UInput :id="`tool-command-path-${index}`" v-model="command.executable" required placeholder="/absolute/path/to/executable" class="w-full" />
               <label :for="`tool-command-args-${index}`">Fixed arguments · JSON array</label><UTextarea :id="`tool-command-args-${index}`" v-model="command.arguments" :rows="2" placeholder='["--version"]' class="w-full" />
+              <label :for="`tool-command-timeout-${index}`">Timeout · seconds, up to {{ toolLimitSeconds.callMax }}</label><UInput :id="`tool-command-timeout-${index}`" v-model.number="command.timeoutSeconds" type="number" min="1" :max="toolLimitSeconds.callMax" step="1" class="w-full window-input" />
               <label class="check-label"><input v-model="command.enabled" type="checkbox"> Allow models to run this command</label>
             </div>
           </section>
@@ -81,6 +91,7 @@ h2, h3 { margin: 0; color: var(--ui-text-highlighted); } h3 { font-size: 1rem; f
 .builtins-section, .commands-section { display: grid; gap: 10px; padding-block: 24px; border-bottom: 1px solid var(--ui-border); margin-bottom: 24px; }
 .access-scope, .authority-note, .access-notice { padding: 14px; background: var(--ui-bg-elevated); border-left: 2px solid var(--ui-border-accented); font-size: .8125rem; line-height: 1.6; }
 .file-grant { align-items: start; gap: 12px; padding-block: 14px; }
+.window-input { max-width: 16rem; }
 .file-grant input { margin-top: 4px; }
 .file-grant span { display: grid; gap: 4px; }
 .file-grant span span { font-weight: 400; color: var(--ui-text-muted); line-height: 1.5; }
