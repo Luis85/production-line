@@ -100,6 +100,19 @@ export function workerCommands(catalog) {
     example: { expectedRevision: 0, config: { enabled: true, repositoryId: "ASSIGNMENT_ID", remote: "origin", branch: "main", workflowPath: ".werk/feature-workflow.json", pollMs: 60000 } },
     description: "Save the shared intake binding from JSON file/stdin while new starts are paused and idle. Use expectedRevision from shared status; switching branches requires finished, published requests.",
   };
+  catalog["tool-access get"] = {
+    method: "GET", path: "/api/tool-access",
+    description: "Inspect model tool grants: file access, command presets, CLI tools, web origins and MCP connections with their revision. Secrets are redacted.",
+  };
+  catalog["tool-access set"] = {
+    method: "POST", path: "/api/tool-access", body: true,
+    example: { expectedRevision: 0, builtins: { files: true, commands: [], cliTools: [{ id: "harness", name: "Project harness", description: "Reads the backlog and runs project checks.", enabled: true, executable: "/absolute/path/to/node", args: ["bin/harness.mjs"], commands: [{ command: "help" }, { command: "backlog context" }, { command: "backlog set", requireOneOf: ["--dry-run"] }], refusedOptions: ["--root", "--config", "--out"] }], webOrigins: [] }, mcp: [] },
+    description: "Replace all model tool grants from JSON file/stdin while new starts are paused and idle. Edit the output of tool-access get and send it back, or supply expectedRevision with builtins and mcp. Omitted MCP connections are removed.",
+  };
+  catalog["tool-access discover"] = {
+    method: "POST", path: "/api/tool-access/discover", required: ["id", "if-match"],
+    description: "Read the tool catalog of a saved MCP connection while paused and idle. Discovery grants nothing; --if-match is the current tool-access revision.",
+  };
   catalog["profile list"] = {
     method: "GET", path: "/api/execution-profiles",
     description: "Inspect execution profiles, their configuration hash and any pending update.",
@@ -508,7 +521,31 @@ export function workerCommands(catalog) {
   }
   return catalog;
 }
+/** Accept an edited `tool-access get` view: its revision becomes the guard and read-only fields are dropped. */
+export function toolAccessBody(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body))
+    throw inputError("Tool access input must be a JSON object.");
+  if (body.expectedRevision !== undefined) return body;
+  if (!Number.isSafeInteger(body.revision))
+    throw inputError("Include expectedRevision, or send the edited output of tool-access get.");
+  const { revision, schemaVersion, canEdit, saveBlockedReason, workerNode, mcp, ...rest } = body;
+  return {
+    ...rest,
+    expectedRevision: revision,
+    mcp: Array.isArray(mcp) ? mcp.map((item) => {
+      if (!item || typeof item !== "object") return item;
+      const { hasSecret, discoveredTools, ...connection } = item;
+      return connection;
+    }) : mcp,
+  };
+}
 export async function workerBody(command, body, options) {
+  if (command.path === "/api/tool-access" && command.method === "POST") return toolAccessBody(body);
+  if (command.path === "/api/tool-access/discover") {
+    if (!/^\d+$/.test(options["if-match"] ?? "") || !Number.isSafeInteger(Number(options["if-match"])))
+      throw inputError("--if-match must be the current tool-access revision.");
+    return { id: options.id, expectedRevision: Number(options["if-match"]) };
+  }
   if (command.path === "/api/requests") {
     if (
       body !== undefined &&

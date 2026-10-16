@@ -53,7 +53,10 @@ export class WorkerSettings {
   }
   private async saveToolPolicy(change: (previous: ToolPolicy) => ToolPolicy) {
     const operation = this.writing.catch(() => {}).then(async () => {
-      const next = change(this.tools), document = JSON.stringify(next) + '\n';
+      const next = change(this.tools);
+      // Omit an empty CLI tool list so a rolled-back 0.9.0 worker can still read the policy.
+      const { cliTools, ...builtins } = next.builtins;
+      const document = JSON.stringify(cliTools.length ? next : { ...next, builtins }) + '\n';
       if (Buffer.byteLength(document) > 655360) throw new DomainError('invalid_input', 'Tool configuration exceeds 640 KiB. Use fewer connections or smaller tool catalogs.');
       await atomicWrite(join(this.directory, 'tool-access.json'), document);
       this.tools = next;

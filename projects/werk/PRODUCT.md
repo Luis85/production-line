@@ -216,7 +216,8 @@ remain separate from provider connections, model settings and agent definitions.
 ## Worker-managed model tools
 
 Dashboard provides default-off grants for read-only task-worktree files, fixed
-command presets, allowed web origins and individually selected MCP tools. MCP
+command presets, project CLI tools with an argument policy, allowed web origins
+and individually selected MCP tools. MCP
 connections support stdio and HTTP, private credentials and explicit discovery.
 Grants are enforced through a common worker-owned catalog across supported local
 provider adapters. Operators pause and drain execution before saving; subsequent

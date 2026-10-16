@@ -3,6 +3,8 @@ import { lstat, mkdir, open, opendir, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { runProcess, ProcessRunError } from '../../shared/process/launcher.js';
 import type { ToolDefinition, ToolPolicy } from '../application/tool-policy.js';
+import { cliToolDescription, cliToolInputSchema, cliToolName } from '../application/cli-tool-policy.js';
+import { CliToolError, runCliTool } from './cli-tools.js';
 import type { ToolResult, ToolWorktreeIdentity } from '../application/tool-runtime.js';
 
 export class BuiltinToolError extends Error {}
@@ -161,6 +163,13 @@ export function builtinToolOperations(options: BuiltinToolOptions): ToolOperatio
       if (error instanceof ProcessRunError) throw new BuiltinToolError(`Command stopped (${error.reason}); no automatic retry was made.`);
       throw new BuiltinToolError('Command could not be started. Check its executable and working directory.');
     }
+  });
+  // CLI tools resolve relative fixed arguments such as bin/tool.mjs against a project, so chat without a worktree has none.
+  const worktree = options.worktree;
+  if (worktree) for (const tool of options.policy.builtins.cliTools.filter(item => item.enabled)) add(cliToolName(tool.id), cliToolDescription(tool), cliToolInputSchema(tool), async (value, signal) => {
+    const args = object(value, ['args']);
+    try { const result = await runCliTool(tool, args.args, worktree, signal); return { content: [{ type: 'text', text: result.text }], ...(result.isError ? { isError: true } : {}) }; }
+    catch (error) { if (error instanceof CliToolError) throw new BuiltinToolError(error.message); throw error; }
   });
   if (options.policy.builtins.webOrigins.length) add('werk_web_fetch', 'GET a public HTTP(S) URL on an operator-approved origin, without credentials or cookies. Redirects must also stay on approved origins. Returns at most 64 KiB.', schema({ url: { type: 'string', minLength: 1, maxLength: 4000 } }, ['url']), async (value, signal) => {
     const args = object(value, ['url']); const input = string(args.url, 4000);

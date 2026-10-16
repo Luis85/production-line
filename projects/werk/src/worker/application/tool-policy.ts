@@ -1,9 +1,11 @@
 import { DomainError } from '../../shared/errors.js';
+import { cliToolDescription, cliToolInputSchema, cliToolLimits, validateCliTool, type ToolCliTool } from './cli-tool-policy.js';
+export type { CliCommandRule, ToolCliTool } from './cli-tool-policy.js';
 
 export interface ToolDefinition { name: string; description: string; inputSchema: Record<string, unknown>; }
 export interface ToolCommandPreset { id: string; name: string; executable: string; args: string[]; enabled: boolean; }
 export type CommandPreset = ToolCommandPreset;
-export interface ToolBuiltinPolicy { files: boolean; commands: ToolCommandPreset[]; webOrigins: string[]; }
+export interface ToolBuiltinPolicy { files: boolean; commands: ToolCommandPreset[]; cliTools: ToolCliTool[]; webOrigins: string[]; }
 export interface ToolMcpConnection {
   id: string; name: string; transport: 'stdio' | 'http'; enabled: boolean;
   command: string; args: string[]; url: string; secretEnv: string; secret: string;
@@ -11,7 +13,8 @@ export interface ToolMcpConnection {
 }
 export interface ToolPolicy { schemaVersion: 1; revision: number; builtins: ToolBuiltinPolicy; mcp: ToolMcpConnection[]; }
 export interface McpConnectionView extends Omit<ToolMcpConnection, 'secret'> { hasSecret: boolean; }
-export interface ToolAccessView extends Omit<ToolPolicy, 'mcp'> { mcp: McpConnectionView[]; canEdit: boolean; saveBlockedReason: string | null; }
+/** `workerNode` is the Node.js executable running this worker, offered as a CLI tool interpreter. */
+export interface ToolAccessView extends Omit<ToolPolicy, 'mcp'> { mcp: McpConnectionView[]; canEdit: boolean; saveBlockedReason: string | null; workerNode: string; }
 export interface ToolMcpInput extends Omit<ToolMcpConnection, 'secret' | 'discoveredTools'> { secret?: string; clearSecret?: boolean; }
 export interface ToolAccessUpdate { expectedRevision: number; builtins: ToolBuiltinPolicy; mcp: ToolMcpInput[]; }
 function invalid(message: string): never { throw new DomainError('invalid_input', message); }
@@ -43,7 +46,7 @@ function url(value: unknown, originOnly: boolean): string {
   if (!originOnly && parsed.protocol === 'http:' && parsed.hostname !== 'localhost' && parsed.hostname !== '[::1]' && !/^127\.\d+\.\d+\.\d+$/.test(parsed.hostname)) invalid('Remote MCP connections require HTTPS; HTTP is available only for loopback servers.');
   return originOnly ? parsed.origin : parsed.href;
 }
-export function defaultToolPolicy(): ToolPolicy { return { schemaVersion: 1, revision: 0, builtins: { files: false, commands: [], webOrigins: [] }, mcp: [] }; }
+export function defaultToolPolicy(): ToolPolicy { return { schemaVersion: 1, revision: 0, builtins: { files: false, commands: [], cliTools: [], webOrigins: [] }, mcp: [] }; }
 export function validateToolDefinitions(value: unknown): ToolDefinition[] {
   if (!Array.isArray(value) || value.length > 64) invalid('An MCP connection may expose at most 64 tools.');
   const result = value.map(item => {
@@ -60,16 +63,20 @@ export function validateToolDefinitions(value: unknown): ToolDefinition[] {
   return result;
 }
 function builtins(value: unknown): ToolBuiltinPolicy {
-  const input = fields(value, ['files', 'commands', 'webOrigins'], 'built-in tool policy');
+  const input = fields(value, ['files', 'commands', 'cliTools', 'webOrigins'], 'built-in tool policy');
   if (!Array.isArray(input.commands) || input.commands.length > 16) invalid('Configure at most 16 command presets.');
   const commands = input.commands.map(item => {
     const command = fields(item, ['id', 'name', 'executable', 'args', 'enabled'], 'command preset');
     return { id: id(command.id), name: string(command.name, 'command name', 120), executable: absolute(command.executable, 'Command executable'), args: strings(command.args, 'command arguments', 32, 2048), enabled: boolean(command.enabled, 'Command enabled') };
   });
   if (new Set(commands.map(item => item.id)).size !== commands.length) invalid('Command preset IDs must be unique.');
+  // Documents saved before CLI tools existed omit the list; absence grants nothing.
+  if (input.cliTools !== undefined && (!Array.isArray(input.cliTools) || input.cliTools.length > cliToolLimits.tools)) invalid(`Configure at most ${cliToolLimits.tools} CLI tools.`);
+  const cliTools = ((input.cliTools ?? []) as unknown[]).map(item => validateCliTool(item, absolute));
+  if (new Set(cliTools.map(item => item.id)).size !== cliTools.length) invalid('CLI tool IDs must be unique.');
   const webOrigins = strings(input.webOrigins, 'web origins', 16, 2048).map(item => url(item, true));
   if (new Set(webOrigins).size !== webOrigins.length) invalid('Web origins must be unique.');
-  return { files: boolean(input.files, 'File access'), commands, webOrigins };
+  return { files: boolean(input.files, 'File access'), commands, cliTools, webOrigins };
 }
 function connection(value: unknown): ToolMcpConnection {
   const input = fields(value, ['id', 'name', 'transport', 'enabled', 'command', 'args', 'url', 'secretEnv', 'secret', 'allowedTools', 'discoveredTools'], 'saved MCP connection');
@@ -93,9 +100,10 @@ export function validateToolPolicy(value: unknown): ToolPolicy {
   if (new Set(mcp.map(item => item.id)).size !== mcp.length) invalid('MCP connection IDs must be unique.');
   const builtinPolicy = builtins(input.builtins);
   const granted = mcp.filter(item => item.enabled).flatMap(item => item.discoveredTools.filter(tool => item.allowedTools.includes(tool.name)));
-  const count = granted.length + (builtinPolicy.files ? 3 : 0) + (builtinPolicy.commands.some(item => item.enabled) ? 1 : 0) + (builtinPolicy.webOrigins.length ? 1 : 0);
+  const count = granted.length + (builtinPolicy.files ? 3 : 0) + (builtinPolicy.commands.some(item => item.enabled) ? 1 : 0) + builtinPolicy.cliTools.filter(item => item.enabled).length + (builtinPolicy.webOrigins.length ? 1 : 0);
   if (count > 64) invalid('Enable at most 64 model tools across built-ins and MCP connections.');
-  if (JSON.stringify(granted).length > 98304) invalid('Granted MCP descriptions and schemas exceed 96 KiB. Enable fewer tools.');
+  const cliDefinitions = builtinPolicy.cliTools.filter(item => item.enabled).map(item => ({ description: cliToolDescription(item), inputSchema: cliToolInputSchema(item) }));
+  if (JSON.stringify(granted).length + JSON.stringify(cliDefinitions).length > 98304) invalid('Granted MCP and CLI tool descriptions and schemas exceed 96 KiB. Enable fewer tools or shorten their descriptions.');
   return { schemaVersion: 1, revision: Number(input.revision), builtins: builtinPolicy, mcp };
 }
 const destination = (item: Pick<ToolMcpConnection, 'transport' | 'command' | 'args' | 'url' | 'secretEnv'>) => JSON.stringify([item.transport, item.command, item.args, item.url, item.secretEnv]);
@@ -126,6 +134,6 @@ export function discoveredToolPolicy(previous: ToolPolicy, connectionId: string,
   target.allowedTools = target.allowedTools.filter(name => JSON.stringify(target.discoveredTools.find(tool => tool.name === name)) === JSON.stringify(tools.find(tool => tool.name === name)));
   target.discoveredTools = tools; next.revision++; return validateToolPolicy(next);
 }
-export function publicToolPolicy(policy: ToolPolicy): Omit<ToolAccessView, 'canEdit' | 'saveBlockedReason'> {
+export function publicToolPolicy(policy: ToolPolicy): Omit<ToolAccessView, 'canEdit' | 'saveBlockedReason' | 'workerNode'> {
   return { ...structuredClone(policy), mcp: policy.mcp.map(({ secret, ...item }) => ({ ...structuredClone(item), hasSecret: !!secret })) };
 }

@@ -156,7 +156,7 @@ export class WorkerWorkspace {
       },
       events: { transport: "polling", streaming: false },
       capabilities: modelCapabilities,
-      toolAccess: { supported: true, management: "worker_global_revision", default: "none", scope: "local_model_invocations", repositoryFiles: "task_worktree_read_only", revocation: "pause_and_drain_before_save" },
+      toolAccess: { supported: true, management: "worker_global_revision", default: "none", scope: "local_model_invocations", repositoryFiles: "task_worktree_read_only", cliTools: "argument_policy_in_task_worktree", revocation: "pause_and_drain_before_save" },
       consumption: { supported: true, unit: 'tokens', periods: ['daily', 'monthly'], clock: 'UTC', scope: 'this_worker_model_invocations', enforcement: 'admission', personalUsageObserved: false },
       resources: {
         supported: true,
@@ -922,7 +922,7 @@ export class WorkerWorkspace {
   }
   toolAccess(): ToolAccessView {
     const saveBlockedReason = this.toolAccessBlockedReason();
-    return { ...this.settings.toolAccess(), canEdit: !saveBlockedReason, saveBlockedReason };
+    return { ...this.settings.toolAccess(), canEdit: !saveBlockedReason, saveBlockedReason, workerNode: process.execPath };
   }
   private toolAccessBlockedReason(): string | null {
     if (!this.acceptingTasks) return 'Worker is stopping.';

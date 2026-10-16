@@ -64,3 +64,23 @@ test('equivalent HTTP MCP addresses retain explicit grants and saved-secret pres
   assert.equal('secret' in submitted.mcp[0], false);
   assert.equal('clearSecret' in submitted.mcp[0], false);
 });
+
+test('CLI tools are edited as one rule per line and saved as an argument policy', async t => {
+  const { parseCliRules, formatCliRules } = await frontend('src/worker/webview/tool-access-editor.ts');
+  const rules = [{ command: 'help', requireOneOf: [], refusedOptions: [] }, { command: 'backlog set', requireOneOf: ['--dry-run'], refusedOptions: [] }, { command: 'eol', requireOneOf: [], refusedOptions: ['--fix', '--hook'] }, { command: 'codegen', requireOneOf: ['--check', '--dry-run'], refusedOptions: ['--write'] }];
+  assert.equal(formatCliRules(rules), 'help\nbacklog set requires --dry-run\neol refuses --fix --hook\ncodegen requires --check --dry-run refuses --write');
+  assert.deepEqual(parseCliRules(formatCliRules(rules) + '\n\n'), rules);
+  assert.throws(() => parseCliRules('backlog set requires dry-run'), /options such as --dry-run/);
+  assert.throws(() => parseCliRules('one two three'), /one or two words/);
+  const e = editor(t); e.state.view.workerNode = '/opt/node/bin/node'; e.addCliTool();
+  assert.equal(e.draft.cliTools[0].executable, '/opt/node/bin/node', 'new CLI tools start with the worker Node.js');
+  assert.equal(e.draft.cliTools[0].enabled, false, 'new CLI tools start disabled');
+  Object.assign(e.draft.cliTools[0], { name: 'Harness', arguments: '["bin/harness.mjs"]', commands: 'help\nbacklog set requires --dry-run', refusedOptions: '--root, --config', enabled: true });
+  let submitted; e.onWrite(async command => { submitted = command; return undefined; }); await e.save();
+  assert.deepEqual(submitted.builtins.cliTools, [{ id: 'cli-1', name: 'Harness', description: '', enabled: true, executable: '/opt/node/bin/node', args: ['bin/harness.mjs'], commands: [{ command: 'help', requireOneOf: [], refusedOptions: [] }, { command: 'backlog set', requireOneOf: ['--dry-run'], refusedOptions: [] }], refusedOptions: ['--root', '--config'], maxArgs: 24, maxArgLength: 500, outputKiB: 32, truncationHint: 'Narrow the command, for example with a filter, limit or summary option.' }]);
+  e.resolveUncertain(); e.addCliTool();
+  for (const [change, pattern] of [[{ executable: 'C:\\tools\\run.cmd' }, /\.bat or \.cmd/], [{ executable: 'node' }, /absolute executable/], [{ commands: '' }, /at least one command/], [{ commands: 'help\nhelp' }, /once/], [{ commands: 'a b c' }, /one or two words/], [{ refusedOptions: 'root' }, /option names/], [{ outputKiB: 65 }, /output limit/], [{ maxArgs: 0 }, /maximum arguments/]]) {
+    Object.assign(e.draft.cliTools[0], { name: 'Other', executable: '/opt/node/bin/node', commands: 'help', refusedOptions: '', outputKiB: 32, maxArgs: 24, id: 'cli-2' }, change);
+    assert.match(e.validation.value, pattern, JSON.stringify(change));
+  }
+});

@@ -469,6 +469,19 @@ provider subscription balances are not measured. See
 [consumption configuration and recovery](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/worker-consumption-limits.md)
 for the webview, accounting fields and failure behavior.
 
+## Worker model tool access
+
+| Command | Contract |
+| --- | --- |
+| `tool-access get` | Authenticated `GET /api/tool-access`; current grants, revision, edit state and the worker's Node.js executable. MCP secrets are redacted. |
+| `tool-access set --file PATH\|-` | `POST /api/tool-access`; replace all grants while new starts are paused and the worker is idle. Accepts the edited `tool-access get` output (its `revision` becomes the guard) or `expectedRevision`, `builtins` and `mcp`. Omitted MCP connections and CLI tools are removed. |
+| `tool-access discover --id ID --if-match REVISION` | `POST /api/tool-access/discover`; read a saved MCP connection's catalog without granting tools. |
+
+CLI tools let the model pass its own arguments to a project command, such as a
+Node script in `bin/`, within allowed commands, required preview flags and
+refused options. See
+[give the model a project CLI](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/manage-model-tools.md#give-the-model-a-project-cli).
+
 ## Worker attempt evidence and export
 
 Every worker-managed model attempt receives a durable run ID. Use `run list` to

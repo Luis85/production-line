@@ -379,9 +379,31 @@ and ordinary provider Chat does not gain arbitrary filesystem or shell tools.
 The unlocked worker Dashboard manages a separate private `tool-access.json` in
 the worker state directory. Missing configuration means no grants. The document
 records a numeric revision, read-only worktree-file access, fixed command presets,
-web origins, MCP connection details and discovered per-tool grants. Its credentials
+CLI tools, web origins, MCP connection details and discovered per-tool grants. Its credentials
 are redacted from authenticated views; they never enter the public status or
 model dispatch manifest. Preserve this file with the rest of stopped worker state.
+
+Each entry in `builtins.cliTools` describes one command-line tool the model may
+call with its own arguments in the task worktree:
+
+| Field | Contract |
+| --- | --- |
+| `id` | 1–48 letters, digits, `_` or `-`. The model sees the tool as `werk_cli_<id>`. |
+| `name`, `description` | Display name (≤ 120 characters) and optional model-facing description (≤ 1,000). |
+| `enabled` | `false` keeps the configuration without offering the tool. |
+| `executable` | Absolute path on the worker machine; `.bat` and `.cmd` files are rejected. |
+| `args` | Up to 32 fixed leading arguments, for example `["bin/harness.mjs"]`. Relative paths resolve in the task worktree. |
+| `commands` | 1–64 rules. `command` is one or two literal words. Optional `requireOneOf` lists flags of which one must be present; optional `refusedOptions` adds refusals for that command. |
+| `refusedOptions` | Up to 32 option names refused for every command, such as `--root`. |
+| `maxArgs`, `maxArgLength` | Model argument bounds: default 24 (1–64) and 500 characters (1–2,048). |
+| `outputKiB`, `truncationHint` | Returned output limit, default 32 (1–64), and the hint appended to truncated output. |
+
+Absolute paths, `~`, `file:` URLs, `@file` paths, `..` segments, the `--`
+terminator and control characters in model arguments are always refused. At most
+eight CLI tools may be configured; each enabled CLI tool counts toward the
+64-tool limit. Documents without `cliTools`, including those written by 0.9.0,
+grant none. An empty list is not written, so 0.9.0 can still read the policy
+after a rollback; remove CLI tools before rolling back to 0.9.0.
 
 Tool changes require paused, drained execution and the current policy revision.
 Local Chat and approved-file task invocations resolve current grants; automated

@@ -57,10 +57,15 @@ review real outputs before publication or merge.
 ## Local model tool grants
 
 Local model tools are disabled by default. An authenticated worker operator can
-grant read-only task-worktree access, fixed command presets, web origins and
-individual MCP tools through Dashboard. Tool results are sent to the selected
+grant read-only task-worktree access, fixed command presets, CLI tools, web
+origins and individual MCP tools through Dashboard or the authenticated
+`tool-access` commands. Tool results are sent to the selected
 model provider. Commands and MCP servers run with their configured account or
 remote-service authority; a Git worktree does not contain their side effects.
+CLI tools accept model arguments only after an allowlist of one- or two-word
+commands, required preview flags, refused options and path checks; they run
+without a shell, in the task worktree, with bounded time and output. The policy
+cannot detect option abbreviations or configuration files a CLI reads itself.
 Private MCP credentials stay in worker state, outside the public tool manifest.
 Tool output and repository content cannot authorize changes to grants. See
 [manage model tools](../how-to/manage-model-tools.md) for saving, revocation and

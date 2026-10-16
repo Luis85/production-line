@@ -10,13 +10,14 @@ import UInput from '@nuxt/ui/components/Input.vue';
 import UTextarea from '@nuxt/ui/components/Textarea.vue';
 import UBadge from '@nuxt/ui/components/Badge.vue';
 import McpConnectionsEditor from './McpConnectionsEditor.vue';
+import CliToolsEditor from './CliToolsEditor.vue';
 import { state, workspaceAction } from '../store';
 const { draft, dirty, stale, locked, validation, canSave } = editor;
 const view = computed(() => state.toolAccess), pausing = ref(false);
 const effective = computed(() => {
   const value = view.value;
   if (!value) return 'Loading saved access';
-  const count = (value.builtins.files ? 1 : 0) + value.builtins.commands.filter(item => item.enabled).length + (value.builtins.webOrigins.length ? 1 : 0) + value.mcp.filter(item => item.enabled).reduce((total, item) => total + item.allowedTools.length, 0);
+  const count = (value.builtins.files ? 1 : 0) + value.builtins.commands.filter(item => item.enabled).length + (value.builtins.cliTools ?? []).filter(item => item.enabled).length + (value.builtins.webOrigins.length ? 1 : 0) + value.mcp.filter(item => item.enabled).reduce((total, item) => total + item.allowedTools.length, 0);
   return count ? 'Tool access configured' : 'All tools off';
 });
 async function pause() {
@@ -31,7 +32,7 @@ async function pause() {
     <div class="section-heading"><h2 id="tool-access-title">Tool access</h2><UBadge color="neutral" variant="subtle">{{ effective }}</UBadge></div>
     <p class="page-note">Choose the tools this worker may offer models. Grants are shared across provider connections. Saved changes apply to future model turns. Results from granted tools are sent to the task’s selected model provider.</p>
     <template v-if="view">
-      <p class="access-scope">File tools require an approved task worktree. Command presets and MCP servers run with their own permissions; imported agent definitions never grant access.</p>
+      <p class="access-scope">File and CLI tools require an approved task worktree. Command presets, CLI tools and MCP servers run with their own permissions; imported agent definitions never grant access.</p>
       <form :aria-busy="draft.busy" @submit.prevent="editor.save">
         <fieldset class="tool-fields" :disabled="locked">
           <legend class="sr-only">Edit model tool access</legend>
@@ -44,7 +45,7 @@ async function pause() {
           </section>
           <section class="commands-section" aria-labelledby="command-presets-title">
             <div class="section-heading"><h3 id="command-presets-title">Command presets</h3><UButton type="button" color="neutral" variant="outline" icon="i-lucide-plus" :disabled="draft.commands.length >= 16" @click="editor.addCommand">Add command</UButton></div>
-            <p class="page-note">Grant exact executable paths and fixed arguments. The model chooses a preset; it cannot supply a new command or extra arguments.</p>
+            <p class="page-note">Grant exact executable paths and fixed arguments. The model chooses a preset; it cannot supply a new command or extra arguments. Use a CLI tool below when the model needs to pass arguments.</p>
             <p class="authority-note">Enabled commands run as the worker’s account. They can change files or use the network according to that account’s permissions.</p>
             <p v-if="!draft.commands.length" class="page-note">No command presets. Models cannot run commands.</p>
             <div v-for="(command, index) in draft.commands" :key="index" class="command-preset">
@@ -55,6 +56,7 @@ async function pause() {
               <label class="check-label"><input v-model="command.enabled" type="checkbox"> Allow models to run this command</label>
             </div>
           </section>
+          <CliToolsEditor :editor="editor" />
           <McpConnectionsEditor :editor="editor" />
           <div class="tool-save-actions"><UButton type="submit" :loading="draft.busy && !draft.discovering" :disabled="!canSave">Save tool access</UButton><UButton v-if="dirty || stale" type="button" color="neutral" variant="ghost" @click="editor.reload">Discard edits and reload</UButton></div>
         </fieldset>

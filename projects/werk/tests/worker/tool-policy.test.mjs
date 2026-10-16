@@ -141,3 +141,18 @@ test('MCP discovery API returns actionable sanitized failures without saving a f
     assert.equal(f.worker.toolAccess().canEdit, true, 'discovery failure releases the configuration lock');
   }
 });
+
+test('tool API saves CLI tools only while paused and idle, explains invalid policies and offers the worker Node.js', async t => {
+  const f = await workspace(t);
+  const cliTool = { id: 'harness', name: 'Project harness', enabled: true, executable: process.execPath, args: ['bin/harness.mjs'], commands: [{ command: 'check' }, { command: 'backlog set', requireOneOf: ['--dry-run'] }], refusedOptions: ['--root'] };
+  const request = () => ({ ...edit(f.worker.settings.toolPolicy()), builtins: { ...defaultToolPolicy().builtins, cliTools: [cliTool] } });
+  assert.equal((await f.api('/api/tool-access', request())).status, 409, 'running workers cannot gain CLI tools');
+  await f.worker.updateSettings({ board: { paused: true } });
+  const invalid = await f.api('/api/tool-access', { ...request(), builtins: { ...defaultToolPolicy().builtins, cliTools: [{ ...cliTool, commands: [{ command: 'backlog set', requireOneOf: ['--root'] }] }] } });
+  assert.equal(invalid.status, 400); assert.match(invalid.value.error, /requires a flag that is also refused/);
+  const saved = await f.api('/api/tool-access', request());
+  assert.equal(saved.status, 200); assert.equal(saved.value.workerNode, process.execPath);
+  assert.deepEqual(saved.value.builtins.cliTools[0].commands[1], { command: 'backlog set', requireOneOf: ['--dry-run'], refusedOptions: [] });
+  assert.equal(saved.value.builtins.cliTools[0].maxArgs, 24);
+  assert.equal(f.worker.capabilities().toolAccess.cliTools, 'argument_policy_in_task_worktree');
+});

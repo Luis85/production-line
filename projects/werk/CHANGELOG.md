@@ -7,6 +7,10 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+### Added
+
+- Worker CLI tools: grant a project command-line tool, such as `node bin/harness.mjs`, that the model calls with its own arguments in the task worktree. Each tool has allowed one- or two-word commands, flags required for writing commands (for example `--dry-run`), refused options and argument bounds. Calls run without a shell under the command-preset process limits. Configure CLI tools in **Dashboard → Tool access** or with the new `tool-access get|set|discover` worker commands. All CLI tools start disabled.
+
 ## [0.9.0] - 2026-10-16
 
 ### Added
