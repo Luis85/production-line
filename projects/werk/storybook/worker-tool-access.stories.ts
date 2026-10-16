@@ -44,6 +44,7 @@ export const SavedCliPolicy: Story = {
     if (!commands.value.includes('backlog set requires --dry-run') || !commands.value.includes('eol refuses --fix')) throw Error('Saved CLI command guards must remain intact in the editor.');
     const executable = await element(canvasElement, '#cli-executable-0') as HTMLInputElement;
     executable.value = '/example/alternate/node'; executable.dispatchEvent(new Event('input', { bubbles: true }));
+    await nextTick(); // Render the edited input before the shortcut restores its previous value.
     const shortcut = [...canvasElement.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent?.trim() === 'Use worker Node.js');
     if (!shortcut) throw Error('The worker executable shortcut must be available.');
     shortcut.click(); await nextTick();
