@@ -329,7 +329,10 @@ replaces the whole `repositories` object, so include `items` and the directory.
 The setting applies to assigned repositories; unassigned legacy Git folders keep
 the in-checkout location.
 
-Checkout uses Git's parallel checkout (`checkout.workers`, at most 8). One
+Checkout uses Git's parallel checkout (`checkout.workers`, at most 8); on Windows
+it falls back to a serial checkout when the worktree's Git administration path
+exceeds Git's 220-byte `GIT_DIR` limit, so short repository paths check out
+faster. One
 120-second budget covers repository queueing, fetch, checkout and verification of
 a new task worktree; with `"background": true` on file-task creation the request
 returns at once and the budget is 10 minutes. `worktree add` itself may run up to
