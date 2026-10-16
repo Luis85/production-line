@@ -14,6 +14,9 @@ interface SettingsForm<Saved, Draft, Command> {
   validate: (draft: Draft, baseline: Saved | null) => string;
   command: (value: Saved, baseline: Saved) => Command;
   savedMessage: string;
+  draftKey?: (draft: Draft) => string;
+  unconfirmedMessage?: string;
+  newerEditsMessage?: string;
 }
 const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -21,7 +24,8 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 /** A guarded form owns its draft and exact unconfirmed command across polling and route changes. */
 export function createGuardedSettingsEditor<Saved extends object, Draft extends object, Command extends object>(ports: GuardedSettingsPorts<Saved, Command>, form: SettingsForm<Saved, Draft, Command>) {
   const draft = shallowReactive({ values: reactive(form.empty()) as Draft, baseline: null as Saved | null, busy: false, checking: false, error: '', notice: '', uncertain: null as { command: Command; value: Saved } | null });
-  const dirty = computed(() => !!draft.baseline && !same(draft.values, form.fields(draft.baseline)));
+  const draftKey = form.draftKey ?? ((value: Draft) => JSON.stringify(value));
+  const dirty = computed(() => !!draft.baseline && draftKey(draft.values) !== draftKey(form.fields(draft.baseline)));
   const stale = computed(() => !!draft.baseline && !!ports.saved() && !same(draft.baseline, ports.saved()));
   const locked = computed(() => !ports.unlocked() || draft.busy || draft.checking || !!draft.uncertain);
   const validation = computed(() => form.validate(draft.values, draft.baseline));
@@ -48,14 +52,14 @@ export function createGuardedSettingsEditor<Saved extends object, Draft extends 
   }
   async function send(submitted: { command: Command; value: Saved }) {
     if (!ports.unlocked() || draft.busy || draft.checking) return;
-    const epoch = ports.epoch(), fieldsAtSubmit = JSON.stringify(draft.values);
+    const epoch = ports.epoch(), fieldsAtSubmit = draftKey(draft.values);
     draft.busy = true; draft.error = ''; draft.notice = ''; draft.uncertain = copy(submitted);
     try {
       const saved = await ports.write(copy(submitted.command));
       if (epoch !== ports.epoch() || !ports.unlocked()) return;
-      if (!saved) { draft.error = 'The save could not be confirmed. Refresh saved settings or retry the same save.'; return; }
-      if (JSON.stringify(draft.values) === fieldsAtSubmit) accept(saved, form.savedMessage);
-      else { draft.baseline = copy(saved); draft.uncertain = null; draft.notice = form.savedMessage + ' Your newer edits are not saved.'; }
+      if (!saved) { draft.error = form.unconfirmedMessage ?? 'The save could not be confirmed. Refresh saved settings or retry the same save.'; return; }
+      if (draftKey(draft.values) === fieldsAtSubmit) accept(saved, form.savedMessage);
+      else { draft.baseline = copy(saved); draft.uncertain = null; draft.notice = form.newerEditsMessage ?? form.savedMessage + ' Your newer edits are not saved.'; }
     } catch (error) {
       if (epoch !== ports.epoch() || !ports.unlocked()) return;
       const status = (error as Error & { status?: number }).status;

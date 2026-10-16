@@ -135,7 +135,7 @@ export class WorkerWorkspace {
   taskDetail(id: string) {
     const detail = this.sessions.detail(id);
     const task = detail.session.kind === 'local' ? this.board.view().tasks.find(item => item.sessionId === id) : undefined;
-    const local = task && this.board.detail(task.id);
+    const local = task && this.board.executionDetail(task.id);
     return { ...detail, chat: publicTaskConversation(detail.chat, local ? { instruction: local.instruction, paths: local.admissionFailure?.paths ?? local.files.map(file => file.path) } : undefined) };
   }
   chatSnapshot(id = this.sessions.current.id) { return this.taskDetail(id).chat; }
@@ -161,7 +161,7 @@ export class WorkerWorkspace {
     const tasks = new Map(this.board.view().tasks.map(task => [task.sessionId, task.id]));
     return this.sessions.details().map(({ session, chat }) => {
       const interaction = session.interaction;
-      const taskId = tasks.get(session.id), local = taskId ? this.board.detail(taskId) : undefined;
+      const taskId = tasks.get(session.id), local = taskId ? this.board.executionDetail(taskId) : undefined;
       const sharedSource = taskId ? this.sharedRuntime.intake.sourceForTask(taskId) : undefined;
       const sourceRepository = sharedSource && this.settings.value.repositories.items.find(item => item.id === sharedSource.repositoryId);
       const sourcePath = sharedSource ? sourceRepository ? join(sourceRepository.path, sharedSource.path) : sharedSource.path : sources.get(session.id);
@@ -174,8 +174,7 @@ export class WorkerWorkspace {
     });
   }
   taskboardDetail(id: string) {
-    const { implementation, developmentCompletion, ...task } = this.board.detail(id);
-    return { ...task, ...(implementation ? { implementation: developmentScopeView(implementation) } : {}) };
+    return this.board.detail(id);
   }
   async taskboardAction(input: unknown) {
     if ((input as Record<string, unknown> | null)?.action === 'retry')
@@ -704,7 +703,7 @@ export class WorkerWorkspace {
             await this.withRepositoryAdmission(() => this.board.create({ title, instruction: message, provider: provider.id, ...approved,
               definitionId: body.definitionId, definitionRef: body.definitionRef, agent: body.agent, useInstructionsOnly: body.useInstructionsOnly,
             }, { id, hash: submissionHash }));
-            return this.sessions.detail(this.board.detail(id).sessionId);
+            return this.sessions.detail(this.board.executionDetail(id).sessionId);
           }
           if (fileTask || this.sessions.view().records.some(session => session.id === 'local-' + id && session.kind === 'local')) throw new DomainError('conflict', 'Task id already belongs to different input.');
           if (existing) {
@@ -952,7 +951,7 @@ export class WorkerWorkspace {
   }
   private inspectSharedFeature(id: string): SharedExecution | undefined {
     try {
-      const task = this.board.detail(id);
+      const task = this.board.executionDetail(id);
       return { status: task.status, summary: task.summary, patch: task.patch,
         ...(task.implementation ? { implementation: developmentScopeView(task.implementation), developmentEvidence: task.developmentEvidence, developmentVerified: developmentCompletionValid(task) } : {}),
         request: task.requestId ? this.sessions.requests.get(task.requestId) : null, currentTurnId: task.currentTurnId, runId: task.runId, error: task.error };
@@ -1242,7 +1241,7 @@ export class WorkerWorkspace {
   private inspectFeature(record: FeatureRecord) {
     try {
       if (record.input?.mode === "patch") {
-        const task = this.board.detail(record.taskId);
+        const task = this.board.executionDetail(record.taskId);
         return {
           request: task.requestId
             ? this.sessions.requests.get(task.requestId)

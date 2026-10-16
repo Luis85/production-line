@@ -1,4 +1,4 @@
-import { Agent, EnvHttpProxyAgent } from 'undici';
+import { Agent, Dispatcher1Wrapper, EnvHttpProxyAgent } from 'undici';
 import { readResponseBody, ResponseBodyLimitError } from './response-body.js';
 import { ApiError } from './errors.js';
 export const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
@@ -31,7 +31,8 @@ export async function request<T = unknown>(base: string, path: string, token: st
     // the process-wide dispatcher or retaining sockets after the response is read.
     const limits = { headersTimeout: timeoutMs, bodyTimeout: timeoutMs, connectTimeout: timeoutMs };
     const useEnvironmentProxy = process.env.NODE_USE_ENV_PROXY === '1' || process.execArgv.includes('--use-env-proxy') || /(?:^|\s)--use-env-proxy(?:\s|$)/.test(process.env.NODE_OPTIONS ?? '');
-    const dispatcher = useEnvironmentProxy ? new EnvHttpProxyAgent(limits) : new Agent(limits);
+    // Node 24 fetch uses the older handler contract; Undici 8 supplies this adapter.
+    const dispatcher = new Dispatcher1Wrapper(useEnvironmentProxy ? new EnvHttpProxyAgent(limits) : new Agent(limits));
     try {
         const options = { method, redirect: 'error' as const, headers: { Authorization: `Bearer ${token}`, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(key ? { 'Idempotency-Key': key } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}), signal, dispatcher };
         const res = await fetch(url, options);

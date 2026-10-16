@@ -1,3 +1,4 @@
+import { validateMcpAddress } from '../application/mcp-endpoint';
 import { computed, reactive, watch } from 'vue';
 import type { ToolAccessView, ToolAccessUpdate, McpConnectionView, CliCommandRule, ToolCliTool } from '../application/tool-policy';
 
@@ -83,7 +84,7 @@ export function createToolAccessEditor(ports: EditorPorts) {
     for (const connection of draft.mcp) {
       if (connection.transport === 'stdio' && !absolute(connection.command.trim())) return 'Enter an absolute executable path for each local MCP server.';
       if (connection.transport === 'stdio' && !/^[A-Z_][A-Z0-9_]{0,79}$/.test(connection.secretEnv)) return 'Use an uppercase environment variable name for each local MCP secret.';
-      if (connection.transport === 'http') { try { const url = new URL(connection.url), local = url.hostname === 'localhost' || url.hostname === '[::1]' || /^127(?:\.[0-9]{1,3}){3}$/.test(url.hostname); if (!(url.protocol === 'https:' || url.protocol === 'http:' && local) || url.username || url.password || url.search || url.hash) throw Error(); } catch { return 'Use HTTPS for an MCP server, or HTTP on localhost. Omit credentials, query parameters and fragments.'; } }
+      if (connection.transport === 'http') { try { validateMcpAddress(connection.url); } catch { return 'Use HTTPS for an MCP server, or HTTP on localhost. Omit credentials, query parameters and fragments.'; } }
       if (connection.secret && connection.clearSecret) return 'Choose either a replacement secret or removal of the saved secret.';
     }
     const origins = new Set<string>();

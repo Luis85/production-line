@@ -1,8 +1,10 @@
+import { containsSensitivePatchMaterial } from '../application/review-patch-policy.js';
+import { runApprovedToolProcess } from './tool-process.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { lstat, mkdir, open, realpath, rename, unlink } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { ProcessRunError, runProcess } from '../../shared/process/launcher.js';
+import { ProcessRunError } from '../../shared/process/launcher.js';
 import type { DevelopmentFactory, DevelopmentEvidence, DevelopmentCandidate, DevelopmentCheckEvidence } from '../application/development.js';
 import { assertDevelopmentPolicy, validateDevelopmentState } from '../application/development.js';
 import { validateApprovedPaths } from '../application/approved-paths.js';
@@ -129,7 +131,7 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
     }
     if (Buffer.byteLength(patch) > 120000) fail('Candidate patch exceeds the bounded review size.');
     // Preserve the same review-leak guard used by legacy proposal patches.
-    if (/-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----|\b(?:sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,})\b/.test(patch)) fail('Candidate patch contains sensitive material and cannot be published for review.');
+    if (containsSensitivePatchMaterial(patch)) fail('Candidate patch contains sensitive material and cannot be published for review.');
     await rootIdentity(); authorize(signal);
     return { patch, digest: digest.digest('hex'), changedPaths: [...new Set([...changed, ...additions.map(file => file.path)])].sort(), files };
   }
@@ -201,8 +203,7 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
       let stdout: Buffer = Buffer.alloc(0), stderr: Buffer = Buffer.alloc(0), exitCode: number | null = null, stopped = '';
       try {
         authorize(signal); await rootIdentity();
-        const env = Object.fromEntries(['PATH', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'TMPDIR', 'LANG', 'LC_ALL'].flatMap(key => process.env[key] === undefined ? [] : [[key, process.env[key]]]));
-        const result = await runProcess(preset.executable, preset.args, { cwd: root, env, mode: 'contained', signal, timeoutMs: options.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS, maxOutputBytes: 32768, captureStderr: true, allowNonZeroExit: true });
+        const result = await runApprovedToolProcess(preset.executable, preset.args, { cwd: root, signal, timeoutMs: options.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS, maxOutputBytes: 32768 });
         ({ stdout, stderr, exitCode } = result);
       } catch (error) {
         stopped = error instanceof ProcessRunError ? error.reason : 'unavailable';

@@ -8,6 +8,7 @@ separately under `docs/handoff`; original source provenance is recorded in the
 
 | Record | Scope |
 | --- | --- |
+| [Worker architecture and reuse](worker-architecture-review.md) | Public task contracts, shared verification and tool policies, guarded settings, adapter lifetimes and retained service boundaries |
 | [Worker software-development review](worker-development-review.md) | Primary-source provider research, candidate editing, verification evidence and implementation qualification |
 | [Worker experience and universal request tracking](worker-experience-review.md) | Product-perspective review, unified Markdown requests, capacity, metrics, settings, stable controls and desktop/mobile evidence |
 | [Architecture and shared boundaries](architecture-review-2026-10-16.md) | Application ports, typed interaction contracts, lifecycle/Git/HTTP mechanics, AST guards, build provenance and explicit remaining debt |

@@ -15,12 +15,12 @@ import RequestGatePanel from "./RequestGatePanel.vue";
 import CandidateEvidence from "./CandidateEvidence.vue";
 import TaskKanban from "../../../shared/webview/components/TaskKanban.vue";
 import { state, workspaceAction, request, date } from "../store";
-import type { LocalTask } from "../../application/local-tasks";
+import type { LocalTaskDetailView } from "../../application/workspace-view";
 const route = useRoute(),
   router = useRouter();
 const busy = ref(false),
   archived = ref(false),
-  detail = ref<LocalTask | null>(null),
+  detail = ref<LocalTaskDetailView | null>(null),
   removing = ref(false),
   active = ref(false);
 const search = ref(""),

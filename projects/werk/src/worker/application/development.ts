@@ -1,3 +1,4 @@
+import { classifyDevelopmentEvidence } from './development-verification.js';
 import { createHash } from 'node:crypto';
 import { DomainError } from '../../shared/errors.js';
 import { validateApprovedPaths } from './approved-paths.js';
@@ -53,8 +54,7 @@ export function assertDevelopmentPolicy(scope: DevelopmentScope, policy: ToolPol
 export function developmentVerified(scope: DevelopmentScope, candidate: DevelopmentCandidate, evidence: DevelopmentEvidence | undefined): boolean {
   return !!candidate.patch.trim() && candidate.changedPaths.length > 0 && !!evidence && evidence.candidateDigest === candidate.digest &&
     gateDigest([...candidate.changedPaths].sort()) === gateDigest([...evidence.changedPaths].sort()) &&
-    new Set(evidence.checks.map(check => check.presetId)).size === evidence.checks.length &&
-    scope.checks.every(required => evidence.checks.some(check => check.presetId === required.id && check.presetFingerprint === required.fingerprint && check.candidateDigest === candidate.digest && check.status === 'passed' && check.exitCode === 0));
+    classifyDevelopmentEvidence(scope, evidence).verified;
 }
 /** Recovered/publication decisions use the immutable captured patch and latest durable receipts together. */
 export function developmentCompletionValid(task: {

@@ -61,7 +61,7 @@ async function fixture(t, execute, { verification = true } = {}) {
     async execute(request, signal) {
       invocations++; requests.push(request);
       const runtime = options.tools(request.policy);
-      const task = board.detail(board.view().tasks.find(item => item.status === 'running').id);
+      const task = board.executionDetail(board.view().tasks.find(item => item.status === 'running').id);
       try { return await execute({ runtime, request, signal, task, invocation: invocations }); }
       catch (error) { failures.push(error); throw error; }
       finally { await runtime.close(); }
@@ -76,7 +76,7 @@ async function fixture(t, execute, { verification = true } = {}) {
   return {
     root, state, repository, baseCommit, settings, requests, grant,
     get board() { return board; }, get sessions() { return sessions; }, get invocations() { return invocations; },
-    request(id) { return sessions.requests.get(board.detail(id).requestId); },
+    request(id) { return sessions.requests.get(board.executionDetail(id).requestId); },
     async create() {
       await board.create({ title: 'Implement the approved fixture change', instruction: 'Change approved.txt to after and verify the actual source.', repository, paths: ['approved.txt'], provider: 'openai-api' });
       return board.view().tasks.at(-1).id;
@@ -84,7 +84,7 @@ async function fixture(t, execute, { verification = true } = {}) {
     async settle(id, expected) {
       await board.tick();
       for (let attempt = 0; attempt < 2000; attempt++) {
-        const task = board.detail(id);
+        const task = board.executionDetail(id);
         if (!['queued', 'running'].includes(task.status) && !sessions.executor.busy) {
           if (failures.length) throw failures[0];
           assert.equal(task.status, expected, task.error ?? 'Unexpected task outcome'); return task;
@@ -92,7 +92,7 @@ async function fixture(t, execute, { verification = true } = {}) {
         await delay(10);
       }
       if (failures.length) throw failures[0];
-      throw Error('Task did not settle: ' + board.detail(id).status);
+      throw Error('Task did not settle: ' + board.executionDetail(id).status);
     },
     async restart(beforeOpen) { await board.close(); await sessions.close(); await beforeOpen?.(); await open(); },
   };
@@ -114,7 +114,7 @@ test('a new implementation edits, fails a real check, repairs and verifies withi
     assert.match(passed.value.stdout, /actual edited source/); receipts.push(passed.value);
     return complete('Implemented the approved change and repaired the failing check. Ready for human review.');
   });
-  const id = await f.create(), accepted = f.board.detail(id);
+  const id = await f.create(), accepted = f.board.executionDetail(id);
   assert.equal(accepted.implementation.mode, 'worktree'); assert.equal(accepted.implementation.baseCommit, f.baseCommit);
   const task = await f.settle(id, 'review');
   assert.equal(f.invocations, 1); assert.equal(receipts.length, 2);
@@ -151,7 +151,7 @@ for (const [label, attempt] of Object.entries(incomplete)) test(`${label} cannot
   assert.equal(await readFile(join(f.repository, 'approved.txt'), 'utf8'), 'before\n');
   await f.restart();
   await f.board.tick();
-  assert.equal(f.board.detail(id).status, 'needs_rework'); assert.equal(f.invocations, 1);
+  assert.equal(f.board.executionDetail(id).status, 'needs_rework'); assert.equal(f.invocations, 1);
 });
 
 test('known verified completion restores its review projection after restart without another provider call', { timeout: 120000 }, async t => {
@@ -165,7 +165,7 @@ test('known verified completion restores its review projection after restart wit
     await rm(join(f.state, 'local-review', id + '.patch'));
   });
   await f.board.tick();
-  const restored = f.board.detail(id);
+  const restored = f.board.executionDetail(id);
   assert.equal(restored.status, 'review'); assert.equal(f.invocations, 1);
   assert.equal(restored.patch, task.patch); assert.equal(restored.summary, task.summary);
   assert.equal(f.request(id).execution.outputDigest, outputDigest);
@@ -213,7 +213,7 @@ test('implementation questions preserve candidate work and immutable result fact
   assert.equal(savedExecution.facts['output.verificationPassed'], false);
   assert.equal(savedExecution.facts['output.requiredCheckCount'], 1);
   await f.restart();
-  assert.equal(f.board.detail(id).status, 'waiting_input'); assert.equal(f.invocations, 1);
+  assert.equal(f.board.executionDetail(id).status, 'waiting_input'); assert.equal(f.invocations, 1);
   assert.deepEqual(f.request(id).execution, savedExecution, 'Recovery must replay the exact known question facts.');
   const interaction = f.sessions.interactions.view(waiting.sessionId);
   assert.equal(interaction.pending.id, pending);

@@ -1,5 +1,7 @@
 import { developmentCompletionValid, type DevelopmentCompletion, assertDevelopmentPolicy, developmentScopeView, developmentVerified, freezeDevelopmentScope, validateDevelopmentState, type DevelopmentFactory, type DevelopmentScope, type DevelopmentEvidence, type DevelopmentRuntime } from './development.js';
-import type { LocalTaskboardView } from './workspace-view.js';
+import type { LocalTaskboardView, LocalTaskDetailView, LocalTaskStatus } from './workspace-view.js';
+import { projectLocalTaskSummary, projectLocalTaskDetail } from './local-task-view.js';
+import { containsSensitivePatchMaterial } from './review-patch-policy.js';
 import type { ToolWorktreeIdentity } from './tool-runtime.js';
 import type { ModelFactory, ProviderId } from './provider-contract.js';
 import type { WorkerSettingsPort, LocalTaskStorage, ApprovedTaskFiles } from './workspace-ports.js';
@@ -106,15 +108,7 @@ export interface LocalTask {
   worktreeIdentity?: ToolWorktreeIdentity;
   baseCommit?: string;
   files: TaskFile[];
-  status:
-    | "queued"
-    | "running"
-    | "review"
-    | "failed"
-    | "cancelled"
-    | "waiting_input"
-    | "escalated"
-    | "needs_rework";
+  status: LocalTaskStatus;
   priority: number;
   createdAt: string;
   finishedAt: string | null;
@@ -543,9 +537,7 @@ export class LocalTaskboard {
     if (
       !patch ||
       patch.length > 131072 ||
-      /-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----|\b(?:sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,})\b/.test(
-        patch,
-      )
+      containsSensitivePatchMaterial(patch)
     )
       throw Error("Patch is empty, too large or contains sensitive material");
     return {
@@ -674,28 +666,21 @@ export class LocalTaskboard {
   view(): LocalTaskboardView {
     return {
       settings: { ...this.settings.value.board },
-      tasks: this.tasks.map(({ files, instruction, patch, implementation, developmentCompletion, ...task }) => ({
-        ...task,
-        ...(implementation ? { implementation: developmentScopeView(implementation) } : {}),
-        files: files.map((file) => ({
-          path: file.path,
-          sha256: fingerprint(file.content),
-        })),
-        hasPatch: !!patch,
-        interaction: this.sessions.interactions.view(task.sessionId),
-        ...(task.requestId
-          ? {
-              requestPhase: this.sessions.requests.get(task.requestId).phase,
-              requestRevision: this.sessions.requests.get(task.requestId)
-                .revision,
-            }
-          : {}),
-      })),
+      tasks: this.tasks.map(task => projectLocalTaskSummary(
+        task,
+        this.sessions.interactions.view(task.sessionId),
+        task.requestId ? this.sessions.requests.get(task.requestId) : undefined,
+      )),
       persistenceError: this.persistenceError || this.evidencePersistenceError,
       running: this.tasks.filter((task) => task.status === "running").length,
     };
   }
-  detail(id: string) {
+  detail(id: string): LocalTaskDetailView {
+    const task = this.executionDetail(id);
+    return projectLocalTaskDetail(task, task.interaction);
+  }
+  /** Trusted execution and publication only; never return this aggregate from an HTTP endpoint. */
+  executionDetail(id: string) {
     const task = this.tasks.find((item) => item.id === id);
     if (!task) throw new DomainError("not_found", "Task not found");
     return {
@@ -1277,7 +1262,7 @@ export class LocalTaskboard {
     const body = object(input, "Task action", ["id", "action", "priority"]);
     const id = String(body.id);
     if (body.action === "retry") {
-      const task = this.detail(id);
+      const task = this.executionDetail(id);
       this.assertAcceptedSnapshots(task);
       if (
         !["failed", "cancelled"].includes(task.status) ||
@@ -1463,7 +1448,7 @@ export class LocalTaskboard {
         if (task.status !== "queued") throw Error("Task no longer queued");
         task.status = "running";
       });
-      const task = this.detail(id);
+      const task = this.executionDetail(id);
       runId = task.runId;
       turnId = task.currentTurnId;
       if (!runId || !turnId)

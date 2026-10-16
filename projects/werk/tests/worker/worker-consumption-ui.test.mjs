@@ -76,3 +76,41 @@ test('consumption settings acknowledgement survives held older reads; unavailabl
   await refresh(); assert.match(state.consumptionError, /could not be refreshed/); assert.equal(state.consumption.measuredTokens, 123);
   globalThis.fetch = async () => Response.json({}); await lock(); assert.equal(state.consumption, null); assert.equal(state.consumptionError, '');
 });
+
+test('consumption conflict refresh failures preserve the draft and original conflict for explicit recovery', async t => {
+  const e = editor(t); e.draft.enabled = true; e.draft.workerPercent = 35;
+  e.onWrite(async () => { throw Object.assign(Error('Consumption settings changed'), { status: 409 }); });
+  e.onRefresh(async () => { throw Error('Refresh offline'); });
+  await e.save();
+  assert.equal(e.draft.busy, false); assert.equal(e.draft.uncertain, null);
+  assert.equal(e.draft.enabled, true); assert.equal(e.draft.workerPercent, 35);
+  assert.equal(e.draft.error, 'Consumption settings changed');
+  e.state.policy = policy({ workerPercent: 20 }); await nextTick();
+  assert.equal(e.stale.value, true); assert.equal(e.canSave.value, false);
+  e.reload(); assert.equal(e.draft.workerPercent, '20'); assert.equal(e.dirty.value, false);
+});
+test('consumption flat field bindings survive replacement snapshots and equivalent numeric inputs stay pristine', async t => {
+  const e = editor(t);
+  for (const allowance of [2_000_000, 3_000_000, 4_000_000]) {
+    e.state.policy = policy({ allowance }); await nextTick();
+    assert.equal(e.draft.allowance, String(allowance));
+    e.draft.allowance = allowance; e.draft.workerPercent = 50; e.draft.perRunReservation = 10000;
+    assert.equal(e.dirty.value, false); assert.equal(e.draft.busy, false); assert.equal(e.draft.checking, false);
+  }
+  e.draft.enabled = true;
+  e.state.policy = Object.fromEntries(Object.entries(e.state.policy).reverse()); await nextTick();
+  assert.equal(e.stale.value, false, 'property ordering is not a concurrent policy change');
+  await e.save(); assert.equal(e.draft.enabled, true); assert.equal(e.dirty.value, false);
+  assert.equal(e.draft.notice, 'Consumption limits saved. Recorded usage is kept.');
+});
+
+test('consumption acknowledgement field order does not make newer unsaved edits stale', async t => {
+  const e = editor(t), pending = deferred(); e.draft.enabled = true;
+  e.onWrite(() => pending.promise);
+  const saving = e.save(); e.draft.workerPercent = 65;
+  const acknowledged = Object.fromEntries(Object.entries(policy({ enabled: true })).reverse());
+  e.state.policy = acknowledged; pending.resolve(acknowledged); await saving;
+  assert.equal(e.draft.workerPercent, 65); assert.equal(e.dirty.value, true);
+  assert.equal(e.stale.value, false); assert.equal(e.canSave.value, true);
+  assert.equal(e.draft.notice, 'Consumption limits saved. Your newer edits are not saved.');
+});

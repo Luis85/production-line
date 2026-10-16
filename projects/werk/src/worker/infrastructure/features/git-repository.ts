@@ -1,3 +1,4 @@
+import { containsSensitivePatchMaterial } from '../../application/review-patch-policy.js';
 import { requestName, parseFeature } from './document.js';
 import { canonicalJson } from '../../application/request-gates.js';
 import { branchName, commitId, FeatureGitIo, GitFeatureError, gitPath, hash, textBytes, type GitBlob } from './git-io.js';
@@ -153,7 +154,7 @@ export class GitFeatureRepository {
     const input = structuredClone(value), bounded = this.signal(signal); operation(input.operationId);
     if (!/^[a-z0-9][a-z0-9-]{0,79}$/.test(input.featureId) || !commitId(input.sourceCommit) || !Array.isArray(input.approvedPaths) || !input.approvedPaths.length || input.approvedPaths.length > 32 || new Set(input.approvedPaths).size !== input.approvedPaths.length) throw new GitFeatureError('invalid_input', 'Feature publication requires a stable feature ID, source commit and explicit approved paths.');
     textBytes(input.patch, 131072);
-    if (!input.patch.trim() || /-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----|\b(?:sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,})\b/.test(input.patch)) throw new GitFeatureError('invalid_input', 'Feature patch is empty or contains sensitive material.');
+    if (!input.patch.trim() || containsSensitivePatchMaterial(input.patch)) throw new GitFeatureError('invalid_input', 'Feature patch is empty or contains sensitive material.');
     for (const path of input.approvedPaths) {
       gitPath(path);
       const normalized = path.toLowerCase();

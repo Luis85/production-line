@@ -1,3 +1,4 @@
+import { projectLocalTaskDetail } from '../../src/worker/dist/worker/application/local-task-view.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -66,7 +67,7 @@ test('shared review publication requires verified candidate evidence bound to th
 test('authenticated task-detail HTTP response excludes private development commands and completion receipt', async t => {
   const privateTask = { id: 'task-one', implementation: scope(), developmentEvidence: evidence(), developmentCompletion: { evidenceDigest: 'PRIVATE_COMPLETION_RECEIPT' }, files: [], instruction: 'Implement feature', summary: 'Completed' };
   const token = 'a'.repeat(64);
-  const workspace = Object.assign(Object.create(WorkerWorkspace.prototype), { token, board: { detail: id => { assert.equal(id, privateTask.id); return structuredClone(privateTask); } } });
+  const workspace = Object.assign(Object.create(WorkerWorkspace.prototype), { token, board: { detail: id => { assert.equal(id, privateTask.id); return projectLocalTaskDetail(privateTask, { turns: [], pending: null }); } } });
   const server = await statusServer(() => ({ activeTasks: [] }), '127.0.0.1', 0, undefined, workspace);
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); });
   const response = await fetch('http://127.0.0.1:' + server.address().port + '/api/taskboard/detail', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ id: privateTask.id }) });
@@ -84,7 +85,7 @@ test('shared inspection binds publication to the private final patch and current
     turnId: execution.currentTurnId, runId: execution.runId, candidateDigest: digest,
     patchSha256: createHash('sha256').update(execution.patch).digest('hex'), evidenceDigest: gateDigest(execution.developmentEvidence), verified: true,
   } };
-  const inspect = value => WorkerWorkspace.prototype.inspectSharedFeature.call({ board: { detail: () => structuredClone(value) }, sessions: { requests: { get: () => execution.request } } }, 'task-one');
+  const inspect = value => WorkerWorkspace.prototype.inspectSharedFeature.call({ board: { executionDetail: () => structuredClone(value) }, sessions: { requests: { get: () => execution.request } } }, 'task-one');
   const valid = inspect(task); assert.equal(valid.developmentVerified, true); assert.deepEqual(doneEvidence(record, valid), evaluation);
   assert.equal(valid.developmentCompletion, undefined); assert.equal(valid.implementation.checks[0].executable, undefined);
   for (const mutate of [

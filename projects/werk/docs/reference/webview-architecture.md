@@ -30,6 +30,12 @@ assignments remain separate. Failed or old observations retain their last values
 without claiming current availability. No extra capacity polling endpoint is
 needed; settings mutation guards stay on the server.
 
+Queue, duration and consumption forms reuse the guarded settings controller for
+draft preservation, acknowledgement recovery and conflict detection. Their domain
+validation and payloads remain separate. Candidate evidence uses the same pure
+receipt classification as application and Markdown projections; frontend task
+detail is an explicit public DTO rather than a private persistence aggregate.
+
 ## Reusable components
 
 The shared source lives in `src/shared/webview`:

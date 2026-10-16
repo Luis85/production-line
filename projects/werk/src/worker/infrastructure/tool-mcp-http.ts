@@ -1,12 +1,10 @@
+import { validateMcpAddress } from '../application/mcp-endpoint.js';
 import { abortFailure, encodeMessage, MCP_WIRE_LIMIT, McpClientError, parseMessage, rpcResult, type McpClientOptions, type McpSession, type McpTransportConfiguration } from './tool-mcp-protocol.js';
 
 /** Operator-selected HTTPS endpoints, or literal loopback HTTP; redirects are never followed. */
 export function validateMcpEndpoint(value: string): URL {
-  let url: URL;
-  try { url = new URL(value); } catch { throw new McpClientError('configuration'); }
-  const loopback = url.hostname === 'localhost' || url.hostname === '[::1]' || /^127(?:\.[0-9]{1,3}){3}$/.test(url.hostname);
-  if ((url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) || url.username || url.password || url.hash || url.search) throw new McpClientError('configuration');
-  return url;
+  try { return validateMcpAddress(value); }
+  catch { throw new McpClientError('configuration'); }
 }
 
 export function openMcpHttp(config: Extract<McpTransportConfiguration, { transport: 'http' }>, options: McpClientOptions, signal: AbortSignal): McpSession {

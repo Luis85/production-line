@@ -1,4 +1,5 @@
-import { runProcess, ProcessRunError, type RunResult } from '../../shared/process/launcher.js';
+import { runApprovedToolProcess } from './tool-process.js';
+import { ProcessRunError, type RunResult } from '../../shared/process/launcher.js';
 import { checkCliArguments, CliArgumentError, type ToolCliTool } from '../application/cli-tool-policy.js';
 import { DEFAULT_COMMAND_TIMEOUT_MS, MAX_COMMAND_TIMEOUT_MS } from '../application/execution-policy.js';
 
@@ -48,10 +49,8 @@ export async function runCliTool(tool: ToolCliTool, value: unknown, cwd: string,
   try { ({ args } = checkCliArguments(tool, value)); }
   catch (error) { if (error instanceof CliArgumentError) throw new CliToolError(error.message); throw error; }
   if (signal.aborted) throw new CliToolError('Tool execution was cancelled.');
-  const env: NodeJS.ProcessEnv = Object.fromEntries(['PATH', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'TMPDIR', 'LANG', 'LC_ALL'].flatMap(key => process.env[key] === undefined ? [] : [[key, process.env[key]]]));
-  Object.assign(env, { NO_COLOR: '1', FORCE_COLOR: '0', TERM: 'dumb' });
   try {
-    const result = await runProcess(tool.executable, [...tool.args, ...args], { cwd, env, mode: 'contained', signal, timeoutMs, maxOutputBytes: CAPTURE_BYTES, captureStderr: true, allowNonZeroExit: true });
+    const result = await runApprovedToolProcess(tool.executable, [...tool.args, ...args], { cwd, signal, timeoutMs, maxOutputBytes: CAPTURE_BYTES, disableColor: true });
     return { text: report(tool, result, ''), isError: false };
   } catch (error) {
     if (!(error instanceof ProcessRunError) || error.reason === 'spawn') throw new CliToolError('The CLI tool could not be started. Check its executable, fixed arguments and the task worktree.');

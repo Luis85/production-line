@@ -85,3 +85,48 @@ test('the shared HTTP client reports its own timeout instead of a raw abort', as
   await assert.rejects(request(base, '/api/shared-intake', 'token', 'GET', undefined, undefined, 100), error => error instanceof RequestTimeoutError && error.code === 'timeout' && error.timeoutMs === 100 && /request may still be running/.test(error.message));
   assert.deepEqual(await request(base, '/api/shared-intake', 'token', 'GET', undefined, undefined, 2000), { schemaVersion: 1, revision: 4 });
 });
+
+test('a request owns its transport deadlines instead of inheriting the global dispatcher cap', async t => {
+  const { Agent, getGlobalDispatcher, setGlobalDispatcher } = await import('undici');
+  const previous = getGlobalDispatcher(), short = new Agent({ headersTimeout: 100 });
+  setGlobalDispatcher(short);
+  t.after(async () => { setGlobalDispatcher(previous); await short.destroy(); });
+  const f = await fixture(t, 1500), base = f.client[1];
+  // Shortened equivalent of Node's independent five-minute header deadline.
+  await assert.rejects(fetch(base, { signal: AbortSignal.timeout(5000) }), error => error.cause?.code === 'UND_ERR_HEADERS_TIMEOUT');
+  const dispatchers = [], transport = globalThis.fetch;
+  t.mock.method(globalThis, 'fetch', (url, options) => { dispatchers.push(options.dispatcher); return transport(url, options); });
+  assert.deepEqual(await request(base, '/api/shared-intake', 'token', 'GET', undefined, undefined, 5000), { schemaVersion: 1, revision: 4 });
+  assert.equal(dispatchers.length, 1);
+  assert.notEqual(dispatchers[0], short);
+  await assert.rejects(dispatchers[0].request({ origin: base, path: '/closed', method: 'GET' }), error => error.code === 'UND_ERR_DESTROYED');
+  assert.equal(getGlobalDispatcher(), short, 'request never changes process-wide transport configuration');
+});
+
+test('body deadlines and HTTP failures release owned dispatchers and sockets', async t => {
+  let bodyStarted = false;
+  const closed = [];
+  const server = createServer((req, res) => {
+    if (req.url === '/body') { bodyStarted = true; res.writeHead(200, { 'content-type': 'application/json' }); res.write('{"pending":'); return; }
+    if (req.url === '/invalid') { res.end('{'); return; }
+    if (req.url === '/denied') { res.writeHead(403); res.end('{"error":"Denied"}'); return; }
+    if (req.url === '/redirect') { res.writeHead(302, { location: '/ok' }); res.end(); return; }
+    res.end('{"ok":true}');
+  });
+  server.on('connection', socket => closed.push(new Promise(resolve => socket.once('close', resolve))));
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); });
+  const base = `http://127.0.0.1:${server.address().port}`, dispatchers = [], transport = globalThis.fetch;
+  t.mock.method(globalThis, 'fetch', (url, options) => { dispatchers.push(options.dispatcher); return transport(url, options); });
+  await assert.rejects(request(base, '/body', 'token', 'POST', {}, undefined, 1000), error => error instanceof RequestTimeoutError && error.code === 'timeout' && error.timeoutMs === 1000 && /operation may still be running/.test(error.message));
+  assert.equal(bodyStarted, true, 'deadline applies after the server has begun its response');
+  await assert.rejects(request(base, '/invalid', 'token'), error => error.status === 502 && /invalid JSON/.test(error.message));
+  await assert.rejects(request(base, '/denied', 'token'), error => error.status === 403 && error.message === 'Denied');
+  await assert.rejects(request(base, '/redirect', 'token'));
+  assert.deepEqual(await request(base, '/ok', 'token'), { ok: true });
+  assert.equal(dispatchers.length, 5);
+  for (const dispatcher of dispatchers) await assert.rejects(dispatcher.request({ origin: base, path: '/closed', method: 'GET' }), error => error.code === 'UND_ERR_DESTROYED');
+  let timer;
+  try { await Promise.race([Promise.all(closed), new Promise((_, reject) => { timer = setTimeout(() => reject(Error('Client sockets remained open after request cleanup')), 2000); })]); }
+  finally { clearTimeout(timer); }
+});

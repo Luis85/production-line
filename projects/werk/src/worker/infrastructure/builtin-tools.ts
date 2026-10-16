@@ -1,7 +1,8 @@
+import { runApprovedToolProcess } from './tool-process.js';
 import { constants, realpathSync, statSync } from 'node:fs';
 import { lstat, mkdir, open, opendir, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { runProcess, ProcessRunError } from '../../shared/process/launcher.js';
+import { ProcessRunError } from '../../shared/process/launcher.js';
 import type { ToolDefinition, ToolPolicy } from '../application/tool-policy.js';
 import { cliToolDescription, cliToolInputSchema, cliToolName } from '../application/cli-tool-policy.js';
 import { CliToolError, runCliTool } from './cli-tools.js';
@@ -184,9 +185,8 @@ export function builtinToolOperations(options: BuiltinToolOptions): ToolOperatio
     const cwd = options.worktree ?? join(options.directory, 'chat-workspace');
     if (!options.worktree) await mkdir(cwd, { recursive: true, mode: 0o700 });
     check(signal);
-    const env = Object.fromEntries(['PATH', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'TMPDIR', 'LANG', 'LC_ALL'].flatMap(key => process.env[key] === undefined ? [] : [[key, process.env[key]]]));
     try {
-      const command = await runProcess(preset.executable, preset.args, { cwd, env, mode: 'contained', signal, timeoutMs: options.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS, maxOutputBytes: 32768, captureStderr: true, allowNonZeroExit: true });
+      const command = await runApprovedToolProcess(preset.executable, preset.args, { cwd, signal, timeoutMs: options.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS, maxOutputBytes: 32768 });
       return output({ preset: preset.id, exitCode: command.exitCode, stdout: command.stdout.toString('utf8'), stderr: command.stderr.toString('utf8') });
     } catch (error) {
       if (error instanceof ProcessRunError) throw new BuiltinToolError(`Command stopped (${error.reason}); no automatic retry was made.`);

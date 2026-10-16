@@ -1,0 +1,41 @@
+# Worker architecture and reuse review
+
+Date: 2026-10-16. Scope: the integrated 0.10.0 worker increment and its Factory, orchestrator, shared-runtime and browser boundaries. This follow-up reviews the feature-development implementation and PRs #24, #26, #27 and #28. The earlier [architecture review](architecture-review-2026-10-16.md) records the 0.8.0 baseline separately.
+
+## Assessment
+
+The service ownership model remains appropriate: Factory manages hierarchy/intake, an orchestrator manages accepted assignments and leases, and a worker owns execution and local evidence. Independent apps communicate through authenticated APIs. Combining their stores or execution services would erase different recovery and authority rules.
+
+The actionable maintenance problems are smaller shared contracts that had accumulated multiple implementations. The pass consolidates those contracts and makes public task projection explicit. It preserves the single execution slot, durable request identity, frozen permissions and human review boundary.
+
+## Review and decisions
+
+| Perspective | Finding and improvement | Boundary retained |
+| --- | --- | --- |
+| Application correctness | Candidate receipt classification was repeated in completion policy, Markdown projection and the UI, with different handling of duplicate receipts. One Node-free classifier now supplies the shared result. | Actual patch/hash/path binding and private turn/run completion proof remain in application completion policy. A display projection cannot authorize publication. |
+| API contracts | The task-detail HTTP response was typed as the private task aggregate. Object omission/spread required every new private field to be excluded in several places. Explicit public summary/detail contracts and allowlist projectors now define disclosure. | Private task access remains available only to internal execution/publication code. Command executable/arguments, completion receipts and admission internals do not become public by default. |
+| Configuration UX | Consumption settings repeated the draft, acknowledgement, conflict and retry controller already used by queue/duration settings. Its wrapper now reuses the guarded controller. | Consumption validation, allowance calculations, numeric/string input equivalence and existing form bindings remain owned by the consumption editor. |
+| Tool adapters | Fixed commands, candidate verification and project CLI tools repeated contained-launch setup and the same minimal environment. A focused process primitive owns that setup. | Callers retain explicit deadlines/output limits, check checkpoint ordering, partial-output handling and CLI-only colour overrides. Provider authentication and MCP environments are separate. |
+| Publication policy | The same sensitive-patch predicate appeared in four paths. One pure policy now supplies that refusal rule. | Each path retains its own size, binary, scope, empty-result and publication rules. Sharing a predicate does not broaden authority. |
+| MCP interfaces | Saved policy, HTTP transport and the settings editor repeated endpoint eligibility and normalization. One pure endpoint policy keeps them consistent. | Raw input bounds, error types and UI wording remain at each boundary. Endpoint identity still controls preservation of saved credentials and grants. |
+| Shared HTTP lifetime | The new long CLI timeout exposed both Node's hidden transport deadline and a native-fetch/packaged-Undici dispatcher interface mismatch. The shared client owns a compatible bounded dispatcher for each complete response and destroys it on every outcome. | Total cancellation, bounded body reading, existing API errors and explicit environment-proxy opt-in remain part of the transport contract. |
+| Provider transport | A compressed valid response succeeded with ordinary fetch but failed through the raw provider adapter. The adapter now consumes bounded decoded content, preserves safe error classification and cleans up its invocation-owned connection pool. | No automatic inference replay, redirect or global dispatcher changes; the frozen invocation signal still owns the header/body deadline. |
+| Packaging | The shared HTTP adapter now needs Undici in all three apps. Distribution staging includes that dependency for every independent app. | Repeated packaged shared code/dependencies are intentional: copied apps must run without sibling apps, source or npm installation. |
+| Team authoring | Managed script refresh needed cleanup on write/fsync faults, permission preservation and consistent manifest limits between plan/apply. Those corrections are covered by failure/retry tests. | Customized/unrecorded scripts still require the inspected revision; script/template ownership is not inferred from a successful model response. |
+| Observability | New Settings and feature-tracking routes were missing from both normalized logging and runtime relay lists. Both are now covered by route parity tests. | The runtime relay remains an independent strict allowlist; arbitrary child output, request data and error messages are never forwarded as service records. |
+| Browser composition | Stable polling, disclosures, drafts and shared candidate evidence already have distinct owners and verified interactions. Reuse is concentrated in pure presenters and guarded form state. | No generic polling framework replaces selection fencing, reviewed plans, KeepAlive lifecycle or authentication epochs. |
+| Verification | Static dependency guards, behavior tests, real Git/process fixtures, browser checks and independent archive smokes establish different properties. | Deterministic model fixtures are not described as live provider qualification. The unsuccessful live preflight remains documented in the [development review](worker-development-review.md). |
+
+## Deliberate remaining separation
+
+Local conversations, file implementations, leased assignments and shared Git intake have different durable identities and recovery checkpoints. Their journals and lifecycle services remain separate. Read-only worktree browsing and candidate mutation scanning also have different link, ignored-file, consistency and byte-budget policies; combining them would make those distinctions harder to inspect.
+
+The Workspace facade and local task orchestration remain large maintenance areas. Further extraction should move one complete use case behind a purpose-specific port with recovery tests. This pass does not introduce a generic base service, move transactions between stores, or split code merely to reduce line counts. Model request preparation and wrapper forwarding are a useful later candidate, but advisory reviews must continue to have no tools and accepted dispatches must keep frozen budgets and context.
+
+The duplicated operational log-label allowlist is checked for parity because source TypeScript and shipped standalone runtime scripts have different dependency graphs. Introducing runtime source lookups or a new generated contract pipeline solely to remove that small list would make copied-app packaging more fragile.
+
+## Qualification and release state
+
+The exact integrated application, browser, archive and cross-platform CI results are recorded on [PR #25](https://github.com/Luis85/production-line/pull/25). Focused regressions exercise shared policy behavior and actual callers, including invalid/stale receipts, private-field projection, conflicting settings drafts, scoped command execution, endpoint changes and transport cleanup. The full application check includes AST dependency-boundary rules and their negative fixtures.
+
+Merge and release remain on hold at the user's request while another session is active. No release tag or publication is authorized by this report.

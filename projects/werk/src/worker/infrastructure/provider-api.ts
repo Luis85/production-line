@@ -21,11 +21,12 @@ async function readResponse(response: Response, signal: AbortSignal) {
   let bytes: Uint8Array;
   try { bytes = await readResponseBody(response.body, 1048576, { cancel: 'always' }); }
   catch (error) {
+    if (signal.aborted) throw new ProviderModelError('cancelled');
     if (error instanceof ProviderModelError) throw error;
     if (error instanceof ResponseBodyLimitError) throw new ProviderModelError('protocol');
-    throw new ProviderModelError(signal.aborted ? 'cancelled' : 'unavailable');
+    throw new ProviderModelError('unavailable');
   }
-  try { return JSON.parse(Buffer.from(bytes).toString('utf8')); }
+  try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); }
   catch { throw response.ok ? new ProviderModelError('protocol') : classifyProviderStatus(response.status); }
 }
 /** Stateless tool loops: each turn replays this invocation only; server-side conversation storage stays off. */
@@ -51,7 +52,12 @@ export async function apiReply(connection: ProviderConnection, request: ModelReq
       response = await transport(openai ? 'https://api.openai.com/v1/responses' : 'https://api.anthropic.com/v1/messages', {
         method: 'POST', signal, redirect: 'error', headers: { 'content-type': 'application/json', ...(openai ? { authorization: `Bearer ${connection.apiKey}` } : { 'x-api-key': connection.apiKey, 'anthropic-version': '2023-06-01' }) }, body: JSON.stringify(body)
       });
-    } catch { throw new ProviderModelError(signal.aborted ? 'cancelled' : 'unavailable'); }
+    } catch (error) {
+      if (signal.aborted) throw new ProviderModelError('cancelled');
+      if (error instanceof ProviderModelError) throw error;
+      if (error instanceof ResponseBodyLimitError) throw new ProviderModelError('protocol');
+      throw new ProviderModelError('unavailable');
+    }
     const value = await readResponse(response, signal);
     usage = addUsage(usage, providerUsage(openai ? 'openai' : 'anthropic', value)); onUsage?.(usage);
     if (!record(value)) throw response.ok ? new ProviderModelError('protocol') : classifyProviderStatus(response.status);

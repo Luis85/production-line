@@ -1,3 +1,4 @@
+import { validateMcpAddress } from './mcp-endpoint.js';
 import { DomainError } from '../../shared/errors.js';
 import { cliToolDescription, cliToolInputSchema, cliToolLimits, validateCliTool, type ToolCliTool } from './cli-tool-policy.js';
 export type { CliCommandRule, ToolCliTool } from './cli-tool-policy.js';
@@ -41,10 +42,10 @@ function absolute(value: unknown, label: string): string {
 }
 function url(value: unknown, originOnly: boolean): string {
   const raw = string(value, originOnly ? 'web origin' : 'MCP address', 2048);
+  if (!originOnly) return validateMcpAddress(raw).href;
   let parsed: URL; try { parsed = new URL(raw); } catch { return invalid('Use an HTTP(S) address without credentials.'); }
-  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash || (originOnly && !['', '/'].includes(parsed.pathname))) invalid('Use an HTTP(S) address without credentials, query or fragment; web grants use origins only.');
-  if (!originOnly && parsed.protocol === 'http:' && parsed.hostname !== 'localhost' && parsed.hostname !== '[::1]' && !/^127\.\d+\.\d+\.\d+$/.test(parsed.hostname)) invalid('Remote MCP connections require HTTPS; HTTP is available only for loopback servers.');
-  return originOnly ? parsed.origin : parsed.href;
+  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash || !['', '/'].includes(parsed.pathname)) invalid('Use an HTTP(S) address without credentials, query or fragment; web grants use origins only.');
+  return parsed.origin;
 }
 export function defaultToolPolicy(): ToolPolicy { return { schemaVersion: 1, revision: 0, builtins: { files: false, commands: [], cliTools: [], webOrigins: [] }, mcp: [] }; }
 export function validateToolDefinitions(value: unknown): ToolDefinition[] {
