@@ -1,8 +1,7 @@
+import { boundedSignal, requestJson } from '../../shared/webview/http';
 import type { ToolAccessView, ToolAccessUpdate } from '../application/tool-policy';
 import type { ExecutionProfilesView } from '../application/execution-profiles';
-import type { WorkerSettings } from '../infrastructure/settings';
-import type { WorkerSessions } from '../application/sessions';
-import type { LocalTaskboard } from '../application/local-tasks';
+import type { WorkerSettingsView, SessionView, LocalTaskboardView } from '../application/workspace-view';
 import { reactive } from 'vue';
 import type { Status } from '../status/server';
 import type { WorkerWorkspace } from '../status/workspace';
@@ -12,12 +11,12 @@ export type HistoryRow = Awaited<ReturnType<WorkerWorkspace['history']>>['rows']
 export const state = reactive({
   executionProfiles: null as ExecutionProfilesView | null,
   toolAccess: null as ToolAccessView | null,
-  settings: null as ReturnType<WorkerSettings['publicView']> | null, sessions: null as ReturnType<WorkerSessions['view']> | null, board: null as ReturnType<LocalTaskboard['view']> | null,
+  settings: null as WorkerSettingsView | null, sessions: null as SessionView | null, board: null as LocalTaskboardView | null,
   status: null as Status | null, environment: null as Awaited<ReturnType<WorkerWorkspace['environment']>> | null,
   history: null as Awaited<ReturnType<WorkerWorkspace['history']>> | null,
   chat: null as ReturnType<WorkerConversation['snapshot']> | null,
   monitoring: null as ReturnType<typeof workerMonitoring> | null,
-  definitions: [] as AgentDefinition[], draftEpoch: 0, partialError: '', accessChecked: false, accessMessage: '', workspaceBusy: false, unlocked: false, paused: false, loading: false, error: '', actionError: '', lastRead: '', draft: '',
+  definitions: [] as AgentDefinition[], draftEpoch: 0, partialError: '', refreshRevision: 0, accessChecked: false, accessMessage: '', workspaceBusy: false, unlocked: false, paused: false, loading: false, error: '', actionError: '', lastRead: '', draft: '',
 });
 // Read revisions invalidate stale snapshots; access revisions also invalidate private results.
 let generation = 0, accessGeneration = 0;
@@ -80,18 +79,12 @@ export async function createTaskAndSend(options: NewTaskOptions, message: string
   }
   return access === accessGeneration ? { sessionId, queued } : { queued: false };
 }
-export async function request(path: string, method = 'GET', body?: unknown) {
+export async function request<T = any>(path: string, method = 'GET', body?: unknown): Promise<T> {
   const access = accessGeneration;
-  const response = await fetch(path, { method, credentials: 'same-origin', cache: 'no-store', signal: AbortSignal.timeout(10000), headers: { 'X-Werk-Request': 'webview', ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
-  // Access invalidation must not depend on a proxy/server returning valid JSON.
-  if (response.status === 401 && path !== '/api/access' && access === accessGeneration) { relock(); state.accessMessage = 'Your access expired or the worker restarted. Unlock to return to your task. Your unsent draft is kept in this tab.'; }
-  const data = await response.json().catch(error => { if (response.ok) throw error; return {}; });
-  if (!response.ok) {
-    const failure = Error(data?.error ?? `Request failed (${response.status})`) as Error & { status: number };
-    failure.status = response.status;
-    throw failure;
-  }
-  return data;
+  return requestJson<T>(path, { method, credentials: 'same-origin', cache: 'no-store', signal: boundedSignal(undefined, 10000), headers: { 'X-Werk-Request': 'webview', ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) }, {
+    onResponse: response => { if (response.status === 401 && path !== '/api/access' && access === accessGeneration) { relock(); state.accessMessage = 'Your access expired or the worker restarted. Unlock to return to your task. Your unsent draft is kept in this tab.'; } },
+    invalidJson: status => status >= 400 ? `Request failed (${status})` : 'The worker returned unreadable JSON.',
+  });
 }
 function relock() {
   if (state.sessions?.selected) drafts.set(state.sessions.selected, state.draft);
@@ -133,6 +126,8 @@ export async function refresh() {
     state.error = status.status === 'rejected' ? 'Worker status could not be refreshed. Check the worker process and retry.' : '';
     state.partialError = failures.length && !state.error ? `${failures.join(', ')} could not be refreshed. Those values may be stale. Refresh to retry.` : '';
     if (!failures.length) state.lastRead = new Date().toISOString();
+    // Completion invalidates independent resources even when one optional snapshot failed.
+    state.refreshRevision++;
   } catch (error) { if (current === generation) state.error = error instanceof Error ? error.message : 'Worker could not be reached. Check the process and retry.'; }
   finally { state.loading = false; }
 }
@@ -176,7 +171,7 @@ export async function workspaceAction(path: string, body: unknown): Promise<any>
       const adoptResult = current === generation, applied = ++generation;
       if (path === '/api/repositories') {
         if (adoptResult && state.environment) state.environment.repositories = result;
-        if (adoptResult && state.settings) state.settings.repositories = { pollMs: result.pollMs, items: result.items.map(({ id, path, remote, branch, watch }: ReturnType<WorkerSettings['publicView']>['repositories']['items'][number]) => ({ id, path, remote, watch, ...(branch ? { branch } : {}) })) };
+        if (adoptResult && state.settings) state.settings.repositories = { pollMs: result.pollMs, items: result.items.map(({ id, path, remote, branch, watch }: WorkerSettingsView['repositories']['items'][number]) => ({ id, path, remote, watch, ...(branch ? { branch } : {}) })) };
       } else if (adoptResult && path === '/api/settings') state.settings = result;
       else if (adoptResult && path !== '/api/sessions') state.board = result;
       if (path === '/api/settings' || path === '/api/sessions') await readConversation(applied, access);

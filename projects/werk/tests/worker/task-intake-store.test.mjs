@@ -1,25 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, writeFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { join } from 'node:path';
-import ts from 'typescript';
+import { freshFrontend } from '../ui/helpers/frontend-loader.mjs';
 
-const root = fileURLToPath(new URL('../../', import.meta.url));
+
 const response = (data, status = 200) => ({ ok: status >= 200 && status < 300, status, async json() { return data; } });
 const options = { provider: 'codex-cli', title: 'Review lifecycle', definitionId: 'reviewer', agent: 'root', useInstructionsOnly: true };
 const instructions = 'Write acceptance criteria for the worker lifecycle.';
 const deferred = () => { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; };
 const tick = () => new Promise(resolve => setImmediate(resolve));
 async function fixture(t) {
-  await mkdir(join(root, 'work'), { recursive: true });
-  const directory = await mkdtemp(join(root, 'work/task-intake-'));
-  const source = await readFile(join(root, 'src/worker/webview/store.ts'), 'utf8');
-  const output = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
-  const modulePath = join(directory, 'store.mjs'); await writeFile(modulePath, output);
   const originalFetch = globalThis.fetch;
-  t.after(async () => { globalThis.fetch = originalFetch; await rm(directory, { recursive: true, force: true }); });
-  const store = await import(pathToFileURL(modulePath).href);
+  t.after(async () => { globalThis.fetch = originalFetch; });
+  const store = await freshFrontend('src/worker/webview/store.ts');
   const previous = { selected: 'previous-task', records: [{ id: 'previous-task', title: 'Previous task', provider: 'codex-cli', status: 'completed' }] };
   const created = { selected: 'created-task', records: [...previous.records, { id: 'created-task', title: options.title, provider: options.provider, status: 'draft' }] };
   let sessions = previous, chat = { messages: [], available: true, busy: false, phase: 'idle' };

@@ -30,7 +30,7 @@ async function apply() {
 }
 onMounted(() => { void load(); }); onActivated(() => { active = true; void load(); });
 onDeactivated(() => { active = false; generation++; loading.value = false; applying.value = false; });
-watch(() => state.lastRead, () => { void load(); });
+watch(() => state.refreshRevision, () => { void load(); });
 watch(() => state.unlocked, unlocked => { if (unlocked) void load(); else { generation++; report.value = null; reviewed.value = null; loading.value = false; applying.value = false; error.value = ''; readError.value = ''; notice.value = ''; } });
 </script>
 <template>

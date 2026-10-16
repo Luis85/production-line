@@ -34,6 +34,7 @@ test('factory distribution builds independently and includes its webview without
   const root=await realpath(await mkdtemp(join(tmpdir(),'werk-factory-build-')));
   try{
     await mkdir(join(root,'scripts'));await cp(new URL('../../scripts/build.mjs',import.meta.url),join(root,'scripts/build.mjs'));
+    await cp(new URL('../../scripts/build-info.mjs',import.meta.url),join(root,'scripts/build-info.mjs'));
     await writeFile(join(root,'package.json'),JSON.stringify({version:'0.1.0',engines:{node:'>=24 <25'}}));
     await cp(new URL('../../scripts/webviews.mjs',import.meta.url),join(root,'scripts/webviews.mjs'));
     await symlink(fileURLToPath(new URL('../../node_modules',import.meta.url)),join(root,'node_modules'),'junction');

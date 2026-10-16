@@ -1,4 +1,4 @@
-import type { ProviderId } from '../infrastructure/providers.js';
+import type { ProviderId } from './provider-contract.js';
 /** Explicitly reported identity only. No provider credential or raw diagnostic fields. */
 export interface ProviderAccountStatus {
   id: ProviderId;

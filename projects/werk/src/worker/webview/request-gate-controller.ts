@@ -60,6 +60,7 @@ export const initialGateState = (): GateControllerState => ({
 export class RequestGateController {
   private generation = 0;
   private disposed = false;
+  private active = true;
   private dependencies: Dependencies;
   constructor(dependencies: Dependencies) {
     this.dependencies = dependencies;
@@ -72,7 +73,7 @@ export class RequestGateController {
   private valid(generation: number, sessionId: string) {
     const current = this.dependencies.current();
     return (
-      !this.disposed &&
+      !this.disposed && this.active &&
       generation === this.generation &&
       current.unlocked &&
       current.sessionId === sessionId
@@ -92,6 +93,8 @@ export class RequestGateController {
     if (resetSelection)
       state.selected = this.dependencies.current().requestId ?? "";
   }
+  suspend() { this.active = false; this.invalidate(false); }
+  resume() { if (!this.disposed) this.active = true; }
   dispose() {
     this.disposed = true;
     this.generation++;
@@ -105,7 +108,7 @@ export class RequestGateController {
     const { state } = this.dependencies,
       context = this.dependencies.current();
     if (
-      this.disposed ||
+      this.disposed || !this.active ||
       !context.unlocked ||
       !context.sessionId ||
       state.loading ||
@@ -168,7 +171,7 @@ export class RequestGateController {
   async mutate(fields: GateCommandFields) {
     const { state, operations } = this.dependencies;
     if (
-      !state.view ||
+      !state.view || !this.active ||
       !this.dependencies.current().unlocked ||
       state.busy ||
       state.loading ||
@@ -187,7 +190,7 @@ export class RequestGateController {
   async send(command: GateActionCommand) {
     const { state, operations } = this.dependencies,
       context = this.dependencies.current();
-    if (this.disposed || !context.unlocked || state.busy) return;
+    if (this.disposed || !this.active || !context.unlocked || state.busy) return;
     const generation = this.generation;
     state.busy = true;
     state.error = "";

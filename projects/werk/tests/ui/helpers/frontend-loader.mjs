@@ -27,7 +27,7 @@ registerHooks({
     }
   },
   load(url, context, nextLoad) {
-    if (url.endsWith(".ts") && url.includes("/webview/"))
+    if (new URL(url).pathname.endsWith(".ts") && url.includes("/webview/"))
       return {
         format: "module",
         source: stripTypeScriptTypes(readFileSync(new URL(url), "utf8")),
@@ -45,3 +45,6 @@ export const deferred = () => {
   });
   return { promise, resolve, reject };
 };
+
+let freshModule = 0;
+export const freshFrontend = path => { const url = pathToFileURL(resolve(path)); url.searchParams.set('test', String(++freshModule)); return import(url.href); };

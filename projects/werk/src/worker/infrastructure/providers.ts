@@ -12,12 +12,11 @@ import { delimiter, isAbsolute, join } from 'node:path';
 import type { ChatMessage } from '../application/conversation.js';
 import { legacyModelReply, observeModelInvocation, modelCapabilities, parseModelResult, ProviderModelError, requireModelRequest, type ModelRequest, type ModelResult, type StructuredModel } from '../application/model-contract.js';
 import { CodexConversationModel } from './conversation.js';
-import { providerCommand } from './codex-adapter.js';
+import { providerCommand } from './provider-process.js';
 import { ensureDirectory } from './journal/files.js';
-export type ProviderId = 'codex-cli' | 'claude-cli' | 'openai-api' | 'anthropic-api';
-export interface ProviderConnection { id: ProviderId; executable: string; model: string; apiKey: string; instruction?: string; }
-export const providerIds: ProviderId[] = ['codex-cli', 'claude-cli', 'openai-api', 'anthropic-api'];
-export const providerLabels: Record<ProviderId, string> = { 'codex-cli': 'Codex CLI', 'claude-cli': 'Claude Code CLI', 'openai-api': 'OpenAI · API', 'anthropic-api': 'Claude · API' };
+import { providerReady, type ProviderConnection } from '../application/provider-contract.js';
+export { providerIds, providerLabels, providerReady } from '../application/provider-contract.js';
+export type { ProviderId, ProviderConnection } from '../application/provider-contract.js';
 export async function findExecutable(name: string) {
   for (const directory of (process.env.PATH ?? '').split(delimiter).filter(Boolean)) {
     const path = join(directory, process.platform === 'win32' ? name + '.exe' : name);
@@ -26,7 +25,6 @@ export async function findExecutable(name: string) {
   }
   return '';
 }
-export function providerReady(connection: ProviderConnection) { return connection.id.endsWith('-cli') ? !!connection.executable : !!connection.apiKey && !!connection.model; }
 export function modelFor(saved: ProviderConnection, directory: string, transport: typeof fetch = providerTransport, options: ProviderOptions = {}): StructuredModel | undefined {
   // Codex CLI conversations remain POSIX-only; Claude Code CLI also runs on native Windows.
   if (!providerReady(saved) || (process.platform === 'win32' && saved.id === 'codex-cli')) return;

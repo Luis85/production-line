@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onActivated, onDeactivated, onBeforeUnmount, ref, watch } from 'vue';
 import UBadge from '@nuxt/ui/components/Badge.vue';
 import UButton from '@nuxt/ui/components/Button.vue';
 import UIcon from '@nuxt/ui/components/Icon.vue';
@@ -20,6 +20,10 @@ const sending = ref(false), intakeBusy = ref(false), interactionBusy = ref(false
 const interaction = ref<InteractionView | null>(null);
 const savedModel = ref(''), modelError = ref(false), rename = ref(''), removing = ref(false), settingsError = ref('');
 let modelGeneration = 0, modelIdentity = '';
+const active = ref(true);
+onActivated(() => { active.value = true; });
+onDeactivated(() => { active.value = false; modelGeneration++; });
+onBeforeUnmount(() => { active.value = false; modelGeneration++; });
 const current = computed(() => state.sessions?.records.find(item => item.id === state.sessions?.selected));
 const connection = computed(() => state.settings?.providers.find(item => item.id === current.value?.provider));
 const executing = computed(() => !!current.value && state.sessions?.execution.currentSessionId === current.value.id);
@@ -35,12 +39,12 @@ watch(() => current.value?.id, (id, previous) => {
   if (id && previous && id !== previous) mode.value = 'followup';
 });
 watch(() => [current.value?.id, current.value?.title].join('|'), () => { rename.value = current.value?.title ?? ''; }, { immediate: true });
-watch(() => [state.unlocked, current.value?.id, interaction.value?.latestTurn?.id, interaction.value?.latestTurn?.status, state.lastRead].join('|'), async () => {
+watch(() => [active.value, state.unlocked, current.value?.id, interaction.value?.latestTurn?.id, interaction.value?.latestTurn?.status, state.refreshRevision].join('|'), async () => {
   const generation = ++modelGeneration, id = current.value?.id, turnId = interaction.value?.latestTurn?.id;
   const identity = [id, turnId].join(':');
   if (identity !== modelIdentity) { savedModel.value = ''; modelIdentity = identity; }
   modelError.value = false;
-  if (!state.unlocked || !id || !turnId) return;
+  if (!active.value || !state.unlocked || !id || !turnId) return;
   try {
     const turn: InteractionTurn = await request('/api/interactions', 'POST', { action: 'turn', sessionId: id, turnId });
     if (generation === modelGeneration && state.unlocked && current.value?.id === id) savedModel.value = turn.dispatch ? turn.dispatch.provider.model || 'Provider default' : '';

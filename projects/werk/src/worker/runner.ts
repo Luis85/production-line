@@ -1,3 +1,5 @@
+import { settleCleanup, withCleanup, type CleanupStep } from '../shared/lifecycle.js';
+import { drainHttpServer } from '../shared/http/server-lifecycle.js';
 import { ExecutionProfiles, type ExecutionProfilesView } from './application/execution-profiles.js';
 import { executionProfilesStorage } from './infrastructure/execution-profiles.js';
 import { DomainError } from '../shared/errors.js';
@@ -8,7 +10,7 @@ import { RemoteRequestGates } from "./application/remote-request-gates.js";
 import { AttemptLease } from "./application/lease.js";
 import { WorkerWorkspace } from "./status/workspace.js";
 import { serviceEvent } from "../shared/http/observability.js";
-import { open, unlink } from "node:fs/promises";
+import { open, unlink, type FileHandle } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
@@ -72,6 +74,8 @@ export interface WorkerConfig {
   url?: string;
   stateDir: string;
   enrollmentToken: string;
+  /** Private local access token; never included in public status. */
+  webviewToken?: string;
   profiles: Profile[];
   statusHost: string;
   statusPort: number;
@@ -115,9 +119,6 @@ export async function runWorker(
   )
     throw Error("retainedPairs must be an integer in 0–100000");
   config = { ...config, profiles: structuredClone(config.profiles), policy: { ...config.policy } };
-  const mode = dependencies.adapter?.mode ?? (config.codex ? "cli" : "mock");
-  const executionProfiles = new ExecutionProfiles(config.policy.configHash, config.profiles, mode, executionProfilesStorage(config.stateDir));
-  const now = dependencies.now ?? Date.now;
   await ensureDirectory(config.stateDir);
   const lock = join(config.stateDir, "worker.lock");
   const handle = await open(lock, "wx", 0o600).catch(() => {
@@ -125,6 +126,27 @@ export async function runWorker(
       "State directory is locked. After a crash, verify the old process is stopped before deleting worker.lock.",
     );
   });
+  const cleanup: CleanupStep[] = [
+    () => handle.close(),
+    () => unlink(lock),
+  ];
+  return withCleanup(
+    () => runLockedWorker(config, stop, dependencies, handle, cleanup),
+    () => settleCleanup(...cleanup),
+  );
+}
+
+/** The lock scope covers constructors as well as asynchronous startup and execution. */
+async function runLockedWorker(
+  config: WorkerConfig,
+  stop: AbortSignal,
+  dependencies: WorkerDependencies,
+  handle: FileHandle,
+  cleanup: CleanupStep[],
+) {
+  const mode = dependencies.adapter?.mode ?? (config.codex ? "cli" : "mock");
+  const executionProfiles = new ExecutionProfiles(config.policy.configHash, config.profiles, mode, executionProfilesStorage(config.stateDir));
+  const now = dependencies.now ?? Date.now;
   const state: Status = {
     workerId: null,
     project: null,
@@ -159,6 +181,7 @@ export async function runWorker(
     },
     config.retainedPairs,
   );
+  cleanup.unshift(() => journal.close());
   let session:
     | { url: string; identity: import('./application/ports.js').WorkerIdentity; client: import('./application/ports.js').WorkerClient }
     | undefined;
@@ -201,6 +224,11 @@ export async function runWorker(
     journal,
     () => ({ ...state, outbox: journal.metrics(now()) }),
   );
+  let workspaceClosing: Promise<void> | undefined, evidenceClosing: Promise<void> | undefined;
+  const closeWorkspace = () => workspaceClosing ??= workspace.close({ deferEvidence: true });
+  const closeEvidence = () => evidenceClosing ??= workspace.closeEvidence();
+  // Also covers failures constructing the execution adapter before the main loop starts.
+  cleanup.unshift(closeWorkspace, closeEvidence);
   const repositoryScope = () => {
     const repositoryIds = workspace.settings.value.repositories.items.map(item => item.id);
     return {
@@ -307,7 +335,7 @@ export async function runWorker(
     save().catch(() => {
       serviceEvent("worker", "state_write_error", "error");
     });
-  try {
+  const execute = async () => {
     await handle.writeFile(String(process.pid));
     await handle.sync();
     await handle.close();
@@ -644,52 +672,27 @@ export async function runWorker(
         break;
       }
     }
-  } catch (error) {
-    if (!stopping.aborted) throw error;
-  } finally {
+  };
+  await withCleanup(async () => {
+    try { await execute(); }
+    catch (error) { if (!stopping.aborted) throw error; }
+  }, async () => {
     shutdown.abort();
     stopping.removeEventListener("abort", stopRepositories);
     state.state = "stopping";
     if (localTimer) clearInterval(localTimer);
-    await workspace.close({ deferEvidence: true });
-    await Promise.allSettled(
-      [...waiting.values()].map(async (entry) => {
-        await entry.lease.close();
-        await cancelSession(
-          entry.task,
-          "The worker stopped before this queued assignment executed.",
-        );
+    await settleCleanup(
+      [closeWorkspace, () => drainHttpServer(status)],
+      [...waiting.values()].map(entry => () => settleCleanup(
+        () => entry.lease.close(),
+        () => cancelSession(entry.task, "The worker stopped before this queued assignment executed."),
+      )),
+      [...running.values()].map(entry => () => entry.promise),
+      () => closeEvidence().catch(error => {
+        serviceEvent("worker", "state_write_error", "error");
+        throw error;
       }),
+      () => { state.state = "stopped"; return save(); },
     );
-    await Promise.allSettled([...running.values()].map((x) => x.promise));
-    await workspace.closeEvidence().catch(() => {
-      serviceEvent("worker", "state_write_error", "error");
-    });
-    journal.close();
-    state.state = "stopped";
-    try {
-      await save();
-    } finally {
-      try {
-        if (status) {
-          const server = status;
-          await new Promise<void>((resolve) => {
-            // A partial status request must not keep the worker lock alive past the supervisor's grace period.
-            const deadline = setTimeout(
-              () => server.closeAllConnections(),
-              5000,
-            ).unref();
-            server.close(() => {
-              clearTimeout(deadline);
-              resolve();
-            });
-            server.closeIdleConnections();
-          });
-        }
-      } finally {
-        await handle.close().catch(() => {});
-        await unlink(lock);
-      }
-    }
-  }
+  });
 }

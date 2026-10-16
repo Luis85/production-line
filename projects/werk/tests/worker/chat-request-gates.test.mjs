@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { WorkerSettings } from "../../src/worker/dist/worker/infrastructure/settings.js";
-import { WorkerSessions } from "../../src/worker/dist/worker/application/sessions.js";
+import { WorkerSessions } from './application-fixtures.mjs';
 import { defaultGatePolicy } from "../../src/worker/dist/worker/application/request-gates.js";
 async function until(check) {
   for (let n = 0; n < 200; n++) {

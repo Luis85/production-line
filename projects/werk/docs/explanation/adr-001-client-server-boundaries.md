@@ -109,3 +109,38 @@ method, and avoid putting application behavior into a generic shared utility.
 These references support the constraints above. The chosen application module
 boundaries and recovery policy are Werk design decisions, not requirements
 imposed by those documents.
+
+## Evolution recorded 2026-10-16
+
+The accepted decision above records the original mock iteration. Independent
+applications, API ownership, idempotency and immutable evidence remain in force.
+Current implementation extends that baseline:
+
+- Factory persists new-intake routing and retries delivery to the selected line;
+  it still does not own or move accepted line tasks. Task inventories are paged.
+- The worker now has an authenticated mutable Taskboard/History/Dashboard, local
+  API/CLI providers and operator-granted tools. Leased native execution remains
+  the single-profile Linux Codex review path. Role tokens, worker browser sessions
+  and documented TLS deployment replace the earlier read-only-only baseline.
+- Shared Git intake confirms ownership before local execution, freezes source and
+  checks, and publishes a feature branch plus review note through a durable outbox.
+  This is a separate authority from the still-planned lease-fenced PR publisher.
+  Human review/merge remain external decisions.
+- Paused, idle workers can update profiles through a guarded identity-preserving
+  acknowledgment. Historical attempts retain their original profile authority.
+- Worker application modules depend on purpose-specific storage, provider, file
+  and journal ports; composition selects concrete implementations. Extracted
+  orchestrator interaction policy uses an injected transport port and validates
+  worker/session identity. Pure shared DTOs carry the cross-service contract.
+- Shared mechanics now cover ordered resource cleanup, bounded response reading
+  and explicit host/immutable Git environments. Error policy, auth, tool grants,
+  journal schema and workflow transitions remain with their respective owners.
+- Architecture tests enforce dependency direction using AST edges and negative
+  fixtures. Staging embeds the root release version in each independent app;
+  snapshots and MCP use that generated value without runtime source reads.
+
+The [current architecture](architecture.md), [execution modes](modes.md) and
+[dated review](../reports/architecture-review-2026-10-16.md) describe implemented
+behavior, residual coupling and qualification. This evolution does not promise
+exactly-once execution, hostile-tenant isolation, shared quota enforcement or
+verified merge completion.

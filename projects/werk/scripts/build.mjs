@@ -3,6 +3,7 @@ import { readdir, readFile, writeFile, mkdir, cp, chmod, rm, rename } from 'node
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { buildWebview, buildStandaloneWebview } from './webviews.mjs';
+import { buildInfoModule } from './build-info.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const rawArgs = process.argv.slice(2);
 const distOnly = rawArgs.includes('--dist-only');
@@ -27,6 +28,7 @@ for (const app of apps) {
   const staging = join(root, 'src', app, `.build-${process.pid}`);
   try {
     for (const module of [app, 'shared']) await compile(join(root, 'src', module), join(staging, module));
+    await writeFile(join(staging, 'shared', 'build-info.js'), buildInfoModule(packageInfo));
     await writeFile(join(staging, 'package.json'), JSON.stringify({name:`@werk/${app}`,version:packageInfo.version,private:true,type:'module',engines:packageInfo.engines,bin:{[`werk-${app}`]:`${app}/cli.js`}},null,2)+'\n');
     await chmod(join(staging, app, 'cli.js'), 0o755);
     const publicDirectory = join(staging, app, 'public');

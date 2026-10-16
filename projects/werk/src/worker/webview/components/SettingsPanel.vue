@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ProviderId } from '../../infrastructure/providers';
+import type { ProviderId } from '../../application/provider-contract';
 import { computed, ref, watch } from 'vue';
 import UButton from '@nuxt/ui/components/Button.vue';
 import UInput from '@nuxt/ui/components/Input.vue';

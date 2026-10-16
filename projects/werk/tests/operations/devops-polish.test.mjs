@@ -51,7 +51,8 @@ test('fleet port preflight refuses an occupied listener',async()=>{
 test('clean standalone build removes stale output and compiles nested shared modules',async()=>{
   const root=await mkdtemp(join(tmpdir(),'werk-build-'));
   try {
-    await mkdir(join(root,'scripts'));await cp(new URL('../../scripts/build.mjs',import.meta.url),join(root,'scripts/build.mjs'));await cp(new URL('../../scripts/webviews.mjs',import.meta.url),join(root,'scripts/webviews.mjs'));
+    await mkdir(join(root,'scripts'));await cp(new URL('../../scripts/build.mjs',import.meta.url),join(root,'scripts/build.mjs'));
+    await cp(new URL('../../scripts/build-info.mjs',import.meta.url),join(root,'scripts/build-info.mjs'));await cp(new URL('../../scripts/webviews.mjs',import.meta.url),join(root,'scripts/webviews.mjs'));
     await mkdir(join(root,'scripts/release'));
     await cp(new URL('../../scripts/release/feature-authoring.mjs',import.meta.url),join(root,'scripts/release/feature-authoring.mjs'));
     await writeFile(join(root,'package.json'),JSON.stringify({version:'0.1.0',engines:{node:'>=24.0.0 <25'}}));

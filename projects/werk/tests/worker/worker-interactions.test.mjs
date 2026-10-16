@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, realpath, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { WorkerSettings } from '../../src/worker/dist/worker/infrastructure/settings.js';
-import { WorkerSessions } from '../../src/worker/dist/worker/application/sessions.js';
+import { WorkerSessions } from './application-fixtures.mjs';
 import { WorkerRunJournal } from '../../src/worker/dist/worker/infrastructure/journal/local-runs.js';
 import { unknownUsage } from '../../src/worker/dist/worker/application/run-evidence.js';
 import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';

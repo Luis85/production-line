@@ -8,6 +8,7 @@ separately under `docs/handoff`; original source provenance is recorded in the
 
 | Record | Scope |
 | --- | --- |
+| [Architecture and shared boundaries](architecture-review-2026-10-16.md) | Application ports, typed interaction contracts, lifecycle/Git/HTTP mechanics, AST guards, build provenance and explicit remaining debt |
 | [Werk 0.4.0 repository review](repository-review-2026-10-15.md) | Six-perspective review, multi-repository worktrees, routing and admission fixes, security and UI polish, native/Docker/Storybook qualification |
 | [CI recovery and independent polish](ci-recovery-polish.md) | Clean image builds, Windows portability and cleanup, truthful feature wait, cancellation accounting and access recovery |
 | [CI recovery browser walkthrough](ci-recovery-polish.html) | Shared-board states and before/after malformed access-expiry journeys |

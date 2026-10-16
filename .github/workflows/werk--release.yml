@@ -50,6 +50,8 @@ jobs:
             git merge-base --is-ancestor "$GITHUB_SHA" origin/main
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Validate the versioned release changelog
+        run: npm run changelog:check
       - run: npm ci --ignore-scripts
       - run: npm run check
       - run: npm run audit:dependencies
@@ -232,7 +234,12 @@ jobs:
           RELEASE_VERSION: ${{ needs.build.outputs.version }}
         run: |
           cd "$GITHUB_WORKSPACE"
-          cat > release-notes.md <<EOF
+          test -s release/RELEASE-NOTES.md
+          cp release/RELEASE-NOTES.md release-notes.md
+          cat >> release-notes.md <<EOF
+
+          ## Installation
+
           Download a prebuilt archive below, extract it, and run \`node werk.mjs up\` with Node.js 24.
           Or download and start the latest stable release in Bash:
 

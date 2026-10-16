@@ -1,6 +1,6 @@
 import { reactive, watch } from 'vue';
 import type { ProviderAccountStatus } from '../application/provider-account';
-import type { ProviderId } from '../infrastructure/providers';
+import type { ProviderId } from '../application/provider-contract';
 interface Ports { id: () => ProviderId; identity: () => string; enabled: () => boolean; unlocked: () => boolean; epoch: () => number; read: (id: ProviderId) => Promise<ProviderAccountStatus>; }
 /** Account observations belong to the saved provider identity and never survive an access change. */
 export function createProviderAccountView(ports: Ports) {

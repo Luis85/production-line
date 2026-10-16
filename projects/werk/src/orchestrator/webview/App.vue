@@ -18,6 +18,7 @@ import PageHeading from "../../shared/webview/components/PageHeading.vue";
 import ConnectionStatus from "../../shared/webview/components/ConnectionStatus.vue";
 import OnboardingTour from "../../shared/webview/components/OnboardingTour.vue";
 import LineInteractionPanel from "../../shared/webview/components/LineInteractionPanel.vue";
+import type { InteractionTask, LineSubmissionReceipt } from '../../shared/webview/line-interaction';
 import { createOrchestratorStore, names, type Tab } from "./store";
 const store = createOrchestratorStore({
   reactive: (value) => reactive(value) as typeof value,
@@ -164,6 +165,10 @@ const steps = [
     activate: () => router.push("/workers"),
   },
 ];
+async function submitInteraction(body: InteractionTask, key: string): Promise<LineSubmissionReceipt> {
+  const result = await store.api('/v1/tasks', body, 'POST', undefined, key);
+  return { kind: 'line', id: result.id };
+}
 </script>
 <template>
   <UApp>
@@ -323,9 +328,7 @@ const steps = [
       :project="s.intake.project"
       :can-write="s.canWrite"
       :request="(body) => store.api('/v1/interaction', body, 'POST')"
-      :submit="
-        (body, key) => store.api('/v1/tasks', body, 'POST', undefined, key)
-      "
+      :submit="submitInteraction"
     />
     <OnboardingTour
       v-if="s.token"

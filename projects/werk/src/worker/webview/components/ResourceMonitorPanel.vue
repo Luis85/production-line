@@ -36,7 +36,7 @@ async function loadEvents(more = false) {
 async function openTask(sessionId: string) { if (opening.value) return; opening.value = true; try { if (await workspaceAction('/api/sessions', { action: 'select', id: sessionId })) await router.push({ path: '/taskboard', query: { session: sessionId } }); else error.value = state.actionError || 'The task could not be opened.'; } finally { opening.value = false; } }
 onMounted(() => { void load(); }); onActivated(() => { active = true; void load(); });
 onDeactivated(() => { active = false; generation++; historyGeneration++; loading.value = false; historyBusy.value = false; });
-watch(() => state.lastRead, () => { void load(); });
+watch(() => state.refreshRevision, () => { void load(); });
 watch(() => state.settings, settings => { if (settings && !warningHours.value && !maximumHours.value) { warningHours.value = String(settings.resources.longRunningMs / 3600000); maximumHours.value = String(settings.execution.maxRuntimeMs / 3600000); } }, { immediate: true });
 watch(historyOpen, opened => { if (opened) void loadEvents(); });
 watch(() => state.unlocked, unlocked => { if (unlocked) void load(); else { generation++; historyGeneration++; report.value = null; history.value = null; events.value = []; loading.value = false; historyBusy.value = false; error.value = ''; readError.value = ''; policyNotice.value = ''; warningHours.value = ''; maximumHours.value = ''; } });

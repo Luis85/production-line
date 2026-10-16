@@ -9,8 +9,8 @@ import { FeatureRequests } from '../../src/worker/dist/worker/application/featur
 import { MarkdownFeatureFolder } from '../../src/worker/dist/worker/infrastructure/features/folder.js';
 import { parseFeature, featureInput, featureTemplate } from '../../src/worker/dist/worker/infrastructure/features/document.js';
 import { WorkerSettings } from '../../src/worker/dist/worker/infrastructure/settings.js';
-import { WorkerSessions } from '../../src/worker/dist/worker/application/sessions.js';
-import { LocalTaskboard } from '../../src/worker/dist/worker/application/local-tasks.js';
+import { WorkerSessions } from './application-fixtures.mjs';
+import { LocalTaskboard } from './application-fixtures.mjs';
 import { configuration } from '../../src/worker/dist/worker/config.js';
 const source = (extra = '', body = '# Goal\n\nExplain the feature.\n') => '---\nschemaVersion: 1\ntitle: Feature request\nstatus: ready\n' + extra + '---\n' + body;
 async function fixture(t, queue) {

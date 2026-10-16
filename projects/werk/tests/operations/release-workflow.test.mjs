@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, writeFile, chmod, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, chmod, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { parse } from 'yaml';
@@ -13,6 +13,8 @@ async function publish(t, version, scenario = 'new') {
   const directory = await mkdtemp(join(tmpdir(), 'werk publish test '));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const log = join(directory, 'calls.jsonl');
+  await mkdir(join(directory, 'release'));
+  if (scenario !== 'missing-notes') await writeFile(join(directory, 'release/RELEASE-NOTES.md'), `## [${version}] - 2026-10-16\n\n### Fixed\n\n- Preserve literal shell text: \`$(touch changelog-executed)\` and \`$HOME\`.\n`);
   await writeFile(join(directory, 'gh'), `#!/usr/bin/env node
 import { appendFileSync } from 'node:fs';
 const args = process.argv.slice(2);
@@ -30,8 +32,10 @@ if (args[1] === 'upload' && process.env.SCENARIO === 'upload-fails') process.exi
     cwd: directory, encoding: 'utf8', timeout: 15000,
     env: { ...process.env, PATH: directory + delimiter + process.env.PATH, GITHUB_WORKSPACE: directory, GH_REPO: 'example/werk', RELEASE_VERSION: version, CALL_LOG: log, SCENARIO: scenario },
   });
-  const calls = (await readFile(log, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
-  return { result, calls, notes: await readFile(join(directory, 'release-notes.md'), 'utf8') };
+  const recorded = await readFile(log, 'utf8').catch(error => { if (error.code === 'ENOENT') return ''; throw error; });
+  const calls = recorded.trim() ? recorded.trim().split('\n').map(line => JSON.parse(line)) : [];
+  await assert.rejects(stat(join(directory, 'changelog-executed')), { code: 'ENOENT' });
+  return { result, calls, notes: await readFile(join(directory, 'release-notes.md'), 'utf8').catch(error => { if (error.code === 'ENOENT') return ''; throw error; }) };
 }
 
 async function freshness(t, tag, pages, apiFailure = false) {
@@ -77,6 +81,10 @@ test('stable publication uploads the complete draft before selecting latest', { 
   assert.deepEqual(calls.map(args => args[1]), ['view', 'create', 'upload', 'edit']);
   assert.ok(calls[1].includes('--draft'));
   for (const path of ['release/werk-0.1.0.tar.gz', 'release/werk-0.1.0.zip', 'release/install.mjs', 'release/SHA256SUMS', 'release/werk-storybook-0.1.0.zip', 'release/STORYBOOK-SHA256SUMS']) assert.ok(calls[2].includes(path));
+  assert.equal(calls[2].filter(arg => arg.startsWith('release/')).length, 6);
+  assert.match(notes, /^## \[0\.1\.0\] - 2026-10-16/);
+  assert.ok(notes.includes('$(touch changelog-executed)'));
+  assert.ok(notes.includes('$HOME'));
   assert.ok(calls[3].includes('--latest'));
   assert.ok(calls[3].includes('--draft=false'));
   assert.match(notes, /https:\/\/github.com\/example\/werk\/releases\/latest\/download\/install.mjs/);
@@ -208,4 +216,23 @@ test('Pages freshness fails closed when its release is missing or the release AP
     assert.equal(output, '');
     assert.match(result.stderr, /Published release is missing|API fixture unavailable/);
   }
+});
+
+
+test('release validation runs before dependency installation and publishes only candidate notes', () => {
+  const commands = workflow.jobs.build.steps.map(step => step.run);
+  const check = commands.indexOf('npm run changelog:check');
+  assert.ok(check > commands.findIndex(command => command?.includes('git merge-base --is-ancestor')));
+  assert.ok(check < commands.indexOf('npm ci --ignore-scripts'));
+  assert.ok(check < commands.indexOf('npm run release:package'));
+  assert.ok(!workflow.jobs.publish.steps.some(step => step.uses?.startsWith('actions/checkout@')));
+  const script = workflow.jobs.publish.steps.at(-1).run;
+  assert.match(script, /cp release\/RELEASE-NOTES\.md release-notes\.md/);
+  assert.match(script, /cat >> release-notes\.md/);
+});
+
+test('missing candidate notes stop publication before any GitHub mutation', { skip: !supported }, async t => {
+  const { result, calls } = await publish(t, '0.1.0', 'missing-notes');
+  assert.notEqual(result.status, 0);
+  assert.deepEqual(calls, []);
 });

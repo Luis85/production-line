@@ -109,7 +109,7 @@ async function stopTask() {
   finally { stopping.value = false; }
 }
 async function newTask() { await interaction.value?.openNewTask(); document.getElementById('task-interaction-title')?.scrollIntoView({ block: 'nearest' }); }
-watch(() => state.lastRead, () => { void readEvidence(); });
+watch(() => state.refreshRevision, () => { void readEvidence(); });
 watch(() => [route.fullPath, state.unlocked], () => { void openDeepLink(); });
 watch(() => state.sessions?.selected, id => {
   if (id && active && route.path === '/taskboard' && route.query.session && route.query.session !== id && !opening.value) void router.replace({ path: '/taskboard', query: { session: id } });

@@ -9,6 +9,7 @@ import { extract, list } from 'tar';
 import { unzipSync } from 'fflate';
 import { packageRelease, releaseFiles, releaseTrees, releaseDocs } from '../../scripts/release/package.mjs';
 import { createArchives } from '../../scripts/release/archives.mjs';
+import { environmentExample } from '../../scripts/runtime/portable/environment.mjs';
 import { extractRelease } from '../../scripts/release/extract.mjs';
 import { verifyRelease } from '../../scripts/release/verify.mjs';
 
@@ -28,28 +29,39 @@ async function fixture(t) {
   await put('scripts/release/install.mjs', 'export const release = /* RELEASE_CONFIG */ null;\n');
   await put('package.json', JSON.stringify({version:'0.1.0'}));
   for (const path of releaseFiles) if (path !== 'scripts/release/install.mjs') await put(path);
+  await put('CHANGELOG.md', '# Changelog\n\n## [Unreleased]\n\n## [0.1.0] - 2026-10-16\n\n### Added\n\n- A packaged fixture runtime for release verification.\n');
   for (const path of releaseTrees) await mkdir(join(root,path),{recursive:true});
   for (const path of releaseDocs) await put(path);
   for (const app of ['factory','orchestrator','worker']) await put(`src/${app}/dist/${app}/cli.js`, `console.log('${app}');\n`);
-  for (const app of ['factory','orchestrator','worker']) await put(`bin/apps/${app}/cli.mjs`, `console.log('${app}');\n`);
+  for (const app of ['factory','orchestrator','worker']) {
+    await put(`bin/apps/${app}/cli.mjs`, `console.log('${app}');\n`);
+    await put(`bin/apps/${app}/.env.example`, environmentExample(app));
+  }
   for (const template of ['readme.md.txt','agents.md.txt','docs-index.md.txt']) await put(`scripts/release/templates/${template}`);
   await put('src/factory/dist/factory/public/guide.html','<!doctype html><title>Composed spatial guide</title>');
   return {root, put};
 }
 test('packages both formats with identical verified payload, normalized modes, checksums and no local state', async t => {
   const {root,put}=await fixture(t);
-  for(const path of ['.env','.werk/credentials.json','.state/db.sqlite','node_modules/dev/index.js','software-fabrik-starter.zip','src/orchestrator/secret.ts','scripts/runtime/.env.local','src/worker/dist/.state/private.json']) await put(path,'SECRET_NEVER_SHIP');
+  for(const path of ['.env','.werk/credentials.json','.state/db.sqlite','node_modules/dev/index.js','software-fabrik-starter.zip','src/orchestrator/secret.ts','scripts/runtime/.env.local','bin/apps/worker/.env','bin/apps/worker/.env.local','scripts/runtime/.env.example','src/worker/dist/.state/private.json']) await put(path,'SECRET_NEVER_SHIP');
   await put('src/orchestrator/dist/node_modules/yaml/index.js','export default {};');
   await put('bin/apps/orchestrator/src/orchestrator/dist/node_modules/yaml/README.md','[Upstream contributor guide](docs/CONTRIBUTING.md)');
   const result=await packageRelease(root);
   assert.equal(result.sourceCommit,null);
+  const notes = await readFile(join(root, 'release/RELEASE-NOTES.md'), 'utf8');
+  assert.match(notes, /^## \[0\.1\.0\] - 2026-10-16/);
+  assert.ok(!notes.includes('[Unreleased]'));
+  assert.ok(!result.artifacts.some(item => item.name === 'RELEASE-NOTES.md'));
   const installer = await readFile(join(root, 'release/install.mjs'), 'utf8');
   assert.ok(installer.includes(result.artifacts.find(item => item.name.endsWith('.tar.gz')).sha256));
   assert.ok(!installer.includes('/* RELEASE_CONFIG */ null'));
   const zipBytes=await readFile(join(root,'release/werk-0.1.0.zip'));
   const files=unzipSync(zipBytes);
   assert.ok(Object.keys(files).every(path=>path.startsWith('werk-0.1.0/')));
+  assert.equal(Buffer.from(files['werk-0.1.0/CHANGELOG.md']).toString(), await readFile(join(root, 'CHANGELOG.md'), 'utf8'));
+  assert.equal(files['werk-0.1.0/scripts/release/changelog.mjs'], undefined);
   assert.ok(Object.values(files).every(bytes=>!Buffer.from(bytes).includes('SECRET_NEVER_SHIP')));
+  for (const app of ['factory','orchestrator','worker']) assert.equal(Buffer.from(files[`werk-0.1.0/bin/apps/${app}/.env.example`]).toString(), environmentExample(app));
   assert.equal(Buffer.from(files['werk-0.1.0/src/guide/public/index.html']).toString(), '<!doctype html><title>Composed spatial guide</title>');
   const extracted=join(root,'fresh extraction with spaces');
   await mkdir(extracted);
@@ -191,4 +203,22 @@ test('release package and extraction entrypoints validate arguments through an a
     const result = spawnSync(process.execPath, [join(alias, 'scripts/release', name), '--unexpected'], { encoding: 'utf8' });
     assert.equal(result.status, 1, result.stderr); assert.match(result.stderr, /Usage:/); assert.equal(result.stdout, '');
   }
+});
+
+test('modified portable environment examples cannot ship operator credentials', async t => {
+  const { root, put } = await fixture(t);
+  await put('bin/apps/worker/.env.example', environmentExample('worker') + 'WERK_WORKER_TOKEN=' + 'a'.repeat(64) + '\n');
+  await assert.rejects(packageRelease(root), /credential-free template/);
+  await assert.rejects(stat(join(root, 'release')), { code: 'ENOENT' });
+});
+
+
+test('invalid release changelog fails before creating or replacing candidate artifacts', async t => {
+  const { root, put } = await fixture(t);
+  await put('CHANGELOG.md', '# Changelog\n\n## [Unreleased]\n');
+  await assert.rejects(packageRelease(root), /Missing changelog entry/);
+  await assert.rejects(stat(join(root, 'release')), { code: 'ENOENT' });
+  await put('release/RELEASE-NOTES.md', 'existing notes');
+  await assert.rejects(packageRelease(root), /Missing changelog entry/);
+  assert.equal(await readFile(join(root, 'release/RELEASE-NOTES.md'), 'utf8'), 'existing notes');
 });

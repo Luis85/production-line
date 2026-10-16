@@ -1,9 +1,10 @@
-import { createToolRuntime } from '../infrastructure/tool-runtime.js';
-import { WorkerRequestJournal } from "../infrastructure/journal/requests.js";
+import type { SessionView } from './workspace-view.js';
+import type { RequestJournal, InteractionJournal, RunJournal } from "./journal-ports.js";
+import type { ModelFactory, ProviderId } from "./provider-contract.js";
+import type { SessionCatalogStorage, WorkerSettingsPort } from "./workspace-ports.js";
+import { settleCleanup } from "../../shared/lifecycle.js";
 import type { GatePolicy } from "./request-gates.js";
-import { WorkerInteractionJournal } from "../infrastructure/journal/interactions.js";
 import type { InteractionCommand } from "./interactions.js";
-import { WorkerRunJournal } from "../infrastructure/journal/local-runs.js";
 import {
   WorkerDefinitions,
   definitionConnection,
@@ -12,18 +13,9 @@ import {
 } from "./definitions.js";
 import { SerialExecutor } from "./serial-executor.js";
 import { randomUUID } from "node:crypto";
-import { join } from "node:path";
 import { object, text, identifier } from "../../shared/contracts.js";
 import { DomainError } from "../../shared/errors.js";
 import { WorkerConversation } from "../application/conversation.js";
-import { FileConversationStore } from "../infrastructure/conversation.js";
-import {
-  atomicWrite,
-  ensureDirectory,
-  readBoundedFile,
-} from "../infrastructure/journal/files.js";
-import { modelFor, type ProviderId } from "../infrastructure/providers.js";
-import type { WorkerSettings } from "../infrastructure/settings.js";
 export type TaskState =
   | "queued"
   | "running"
@@ -47,7 +39,7 @@ export interface SessionRecord {
 }
 /** Worker-owned transcripts are provider-independent; native CLI session IDs never cross providers. */
 export class WorkerSessions {
-  readonly requests: WorkerRequestJournal;
+  readonly requests: RequestJournal;
   requestPolicy?: () => GatePolicy | undefined;
   onRequestChanged?: (requestId: string) => void;
   notifyRequest(requestId: string) {
@@ -58,13 +50,15 @@ export class WorkerSessions {
     }
   }
   readonly definitions: WorkerDefinitions;
-  readonly runs: WorkerRunJournal;
-  readonly interactions: WorkerInteractionJournal;
-  private directory: string;
-  private settings: WorkerSettings;
-  private model: typeof modelFor;
+  readonly runs: RunJournal;
+  readonly interactions: InteractionJournal;
+  private storage: SessionCatalogStorage;
+  private settings: WorkerSettingsPort;
+  private model: ModelFactory;
   readonly executor: SerialExecutor;
   private writes = Promise.resolve();
+  private draining?: Promise<void>;
+  private evidenceClosing?: Promise<void>;
   private protectedTasks = new Set<string>();
   protectTask(id: string, protectedTask: boolean) {
     if (protectedTask) this.protectedTasks.add(id);
@@ -76,20 +70,22 @@ export class WorkerSessions {
   private changing = false;
   private changingProviders = false;
   private activeOutsideChat: () => number;
-  constructor(
-    directory: string,
-    settings: WorkerSettings,
-    model: typeof modelFor = modelFor,
-    requests?: WorkerRequestJournal,
-    activeOutsideChat: () => number = () => 0,
-  ) {
-    this.activeOutsideChat = activeOutsideChat;
-    this.requests = requests ?? new WorkerRequestJournal(directory);
-    this.interactions = new WorkerInteractionJournal(directory);
-    this.runs = new WorkerRunJournal(directory);
-    this.definitions = new WorkerDefinitions(directory);
-    this.model = model;
-    this.directory = directory;
+  constructor(settings: WorkerSettingsPort, dependencies: {
+    model: ModelFactory;
+    storage: SessionCatalogStorage;
+    requests: RequestJournal;
+    interactions: InteractionJournal;
+    runs: RunJournal;
+    definitions: WorkerDefinitions;
+    activeOutsideChat?: () => number;
+  }) {
+    this.activeOutsideChat = dependencies.activeOutsideChat ?? (() => 0);
+    this.requests = dependencies.requests;
+    this.interactions = dependencies.interactions;
+    this.runs = dependencies.runs;
+    this.definitions = dependencies.definitions;
+    this.model = dependencies.model;
+    this.storage = dependencies.storage;
     this.settings = settings;
     this.executor = new SerialExecutor(() => settings.value.board.paused);
   }
@@ -98,10 +94,9 @@ export class WorkerSessions {
     await this.interactions.init();
     await this.runs.init((id) => this.interactions.resultForRun(id));
     await this.definitions.init();
-    try {
-      const value = JSON.parse(
-        await readBoundedFile(join(this.directory, "sessions.json"), 2097152),
-      );
+    const saved = await this.storage.read();
+    if (saved !== undefined) {
+      const value = JSON.parse(saved);
       if (
         !Array.isArray(value.records) ||
         !value.records.length ||
@@ -145,8 +140,7 @@ export class WorkerSessions {
             : record.taskState,
       }));
       this.selected = value.selected;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    } else {
       this.records = [
         {
           id: "default",
@@ -164,22 +158,16 @@ export class WorkerSessions {
     for (const record of this.records) await this.load(record);
   }
   private async load(record: SessionRecord) {
-    const directory =
-      record.id === "default"
-        ? this.directory
-        : join(this.directory, "sessions", record.id);
-    await ensureDirectory(directory);
+    const store = await this.storage.conversation(record.id);
     const model = this.model(
       definitionConnection(
         this.settings.provider(record.provider),
         record.definition,
       ),
-      directory,
-      undefined,
-      { tools: () => createToolRuntime({ policy: this.settings.toolPolicy(), currentRevision: () => this.settings.toolPolicy().revision, directory }) },
+      { sessionId: record.id },
     );
     const conversation = new WorkerConversation(
-      new FileConversationStore(directory),
+      store,
       model,
       () => this.settings.value.execution.maxRuntimeMs,
       this.executor,
@@ -249,7 +237,7 @@ export class WorkerSessions {
       [...this.instances.values()].some((item) => item.snapshot().busy)
     );
   }
-  view() {
+  view(): SessionView {
     return {
       selected: this.selected,
       execution: {
@@ -470,7 +458,7 @@ export class WorkerSessions {
     const write = this.writes
       .catch(() => {})
       .then(() =>
-        atomicWrite(join(this.directory, "sessions.json"), serialized),
+        this.storage.write(serialized),
       );
     this.writes = write;
     return write;
@@ -632,12 +620,13 @@ export class WorkerSessions {
       this.changing = false;
     }
   }
-  async close(options: { retainEvidence?: boolean } = {}) {
-    await Promise.all([...this.instances.values()].map((item) => item.close()));
-    if (!options.retainEvidence) {
-      this.requests.close();
-      this.runs.close();
-      this.interactions.close();
-    }
+  close(options: { retainEvidence?: boolean } = {}): Promise<void> {
+    this.draining ??= settleCleanup([...this.instances.values()].map(item => () => item.close()));
+    if (options.retainEvidence) return this.draining;
+    this.evidenceClosing ??= settleCleanup(
+      () => this.draining,
+      [() => this.requests.close(), () => this.runs.close(), () => this.interactions.close()],
+    );
+    return this.evidenceClosing;
   }
 }

@@ -89,7 +89,7 @@ async function send(key: string, command: CheckpointCommand) {
 function resetVisible() { generation++; view.value = null; lastTurn.value = null; consumptionKey = ''; loading.value = false; error.value = ''; readError.value = ''; notice.value = ''; emit('change', null); }
 watch(sessionId, () => { resetVisible(); void load(); });
 watch(() => state.unlocked, unlocked => { resetVisible(); if (unlocked) void load(); });
-watch(() => state.lastRead, () => { void load(); });
+watch(() => state.refreshRevision, () => { void load(); });
 onMounted(() => { void load(); });
 onActivated(() => { active.value = true; void load(); });
 onDeactivated(() => { active.value = false; generation++; loading.value = false; });

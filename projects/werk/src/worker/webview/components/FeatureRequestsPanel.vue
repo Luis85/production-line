@@ -36,7 +36,7 @@ async function openConversation() { const sessionId = detail.value?.record?.sess
 async function entry() { await load(); if (!props.compact && route.query.view === 'features') { await nextTick(); document.getElementById('project-requests-title')?.focus(); } }
 onMounted(() => { void entry(); }); onActivated(() => { active.value = true; void entry(); });
 onDeactivated(() => { active.value = false; revision++; detailRevision++; loading.value = false; });
-watch(() => state.lastRead, () => { if (active.value && state.unlocked) { if (!loading.value) void load(); void refreshSelected(); } });
+watch(() => state.refreshRevision, () => { if (active.value && state.unlocked) { if (!loading.value) void load(); void refreshSelected(); } });
 watch(() => route.query.view, () => { if (route.path === '/history') void entry(); });
 watch(() => state.unlocked, unlocked => { if (unlocked) void entry(); else { revision++; detailRevision++; folder.value = null; detail.value = null; loading.value = false; error.value = ''; } });
 </script>

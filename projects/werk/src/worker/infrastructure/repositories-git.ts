@@ -1,3 +1,6 @@
+import { gitExecutable } from '../../shared/git/executable.js';
+import { gitLaunchMode } from '../../shared/git/launch-mode.js';
+import { gitEnvironment } from '../../shared/git/environment.js';
 import { ProcessRunError, runProcess } from '../../shared/process/launcher.js';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
@@ -16,8 +19,9 @@ export class RepositoryGitError extends Error {
 export async function repositoryGit(cwd: string, args: string[], signal: AbortSignal, timeoutMs = 30000): Promise<string> {
   signal.throwIfAborted();
   try {
-    const result = await runProcess('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'core.longpaths=true', '-c', 'submodule.recurse=false', '-c', 'protocol.ext.allow=never', ...args], {
-      cwd, env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never' }, signal, timeoutMs, maxOutputBytes: 2 * 1024 * 1024,
+    const mode = gitLaunchMode(args), env = gitEnvironment(mode === 'plain' ? 'host-local' : 'host');
+    const result = await runProcess(await gitExecutable(cwd, env, mode), ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'log.showSignature=false', '-c', 'core.longpaths=true', '-c', 'submodule.recurse=false', '-c', 'protocol.ext.allow=never', ...args], {
+      cwd, env, mode, signal, timeoutMs, maxOutputBytes: 2 * 1024 * 1024,
     });
     return result.stdout.toString('utf8');
   } catch (error) {

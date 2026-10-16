@@ -1,3 +1,4 @@
+import { workspaceModelFactory } from './application-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, realpath, rm, rename, symlink, lstat, copyFile } from 'node:fs/promises';
@@ -21,7 +22,7 @@ async function fixture(t) {
     executions++; const runtime = options.tools(); try { const result = await runtime.call('werk_files_read', { path: 'approved.txt' }, signal); assert.match(JSON.stringify(result), /accepted committed snapshot/); } finally { await runtime.close(); }
     return { type: 'needs_input', request: { schemaVersion: 1, kind: 'question', message: 'Which approved change?' } };
   } });
-  const open = async () => { worker = new WorkerWorkspace({ stateDir: state, projectDir: root, pollMs: 1000, timeoutMs: 60000 }, journal, () => ({ activeTasks: [], queuedTasks: [] })); worker.board.model = factory; await worker.init(); };
+  const open = async () => { worker = new WorkerWorkspace({ stateDir: state, projectDir: root, pollMs: 1000, timeoutMs: 60000 }, journal, () => ({ activeTasks: [], queuedTasks: [] })); worker.board.model = workspaceModelFactory(state, worker.settings, factory); await worker.init(); };
   await open(); cleanup(t, () => worker.close());
   await worker.updateSettings({ provider: { id: 'openai-api', apiKey: 'fixture-never-sent', model: 'fixture-model' }, board: { paused: true }, repositories: { items: [{ id: 'project', path: repository, remote: 'origin', watch: false }] } });
   await worker.updateToolAccess({ expectedRevision: 0, builtins: { files: true, commands: [], webOrigins: [] }, mcp: [] });

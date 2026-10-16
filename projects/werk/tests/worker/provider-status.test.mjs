@@ -67,3 +67,16 @@ test('Claude saved-connection preflight reports minimum version without a model 
     assert.doesNotMatch(JSON.stringify(result), /private-account/);
   }
 });
+
+
+test('status shutdown cancels an active probe and refuses later CLI launches', { skip: process.platform === 'win32', timeout: 10000 }, async t => {
+  const cli = await executable(t, "require('node:fs').writeFileSync(__filename+'.started',process.cwd());setInterval(()=>{},1000)");
+  const checks = new ProviderStatusChecks(); t.after(() => checks.close());
+  const pending = checks.check(provider('codex-cli', { executable: cli }));
+  let directory;
+  while (!directory) { t.signal.throwIfAborted(); directory = await readFile(cli + '.started', 'utf8').catch(() => null); if (!directory) await new Promise(resolve => setTimeout(resolve, 20)); }
+  await checks.close();
+  assert.equal((await pending).authentication, 'unknown');
+  await assert.rejects(readFile(directory), { code: 'ENOENT' });
+  assert.match((await checks.check(provider('codex-cli', { executable: cli }))).message, /stopping/);
+});

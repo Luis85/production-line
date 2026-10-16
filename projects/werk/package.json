@@ -1,6 +1,6 @@
 {
   "name": "software-fabrik",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -21,13 +21,15 @@
     "check": "npm run typecheck && npm test",
     "audit:dependencies": "npm audit --audit-level=low",
     "release:package": "node scripts/release/package.mjs",
-    "release:build": "npm run build && npm run storybook:ci && npm run release:package && npm run release:storybook",
+    "release:build": "npm run changelog:check && npm run build && npm run storybook:ci && npm run release:package && npm run release:storybook",
     "storybook": "npm run storybook:generate && storybook dev -p 6006 --no-open",
     "storybook:generate": "node scripts/storybook/generate.mjs",
     "storybook:build": "npm run storybook:generate && storybook build --disable-telemetry",
     "storybook:capture": "node scripts/storybook/capture.mjs",
     "storybook:ci": "npm run storybook:build && npm run storybook:capture",
-    "release:storybook": "node scripts/release/storybook-package.mjs"
+    "release:storybook": "node scripts/release/storybook-package.mjs",
+    "changelog:check": "node scripts/release/changelog.mjs check",
+    "changelog:notes": "node scripts/release/changelog.mjs notes"
   },
   "devDependencies": {
     "@iconify-json/lucide": "1.2.143",

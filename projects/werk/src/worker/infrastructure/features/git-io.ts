@@ -1,3 +1,6 @@
+import { gitExecutable } from '../../../shared/git/executable.js';
+import { gitLaunchMode } from '../../../shared/git/launch-mode.js';
+import { gitEnvironment } from '../../../shared/git/environment.js';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { lstat, mkdir, open, readdir, realpath } from 'node:fs/promises';
@@ -62,10 +65,10 @@ export class FeatureGitIo {
     catch { throw new GitFeatureError(signal.aborted ? 'cancelled' : 'unavailable', 'Shared feature repository is unavailable. Check its path and Git configuration.'); }
   }
   async git(cwd: string, args: string[], signal: AbortSignal, input?: string, allowNonZeroExit = false) {
-    const env = { ...process.env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never', GIT_AUTHOR_NAME: 'Werk Worker', GIT_AUTHOR_EMAIL: 'worker@werk.invalid', GIT_COMMITTER_NAME: 'Werk Worker', GIT_COMMITTER_EMAIL: 'worker@werk.invalid' };
-    for (const name of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES']) delete (env as NodeJS.ProcessEnv)[name];
+    const mode = gitLaunchMode(args);
+    const env = { ...gitEnvironment(mode === 'plain' ? 'host-local' : 'host'), GIT_AUTHOR_NAME: 'Werk Worker', GIT_AUTHOR_EMAIL: 'worker@werk.invalid', GIT_COMMITTER_NAME: 'Werk Worker', GIT_COMMITTER_EMAIL: 'worker@werk.invalid' };
     try {
-      return await runProcess('git', ['--literal-pathspecs', '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'core.longpaths=true', '-c', 'core.autocrlf=false', '-c', 'core.eol=lf', '-c', 'submodule.recurse=false', '-c', 'protocol.ext.allow=never', '-c', 'commit.gpgSign=false', ...args], { cwd, env, signal, input, timeoutMs: 30000, maxOutputBytes: 2 * 1024 * 1024, allowNonZeroExit });
+      return await runProcess(await gitExecutable(cwd, env, mode), ['--literal-pathspecs', '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'log.showSignature=false', '-c', 'core.longpaths=true', '-c', 'core.autocrlf=false', '-c', 'core.eol=lf', '-c', 'submodule.recurse=false', '-c', 'protocol.ext.allow=never', '-c', 'commit.gpgSign=false', ...args], { cwd, env, mode, signal, input, timeoutMs: 30000, maxOutputBytes: 2 * 1024 * 1024, allowNonZeroExit });
     } catch (error) {
       throw new GitFeatureError(signal.aborted || error instanceof ProcessRunError && error.reason === 'cancelled' ? 'cancelled' : 'unavailable', 'Shared feature Git operation failed. Check connectivity, host Git authentication and repository permissions.');
     }

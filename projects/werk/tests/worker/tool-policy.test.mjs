@@ -9,7 +9,7 @@ import { execFileSync } from 'node:child_process';
 import { defaultToolPolicy, updateToolPolicy, discoveredToolPolicy, validateToolPolicy, publicToolPolicy } from '../../src/worker/dist/worker/application/tool-policy.js';
 import { WorkerSettings } from '../../src/worker/dist/worker/infrastructure/settings.js';
 import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';
-import { WorkerSessions } from '../../src/worker/dist/worker/application/sessions.js';
+import { WorkerSessions, workspaceModelFactory } from './application-fixtures.mjs';
 import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
 import { statusServer } from '../../src/worker/dist/worker/status/server.js';
 import { modelCapabilities, prepareModelRequest } from '../../src/worker/dist/worker/application/model-contract.js';
@@ -108,7 +108,7 @@ test('approved-file task grants read access to its retained worktree, never the 
   git('init', '-b', 'main'); git('config', 'core.autocrlf', 'false'); await writeFile(join(repository, 'approved.txt'), 'committed fixture\n'); git('add', '.'); git('commit', '-m', 'Fixture'); await writeFile(join(repository, 'approved.txt'), 'dirty original\n');
   await f.worker.updateSettings({ provider: { id: 'openai-api', apiKey: 'fixture-never-sent', model: 'fixture-model' }, board: { paused: true }, repositories: { items: [{ id: 'project', path: repository, remote: 'origin', watch: false }] } });
   await f.worker.updateToolAccess({ ...edit(f.worker.settings.toolPolicy()), builtins: { files: true, commands: [], webOrigins: [] } });
-  const runtimes = []; f.worker.board.model = (connection, directory, transport, options) => { const runtime = options?.tools(); if (runtime) runtimes.push(runtime); return { configuration: { id: connection.id, model: connection.model, instruction: '' }, capabilities: modelCapabilities, toolManifest: runtime?.manifest, async reply() { throw Error('Paused fixture must not invoke a provider'); } }; };
+  const runtimes = []; f.worker.board.model = workspaceModelFactory(f.path, f.worker.settings, (connection, directory, transport, options) => { const runtime = options?.tools(); if (runtime) runtimes.push(runtime); return { configuration: { id: connection.id, model: connection.model, instruction: '' }, capabilities: modelCapabilities, toolManifest: runtime?.manifest, async reply() { throw Error('Paused fixture must not invoke a provider'); } }; });
   await f.worker.board.create({ title: 'Read approved file', instruction: 'Inspect committed context', repository: 'project', paths: ['approved.txt'], provider: 'openai-api' });
   const task = f.worker.board.detail(f.worker.board.view().tasks[0].id), runtime = runtimes.at(-1);
   assert.notEqual(task.worktree, repository); assert.deepEqual(runtime.manifest.tools.map(item => item.name), ['werk_files_list', 'werk_files_read', 'werk_files_search']);

@@ -1,10 +1,8 @@
-import { DatabaseSync } from 'node:sqlite';
+import type { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
-import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { chmod, lstat, open } from 'node:fs/promises';
 import { DomainError } from '../../../shared/errors.js';
-import { ensureDirectory } from './files.js';
+import { openPrivateJournal } from './database.js';
 import { unknownUsage, type ConsumptionTotals, type ProviderUsage, type RunAnalysis, type RunMetadata, type RunOutcome, type RunPage, type RunQuery, type RunResources, type WorkerRun } from '../../application/run-evidence.js';
 const usageColumns = { inputTokens: 'input_tokens', outputTokens: 'output_tokens', cacheReadTokens: 'cache_read_tokens', cacheWriteTokens: 'cache_write_tokens', providerReportedCostUsd: 'cost_usd' } as const;
 const outcomes: RunOutcome[] = ['queued', 'running', 'completed', 'review', 'failed', 'cancelled', 'interrupted', 'waiting_input', 'escalated'];
@@ -18,17 +16,9 @@ export class WorkerRunJournal {
   constructor(directory: string) { this.directory = directory; }
   async init(recovery?: (runId: string) => { outcome: Exclude<RunOutcome, 'queued' | 'running'>; usage: ProviderUsage } | undefined) {
     if (this.initialized) return;
-    await ensureDirectory(this.directory);
-    const file = join(this.directory, 'worker-runs.sqlite');
-    for (const path of [file, file + '-wal', file + '-shm']) {
-      const info = await lstat(path).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
-      if (info && (!info.isFile() || info.isSymbolicLink())) throw Error('Run evidence storage must be a regular file, not a symlink.');
-    }
-    const reserved = await open(file, 'ax', 0o600).catch(error => { if (error.code !== 'EEXIST') throw error; return null; }); await reserved?.close();
-    this.db = new DatabaseSync(file);
+    this.db = await openPrivateJournal(this.directory, 'worker-runs.sqlite', 'Run evidence storage must be a regular file, not a symlink.');
     try {
-    await chmod(file, 0o600);
-    this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;
+    this.db.exec(`
       CREATE TABLE IF NOT EXISTS worker_runs (
         sequence INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, session_id TEXT NOT NULL, task_id TEXT NOT NULL,
         kind TEXT NOT NULL, provider TEXT NOT NULL, outcome TEXT NOT NULL, created_at TEXT NOT NULL, payload TEXT NOT NULL,

@@ -1,27 +1,9 @@
 import { computed, reactive } from "vue";
-export interface InteractionMessage {
-  id?: string;
-  role: string;
-  text: string;
-  state?: string;
-}
-export interface LineInteractionResult {
-  chat?: {
-    available: boolean;
-    busy: boolean;
-    phase?: string;
-    messages: InteractionMessage[];
-  };
-  sessions?: {
-    selected: string;
-    records: {
-      id: string;
-      title: string;
-      busy?: boolean;
-      status?: string;
-    }[];
-  };
-}
+import type { WorkerInteractionRequest, WorkerInteractionResponse, WorkerInteractionMessage } from '../worker-interaction';
+export type InteractionMessage = WorkerInteractionMessage;
+export type LineInteractionResult = WorkerInteractionResponse;
+/** App adapters translate their delivery model into this presentation receipt. */
+export type LineSubmissionReceipt = { kind: 'factory'; id: string; status: 'delivered' | 'pending' } | { kind: 'line'; id: string };
 export interface InteractionTask {
   project: string;
   provider: string;
@@ -33,11 +15,11 @@ export interface InteractionTask {
   wikilinks?: string[];
 }
 export type InteractionRequest = (
-  body: Record<string, unknown>,
+  body: WorkerInteractionRequest,
 ) => Promise<LineInteractionResult>;
 export function createLineInteraction(
   request: InteractionRequest,
-  submit: (task: InteractionTask, key: string) => Promise<any>,
+  submit: (task: InteractionTask, key: string) => Promise<LineSubmissionReceipt>,
   writable: () => boolean,
   project = "",
 ) {
@@ -131,7 +113,7 @@ export function createLineInteraction(
   }
   const canSend = computed(
     () =>
-      !!state.connection &&
+      !!state.connection && !!state.sessionId &&
       !state.busy &&
       writable() &&
       state.chat?.available &&
@@ -190,7 +172,7 @@ export function createLineInteraction(
   ) {
     const read = action === "read";
     if (
-      !state.connection ||
+      !state.connection || (!read && !state.sessionId) ||
       state.busy ||
       (read && state.reading) ||
       (!read && !writable()) ||
@@ -210,12 +192,12 @@ export function createLineInteraction(
             ? "Preparing a new task…"
             : "Stopping the reply…";
     try {
-      const result = await request({
-        ...state.connection,
-        action,
-        sessionId: state.sessionId,
-        ...(action === "send" ? { message } : {}),
-      });
+      const command: WorkerInteractionRequest = action === 'read'
+        ? { ...state.connection, action: 'read', sessionId: state.sessionId }
+        : action === 'send'
+          ? { ...state.connection, action, sessionId: state.sessionId!, message }
+          : { ...state.connection, action, sessionId: state.sessionId! };
+      const result = await request(command);
       if (own !== epoch || id !== revision) return;
       if (action === "new") {
         remember();
@@ -273,7 +255,7 @@ export function createLineInteraction(
       const result = await submit(task, taskKey);
       if (own !== epoch) return;
       state.taskMessage =
-        typeof result.factoryId === "string" && "remoteTaskId" in result
+        result.kind === "factory"
           ? "Saved in Factory intake: " +
             result.id +
             ". " +

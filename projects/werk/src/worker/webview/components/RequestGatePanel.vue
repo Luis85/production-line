@@ -14,13 +14,14 @@ watchPrivateDrafts(
 );
 </script>
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch, toRaw, toRef } from "vue";
+import { computed, onActivated, onDeactivated, onBeforeUnmount, onMounted, ref, watch, toRaw, toRef } from "vue";
 import UButton from "@nuxt/ui/components/Button.vue";
 import UBadge from "@nuxt/ui/components/Badge.vue";
 import USelect from "@nuxt/ui/components/Select.vue";
 import UTextarea from "@nuxt/ui/components/Textarea.vue";
 import UAlert from "@nuxt/ui/components/Alert.vue";
 import MessageContent from "./MessageContent.vue";
+import { useBoundedPolling } from '../../../shared/webview/composables/useBoundedPolling';
 import type {
   WorkerRequest,
   GateEvaluation,
@@ -42,7 +43,7 @@ const view = toRef(gateState, "view"),
   busy = toRef(gateState, "busy"),
   error = toRef(gateState, "error"),
   notice = toRef(gateState, "notice");
-let timer: ReturnType<typeof setInterval> | undefined;
+const active = ref(true);
 const sessionId = computed(
   () => props.sessionId ?? state.sessions?.selected ?? "",
 );
@@ -203,16 +204,11 @@ watch([sessionId, () => props.requestId, () => state.unlocked], () => {
   controller.invalidate();
   if (state.unlocked) void load(true);
 });
-onMounted(() => {
-  void load(true);
-  timer = setInterval(() => {
-    if (!document.hidden && !state.paused) void load();
-  }, 2500);
-});
-onBeforeUnmount(() => {
-  controller.dispose();
-  clearInterval(timer);
-});
+useBoundedPolling(() => load(), computed(() => state.paused || !state.unlocked || !active.value), 2500);
+onMounted(() => { void load(true); });
+onDeactivated(() => { active.value = false; controller.suspend(); });
+onActivated(() => { if (!active.value) { active.value = true; controller.resume(); void load(true); } });
+onBeforeUnmount(() => controller.dispose());
 </script>
 <template>
   <section

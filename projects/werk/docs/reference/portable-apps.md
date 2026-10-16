@@ -26,10 +26,38 @@ returned URL and unlock the webview using that file locally. The CLI reads local
 credentials itself. Workers may enroll later through `settings set`; Factory can
 register an already running orchestrator as a line.
 
+## Project environment and local access
+
+Run `node bin/apps/worker/cli.mjs env init --project-dir /absolute/project`
+to create that app's private project `.env` and credential-free `.env.example`.
+Factory and orchestrator expose the same command. When adopting existing state,
+pass its `--state-dir /absolute/state` so setup reuses its credentials. Project
+worker `init` performs this step automatically. Existing values/comments are
+preserved; missing keys are appended and the private file is ignored by Git.
+Initialization prints paths and key names only.
+
+The worker's local unlock token is `WERK_WORKER_TOKEN` in the private project
+file; runtime also maintains `<worker-state>/webview-token`. Its host, port, state,
+config and optional upstream use `WERK_WORKER_*` keys. Factory uses
+`WERK_FACTORY_*`; orchestrator launch defaults use `WERK_ORCHESTRATOR_*` with
+`WERK_ADMIN_TOKEN`/`WERK_ENROLLMENT_TOKEN`. Consult
+[project environment configuration](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/configuration.md#project-environment-files)
+for the complete list and saved worker-settings exceptions.
+
+Explicit CLI options override environment launch defaults; process environment
+overrides project `.env`. Relative environment state/config paths resolve in the
+project directory. Stop before intentionally changing a local access token, then
+restart to synchronize private state. Removing an environment value preserves
+the saved token. A malformed project file does not block `status`/`stop` when
+you provide an explicit state directory. Explicit remote `--url` commands still
+need `--token-file` or process `WERK_APP_TOKEN`; local dotenv secrets are not sent
+to that URL. No npm install or dotenv package is required.
+
 ## Initialize a project worker
 
 Run the release worker's `cli.mjs init --project-dir /absolute/project` to install
-the app into that project's `bin/apps/worker`, create `.werk/worker.json`, a draft
+the app into that project's `bin/apps/worker`, create `.env`/`.env.example`,
+`.werk/worker.json`, a draft
 feature-request template and `.werk/compose.worker.yaml`. Use `--features-dir` to
 choose a project-relative folder and `--provider` to choose its default connection.
 Run or start from the project directory; the installed worker discovers its project

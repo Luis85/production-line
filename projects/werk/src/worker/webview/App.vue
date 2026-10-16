@@ -134,9 +134,11 @@ watch(
           />
         </div>
         <p id="token-help" class="page-note">
-          Use the <code>webview-token</code> file in this worker’s state
-          directory. The start or status command shows its location as
-          <code>credentialsFile</code>.
+          For a project worker, use <code>WERK_WORKER_TOKEN</code> from the
+          project’s <code>.env</code> file. Existing standalone or managed
+          setups can use the private <code>webview-token</code> file in the
+          worker’s state directory; the start or status command shows its
+          location as <code>credentialsFile</code>.
         </p>
         <p v-if="accessError" class="error-text" role="alert">
           {{ accessError }}

@@ -1,6 +1,6 @@
 <script lang="ts">
 import { reactive, watch as watchDraftEpoch } from 'vue';
-import type { ProviderId } from '../../infrastructure/providers';
+import type { ProviderId } from '../../application/provider-contract';
 import { state as workerState } from '../store';
 const emptyEditor = () => ({ open: false, title: '', repository: '', paths: '', instruction: '', provider: undefined as ProviderId | undefined, definitionId: 'none', agent: '', adapt: false });
 // Private tab memory survives session expiry without persisting approved paths or instructions to browser storage.

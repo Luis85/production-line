@@ -1,3 +1,4 @@
+import type { WorkerInteractionResponse } from '../shared/worker-interaction.js';
 import { taskPageQuery } from './application/task-pages.js';
 import type { FactoryIntake } from './application/intake.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -17,9 +18,9 @@ function requestKey(request: IncomingMessage): string | undefined {
     if (values && values.length !== 1) throw new DomainError('invalid_input', 'A single Idempotency-Key header is required');
     return mutationKey(values?.[0]);
 }
-export function createFactoryHandler(application: FactoryApplication, adminToken: string, view: string, reportError: (error: unknown) => void, guide?: string, access?: AccessDocument, audit?: AuditSink, intake?: FactoryIntake, interaction?: (id: string, input: unknown) => Promise<unknown>) {
+export function createFactoryHandler(application: FactoryApplication, adminToken: string, view: string, reportError: (error: unknown) => void, guide?: string, access?: AccessDocument, audit?: AuditSink, intake?: FactoryIntake, interaction?: (id: string, input: unknown, signal?: AbortSignal) => Promise<WorkerInteractionResponse>) {
     const authenticate = accessAuthorization(adminToken, access);
-    return async (request: IncomingMessage, response: ServerResponse) => {
+    return async (request: IncomingMessage, response: ServerResponse, signal?: AbortSignal) => {
         try {
             const target = new URL(request.url ?? '/', 'http://localhost'), path = target.pathname, method = request.method;
             if (method === 'GET' && path === '/healthz')
@@ -44,7 +45,7 @@ export function createFactoryHandler(application: FactoryApplication, adminToken
             const taskPage = path.match(/^\/v1\/lines\/([^/]+)\/tasks$/);
             if (taskPage && method === 'GET') return json(response, 200, await application.taskPage(identifier(taskPage[1], 'lineId'), taskPageQuery(target.searchParams)));
             const interact = path.match(/^\/v1\/lines\/([^/]+)\/interaction$/);
-            if (interaction && interact && method === 'POST') return json(response, 200, await interaction(identifier(interact[1], 'lineId'), await readJson(request)));
+            if (interaction && interact && method === 'POST') return json(response, 200, await interaction(identifier(interact[1], 'lineId'), await readJson(request), signal));
             if (intake && path === '/v1/intake') {
                 if (method === 'GET') return json(response, 200, intake.list(target.searchParams.has('factoryId') ? identifier(target.searchParams.get('factoryId'), 'factoryId') : undefined));
                 if (method === 'POST') return json(response, 201, intake.create(await readJson(request), requestKey(request) ?? ''));
