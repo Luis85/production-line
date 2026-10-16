@@ -98,9 +98,16 @@ Use a current Codex CLI supporting `exec --json --ignore-user-config`,
 `--ephemeral`, the read-only sandbox and disabled tool feature flags. Claude
 Code must support `--safe-mode`, `--restricted`, `--tools`, `--strict-mcp-config`
 and `--no-session-persistence` (adapter flags checked against 2.1.296).
-CLI chat uses an empty workspace, with tools disabled. API calls use the official
-OpenAI Responses or Anthropic Messages endpoint, without tools. OpenAI responses
-use `store: false`.
+CLI Chat starts in a private workspace. All adapters default to tools disabled;
+**Dashboard → Tool access** manages explicit built-in grants and MCP connections.
+Granted CLI tools use the worker’s private MCP bridge with native tools disabled
+and a fresh private working directory. Claude’s tool-enabled path omits
+`--safe-mode` because that flag disables MCP; it retains `--restricted`, an empty
+native tool list, strict MCP configuration, disabled hooks/plugins/memory and
+disabled project instruction loading. The tool-free path retains safe mode.
+API calls use the official OpenAI Responses or Anthropic Messages endpoint;
+OpenAI responses use `store: false`. Tool results go to the selected provider.
+See [manage model tools](manage-model-tools.md) for setup and revocation.
 
 Provider keys and enrollment credentials are saved in the worker's private
 `workspace-settings.json`, with mode 0600 on POSIX. They are never returned to
@@ -148,8 +155,12 @@ than target the wrong session.
 
 Use **Board** or **List**, search by title or identity, and select a card to
 focus its conversation. Drafts and completed work remain available in their
-own disclosures. Replies render readable paragraphs, lists and fenced code,
-with copy actions; model HTML is never executed.
+own disclosures. Completed model replies render Markdown as readable headings,
+paragraphs, nested lists, quotations, links, tables and code blocks. Code blocks
+keep their original text and offer **Copy code**; wide code and tables scroll
+within the reply on smaller screens. Saved replies use the same formatting.
+Your messages and failure notices remain literal text. Model HTML is never
+executed, and images appear as descriptive links rather than loading automatically.
 You can draft a follow-up while work is queued or running and send it when the
 worker finishes. Use the composer or Ctrl/Command + Enter to submit a message. The stop action
 cancels the pending or active reply. Each provider invocation uses the worker’s
@@ -163,8 +174,10 @@ is shown as unsaved. Interrupted requests
 are marked explicitly after restart rather than silently replayed.
 
 Only the worker prompts the model. A Chat task does not automatically expose
-dashboard telemetry or repository files; use the file-task editor below to
-approve file input and generate a patch.
+dashboard telemetry or repository files. Use the file-task editor below to
+approve file input and generate a patch. Repository file tools additionally
+require an explicit grant and an approved task worktree; commands, web access
+and MCP tools follow their separately saved grants.
 
 ## Assign and watch repositories
 

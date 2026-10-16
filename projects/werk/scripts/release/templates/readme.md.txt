@@ -99,6 +99,8 @@ For model questions, escalation and stopped requests, use the
 [answer and resume guide](docs/how-to/answer-and-resume-worker.md).
 The [interaction contract](docs/reference/model-interaction.md) describes durable
 checkpoints, provider capabilities and replayable lifecycle events.
+Configure built-in tools and MCP connections in **Dashboard → Tool access**;
+see [manage model tools](docs/how-to/manage-model-tools.md).
 
 For illustrated component stories, complete system journeys and desktop/mobile
 screenshots, download the matching `werk-storybook-<version>.zip` and

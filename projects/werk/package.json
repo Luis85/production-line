@@ -1,6 +1,6 @@
 {
   "name": "software-fabrik",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -34,7 +34,9 @@
     "@nuxt/ui": "4.11.3",
     "@types/node": "24.0.0",
     "@vitejs/plugin-vue": "6.0.4",
+    "entities": "7.0.1",
     "fflate": "0.8.3",
+    "marked": "17.0.6",
     "tailwindcss": "4.2.2",
     "tar": "7.5.22",
     "typescript": "5.9.3",

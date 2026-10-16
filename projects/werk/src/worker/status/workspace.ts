@@ -1,3 +1,5 @@
+import type { ToolAccessView } from '../application/tool-policy.js';
+import { discoverMcpTools, mcpTransportConfiguration, McpClientError } from '../infrastructure/tool-mcp.js';
 import type { ExecutionProfilesControl } from '../application/execution-profiles.js';
 import { RepositoryDiscovery } from '../infrastructure/repository-discovery.js';
 import type { RepositoryConfiguration } from '../application/repositories.js';
@@ -141,6 +143,7 @@ export class WorkerWorkspace {
       },
       events: { transport: "polling", streaming: false },
       capabilities: modelCapabilities,
+      toolAccess: { supported: true, management: "worker_global_revision", default: "none", scope: "local_model_invocations", repositoryFiles: "task_worktree_read_only", revocation: "pause_and_drain_before_save" },
       resources: {
         supported: true,
         scope: "worker_node_process",
@@ -841,6 +844,46 @@ export class WorkerWorkspace {
       }
       return this.repositoryStatus();
     } finally { this.repositoriesUpdating = false; }
+  }
+  toolAccess(): ToolAccessView {
+    const saveBlockedReason = this.toolAccessBlockedReason();
+    return { ...this.settings.toolAccess(), canEdit: !saveBlockedReason, saveBlockedReason };
+  }
+  private toolAccessBlockedReason(): string | null {
+    if (!this.acceptingTasks) return 'Worker is stopping.';
+    if (this.configurationUpdating || this.repositoriesUpdating || this.executionProfiles?.pending()) return 'Finish the current worker configuration change first.';
+    if (!this.settings.value.board.paused) return 'Pause new starts before changing tool access.';
+    if (this.repositoryPreparations || this.sessions.busy || this.board.active || this.get().activeTasks.length || this.get().queuedTasks?.length) return 'Finish or cancel queued work and active replies before changing tool access.';
+    return null;
+  }
+  async updateToolAccess(input: unknown) {
+    const blocked = this.toolAccessBlockedReason();
+    if (blocked) throw new DomainError('conflict', blocked);
+    await this.withIdleConfiguration(() => this.settings.updateToolAccess(input));
+    return this.toolAccess();
+  }
+  async discoverToolAccess(input: unknown) {
+    const body = object(input, 'MCP discovery', ['id', 'expectedRevision']);
+    const id = identifier(body.id, 'MCP connection ID');
+    const blocked = this.toolAccessBlockedReason();
+    if (blocked) throw new DomainError('conflict', blocked);
+    await this.withIdleConfiguration(async () => {
+      const policy = this.settings.toolPolicy();
+      if (body.expectedRevision !== policy.revision) throw new DomainError('conflict', 'Tool access changed. Reload before discovering tools.');
+      const connection = policy.mcp.find(item => item.id === id);
+      if (!connection) throw new DomainError('not_found', 'MCP connection not found.');
+      let definitions;
+      try { definitions = await discoverMcpTools(mcpTransportConfiguration(connection), { signal: this.repositoryStop.signal }); }
+      catch (error) {
+        // MCP errors contain only worker-owned messages, never server diagnostics or credentials.
+        if (error instanceof McpClientError) throw new DomainError(
+          ['configuration', 'output_limit'].includes(error.reason) ? 'invalid_input' : 'unavailable', error.message,
+        );
+        throw error;
+      }
+      await this.settings.discoveredTools(id, policy.revision, definitions);
+    });
+    return this.toolAccess();
   }
   async withIdleConfiguration<T>(operation: () => Promise<T>): Promise<T> {
     if (!this.acceptingTasks || this.configurationUpdating || !this.settings.value.board.paused || this.repositoriesUpdating || this.repositoryPreparations || this.sessions.busy || this.board.active || this.get().activeTasks.length || this.get().queuedTasks?.length)

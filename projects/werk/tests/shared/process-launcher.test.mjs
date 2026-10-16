@@ -3,12 +3,23 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createInterface } from 'node:readline';
 import { setTimeout as delay } from 'node:timers/promises';
 import { launchProcess, ProcessRunError, runProcess, terminateProcess } from '../../src/worker/dist/shared/process/launcher.js';
 
 const node = process.execPath;
 const env = { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot };
-const alive = pid => { try { process.kill(pid, 0); return true; } catch { return false; } };
+const alive = async pid => {
+  try {
+    process.kill(pid, 0);
+    if (process.platform === 'linux') {
+      // A killed orphan may await init's reap; a zombie cannot continue work.
+      const stat = await readFile(`/proc/${pid}/stat`, 'utf8');
+      return stat.slice(stat.lastIndexOf(')') + 2).split(' ')[0] !== 'Z';
+    }
+    return true;
+  } catch { return false; }
+};
 const rejectsWith = (operation, reason) => assert.rejects(operation, error => error instanceof ProcessRunError && error.reason === reason);
 
 test('runs with exactly the supplied environment and input, capturing stdout by default', async () => {
@@ -20,6 +31,30 @@ test('runs with exactly the supplied environment and input, capturing stdout by 
     assert.deepEqual(JSON.parse(result.stdout.toString()), { input: 'hello', secret: null, chosen: 'yes' });
     assert.equal(result.stderr.length, 0);
   } finally { if (previous === undefined) delete process.env.WERK_LAUNCHER_SECRET; else process.env.WERK_LAUNCHER_SECRET = previous; }
+});
+
+test('contained processes exchange small frames before stdin closes', { timeout: 20000 }, async t => {
+  const script = `require('node:readline').createInterface({input:process.stdin}).on('line',line=>process.stdout.write(JSON.stringify({reply:line})+'\\n'));`;
+  const child = launchProcess(node, ['-e', script], { env, mode: 'contained' });
+  const output = createInterface({ input: child.stdout }), lines = output[Symbol.asyncIterator]();
+  const closed = new Promise((resolve, reject) => { child.once('close', code => resolve(code)); child.once('error', reject); });
+  // Timeout must stop the supervisor too, so a failed handshake cannot leak a child.
+  const stop = () => terminateProcess(child);
+  t.signal.addEventListener('abort', stop, { once: true });
+  try {
+    for (const frame of ['first small request', 'second small request']) {
+      child.stdin.write(frame + '\n');
+      const response = await lines.next();
+      assert.equal(response.done, false, 'the child responds while its input pipe stays open');
+      assert.deepEqual(JSON.parse(response.value), { reply: frame });
+      assert.equal(child.stdin.writableEnded, false);
+    }
+    child.stdin.end();
+    assert.equal(await closed, 0, 'EOF still permits a normal drained exit');
+  } finally {
+    output.close(); terminateProcess(child); await closed.catch(() => {});
+    t.signal.removeEventListener('abort', stop);
+  }
 });
 
 test('nonzero exits reject with captured output unless explicitly allowed', async () => {
@@ -56,10 +91,26 @@ test('cancellation stops descendants of a plain launch on POSIX and of a contain
     assert.ok(grandchild, `${mode}: grandchild started`);
     controller.abort();
     await rejectsWith(running, 'cancelled');
-    for (let i = 0; i < 100 && alive(grandchild); i++) await delay(50);
-    assert.equal(alive(grandchild), false, `${mode}: grandchild stopped`);
+    for (let i = 0; i < 100 && await alive(grandchild); i++) await delay(50);
+    assert.equal(await alive(grandchild), false, `${mode}: grandchild stopped`);
   }
 });
+
+for (const inheritPipes of [false, true]) {
+  test(`successful POSIX leaders stop descendants with ${inheritPipes ? 'inherited' : 'ignored'} output before completing`, { skip: process.platform === 'win32' && 'POSIX process groups', timeout: 15000 }, async t => {
+    const directory = await mkdtemp(join(tmpdir(), 'werk-launcher-exit-'));
+    const controller = new AbortController(), pidFile = join(directory, 'grandchild.pid');
+    t.after(async () => { controller.abort(); await rm(directory, { recursive: true, force: true }); });
+    const script = `const c=require('node:child_process').spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:${JSON.stringify(inheritPipes ? ['ignore', 'inherit', 'inherit'] : 'ignore')}});c.unref();require('node:fs').writeFileSync(${JSON.stringify(pidFile)},String(c.pid));process.stdout.write('parent completed\\n');`;
+    const result = await runProcess(node, ['-e', script], { env, signal: controller.signal, maxOutputBytes: 4096, timeoutMs: 5000 });
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.stdout.toString(), 'parent completed\n');
+    const grandchild = Number(await readFile(pidFile, 'utf8'));
+    assert.ok(grandchild, 'parent started its descendant');
+    for (let i = 0; i < 100 && await alive(grandchild); i++) await delay(50);
+    assert.equal(await alive(grandchild), false, 'descendant stopped after successful parent exit');
+  });
+}
 
 test('plain launches lead a POSIX process group and terminate cleanly', async () => {
   const child = launchProcess(node, ['-e', 'setInterval(()=>{},1000)'], { env });

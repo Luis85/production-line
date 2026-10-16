@@ -30,6 +30,7 @@ contracts, and explanations describe the system and its limits.
 - [Worker–model interaction contract](reference/model-interaction.md): capabilities, typed results, durable events and recovery.
 - [Markdown feature-request contract](reference/feature-requests.md)
 - [Use the worker webview](how-to/use-worker-webview.md): Taskboard, History and Dashboard.
+- [Manage model tools](how-to/manage-model-tools.md): built-in grants, MCP connections and revocation.
 
 - [Operate, back up and replace a Linux VM](how-to/operate-linux-vm.md)
 

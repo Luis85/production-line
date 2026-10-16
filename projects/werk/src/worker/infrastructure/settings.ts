@@ -1,3 +1,4 @@
+import { defaultToolPolicy, discoveredToolPolicy, publicToolPolicy, updateToolPolicy, validateToolPolicy, type ToolPolicy } from '../application/tool-policy.js';
 import { defaultRepositoryConfiguration, validateRepositoryConfiguration, type RepositoryConfiguration } from '../application/repositories.js';
 import { defaultResourcePolicy, validateResourcePolicy, type ResourcePolicy } from '../application/resources.js';
 import { defaultExecutionPolicy, validateExecutionPolicy, type ExecutionPolicy } from '../application/execution-policy.js';
@@ -18,6 +19,7 @@ export class WorkerSettings {
   private directory: string;
   value: WorkspaceSettings;
   private writing = Promise.resolve();
+  private tools: ToolPolicy = defaultToolPolicy();
   private executionOverride?: ExecutionPolicy;
   private savedExecution = defaultExecutionPolicy();
   private executionSource: 'environment' | 'saved_settings' | 'default' = 'default';
@@ -34,6 +36,26 @@ export class WorkerSettings {
       this.value = this.validate(this.value); await this.persist(this.value);
     }
     if (this.executionOverride) { this.value.execution = { ...this.executionOverride }; this.executionSource = 'environment'; }
+    try { this.tools = validateToolPolicy(JSON.parse(await readBoundedFile(join(this.directory, 'tool-access.json'), 655360))); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+
+  }
+  toolPolicy(): ToolPolicy { return structuredClone(this.tools); }
+  toolAccess() { return publicToolPolicy(this.tools); }
+  async updateToolAccess(input: unknown) {
+    return this.saveToolPolicy(previous => updateToolPolicy(previous, input));
+  }
+  async discoveredTools(id: string, expectedRevision: number, tools: unknown) {
+    return this.saveToolPolicy(previous => discoveredToolPolicy(previous, id, expectedRevision, tools));
+  }
+  private async saveToolPolicy(change: (previous: ToolPolicy) => ToolPolicy) {
+    const operation = this.writing.catch(() => {}).then(async () => {
+      const next = change(this.tools), document = JSON.stringify(next) + '\n';
+      if (Buffer.byteLength(document) > 655360) throw new DomainError('invalid_input', 'Tool configuration exceeds 640 KiB. Use fewer connections or smaller tool catalogs.');
+      await atomicWrite(join(this.directory, 'tool-access.json'), document);
+      this.tools = next;
+    });
+    this.writing = operation; await operation; return this.toolAccess();
   }
   publicView() { return { repositories: structuredClone(this.value.repositories), executionSource: this.executionSource, resources: { ...this.value.resources }, execution: { ...this.value.execution }, providers: this.value.providers.map(({ apiKey, ...provider }) => ({ ...provider, label: providerLabels[provider.id], configured: providerReady({ ...provider, apiKey }), hasApiKey: !!apiKey, authentication: provider.id.endsWith('-cli') ? 'Host CLI login; not verified' : 'Private API key' })), connection: { enabled: this.value.connection.enabled, url: this.value.connection.url, hasEnrollmentToken: !!this.value.connection.enrollmentToken }, board: { ...this.value.board } }; }
   provider(id: string) { const value = this.value.providers.find(item => item.id === id); if (!value) throw new DomainError('invalid_input', 'Choose a supported provider.'); return value; }

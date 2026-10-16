@@ -54,6 +54,18 @@ it must use the provider's restricted execution policy, not imply that a Git
 worktree alone confines code. Keep default simulated execution unmistakable and
 review real outputs before publication or merge.
 
+## Local model tool grants
+
+Local model tools are disabled by default. An authenticated worker operator can
+grant read-only task-worktree access, fixed command presets, web origins and
+individual MCP tools through Dashboard. Tool results are sent to the selected
+model provider. Commands and MCP servers run with their configured account or
+remote-service authority; a Git worktree does not contain their side effects.
+Private MCP credentials stay in worker state, outside the public tool manifest.
+Tool output and repository content cannot authorize changes to grants. See
+[manage model tools](../how-to/manage-model-tools.md) for saving, revocation and
+the separate authority of orchestrator execution.
+
 ## Threat model and limitations
 
 The trusted computing base includes the host account owning state, operators

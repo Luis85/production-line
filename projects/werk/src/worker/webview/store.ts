@@ -1,3 +1,4 @@
+import type { ToolAccessView, ToolAccessUpdate } from '../application/tool-policy';
 import type { ExecutionProfilesView } from '../application/execution-profiles';
 import type { WorkerSettings } from '../infrastructure/settings';
 import type { WorkerSessions } from '../application/sessions';
@@ -10,6 +11,7 @@ import type { workerMonitoring } from '../status/server';
 export type HistoryRow = Awaited<ReturnType<WorkerWorkspace['history']>>['rows'][number];
 export const state = reactive({
   executionProfiles: null as ExecutionProfilesView | null,
+  toolAccess: null as ToolAccessView | null,
   settings: null as ReturnType<WorkerSettings['publicView']> | null, sessions: null as ReturnType<WorkerSessions['view']> | null, board: null as ReturnType<LocalTaskboard['view']> | null,
   status: null as Status | null, environment: null as Awaited<ReturnType<WorkerWorkspace['environment']>> | null,
   history: null as Awaited<ReturnType<WorkerWorkspace['history']>> | null,
@@ -93,7 +95,7 @@ export async function request(path: string, method = 'GET', body?: unknown) {
 }
 function relock() {
   if (state.sessions?.selected) drafts.set(state.sessions.selected, state.draft);
-  generation++; accessGeneration++; state.unlocked = false; state.environment = null; state.executionProfiles = null; state.history = null; state.chat = null; state.settings = null; state.sessions = null; state.board = null; state.definitions = []; state.actionError = ''; state.workspaceBusy = false;
+  generation++; accessGeneration++; state.unlocked = false; state.environment = null; state.executionProfiles = null; state.toolAccess = null; state.history = null; state.chat = null; state.settings = null; state.sessions = null; state.board = null; state.definitions = []; state.actionError = ''; state.workspaceBusy = false;
 }
 export async function lock() {
   try { await request('/api/access', 'DELETE'); state.draftEpoch++; relock(); state.draft = ''; drafts.clear(); state.accessMessage = 'This browser is locked and unsent drafts were cleared. Running tasks continue on the worker.'; }
@@ -113,9 +115,9 @@ export async function refresh() {
   if (state.loading || !state.unlocked) return;
   state.loading = true; const current = generation;
   try {
-    const results = await Promise.allSettled([request('/status'), request('/monitoring'), request('/api/environment'), request('/api/history'), request('/api/chat/session'), request('/api/settings'), request('/api/taskboard'), request('/api/definitions'), request('/api/execution-profiles')]);
+    const results = await Promise.allSettled([request('/status'), request('/monitoring'), request('/api/environment'), request('/api/history'), request('/api/chat/session'), request('/api/settings'), request('/api/taskboard'), request('/api/definitions'), request('/api/execution-profiles'), request('/api/tool-access')]);
     if (current !== generation) return;
-    const [status, monitoring, environment, history, pair, settings, board, definitions, executionProfiles] = results;
+    const [status, monitoring, environment, history, pair, settings, board, definitions, executionProfiles, toolAccess] = results;
     if (status.status === 'fulfilled') state.status = status.value;
     if (monitoring.status === 'fulfilled') state.monitoring = monitoring.value;
     if (environment.status === 'fulfilled') state.environment = environment.value;
@@ -125,7 +127,8 @@ export async function refresh() {
     if (board.status === 'fulfilled') state.board = board.value;
     if (definitions.status === 'fulfilled') state.definitions = definitions.value.definitions;
     if (executionProfiles.status === 'fulfilled') state.executionProfiles = executionProfiles.value;
-    const labels = ['Worker status', 'Monitoring', 'Environment', 'History', 'Task conversation', 'Settings', 'File tasks', 'Agent definitions', 'Execution profiles'];
+    if (toolAccess.status === 'fulfilled') state.toolAccess = toolAccess.value;
+    const labels = ['Worker status', 'Monitoring', 'Environment', 'History', 'Task conversation', 'Settings', 'File tasks', 'Agent definitions', 'Execution profiles', 'Tool access'];
     const failures = results.flatMap((result, index) => result.status === 'rejected' ? [labels[index]] : []);
     state.error = status.status === 'rejected' ? 'Worker status could not be refreshed. Check the worker process and retry.' : '';
     state.partialError = failures.length && !state.error ? `${failures.join(', ')} could not be refreshed. Those values may be stale. Refresh to retry.` : '';
@@ -201,3 +204,18 @@ export const bytes = (value: number | null | undefined) => value == null ? 'Unav
 export const date = (value: string | null | undefined) => value ? new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'Not recorded';
 export const duration = (value: number | null | undefined) => value == null ? 'Unavailable' : value < 1000 ? `${Math.round(value)} ms` : `${(value / 1000).toFixed(1)} s`;
 export const outcome = (value: string) => ({ simulated: 'Simulated', change_set: 'Review required', 'change-set': 'Review required', failed: 'Failed', interrupted: 'Interrupted', running: 'Running', incomplete: 'Incomplete evidence' }[value] ?? value.replaceAll('_', ' '));
+
+/** Tool access acknowledgements survive refresh failures and invalidate older reads. */
+async function toolAccessMutation(path: string, body: unknown): Promise<ToolAccessView | undefined> {
+  if (!state.unlocked) return;
+  const access = accessGeneration;
+  try {
+    const result: ToolAccessView = await request(path, 'POST', body);
+    if (access !== accessGeneration || !state.unlocked) return;
+    state.toolAccess = result; generation++;
+    await refresh();
+    if (access === accessGeneration && state.unlocked) return result;
+  } catch (error) { if (access === accessGeneration && state.unlocked) throw error; }
+}
+export const toolAccessAction = (body: ToolAccessUpdate) => toolAccessMutation('/api/tool-access', body);
+export const toolAccessDiscover = (body: { id: string; expectedRevision: number }) => toolAccessMutation('/api/tool-access/discover', body);

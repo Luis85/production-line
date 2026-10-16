@@ -177,6 +177,7 @@ function keydown(event: KeyboardEvent) { if (event.key === 'Enter' && (event.ctr
           </p>
           <div
             v-else
+            :key="current?.id"
             class="conversation"
             role="log"
             aria-live="polite"
@@ -212,6 +213,7 @@ function keydown(event: KeyboardEvent) { if (event.key === 'Enter' && (event.ctr
               <MessageContent
                 v-else
                 :text="message.text"
+                :markdown="message.role === 'assistant' && message.state === 'complete'"
                 :class="{ 'error-text': message.state === 'error' }"
               />
             </article>

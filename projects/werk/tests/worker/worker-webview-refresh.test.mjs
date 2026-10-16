@@ -180,3 +180,26 @@ test('profile conflicts remain explicit and late profile writes cannot restore d
   await lock(); admission.resolve(response({ configurationHash: 'late', profiles: [{ id: 'private' }] }));
   assert.equal(await saving, undefined); assert.equal(state.executionProfiles, null);
 });
+
+
+test('tool grants acknowledge exact save despite a held older refresh and clear on access expiry', async t => {
+  const { state, refresh, toolAccessAction, request } = await store(t), data = payloads(), pending = new Map();
+  const old = { schemaVersion: 1, revision: 0, builtins: { files: false, commands: [], webOrigins: [] }, mcp: [], canEdit: true, saveBlockedReason: null };
+  const saved = { ...old, revision: 1, builtins: { ...old.builtins, files: true } };
+  state.unlocked = true; state.toolAccess = old;
+  globalThis.fetch = (path, options) => options.method === 'POST' && path === '/api/tool-access' ? Promise.resolve(response(saved)) : new Promise(resolve => pending.set(path, resolve));
+  const reading = refresh();
+  assert.deepEqual(await toolAccessAction({ expectedRevision: 0, builtins: saved.builtins, mcp: [] }), saved);
+  for (const [path, resolve] of pending) resolve(response(path === '/api/tool-access' ? old : data[path]));
+  await reading; assert.equal(state.toolAccess.revision, 1); assert.equal(state.toolAccess.builtins.files, true);
+  globalThis.fetch = async () => response({ error: 'Expired' }, 401); await assert.rejects(request('/api/tool-access'));
+  assert.equal(state.toolAccess, null); assert.equal(state.unlocked, false);
+});
+test('tool discovery conflicts remain visible and late discovery cannot repopulate locked state', async t => {
+  const { state, toolAccessDiscover, lock } = await store(t); state.unlocked = true;
+  globalThis.fetch = async () => response({ error: 'Tool access changed' }, 409);
+  await assert.rejects(toolAccessDiscover({ expectedRevision: 0, id: 'docs' }), error => error.status === 409);
+  const pending = deferred(); globalThis.fetch = async path => path === '/api/tool-access/discover' ? pending.promise : response({});
+  const discovering = toolAccessDiscover({ expectedRevision: 0, id: 'docs' }); await lock(); pending.resolve(response({ revision: 1, mcp: [{ id: 'private' }] }));
+  assert.equal(await discovering, undefined); assert.equal(state.toolAccess, null);
+});

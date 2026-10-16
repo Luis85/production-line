@@ -146,6 +146,7 @@ test('failed worker startup removes its process lock and writes a stopped state'
 test('completion cannot conceal an outstanding orchestrator polling failure', {timeout:10000},async t=>{
   const dir=await mkdtemp(join(tmpdir(),'werk-state-')),stop=new AbortController();
   let release;const execution=new Promise(resolve=>{release=resolve;});let claimed=false,completed=false,adapterStarted=false;
+  const adapterEntry=Promise.withResolvers();
   const cancel=()=>{release();stop.abort();};
   t.signal.addEventListener('abort',cancel,{once:true});
   t.after(()=>{t.signal.removeEventListener('abort',cancel);cancel();});
@@ -157,7 +158,7 @@ test('completion cannot conceal an outstanding orchestrator polling failure', {t
     async heartbeat(){return assigned;},async publishSnapshot(){},async abandon(){},async complete(){completed=true;}
   };
   const gateway={async register(){return {id:task.workerId,project:task.project,token:'test-identity'};},connect(){return client;}};
-  const adapter={mode:'mock',async run(){adapterStarted=true;await execution;return {kind:'simulated',summary:'done'};}};
+  const adapter={mode:'mock',async run(){adapterStarted=true;adapterEntry.resolve();await execution;return {kind:'simulated',summary:'done'};}};
   let running,runtimeError;
   const readState=async()=>{try{return JSON.parse(await readFile(join(dir,'status.json'),'utf8'));}catch{return null;}};
   const wait=async(label,predicate)=>{
@@ -175,7 +176,9 @@ test('completion cannot conceal an outstanding orchestrator polling failure', {t
     const c=await configuration({'poll-ms':'100'});
     running=runWorker({...c,stateDir:dir,url:'http://injected.invalid',enrollmentToken:'',statusHost:'127.0.0.1',statusPort:0},stop.signal,{gateway,adapter});
     running.catch(error=>{runtimeError=error;});
-    await wait('adapter entered',()=>adapterStarted);
+    // Wait for actual execution readiness: this checks polling-state recovery, not startup latency.
+    // The unchanged outer test deadline still bounds startup and aborts the worker on failure.
+    await Promise.race([adapterEntry.promise,running.then(()=>{throw Error('Worker stopped before adapter entry');})]);
     await wait('polling disconnected',state=>state?.state==='disconnected');release();
     await wait('completion acknowledged and drained',state=>completed&&state?.activeTasks.length===0);
     assert.equal((await readState()).state,'disconnected');

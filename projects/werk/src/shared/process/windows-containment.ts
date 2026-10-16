@@ -60,6 +60,15 @@ public static class WerkProviderJob {
     if (!SetInformationJobObject(job, 9, ref limits, (uint)Marshal.SizeOf(typeof(ExtendedLimits)))) { CloseHandle(job); throw new InvalidOperationException("Provider job unavailable"); }
     return job;
   }
+  static void PumpInput(Stream source, Stream destination) {
+    var buffer = new byte[8192]; int count;
+    while ((count = source.Read(buffer, 0, buffer.Length)) != 0) {
+      destination.Write(buffer, 0, count);
+      // Interactive protocols keep stdin open while waiting for each response.
+      // Flush every read so small frames do not wait in FileStream's write buffer.
+      destination.Flush();
+    }
+  }
   public static int Run(string executable, string[] arguments) {
     IntPtr job = IntPtr.Zero, inRead = IntPtr.Zero, inWrite = IntPtr.Zero, outRead = IntPtr.Zero, outWrite = IntPtr.Zero, errRead = IntPtr.Zero, errWrite = IntPtr.Zero;
     ProcessInfo child = new ProcessInfo(); FileStream input = null, output = null, error = null;
@@ -89,7 +98,7 @@ public static class WerkProviderJob {
       // Anonymous pipe handles are synchronous on .NET Framework. Starting an async
       // read here can block before the provider is resumed. Dedicated pumps keep all
       // blocking pipe I/O off the supervisor thread and avoid thread-pool starvation.
-      Task.Factory.StartNew(() => { try { Console.OpenStandardInput().CopyTo(providerInput); } catch (IOException) {} catch (ObjectDisposedException) {} finally { providerInput.Dispose(); } }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+      Task.Factory.StartNew(() => { try { PumpInput(Console.OpenStandardInput(), providerInput); } catch (IOException) {} catch (ObjectDisposedException) {} finally { providerInput.Dispose(); } }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
       var providerOutput = output; var providerError = error;
       Task stdout = Task.Factory.StartNew(() => providerOutput.CopyTo(hostOutput), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
       Task stderr = Task.Factory.StartNew(() => providerError.CopyTo(hostError), CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);

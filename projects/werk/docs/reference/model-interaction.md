@@ -11,20 +11,27 @@ Use `capabilities` in the portable worker CLI to inspect the active wrapper
 contract. The current adapters expose structured questions through Werk protocol
 version 1 and report usage when the provider supplies it. They declare
 `continuation: worker_context_replay`, `nativeResume: false`, `streaming: false`
-and `tools: none`. These describe the wrapper, not everything the provider brand
-or its other SDKs can do.
+and default to `tools: none`. An invocation with an operator-granted catalog
+records `tools: granted` and its public tool manifest. These describe the wrapper,
+not everything the provider brand or its other SDKs can do.
 
 `ModelRequest` contains its schema/protocol version, chat or patch operation,
 provider ID, model, effective instruction, messages, capability/policy snapshot,
 protocol instructions and rendered semantic prompt. The worker saves this private
-dispatch and its digest before invoking the model. It excludes API keys, bearer
-headers, process environment and hidden model state. It is not a wire capture.
+dispatch and its digest before invoking the model. Granted invocations include
+the tool-policy revision, names, descriptions and input schemas. This snapshot
+is evidence, not authority: execution requires the current matching grant. It
+excludes API keys, bearer headers, process environment and hidden model state.
+It is not a wire capture.
 
 A continuation uses the saved prompt configuration. Current credentials can be
 resolved privately to contact the same provider; editing settings must not silently
 rewrite an accepted instruction or model identity. Patch continuation preserves
 the approved file snapshots and produces a patch for review, without applying it
-to the project.
+to the project. Continuations use current tool grants; old dispatch evidence
+cannot restore revoked access. Automated request reviewers remain tool-free.
+See [manage model tools](../how-to/manage-model-tools.md) for scope, MCP connections
+and revocation.
 
 ## Typed results
 
@@ -190,10 +197,15 @@ removes its private interaction records while numeric run history keeps its
 existing retention contract. This is logical deletion, not secure erasure of
 backups or storage media.
 
-Current adapters retain no-tools, ephemeral CLI and synchronous API behavior.
+Current adapters default to no tools, use ephemeral CLI invocations and await
+API completion. Granted tools use the worker-owned catalog: API adapters exchange
+function calls and results, while CLI adapters receive a private MCP bridge.
+Provider-native tools remain disabled. Tool calls and output are bounded; a
+revoked policy or ungranted tool fails closed. Tool output is untrusted data and
+cannot authorize additional tools.
 Claude Code restriction flags require version 2.1.248 or newer. The saved
 connection check reports a known older version with upgrade guidance; an unknown
 version remains unverified. Execution never drops required flags. Provider
 features such as native resume, live streaming, compaction, background response
-retrieval and execution tools require a separately implemented capability; they
-are not implied by this interface.
+retrieval require separately implemented capabilities; they are not implied by
+this interface. Explicit tool grants do not enable these features.

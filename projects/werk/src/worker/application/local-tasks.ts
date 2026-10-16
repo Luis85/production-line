@@ -1,3 +1,6 @@
+import type { ToolWorktreeIdentity } from './tool-runtime.js';
+import { createToolRuntime } from '../infrastructure/tool-runtime.js';
+import type { StructuredModel } from './model-contract.js';
 import type { GateInput, WorkerRequest } from "./request-gates.js";
 import { DEFAULT_MAX_RUNTIME_MS } from "./execution-policy.js";
 import {
@@ -62,6 +65,7 @@ export interface LocalTask {
   repository: string;
   repositoryId?: string;
   worktree?: string;
+  worktreeIdentity?: ToolWorktreeIdentity;
   baseCommit?: string;
   files: TaskFile[];
   status:
@@ -80,6 +84,12 @@ export interface LocalTask {
   summary: string | null;
   patch: string | null;
   archived: boolean;
+}
+async function worktreeIdentity(path: string): Promise<ToolWorktreeIdentity> {
+  const info = await lstat(path);
+  if (!info.isDirectory() || info.isSymbolicLink() || await realpath(path) !== path)
+    throw new DomainError('conflict', 'The retained task worktree changed. Create a new task before using tools.');
+  return { dev: String(info.dev), ino: String(info.ino), birthtimeMs: info.birthtimeMs };
 }
 const fingerprint = (value: string) =>
   createHash("sha256").update(value).digest("hex");
@@ -293,7 +303,7 @@ export class LocalTaskboard {
     };
   }
   private originalPrompt(task: LocalTask) {
-    return `Implement the requested changes to the supplied files. Return ONLY a JSON object {"summary":"...","files":[{"path":"approved path","content":"complete new file content"}]}. Do not execute commands. Only include changed approved files. Do not claim tests were run. This creates a patch for human review.\nTask: ${task.title}\nInstruction: ${task.instruction}\nApproved file snapshots: ${JSON.stringify(task.files)}`;
+    return `Implement the requested changes to the supplied files. Return ONLY a JSON object {"summary":"...","files":[{"path":"approved path","content":"complete new file content"}]}. Use only tools explicitly granted by the worker. Only include changed approved files. Claim tests were run only when a granted tool actually ran them. This creates a patch for human review.\nTask: ${task.title}\nInstruction: ${task.instruction}\nApproved file snapshots: ${JSON.stringify(task.files)}`;
   }
   private preparedRequest(
     task: LocalTask,
@@ -363,6 +373,7 @@ export class LocalTaskboard {
       ? {
           reply: model.reply.bind(model),
           configuration: structuredClone(base.provider),
+          toolManifest: (model as Partial<StructuredModel>).toolManifest,
         }
       : model;
     return prepareModelRequest(
@@ -370,6 +381,7 @@ export class LocalTaskboard {
         ? ({
             reply: model.reply.bind(model),
             configuration: this.sessions.requests.get(task.requestId).provider,
+            toolManifest: (model as Partial<StructuredModel>).toolManifest,
           } as ConversationModel)
         : replayModel,
       messages,
@@ -377,7 +389,25 @@ export class LocalTaskboard {
       this.settings.value.execution.maxRuntimeMs,
     );
   }
+  private async assertToolWorkspace(task: LocalTask, signal: AbortSignal) {
+    const policy = this.settings.toolPolicy();
+    const granted = policy.builtins.files || policy.builtins.commands.some(item => item.enabled) || policy.builtins.webOrigins.length || policy.mcp.some(item => item.enabled && item.allowedTools.length);
+    if (!granted || !task.worktree) return;
+    const fail = () => new DomainError('conflict', 'The retained task worktree could not be verified. Create a new task before using tools; accepted file snapshots remain saved.');
+    if (!task.worktreeIdentity || !task.baseCommit || !this.workspaces) throw fail();
+    const verifyIdentity = async () => {
+      let actual; try { actual = await worktreeIdentity(task.worktree!); } catch { throw fail(); }
+      if (actual.dev !== task.worktreeIdentity!.dev || actual.ino !== task.worktreeIdentity!.ino || actual.birthtimeMs !== task.worktreeIdentity!.birthtimeMs) throw fail();
+    };
+    // Check before the preparation port: a missing directory must never be recreated here.
+    await verifyIdentity();
+    const selector = task.repositoryId && this.settings.value.repositories.items.some(item => item.id === task.repositoryId) ? task.repositoryId : task.repository;
+    const retained = await this.workspaces.prepareWorktree(selector, task.id, signal, task.baseCommit);
+    if (!retained.reused || retained.path !== task.worktree || retained.repository !== task.repository || retained.baseCommit !== task.baseCommit || retained.repositoryId !== task.repositoryId) throw fail();
+    await verifyIdentity();
+  }
   private async prepareTurn(task: LocalTask, turn: InteractionTurn) {
+    await this.assertToolWorkspace(task, AbortSignal.any([this.workspaceController.signal, AbortSignal.timeout(30000)]));
     const connection = {
       ...this.settings.provider(task.provider),
       model: task.model,
@@ -385,6 +415,8 @@ export class LocalTaskboard {
     const model = this.model(
       definitionConnection(connection, task.definition),
       this.directory,
+      undefined,
+      { tools: () => createToolRuntime({ policy: this.settings.toolPolicy(), currentRevision: () => this.settings.toolPolicy().revision, directory: this.directory, worktree: task.worktree, worktreeIdentity: task.worktreeIdentity }) },
     );
     if (!model)
       throw new DomainError(
@@ -820,6 +852,7 @@ export class LocalTaskboard {
         ? {
             repositoryId: prepared.repositoryId,
             worktree: snapshotRoot,
+            worktreeIdentity: await worktreeIdentity(snapshotRoot),
             baseCommit: prepared.baseCommit,
           }
         : {}),
@@ -1378,6 +1411,7 @@ export class LocalTaskboard {
         throw Error("Task has no reserved execution context.");
       const turn = this.sessions.interactions.turn(task.sessionId, turnId);
       if (!turn.dispatch) throw Error("Task request was not durably prepared.");
+      await this.assertToolWorkspace(task, AbortSignal.any([controller.signal, this.workspaceController.signal, AbortSignal.timeout(30000)]));
       const connection = {
         ...this.settings.provider(task.provider),
         model: task.model,
@@ -1385,6 +1419,8 @@ export class LocalTaskboard {
       const model = this.model(
         definitionConnection(connection, task.definition),
         this.directory,
+        undefined,
+        { tools: () => createToolRuntime({ policy: this.settings.toolPolicy(), currentRevision: () => this.settings.toolPolicy().revision, directory: this.directory, worktree: task.worktree, worktreeIdentity: task.worktreeIdentity }) },
       );
       if (!model) throw Error("Provider not configured");
       signal = AbortSignal.any([
