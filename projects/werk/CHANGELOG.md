@@ -7,6 +7,10 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+### Fixed
+
+- Local stdio MCP connections that need no credential can be saved without a secret environment variable. A secret still requires a dedicated variable name, and clearing or changing the variable removes the saved secret instead of passing it to another variable.
+
 ## [0.9.0] - 2026-10-16
 
 ### Added

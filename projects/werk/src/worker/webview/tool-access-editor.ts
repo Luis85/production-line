@@ -40,7 +40,8 @@ export function createToolAccessEditor(ports: EditorPorts) {
     for (const item of [...draft.commands, ...draft.mcp.filter(item => item.transport === 'stdio')]) { try { const args = argumentsOf(item.arguments); if (args.length > 32 || args.some(value => value.length > 2048 || /[\x00-\x1f\x7f]/.test(value))) throw Error(); } catch { return 'Use a JSON array of up to 32 strings for fixed arguments; each argument may contain up to 2,048 characters.'; } }
     for (const connection of draft.mcp) {
       if (connection.transport === 'stdio' && !absolute(connection.command.trim())) return 'Enter an absolute executable path for each local MCP server.';
-      if (connection.transport === 'stdio' && !/^[A-Z_][A-Z0-9_]{0,79}$/.test(connection.secretEnv)) return 'Use an uppercase environment variable name for each local MCP secret.';
+      if (connection.transport === 'stdio' && connection.secretEnv && !/^[A-Z_][A-Z0-9_]{0,79}$/.test(connection.secretEnv)) return 'Use an uppercase environment variable name for each local MCP secret.';
+      if (connection.transport === 'stdio' && !connection.secretEnv && connection.secret) return 'Name the environment variable that receives the local MCP secret, or leave the secret blank.';
       if (connection.transport === 'http') { try { const url = new URL(connection.url), local = url.hostname === 'localhost' || url.hostname === '[::1]' || /^127(?:\.[0-9]{1,3}){3}$/.test(url.hostname); if (!(url.protocol === 'https:' || url.protocol === 'http:' && local) || url.username || url.password || url.search || url.hash) throw Error(); } catch { return 'Use HTTPS for an MCP server, or HTTP on localhost. Omit credentials, query parameters and fragments.'; } }
       if (connection.secret && connection.clearSecret) return 'Choose either a replacement secret or removal of the saved secret.';
     }

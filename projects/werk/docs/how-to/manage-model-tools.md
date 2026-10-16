@@ -50,8 +50,11 @@ remain within granted origins. URLs with embedded credentials are rejected.
 Add a connection with a recognizable name and choose its transport:
 
 - **Stdio:** an absolute executable path and fixed arguments on the worker
-  machine. Configure the server's credential environment variable and secret when
-  required. The server runs with the worker account's authority.
+  machine. The server runs with the worker account's authority. If the server
+  needs a credential, enter its secret and the dedicated environment variable that
+  receives it, such as `MCP_AUTH_TOKEN`. A local server without a credential needs
+  neither: leave both fields blank and no variable is set. Process and worker
+  configuration variables such as `PATH`, `NODE_OPTIONS` or `WERK_*` are refused.
 - **HTTP:** the server's Streamable HTTP MCP endpoint and an optional bearer
   token. JSON and SSE responses are supported; legacy separate SSE endpoints are
   not. Remote connections require HTTPS; loopback HTTP supports local servers.
@@ -68,8 +71,10 @@ descriptions and returned content cannot change the worker's saved permissions.
 
 Secrets are stored privately and never returned to the editor. A blank secret
 field preserves a saved value; use the clear control to remove it. Changing the
-server destination resets discovery and grants. Rediscovering a changed tool
-definition removes its previous grant so you can review it again.
+server destination, including its secret environment variable, removes the saved
+secret and resets discovery and grants; enter the secret again for the new
+variable. Rediscovering a changed tool definition removes its previous grant so
+you can review it again.
 
 ## Revoke access and resolve conflicts
 

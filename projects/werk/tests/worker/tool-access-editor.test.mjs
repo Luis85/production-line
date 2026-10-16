@@ -29,6 +29,14 @@ test('secret inputs preserve, replace and remove without trusting a changed serv
   e.resolveUncertain(); e.draft.mcp[0].clearSecret = true; await e.save(); assert.equal(submitted.mcp[0].clearSecret, true);
   e.resolveUncertain(); e.draft.mcp[0].url = 'https://other.example.com/mcp'; e.draft.mcp[0].allowedTools = ['search']; assert.equal(e.destinationChanged(e.draft.mcp[0]), true); await e.save(); assert.deepEqual(submitted.mcp[0].allowedTools, []);
 });
+test('local MCP connections may omit the secret variable unless a secret is entered', async t => {
+  const e = editor(t); e.addMcp(); const item = e.draft.mcp[1]; Object.assign(item, { name: 'Local', command: '/usr/bin/mcp-server', secretEnv: '' });
+  assert.equal(e.validation.value, '');
+  let submitted; e.onWrite(async command => { submitted = command; return undefined; }); await e.save(); assert.equal(submitted.mcp[1].secretEnv, ''); assert.equal('secret' in submitted.mcp[1], false);
+  e.resolveUncertain(); e.draft.mcp.push({ ...item, id: 'local-secret', secret: 'fixture-secret' }); assert.match(e.validation.value, /Name the environment variable/);
+  e.draft.mcp[e.draft.mcp.length - 1].secretEnv = 'lower'; assert.match(e.validation.value, /uppercase/);
+  e.draft.mcp[e.draft.mcp.length - 1].secretEnv = 'LOCAL_TOKEN'; assert.equal(e.validation.value, '');
+});
 test('fixed command arguments preserve spaces and empty strings while rejecting malformed inputs', async t => {
   const e = editor(t); e.addCommand(); Object.assign(e.draft.commands[0], { name: 'Test', executable: '/usr/bin/tool', arguments: '["a b","", "  keep  "]', enabled: true });
   e.onWrite(async command => { assert.deepEqual(command.builtins.commands[0].args, ['a b', '', '  keep  ']); return { ...view(1), builtins: command.builtins }; }); await e.save();
