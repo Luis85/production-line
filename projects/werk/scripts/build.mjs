@@ -41,8 +41,10 @@ for (const app of apps) {
     if (['orchestrator', 'worker'].includes(app)) {
       await mkdir(join(staging,'node_modules'),{recursive:true});
       await cp(join(root,'node_modules/yaml'),join(staging,'node_modules/yaml'),{recursive:true});
-      if (app === 'worker') await cp(join(root,'node_modules/undici'),join(staging,'node_modules/undici'),{recursive:true});
     }
+    // The shared HTTP client owns a bounded dispatcher in every portable app.
+    await mkdir(join(staging, 'node_modules'), { recursive: true });
+    await cp(join(root, 'node_modules/undici'), join(staging, 'node_modules/undici'), { recursive: true });
     if (app === 'worker') {
       const { buildFeatureAuthoring } = await import('./release/feature-authoring.mjs');
       await buildFeatureAuthoring(root, staging);

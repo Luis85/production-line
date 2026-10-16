@@ -20,10 +20,8 @@ function readable(buffer: Buffer): string {
   return buffer.toString('utf8').replace(/^﻿/, '').replace(/\r\n?/g, '\n')
     .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '').replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '');
 }
-/** The Windows containment supervisor is PowerShell; its serialized progress records are not CLI output. */
-const powershellRecords = (text: string) => text.replace(/^#< CLIXML\n/, '').replace(/<Objs Version="[^"]*" xmlns="http:\/\/schemas\.microsoft\.com\/powershell\/2004\/04">[\s\S]*?<\/Objs>\n?/g, '');
 function report(tool: ToolCliTool, result: RunResult, stopped: string): string {
-  const stdout = readable(result.stdout), stderr = powershellRecords(readable(result.stderr));
+  const stdout = readable(result.stdout), stderr = readable(result.stderr);
   const limit = tool.outputKiB * 1024;
   const stderrBudget = Math.min(Buffer.byteLength(stderr), Math.floor(limit / 4));
   let out = clip(stdout, limit - stderrBudget), err = clip(stderr, stderrBudget);

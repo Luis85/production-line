@@ -41,8 +41,8 @@ export async function main(kind, argv = process.argv.slice(2)) {
       }
     }
     if (kind === 'worker' && cmd === 'feature setup') {
-      validateOptions(o, ['project-dir', 'features-dir']);
-      console.log(JSON.stringify(await setupFeatureAuthoring(root, o['project-dir'] ?? process.cwd(), { ...(o['features-dir'] === undefined ? {} : { featuresDirectory: o['features-dir'] }) }))); return;
+      validateOptions(o, ['project-dir', 'features-dir', 'if-match']);
+      console.log(JSON.stringify(await setupFeatureAuthoring(root, o['project-dir'] ?? process.cwd(), { ...(o['features-dir'] === undefined ? {} : { featuresDirectory: o['features-dir'] }), ...(o['if-match'] === undefined ? {} : { ifMatch: o['if-match'] }) }))); return;
     }
     if (kind === 'worker' && ['feature author create', 'feature author validate', 'feature author ready'].includes(cmd)) {
       const action = cmd.split(' ')[2];

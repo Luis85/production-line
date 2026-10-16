@@ -12,7 +12,10 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 ### Added
 
 - Portable client option `--request-timeout-ms` (1,000–600,000) overrides how long a command waits for the API.
-- `feature setup` and its plan warn with `authoring_script_outdated` when the committed `.werk/authoring/feature-request.mjs` differs from the bundled script. The guide explains how to compare and refresh it after an upgrade.
+- `feature setup` keeps the committed `.werk/authoring/feature-request.mjs` current after upgrades.
+  - Setup records the installed script's content hash in `.werk/authoring/manifest.json` and replaces the script while it still matches that record.
+  - A customized or unrecorded script is preserved, and setup reports `authoring_script_outdated` with its `revision`.
+  - `feature setup --if-match REVISION` replaces exactly that revision.
 - `state_write_error` service events name the failing writer in `site` and include an allowlisted system error code such as `EPERM` or `EBUSY`.
 - New repository requests can implement features in their isolated worktree: explicitly approved file edits, required verification commands, repair loops and review patches generated from the actual candidate. Check receipts are tied to the candidate and appear in the webview and Markdown records; legacy requests retain proposal behavior.
 - Configurable tool-call and command-duration budgets accompany the task duration, including API loops and the CLI MCP bridge.

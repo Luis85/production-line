@@ -56,11 +56,17 @@ The implementation choices below are engineering conclusions from this research 
 
 `output.verificationPassed`, `output.requiredCheckCount` and `output.candidateDigest` come from worker-observed candidate/check evidence, and participate in the saved result digest. They remain unknown for legacy proposal tasks. Generic required commands are not automatically classified as unit tests or builds; `tests.passed` and `build.passed` are not fabricated from a model's prose.
 
-A team that requires actual implementation can add `output.verificationPassed == true` to `fr-done-check.json`. This holds a proposal-only result rather than falsely accepting it as tested code.
+An implementation result with explicitly failed or missing required verification is held for rework even if a custom done policy omits that rule. A team that also requires actual implementation for proposal-only requests can add `output.verificationPassed == true` to `fr-done-check.json`. This holds a proposal-only result rather than falsely accepting it as tested code.
 
 ## Qualification record
 
-Qualification is completed against the integrated implementation before release. Record deterministic workflow tests, browser/Storybook checks, CI and any live provider attempt separately. A protocol fixture proves the harness behavior; it does not prove a commercial model's feature quality or every provider/version combination.
+Independent reviews exercised real Git worktrees and real child-process checks with deterministic model/tool fixtures. They found and corrected a generic-command path that retained a stale passing receipt, a custom done-policy path that mislabeled unverified work, and the native CLI bridge's hidden five-minute HTTP timeout. The resulting workflow covers edit/check/fail/repair, changed-candidate invalidation, durable recovery, cancellation, revoked grants, approved deletion and shared publication without merging the developer checkout.
+
+The focused browser confirmation passed 11 interaction checks across 30 screenshots at 1440, 390 and 320 pixels, with no page errors or horizontal overflow. It covers saved evidence, stale/failed checks, retained disclosure and follow-up drafts during polling, exact patch download, required-check setup and concurrent/environment-controlled budget editing. Receipts in these screenshots are explicitly illustrative fixtures.
+
+A live preflight used installed stock Codex CLI 0.159.2, which reported ChatGPT sign-in. The worker adapter did not receive an accepted response before its 120-second deadline. A bounded diagnostic reported connection, WebSocket and authentication-refresh failures. This environment therefore did **not** qualify live model implementation; no successful commercial-model run is claimed. Claude CLI was not installed.
+
+PRs #24, #26, #27 and #28 are incorporated into the open integration branch with preserved ancestry. Full integrated test/Storybook results and cross-platform CI are recorded on PR #25. The user paused merge and release while another session is active; this report does not imply publication. A protocol fixture proves harness behavior, not a commercial model's feature quality or every provider/version combination.
 
 ## Remaining boundaries
 

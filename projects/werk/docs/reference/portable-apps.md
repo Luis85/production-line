@@ -204,9 +204,11 @@ Progress records go to stderr.
 
 The state directory is never modified, and project files, `.env`, feature folders
 and agent integrations are not written. Review `integrations plan` after updating
-for new templates. For a worker, also run `feature setup`: an
-`authoring_script_outdated` warning means the committed
-`.werk/authoring/feature-request.mjs` is older than the bundled script; see
+for new templates. For a worker, also run `feature setup`. It refreshes an
+unmodified `.werk/authoring/feature-request.mjs` recorded in
+`.werk/authoring/manifest.json`. It reports `authoring_script_outdated` with a
+`revision` for a changed or unrecorded script, which `feature setup --if-match REVISION`
+replaces; see
 [Refresh the authoring script after an upgrade](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/team-feature-authoring.md#refresh-the-authoring-script-after-an-upgrade).
 `bin/apps/.<app>-update/` and `<state>.updates/` contain a
 `.gitignore` that excludes them from Git; backups contain credentials, so keep

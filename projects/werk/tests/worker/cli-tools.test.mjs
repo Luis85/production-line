@@ -14,7 +14,7 @@ import { commands } from '../../scripts/runtime/portable/commands.mjs';
 const harness = (extra = {}) => ({
   id: 'harness', name: 'Project harness', description: 'Reads the project backlog.', enabled: true,
   executable: process.execPath, args: ['bin/harness.mjs'],
-  commands: [{ command: 'help' }, { command: 'check' }, { command: 'backlog context' }, { command: 'backlog set', requireOneOf: ['--dry-run'] }, { command: 'codegen', requireOneOf: ['--check', '--dry-run'] }, { command: 'eol', refusedOptions: ['--fix', '--hook'] }, { command: 'fail' }, { command: 'flood' }],
+  commands: [{ command: 'help' }, { command: 'check' }, { command: 'backlog context' }, { command: 'backlog set', requireOneOf: ['--dry-run'] }, { command: 'codegen', requireOneOf: ['--check', '--dry-run'] }, { command: 'eol', refusedOptions: ['--fix', '--hook'] }, { command: 'fail' }, { command: 'flood' }, { command: 'xml' }],
   refusedOptions: ['--root', '--config', '--out', '-o'], ...extra,
 });
 const update = (tools, policy = defaultToolPolicy()) => updateToolPolicy(policy, { expectedRevision: policy.revision, builtins: { ...policy.builtins, cliTools: tools }, mcp: [] });
@@ -119,7 +119,11 @@ import { writeFileSync } from 'node:fs';
 const args = process.argv.slice(2);
 writeFileSync('ran.txt', JSON.stringify(args));
 if (args[0] === 'fail') { console.error('fixture failure'); process.exitCode = 3; }
-if (args[0] === 'flood') process.stdout.write('"'.repeat(200000));
+if (args[0] === 'xml') {
+  const xml = '#< CLIXML\r\n<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><S S="Output">Child-owned XML record</S></Objs>\r\n';
+  process.stdout.write(xml); process.stderr.write(xml);
+}
+else if (args[0] === 'flood') process.stdout.write('"'.repeat(200000));
 else if (args[0] !== 'fail') console.log('\uFEFF\x1b[32m' + JSON.stringify({ args, cwd: process.cwd(), secret: process.env.WERK_TEST_SECRET ?? null, color: process.env.NO_COLOR ?? null }) + '\x1b[0m\r');
 `;
 async function runtimeFixture(t, mutate = () => {}) {
@@ -164,6 +168,14 @@ test('CLI tools run through the tool runtime in the task worktree without a shel
 
   policy.revision++;
   await assert.rejects(runtime.call('werk_cli_harness', { args: ['help'] }, signal()), /permissions changed/);
+});
+
+test('CLI tool output preserves child-owned XML and CLIXML records on both streams', { timeout: 60000 }, async t => {
+  const { runtime } = await runtimeFixture(t);
+  const result = await runtime.call('werk_cli_harness', { args: ['xml'] }, signal());
+  const xml = '#< CLIXML\n<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"><S S="Output">Child-owned XML record</S></Objs>\n';
+  assert.equal(result.isError, undefined);
+  assert.equal(result.content[0].text, 'exit: 0\n' + xml + '\n[stderr]\n' + xml, 'only line endings are normalized; child XML is not supervisor progress');
 });
 
 test('CLI tools need a task worktree and an enabled grant', async t => {
