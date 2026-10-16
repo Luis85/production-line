@@ -45,7 +45,7 @@ const Content = () => markdownNodes(tokens.value, (text, language, index) => h('
 .markdown :deep(.code-toolbar) { flex-wrap: wrap; }
 .markdown :deep(.markdown-table-scroll) { max-width: 100%; overflow-x: auto; margin: 16px 0; border: 1px solid var(--ui-border); border-radius: 7px; }
 .markdown :deep(table) { width: 100%; border-collapse: collapse; font-size: .92em; }
-.markdown :deep(th), .markdown :deep(td) { min-width: 100px; padding: 9px 12px; border-bottom: 1px solid var(--ui-border); text-align: left; vertical-align: top; }
+.markdown :deep(th), .markdown :deep(td) { min-width: 100px; padding: 9px 12px; border-bottom: 1px solid var(--ui-border); text-align: left; vertical-align: top; overflow-wrap: normal; }
 .markdown :deep(th) { color: var(--ui-text-highlighted); font-weight: 650; background: var(--ui-bg-elevated); }
 .markdown :deep(tr:last-child td) { border-bottom: 0; }
 .markdown :deep(hr) { margin: 18px 0; border: 0; border-top: 1px solid var(--ui-border); }
