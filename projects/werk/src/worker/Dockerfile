@@ -1,7 +1,7 @@
 FROM node:24-bookworm-slim AS build
 WORKDIR /build
 COPY package.json package-lock.json ./
-COPY scripts/build.mjs scripts/webviews.mjs scripts/
+COPY scripts/build.mjs scripts/build-info.mjs scripts/webviews.mjs scripts/
 COPY scripts/release/feature-authoring.mjs scripts/release/
 COPY src/shared src/shared
 COPY src/worker src/worker

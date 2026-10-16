@@ -4,11 +4,11 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WorkerDefinitions, previewDefinition, definitionConnection } from '../../src/worker/dist/worker/application/definitions.js';
+import { WorkerDefinitions, previewDefinition, definitionConnection } from './application-fixtures.mjs';
 import { WorkerSettings } from '../../src/worker/dist/worker/infrastructure/settings.js';
-import { WorkerSessions } from '../../src/worker/dist/worker/application/sessions.js';
+import { WorkerSessions } from './application-fixtures.mjs';
 import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';
-import { LocalTaskboard } from '../../src/worker/dist/worker/application/local-tasks.js';
+import { LocalTaskboard } from './application-fixtures.mjs';
 import { modelFor } from '../../src/worker/dist/worker/infrastructure/providers.js';
 const source = `version: '16'
 models:

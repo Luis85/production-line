@@ -4,12 +4,12 @@ A worker can run on its own machine without a Factory or orchestrator. From an
 extracted release, with Node 24 installed, start it with one command:
 
 ```sh
-node werk.mjs worker run
+node bin/apps/worker/cli.mjs run
 ```
 
 Open `http://127.0.0.1:4100`. The release includes the built Vue 3 / Nuxt UI
 webview; no npm install or frontend server is needed. State defaults to
-`.state/worker`. Use `--state-dir /private/worker` and `--status-port 4201` for
+`.werk/worker` in the current project. Use `--state-dir /private/worker` and `--port 4201` for
 another worker. Keep the process running; Ctrl+C stops it gracefully. Each worker
 executes exactly one task at a time, including Chat, explicit file tasks and
 remote assignments. For parallel work, start separate workers; see the
@@ -33,9 +33,12 @@ frontmatter and adjacent result files expose their lifecycle without the webview
 
 ## Unlock the webview
 
-The dedicated unlock screen protects the workspace until access succeeds. Read
-`<worker-state>/webview-token` on the worker machine and paste it into **Worker
-access token**. Portable `start`/`status` return the private credential file path.
+The dedicated unlock screen protects the workspace until access succeeds. For an
+installed project worker, read `WERK_WORKER_TOKEN` in its private project `.env`
+and paste it into **Worker access token**. A process environment override takes
+precedence. The synchronized `<worker-state>/webview-token` remains the local
+credential source for other installations; portable `start`/`status` return its
+private file path.
 In a system deployment, use
 `<system-state>/lines/<line-id>/workers/worker-1/webview-token`.
 
@@ -55,7 +58,12 @@ prevent collisions, not isolation from other services on that hostname. Use
 separate trusted hostnames where stronger browser separation is needed. The token
 grants operator control of this worker; operators share its tasks and settings.
 
-To rotate access, stop the worker, remove only `webview-token`, and restart.
+To rotate access, stop the worker, set a new 64-character lowercase hexadecimal
+`WERK_WORKER_TOKEN` in project `.env` or the higher-precedence process environment,
+and restart. Startup updates the saved token. If no environment override is used,
+removing only `webview-token` while stopped generates a new token on restart.
+Deleting that file cannot override a configured environment token. See
+[environment configuration](../reference/configuration.md#project-environment-files).
 
 ## Connect Claude or Codex
 

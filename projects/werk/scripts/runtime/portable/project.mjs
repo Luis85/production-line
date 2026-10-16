@@ -2,6 +2,7 @@ import { cp, mkdir, open, lstat, readFile, realpath, readdir } from 'node:fs/pro
 import { resolve, relative, join, isAbsolute, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { seedWorkerPackage } from './npm-package.mjs';
+import { seedEnvironment } from './environment.mjs';
 import { setupFeatureAuthoring, planFeatureAuthoring } from './feature-authoring.mjs';
 import { inputError, readPrivate, createPrivate } from '../config.mjs';
 
@@ -71,10 +72,13 @@ export async function initializeWorker(root, options) {
   await planFeatureAuthoring(root, project, { featuresDirectory: inside.split(sep).join('/') });
   // Validate every existing destination before installing; repeat setup preserves user edits.
   for (const file of ['worker-project.json', 'worker.json', 'compose.worker.yaml', '.gitignore']) await plainFile(join(project, '.werk', file));
+  if (!prior) await rejectLinks(root);
+  for (const directory of [join(project, '.werk'), state, featureDirectory, join(featureDirectory, '_templates'), join(project, '.werk/provider-home'), join(project, 'bin/apps')]) await realDirectory(directory).catch(error => { if (error.code !== 'ENOENT') throw error; });
+  const environment = await seedEnvironment('worker', project, { defaults: options.port === undefined ? {} : { port: String(port) }, fallbacks: { config: '.werk/worker.json', port: String(port) } });
   await realDirectory(join(project, '.werk'), true); await realDirectory(state, true);
   await realDirectory(featureDirectory, true); await realDirectory(join(featureDirectory, '_templates'), true);
   await realDirectory(join(project, '.werk/provider-home'), true);
-  if (!prior) { await rejectLinks(root); await realDirectory(join(project, 'bin/apps'), true); await cp(root, app, { recursive: true, errorOnExist: true, force: false }); }
+  if (!prior) { await realDirectory(join(project, 'bin/apps'), true); await cp(root, app, { recursive: true, errorOnExist: true, force: false, filter: source => !relative(root, source).split(sep).some(name => name === '.werk' || name === '.env' || name.startsWith('.env.') && name !== '.env.example') }); }
   if (!existingConfig) await createPrivate(config, { schemaVersion: 1, features: { directory: inside.split(sep).join('/'), provider: options.provider ?? 'codex-cli', pollMs: 1000 } });
   await seed(join(project, '.werk/worker-project.json'), JSON.stringify({ schemaVersion: 1, port }, null, 2) + '\n');
   const authoring = await setupFeatureAuthoring(app, project, { featuresDirectory: inside.split(sep).join('/') });
@@ -121,5 +125,5 @@ services:
     const { seedProjectIntegrations } = await import(new URL('../../../src/worker/dist/worker/infrastructure/project-integrations.js', import.meta.url));
     integrations = await seedProjectIntegrations(project);
   } catch { integrations = { applied: false, unavailable: true, reason: 'Integration setup did not complete. Inspect integrations plan before syncing.' }; }
-  return { authoring, npm, integrations, initialized: true, projectDirectory: project, application: app, stateDirectory: state, featuresDirectory: featureDirectory, template: join(featureDirectory, '_templates/feature-request.md'), configuration: config, commands: { run: 'node bin/apps/worker/cli.mjs run', start: 'node bin/apps/worker/cli.mjs start', status: 'node bin/apps/worker/cli.mjs status', docker: 'docker compose -f .werk/compose.worker.yaml up -d', dockerStop: 'docker compose -f .werk/compose.worker.yaml down' }, next: 'Connect a provider in the webview or use settings set --file provider.json and provider check --id PROVIDER. Use feature author create to make a draft from the team template, fill it in, validate it with feature author validate, then queue it with feature author ready and its current revision.' };
+  return { authoring, npm, integrations, environment, initialized: true, projectDirectory: project, application: app, stateDirectory: environment.stateDirectory, featuresDirectory: featureDirectory, template: join(featureDirectory, '_templates/feature-request.md'), configuration: config, commands: { run: 'node bin/apps/worker/cli.mjs run', start: 'node bin/apps/worker/cli.mjs start', status: 'node bin/apps/worker/cli.mjs status', docker: 'docker compose --env-file .env -f .werk/compose.worker.yaml up -d', dockerStop: 'docker compose --env-file .env -f .werk/compose.worker.yaml down' }, next: 'Connect a provider in the webview or use settings set --file provider.json and provider check --id PROVIDER. Use feature author create to make a draft from the team template, fill it in, validate it with feature author validate, then queue it with feature author ready and its current revision.' };
 }

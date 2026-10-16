@@ -1,9 +1,7 @@
-import { DatabaseSync } from 'node:sqlite';
+import type { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
-import { chmod, lstat, open } from 'node:fs/promises';
-import { join } from 'node:path';
 import { DomainError } from '../../../shared/errors.js';
-import { ensureDirectory } from './files.js';
+import { openPrivateJournal } from './database.js';
 import type { ResourceAlert, ResourceEvent, ResourceEventPage, ResourceEventStore } from '../../application/resources.js';
 
 /** Durable worker-wide numeric warning transitions, bounded independently from run evidence. */
@@ -13,18 +11,9 @@ export class WorkerResourceJournal implements ResourceEventStore {
   constructor(directory: string) { this.directory = directory; }
   async init() {
     if (this.db) return;
-    await ensureDirectory(this.directory);
-    const path = join(this.directory, 'worker-resources.sqlite');
-    for (const name of [path, path + '-wal', path + '-shm']) {
-      const info = await lstat(name).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
-      if (info && (!info.isFile() || info.isSymbolicLink())) throw Error('Resource journal must be a regular file.');
-    }
-    const reserved = await open(path, 'ax', 0o600).catch(error => { if (error.code !== 'EEXIST') throw error; return null; });
-    await reserved?.close();
-    this.db = new DatabaseSync(path);
+    this.db = await openPrivateJournal(this.directory, 'worker-resources.sqlite', 'Resource journal must be a regular file.');
     try {
-      await chmod(path, 0o600);
-      this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;
+      this.db.exec(`
         CREATE TABLE IF NOT EXISTS resource_alerts (code TEXT PRIMARY KEY, payload TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS resource_events (sequence INTEGER PRIMARY KEY AUTOINCREMENT, payload TEXT NOT NULL);`);
     } catch (error) { this.close(); throw error; }

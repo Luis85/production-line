@@ -4,19 +4,20 @@ import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { join } from 'node:path';
 import ts from 'typescript';
+import '../ui/helpers/frontend-loader.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 await mkdir(join(root, 'work'), { recursive: true });
 const directory = await mkdtemp(join(root, 'work/story-fixtures-'));
+test.after(() => rm(directory, { recursive: true, force: true }));
 const modulePath = join(directory, 'portfolio.mjs');
-for (const [source, destination] of [['src/factory/webview/store.ts', 'factory-store.mjs'], ['src/orchestrator/webview/store.ts', 'orchestrator-store.mjs'], ['storybook/fixtures/portfolio.ts', 'portfolio.mjs']]) {
+for (const [source, destination] of [['storybook/fixtures/portfolio.ts', 'portfolio.mjs']]) {
   let content = await readFile(join(root, source), 'utf8');
-  if (destination === 'portfolio.mjs') content = content.replace('../../src/factory/webview/store', './factory-store.mjs').replace('../../src/orchestrator/webview/store', './orchestrator-store.mjs');
+  if (destination === 'portfolio.mjs') content = content.replace('../../src/factory/webview/store', pathToFileURL(join(root, 'src/factory/webview/store.ts')).href).replace('../../src/orchestrator/webview/store', pathToFileURL(join(root, 'src/orchestrator/webview/store.ts')).href);
   const output = ts.transpileModule(content, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
   await writeFile(join(directory, destination), output);
 }
-const { factoryFixture, orchestratorFixture } = await import(pathToFileURL(modulePath));
-test.after(() => rm(directory, { recursive: true, force: true }));
+const { factoryFixture, orchestratorFixture } = await import(pathToFileURL(modulePath)).catch(async error => { await rm(directory, { recursive: true, force: true }); throw error; });
 
 function errors(t) {
   const previous = globalThis.__WERK_STORY_ERRORS__;

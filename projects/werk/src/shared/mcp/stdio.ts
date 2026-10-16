@@ -1,4 +1,5 @@
 import { ValidationError } from '../errors.js';
+import { buildInfo } from '../build-info.js';
 import type { Readable, Writable } from 'node:stream';
 import { ToolCatalog, validateArguments, type Role } from './catalog.js';
 
@@ -53,7 +54,7 @@ export async function serveStdio(catalog: ToolCatalog, role: Role, input: Readab
         await error(id, -32602, 'initialize requires protocolVersion, capabilities and clientInfo');return;
       }
       initialized = true;
-      await result(id, { protocolVersion: VERSIONS.includes(params.protocolVersion) ? params.protocolVersion : VERSIONS[0], capabilities: { tools: { listChanged: false } }, serverInfo: { name: `werk-${role}`, version: '0.1.0' }, instructions: 'Werk tools access one configured service. Mutations require explicit enablement and idempotencyKey. There are no worker completion or lease override tools.' });return;
+      await result(id, { protocolVersion: VERSIONS.includes(params.protocolVersion) ? params.protocolVersion : VERSIONS[0], capabilities: { tools: { listChanged: false } }, serverInfo: { name: `werk-${role}`, version: buildInfo.version }, instructions: 'Werk tools access one configured service. Mutations require explicit enablement and idempotencyKey. There are no worker completion or lease override tools.' });return;
     }
     if (!initialized || !ready) { await error(id, -32002, 'Initialize and send notifications/initialized before using tools');return; }
     if (value.method === 'tools/list') {

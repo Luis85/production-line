@@ -1,13 +1,12 @@
-import type { WorkerSessions } from '../application/sessions';
-import type { LocalTaskboard } from '../application/local-tasks';
+import type { SessionView, LocalTaskboardView } from '../application/workspace-view';
 import type { FeatureRequests } from '../application/feature-requests';
 import type { WorkerRun } from '../application/run-evidence';
 import type { WorkerWorkspace } from '../status/workspace';
 
 export type TaskOverviewSource = 'chat' | 'file' | 'assigned' | 'project';
 export type TaskOverviewGroup = 'attention' | 'running' | 'queued' | 'completed' | 'draft';
-type Sessions = ReturnType<WorkerSessions['view']>;
-type Board = ReturnType<LocalTaskboard['view']>;
+type Sessions = SessionView;
+type Board = LocalTaskboardView;
 type Features = Awaited<ReturnType<FeatureRequests['list']>>;
 type History = Awaited<ReturnType<WorkerWorkspace['history']>>;
 type Session = Sessions['records'][number];

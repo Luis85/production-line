@@ -4,7 +4,7 @@ Run `npm test` from the project root with Node 24. The command builds all three 
 
 | Directory | Concern |
 | --- | --- |
-| `architecture/` | Shared dependency boundaries and domain/adapter separation |
+| `architecture/` | AST dependency direction, negative boundary fixtures, build-version provenance and domain/adapter separation |
 | `factory/` | Factory registry, topology aggregation, isolation and application behavior |
 | `infrastructure/` | Portable Linux VM/cloud-init rendering, artifact verification and service supervision contracts |
 | `operations/` | Build packaging, fleet startup/shutdown, environment isolation, backup/restore and polling limits |
@@ -131,3 +131,19 @@ project. It uses a provider protocol fixture and does not qualify live inference
 ## Generated UI stories and release evidence
 
 `npm run storybook:ci` builds actual Vue stories, captures desktop/mobile evidence and checks every first-party Vue source component against observed mounts. It requires Chromium and uses isolated synthetic fixtures without live model calls. `tests/storybook` exercises inventory and evidence validation; `tests/operations` checks artifact freshness, file integrity and publication gates. Follow the [storybook generation guide](../docs/how-to/generate-storybook.md) to add states or reproduce release screenshots.
+
+## Architecture checks
+
+After a coordinated build, run `node --test "tests/architecture/*.test.mjs"`.
+The dependency utility scans TS/JS/CommonJS and both Vue script blocks. Negative
+fixtures exercise actual boundary failures through imports, reexports, type edges,
+require/createRequire, literal dynamic imports, absolute paths and package aliases.
+Worker application and extracted orchestrator application modules cannot import
+adapters, including for types. Selected shared contracts form a closed graph.
+Computed imports are forbidden in those protected modules; composition remains
+free to select configured adapters. This is a static guard, not arbitrary
+JavaScript evaluation or automatic third-party package analysis.
+
+Build-provenance tests compare the root manifest with every generated/portable
+app, real MCP initialization responses and newly captured snapshot versions.
+Rebuild after a root version change before running those artifact checks.

@@ -1,19 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, writeFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { join } from 'node:path';
-import ts from 'typescript';
-const root = fileURLToPath(new URL('../../', import.meta.url));
+import { freshFrontend } from '../ui/helpers/frontend-loader.mjs';
+
 async function store(t) {
-  await mkdir(join(root, 'work'), { recursive: true });
-  const directory = await mkdtemp(join(root, 'work/webview-refresh-'));
-  const source = await readFile(join(root, 'src/worker/webview/store.ts'), 'utf8');
-  const output = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
-  const modulePath = join(directory, 'store.mjs'); await writeFile(modulePath, output);
   const originalFetch = globalThis.fetch;
-  t.after(async () => { globalThis.fetch = originalFetch; await rm(directory, { recursive: true, force: true }); });
-  return import(pathToFileURL(modulePath).href);
+  t.after(async () => { globalThis.fetch = originalFetch; });
+  return freshFrontend('src/worker/webview/store.ts');
 }
 function payloads() {
   return {
@@ -37,9 +29,11 @@ test('failed optional history read preserves history while adopting healthy chat
   assert.equal(state.history.rows[0].id, 'previous-history');
   assert.equal(state.error, ''); assert.match(state.partialError, /History.*stale/);
   assert.equal(state.lastRead, 'previous-read'); assert.equal(state.loading, false);
+  assert.equal(state.refreshRevision, 1, 'Independent panels observe a completed partial refresh');
   globalThis.fetch = async path => response(data[path]); await refresh();
   assert.equal(state.history.rows[0].id, 'fresh-history');
   assert.equal(state.partialError, ''); assert.notEqual(state.lastRead, 'previous-read');
+  assert.equal(state.refreshRevision, 2);
 });
 test('expired access prevents late successful refresh responses from restoring private data', async t => {
   const { state, refresh } = await store(t), data = payloads(), pending = new Map();
@@ -56,6 +50,7 @@ test('expired access prevents late successful refresh responses from restoring p
   assert.equal(state.environment, null); assert.equal(state.history, null); assert.equal(state.settings, null);
   assert.equal(state.board, null); assert.deepEqual([...state.definitions], []);
   assert.equal(state.draft, 'Unsent message'); assert.match(state.accessMessage, /expired/);
+  assert.equal(state.refreshRevision, 0, 'A discarded access epoch never announces fresh data');
   assert.equal(state.loading, false);
 });
 

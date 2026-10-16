@@ -1,6 +1,7 @@
 import { cp, mkdir, readFile, writeFile, chmod, rm, rename } from 'node:fs/promises';
 import { join } from 'node:path';
 import { workerNpmScripts } from '../runtime/portable/npm-package.mjs';
+import { environmentExample } from '../runtime/portable/environment.mjs';
 
 /** Each folder includes exactly one compiled application and its operator runtime. */
 export async function packageApp(root, kind) {
@@ -15,6 +16,7 @@ export async function packageApp(root, kind) {
     await writeFile(join(staging, 'package.json'), JSON.stringify({ name: `@werk/${kind}-portable`, version: info.version, private: true, type: 'module', engines: info.engines, bin: { [`werk-${kind}`]: 'cli.mjs' }, ...(kind === 'worker' ? { scripts: workerNpmScripts() } : {}) }, null, 2) + '\n');
     await writeFile(join(staging, 'cli.mjs'), `#!/usr/bin/env node\nimport { main } from './scripts/runtime/portable/cli.mjs';\nawait main('${kind}');\n`);
     await chmod(join(staging, 'cli.mjs'), 0o755);
+    await writeFile(join(staging, '.env.example'), environmentExample(kind));
     await cp(join(root, 'LICENSE'), join(staging, 'LICENSE'));
     await cp(join(root, 'docs/reference/portable-apps.md'), join(staging, 'README.md'));
     await rm(destination, { recursive: true, force: true });

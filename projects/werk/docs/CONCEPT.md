@@ -3,7 +3,9 @@
 Werk is an agent driven software production line with independently deployable
 Factory, line orchestrator and worker applications. The imported starter was a
 mock foundation. The current product keeps simulation as its default and adds an
-opt-in native Linux Codex adapter that produces a local patch for human review.
+opt-in native Linux Codex assignment adapter that produces a patch for review.
+Local workers also support configured API providers and Codex/Claude CLIs.
+See execution modes for the different platform and authority boundaries.
 Shared feature intake publishes scoped feature branches and Obsidian review notes after its configured checks. Human approval and merge remain separate; automated merge tracking remains planned work.
 Use [execution modes](explanation/modes.md) for the current capability and
 qualification limits; the imported documents below record the original baseline.
@@ -23,7 +25,7 @@ record the original target and remaining milestones; their dated implementation
 claims are not the current product reference. [Review reports](reports/index.md)
 retain the evidence obtained in each subsequent pass. [Design](../DESIGN.md) and
 [current architecture](explanation/architecture.md) distinguish the intended
-live factory from the implemented mock runtime.
+delivery target from the implemented execution and publication paths.
 
 ## Local development
 

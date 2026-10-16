@@ -1,7 +1,7 @@
 <script lang="ts">
 import { reactive, watch as watchPrivateDraft } from 'vue';
 import { state as workerState } from '../store';
-import type { ProviderId } from '../../infrastructure/providers';
+import type { ProviderId } from '../../application/provider-contract';
 const emptyDraft = () => ({ message: '', provider: undefined as ProviderId | undefined, title: '', definitionId: 'none', agent: '', adapt: false });
 // Keep private drafts in tab memory; explicit locking clears them with the other editors.
 const intake = reactive(emptyDraft());

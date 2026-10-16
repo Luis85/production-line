@@ -5,10 +5,12 @@ import UInput from "@nuxt/ui/components/Input.vue";
 import UTextarea from "@nuxt/ui/components/Textarea.vue";
 import USelect from "@nuxt/ui/components/Select.vue";
 import UModal from "@nuxt/ui/components/Modal.vue";
+import MessageContent from './MessageContent.vue';
 import {
   createLineInteraction,
   type InteractionRequest,
   type InteractionTask,
+  type LineSubmissionReceipt,
 } from "../line-interaction";
 const props = withDefaults(
   defineProps<{
@@ -17,7 +19,7 @@ const props = withDefaults(
     project?: string;
     canWrite: boolean;
     request: InteractionRequest;
-    submit: (task: InteractionTask, key: string) => Promise<any>;
+    submit: (task: InteractionTask, key: string) => Promise<LineSubmissionReceipt>;
   }>(),
   { project: "" },
 );
@@ -137,7 +139,7 @@ const providers = [
               :key="message.id ?? index"
             >
               <strong>{{ message.role === "user" ? "You" : "Model" }}</strong>
-              <p>{{ message.text || "Reply in progress…" }}</p>
+              <MessageContent :text="message.text || 'Reply in progress…'" :markdown="message.role === 'assistant' && (!message.state || message.state === 'complete')" />
             </article>
             <p v-if="!s.chat?.messages.length">
               Describe the task in your first message.

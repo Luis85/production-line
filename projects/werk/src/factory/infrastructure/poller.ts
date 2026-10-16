@@ -1,3 +1,4 @@
+import { readResponseBody, ResponseBodyLimitError } from '../../shared/http/response-body.js';
 import { privateJson } from '../../shared/http/bounded-client.js';
 import { checkedTaskPage } from '../application/task-pages.js';
 import { DomainError } from '../../shared/errors.js';
@@ -112,27 +113,14 @@ export class HttpLineReader implements LineReader {
                 await response.body?.cancel();
                 return unavailable('unavailable', 'Orchestrator summary request failed (HTTP ' + response.status + ')');
             }
-            const reader = response.body?.getReader(), chunks: Uint8Array[] = [];
-            let size = 0;
-            if (reader)
-                try {
-                    for (;;) {
-                        const { done, value } = await reader.read();
-                        if (done)
-                            break;
-                        size += value.byteLength;
-                        if (size > 65536) {
-                            await reader.cancel();
-                            return unavailable('invalid', 'Orchestrator summary exceeds 64 KiB');
-                        }
-                        chunks.push(value);
-                    }
-                }
-                finally {
-                    reader.releaseLock();
-                }
+            let bytes: Uint8Array;
+            try { bytes = await readResponseBody(response.body, 65536); }
+            catch (error) {
+                if (error instanceof ResponseBodyLimitError) return unavailable('invalid', 'Orchestrator summary exceeds 64 KiB');
+                throw error;
+            }
             try {
-                const overview = validateOverview(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+                const overview = validateOverview(JSON.parse(Buffer.from(bytes).toString('utf8')));
                 return { status: 'available', error: null, overview, checkedAt: new Date().toISOString() };
             }
             catch {

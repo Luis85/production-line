@@ -5,8 +5,8 @@ import { mkdtemp, mkdir, rename, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WorkerSettings } from '../../src/worker/dist/worker/infrastructure/settings.js';
-import { WorkerSessions } from '../../src/worker/dist/worker/application/sessions.js';
-import { LocalTaskboard } from '../../src/worker/dist/worker/application/local-tasks.js';
+import { WorkerSessions } from './application-fixtures.mjs';
+import { LocalTaskboard } from './application-fixtures.mjs';
 const model = () => ({ async reply() { return 'Saved answer'; } });
 async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(), 'werk-session-reliability-'));

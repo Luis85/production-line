@@ -1,3 +1,4 @@
+import { readResponseBody, ResponseBodyLimitError } from '../../shared/http/response-body.js';
 import { classifyProviderStatus, parseModelResult, ProviderModelError, type ModelRequest } from '../application/model-contract.js';
 import type { ProviderUsage } from '../application/run-evidence.js';
 import type { ToolRuntime } from '../application/tool-runtime.js';
@@ -15,14 +16,15 @@ function addUsage(previous: ProviderUsage | undefined, next: ProviderUsage): Pro
   return total;
 }
 async function readResponse(response: Response, signal: AbortSignal) {
-  const reader = response.body?.getReader();
-  if (!reader) throw response.ok ? new ProviderModelError('protocol') : classifyProviderStatus(response.status);
-  const chunks: Uint8Array[] = []; let size = 0;
-  try {
-    for (;;) { const part = await reader.read(); if (part.done) break; size += part.value.length; if (size > 1048576) throw new ProviderModelError('protocol'); chunks.push(part.value); }
-  } catch (error) { if (error instanceof ProviderModelError) throw error; throw new ProviderModelError(signal.aborted ? 'cancelled' : 'unavailable'); }
-  finally { await reader.cancel().catch(() => {}); }
-  try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+  if (!response.body) throw response.ok ? new ProviderModelError('protocol') : classifyProviderStatus(response.status);
+  let bytes: Uint8Array;
+  try { bytes = await readResponseBody(response.body, 1048576, { cancel: 'always' }); }
+  catch (error) {
+    if (error instanceof ProviderModelError) throw error;
+    if (error instanceof ResponseBodyLimitError) throw new ProviderModelError('protocol');
+    throw new ProviderModelError(signal.aborted ? 'cancelled' : 'unavailable');
+  }
+  try { return JSON.parse(Buffer.from(bytes).toString('utf8')); }
   catch { throw response.ok ? new ProviderModelError('protocol') : classifyProviderStatus(response.status); }
 }
 /** Stateless tool loops: each turn replays this invocation only; server-side conversation storage stays off. */

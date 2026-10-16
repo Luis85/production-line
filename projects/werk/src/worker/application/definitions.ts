@@ -1,10 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { join } from 'node:path';
 import { parseDocument, isAlias, isCollection, isPair, isScalar, visit } from 'yaml';
 import { DomainError } from '../../shared/errors.js';
 import { object, text, identifier } from '../../shared/contracts.js';
-import { atomicWrite, readBoundedFile } from '../infrastructure/journal/files.js';
-import type { ProviderConnection } from '../infrastructure/providers.js';
+import type { DefinitionStorage } from './workspace-ports.js';
+import type { ProviderConnection } from './provider-contract.js';
 export interface DefinitionAgent { name: string; description: string; instruction: string; model: string; provider: 'openai' | 'anthropic' | ''; unsupported: string[]; requiresAdaptation: boolean; }
 export interface AgentDefinition { id: string; name: string; digest: string; createdAt: string; agents: DefinitionAgent[]; }
 export interface DefinitionSnapshot { definitionId: string; name: string; digest: string; agent: string; instruction: string; model: string; provider: DefinitionAgent['provider']; unsupported: string[]; adapted: boolean; }
@@ -78,18 +77,19 @@ export function definitionConnection(connection: ProviderConnection, definition?
   return { ...connection, model: definition.model || connection.model, instruction: definition.instruction };
 }
 export class WorkerDefinitions {
-  private directory: string; private definitions: AgentDefinition[] = []; private writes = Promise.resolve();
-  constructor(directory: string) { this.directory = directory; }
+  private storage: DefinitionStorage; private definitions: AgentDefinition[] = []; private writes = Promise.resolve();
+  constructor(storage: DefinitionStorage) { this.storage = storage; }
   async init() {
-    try {
-      const value = JSON.parse(await readBoundedFile(join(this.directory, 'agent-definitions.json'), 2097152));
+    const saved = await this.storage.read();
+    if (saved !== undefined) {
+      const value = JSON.parse(saved);
       if (!Array.isArray(value) || value.length > 32 || new Set(value.map(item => item.id)).size !== value.length) invalid('Invalid saved agent definitions.');
       for (const definition of value) {
         if (!Array.isArray(definition.agents) || !definition.agents.length || definition.agents.length > 24 || new Set(definition.agents.map((agent: DefinitionAgent) => agent.name)).size !== definition.agents.length || !Number.isFinite(Date.parse(definition.createdAt))) invalid('Invalid saved agent definitions.');
         for (const agent of definition.agents) { if (typeof agent.description !== 'string' || agent.description.length > 1000 || typeof agent.requiresAdaptation !== 'boolean' || agent.requiresAdaptation !== (agent.unsupported?.length > 0)) invalid('Invalid saved agent definition.'); validateSnapshot({ definitionId: definition.id, name: definition.name, digest: definition.digest, agent: agent.name, instruction: agent.instruction, model: agent.model, provider: agent.provider, unsupported: agent.unsupported, adapted: agent.requiresAdaptation }); }
       }
       this.definitions = value;
-    } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    }
   }
   view() { return { compatibility: 'instruction-profile' as const, definitions: structuredClone(this.definitions) }; }
   select(input: Record<string, unknown>): DefinitionSnapshot | undefined {
@@ -118,7 +118,7 @@ export class WorkerDefinitions {
         next = next.filter(item => item.id !== id);
       } else invalid('Definition action: preview|import|delete.');
       const saved = JSON.stringify(next); if (Buffer.byteLength(saved) > 2097152) throw new DomainError('conflict', 'Definition storage is full. Delete an unused definition.');
-      await atomicWrite(join(this.directory, 'agent-definitions.json'), saved); this.definitions = next;
+      await this.storage.write(saved); this.definitions = next;
     });
     this.writes = operation; await operation; return this.view();
   }

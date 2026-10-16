@@ -1,3 +1,4 @@
+import { boundedSignal, requestJson } from '../../shared/webview/http';
 /** Memory-only authenticated state. Transport injection keeps race contracts testable. */
 export type Tab = "system" | "intake" | "tasks" | "workers" | "metrics";
 export type RecordData = Record<string, any>;
@@ -148,23 +149,10 @@ export function createOrchestratorStore(options: StoreOptions = {}) {
   const uuid = options.uuid ?? (() => crypto.randomUUID());
   const request =
     options.request ??
-    (async (path, init) => {
-      const response = await fetch(path, init);
-      let value: any;
-      try {
-        value = await response.json();
-      } catch {
-        throw Object.assign(
-          Error(`Keine lesbare JSON-Antwort (HTTP ${response.status}).`),
-          { status: response.status },
-        );
-      }
-      if (!response.ok)
-        throw Object.assign(Error(value?.error || `HTTP ${response.status}`), {
-          status: response.status,
-        });
-      return value;
-    });
+    ((path, init) => requestJson<RecordData>(path, init, {
+      invalidJson: status => `Keine lesbare JSON-Antwort (HTTP ${status}).`,
+      failure: status => `HTTP ${status}`,
+    }));
   const state = (options.reactive ?? ((value) => value))({
     token: "",
     canWrite: false,
@@ -275,9 +263,7 @@ export function createOrchestratorStore(options: StoreOptions = {}) {
         ...(key ? { "Idempotency-Key": key } : {}),
       },
       ...(body ? { body: JSON.stringify(body) } : {}),
-      signal: signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(10000)])
-        : AbortSignal.timeout(10000),
+      signal: boundedSignal(signal, 10000),
     });
   }
   function applyAccess(access: any) {

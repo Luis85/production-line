@@ -5,6 +5,13 @@ This extracted release contains prebuilt applications; do not run npm install,
 source builds or Forge workspace commands here. Native execution requires Node24;
 Docker execution requires Docker/Compose and Bash or PowerShell.
 
+For copied independent apps, use `env init` to preserve/create project `.env`
+and credential-free `.env.example`; project worker `init` includes this step.
+Read docs/reference/configuration.md for supported namespaced keys, precedence,
+permissions and stopped token rotation. Never echo or commit `.env` values.
+Explicit remote `--url` requires a token file or process WERK_APP_TOKEN; local
+project secrets must not be inferred as remote credentials.
+
 For a standalone project worker, read docs/tutorials/worker-feature-lifecycle.md
 and docs/reference/worker-run-metrics.md. Discover the installed command catalog
 with `node bin/apps/worker/cli.mjs schema`; use revision-guarded feature commands

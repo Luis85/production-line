@@ -1,10 +1,11 @@
 # Architecture and delivery workflow
 
-This document distinguishes the current runtime from the target delivery
-workflow. Simulation is the default; an opt-in native Linux Codex adapter creates
-a local patch for human review. Git publication, review/rework and merge tracking
-remain operator actions or future integration work. See [execution modes](modes.md)
-for the adapter's scope and qualification limits. The [client/server ADR](adr-001-client-server-boundaries.md) records
+Werk separates orchestrator assignments from local worker execution. Assignments
+default to simulation; the opt-in native Linux Codex adapter creates a patch for
+review. Local workers support configured API/CLI providers, approved-file tasks
+and shared Git intake that publishes feature branches and Obsidian review notes.
+Human merge and automated merge tracking remain separate. See
+[execution modes](modes.md) for each path's scope and qualification limits. The [client/server ADR](adr-001-client-server-boundaries.md) records
 ownership, retry/fencing semantics and deployment tradeoffs. The
 [UI journey](ui-journey.md) maps the same boundaries to user-facing behavior.
 
@@ -19,7 +20,7 @@ implemented contracts and operating procedures.
 
 `src/factory` is a third standalone application with its own CLI, HTTP webview
 and SQLite registry. It owns factory records, logical parent/child relationships,
-stable line registrations and read-only rollups. Each line points to an
+stable line registrations, durable intake routing and read-only rollups. Each line points to an
 independent orchestrator; tasks, workers, leases and evidence remain inside it.
 A project is a repository/context binding inside a line, not the line itself.
 
@@ -31,9 +32,11 @@ the browser receives no line secret. See [Factory setup](../how-to/factory.md).
 
 The original `src/orchestrator`/`src/worker` separation remains. Existing line
 runtimes can be deployed without Factory, and Factory neither opens their
-SQLite files nor routes their tasks to alternate lines. Current Factory rollups
-are fresh observations, not a persisted cross-line timeseries; only hierarchy
-and line registrations are stored there.
+SQLite files nor moves accepted tasks between lines. Factory routes new intake to
+a compatible line using observed capabilities and a durable idempotent delivery
+record; the selected orchestrator owns the accepted task. Current rollups are
+fresh observations, not a persisted cross-line timeseries. See
+[Factory mutation idempotency](../reference/factory-idempotency.md).
 
 ## Target source of truth and branch relationship
 
@@ -92,15 +95,20 @@ retain their destination. Repository import is the primary team workflow and
 manual submissions are an explicit alternative.
 
 `src/worker` owns polling, the execution adapter boundary, local journals,
-configuration, snapshots and an authenticated Vue workspace with Chat, History
-and Dashboard. Local chat, file tasks and parent assignments share one execution
-slot. Basic status, health and metrics remain public read-only endpoints. The
-opt-in native Linux Codex assignment adapter creates a disposable local checkout
-from a pinned commit and
-manages provider cancellation and process-group cleanup. Its exact file allowlist
-and host-account trust boundary are described in the
-[live workflow](../how-to/run-codex-task.md). Concurrent live providers and the
-target feature-branch/PR lifecycle remain future integration work.
+configuration, snapshots and an authenticated Vue workspace with Taskboard, History
+and Dashboard. Local chat, file tasks and parent assignments
+share one execution slot. Basic status, health and metrics remain public read-only
+endpoints. Assigned repositories provide retained per-task worktrees. The native
+Linux Codex assignment adapter executes in one of these worktrees and manages
+provider cancellation and descendant cleanup. Its exact file allowlist and
+host-account trust boundary are described in the
+[live workflow](../how-to/run-codex-task.md). Local approved-file tasks instead
+capture bounded immutable inputs and validate the returned patch. Shared Git
+intake claims ready work remotely, freezes policy/source, and publishes the
+validated result plus a review note. Its outbox and recovery semantics are
+specified in [shared intake](../reference/shared-feature-intake.md). Concurrent
+live execution, lease-fenced remote PR publication and automatic merge tracking
+remain outside these implemented paths.
 
 `src/shared` owns versioned contracts and validators. It imports neither server
 nor worker. The build copies shared code into each independent CLI distribution.
@@ -109,17 +117,36 @@ Source folders group application policy, persistence, intake, context, HTTP infr
 
 ## Implemented dependency map
 
+Dependency arrows below point toward a consumed interface or implementation.
+Each service retains its own composition root and state owner.
+
+```mermaid
+flowchart TB
+  Factory[Factory composition] --> FactoryPolicy[Hierarchy and intake policy]
+  Factory --> Registry[Factory SQLite and line HTTP adapters]
+  Orchestrator[Orchestrator composition] --> LinePolicy[Task and interaction policy]
+  Orchestrator --> Store[Line SQLite and worker HTTP adapters]
+  Worker[Worker composition] --> WorkerPolicy[Execution and shared-intake policy]
+  Worker --> Adapters[Git, providers, files and journals]
+  WorkerPolicy --> Ports[Application ports]
+  Adapters -. implements .-> Ports
+  FactoryPolicy --> Contracts[Shared contracts and validation]
+  LinePolicy --> Contracts
+  WorkerPolicy --> Contracts
+```
+
+
 | Module | Responsibility and dependency direction |
 | --- | --- |
 | `factory/cli.ts`, `server.ts` | Factory process/client entry and composition of registry, line reader, application and HTTP handler |
 | `factory/application/service.ts`, `application/ports.ts` | Logical hierarchy and scoped aggregation through registry/line-reader ports |
 | `factory/application/overview.ts` | Descendant scope and partial-rollup policy; one unavailable line does not erase reachable evidence |
-| `factory/infrastructure/registry.ts` | Factory-owned SQLite hierarchy and stable line registrations; no task database access |
+| `factory/infrastructure/registry.ts`, `delivery.ts` | Factory-owned SQLite hierarchy and stable line registrations; idempotent intake delivery through HTTP, without line database access |
 | `factory/infrastructure/poller.ts`, `factory/http.ts` | Bounded authenticated line observation and Factory HTTP adaptation |
 | `orchestrator/cli.ts` | Process entry point; parses commands and selects server startup or HTTP client/import operations |
 | `orchestrator/server.ts` | Server composition root: constructs SQLite Store, application and HTTP handler; owns listener/reaper shutdown |
 | `orchestrator/http.ts` | Routes, role-token authorization, request parsing and HTTP presentation; invokes application operations |
-| `orchestrator/application.ts` | Commands/queries and worker-bound operations through `OrchestratorRepository`; no Node HTTP or SQLite imports |
+| `orchestrator/application.ts`, `application/worker-interaction.ts` | Commands/queries through `OrchestratorRepository`; injected worker interaction port with worker/session identity validation |
 | `orchestrator/persistence/store.ts` | Transactional SQLite implementation of that port; persists tasks, attempts, snapshots and events |
 | `orchestrator/persistence/schema.ts` | Versioned SQLite schema and atomic migrations |
 | `orchestrator/context/*` | Exact-commit resolution, bounded admission and operator-owned context binding; committed source remains untrusted data |
@@ -128,16 +155,19 @@ Source folders group application policy, persistence, intake, context, HTTP infr
 | `orchestrator/intake/iteration.ts` | Committed-feature collection and import/revision policy through `IterationSource`/`IterationTaskGateway` ports |
 | `worker/cli.ts` | Parses runtime/status commands, loads configuration and supplies process cancellation |
 | `worker/runner.ts` | Worker composition/lifecycle: concrete HTTP gateway, selected mock/Codex adapter, journal, identity, workspace/status service and the shared single-slot scheduler |
-| `worker/application/*` | Attempt execution, lease renewal, reporting and ports; no URL/bearer-token or SQLite ownership |
+| `worker/application/*` | Attempt execution, sessions, approved-file tasks, frozen gates and shared feature lifecycle through injected ports; no infrastructure imports, filesystem I/O or SQLite ownership |
 | `worker/infrastructure/*` | HTTP operation mapping, pinned-context verification, mock/Codex adapters, review artifacts and persisted registration identity |
 | `worker/infrastructure/journal/{snapshots,files,retention}.ts` | Measurement capture, immutable journal, serialized upload and durable local file operations |
 | `worker/status/server.ts`, `status/workspace.ts`, `worker/webview/*` | Public health/status, authenticated workspace API and Vue UI; workspace composes local task, session and settings services |
 | `shared/domain.ts`, `context.ts`, `validation.ts`, `snapshots.ts` | Domain data and pure validation of input/evidence |
-| `shared/protocol.ts`, `factory.ts` | Typed request/response DTOs, Factory records and overview validation |
+| `shared/protocol.ts`, `factory.ts`, `worker-interaction.ts` | Typed request/response DTOs, Factory records, overview and cross-service interaction validation |
+| `shared/build-info.ts` | Source-only development marker; distribution staging generates the root release version for snapshots and MCP |
+| `shared/lifecycle.ts`, `http/server-lifecycle.ts` | Ordered cleanup that settles every resource; bounded HTTP drain remains an explicit transport helper |
+| `shared/git/environment.ts`, `http/response-body.ts` | Explicit Git authority profiles and bounded response reading; each adapter retains its auth, limits and error policy |
 | `shared/wiki.ts` | Pure vault-reference syntax parser; no repository resolution |
 | `shared/mcp/*` | Stdio tool catalog/transport mapped to one configured HTTP service, read-only by default |
 | `shared/errors.ts` | Semantic application errors, independent of HTTP status codes |
-| `shared/http/*`, `cli.ts`, `html.ts` | Explicit transport, process-input and escaping adapters |
+| `shared/http/*`, `cli.ts` | Explicit transport and process-input adapters; they are separate from pure contracts |
 
 `shared/contracts.ts` and `shared/io.ts` remain compatibility facades. New code
 should import the specific module it consumes; the facades are not a place to
@@ -149,6 +179,16 @@ state callbacks and clock through its ports. This lets tests exercise terminal
 reporting and cancellation without starting HTTP or a real coding agent. The
 server application similarly depends on its repository port, while the
 composition root chooses SQLite. Shared code never imports either application.
+
+The AST architecture guard checks imports, reexports, type edges, require calls,
+literal dynamic imports and package aliases, with negative fixtures that must
+fail the same policies. All worker application modules and the extracted
+orchestrator application directory depend inward; they cannot import concrete
+adapters even for types. Selected shared contracts have a closed pure dependency
+graph. Node crypto/path/timer helpers and YAML parsing remain explicit application
+allowances. Composition may select configured adapters dynamically; the guard is
+not an arbitrary-JavaScript dependency resolver. See the
+[architecture review](../reports/architecture-review-2026-10-16.md).
 
 This is a concrete dependency improvement, not a claim that every domain rule
 has a separate object model. The Store still combines transactional persistence
@@ -176,7 +216,7 @@ The server's clock governs lease acceptance. Worker-side expiry timers are
 conservative local cancellation guards and depend on usable clock alignment;
 they do not override server lease checks. Monotonic attempt duration and server
 snapshot sequence are independent from cross-host wall-clock timestamps. Full
-clock-offset negotiation is not implemented in this starter.
+clock-offset negotiation is not implemented.
 
 ## SQLite deployment
 
@@ -187,16 +227,25 @@ versions. A background sweep reconciles expired leases without waiting for new
 claims; the attempt ceiling is pinned when work is assigned.
 Tasks, attempts, snapshots and events are persisted together as
 needed. Workers never mount the DB or execute SQL. Scale workers first; multiple
-orchestrator replicas and network-filesystem SQLite are outside iteration one.
+orchestrator replicas and network-filesystem SQLite are outside the supported deployment.
 
-The starter is small and uses synchronous `node:sqlite`. Store work must stay
+The runtime uses synchronous `node:sqlite`. Store work must stay
 bounded; large portfolio analytics should eventually move to rollups/background
 queries. Raw snapshots have an ascending sequence cursor and can be exported to
 an analysis tool. Unknown values must remain null through every aggregation.
 
 ## Publication, fencing and snapshots
 
-In the target integration, the worker initiates PR actions and a server-side
+The implemented shared-intake publisher runs at the local worker. A confirmed
+remote claim and durable journal bind repository, intake branch, feature identity,
+source commit, frozen checks and canonical output. It only publishes a validated
+patch with matching successful done evidence, then reconciles the feature branch
+and review-note acknowledgments. This authority comes from the configured shared
+binding and host Git credentials, not an orchestrator lease. The developer's
+original checkout is preserved; human merge is still required.
+
+For orchestrator assignments, the following lease-fenced PR publisher remains
+a target integration. In that integration, the worker initiates PR actions and a server-side
 publisher holds Git write
 credentials. It validates the live lease and serializes publication by task
 revision. This prevents an old worker with a stale lease from pushing through
@@ -222,17 +271,22 @@ preferences. User prompts cannot disable lease checks, quality gates, snapshot
 capture or human review. Configuration is validated and hashed; each attempt
 records that hash, prompt hash, skill/policy versions and adapter version.
 
-In the starter, settings are immutable for an identity. Restarting with changed
-settings requires a new state directory after the old worker is stopped. Future
-hot reload must drain the worker and version changes for future assignments only.
-The configured attempt ceiling prevents an unavailable provider or impossible
-check from causing endless automatic rework.
+Worker settings have separate guarded update contracts. Repository assignments,
+provider connections and tool grants are persisted locally. Execution profiles
+can change within the installed mode only while paused and idle. Registered
+workers retain their identity/history and stage a durable pending change until
+the same orchestrator acknowledges its configuration hash. Pending changes block
+new admission and resume; disconnecting cannot bypass acknowledgment. Historical
+attempts retain their original provider/mode authority. See
+[configuration](../reference/configuration.md). The attempt ceiling prevents an
+unavailable provider or impossible check from causing endless automatic rework.
 
 Machine slots, profile sessions and subscription quota are different constraints.
-The starter enforces machine/profile slots, not real subscription limits. It
-records unavailable provider/cost fields honestly. Only the narrow native Linux
-Codex adapter is implemented for live execution. Claude and further adapters,
-mixed live profiles and shared quota enforcement remain future work.
+The worker enforces its single shared execution slot, not real subscription
+limits. Orchestrator live assignments use the narrow native Linux Codex adapter;
+local chat/file tasks support configured API providers and Codex/Claude CLIs on
+their documented platforms. Unknown usage/cost remains unknown. Mixed live
+profiles, concurrent live execution and shared quota enforcement remain future work.
 
 ## Obsidian context
 
@@ -249,7 +303,7 @@ The factory indexes content by commit rather than relying on a user's running
 Obsidian UI or local cache. Each format needs an appropriate reader. Full context
 availability does not mean blindly concatenating every file into a model prompt.
 
-Only designated `factory_*` properties control import. A note's text, embed or
+For orchestrator iteration import, only designated `factory_*` properties control import. A note's text, embed or
 attachment does not have authority to change execution policy. Secrets, personal
 workspace settings and uncommitted notes must not enter telemetry artifacts.
 
@@ -266,9 +320,9 @@ remains separate from the runtime.
 | --- | --- |
 | Repo-ready importer, server-pinned Markdown context and worker verification | Full Obsidian artifacts, verified remote identity and explicit revisions |
 | SQLite, registration, idempotency, slots, leases; viewer/operator/admin tokens | Broader identity integration, per-project enrollment grants and shared quota groups |
-| Mock worker and journal; opt-in single-slot native Linux Codex patch adapter | Additional live providers, mixed live profiles and project-specific tool/skill policy |
-| Verified local review artifacts and telemetry API | Lease-checked Git push, early draft PR and review requests |
-| Snapshot dashboard, worker detail, readiness and operational alerts | Git webhook verification, independent project checks and review/rework loop |
+| Mock assignments; native Linux Codex review adapter; local API and Codex/Claude CLI execution with operator-granted tools | Mixed/concurrent live assignments and shared provider quota enforcement |
+| Verified local review artifacts, telemetry API, shared Git claims and feature branch/review-note publication | Lease-checked orchestrator publisher, early draft PR and automatic merge tracking |
+| Snapshot/run dashboards, guarded questions/rework, configurable ready/done rules and resource alerts | Git webhook verification and independently executed project-check evidence |
 | Native/Docker launchers, VM profile, qualification gates and stopped-state backup/restore | Environment-specific deployment qualification and high-availability design |
 
 The native, Docker and VM gates validate simulated task journeys. Their existence

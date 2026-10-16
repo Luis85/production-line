@@ -67,7 +67,7 @@ async function entry() { if (!state.unlocked) return; await load();
 onMounted(() => { void entry(); });
 onActivated(() => { active.value = true; void entry(); });
 onDeactivated(() => { active.value = false; revision++; detailRevision++; exportRevision++; loading.value = false; exporting.value = false; });
-watch(() => state.lastRead, () => { if (active.value && state.unlocked) { if (!loading.value && (page.value?.rows.length ?? 0) <= 25) void load(false, true); void refreshSelected(); } });
+watch(() => state.refreshRevision, () => { if (active.value && state.unlocked) { if (!loading.value && (page.value?.rows.length ?? 0) <= 25) void load(false, true); void refreshSelected(); } });
 watch(() => [route.query.view, route.query.runSession, route.query.runId], () => { if (route.path === '/history') { revision++; detailRevision++; selected.value = null; loading.value = false; void entry(); } });
 watch(() => state.unlocked, unlocked => { if (unlocked) void entry(); else { revision++; detailRevision++; exportRevision++; page.value = null; analysis.value = null; selected.value = null; loading.value = false; exporting.value = false; error.value = ''; detailError.value = ''; exportError.value = ''; } });
 </script>

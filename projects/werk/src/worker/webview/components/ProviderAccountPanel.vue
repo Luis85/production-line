@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onActivated, onBeforeUnmount, onMounted, watch } from 'vue';
 import UButton from '@nuxt/ui/components/Button.vue';
-import type { ProviderId } from '../../infrastructure/providers';
+import type { ProviderId } from '../../application/provider-contract';
 import { createProviderAccountView } from '../provider-account-view';
 import { date, request, state } from '../store';
 const props = defineProps<{ providerId: ProviderId; connectionKey: string; enabled: boolean }>();

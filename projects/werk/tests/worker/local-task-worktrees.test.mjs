@@ -6,8 +6,8 @@ import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WorkerSettings } from "../../src/worker/dist/worker/infrastructure/settings.js";
-import { WorkerSessions } from "../../src/worker/dist/worker/application/sessions.js";
-import { LocalTaskboard } from "../../src/worker/dist/worker/application/local-tasks.js";
+import { WorkerSessions } from './application-fixtures.mjs';
+import { LocalTaskboard } from './application-fixtures.mjs';
 import { modelCapabilities } from "../../src/worker/dist/worker/application/model-contract.js";
 
 const command = promisify(execFile);

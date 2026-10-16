@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { buildInfo } from "../../../shared/build-info.js";
 import { loadavg } from "node:os";
 import { performance, monitorEventLoopDelay } from "node:perf_hooks";
 import { mkdir, readdir, rmdir, unlink, access, lstat } from "node:fs/promises";
@@ -128,7 +129,7 @@ export class SnapshotJournal {
         node: process.version,
         platform: process.platform,
         arch: process.arch,
-        workerVersion: "0.1.0",
+        workerVersion: buildInfo.version,
         adapterVersion: profile.mode === "cli" ? "codex-cli-1" : "mock-1",
       },
       execution: {

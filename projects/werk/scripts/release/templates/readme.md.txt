@@ -3,8 +3,9 @@
 Run a local software-factory line, submit requirement references and inspect worker
 attempts and evidence. **Simulation is the default**: a simulated task does not
 produce code. Trusted operators can [enable native Linux Codex execution](docs/how-to/run-codex-task.md)
-to produce a local patch requiring human review. Git publication and merge remain
-operator actions. Orchestrator execution in the supplied Docker and managed VM profiles remains simulated. Standalone worker Chat and approved-file tasks can use configured API providers, including in Docker. See [project worker setup](docs/how-to/project-worker.md) for terminal and Docker installation.
+to produce a local patch requiring human review. Shared local feature intake can
+publish a feature branch and Obsidian review note after its checks; human merge
+remains separate. Orchestrator execution in the supplied Docker and managed VM profiles remains simulated. Standalone worker Chat and approved-file tasks can use configured API providers, including in Docker. See [project worker setup](docs/how-to/project-worker.md) for terminal and Docker installation.
 
 Verify and extract the release, then open a terminal in this directory. With Node.js 24 installed, start the complete Factory system in one command:
 
@@ -16,7 +17,7 @@ This creates or preserves private configuration, starts the Factory and both sim
 
 Subsequent native starts check stable GitHub releases, verify updates and back up existing state before activation. Run `node werk.mjs update check` to inspect releases or `node werk.mjs update disable` to opt out. `--no-update` skips one startup check. See [automatic updates](docs/reference/updates.md) for recovery and adopting state from 0.1.0.
 
-For automatic download and startup from GitHub, installer options and release verification, see the [release reference](docs/reference/releases.md).
+For automatic download and startup from GitHub, installer options and release verification, see the [release reference](docs/reference/releases.md). Read the [changelog](CHANGELOG.md) for the changes in this version.
 
 For a standalone project worker, follow the [feature lifecycle tutorial](docs/tutorials/worker-feature-lifecycle.md): install, configure a watched folder, submit requests and inspect before/after consumption through the CLI or webview.
 
@@ -25,7 +26,12 @@ For a standalone project worker, follow the [feature lifecycle tutorial](docs/tu
 Copy any complete `bin/apps/factory`, `bin/apps/orchestrator` or `bin/apps/worker`
 folder into your project. Each provides a Node 24 webview and JSON automation CLI.
 Start with `node bin/apps/worker/cli.mjs start`, then inspect `schema` for task and
-management commands. See [portable apps](docs/reference/portable-apps.md).
+management commands. Project worker `init` creates private `.env` and
+credential-free `.env.example`; each app also supports `env init`. Use the
+project's `WERK_WORKER_TOKEN` to unlock an installed worker. Process environment
+wins over dotenv and CLI launch flags win over environment defaults. See
+[portable apps](docs/reference/portable-apps.md) and
+[environment configuration](docs/reference/configuration.md#project-environment-files).
 
 ## A complete system from one YAML file
 

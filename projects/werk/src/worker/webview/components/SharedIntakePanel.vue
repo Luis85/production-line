@@ -28,7 +28,7 @@ onMounted(() => { void refresh(); });
 onActivated(() => { active = true; void refresh(); });
 onDeactivated(() => { active = false; });
 onBeforeUnmount(editor.dispose);
-watch(() => state.lastRead, () => { void refresh(); });
+watch(() => state.refreshRevision, () => { void refresh(); });
 watch(() => state.unlocked, unlocked => { if (unlocked) void refresh(); else selectedId.value = ''; });
 watch(() => state.draftEpoch, () => { search.value = ''; filter.value = 'all'; selectedId.value = ''; });
 watch(() => selected.value?.reviewNote, (next, previous) => { if (next !== previous) editor.closeNote(); });

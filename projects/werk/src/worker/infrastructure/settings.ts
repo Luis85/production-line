@@ -1,3 +1,4 @@
+import type { WorkerSettingsView } from '../application/workspace-view.js';
 import { defaultToolPolicy, discoveredToolPolicy, publicToolPolicy, updateToolPolicy, validateToolPolicy, type ToolPolicy } from '../application/tool-policy.js';
 import { defaultRepositoryConfiguration, validateRepositoryConfiguration, type RepositoryConfiguration } from '../application/repositories.js';
 import { defaultResourcePolicy, validateResourcePolicy, type ResourcePolicy } from '../application/resources.js';
@@ -57,7 +58,7 @@ export class WorkerSettings {
     });
     this.writing = operation; await operation; return this.toolAccess();
   }
-  publicView() { return { repositories: structuredClone(this.value.repositories), executionSource: this.executionSource, resources: { ...this.value.resources }, execution: { ...this.value.execution }, providers: this.value.providers.map(({ apiKey, ...provider }) => ({ ...provider, label: providerLabels[provider.id], configured: providerReady({ ...provider, apiKey }), hasApiKey: !!apiKey, authentication: provider.id.endsWith('-cli') ? 'Host CLI login; not verified' : 'Private API key' })), connection: { enabled: this.value.connection.enabled, url: this.value.connection.url, hasEnrollmentToken: !!this.value.connection.enrollmentToken }, board: { ...this.value.board } }; }
+  publicView(): WorkerSettingsView { return { repositories: structuredClone(this.value.repositories), executionSource: this.executionSource, resources: { ...this.value.resources }, execution: { ...this.value.execution }, providers: this.value.providers.map(({ apiKey, ...provider }) => ({ ...provider, label: providerLabels[provider.id], configured: providerReady({ ...provider, apiKey }), hasApiKey: !!apiKey, authentication: provider.id.endsWith('-cli') ? 'Host CLI login; not verified' : 'Private API key' })), connection: { enabled: this.value.connection.enabled, url: this.value.connection.url, hasEnrollmentToken: !!this.value.connection.enrollmentToken }, board: { ...this.value.board } }; }
   provider(id: string) { const value = this.value.providers.find(item => item.id === id); if (!value) throw new DomainError('invalid_input', 'Choose a supported provider.'); return value; }
   async update(input: unknown) {
     const operation = this.writing.catch(() => {}).then(async () => {

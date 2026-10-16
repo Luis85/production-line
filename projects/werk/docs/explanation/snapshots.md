@@ -1,5 +1,11 @@
 # Worker snapshots and time-series semantics
 
+This page describes orchestrator lease-attempt snapshots. Local chat and
+approved-file tasks use a separate [run-evidence contract](../reference/worker-run-metrics.md),
+which can record provider-reported usage and request-gate evidence. Shared Git
+publication uses those local runs and its own durable claim/publication journal;
+it does not turn a leased snapshot into proof of merge.
+
 ## Identity and durability
 
 Every **attempt**, including review rework, has one immutable before/after pair.
@@ -20,20 +26,21 @@ signature or independent attestation of the worker's measurements.
 
 The canonical original also belongs in the project's feature PR:
 `.factory/runs/TASK_ID/attempt-N/LEASE_ID/{before,after}.json`.
-The starter writes these into `--project-dir` when supplied; the live publisher
-integration is still required to commit and push them.
+The lease journal writes these into `--project-dir` when supplied; a lease-fenced
+PR publisher is still required to commit and push them. Shared-intake feature
+branches and review notes are a separate implemented publication path.
 
 ## Measurements
 
-| Dimension | Contract / target | Starter measurement |
+| Dimension | Contract / target | Leased-attempt measurement |
 | --- | --- | --- |
 | Execution | Start/end, queue time, duration, timeout, interruption, retries | Before/after times, monotonic duration, outcome, attempt |
 | Resource use | Per-process/group CPU, RSS, memory peak, disk/network where attributable | Node worker CPU, RSS, heap, process-lifetime peak RSS, host 1-minute load |
 | Health | Heartbeats, lease loss, disconnects, event-loop lag, provider login/limits | Last contact, cumulative heartbeat errors, process-lifetime event-loop P95, recovery flag |
-| Provider usage | Input/output/cache tokens, model/version, context size, account quota | Null: mock execution has no provider telemetry |
+| Provider usage | Input/output/cache tokens, model/version, context size, account quota | Unavailable for mock and the leased Codex adapter; local-run evidence is separate |
 | Cost | Reported variable cost, estimated cost, subscription allocation separately | Null; no invented API price or allocation |
 | Quality | Build/test outcomes, counts, coverage, lint, security, check evidence | Explicit `not_run`, null measurements; no success inference |
-| Provenance | Git base/tested/head associations, manifest hash, tools/skills, policy/config | Configuration and prompt hashes, runtime/adapter versions; Git fields null |
+| Provenance | Git base/tested/head associations, manifest hash, tools/skills, policy/config | Configuration/prompt hashes, runtime/adapter versions and available pinned source/context; review change sets carry validated base and patch identity |
 | Delivery | Draft creation, ready-for-review, review rounds, merge, deployment | Target Git-event stream; absent from mock completion |
 
 Worker metrics are **worker-scoped**, especially when tasks overlap. A CPU delta
@@ -43,9 +50,9 @@ sum those deltas as exclusive task CPU. RSS is an instantaneous gauge;
 Host load is environmental context, not an allocation to a feature. Future CLI
 metrics should include child-process/cgroup scope and sampling-window metadata.
 
-Two snapshots provide boundary evidence, not continuous observability. A full
-health service should additionally sample worker heartbeat/resource gauges at a
-fixed interval and record outage events. Never infer an intra-task memory peak,
+Two snapshots provide boundary evidence, not continuous observability. The worker
+resource monitor separately samples resource gauges and records durable alerts;
+its scope and history must be interpreted separately from these snapshot pairs. Never infer an intra-task memory peak,
 continuous availability, or idle-machine health solely from task boundaries.
 
 ## Costs and quality without false precision
@@ -89,7 +96,7 @@ to that successor. The worker validates this response before recording the
 acknowledged outcome. A finished local attempt does not imply restored
 connectivity when the polling loop remains disconnected.
 
-The final after snapshot is taken before PR publication. It cannot contain the
+In the target leased PR workflow, the final after snapshot is taken before publication. It cannot contain the
 hash of its own enclosing commit. PR ID, published commit, CI, review feedback
 and merge outcome are additional events attached by the orchestrator. This also
 captures review/rework timing without rewriting evidence in earlier commits.
@@ -102,7 +109,7 @@ backwards from the latest records. CLI `snapshots list` exposes the same contrac
 Use `nextCursor` in the selected direction while `hasMore` is true; retain schema
 version and source/receipt times in external analysis.
 
-The starter portfolio filters by project, worker, iteration, time window and
+The portfolio filters by project, worker, iteration, time window and
 outcome. It shows duration P50/P95 with sample count, outcome counts, RSS,
 event-loop delay and snapshot JSON/digests. A scatter plot avoids implying a
 continuous series between unrelated workers. Above 500 points the plot is

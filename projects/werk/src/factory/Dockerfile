@@ -4,7 +4,7 @@ COPY package.json package-lock.json ./
 RUN --mount=type=secret,id=proxy_ca \
     if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi; \
     npm ci --ignore-scripts --workspaces=false --strict-ssl=true
-COPY scripts/build.mjs scripts/webviews.mjs scripts/
+COPY scripts/build.mjs scripts/build-info.mjs scripts/webviews.mjs scripts/
 COPY src/shared src/shared
 COPY src/factory src/factory
 COPY src/guide src/guide
