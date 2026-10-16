@@ -109,14 +109,20 @@ worker’s local credentials; stdout is JSON and no command prompts for a choice
 | Command after `node bin/apps/worker/cli.mjs` | Contract |
 | --- | --- |
 | `repository status` | Inspect assignments and the detected project checkout without fetching |
-| `repository sync [--id ASSIGNMENT_ID]` | Fetch and safely fast-forward one assignment, or all when omitted |
+| `repository sync [--id ASSIGNMENT_ID]` | Fetch and safely fast-forward one assignment, or all when omitted; waits up to 120 s |
 | `repository accept --discovery-id ID` | Accept the exact detected checkout and save an assignment; requires idle work |
 | `repository decline --discovery-id ID` | Persist the choice not to use the detected checkout |
 | `shared status` | Inspect shared Git intake: binding, `revision`, workflow snapshot and requests, without fetching |
-| `shared sync` | Fetch the shared branch now and reconcile claims and publications |
-| `shared configure --file intake.json` | Save `{"expectedRevision":N,"config":{...}}` while new starts are paused and idle |
+| `shared sync` | Fetch the shared branch now and reconcile claims and publications; waits up to 120 s |
+| `shared configure --file intake.json` | Save `{"expectedRevision":N,"config":{...}}` while new starts are paused and idle. `config` must be complete: `enabled`, `repositoryId`, `remote`, `branch`, `workflowPath` and `pollMs` |
 | `profile list` | Read active profiles, current `configurationHash` and any pending update |
 | `profile set --file profiles.json` | Save a guarded profile update while paused and idle; `--file -` reads stdin |
+
+JSON input from `--file PATH` or `--file -` may start with a UTF-8 byte order mark,
+which Windows PowerShell 5.1 adds to piped input. Each API call waits 10 s, or
+120 s for the Git operations marked above; `--request-timeout-ms 1000–600000`
+overrides the wait. A timeout (`"code":"timeout"`, exit 1) only means the client
+stopped waiting: run `shared status` or `repository status` before retrying.
 
 Read `repository status` first and use its `discovery.id`, not an assignment ID
 or path, for accept/decline. Both choices survive restart; a declined candidate

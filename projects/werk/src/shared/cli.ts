@@ -75,7 +75,8 @@ export async function input(path: string, limit = INPUT_LIMIT): Promise<unknown>
         }
     }
     try {
-        return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        // Windows PowerShell 5.1 prefixes piped stdin, and many editors prefix saved files, with a UTF-8 BOM.
+        return JSON.parse(Buffer.concat(chunks).toString('utf8').replace(/^\uFEFF/, ''));
     }
     catch {
         throw new ValidationError('Invalid JSON input');

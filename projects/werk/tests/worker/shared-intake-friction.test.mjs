@@ -147,3 +147,14 @@ test('Windows shared configuration rejects an overlong publication path without 
   assert.equal(await readFile(join(state, 'shared-intake.json'), 'utf8'), saved);
   assert.deepEqual(await readdir(state), ['shared-intake.json']); assert.deepEqual(calls, []);
 });
+
+test('a partial shared intake configuration names the fields it is missing', async () => {
+  const { validateSharedIntakeConfig } = await import('../../src/worker/dist/worker/application/shared-feature-state.js');
+  assert.throws(() => validateSharedIntakeConfig({ enabled: true }), /incomplete; missing repositoryId, remote, branch, workflowPath, pollMs\. Send the complete config from shared status/);
+  assert.throws(() => validateSharedIntakeConfig({ enabled: true, repositoryId: 'local-project', remote: 'origin', branch: 'main', workflowPath: '.werk/feature-workflow.json' }), /missing pollMs\./);
+  assert.throws(() => validateSharedIntakeConfig({ enabled: true, repositoryId: 'local-project', remote: 'origin', branch: 'main', workflowPath: '.werk/feature-workflow.json', pollMs: 60000, extra: 1 }), /accepts only enabled, repositoryId, remote, branch, workflowPath, pollMs/);
+  assert.throws(() => validateSharedIntakeConfig({ enabled: 'yes', repositoryId: '', remote: 'origin', branch: 'main', workflowPath: '.werk/feature-workflow.json', pollMs: 60000 }), /enabled must be true or false/);
+  assert.throws(() => validateSharedIntakeConfig({ enabled: true, repositoryId: '', remote: 'origin', branch: 'main', workflowPath: '.werk/feature-workflow.json', pollMs: 60000 }), /Choose an assigned repository/);
+  const config = { enabled: true, repositoryId: 'local-project', remote: 'origin', branch: 'main', workflowPath: '.werk/feature-workflow.json', pollMs: 60000 };
+  assert.deepEqual(validateSharedIntakeConfig(config), config);
+});

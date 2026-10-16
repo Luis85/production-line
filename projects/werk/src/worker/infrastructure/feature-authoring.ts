@@ -6,6 +6,9 @@ import { authoringRoot, authoringPath, readAuthoringFile, seedAuthoringFile } fr
 
 export const featureWorkflowPath = '.werk/feature-workflow.json';
 const json = (value: unknown) => JSON.stringify(value, null, 2) + '\n';
+const authoringScriptPath = '.werk/authoring/feature-request.mjs';
+// Git checkouts on Windows may convert line endings; only content changes make the script outdated.
+const lf = (text: string) => text.replace(/\r\n/g, '\n');
 
 /** Installs only missing, portable authoring files. Existing team customization is preserved. */
 type AuthoringSetup = { featuresDirectory?: string; script: string };
@@ -46,7 +49,7 @@ async function prepareFeatureAuthoring(directory: string, options: AuthoringSetu
     [config.doneCheck]: json(defaultFeatureCheck('done')),
     [config.template]: authoringTemplate,
     [config.base]: authoringBase(config),
-    '.werk/authoring/feature-request.mjs': options.script,
+    [authoringScriptPath]: options.script,
     '.werk/authoring/.gitignore': 'write.lock\n',
     '.agents/skills/create-feature-request/SKILL.md': authoringSkill(),
     '.claude/skills/create-feature-request/SKILL.md': authoringSkill(),
@@ -54,6 +57,9 @@ async function prepareFeatureAuthoring(directory: string, options: AuthoringSetu
   // Check every destination before the first write; setup never replaces user content.
   const destinations: { path: string; status: 'missing' | 'preserved' }[] = [];
   for (const path of Object.keys(files)) destinations.push({ path, status: await readAuthoringFile(root, path, 2097152) === undefined ? 'missing' : 'preserved' });
+  // Setup never replaces the committed script, so an upgrade would otherwise leave an older copy in use silently.
+  const installed = await readAuthoringFile(root, authoringScriptPath, 2097152);
+  if (installed !== undefined && lf(installed) !== lf(options.script)) warnings.push({ code: 'authoring_script_outdated', message: `The existing ${authoringScriptPath} differs from this worker's bundled script and was preserved. Unless the team customized it, replace it with src/worker/dist/worker/authoring/feature-request.mjs from the worker app folder and commit the change.` });
   return { root, config, files, warnings, destinations };
 }
 export async function planFeatureAuthoring(directory: string, options: AuthoringSetup) {

@@ -38,6 +38,24 @@ built-in table view; no special backlog plugin is needed. Open the project as an
 Obsidian vault to see the table. It reflects files in the local checkout, so pull
 shared Git updates to see teammates' requests and worker notes.
 
+### Refresh the authoring script after an upgrade
+
+Setup never replaces committed kit files, including the authoring script. After
+updating the worker app, run `feature setup` again. If the result contains the
+warning `authoring_script_outdated`, the committed `.werk/authoring/feature-request.mjs`
+differs from the script bundled with the new worker. An outdated script can reject
+fields that the new worker accepts, such as `definitionRef`. Compare the two files
+before you replace the committed copy:
+
+```sh
+git diff --no-index .werk/authoring/feature-request.mjs bin/apps/worker/src/worker/dist/worker/authoring/feature-request.mjs
+```
+
+If the team has not customized the script, copy the bundled file over the
+committed one. Run `node .werk/authoring/feature-request.mjs validate --file` on
+an existing request, then commit the change so teammates receive it with their
+next pull. Line-ending differences alone do not produce the warning.
+
 ## Create and finish a draft
 
 In a clone containing the committed kit, work from the repository root:

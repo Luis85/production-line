@@ -80,7 +80,7 @@ Supported events are:
 | `internal_error` | Generic internal request failure |
 | `lease_reaper_error` | Lease reconciliation failure |
 | `attempt_error` | Worker attempt failure |
-| `state_write_error` | Worker state persistence failure |
+| `state_write_error` | Worker state persistence failure. `site` names the writer: `status_snapshot`, `board_tick`, `task_state` or `evidence_close`. An optional `code` carries a system error code such as `EPERM`, `EBUSY` or `SQLITE_BUSY`; paths and messages are never included |
 | `connection_lost` / `connection_restored` | Worker connection transition |
 | `service_listening` | Worker status service started listening |
 

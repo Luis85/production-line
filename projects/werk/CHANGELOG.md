@@ -11,6 +11,9 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Added
 
+- Portable client option `--request-timeout-ms` (1,000–600,000) overrides how long a command waits for the API.
+- `feature setup` and its plan warn with `authoring_script_outdated` when the committed `.werk/authoring/feature-request.mjs` differs from the bundled script. The guide explains how to compare and refresh it after an upgrade.
+- `state_write_error` service events name the failing writer in `site` and include an allowlisted system error code such as `EPERM` or `EBUSY`.
 - New repository requests can implement features in their isolated worktree: explicitly approved file edits, required verification commands, repair loops and review patches generated from the actual candidate. Check receipts are tied to the candidate and appear in the webview and Markdown records; legacy requests retain proposal behavior.
 - Configurable tool-call and command-duration budgets accompany the task duration, including API loops and the CLI MCP bridge.
 - Project CLI tool grants let the model pass arguments to an approved executable in its task worktree, within allowed commands, required flags, refused options and argument/output limits. Tools start disabled and run without a shell. Configure them in **Settings → Tools & MCP** or with `tool-access get|set`; `tool-access discover` reads saved MCP tool catalogs without granting access.
@@ -20,12 +23,16 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Changed
 
+- `shared sync`, `shared configure` and `repository sync` wait up to 120 s instead of 10 s. A client timeout now reports `"code":"timeout"` and says the operation may still be running.
+- `shared configure` names missing configuration fields instead of asking for an assigned repository.
 - Worker navigation now separates Taskboard, Metrics, History and Settings. Existing dashboard setup bookmarks continue to open the corresponding settings section.
 - One request composer handles instructions and optional approved repository files. Provider, model, tool and agent options disclose when needed; retries retain the original request identity. Task and conversation navigation remains accessible on narrow screens.
 - Metrics prioritizes consumption and retained execution measurements, with coverage and scope labels, followed by worker health and host resources.
 
 ### Fixed
 
+- Portable CLI JSON input from `--file PATH` or `--file -` accepts a leading UTF-8 byte order mark, as written by Windows PowerShell 5.1 pipes.
+- Shared-intake, provider-account, Taskboard page and webview asset requests no longer log as route `unmatched`. Runtime log capture keeps every normalized worker route.
 - CLI grants reject response-file and extracted-path escapes and ambiguous required flags; CLI-only grants revalidate retained Git worktree ownership. Exported MCP catalogs can round-trip through the tool-access CLI while preserving API size limits and secret handling.
 - Portable startup resolves valid state-directory parent aliases before saving request Markdown, including macOS path aliases. Symlinked state directories and managed note directories remain refused.
 - Interrupted repository preparation can recover through the same request identity when its retained worktree is unchanged. Edited worktrees are preserved with a failed request and explicit recovery guidance.
