@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { channel } from 'node:diagnostics_channel';
 import { once } from 'node:events';
+import { createRequire } from 'node:module';
+import { setImmediate as nextTurn } from 'node:timers/promises';
 import { WorkerConversation } from '../../src/worker/dist/worker/application/conversation.js';
 import { defaultExecutionPolicy, validateExecutionPolicy } from '../../src/worker/dist/worker/application/execution-policy.js';
 import { prepareModelRequest } from '../../src/worker/dist/worker/application/model-contract.js';
@@ -30,19 +32,49 @@ test('chat snapshots admission budget and injected short deadline retains timeou
   assert.match(conversation.snapshot().messages.at(-1).text,/configured execution time limit/);
   await conversation.close();
 });
-test('provider transport accepts delayed headers/body and aborts cleanly without retries', async () => {
-  let calls=0; const observed=[];
-  const requests=channel('undici:request:create'); const observe=({request})=>observed.push({headersTimeout:request.headersTimeout,bodyTimeout:request.bodyTimeout}); requests.subscribe(observe);
-  const server=createServer((request,response)=>{calls++;request.resume();setTimeout(()=>{response.writeHead(200,{'content-type':'application/json'});response.write('{');setTimeout(()=>response.end('"ok":true}'),30);},30)});
-  server.listen(0,'127.0.0.1'); await once(server,'listening');
-  const url='http://127.0.0.1:'+server.address().port;
+test('provider transport accepts delayed headers/body and aborts cleanly without retries', { timeout: 7000 }, async () => {
+  // Advance the pinned transport's test clock, not the invocation's real deadline.
+  // Request diagnostics omit deadlines inherited from the owned Agent.
+  const providerRequire = createRequire(new URL('../../src/worker/dist/worker/infrastructure/provider-transport.js', import.meta.url));
+  const transportTimers = providerRequire('undici/lib/util/timers.js');
+  let calls = 0, dispatched = 0, firstStarted, secondStarted, receivedHeaders;
+  const firstAdmission = new Promise(resolve => { firstStarted = resolve; });
+  const secondAdmission = new Promise(resolve => { secondStarted = resolve; });
+  const headers = new Promise(resolve => { receivedHeaders = resolve; });
+  const server = createServer((request, response) => {
+    request.resume(); calls++;
+    if (calls === 1) firstStarted(response); else secondStarted(response);
+  });
+  server.listen(0, '127.0.0.1'); await once(server, 'listening');
+  const url = 'http://127.0.0.1:' + server.address().port;
+  const requests = channel('undici:request:create'), responses = channel('undici:request:headers');
+  const observeRequest = ({ request }) => { if (request.origin === url) dispatched++; };
+  const observeHeaders = ({ request }) => { if (request.origin === url) receivedHeaders(); };
+  requests.subscribe(observeRequest); responses.subscribe(observeHeaders);
   try {
-    const result=await providerTransport(url,{method:'POST',body:'{}',signal:AbortSignal.timeout(1000)});
-    assert.deepEqual(await result.json(),{ok:true});
-    await assert.rejects(providerTransport(url,{method:'POST',body:'{}',signal:AbortSignal.timeout(10)}));
-    assert.equal(calls,2); assert.equal(observed.length,2);
-    for(const request of observed) assert.deepEqual(request,{headersTimeout:0,bodyTimeout:0});
-  } finally {requests.unsubscribe(observe);server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+    let settled = false;
+    const first = providerTransport(url, { method: 'POST', body: '{}', signal: AbortSignal.timeout(5000) });
+    first.then(() => { settled = true; }, () => { settled = true; });
+    const waitFor = (barrier, pending) => Promise.race([barrier, pending.then(() => { throw Error('Provider settled before the test barrier'); })]);
+    const response = await waitFor(firstAdmission, first);
+    const advancePastDefault = async () => { transportTimers.tick(1); transportTimers.tick(301000); await nextTurn(); await nextTurn(); };
+    await advancePastDefault();
+    assert.equal(settled, false, 'the default five-minute header cap must not end an admitted invocation');
+    response.writeHead(200, { 'content-type': 'application/json' }); response.write('{');
+    await waitFor(headers, first);
+    await advancePastDefault();
+    assert.equal(settled, false, 'the default five-minute body cap must not end an admitted invocation');
+    response.end('"ok":true}');
+    assert.deepEqual(await (await first).json(), { ok: true });
+    const controller = new AbortController();
+    const cancelled = assert.rejects(providerTransport(url, { method: 'POST', body: '{}', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5000)]) }), error => error.name === 'AbortError' || error.code === 'cancelled');
+    await Promise.race([secondAdmission, cancelled]); controller.abort(); await cancelled;
+    assert.equal(calls, 2); assert.equal(dispatched, 2, 'neither delayed nor cancelled inference is retried');
+  } finally {
+    requests.unsubscribe(observeRequest); responses.unsubscribe(observeHeaders);
+    server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
+    transportTimers.reset();
+  }
 });
 
 test('provider transport honors opt-in environment proxy without mutating global dispatcher', async () => {
