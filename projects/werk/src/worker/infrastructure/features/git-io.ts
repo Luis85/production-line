@@ -50,6 +50,17 @@ async function publicationDirectory(storage: string, signal: AbortSignal) {
 }
 export interface GitBlob { revision: string; content: string; mode: string; }
 export interface GitIoOptions { repository: string; remote: string; stateDirectory: string; }
+/**
+ * Git opens worktree metadata before long-path configuration and bounds a child's
+ * GIT_DIR to 220 UTF-8 bytes on Windows; a relative argument preserves the same path.
+ * Checked when shared intake is configured so a deep state directory fails before any claim.
+ */
+export function assertPublicationPath(stateDirectory: string, repository: string, platform: NodeJS.Platform = process.platform) {
+  if (platform !== 'win32') return;
+  const candidate = join(stateDirectory, 'worktrees', 'p-XXXXXX'), gitDir = join(repositoryWorktreeArgument(repository, candidate), '.git');
+  if (join(candidate, '.git').length >= 260 || Buffer.byteLength(gitDir) > 220)
+    throw new GitFeatureError('invalid_input', `Use a shorter worker state directory for shared feature publication on Windows: Git worktree metadata needs ${Buffer.byteLength(gitDir)} of at most 220 bytes. Start the worker with a shorter --state-dir, for example C:\werk\<project>.`);
+}
 /** Git reads objects and writes only worker-owned temporary worktrees; it never checks out the developer branch. */
 export class FeatureGitIo {
   readonly options: GitIoOptions;
@@ -104,10 +115,8 @@ export class FeatureGitIo {
   }
   async worktree<T>(root: RepositoryRoot, commit: string, signal: AbortSignal, action: (path: string) => Promise<T>): Promise<T> {
     if (!commitId(commit)) throw new GitFeatureError('invalid_input', 'Publication requires a full source commit identifier.');
-    const directory = join(this.options.stateDirectory, 'worktrees'), candidate = join(directory, 'p-XXXXXX');
-    // Git opens its metadata before long-path config and bounds a child's GIT_DIR
-    // to 220 UTF-8 bytes on Windows. A relative argument preserves the same path.
-    if (process.platform === 'win32' && (join(candidate, '.git').length >= 260 || Buffer.byteLength(join(repositoryWorktreeArgument(root.path, candidate), '.git')) > 220)) throw new GitFeatureError('invalid_input', 'Use a shorter worker state directory for shared feature publication on Windows.');
+    const directory = join(this.options.stateDirectory, 'worktrees');
+    assertPublicationPath(this.options.stateDirectory, root.path);
     const storage = await ordinaryDirectory(directory, true);
     const path = await publicationDirectory(storage, signal), identity = await lstat(path);
     let added = false;

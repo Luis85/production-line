@@ -22,7 +22,7 @@ export interface FeatureExecutionLinks {
 export interface FeatureInput { title: string; mode: 'chat' | 'patch'; provider: string; message: string; paths?: string[]; priority: number; definitionId?: string; agent?: string; useInstructionsOnly?: boolean; }
 export interface FeatureRecord { id: string; name: string; source: 'folder' | 'orchestrator'; taskId: string; sessionId: string; input?: FeatureInput; inputHash: string; submitted: boolean; status: string; createdAt: string; updatedAt: string; error?: string; result?: string; patch?: string; attempt?: number; archived?: boolean; execution?: FeatureExecutionLinks; executionDirectory?: string; gates?: FeatureGateProjection; executionStatus?: string; interaction?: { phase: string; revision: number; pendingId?: string; link?: string }; }
 export interface FeatureIndex { version: 1; owner: string; records: FeatureRecord[]; }
-export interface FeatureFile { name: string; revision: string; id?: string; status?: string; source?: string; input?: FeatureInput; error?: string; }
+export interface FeatureFile { name: string; revision: string; id?: string; status?: string; source?: string; templateId?: string; input?: FeatureInput; error?: string; }
 export interface FeatureFolderPort {
   directory: string;
   documents: FeatureDocumentPort;
@@ -108,6 +108,9 @@ export class FeatureRequests {
       record ??= !file.id ? atName : undefined;
       if (!record) {
         if (file.source === 'orchestrator' || !['draft', 'ready', undefined].includes(file.status)) { this.errors.push({ file: file.name, message: 'Unrecognized lifecycle record. New requests must use status: draft or ready and no worker metadata.' }); continue; }
+        // A templateId marks a shared Git request. Claiming it here would write local lifecycle
+        // metadata into a team file that a vault or sync tool may push back to the shared branch.
+        if (file.templateId) { if (file.status === 'ready') this.errors.push({ file: file.name, message: 'Shared Git request: connect shared intake to process it. The local feature folder never claims shared requests.' }); continue; }
         if (!admit || file.status === 'draft' || previous !== file.revision) continue;
         if (!file.input) continue;
         if (this.index.records.length >= 1000) { this.errors.push({ file: file.name, message: 'Feature index reached 1,000 records. Use a new worker state and folder for further requests.' }); continue; }

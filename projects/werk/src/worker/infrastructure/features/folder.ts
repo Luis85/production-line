@@ -78,7 +78,7 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
     for (const name of names) {
       try {
         const raw = await readBoundedFile(join(this.directory, name), 65536), parsed = parseFeature(raw), d = parsed.data;
-        files.push({ name, revision: digest(raw), ...(typeof d.id === 'string' ? { id: d.id } : {}), status: d.status === undefined ? undefined : String(d.status), source: String(d.source ?? 'folder'), ...(d.source === 'orchestrator' ? {} : { input: featureInput(parsed, this.defaultProvider) }) });
+        files.push({ name, revision: digest(raw), ...(typeof d.id === 'string' ? { id: d.id } : {}), status: d.status === undefined ? undefined : String(d.status), source: String(d.source ?? 'folder'), ...(typeof d.templateId === 'string' ? { templateId: d.templateId } : {}), ...(d.source === 'orchestrator' ? {} : { input: featureInput(parsed, this.defaultProvider) }) });
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
         // Parse/validation messages contain no source contents or YAML parser diagnostics.
