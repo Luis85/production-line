@@ -223,12 +223,16 @@ node bin/apps/worker/cli.mjs provider check --id codex-cli
 node bin/apps/worker/cli.mjs definition preview --file preview.json
 node bin/apps/worker/cli.mjs definition import --file definition.json
 node bin/apps/worker/cli.mjs definition list
+node bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-reviewer
 node bin/apps/worker/cli.mjs definition delete --id DEFINITION_ID
 ```
 
-Preview input is `{"yaml":"YAML_TEXT"}`; import adds `"name":"Project reviewer"`.
+Preview input is `{"yaml":"YAML_TEXT"}`; import adds `"name":"Project reviewer"`
+and optionally a stable `"ref":"project-reviewer"`.
 The returned definition ID can be added to `task create` or `file-task create`
-input as `"definitionId":"DEFINITION_ID","agent":"root"`. The task stores an
+input as `"definitionId":"DEFINITION_ID","agent":"root"`. Shared or committed
+input should use `"definitionRef":"project-reviewer"` instead, which resolves on
+whichever worker receives it. The task stores an
 immutable instruction/model snapshot. Supported OpenAI/Anthropic model references
 require a matching worker provider; the definition never silently changes billing.
 

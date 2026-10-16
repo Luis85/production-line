@@ -67,7 +67,7 @@ files are reserved/ignored.
 | `provider` | `codex-cli`, `claude-cli`, `openai-api` or `anthropic-api`; defaults to `features.provider`. Configure/authenticate that connection separately. |
 | `paths` | Required for patch mode: up to 32 project-relative approved text files. Rejected in chat mode. |
 | `priority` | `1` or `2` (default `1`); applies to patch tasks when the taskboard uses priority ordering. |
-| `definitionId`, `agent`, `useInstructionsOnly` | Optional [Docker Agent instruction profile](agent-definitions.md) selection, with the same compatibility acknowledgement as the webview. |
+| `definitionRef` or `definitionId`, `agent`, `useInstructionsOnly` | Optional [Docker Agent instruction profile](agent-definitions.md) selection, with the same compatibility acknowledgement as the webview. Use `definitionRef` (1–80 lowercase letters, digits or hyphens) in committed or shared files: it names a definition by its [stable reference](agent-definitions.md#stable-references-for-committed-requests). `definitionId` is specific to one worker. A request may use one, not both. |
 | `source`, `werk` | Worker-owned provenance and lifecycle metadata. Orchestrator files use `source: orchestrator`; users must not create remote assignments by editing this field. |
 
 Custom frontmatter fields/comments are retained. The Markdown body is preserved

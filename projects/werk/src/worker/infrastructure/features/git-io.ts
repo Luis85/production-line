@@ -4,7 +4,7 @@ import { gitEnvironment } from '../../../shared/git/environment.js';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { lstat, mkdir, open, readdir, realpath } from 'node:fs/promises';
-import { isAbsolute, join, parse, resolve, sep } from 'node:path';
+import { isAbsolute, join, parse, resolve, sep, win32 } from 'node:path';
 import { runProcess, ProcessRunError } from '../../../shared/process/launcher.js';
 import { repositoryRoot, repositoryWorktreeArgument, type RepositoryRoot } from '../repositories-git.js';
 
@@ -60,9 +60,12 @@ export interface GitIoOptions { repository: string; remote: string; stateDirecto
  */
 export function assertPublicationPath(stateDirectory: string, repository: string, platform: NodeJS.Platform = process.platform) {
   if (platform !== 'win32') return;
-  const candidate = join(stateDirectory, 'worktrees', 'p-XXXXXX'), gitDir = join(repositoryWorktreeArgument(repository, candidate), '.git');
-  if (join(candidate, '.git').length >= 260 || Buffer.byteLength(gitDir) > 220)
-    throw new GitFeatureError('invalid_input', `Use a shorter worker state directory for shared feature publication on Windows: Git worktree metadata needs ${Buffer.byteLength(gitDir)} of at most 220 bytes. Start the worker with a shorter --state-dir, for example C:\werk\<project>.`);
+  const candidate = win32.join(stateDirectory, 'worktrees', 'p-XXXXXX');
+  const metadataPath = win32.join(candidate, '.git'), gitDir = win32.join(repositoryWorktreeArgument(repository, candidate, win32), '.git');
+  const limits: string[] = [];
+  if (metadataPath.length >= 260) limits.push('the absolute metadata path has ' + metadataPath.length + ' characters and must have fewer than 260');
+  if (Buffer.byteLength(gitDir) > 220) limits.push('the Git worktree argument uses ' + Buffer.byteLength(gitDir) + ' UTF-8 bytes and must use at most 220');
+  if (limits.length) throw new GitFeatureError('invalid_input', 'Use a shorter worker state directory for shared feature publication on Windows: ' + limits.join('; ') + '. Start the worker with a shorter --state-dir, for example C:\\werk\\project.');
 }
 /** Git reads objects and writes only worker-owned temporary worktrees; it never checks out the developer branch. */
 export class FeatureGitIo {

@@ -48,9 +48,9 @@ export async function repositoryRoot(path: string, signal: AbortSignal, timeoutM
 }
 
 /** Git passes this argument to a child's GIT_DIR, whose Windows byte limit is stricter than filesystem paths. */
-export function repositoryWorktreeArgument(repository: string, worktree: string): string {
-  const candidate = relative(repository, worktree);
-  return !isAbsolute(candidate) && Buffer.byteLength(candidate) < Buffer.byteLength(worktree) ? candidate : worktree;
+export function repositoryWorktreeArgument(repository: string, worktree: string, paths = { relative, isAbsolute }): string {
+  const candidate = paths.relative(repository, worktree);
+  return !paths.isAbsolute(candidate) && Buffer.byteLength(candidate) < Buffer.byteLength(worktree) ? candidate : worktree;
 }
 
 async function directory(parent: string, name: string) {

@@ -77,8 +77,8 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
     const files: FeatureFile[] = [];
     for (const name of names) {
       try {
-        const raw = await readBoundedFile(join(this.directory, name), 65536), parsed = parseFeature(raw), d = parsed.data;
-        files.push({ name, revision: digest(raw), ...(typeof d.id === 'string' ? { id: d.id } : {}), status: d.status === undefined ? undefined : String(d.status), source: String(d.source ?? 'folder'), ...(typeof d.templateId === 'string' ? { templateId: d.templateId } : {}), ...(d.source === 'orchestrator' ? {} : { input: featureInput(parsed, this.defaultProvider) }) });
+        const raw = await readBoundedFile(join(this.directory, name), 65536), parsed = parseFeature(raw), d = parsed.data, shared = Object.hasOwn(d, 'templateId');
+        files.push({ name, revision: digest(raw), ...(typeof d.id === 'string' ? { id: d.id } : {}), status: d.status === undefined ? undefined : String(d.status), source: String(d.source ?? 'folder'), shared, ...(shared || d.source === 'orchestrator' ? {} : { input: featureInput(parsed, this.defaultProvider) }) });
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
         // Parse/validation messages contain no source contents or YAML parser diagnostics.
@@ -94,6 +94,7 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
     const current = await readBoundedFile(path, 65536).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
     if (current === null || digest(current) !== file.revision) return false;
     const parsed = parseFeature(current);
+    if (Object.hasOwn(parsed.data, 'templateId')) return false;
     const next = renderFeature(parsed, record.id, record.status, { archived: record.archived ?? false, source: record.source, taskId: record.taskId, sessionId: record.sessionId, submittedAt: record.createdAt, updatedAt: record.updatedAt, inputHash: record.inputHash, ...(record.attempt !== undefined ? { attempt: record.attempt } : {}), ...(record.error ? { error: record.error } : {}), ...(record.result ? { result: record.result } : {}), ...(record.patch ? { patch: record.patch } : {}), ...(record.execution ? { execution: record.execution } : {}), ...(record.executionDirectory ? { executionDirectory: record.executionDirectory } : {}), ...(record.interaction ? { interaction: record.interaction } : {}), ...(record.gates ? { gates: record.gates, requestPhase: record.gates.phase, executionStatus: record.executionStatus } : {}), ...(inputChanged ? { inputChanged: true, note: 'Accepted input is frozen. Copy to a new filename and remove id/werk to request different work.' } : {}) });
     if (next === current) return true;
     // Optimistic editor protection; a changed observation is retried on the next scan.

@@ -39,7 +39,7 @@ import {
   type FeatureRecord,
 } from "../application/feature-requests.js";
 import { MarkdownFeatureFolder } from "../infrastructure/features/folder.js";
-import { definitionConnection } from "../application/definitions.js";
+import { definitionConnection, definitionSelection } from "../application/definitions.js";
 import { WorkerSettings } from "../infrastructure/settings.js";
 import type { WorkerSessions } from "../application/sessions.js";
 import type { LocalTaskboard } from "../application/local-tasks.js";
@@ -547,6 +547,7 @@ export class WorkerWorkspace {
           "provider",
           "message",
           "definitionId",
+          "definitionRef",
           "agent",
           "useInstructionsOnly",
         ]);
@@ -562,6 +563,7 @@ export class WorkerWorkspace {
         if (
           body.action !== "create" &&
           (body.definitionId !== undefined ||
+            body.definitionRef !== undefined ||
             body.agent !== undefined ||
             body.useInstructionsOnly !== undefined)
         )
@@ -595,6 +597,7 @@ export class WorkerWorkspace {
         }
         const message = text(requestMessage, "message", 8000);
         if (body.action === "create") {
+          const selection = definitionSelection(body);
           const title = text(body.title, "title", 120),
             provider = this.settings.provider(String(body.provider));
           const existing = this.sessions
@@ -603,7 +606,9 @@ export class WorkerWorkspace {
           const savedDefinition = existing?.definition;
           const definition =
             savedDefinition &&
-            body.definitionId === savedDefinition.definitionId &&
+            (selection.definitionRef !== undefined
+              ? selection.definitionRef === savedDefinition.ref
+              : selection.definitionId === savedDefinition.definitionId) &&
             (body.agent ?? "root") === savedDefinition.agent &&
             (!savedDefinition.adapted || body.useInstructionsOnly === true)
               ? savedDefinition
@@ -775,6 +780,10 @@ export class WorkerWorkspace {
       allowed: path => this.repositoryDiscovery.assertAllowed(path),
       canAdmit: () => this.acceptingTasks && !this.settings.value.board.paused && !this.consumption.status().blocked && !this.configurationUpdating && !this.repositoriesUpdating && !this.executionProfiles?.pending(),
       submit: record => this.submitSharedFeature(record),
+      admissionIssue: input => {
+        try { definitionConnection(this.settings.provider(input.provider), this.definitions.select({ definitionId: input.definitionId, definitionRef: input.definitionRef, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly })); return undefined; }
+        catch (error) { return error instanceof Error ? error.message : 'The selected agent definition is unavailable.'; }
+      },
       inspect: id => {
         try {
           const task = this.board.detail(id);
@@ -858,7 +867,7 @@ export class WorkerWorkspace {
   private async submitSharedFeature(record: SharedFeatureRecord) {
     const input = record.accepted;
     const assignment = this.repositories.resolve(record.binding.repositoryId);
-    await this.withRepositoryAdmission(() => this.board.create({ title: input.title, instruction: input.message, provider: input.provider, repository: assignment.path, paths: input.paths, priority: input.priority, definitionId: input.definitionId, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly }, { id: record.taskId!, hash: record.inputHash, policy: record.workflow.policy, criteria: input.criteria, repositoryId: record.binding.repositoryId, baseCommit: record.sourceCommit }));
+    await this.withRepositoryAdmission(() => this.board.create({ title: input.title, instruction: input.message, provider: input.provider, repository: assignment.path, paths: input.paths, priority: input.priority, definitionId: input.definitionId, definitionRef: input.definitionRef, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly }, { id: record.taskId!, hash: record.inputHash, policy: record.workflow.policy, criteria: input.criteria, repositoryId: record.binding.repositoryId, baseCommit: record.sourceCommit }));
   }
   repositoryStatus() {
     return { schemaVersion: 1, pollMs: this.settings.value.repositories.pollMs, items: this.repositories.view(), discovery: this.repositoryDiscovery.view() };
@@ -1097,6 +1106,7 @@ export class WorkerWorkspace {
           paths: input.paths,
           priority: input.priority,
           definitionId: input.definitionId,
+          definitionRef: input.definitionRef,
           agent: input.agent,
           useInstructionsOnly: input.useInstructionsOnly,
         },
@@ -1110,6 +1120,7 @@ export class WorkerWorkspace {
         provider: input.provider,
         message: input.message,
         definitionId: input.definitionId,
+        definitionRef: input.definitionRef,
         agent: input.agent,
         useInstructionsOnly: input.useInstructionsOnly,
       });

@@ -19,10 +19,10 @@ export interface FeatureExecutionLinks {
   runId: string; attempt: number; before: string; after?: string; completedAt?: string;
   result?: string; patch?: string;
 }
-export interface FeatureInput { title: string; mode: 'chat' | 'patch'; provider: string; message: string; paths?: string[]; priority: number; definitionId?: string; agent?: string; useInstructionsOnly?: boolean; }
+export interface FeatureInput { title: string; mode: 'chat' | 'patch'; provider: string; message: string; paths?: string[]; priority: number; definitionId?: string; definitionRef?: string; agent?: string; useInstructionsOnly?: boolean; }
 export interface FeatureRecord { id: string; name: string; source: 'folder' | 'orchestrator'; taskId: string; sessionId: string; input?: FeatureInput; inputHash: string; submitted: boolean; status: string; createdAt: string; updatedAt: string; error?: string; result?: string; patch?: string; attempt?: number; archived?: boolean; execution?: FeatureExecutionLinks; executionDirectory?: string; gates?: FeatureGateProjection; executionStatus?: string; interaction?: { phase: string; revision: number; pendingId?: string; link?: string }; }
 export interface FeatureIndex { version: 1; owner: string; records: FeatureRecord[]; }
-export interface FeatureFile { name: string; revision: string; id?: string; status?: string; source?: string; templateId?: string; input?: FeatureInput; error?: string; }
+export interface FeatureFile { name: string; revision: string; id?: string; status?: string; source?: string; shared?: boolean; input?: FeatureInput; error?: string; }
 export interface FeatureFolderPort {
   directory: string;
   documents: FeatureDocumentPort;
@@ -65,6 +65,10 @@ export class FeatureRequests {
       const body = input as { name: string; action: string };
       const readOnly = ['get', 'validate', 'result'].includes(body?.action);
       if (readOnly) await this.reconcile(false);
+      if (body?.action === 'submit' || body?.action === 'retry') {
+        const file = (await this.folder.scan()).find(file => file.name === body.name);
+        if (file?.shared) throw new DomainError('conflict', 'Shared Git requests use shared intake. Cancel any unfinished local task and restore its shared request from Git before connecting shared intake; local submit and retry cannot process it.');
+      }
       if (body?.action === 'retry') {
         // Capture the just-finished run before this management action replaces it.
         // This does not rewrite the source file/revision used by the caller's guard.
@@ -101,6 +105,14 @@ export class FeatureRequests {
     for (const file of files) {
       const previous = this.observed.get(file.name); this.observed.set(file.name, file.revision);
       if (file.error) { this.errors.push({ file: file.name, message: file.error }); continue; }
+      // Shared notes belong to the Git intake even when an older worker retained
+      // a local record. Keep that history available for cancellation and inspection.
+      if (file.shared) {
+        const retained = this.index.records.find(record => record.id === file.id || record.name === file.name);
+        if (retained) this.errors.push({ file: file.name, message: 'Shared Git request has retained local history. Local admission and source updates are blocked. Cancel any unfinished local task, restore the shared request from Git, then connect shared intake.' });
+        else if (file.status === 'ready') this.errors.push({ file: file.name, message: 'Shared Git request: connect shared intake to process it. The local feature folder never claims shared requests.' });
+        continue;
+      }
       if (file.id && ids.get(file.id)! > 1) { this.errors.push({ file: file.name, message: 'Duplicate feature ID. Keep one file per request; remove id and werk from a new copy.' }); continue; }
       let record = this.index.records.find(item => item.id === file.id);
       const atName = this.index.records.find(item => item.name === file.name);
@@ -108,9 +120,6 @@ export class FeatureRequests {
       record ??= !file.id ? atName : undefined;
       if (!record) {
         if (file.source === 'orchestrator' || !['draft', 'ready', undefined].includes(file.status)) { this.errors.push({ file: file.name, message: 'Unrecognized lifecycle record. New requests must use status: draft or ready and no worker metadata.' }); continue; }
-        // A templateId marks a shared Git request. Claiming it here would write local lifecycle
-        // metadata into a team file that a vault or sync tool may push back to the shared branch.
-        if (file.templateId) { if (file.status === 'ready') this.errors.push({ file: file.name, message: 'Shared Git request: connect shared intake to process it. The local feature folder never claims shared requests.' }); continue; }
         if (!admit || file.status === 'draft' || previous !== file.revision) continue;
         if (!file.input) continue;
         if (this.index.records.length >= 1000) { this.errors.push({ file: file.name, message: 'Feature index reached 1,000 records. Use a new worker state and folder for further requests.' }); continue; }
@@ -135,7 +144,7 @@ export class FeatureRequests {
     // Refresh revisions after intake publication. Updates preserve the current Markdown body.
     const fresh = await this.folder.scan();
     for (const file of fresh) {
-      if (file.error || (file.id && ids.get(file.id)! > 1)) continue;
+      if (file.error || file.shared || (file.id && ids.get(file.id)! > 1)) continue;
       const record = this.index.records.find(item => item.id === file.id || (!file.id && item.name === file.name));
       if (record && record.name === file.name) await this.folder.update(file, record, record.source === 'folder' && !!file.input && fingerprint(file.input) !== record.inputHash);
     }

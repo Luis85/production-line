@@ -51,9 +51,19 @@ the worker state directory stay within Git's limits; a deep `--state-dir` is
 rejected before any request is claimed.
 
 Bind shared intake before teammates' ready requests reach the worker's checkout.
-The local feature folder never admits a request carrying a `templateId`: it leaves
-the file unchanged and reports it until shared intake processes it, so a vault or
-sync tool cannot push local lifecycle metadata back into a shared request.
+The local feature folder never admits a request carrying a `templateId`, including
+an empty or invalid marker. It leaves the file unchanged and reports ready
+requests until shared intake processes them, so a vault or sync tool cannot push
+local lifecycle metadata back into a shared request. Incomplete shared drafts
+remain outside local validation and execution.
+
+If an older worker already admitted a shared request locally, its task history
+remains available but local admission, retry and source-note updates are blocked.
+Cancel any unfinished local task before connecting shared intake. Restore the
+request from a clean Git revision, preserving any newer team edits and the shared
+request ID, then inspect shared intake before resuming. Do not remove the
+`templateId` to force local execution; the shared workflow owns its readiness
+checks and claim.
 
 The default workflow file is `.werk/feature-workflow.json`. Its paths configure
 request and review-note folders, the template, the Obsidian Base and both check

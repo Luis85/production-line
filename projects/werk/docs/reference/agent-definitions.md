@@ -35,6 +35,50 @@ require Codex CLI or OpenAI API; Anthropic definitions require Claude Code CLI o
 Anthropic API. Selecting a definition never switches billing or provider families
 automatically. CLI authentication still belongs to the worker's OS account.
 
+## Stable references for committed requests
+
+Importing a definition generates a random `definitionId` that exists only in that
+worker's private state. Another worker, or the same worker after its state is
+recreated, assigns a different ID. Committed request templates, shared Git
+requests and scripts that run against several workers should therefore select a
+profile by **reference** instead:
+
+```yaml
+definitionRef: project-reviewer
+agent: root
+```
+
+A reference is a name of 1–80 lowercase letters, digits or hyphens, starting with
+a letter or digit. The worker operator assigns it to one imported definition on
+each worker. References are unique per worker. Give a reference when importing
+(`"ref":"project-reviewer"` in the import JSON or the **Shared reference** field
+in the webview), or assign it to an existing definition:
+
+```sh
+node bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-reviewer
+```
+
+Assigning a reference that another definition holds moves it; importing a
+definition with a reference that is already taken is refused. To update a shared
+profile, import the new YAML without a reference, preview it, move the reference
+to the new definition, then delete the old definition when it is no longer
+needed. Moving or removing a reference affects only tasks created afterwards.
+
+Task creation resolves `definitionRef` once, and the task keeps the same immutable
+snapshot as an ID selection. The snapshot records the resolved `definitionId`, the
+reference and the source digest, so you can tell later which YAML a task used. A
+request that names both `definitionRef` and `definitionId` is rejected. When no
+definition on the receiving worker holds the reference, task creation fails with
+`not_found` and nothing is queued. Local folder intake keeps such a request
+waiting with that error and retries it; shared Git intake does not claim it. The adaptation acknowledgement still applies:
+a profile with unsupported features also needs `useInstructionsOnly: true`.
+Existing `definitionId` requests continue to work unchanged.
+
+The reference is a name, not a content pin. Each worker resolves it to the
+definition its operator has assigned, so a team using several workers must import
+the same YAML on each one. Compare the `digest` in `definition list` across workers
+to confirm they match.
+
 ## Compatibility boundary
 
 This integration reads **instruction profiles**, not the full Docker Agent runtime.
@@ -78,23 +122,29 @@ The portable worker exposes the same workflow to users, CI and AI agents:
 node bin/apps/worker/cli.mjs definition preview --file preview.json
 node bin/apps/worker/cli.mjs definition import --file definition.json
 node bin/apps/worker/cli.mjs definition list
+node bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-reviewer
 node bin/apps/worker/cli.mjs task create --file task.json
 node bin/apps/worker/cli.mjs definition delete --id DEFINITION_ID
 ```
 
 `preview.json` contains `{"yaml":"YAML_TEXT"}`. `definition.json` contains
-`{"name":"Project reviewer","yaml":"YAML_TEXT"}`. Read the generated definition
-ID from the import/list response and use it in task input:
+`{"name":"Project reviewer","ref":"project-reviewer","yaml":"YAML_TEXT"}`; `ref` is
+optional. Select the definition in task input by its reference:
 
 ```json
-{"id":"review-001","title":"Review the feature","provider":"codex-cli","definitionId":"DEFINITION_ID","agent":"root","message":"Review these acceptance criteria: ..."}
+{"id":"review-001","title":"Review the feature","provider":"codex-cli","definitionRef":"project-reviewer","agent":"root","message":"Review these acceptance criteria: ..."}
 ```
+
+Alternatively, read the generated definition ID from the import/list response and
+use `"definitionId":"DEFINITION_ID"` in place of `definitionRef`.
 
 Where required, add `"useInstructionsOnly":true` after reviewing preview diagnostics.
 The CLI derives action names from its commands. Direct HTTP callers use
 `GET /api/definitions` or `POST /api/definitions` with `action` set to
-`preview`, `import` or `delete`. Task/session creation and file-task creation accept
-`definitionId`, `agent` and `useInstructionsOnly`. Authenticated browser sessions
+`preview`, `import`, `ref` (with `id` and `ref`; an empty `ref` removes the
+reference) or `delete`. Task/session creation and file-task creation accept
+`definitionRef` or `definitionId`, plus `agent` and `useInstructionsOnly`. Local
+folder and shared Git feature requests accept the same frontmatter fields. Authenticated browser sessions
 and bearer-authenticated automation use the same validation and task queue.
 
 See [portable applications](portable-apps.md) for state paths and automation,
