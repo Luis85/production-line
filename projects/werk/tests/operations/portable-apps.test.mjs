@@ -79,6 +79,8 @@ test('copied apps operate independently with agent tasks, durable state and late
   const definition = imported.definitions.find(item => item.name === definitionInput.name);
   assert.ok(definition?.id); assert.match(definition.digest, /^[a-f0-9]{64}$/);
   assert.equal((await ok('worker', 'definition list')).definitions.length, 1);
+  assert.equal((await ok('worker', 'definition ref', ['--id', definition.id, '--ref', 'project-reviewer'])).definitions[0].ref, 'project-reviewer');
+  assert.equal((await invokeApp('worker', 'definition ref', ['--id', definition.id, '--ref', 'Not Valid'])).code, 2);
   assert.equal((await ok('worker', 'provider check', ['--id', 'openai-api'])).authentication, 'not-verified');
   const task = { id: 'ci-task-1', title: 'Agent task', provider: queuedProvider.id, definitionId: definition.id, agent: 'root', message: 'Fixture instruction; do not execute.' };
   const created = await ok('worker', 'task create', [], task); assert.equal(created.session.id, task.id); assert.equal(created.session.status, 'queued');
@@ -87,6 +89,8 @@ test('copied apps operate independently with agent tasks, durable state and late
   assert.equal((await ok('worker', 'task list')).selected, 'default', 'agent must not change UI selection');
   await ok('worker', 'task create', [], { ...task, id: 'ci-task-2' });
   const queue = await ok('worker', 'task list'); assert.equal(queue.execution.maxParallel, 1); assert.equal(queue.execution.currentSessionId, null); assert.equal(queue.records.filter(row => row.status === 'queued').length, 2);
+  const { definitionId: _localId, ...portable } = task, byRef = await ok('worker', 'task create', [], { ...portable, id: 'ci-task-ref', definitionRef: 'project-reviewer' });
+  assert.equal(byRef.session.definition.definitionId, definition.id); await ok('worker', 'task cancel', ['--id', 'ci-task-ref']);
   await ok('worker', 'task cancel', ['--id', task.id]);
   await ok('worker', 'task send', ['--id', task.id], { message: 'Same-session follow-up.' });
   assert.equal((await ok('worker', 'task get', ['--id', task.id])).chat.messages.length, 4);

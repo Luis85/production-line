@@ -97,6 +97,15 @@ execution request. Use a new ID for successor work.
 An omitted provider selects `codex-cli`. Requests can explicitly select
 `codex-cli`, `claude-cli`, `openai-api` or `anthropic-api`. Credentials, model
 configuration and supported instruction profiles come from the local worker.
+Select a profile in committed requests and templates with `definitionRef`, a
+stable name the worker operator assigns to an imported definition, rather than a
+worker-generated `definitionId`. The claiming worker resolves the reference when
+the task is admitted, and the task retains that worker's resolved snapshot. A
+worker that cannot resolve the selection (no definition with that reference or ID,
+an unknown agent, or a profile that needs `useInstructionsOnly: true`) does not
+claim the request. It stays ready and unclaimed, with the reason in the request
+view, until that worker can run it or another worker claims it. See
+[agent definitions](agent-definitions.md#stable-references-for-committed-requests).
 Accepted execution preserves its provider configuration. Locally granted model
 tools remain subject to current worker policy and per-call revocation checks;
 repository rules never grant permissions.

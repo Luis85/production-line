@@ -19,7 +19,7 @@ export interface FeatureExecutionLinks {
   runId: string; attempt: number; before: string; after?: string; completedAt?: string;
   result?: string; patch?: string;
 }
-export interface FeatureInput { title: string; mode: 'chat' | 'patch'; provider: string; message: string; paths?: string[]; priority: number; definitionId?: string; agent?: string; useInstructionsOnly?: boolean; }
+export interface FeatureInput { title: string; mode: 'chat' | 'patch'; provider: string; message: string; paths?: string[]; priority: number; definitionId?: string; definitionRef?: string; agent?: string; useInstructionsOnly?: boolean; }
 export interface FeatureRecord { id: string; name: string; source: 'folder' | 'orchestrator'; taskId: string; sessionId: string; input?: FeatureInput; inputHash: string; submitted: boolean; status: string; createdAt: string; updatedAt: string; error?: string; result?: string; patch?: string; attempt?: number; archived?: boolean; execution?: FeatureExecutionLinks; executionDirectory?: string; gates?: FeatureGateProjection; executionStatus?: string; interaction?: { phase: string; revision: number; pendingId?: string; link?: string }; }
 export interface FeatureIndex { version: 1; owner: string; records: FeatureRecord[]; }
 export interface FeatureFile { name: string; revision: string; id?: string; status?: string; source?: string; input?: FeatureInput; error?: string; }

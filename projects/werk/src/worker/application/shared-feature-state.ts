@@ -72,6 +72,8 @@ export interface SharedIntakePorts {
   submit(record: SharedFeatureRecord): Promise<void>;
   inspect(taskId: string): SharedExecution | undefined;
   canAdmit(): boolean;
+  /** A reason this worker cannot run the input, such as a missing instruction profile. The request then stays unclaimed for another worker or a later sync. */
+  admissionIssue?(input: SharedFeatureInput): string | undefined;
 }
 export function bindingKey(config: SharedIntakeConfig) { return JSON.stringify([config.repositoryId, config.remote, config.branch, config.workflowPath]); }
 export const sharedTerminal = (status: string) => ['ready_for_review', 'failed', 'cancelled'].includes(status);

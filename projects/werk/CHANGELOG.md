@@ -7,6 +7,17 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-16
+
+### Added
+
+- Stable instruction profile references. A worker operator assigns a reference such as `project-reviewer` to an imported agent definition, at import or with the new `definition ref` command, and requests select it with `definitionRef` instead of a worker-specific `definitionId`. Committed team templates and shared Git requests no longer need editing when the worker host changes.
+- The webview definition editor accepts and shows a shared reference.
+
+### Changed
+
+- Shared Git intake no longer claims a request whose instruction profile the worker cannot resolve. The request stays ready and unclaimed, with the reason shown, so another worker or a later sync can take it.
+
 ## [0.8.0] - 2026-10-16
 
 ### Added

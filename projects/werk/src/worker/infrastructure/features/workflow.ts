@@ -45,7 +45,7 @@ export function validateFeatureTemplate(markdown: string): FeatureTemplateContra
   if (data.status !== 'draft' || data.mode !== 'patch' || data.source !== undefined || data.werk !== undefined) invalid('Shared feature templates require draft patch mode without worker-owned metadata.');
   if (typeof data.templateId !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(data.templateId)) invalid('Feature templates require a stable templateId.');
   featureRequestSections(parsed.body);
-  const optional = ['schemaVersion', 'id', 'title', 'status', 'mode', 'paths', 'provider', 'priority', 'definitionId', 'agent', 'useInstructionsOnly', 'templateId'];
+  const optional = ['schemaVersion', 'id', 'title', 'status', 'mode', 'paths', 'provider', 'priority', 'definitionId', 'definitionRef', 'agent', 'useInstructionsOnly', 'templateId'];
   return { templateId: data.templateId, headings: [...markdownSections(parsed.body).keys()], fields: Object.keys(data).filter(key => !optional.includes(key)) };
 }
 function meaningful(value: unknown): boolean {
@@ -86,7 +86,7 @@ export function validateFeatureReadiness(markdown: string, readyCheck: FeatureCh
     const entries = sections['acceptance criteria'].split(/\r?\n/).map(line => /^ {0,3}[-*+]\s+(?:\[[ xX]\]\s*)?(.*)$/.exec(line)).filter((match): match is RegExpExecArray => !!match);
     const criteria = entries.map(match => match[1].trim());
     if (!criteria.length || criteria.length > 32 || criteria.some(criterion => !criterion || criterion.length > 1000 || /^(?:tbd|todo|n\/a|none|[-_.\s]+)$/i.test(criterion))) invalid('List 1–32 meaningful acceptance criteria, each at most 1,000 characters.');
-    const standard = ['schemaVersion', 'id', 'templateId', 'title', 'status', 'mode', 'paths', 'provider', 'priority', 'definitionId', 'agent', 'useInstructionsOnly'];
+    const standard = ['schemaVersion', 'id', 'templateId', 'title', 'status', 'mode', 'paths', 'provider', 'priority', 'definitionId', 'definitionRef', 'agent', 'useInstructionsOnly'];
     const metadata = Object.fromEntries(Object.entries(parsed.data).filter(([key]) => !standard.includes(key)));
     function finite(value: unknown): boolean { return typeof value === 'number' ? Number.isFinite(value) : Array.isArray(value) ? value.every(finite) : value && typeof value === 'object' ? Object.values(value).every(finite) : true; }
     if (!finite(metadata)) invalid('Feature metadata must contain finite JSON values.');

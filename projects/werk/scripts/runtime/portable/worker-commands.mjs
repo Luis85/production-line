@@ -70,6 +70,10 @@ export function workerCommands(catalog) {
     description:
       "Print an editable draft frontmatter + Markdown request without a running worker. Save it to a file, finish it, then feature create/validate/submit.",
   };
+  catalog["definition ref"] = {
+    method: "POST", path: "/api/definitions", required: ["id", "ref"], mutating: true,
+    description: "Give an imported definition the stable reference that committed requests select with definitionRef. The reference moves from any other definition; existing tasks keep their saved copy.",
+  };
   catalog["repository status"] = {
     method: "GET", path: "/api/repositories",
     description: "Inspect assigned repositories and the installation-folder consent request without fetching.",

@@ -12,7 +12,8 @@ mode: chat
 # For a review patch, set mode: patch and list approved project-relative files.
 # paths:
 #   - src/example.ts
-# Optional: definitionId, agent, useInstructionsOnly
+# Optional instruction profile: definitionRef (stable, shared) or definitionId
+# (worker-local), plus agent and useInstructionsOnly.
 ---
 # Goal
 
@@ -64,10 +65,12 @@ export function featureInput(parsed: FeatureDocument, defaultProvider: string): 
   if (mode === 'patch' && (!Array.isArray(d.paths) || !d.paths.length)) throw Error('Patch requests require an explicit paths list.');
   if (mode === 'chat' && d.paths !== undefined) throw Error('Use mode: patch to supply approved files. Chat does not read paths.');
   if (d.definitionId !== undefined && (typeof d.definitionId !== 'string' || d.definitionId.length > 100)) throw Error('Invalid definitionId.');
+  if (d.definitionRef !== undefined && (typeof d.definitionRef !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(d.definitionRef))) throw Error('definitionRef must use 1–80 lowercase letters, digits or hyphens.');
+  if (d.definitionId !== undefined && d.definitionRef !== undefined) throw Error('Use definitionRef or definitionId, not both.');
   if (d.agent !== undefined && (typeof d.agent !== 'string' || d.agent.length > 100)) throw Error('Invalid agent name.');
   if (d.useInstructionsOnly !== undefined && typeof d.useInstructionsOnly !== 'boolean') throw Error('useInstructionsOnly must be true or false.');
   if (d.priority !== undefined && d.priority !== 1 && d.priority !== 2) throw Error('priority must be 1 or 2.');
-  return { title: title.trim(), mode: mode as 'chat' | 'patch', provider: String(provider), message: parsed.body.trim(), ...(d.paths ? { paths: d.paths as string[] } : {}), priority: Number(d.priority ?? 1), ...(d.definitionId ? { definitionId: String(d.definitionId) } : {}), ...(d.agent ? { agent: String(d.agent) } : {}), ...(d.useInstructionsOnly !== undefined ? { useInstructionsOnly: d.useInstructionsOnly } : {}) };
+  return { title: title.trim(), mode: mode as 'chat' | 'patch', provider: String(provider), message: parsed.body.trim(), ...(d.paths ? { paths: d.paths as string[] } : {}), priority: Number(d.priority ?? 1), ...(d.definitionId ? { definitionId: String(d.definitionId) } : {}), ...(d.definitionRef ? { definitionRef: String(d.definitionRef) } : {}), ...(d.agent ? { agent: String(d.agent) } : {}), ...(d.useInstructionsOnly !== undefined ? { useInstructionsOnly: d.useInstructionsOnly } : {}) };
 }
 export function renderFeature(parsed: FeatureDocument, id: string, status: string, metadata: Record<string, unknown>) {
   parsed.document.set('id', id); parsed.document.set('status', status); parsed.document.set('werk', metadata);

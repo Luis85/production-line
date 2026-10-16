@@ -65,7 +65,7 @@ async function fixture(t, options = {}) {
     const head = nextCommit(), repo = { head, files, versions: new Map([[head, new Map(files)]]), lifecycle: new Map(), features: new Map() };
     repositories.set(id, repo); return repo;
   }
-  addRepository();
+  addRepository('shared', options.source ?? source);
   function commitFiles(id, edits) {
     const repo = repositories.get(id); for (const [path, content] of Object.entries(edits)) content === null ? repo.files.delete(path) : repo.files.set(path, content);
     repo.head = nextCommit(); repo.versions.set(repo.head, new Map(repo.files)); return repo.head;
@@ -119,6 +119,7 @@ async function fixture(t, options = {}) {
     },
     inspect(id) { const task = tasks.get(id); if (!task) return undefined; const execution = { ...task, request: requests.get(task.requestId) }; return controls.inspect ? controls.inspect(execution) : execution; },
     canAdmit: () => controls.admit,
+    admissionIssue: input => controls.admissionIssue?.(input),
   };
   async function open() { journal = new SharedFeatureJournal(directory); requests = new WorkerRequestJournal(directory); await requests.init(); intake = new SharedFeatureIntake(ports); await intake.init(); }
   await open();
@@ -352,4 +353,21 @@ test('one unavailable repository adapter does not prevent later owned publicatio
   await f.intake.sync(); const rows = f.intake.view().requests;
   assert.equal(rows[0].publication, 'error'); assert.match(rows[0].error, /repository unavailable/);
   assert.equal(rows[1].status, 'ready_for_review'); assert.equal(rows[1].publication, 'synced'); assert.equal(f.featureCommits, 1);
+});
+
+test('a committed definitionRef is retained in the accepted input that admission hands to the task board', async t => {
+  const f = await fixture(t, { source: source.replace('mode: patch\n', 'mode: patch\ndefinitionRef: team-reviewer\nagent: root\n') });
+  await f.intake.sync(); assert.equal(f.tasks.size, 1);
+  const [record] = (await f.state()).records;
+  assert.equal(record.accepted.definitionRef, 'team-reviewer'); assert.equal(record.accepted.agent, 'root'); assert.equal(record.accepted.definitionId, undefined);
+});
+
+test('a worker without the referenced instruction profile leaves the request unclaimed until it can run it', async t => {
+  const f = await fixture(t, { source: source.replace('mode: patch\n', 'mode: patch\ndefinitionRef: team-reviewer\n') });
+  f.controls.admissionIssue = input => input.definitionRef === 'team-reviewer' ? 'No agent definition on this worker uses the reference team-reviewer.' : undefined;
+  await f.intake.sync();
+  assert.equal(f.tasks.size, 0); assert.equal(f.lifecycleAttempts.length, 0, 'no remote claim is written');
+  const [view] = f.intake.view().requests; assert.equal(view.owner, null); assert.equal(view.status, 'ready'); assert.match(view.error, /team-reviewer/);
+  f.controls.admissionIssue = undefined; await f.intake.sync();
+  assert.equal(f.tasks.size, 1); assert.equal((await f.state()).records[0].accepted.definitionRef, 'team-reviewer');
 });

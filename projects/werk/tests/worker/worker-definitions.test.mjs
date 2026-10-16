@@ -123,3 +123,53 @@ test('automation idempotency survives definition deletion without changing the f
   await assert.rejects(workspace.task({ action: 'send', id: 'same-task', message: 'Followup', definitionId: entry.id }), /fixed when a task is created/);
   await workspace.task({ action: 'cancel', id: 'same-task' });
 });
+
+test('stable definition references select a worker-local definition, move explicitly and survive restart', async t => {
+  const path = await directory(t), definitions = new WorkerDefinitions(path); await definitions.init();
+  const { definitions: [first] } = await definitions.action({ action: 'import', name: 'Reviewer v1', ref: 'team-reviewer', yaml: source });
+  assert.equal(first.ref, 'team-reviewer');
+  const byRef = definitions.select({ definitionRef: 'team-reviewer', agent: 'writer' });
+  assert.equal(byRef.definitionId, first.id); assert.equal(byRef.ref, 'team-reviewer'); assert.equal(byRef.agent, 'writer'); assert.equal(byRef.digest, first.digest);
+  assert.deepEqual(definitions.select({ definitionId: first.id, agent: 'writer' }), byRef, 'id and reference select the same snapshot');
+  assert.throws(() => definitions.select({ definitionId: first.id, definitionRef: 'team-reviewer' }), /not both/);
+  assert.throws(() => definitions.select({ definitionRef: 'Team_Reviewer' }), /lowercase/);
+  assert.throws(() => definitions.select({ definitionRef: 'missing-profile' }), /definition ref/);
+  await assert.rejects(definitions.action({ action: 'import', name: 'Duplicate', ref: 'team-reviewer', yaml: source }), /already selects Reviewer v1/);
+  await assert.rejects(definitions.action({ action: 'import', name: 'Bad', ref: '-bad', yaml: source }), /lowercase/);
+  const { definitions: [, second] } = await definitions.action({ action: 'import', name: 'Reviewer v2', yaml: source.replace('Give a concise answer.', 'Give a thorough answer.') });
+  assert.equal(second.ref, undefined);
+  const moved = await definitions.action({ action: 'ref', id: second.id, ref: 'team-reviewer' });
+  assert.equal(moved.definitions.find(item => item.id === first.id).ref, undefined); assert.equal(moved.definitions.find(item => item.id === second.id).ref, 'team-reviewer');
+  assert.match(definitions.select({ definitionRef: 'team-reviewer' }).instruction, /thorough/);
+  assert.equal(byRef.definitionId, first.id, 'an earlier snapshot is not rewritten when its reference moves');
+  await assert.rejects(definitions.action({ action: 'ref', id: 'missing', ref: 'other' }), /not found/);
+  const recovered = new WorkerDefinitions(path); await recovered.init();
+  assert.equal(recovered.select({ definitionRef: 'team-reviewer' }).definitionId, second.id);
+  await recovered.action({ action: 'ref', id: second.id, ref: '' });
+  assert.throws(() => recovered.select({ definitionRef: 'team-reviewer' }), /No agent definition/);
+});
+
+test('stored references are validated and unique when a worker loads its definitions', async t => {
+  for (const refs of [['dup', 'dup'], ['Bad Ref']]) {
+    const path = await directory(t), definitions = new WorkerDefinitions(path); await definitions.init();
+    for (const [n] of refs.entries()) await definitions.action({ action: 'import', name: 'Profile ' + n, yaml: source });
+    const file = join(path, 'agent-definitions.json'), saved = JSON.parse(await readFile(file, 'utf8'));
+    saved.forEach((item, n) => { item.ref = refs[n]; }); await writeFile(file, JSON.stringify(saved));
+    await assert.rejects(new WorkerDefinitions(path).init(), /references/);
+  }
+});
+
+test('automation creates tasks by definition reference and replays them after the reference moves', async t => {
+  const path = await directory(t);
+  const workspace = new WorkerWorkspace({ stateDir: path, pollMs: 1000, timeoutMs: 1000 }, {}, () => ({ activeTasks: [], queuedTasks: [] }));
+  await workspace.init(); cleanup(t, () => workspace.close());
+  await workspace.updateSettings({ provider: { id: 'openai-api', apiKey: 'fixture-only', model: 'fixture-model' }, board: { paused: true } });
+  const { definitions: [entry] } = await workspace.definitions.action({ action: 'import', name: 'Profile', ref: 'shared-profile', yaml: source });
+  const command = { action: 'create', id: 'ref-task', title: 'Review', provider: 'openai-api', message: 'Review this', definitionRef: 'shared-profile', agent: 'root' };
+  const first = await workspace.task(command); assert.equal(first.session.definition.definitionId, entry.id); assert.equal(first.session.definition.ref, 'shared-profile');
+  const { definitions: [, replacement] } = await workspace.definitions.action({ action: 'import', name: 'Replacement', yaml: source });
+  await workspace.definitions.action({ action: 'ref', id: replacement.id, ref: 'shared-profile' });
+  const repeated = await workspace.task(command); assert.equal(repeated.session.id, first.session.id); assert.equal(repeated.session.definition.definitionId, entry.id);
+  await assert.rejects(workspace.task({ action: 'send', id: 'ref-task', message: 'Followup', definitionRef: 'shared-profile' }), /fixed when a task is created/);
+  await workspace.task({ action: 'cancel', id: 'ref-task' });
+});

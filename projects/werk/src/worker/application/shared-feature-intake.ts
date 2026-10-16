@@ -106,6 +106,8 @@ export class SharedFeatureIntake {
       const ready = this.ports.ready(file.content, snapshot);
       if (!ready.valid || !ready.input || !ready.inputHash) { this.discovered.push(this.unclaimed(file.name, source.id ?? '', source.title, 'needs_rework', commit, ready.errors.map(e => e.message))); continue; }
       if (!this.ports.canAdmit()) { this.discovered.push(this.unclaimed(file.name, ready.input.id, ready.input.title, 'ready', commit, [])); continue; }
+      const issue = this.ports.admissionIssue?.(ready.input);
+      if (issue) { this.discovered.push({ ...this.unclaimed(file.name, ready.input.id, ready.input.title, 'ready', commit, []), error: issue.slice(0, 500) }); continue; }
       if (this.state.records.length >= 100) throw new DomainError('conflict', 'Shared intake has reached 100 owned requests. Retain this worker state and configure another worker for further requests.');
       const at = new Date().toISOString();
       const record: SharedFeatureRecord = {

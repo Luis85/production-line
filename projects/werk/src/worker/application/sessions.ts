@@ -516,6 +516,7 @@ export class WorkerSessions {
         "title",
         "provider",
         "definitionId",
+        "definitionRef",
         "agent",
         "useInstructionsOnly",
       ]);
@@ -545,6 +546,7 @@ export class WorkerSessions {
       } else {
         if (
           body.definitionId !== undefined ||
+          body.definitionRef !== undefined ||
           body.agent !== undefined ||
           body.useInstructionsOnly !== undefined
         )
