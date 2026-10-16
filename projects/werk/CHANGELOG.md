@@ -23,6 +23,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Fixed
 
+- Portable startup resolves valid state-directory parent aliases before saving request Markdown, including macOS path aliases. Symlinked state directories and managed note directories remain refused.
 - Interrupted repository preparation can recover through the same request identity when its retained worktree is unchanged. Edited worktrees are preserved with a failed request and explicit recovery guidance.
 - Open request notes retain their rendered contents across unchanged background snapshots.
 - Background polling no longer repeatedly replaces button labels or icons with loading indicators, shifts their width, or temporarily disables valid actions. Deliberate refreshes and saves retain visible feedback.

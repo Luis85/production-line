@@ -25,7 +25,7 @@ async function until(operation, predicate, timeout = 18000) {
   throw Error('Expected state did not arrive');
 }
 test('state separation resolves directory aliases and absent descendants', async t => {
-  const root = await mkdtemp(join(tmpdir(), 'werk-path-alias-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'werk-path-alias-')));
   t.after(() => rm(root, { recursive: true, force: true }));
   const app = join(root, 'app'), alias = join(root, 'alias'); await mkdir(app);
   try { await symlink(app, alias, process.platform === 'win32' ? 'junction' : 'dir'); }

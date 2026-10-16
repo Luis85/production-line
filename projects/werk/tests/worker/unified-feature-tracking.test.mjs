@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, writeFile, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, realpath, mkdir, readFile, writeFile, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';
@@ -11,7 +11,7 @@ import { SharedFeatureIntake } from '../../src/worker/dist/worker/application/sh
 import { publicTaskConversation } from '../../src/worker/dist/worker/application/public-task-transcript.js';
 
 async function fixture(t, configuredFolder = false) {
-  const directory = await mkdtemp(join(tmpdir(), 'werk-unified-tracking-')), state = join(directory, 'state'), project = join(directory, 'project'), features = join(project, 'features');
+  const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-unified-tracking-'))), state = join(directory, 'state'), project = join(directory, 'project'), features = join(project, 'features');
   await mkdir(state); await mkdir(project); if (configuredFolder) await mkdir(features);
   await writeFile(join(project, 'approved.txt'), 'PRIVATE APPROVED SNAPSHOT\n');
   const config = { stateDir: state, projectDir: project, pollMs: 1000, timeoutMs: 60000, ...(configuredFolder ? { features: { directory: features, provider: 'openai-api', pollMs: 1000 } } : {}) };

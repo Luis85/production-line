@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, realpath, mkdir, readFile, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { parse } from 'yaml';
@@ -11,7 +11,7 @@ const at='2026-10-16T12:00:00.000Z';
 function session(id='task-one', extra={}) { return {id,taskId:id,title:'Improve worker interaction',provider:'codex-cli',kind:'chat',status:'draft',createdAt:at,archived:false,messages:0,busy:false,interaction:{schemaVersion:1,sessionId:id,revision:0,phase:'idle',pending:null,latestTurn:null,turns:[],totalTurns:0},...extra}; }
 function message(role,text,extra={}) {return {id:role+'-one',role,text,at,state:'complete',...extra};}
 function turn(extra={}) {return {schemaVersion:1,id:'turn-one',sessionId:'task-one',kind:'message',status:'completed',createdAt:at,finishedAt:at,priorTurnId:null,runId:'run-one',input:'Make the interface clearer.',context:{secret:'PRIVATE_CONTEXT'},dispatch:{operation:'chat',renderedPrompt:'PRIVATE_PROMPT'},dispatchDigest:null,result:{type:'completed',text:'**Completed result**'},usage:null,errorCode:null,...extra};}
-async function fixture(t, snapshots=[]) { const root=await mkdtemp(join(tmpdir(),'werk-feature-tracking-'));const directory=join(root,'features','_tasks'),state=join(root,'state');let current=snapshots;const documents=new MarkdownFeatureTracking(directory,state),tracking=new FeatureTracking(documents,()=>current);t.after(async()=>{await tracking.close();await rm(root,{recursive:true,force:true});});return {root,directory,state,documents,tracking,set:value=>{current=value;}}; }
+async function fixture(t, snapshots=[]) { const root=await realpath(await mkdtemp(join(tmpdir(),'werk-feature-tracking-')));const directory=join(root,'features','_tasks'),state=join(root,'state');let current=snapshots;const documents=new MarkdownFeatureTracking(directory,state),tracking=new FeatureTracking(documents,()=>current);t.after(async()=>{await tracking.close();await rm(root,{recursive:true,force:true});});return {root,directory,state,documents,tracking,set:value=>{current=value;}}; }
 test('all real task kinds have one durable Markdown request; bootstrap is skipped and followups reuse identity',async t=>{
  const f=await fixture(t,[{session:session('default')},{session:session('draft')},{session:session('legacy',{messages:2,status:'completed'}),messages:[message('user','Legacy request'),message('assistant','Legacy answer')]},{session:session('remote-one',{kind:'orchestrator',status:'queued',messages:1}),messages:[message('user','Assigned requirements')]}]);
  const initial=await f.tracking.init();assert.equal(initial.error,null);assert.equal(initial.records.length,3);assert.equal(f.tracking.record('default'),undefined);assert.match((await f.tracking.get('draft')).markdown,/No instructions have been submitted/);assert.match((await f.tracking.get('legacy')).markdown,/Legacy answer/);
@@ -43,7 +43,7 @@ test('foreign notes and symlinks are preserved; failed persistence never claims 
  if(process.platform!=='win32'){await rm(record.path);const outside=join(f.root,'outside.md');await writeFile(outside,'Do not replace');await symlink(outside,record.path);await f.tracking.sync();assert.match(f.tracking.status().error,/could not be saved/);assert.equal(await readFile(outside,'utf8'),'Do not replace');await assert.rejects(f.documents.read('task-one'),/regular file/);await rm(record.path);}
 });
 test('a symlinked directory ancestor is rejected without writing outside the approved tracking folder',async t=>{
- if(process.platform==='win32')return t.skip('Creating directory symlinks may require Windows privileges.');const root=await mkdtemp(join(tmpdir(),'werk-tracking-path-'));t.after(()=>rm(root,{recursive:true,force:true}));await mkdir(join(root,'outside'));await symlink(join(root,'outside'),join(root,'linked'));const documents=new MarkdownFeatureTracking(join(root,'linked','notes'),join(root,'state'));await assert.rejects(documents.init(),/real directories/);assert.deepEqual(await readdir(join(root,'outside')),[]);
+ if(process.platform==='win32')return t.skip('Creating directory symlinks may require Windows privileges.');const root=await realpath(await mkdtemp(join(tmpdir(),'werk-tracking-path-')));t.after(()=>rm(root,{recursive:true,force:true}));await mkdir(join(root,'outside'));await symlink(join(root,'outside'),join(root,'linked'));const documents=new MarkdownFeatureTracking(join(root,'linked','notes'),join(root,'state'));await assert.rejects(documents.init(),/real directories/);assert.deepEqual(await readdir(join(root,'outside')),[]);
 });
 test('sync during an older write observes the later snapshot before resolving, and write faults recover',async()=>{
  let release,entered;const inWrite=new Promise(resolve=>{entered=resolve;});const blocked=new Promise(resolve=>{release=resolve;});let snapshots=[{session:session('first')}],writes=[],block=true,fail=false;

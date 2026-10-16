@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
+import { normalizeSource } from '../../helpers/source-text.mjs';
 import { computed, ref, watch, nextTick, reactive, effectScope, proxyRefs } from 'vue';
 import { deferred } from '../helpers/frontend-loader.mjs';
 
 // Exercise each component's real setup and button bindings with held transport responses.
 // Browser polling journeys separately check the rendered icons, labels and dimensions.
-async function fixture(t, component, request) {
-  const source = await readFile(new URL('../../../src/worker/webview/components/' + component + '.vue', import.meta.url), 'utf8');
+async function fixture(t, component, request, sourceTransform = source => source) {
+  const source = normalizeSource(sourceTransform(await readFile(new URL('../../../src/worker/webview/components/' + component + '.vue', import.meta.url), 'utf8')));
   const script = source.match(/<script setup[^>]*>([\s\S]*?)<\/script>/)[1].replace(/^import .*;\n/gm, '');
   const state = reactive({ unlocked: true, refreshRevision: 0 }), route = reactive({ path: '/history', query: {} });
   const ports = { computed, ref, watch, nextTick, state, request, useRoute: () => route, useRouter: () => ({}), defineProps: () => ({ compact: false }), onMounted() {}, onActivated() {}, onDeactivated() {}, document: { getElementById: () => ({ focus() {} }) } };
@@ -103,4 +104,18 @@ test('failed background feature reads retain the error and loaded data while ret
   assert.equal(f.folder.value.files[0].title, 'saved'); assert.deepEqual(f.button('Refresh requests'), idle);
   f.state.unlocked = false; await nextTick(); pending.resolve(folder('private')); await nextTick(); await nextTick();
   assert.equal(f.folder.value, null); assert.equal(f.loading.value, false); assert.equal(f.refreshing.value, false);
+});
+
+
+test('CRLF checkout source preserves quiet polling and deliberate refresh behavior', async t => {
+  const background = deferred(), manual = deferred(); let reads = 0;
+  const f = await fixture(t, 'FeatureRequestsPanel', async () => ++reads === 1 ? folder('saved') : reads === 2 ? background.promise : manual.promise, source => source.replace(/\r?\n/g, '\r\n'));
+  await f.load(); await poll(f);
+  assert.deepEqual(f.button('Refresh requests'), idle);
+  assert.equal(f.folder.value.files[0].title, 'saved');
+  const refreshing = f.load(); assert.equal(f.button('Refresh requests').loading, true);
+  manual.resolve(folder('current')); await refreshing;
+  background.resolve(folder('stale')); await nextTick(); await nextTick();
+  assert.equal(f.folder.value.files[0].title, 'current');
+  assert.deepEqual(f.button('Refresh requests'), idle);
 });

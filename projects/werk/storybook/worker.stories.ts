@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite';
+import { userEvent, within } from 'storybook/test';
 import { h, KeepAlive, nextTick, type Component } from 'vue';
 import UApp from '@nuxt/ui/components/App.vue';
 import App from '../src/worker/webview/App.vue';
@@ -117,9 +118,11 @@ export const FileTaskIntake: Story = {
     const checkbox = await element(canvasElement, '#request-file-changes') as HTMLInputElement;
     if (!checkbox.checked) checkbox.click();
     const repository = await element(canvasElement, '#local-repository');
-    repository.click();
-    const option = await element(document.body, '[role="option"]');
-    option.click();
+    await userEvent.click(repository);
+    await element(document.body, '[role="option"]');
+    await userEvent.click(within(document.body).getByRole('option', { name: /^web$/ }));
+    const checkout = await element(canvasElement, '#file-task-checkout');
+    if (!checkout.textContent?.includes('/example/projects/web')) throw Error('The request must retain the explicitly selected repository.');
     const paths = await element(canvasElement, '#local-paths') as HTMLTextAreaElement;
     paths.value = 'README.md'; paths.dispatchEvent(new Event('input', { bubbles: true }));
     await nextTick();

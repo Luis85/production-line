@@ -2,14 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
+import { normalizeSource } from '../helpers/source-text.mjs';
 import { reactive, ref, computed, watch, nextTick, defineComponent } from 'vue';
 import { parse, compileScript } from '@vue/compiler-sfc';
 import { frontend, deferred } from '../ui/helpers/frontend-loader.mjs';
 const { validateApprovedPaths } = await frontend('src/worker/application/approved-paths.ts');
 const { buildWorkerCapacityView } = await frontend('src/worker/webview/worker-capacity.ts');
 // Compile the actual unified composer; keep its production validation and worker port under test.
-async function editorFixture(action) {
-  const source = await readFile(new URL('../../src/worker/webview/components/TaskIntake.vue', import.meta.url), 'utf8');
+async function editorFixture(action, sourceTransform = source => source) {
+  const source = normalizeSource(sourceTransform(await readFile(new URL('../../src/worker/webview/components/TaskIntake.vue', import.meta.url), 'utf8')));
   const { descriptor, errors } = parse(source, { filename: 'TaskIntake.vue' }); assert.deepEqual(errors, []);
   const scripts = compileScript(descriptor, { id: 'request-editor-fixture', genDefaultAs: 'EditorComponent' }).content.replace(/^import .*\n/gm, '');
   const state = reactive({ draftEpoch: 0, unlocked: true, workspaceBusy: false, draft: 'Existing follow-up draft', actionError: '', settings: { repositories: { items: [] }, providers: [{ id: 'codex-cli', configured: true }, { id: 'claude-cli', configured: true }] }, sessions: { selected: 'one', records: [{ id: 'one', provider: 'codex-cli' }, { id: 'two', provider: 'claude-cli' }] }, definitions: [], toolAccess: null });
@@ -73,4 +74,22 @@ test('explicit lock during creation clears the operation and ignores its late id
   const pending = deferred(), f = await editorFixture(() => pending.promise); const creating = f.create();
   f.state.draftEpoch++; f.state.unlocked = false; pending.resolve({ session: { id: 'late-private' }, chat: {} }); await creating;
   assert.equal(f.intake.pending, null); assert.equal(f.intake.message, ''); assert.equal(f.intake.error, ''); assert.ok(!f.events.some(([event]) => event === 'created'));
+});
+
+
+test('CRLF checkout source executes the real unified composer and preserves an ambiguous operation for retry', async () => {
+  const commands = []; let fail = true;
+  const f = await editorFixture(async command => {
+    commands.push(structuredClone(command));
+    if (fail) throw Error('Acknowledgement unavailable');
+    return { session: { id: 'local-' + command.id }, chat: {} };
+  }, source => source.replace(/\r?\n/g, '\r\n'));
+  f.intake.fileChanges = true; await f.create();
+  assert.ok(f.intake.pending); assert.equal(commands.length, 1);
+  assert.deepEqual(commands[0].files, { repository: '/project', paths: ['src/a.ts'] });
+  fail = false; await f.create();
+  assert.deepEqual(commands[1], commands[0]);
+  assert.equal(f.intake.pending, null);
+  assert.ok(f.events.some(([event, id]) => event === 'created' && id === 'local-' + commands[0].id));
+  assert.equal(f.state.draft, 'Existing follow-up draft');
 });
