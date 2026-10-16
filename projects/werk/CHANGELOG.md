@@ -7,6 +7,15 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+### Changed
+
+- File-task review patches contain minimal Git hunks with three context lines instead of replacing every line of a changed file. Quoted paths, missing final newlines and `git apply` compatibility are preserved.
+- The file-task prompt states the exact patch reply limits. A single patch object surrounded by prose or a Markdown fence is accepted; two different objects are refused as ambiguous.
+
+### Fixed
+
+- A file task whose model reply breaks the patch format now records the specific rule, such as `The summary has 2001 characters; the limit is 2000.`, in the task error, and a matching `patch_*` code on the interaction turn and its `failed` event, instead of the generic "Task could not produce a valid patch".
+
 ## [0.9.0] - 2026-10-16
 
 ### Added
