@@ -70,7 +70,9 @@ export function installWorkerFixture(variant: WorkerFixture = 'populated') {
   ] };
   const discovery = variant.startsWith('repository-') ? { id: 'storybook-repository-discovery', path: '/example/projects/customer-portal/installation-folder-with-a-long-readable-name', currentBranch: 'main', remote: variant === 'repository-local' ? null : 'origin', watch: variant !== 'repository-local', decision: variant === 'repository-declined' ? 'declined' : 'pending' } : null;
   const repositoryStatus = { discovery, pollMs: repositories.pollMs, items: repositories.items.map((item, index) => ({ ...item, state: index ? 'dirty' : 'ready', currentBranch: 'main', head: 'storybook-commit', ahead: 0, behind: index ? 1 : 0, lastCheckedAt: fixtureTime, lastPulledAt: index ? null : fixtureTime, error: index ? 'Local changes were retained. Commit or stash them before pulling.' : null })) };
-  const settings = { repositories, executionSource: 'saved_settings', resources: { longRunningMs: 3_600_000 }, execution: { maxRuntimeMs: 14_400_000 }, providers, connection: { enabled: false, url: '', hasEnrollmentToken: false }, board: { paused: false, maxParallel: 1, queueCapacity: 16, orchestratorQueue: 4, order: 'fifo' } };
+  const consumptionPolicy = { enabled: false, period: 'daily', allowance: 1_000_000, workerPercent: 50, perRunReservation: 10_000 };
+  const consumptionStatus = { schemaVersion: 1, policy: consumptionPolicy, periodStart: '2026-10-15T00:00:00.000Z', periodEnd: '2026-10-16T00:00:00.000Z', workerAllowance: 500_000, measuredTokens: 1_584, reservedTokens: 0, chargedTokens: 1_584, remainingTokens: 498_416, activeInvocations: 0, uncertainInvocations: 0, blocked: false, reason: 'disabled', accountingAvailable: true, trackingStartedAt: '2026-10-15T08:00:00.000Z' };
+  const settings = { consumption: consumptionPolicy, repositories, executionSource: 'saved_settings', resources: { longRunningMs: 3_600_000 }, execution: { maxRuntimeMs: 14_400_000 }, providers, connection: { enabled: false, url: '', hasEnrollmentToken: false }, board: { paused: false, maxParallel: 1, queueCapacity: 16, orchestratorQueue: 4, order: 'fifo' } };
   const file = { id: 'file-review', title: 'Review the navigation patch', instruction: 'Clarify the task interaction guidance.', sessionId: 'file', provider: 'codex-cli', model: 'gpt-fixture', repository: '/example/project', files: [{ path: 'README.md', content: '# Worker\nOriginal task guidance.\n', existed: true }], status: 'review', priority: 1, createdAt: startedAt, finishedAt: fixtureTime, error: null, summary: 'A proposed documentation change is ready for human review. No checkout changes or tests were performed.', patch: 'diff --git a/README.md b/README.md\n--- a/README.md\n+++ b/README.md\n@@ -1,2 +1,2 @@\n # Worker\n-Original task guidance.\n+Open the taskboard to add work or follow up on a task.\n', archived: false, interaction: interaction('file'), changedFileCount: 1, runId: 'run-file' };
   const board = { settings: settings.board, tasks: empty ? [] : [{ ...file, files: file.files.map(item => ({ path: item.path, sha256: 'storybook-sha256' })), hasPatch: true }], running: 0, persistenceError: false };
   const chat = { sessionId: selected, messages: empty ? [] : [
@@ -101,6 +103,7 @@ export function installWorkerFixture(variant: WorkerFixture = 'populated') {
     }
     if (path === '/api/shared-intake') return Response.json({ revision: 0, workerId: 'storybook-worker', config: { enabled: false, repositoryId: '', remote: 'origin', branch: 'main', workflowPath: '.werk/feature-workflow.json', pollMs: 5000 }, canEdit: false, blockedReason: 'Pause new starts and finish or stop queued and running work before changing shared intake.', state: 'disabled', error: null, lastSyncedAt: null, sourceCommit: null, workflow: null, requests: [] });
     if (path === '/api/providers/account') return Response.json({ id: body.id, signedIn: 'unknown', account: null, email: null, organization: null, subscription: null, authMethod: null, checkedAt: fixtureTime, message: 'Illustrative fixture. No CLI account was checked.' });
+    if (path === '/api/consumption') return Response.json(consumptionStatus);
     if (path === '/api/tool-access') return Response.json(toolAccess);
     if (path === '/api/execution-profiles') return Response.json(executionProfiles);
     if (path === '/api/access') return Response.json({ authenticated: variant !== 'locked' });
@@ -132,6 +135,6 @@ export function installWorkerFixture(variant: WorkerFixture = 'populated') {
   };
   (window as unknown as { __WERK_STORY_FETCH__: typeof fetch }).__WERK_STORY_FETCH__ = fetchFixture;
   state.unlocked = false;
-  Object.assign(state, clone(initialState), { executionProfiles, toolAccess, settings, sessions, board, status, monitoring, environment, history, chat, definitions: [definition], draftEpoch: state.draftEpoch + 1, unlocked: variant !== 'locked', accessChecked: true, paused: true, lastRead: fixtureTime });
+  Object.assign(state, clone(initialState), { executionProfiles, toolAccess, consumption: consumptionStatus, settings, sessions, board, status, monitoring, environment, history, chat, definitions: [definition], draftEpoch: state.draftEpoch + 1, unlocked: variant !== 'locked', accessChecked: true, paused: true, lastRead: fixtureTime });
   return { state, file, run, resourceReport, definition, fetchFixture };
 }

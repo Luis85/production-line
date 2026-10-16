@@ -1,3 +1,6 @@
+import { WorkerConsumption } from '../application/consumption.js';
+import { consumptionModel } from '../application/consumption-model.js';
+import { WorkerConsumptionJournal } from '../infrastructure/journal/consumption.js';
 import { loadWebviewToken } from '../infrastructure/webview-token.js';
 import { settleCleanup } from '../../shared/lifecycle.js';
 import { ProviderStatusChecks } from '../infrastructure/provider-status.js';
@@ -102,6 +105,7 @@ export class WorkerWorkspace {
   private repositoriesUpdating = false;
   private repositoryStop = new AbortController();
   readonly resources: WorkerResourceMonitor;
+  readonly consumption: WorkerConsumption;
   readonly reviews: RequestReviewManager;
   readonly settings: WorkerSettings;
   readonly sessions: WorkerSessions;
@@ -153,6 +157,7 @@ export class WorkerWorkspace {
       events: { transport: "polling", streaming: false },
       capabilities: modelCapabilities,
       toolAccess: { supported: true, management: "worker_global_revision", default: "none", scope: "local_model_invocations", repositoryFiles: "task_worktree_read_only", revocation: "pause_and_drain_before_save" },
+      consumption: { supported: true, unit: 'tokens', periods: ['daily', 'monthly'], clock: 'UTC', scope: 'this_worker_model_invocations', enforcement: 'admission', personalUsageObserved: false },
       resources: {
         supported: true,
         scope: "worker_node_process",
@@ -710,16 +715,18 @@ export class WorkerWorkspace {
       config.chatExecutable,
       config.repositories,
     );
+    this.consumption = new WorkerConsumption(new WorkerConsumptionJournal(config.stateDir), () => this.settings.value.consumption);
     this.repositories = new RepositoryManager(this.settings.value.repositories, { beforeRepositoryUse: item => this.repositoryDiscovery.assertAllowed(item.path), preserveCheckout: item => this.sharedRuntime?.intake.binding?.repositoryId === item.id || (this.sharedRuntime?.intake.requiredRepositoryIds().includes(item.id) ?? false) });
     this.repositoryDiscovery = new RepositoryDiscovery(config.stateDir, config.integrationProjectDir ?? config.projectDir ?? process.cwd(), this.repositoryStop.signal, config.codex?.repository);
     this.sessions = createWorkerSessions(
-      config.stateDir, this.settings, modelFor, undefined, () => this.board.active,
+      config.stateDir, this.settings, modelFor, undefined, () => this.board.active, this.consumption,
     );
     this.board = createLocalTaskboard(
       config.stateDir,
       this.settings,
       this.sessions,
       { prepareWorktree: (selector, key, signal, commit) => this.prepareTaskWorkspace(selector, key, signal, commit) },
+      undefined, this.consumption,
     );
     this.reviews = new RequestReviewManager({
       gates: this.sessions.requests,
@@ -727,14 +734,14 @@ export class WorkerWorkspace {
       runs: this.sessions.runs,
       maxRuntimeMs: () => this.settings.value.execution.maxRuntimeMs,
       model: (profile) =>
-        modelFor(
+        consumptionModel(modelFor(
           {
             ...this.settings.provider(profile.id),
             model: profile.model,
             instruction: profile.instruction,
           },
           config.stateDir,
-        ),
+        ), this.consumption),
     });
     this.sessions.onRequestChanged = (id) => {
       if (this.sessions.requests.get(id).phase === "cancelled")
@@ -766,7 +773,7 @@ export class WorkerWorkspace {
       stateDirectory: config.stateDir,
       resolve: id => this.repositories.resolve(id),
       allowed: path => this.repositoryDiscovery.assertAllowed(path),
-      canAdmit: () => this.acceptingTasks && !this.settings.value.board.paused && !this.configurationUpdating && !this.repositoriesUpdating && !this.executionProfiles?.pending(),
+      canAdmit: () => this.acceptingTasks && !this.settings.value.board.paused && !this.consumption.status().blocked && !this.configurationUpdating && !this.repositoriesUpdating && !this.executionProfiles?.pending(),
       submit: record => this.submitSharedFeature(record),
       inspect: id => {
         try {
@@ -799,6 +806,7 @@ export class WorkerWorkspace {
     await ensureDirectory(this.config.stateDir);
     this.token = await loadWebviewToken(this.config.stateDir, this.config.webviewToken);
     await this.settings.init();
+    await this.consumption.init();
     await this.repositoryDiscovery.init(this.settings.value.repositories.items);
     await this.sharedRuntime.intake.init();
     await this.repositories.configure(this.settings.value.repositories);
@@ -1039,7 +1047,9 @@ export class WorkerWorkspace {
         return result;
       } finally { this.repositoriesUpdating = false; }
     }
-    return update();
+    const result = await update();
+    this.sessions.executor.wake();
+    return result;
   }
   close(options: { deferEvidence?: boolean } = {}): Promise<void> {
     this.acceptingTasks = false;
@@ -1059,7 +1069,7 @@ export class WorkerWorkspace {
     this.evidenceClosing ??= settleCleanup(
       () => this.features?.close(),
       () => this.resources.close(),
-      [() => this.sessions.runs.close(), () => this.sessions.interactions.close(), () => this.sessions.requests.close()],
+      [() => this.sessions.runs.close(), () => this.sessions.interactions.close(), () => this.sessions.requests.close(), () => this.consumption.close()],
     );
     return this.evidenceClosing;
   }

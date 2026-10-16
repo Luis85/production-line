@@ -1,4 +1,6 @@
 import { boundedSignal, requestJson } from '../../shared/webview/http';
+import type { ConsumptionStatus } from '../application/consumption';
+import type { ConsumptionCommand } from './consumption-editor';
 import type { ToolAccessView, ToolAccessUpdate } from '../application/tool-policy';
 import type { ExecutionProfilesView } from '../application/execution-profiles';
 import type { WorkerSettingsView, SessionView, LocalTaskboardView } from '../application/workspace-view';
@@ -11,6 +13,7 @@ export type HistoryRow = Awaited<ReturnType<WorkerWorkspace['history']>>['rows']
 export const state = reactive({
   executionProfiles: null as ExecutionProfilesView | null,
   toolAccess: null as ToolAccessView | null,
+  consumption: null as ConsumptionStatus | null, consumptionError: '',
   settings: null as WorkerSettingsView | null, sessions: null as SessionView | null, board: null as LocalTaskboardView | null,
   status: null as Status | null, environment: null as Awaited<ReturnType<WorkerWorkspace['environment']>> | null,
   history: null as Awaited<ReturnType<WorkerWorkspace['history']>> | null,
@@ -88,7 +91,7 @@ export async function request<T = any>(path: string, method = 'GET', body?: unkn
 }
 function relock() {
   if (state.sessions?.selected) drafts.set(state.sessions.selected, state.draft);
-  generation++; accessGeneration++; state.unlocked = false; state.environment = null; state.executionProfiles = null; state.toolAccess = null; state.history = null; state.chat = null; state.settings = null; state.sessions = null; state.board = null; state.definitions = []; state.actionError = ''; state.workspaceBusy = false;
+  generation++; accessGeneration++; state.unlocked = false; state.environment = null; state.executionProfiles = null; state.toolAccess = null; state.consumption = null; state.consumptionError = ''; state.history = null; state.chat = null; state.settings = null; state.sessions = null; state.board = null; state.definitions = []; state.actionError = ''; state.workspaceBusy = false;
 }
 export async function lock() {
   try { await request('/api/access', 'DELETE'); state.draftEpoch++; relock(); state.draft = ''; drafts.clear(); state.accessMessage = 'This browser is locked and unsent drafts were cleared. Running tasks continue on the worker.'; }
@@ -108,9 +111,9 @@ export async function refresh() {
   if (state.loading || !state.unlocked) return;
   state.loading = true; const current = generation;
   try {
-    const results = await Promise.allSettled([request('/status'), request('/monitoring'), request('/api/environment'), request('/api/history'), request('/api/chat/session'), request('/api/settings'), request('/api/taskboard'), request('/api/definitions'), request('/api/execution-profiles'), request('/api/tool-access')]);
+    const results = await Promise.allSettled([request('/status'), request('/monitoring'), request('/api/environment'), request('/api/history'), request('/api/chat/session'), request('/api/settings'), request('/api/taskboard'), request('/api/definitions'), request('/api/execution-profiles'), request('/api/tool-access'), request('/api/consumption')]);
     if (current !== generation) return;
-    const [status, monitoring, environment, history, pair, settings, board, definitions, executionProfiles, toolAccess] = results;
+    const [status, monitoring, environment, history, pair, settings, board, definitions, executionProfiles, toolAccess, consumption] = results;
     if (status.status === 'fulfilled') state.status = status.value;
     if (monitoring.status === 'fulfilled') state.monitoring = monitoring.value;
     if (environment.status === 'fulfilled') state.environment = environment.value;
@@ -121,7 +124,9 @@ export async function refresh() {
     if (definitions.status === 'fulfilled') state.definitions = definitions.value.definitions;
     if (executionProfiles.status === 'fulfilled') state.executionProfiles = executionProfiles.value;
     if (toolAccess.status === 'fulfilled') state.toolAccess = toolAccess.value;
-    const labels = ['Worker status', 'Monitoring', 'Environment', 'History', 'Task conversation', 'Settings', 'File tasks', 'Agent definitions', 'Execution profiles', 'Tool access'];
+    if (consumption.status === 'fulfilled') { state.consumption = consumption.value; state.consumptionError = ''; }
+    else state.consumptionError = 'Consumption could not be refreshed. Check that the worker is running, then refresh.';
+    const labels = ['Worker status', 'Monitoring', 'Environment', 'History', 'Task conversation', 'Settings', 'File tasks', 'Agent definitions', 'Execution profiles', 'Tool access', 'Consumption'];
     const failures = results.flatMap((result, index) => result.status === 'rejected' ? [labels[index]] : []);
     state.error = status.status === 'rejected' ? 'Worker status could not be refreshed. Check the worker process and retry.' : '';
     state.partialError = failures.length && !state.error ? `${failures.join(', ')} could not be refreshed. Those values may be stale. Refresh to retry.` : '';
@@ -214,3 +219,16 @@ async function toolAccessMutation(path: string, body: unknown): Promise<ToolAcce
 }
 export const toolAccessAction = (body: ToolAccessUpdate) => toolAccessMutation('/api/tool-access', body);
 export const toolAccessDiscover = (body: { id: string; expectedRevision: number }) => toolAccessMutation('/api/tool-access/discover', body);
+
+/** Settings writes use the saved policy as a guard; unrelated polling cannot replace an acknowledgement. */
+export async function consumptionAction(body: ConsumptionCommand) {
+  if (!state.unlocked) return;
+  const access = accessGeneration;
+  try {
+    const result: WorkerSettingsView = await request('/api/settings', 'POST', body);
+    if (access !== accessGeneration || !state.unlocked) return;
+    state.settings = result; generation++;
+    await refresh();
+    if (access === accessGeneration && state.unlocked) return result.consumption;
+  } catch (error) { if (access === accessGeneration && state.unlocked) throw error; }
+}

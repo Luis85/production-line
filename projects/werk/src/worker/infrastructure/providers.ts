@@ -10,7 +10,7 @@ import { constants } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, isAbsolute, join } from 'node:path';
 import type { ChatMessage } from '../application/conversation.js';
-import { legacyModelReply, observeModelInvocation, modelCapabilities, parseModelResult, ProviderModelError, requireModelRequest, type ModelRequest, type ModelResult, type StructuredModel } from '../application/model-contract.js';
+import { legacyModelReply, observeModelInvocation, modelCapabilities, parseModelResult, ProviderModelError, requireModelRequest, type ModelRequest, type ModelInvocationControl, type ModelResult, type StructuredModel } from '../application/model-contract.js';
 import { CodexConversationModel } from './conversation.js';
 import { providerCommand } from './provider-process.js';
 import { ensureDirectory } from './journal/files.js';
@@ -35,11 +35,11 @@ export function modelFor(saved: ProviderConnection, directory: string, transport
     get toolManifest() { return currentToolManifest(options.tools); },
     get capabilities() { return { ...modelCapabilities, tools: currentToolManifest(options.tools) ? 'granted' as const : 'none' as const }; },
     reply(messages: ChatMessage[], signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void) { return legacyModelReply(model, messages, signal, onUsage); },
-    async execute(request: ModelRequest, signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void): Promise<ModelResult> {
+    async execute(request: ModelRequest, signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void, control?: ModelInvocationControl): Promise<ModelResult> {
       requireModelRequest(request, connection.id);
       return observeModelInvocation(signal, onUsage, observe => withProviderTools(request, signal, options.tools, (runtime, bounded) => connection.id === 'claude-cli'
-        ? claudeReply(connection, directory, request, bounded, observe, runtime)
-        : apiReply(connection, request, bounded, transport, observe, runtime)));
+        ? claudeReply(connection, directory, request, bounded, observe, runtime, control)
+        : apiReply(connection, request, bounded, transport, observe, runtime, control)));
     }
   };
   return model;
@@ -48,7 +48,7 @@ export function modelFor(saved: ProviderConnection, directory: string, transport
 export function claudeArguments(model: string, promptFile: string, bridge?: CliToolBridge) {
   return ['--print', '--output-format', 'json', ...(!bridge ? ['--safe-mode'] : ['--settings', JSON.stringify({ disableAllHooks: true, autoMemoryEnabled: false, enabledPlugins: {} })]), '--restricted', '--tools', '', '--strict-mcp-config', '--mcp-config', bridge?.configFile ?? '{"mcpServers":{}}', ...(bridge ? ['--allowedTools', ...bridge.toolNames.map(name => 'mcp__werk__' + name)] : []), '--setting-sources', '', '--no-session-persistence', '--disable-slash-commands', ...(model ? ['--model', model] : []), '--system-prompt-file', promptFile];
 }
-async function claudeReply(connection: ProviderConnection, directory: string, request: ModelRequest, signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void, runtime?: ToolRuntime) {
+async function claudeReply(connection: ProviderConnection, directory: string, request: ModelRequest, signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void, runtime?: ToolRuntime, control?: ModelInvocationControl) {
   const workspace = join(directory, 'chat-workspace'); await ensureDirectory(workspace);
   // Instructions can exceed one argument (Linux) or the whole command line (Windows); pass them as a private file.
   const promptDirectory = await mkdtemp(join(tmpdir(), 'werk-claude-prompt-'));
@@ -57,10 +57,13 @@ async function claudeReply(connection: ProviderConnection, directory: string, re
   try {
     const promptFile = join(promptDirectory, 'system-prompt.md');
     await writeFile(promptFile, request.protocolInstructions, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
-    result = await withCliToolBridge(runtime, signal, bridge => providerCommand(connection.executable, claudeArguments(request.provider.model, promptFile, bridge), cwd, signal, JSON.stringify(request.messages.map(({ role, text }) => ({ role, content: text }))), true, 'claude', output => {
+    result = await withCliToolBridge(runtime, signal, bridge => {
+      control?.beforeCall();
+      return providerCommand(connection.executable, claudeArguments(request.provider.model, promptFile, bridge), cwd, signal, JSON.stringify(request.messages.map(({ role, text }) => ({ role, content: text }))), true, 'claude', output => {
       let response; try { response = JSON.parse(output.toString('utf8')); } catch { return; }
       if (response?.type === 'result') onUsage?.(providerUsage('claude', response));
-    }));
+      });
+    });
   } finally { await rm(promptDirectory, { recursive: true, force: true }); }
   let value; try { value = JSON.parse(result.toString('utf8')); } catch { throw new ProviderModelError('protocol'); }
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new ProviderModelError('protocol');

@@ -92,6 +92,15 @@ export function workerCommands(catalog) {
     example: { expectedConfigurationHash: "Current configurationHash from profile list", profiles: [{ id: "codex-review", provider: "codex", mode: "mock", maxParallel: 1 }] },
     description: "Save execution profiles from JSON file/stdin while the queue is paused and idle. Use the current configuration hash; connected workers synchronize before applying.",
   };
+  catalog["consumption status"] = {
+    method: "GET", path: "/api/consumption", mutating: false,
+    description: "Inspect the configured daily/monthly token allowance, worker share, measured and reserved usage, reset time and admission state. Personal account use outside this worker is not measured.",
+  };
+  catalog["consumption configure"] = {
+    method: "POST", path: "/api/settings", body: true,
+    example: { consumption: { enabled: true, period: "daily", allowance: 1000000, workerPercent: 50, perRunReservation: 10000 } },
+    description: "Save a consumption policy from JSON file/stdin using the consumption wrapper shown in the example. The worker limits new model invocations; an active invocation can exceed its reservation.",
+  };
   catalog["provider list"] = {
     method: "GET",
     path: "/api/settings",

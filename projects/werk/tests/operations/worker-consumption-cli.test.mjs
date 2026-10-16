@@ -1,0 +1,48 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { commands } from '../../scripts/runtime/portable/commands.mjs';
+const exec = promisify(execFile);
+const entry = new URL('../../scripts/runtime/portable/cli.mjs', import.meta.url).href;
+
+test('consumption commands expose the token policy and preserve authenticated API results and rejections', async t => {
+  const catalog = commands('worker');
+  assert.equal(catalog['consumption status'].mutating, false);
+  assert.equal(catalog['consumption configure'].mutating, true);
+  const directory = await mkdtemp(join(tmpdir(), 'werk-consumption-cli-'));
+  const tokenPath = join(directory, 'token'), policyFile = join(directory, 'consumption.json');
+  const token = 'labelled-consumption-transport-fixture-token';
+  await writeFile(tokenPath, token, { mode: 0o600 });
+  const calls = [];
+  let rejection = false;
+  const status = { schemaVersion: 1, policy: catalog['consumption configure'].example.consumption, measuredTokens: 450000, reservedTokens: 10000, remainingTokens: 40000, blocked: false, reason: 'available', periodEnd: '2026-10-17T00:00:00.000Z' };
+  const server = createServer(async (req, res) => {
+    let raw = ''; for await (const chunk of req) raw += chunk;
+    calls.push({ path: req.url, method: req.method, authorization: req.headers.authorization, body: raw ? JSON.parse(raw) : undefined });
+    res.setHeader('content-type', 'application/json');
+    res.statusCode = rejection ? 400 : 200;
+    res.end(JSON.stringify(rejection ? { error: 'Reservation exceeds the worker allowance.' } : req.method === 'GET' ? status : { consumption: status.policy }));
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(async () => { await new Promise(resolve => server.close(resolve)); await rm(directory, { recursive: true, force: true }); });
+  const base = 'http://127.0.0.1:' + server.address().port;
+  const command = (...args) => exec(process.execPath, ['--input-type=module', '-e', 'import { main } from ' + JSON.stringify(entry) + "; await main('worker', process.argv.slice(1));", ...args, '--url', base, '--token-file', tokenPath, '--state-dir', join(directory, 'state')], { timeout: 15000 });
+  assert.deepEqual(JSON.parse((await command('consumption', 'status')).stdout), status);
+  assert.deepEqual(calls.at(-1), { path: '/api/consumption', method: 'GET', authorization: 'Bearer ' + token, body: undefined });
+  const body = catalog['consumption configure'].example;
+  await writeFile(policyFile, JSON.stringify(body));
+  assert.deepEqual(JSON.parse((await command('consumption', 'configure', '--file', policyFile)).stdout), { consumption: status.policy });
+  assert.deepEqual(calls.at(-1), { path: '/api/settings', method: 'POST', authorization: 'Bearer ' + token, body });
+  rejection = true;
+  await assert.rejects(command('consumption', 'configure', '--file', policyFile), error => error.code === 2 && /Reservation exceeds/.test(error.stderr) && !error.stderr.includes(token) && error.stdout === '');
+  const count = calls.length;
+  await assert.rejects(command('consumption', 'configure'), error => error.code === 2 && /--file required/.test(error.stderr));
+  await writeFile(policyFile, '{malformed');
+  await assert.rejects(command('consumption', 'configure', '--file', policyFile), error => error.code === 2 && error.stdout === '');
+  assert.equal(calls.length, count, 'Invalid CLI input must not reach the API.');
+});
