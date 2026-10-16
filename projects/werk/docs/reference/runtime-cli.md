@@ -112,6 +112,9 @@ worker’s local credentials; stdout is JSON and no command prompts for a choice
 | `repository sync [--id ASSIGNMENT_ID]` | Fetch and safely fast-forward one assignment, or all when omitted |
 | `repository accept --discovery-id ID` | Accept the exact detected checkout and save an assignment; requires idle work |
 | `repository decline --discovery-id ID` | Persist the choice not to use the detected checkout |
+| `shared status` | Inspect shared Git intake: binding, `revision`, workflow snapshot and requests, without fetching |
+| `shared sync` | Fetch the shared branch now and reconcile claims and publications |
+| `shared configure --file intake.json` | Save `{"expectedRevision":N,"config":{...}}` while new starts are paused and idle |
 | `profile list` | Read active profiles, current `configurationHash` and any pending update |
 | `profile set --file profiles.json` | Save a guarded profile update while paused and idle; `--file -` reads stdin |
 
@@ -146,6 +149,37 @@ endpoints. See [repository consent](configuration.md#detected-installation-repos
 and [profile configuration](configuration.md#editable-execution-profiles) for
 persistence, restart and compatibility behavior. The portable client’s
 `schema` output supplies the current machine-readable command catalog.
+
+## Worker consumption limits
+
+Consumption is configured per worker through its portable client, using the same
+`--state-dir` as startup or an explicit remote URL and credential:
+
+```sh
+node bin/apps/worker/cli.mjs consumption status
+node bin/apps/worker/cli.mjs consumption configure --file consumption.json
+```
+
+`consumption.json` contains a complete policy under its settings wrapper:
+
+```json
+{"consumption":{"enabled":true,"period":"daily","allowance":1000000,"workerPercent":50,"perRunReservation":10000}}
+```
+
+The example allocates 500,000 input + output tokens per UTC day to this worker.
+Use `monthly` for UTC calendar months. Limits start disabled, and accounting
+persists across restarts and policy changes. Status returns measured usage,
+outstanding reservations, remaining tokens, the next reset and any blocking
+reason. These commands use authenticated `GET /api/consumption` and
+`POST /api/settings`; stdout is JSON, and `--file -` reads stdin.
+
+The limit prevents new model calls when budget or usage evidence is insufficient;
+a current response can exceed its reservation. It does not measure personal use
+or a provider subscription balance. See the
+[consumption guide](../how-to/worker-consumption-limits.md) for validation,
+concurrent edits, queue recovery and unknown-usage handling. The
+[portable command reference](portable-apps.md#worker-consumption-limits) lists
+the named commands and input wrapper.
 
 ## Native maintenance
 

@@ -206,6 +206,8 @@ export async function statusServer(
               200,
               await workspace.definitions.action(await readJson(req)),
             );
+          if (req.method === "GET" && req.url === "/api/consumption")
+            return json(res, 200, workspace.consumption.status());
           if (req.method === "GET" && req.url === "/api/resources")
             return json(res, 200, workspace.resources.status());
           if (req.method === "POST" && req.url === "/api/resources")

@@ -4,7 +4,7 @@ import { gitEnvironment } from '../../../shared/git/environment.js';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { lstat, mkdir, open, readdir, realpath } from 'node:fs/promises';
-import { isAbsolute, join, parse, resolve, sep } from 'node:path';
+import { isAbsolute, join, parse, resolve, sep, win32 } from 'node:path';
 import { runProcess, ProcessRunError } from '../../../shared/process/launcher.js';
 import { repositoryRoot, repositoryWorktreeArgument, type RepositoryRoot } from '../repositories-git.js';
 
@@ -53,6 +53,20 @@ async function publicationDirectory(storage: string, signal: AbortSignal) {
 }
 export interface GitBlob { revision: string; content: string; mode: string; }
 export interface GitIoOptions { repository: string; remote: string; stateDirectory: string; }
+/**
+ * Git opens worktree metadata before long-path configuration and bounds a child's
+ * GIT_DIR to 220 UTF-8 bytes on Windows; a relative argument preserves the same path.
+ * Checked when shared intake is configured so a deep state directory fails before any claim.
+ */
+export function assertPublicationPath(stateDirectory: string, repository: string, platform: NodeJS.Platform = process.platform) {
+  if (platform !== 'win32') return;
+  const candidate = win32.join(stateDirectory, 'worktrees', 'p-XXXXXX');
+  const metadataPath = win32.join(candidate, '.git'), gitDir = win32.join(repositoryWorktreeArgument(repository, candidate, win32), '.git');
+  const limits: string[] = [];
+  if (metadataPath.length >= 260) limits.push('the absolute metadata path has ' + metadataPath.length + ' characters and must have fewer than 260');
+  if (Buffer.byteLength(gitDir) > 220) limits.push('the Git worktree argument uses ' + Buffer.byteLength(gitDir) + ' UTF-8 bytes and must use at most 220');
+  if (limits.length) throw new GitFeatureError('invalid_input', 'Use a shorter worker state directory for shared feature publication on Windows: ' + limits.join('; ') + '. Start the worker with a shorter --state-dir, for example C:\\werk\\project.');
+}
 /** Git reads objects and writes only worker-owned temporary worktrees; it never checks out the developer branch. */
 export class FeatureGitIo {
   readonly options: GitIoOptions;
@@ -107,10 +121,8 @@ export class FeatureGitIo {
   }
   async worktree<T>(root: RepositoryRoot, commit: string, signal: AbortSignal, action: (path: string) => Promise<T>): Promise<T> {
     if (!commitId(commit)) throw new GitFeatureError('invalid_input', 'Publication requires a full source commit identifier.');
-    const directory = join(this.options.stateDirectory, 'worktrees'), candidate = join(directory, 'p-XXXXXX');
-    // Git opens its metadata before long-path config and bounds a child's GIT_DIR
-    // to 220 UTF-8 bytes on Windows. A relative argument preserves the same path.
-    if (process.platform === 'win32' && (join(candidate, '.git').length >= 260 || Buffer.byteLength(join(repositoryWorktreeArgument(root.path, candidate), '.git')) > 220)) throw new GitFeatureError('invalid_input', 'Use a shorter worker state directory for shared feature publication on Windows.');
+    const directory = join(this.options.stateDirectory, 'worktrees');
+    assertPublicationPath(this.options.stateDirectory, root.path);
     const storage = await ordinaryDirectory(directory, true);
     const path = await publicationDirectory(storage, signal), identity = await lstat(path);
     let added = false;

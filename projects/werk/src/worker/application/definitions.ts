@@ -5,11 +5,23 @@ import { object, text, identifier } from '../../shared/contracts.js';
 import type { DefinitionStorage } from './workspace-ports.js';
 import type { ProviderConnection } from './provider-contract.js';
 export interface DefinitionAgent { name: string; description: string; instruction: string; model: string; provider: 'openai' | 'anthropic' | ''; unsupported: string[]; requiresAdaptation: boolean; }
-export interface AgentDefinition { id: string; name: string; digest: string; createdAt: string; agents: DefinitionAgent[]; }
-export interface DefinitionSnapshot { definitionId: string; name: string; digest: string; agent: string; instruction: string; model: string; provider: DefinitionAgent['provider']; unsupported: string[]; adapted: boolean; }
+/** `ref` is an operator-assigned stable name, unique per worker, that committed requests can use instead of the generated id. */
+export interface AgentDefinition { id: string; ref?: string; name: string; digest: string; createdAt: string; agents: DefinitionAgent[]; }
+export interface DefinitionSnapshot { definitionId: string; ref?: string; name: string; digest: string; agent: string; instruction: string; model: string; provider: DefinitionAgent['provider']; unsupported: string[]; adapted: boolean; }
 function invalid(message: string): never { throw new DomainError('invalid_input', message); }
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const safeKey = (value: string) => /^[a-zA-Z0-9_-]{1,80}$/.test(value);
+export const definitionReference = /^[a-z0-9][a-z0-9-]{0,79}$/;
+function reference(value: unknown, name: string): string {
+  if (typeof value !== 'string' || !definitionReference.test(value)) invalid(`${name} must use 1–80 lowercase letters, digits or hyphens, starting with a letter or digit.`);
+  return value;
+}
+/** Validate selector syntax even when an existing task can reuse its frozen snapshot. */
+export function definitionSelection(input: Record<string, unknown>): { definitionId?: string; definitionRef?: string } {
+  const byId = input.definitionId !== undefined && input.definitionId !== '', byRef = input.definitionRef !== undefined && input.definitionRef !== '';
+  if (byId && byRef) invalid('Choose a definition by definitionId or definitionRef, not both.');
+  return byRef ? { definitionRef: reference(input.definitionRef, 'definitionRef') } : byId ? { definitionId: identifier(input.definitionId, 'definitionId') } : {};
+}
 const sensitiveKey = /^(?:api[_-]?key|api[_-]?token|access[_-]?token|password|secret|authorization|credentials|headers|env|environment|env_file)$/i;
 const secretLiteral = /(?:\bsk-(?:proj-|ant-)?[A-Za-z0-9_-]{16,}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bBearer\s+[A-Za-z0-9_.-]{16,})/i;
 /** Parse data only. No includes, interpolation, tools, credentials or Docker process are evaluated. */
@@ -67,7 +79,7 @@ export function previewDefinition(source: unknown) {
   return { compatibility: 'instruction-profile' as const, agents };
 }
 export function validateSnapshot(value: unknown): asserts value is DefinitionSnapshot {
-  if (!record(value) || typeof value.definitionId !== 'string' || !safeKey(value.definitionId) || typeof value.agent !== 'string' || !safeKey(value.agent) || typeof value.name !== 'string' || !value.name || value.name.length > 120 || typeof value.digest !== 'string' || !/^[a-f0-9]{64}$/.test(value.digest) || typeof value.instruction !== 'string' || !value.instruction.trim() || value.instruction.length > 16000 || typeof value.model !== 'string' || value.model.length > 200 || !['', 'openai', 'anthropic'].includes(String(value.provider)) || typeof value.adapted !== 'boolean' || !Array.isArray(value.unsupported) || value.unsupported.length > 500 || value.unsupported.some(item => typeof item !== 'string' || item.length > 300) || (value.unsupported.length && !value.adapted)) invalid('Invalid saved agent definition snapshot.');
+  if (!record(value) || typeof value.definitionId !== 'string' || !safeKey(value.definitionId) || (value.ref !== undefined && (typeof value.ref !== 'string' || !definitionReference.test(value.ref))) || typeof value.agent !== 'string' || !safeKey(value.agent) || typeof value.name !== 'string' || !value.name || value.name.length > 120 || typeof value.digest !== 'string' || !/^[a-f0-9]{64}$/.test(value.digest) || typeof value.instruction !== 'string' || !value.instruction.trim() || value.instruction.length > 16000 || typeof value.model !== 'string' || value.model.length > 200 || !['', 'openai', 'anthropic'].includes(String(value.provider)) || typeof value.adapted !== 'boolean' || !Array.isArray(value.unsupported) || value.unsupported.length > 500 || value.unsupported.some(item => typeof item !== 'string' || item.length > 300) || (value.unsupported.length && !value.adapted)) invalid('Invalid saved agent definition snapshot.');
 }
 export function definitionConnection(connection: ProviderConnection, definition?: DefinitionSnapshot): ProviderConnection {
   if (!definition) return connection;
@@ -84,6 +96,8 @@ export class WorkerDefinitions {
     if (saved !== undefined) {
       const value = JSON.parse(saved);
       if (!Array.isArray(value) || value.length > 32 || new Set(value.map(item => item.id)).size !== value.length) invalid('Invalid saved agent definitions.');
+      const refs = value.filter(item => item.ref !== undefined).map(item => item.ref);
+      if (refs.some(ref => typeof ref !== 'string' || !definitionReference.test(ref)) || new Set(refs).size !== refs.length) invalid('Invalid saved agent definition references.');
       for (const definition of value) {
         if (!Array.isArray(definition.agents) || !definition.agents.length || definition.agents.length > 24 || new Set(definition.agents.map((agent: DefinitionAgent) => agent.name)).size !== definition.agents.length || !Number.isFinite(Date.parse(definition.createdAt))) invalid('Invalid saved agent definitions.');
         for (const agent of definition.agents) { if (typeof agent.description !== 'string' || agent.description.length > 1000 || typeof agent.requiresAdaptation !== 'boolean' || agent.requiresAdaptation !== (agent.unsupported?.length > 0)) invalid('Invalid saved agent definition.'); validateSnapshot({ definitionId: definition.id, name: definition.name, digest: definition.digest, agent: agent.name, instruction: agent.instruction, model: agent.model, provider: agent.provider, unsupported: agent.unsupported, adapted: agent.requiresAdaptation }); }
@@ -92,31 +106,48 @@ export class WorkerDefinitions {
     }
   }
   view() { return { compatibility: 'instruction-profile' as const, definitions: structuredClone(this.definitions) }; }
+  /** Resolve once at task creation; the returned copy is what the task keeps, even if the reference later moves. */
   select(input: Record<string, unknown>): DefinitionSnapshot | undefined {
-    if (input.definitionId === undefined || input.definitionId === '') {
+    const selection = definitionSelection(input);
+    if (!selection.definitionId && !selection.definitionRef) {
       if (input.agent !== undefined && input.agent !== '') invalid('Choose a definition before selecting an agent.');
       return;
     }
-    const definition = this.definitions.find(item => item.id === identifier(input.definitionId, 'definitionId'));
-    if (!definition) throw new DomainError('not_found', 'Agent definition not found.');
+    const definition = selection.definitionRef
+      ? this.definitions.find(item => item.ref === selection.definitionRef)
+      : this.definitions.find(item => item.id === selection.definitionId);
+    if (!definition) throw new DomainError('not_found', selection.definitionRef ? `No agent definition on this worker uses the reference ${String(input.definitionRef)}. Import the shared profile and assign it with definition ref.` : 'Agent definition not found.');
     const agent = definition.agents.find(item => item.name === (input.agent ?? 'root'));
     if (!agent) invalid('Choose an agent from the selected definition.');
     if (agent.requiresAdaptation && input.useInstructionsOnly !== true) invalid('This definition includes unsupported features. Review them and explicitly choose Use instructions only before creating the task.');
-    return { definitionId: definition.id, name: definition.name, digest: definition.digest, agent: agent.name, instruction: agent.instruction, model: agent.model, provider: agent.provider, unsupported: [...agent.unsupported], adapted: agent.requiresAdaptation };
+    return { definitionId: definition.id, ...(definition.ref ? { ref: definition.ref } : {}), name: definition.name, digest: definition.digest, agent: agent.name, instruction: agent.instruction, model: agent.model, provider: agent.provider, unsupported: [...agent.unsupported], adapted: agent.requiresAdaptation };
   }
   async action(input: unknown) {
-    const body = object(input, 'Agent definition', ['action', 'yaml', 'name', 'id']);
+    const body = object(input, 'Agent definition', ['action', 'yaml', 'name', 'id', 'ref']);
     if (body.action === 'preview') return previewDefinition(body.yaml);
     const operation = this.writes.catch(() => {}).then(async () => {
       let next = structuredClone(this.definitions);
       if (body.action === 'import') {
         if (next.length >= 32) throw new DomainError('conflict', 'Delete an unused definition before importing another (limit 32).');
         const parsed = previewDefinition(body.yaml), name = text(body.name, 'Definition name', 120);
-        next.push({ id: randomUUID(), name, digest: createHash('sha256').update(String(body.yaml)).digest('hex'), createdAt: new Date().toISOString(), agents: parsed.agents });
+        const ref = body.ref === undefined || body.ref === '' ? undefined : reference(body.ref, 'Definition reference');
+        const holder = ref && next.find(item => item.ref === ref);
+        if (holder) throw new DomainError('conflict', `Definition reference ${ref} already selects ${holder.name}. Import without a reference, then move it with definition ref.`);
+        next.push({ id: randomUUID(), ...(ref ? { ref } : {}), name, digest: createHash('sha256').update(String(body.yaml)).digest('hex'), createdAt: new Date().toISOString(), agents: parsed.agents });
+      } else if (body.action === 'ref') {
+        // Moving a reference only affects tasks created afterwards; existing tasks keep their snapshots.
+        const id = identifier(body.id, 'Definition id'), target = next.find(item => item.id === id);
+        if (!target) throw new DomainError('not_found', 'Agent definition not found.');
+        if (body.ref === '' || body.ref === null) delete target.ref;
+        else {
+          const ref = reference(body.ref, 'Definition reference');
+          for (const item of next) if (item.ref === ref) delete item.ref;
+          target.ref = ref;
+        }
       } else if (body.action === 'delete') {
         const id = identifier(body.id, 'Definition id'); if (!next.some(item => item.id === id)) throw new DomainError('not_found', 'Agent definition not found.');
         next = next.filter(item => item.id !== id);
-      } else invalid('Definition action: preview|import|delete.');
+      } else invalid('Definition action: preview|import|ref|delete.');
       const saved = JSON.stringify(next); if (Buffer.byteLength(saved) > 2097152) throw new DomainError('conflict', 'Definition storage is full. Delete an unused definition.');
       await this.storage.write(saved); this.definitions = next;
     });

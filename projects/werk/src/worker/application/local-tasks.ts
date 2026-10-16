@@ -730,6 +730,7 @@ export class LocalTaskboard {
       "priority",
       "provider",
       "definitionId",
+      "definitionRef",
       "agent",
       "useInstructionsOnly",
     ]);

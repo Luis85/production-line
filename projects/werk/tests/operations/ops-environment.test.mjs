@@ -34,7 +34,7 @@ test('actual fleet worker subprocess receives enrollment without admin credentia
     for(const app of ['orchestrator','worker'])await mkdir(join(root,'src',app,'dist',app),{recursive:true});
     const resultFile=join(root,'observed-keys.json');
     await writeFile(join(root,'src/orchestrator/dist/orchestrator/cli.js'),`const http=require('node:http');const p=Number(process.argv[process.argv.indexOf('--port')+1]);const s=http.createServer((req,res)=>res.end('{}'));s.listen(p,'127.0.0.1');process.once('SIGTERM',()=>s.close());`);
-    await writeFile(join(root,'src/worker/dist/worker/cli.js'),`require('node:fs').writeFileSync(${JSON.stringify(resultFile)},JSON.stringify(Object.keys(process.env).filter(k=>/^WERK_.*TOKEN$/.test(k))));const t=setInterval(()=>{},1000);process.once('SIGTERM',()=>clearInterval(t));`);
+    await writeFile(join(root,'src/worker/dist/worker/cli.js'),`const t=setInterval(()=>{},1000);process.once('SIGTERM',()=>clearInterval(t));require('node:fs').writeFileSync(${JSON.stringify(resultFile)},JSON.stringify(Object.keys(process.env).filter(k=>/^WERK_.*TOKEN$/.test(k))));`);
     child=spawn(process.execPath,[join(root,'scripts/fleet.mjs'),'--workers','1'],{env:{...process.env,WERK_DEV_PORT:String(port),WERK_STATUS_BASE:String(status),WERK_FACTORY_ADMIN_TOKEN:'unrelated-factory-token',WERK_LINE_OTHER_TOKEN:'unrelated-line-token'},stdio:'ignore'});
     exited=new Promise(r=>child.once('exit',code=>r(code)));
     let keys;

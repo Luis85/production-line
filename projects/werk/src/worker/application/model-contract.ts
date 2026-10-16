@@ -13,12 +13,15 @@ export interface ModelRequest {
 }
 export interface ModelQuestion { schemaVersion: 1; kind: 'question' | 'escalation'; message: string; choices?: { id: string; label: string }[]; reason?: string; }
 export type ModelResult = { type: 'completed'; text: string } | { type: 'needs_input'; request: ModelQuestion };
+/** Adapter hook immediately before each model request, including subsequent API tool rounds. */
+export interface ModelInvocationControl { beforeCall(): void; }
 export interface StructuredModel extends ConversationModel {
   readonly configuration: ModelProvider; readonly capabilities: ModelCapabilities; readonly toolManifest?: ToolManifest;
-  execute(request: ModelRequest, signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void): Promise<ModelResult>;
+  execute(request: ModelRequest, signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void, control?: ModelInvocationControl): Promise<ModelResult>;
 }
-export type ModelErrorCode = 'authentication' | 'rate_limit' | 'quota' | 'invalid_request' | 'tool_access' | 'unavailable' | 'incomplete' | 'protocol' | 'cancelled' | 'refusal';
+export type ModelErrorCode = 'authentication' | 'rate_limit' | 'quota' | 'invalid_request' | 'tool_access' | 'unavailable' | 'incomplete' | 'protocol' | 'cancelled' | 'refusal' | 'consumption_limit';
 const messages: Record<ModelErrorCode, string> = {
+  consumption_limit: 'Worker consumption is limited or usage could not be verified. Review Consumption before resuming.',
   authentication: 'Provider authentication failed. Check the saved connection.', rate_limit: 'Provider rate limit reached. Retry later.',
   quota: 'Provider quota is unavailable. Check the provider account before retrying.', invalid_request: 'Provider rejected the request configuration.',
   tool_access: 'Worker tool access changed or is unavailable. Review Tool access and start a new attempt.',
@@ -81,11 +84,11 @@ export async function observeModelInvocation<T>(signal: AbortSignal, onUsage: ((
     return result;
   } finally { settled = true; }
 }
-export async function executeModel(model: ConversationModel, request: ModelRequest, signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void): Promise<ModelResult> {
+export async function executeModel(model: ConversationModel, request: ModelRequest, signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void, control?: ModelInvocationControl): Promise<ModelResult> {
   if (signal.aborted) throw new ProviderModelError('cancelled');
   requireModelRequest(request, request?.provider?.id ?? '');
   const typed = model as Partial<StructuredModel>;
-  return observeModelInvocation(signal, onUsage, async observe => typed.execute ? typed.execute(request, signal, observe) : parseModelResult(await model.reply(structuredClone(request.messages), signal, observe)));
+  return observeModelInvocation(signal, onUsage, async observe => typed.execute ? typed.execute(request, signal, observe, control) : (control?.beforeCall(), parseModelResult(await model.reply(structuredClone(request.messages), signal, observe))));
 }
 export async function legacyModelReply(model: StructuredModel, input: ChatMessage[], signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void): Promise<string> {
   const result = await executeModel(model, prepareModelRequest(model, input), signal, onUsage);

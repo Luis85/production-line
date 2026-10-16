@@ -14,6 +14,8 @@ import { executeAttempt } from '../../src/worker/dist/worker/application/execute
 import { Store } from '../../src/orchestrator/dist/orchestrator/persistence/store.js';
 import { validateSnapshot } from '../../src/worker/dist/shared/snapshots.js';
 import { taskInput } from '../../src/worker/dist/shared/validation.js';
+import { WorkerConsumption } from '../../src/worker/dist/worker/application/consumption.js';
+import { WorkerConsumptionJournal } from '../../src/worker/dist/worker/infrastructure/journal/consumption.js';
 const linux = { skip: process.platform !== 'linux' };
 const hash = value => createHash('sha256').update(value).digest('hex');
 async function fixture(t, program = "require('node:fs').appendFileSync('README.md','Human review is required.\\n');") {
@@ -224,4 +226,15 @@ test('ignored provider files cannot hide outside-allowlist changes in retained w
   assert.equal(await readFile(join(retained.workspace,'ignored','private.txt'),'utf8'),'Unapproved artifact.');
   await assert.rejects(readFile(join(f.stateDir,'review',f.task.lease,'change.patch')),error=>error.code==='ENOENT');
   assert.equal(await readFile(join(f.repository,'README.md'),'utf8'),'# Fixture\n');
+});
+
+for (const failed of [false, true]) test('native Codex consumption accounts for the actual provider invocation ' + (failed ? 'after failure' : 'before patch review'), linux, async t => {
+  const program = "const fs=require('node:fs'),assert=require('node:assert/strict');assert.ok(process.argv.includes('--json'));fs.appendFileSync('README.md','Accounted change.');console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:30,cached_input_tokens:20,output_tokens:10}}));" + (failed ? 'process.exitCode=7;' : '');
+  const f = await fixture(t, program), policy = { enabled: true, period: 'daily', allowance: 100, workerPercent: 50, perRunReservation: 40 };
+  const consumption = new WorkerConsumption(new WorkerConsumptionJournal(f.stateDir), () => policy); await consumption.init(); t.after(() => consumption.close());
+  const adapter = new CodexAdapter(f.config, f.stateDir, 'Fixture task.', undefined, undefined, consumption);
+  if (failed) await assert.rejects(adapter.run(f.task, AbortSignal.timeout(5000)));
+  else assert.equal((await adapter.run(f.task, AbortSignal.timeout(5000))).kind, 'change-set');
+  const status = consumption.status(); assert.equal(status.measuredTokens, 40); assert.equal(status.activeInvocations, 0); assert.equal(status.uncertainInvocations, failed ? 1 : 0);
+  assert.equal(status.chargedTokens, 40);
 });

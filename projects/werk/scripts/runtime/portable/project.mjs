@@ -61,7 +61,7 @@ export async function initializeWorker(root, options) {
   const featureDirectory = join(project, inside), app = join(project, 'bin/apps/worker');
   const state = join(project, '.werk/worker');
   const prior = await exists(app), source = await realpath(root);
-  if (prior && (prior.isSymbolicLink() || !prior.isDirectory() || await realpath(app) !== source)) throw inputError('A worker app already exists. Run init from that installed app; upgrades use stop/back-up/replace/restart.');
+  if (prior && (prior.isSymbolicLink() || !prior.isDirectory() || await realpath(app) !== source)) throw inputError('A worker app already exists. Run init from that installed app; upgrade it with update apply.');
   const normalized = await configuration({ 'project-dir': project }, existingConfig ?? { schemaVersion: 1, features: { directory: inside.split(sep).join('/'), provider: options.provider ?? 'codex-cli', pollMs: 1000 } });
   if (!normalized.features || normalized.features.directory !== featureDirectory || options.provider && normalized.features.provider !== options.provider) throw inputError('Existing worker configuration differs. Use feature folder set --path PATH to change its folder; configure provider settings separately.');
   const marker = await readPrivate(join(project, '.werk/worker-project.json')).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });

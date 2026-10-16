@@ -70,6 +70,10 @@ export function workerCommands(catalog) {
     description:
       "Print an editable draft frontmatter + Markdown request without a running worker. Save it to a file, finish it, then feature create/validate/submit.",
   };
+  catalog["definition ref"] = {
+    method: "POST", path: "/api/definitions", required: ["id", "ref"], mutating: true,
+    description: "Give an imported definition the stable reference that committed requests select with definitionRef. The reference moves from any other definition; existing tasks keep their saved copy.",
+  };
   catalog["repository status"] = {
     method: "GET", path: "/api/repositories",
     description: "Inspect assigned repositories and the installation-folder consent request without fetching.",
@@ -83,6 +87,19 @@ export function workerCommands(catalog) {
       ...action("/api/repositories", name, ["discovery-id"], false, [], { "discovery-id": "discoveryId" }),
       description: "Record the explicit choice for the exact detected installation repository. Read repository status for its discovery id first.",
     };
+  catalog["shared status"] = {
+    method: "GET", path: "/api/shared-intake",
+    description: "Inspect shared Git intake: binding, current revision, workflow snapshot and request lifecycle, without fetching.",
+  };
+  catalog["shared sync"] = {
+    ...action("/api/shared-intake", "sync", [], false),
+    description: "Fetch the shared branch now and reconcile ready requests, claims and publications.",
+  };
+  catalog["shared configure"] = {
+    ...action("/api/shared-intake", "configure", [], true),
+    example: { expectedRevision: 0, config: { enabled: true, repositoryId: "ASSIGNMENT_ID", remote: "origin", branch: "main", workflowPath: ".werk/feature-workflow.json", pollMs: 60000 } },
+    description: "Save the shared intake binding from JSON file/stdin while new starts are paused and idle. Use expectedRevision from shared status; switching branches requires finished, published requests.",
+  };
   catalog["profile list"] = {
     method: "GET", path: "/api/execution-profiles",
     description: "Inspect execution profiles, their configuration hash and any pending update.",
@@ -91,6 +108,15 @@ export function workerCommands(catalog) {
     method: "POST", path: "/api/execution-profiles", body: true,
     example: { expectedConfigurationHash: "Current configurationHash from profile list", profiles: [{ id: "codex-review", provider: "codex", mode: "mock", maxParallel: 1 }] },
     description: "Save execution profiles from JSON file/stdin while the queue is paused and idle. Use the current configuration hash; connected workers synchronize before applying.",
+  };
+  catalog["consumption status"] = {
+    method: "GET", path: "/api/consumption", mutating: false,
+    description: "Inspect the configured daily/monthly token allowance, worker share, measured and reserved usage, reset time and admission state. Personal account use outside this worker is not measured.",
+  };
+  catalog["consumption configure"] = {
+    method: "POST", path: "/api/settings", body: true,
+    example: { consumption: { enabled: true, period: "daily", allowance: 1000000, workerPercent: 50, perRunReservation: 10000 } },
+    description: "Save a consumption policy from JSON file/stdin using the consumption wrapper shown in the example. The worker limits new model invocations; an active invocation can exceed its reservation.",
   };
   catalog["provider list"] = {
     method: "GET",

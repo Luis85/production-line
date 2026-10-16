@@ -1,3 +1,5 @@
+import type { ConsumptionRuntime } from '../application/consumption.js';
+import { consumptionModel } from '../application/consumption-model.js';
 import { join } from 'node:path';
 import { WorkerSessions } from '../application/sessions.js';
 import { LocalTaskboard, type LocalTaskWorkspaces } from '../application/local-tasks.js';
@@ -13,26 +15,28 @@ import { createToolRuntime } from './tool-runtime.js';
 import { definitionStorage, sessionCatalogStorage, localTaskStorage, approvedTaskFiles } from './journal/workspace-files.js';
 
 /** Concrete provider/tool construction stays at the worker edge. Each call observes current grants. */
-export function workspaceModelFactory(directory: string, settings: WorkerSettingsPort, model: typeof modelFor = modelFor): ModelFactory {
+export function workspaceModelFactory(directory: string, settings: WorkerSettingsPort, model: typeof modelFor = modelFor, consumption?: ConsumptionRuntime): ModelFactory {
   return (connection, scope) => {
     const executionDirectory = !scope?.sessionId || scope.sessionId === 'default' ? directory : join(directory, 'sessions', scope.sessionId);
-    return model(connection, executionDirectory, undefined, scope ? {
+    const instance = model(connection, executionDirectory, undefined, scope ? {
       tools: () => createToolRuntime({ policy: settings.toolPolicy(), currentRevision: () => settings.toolPolicy().revision, directory: executionDirectory, worktree: scope.worktree, worktreeIdentity: scope.worktreeIdentity }),
     } : undefined);
+    return consumption ? consumptionModel(instance, consumption) : instance;
   };
 }
 export function createWorkerDefinitions(directory: string) { return new WorkerDefinitions(definitionStorage(directory)); }
-export function createWorkerSessions(directory: string, settings: WorkerSettingsPort, model: typeof modelFor = modelFor, requests?: RequestJournal, activeOutsideChat: () => number = () => 0) {
+export function createWorkerSessions(directory: string, settings: WorkerSettingsPort, model: typeof modelFor = modelFor, requests?: RequestJournal, activeOutsideChat: () => number = () => 0, consumption?: ConsumptionRuntime) {
   return new WorkerSessions(settings, {
-    model: workspaceModelFactory(directory, settings, model), storage: sessionCatalogStorage(directory),
+    model: workspaceModelFactory(directory, settings, model, consumption), storage: sessionCatalogStorage(directory),
+    consumptionBlocked: consumption ? () => consumption.status().blocked : undefined,
     requests: requests ?? new WorkerRequestJournal(directory), interactions: new WorkerInteractionJournal(directory), runs: new WorkerRunJournal(directory),
     definitions: createWorkerDefinitions(directory), activeOutsideChat,
   });
 }
-export function createLocalTaskboard(directory: string, settings: WorkerSettingsPort, sessions: WorkerSessions, modelOrWorkspaces: typeof modelFor | LocalTaskWorkspaces = modelFor, workspaces?: LocalTaskWorkspaces) {
+export function createLocalTaskboard(directory: string, settings: WorkerSettingsPort, sessions: WorkerSessions, modelOrWorkspaces: typeof modelFor | LocalTaskWorkspaces = modelFor, workspaces?: LocalTaskWorkspaces, consumption?: ConsumptionRuntime) {
   const model = typeof modelOrWorkspaces === 'function' ? modelOrWorkspaces : modelFor;
   return new LocalTaskboard(settings, sessions, {
-    model: workspaceModelFactory(directory, settings, model), storage: localTaskStorage(directory), files: approvedTaskFiles,
+    model: workspaceModelFactory(directory, settings, model, consumption), storage: localTaskStorage(directory), files: approvedTaskFiles,
     workspaces: typeof modelOrWorkspaces === 'function' ? workspaces : modelOrWorkspaces,
   });
 }

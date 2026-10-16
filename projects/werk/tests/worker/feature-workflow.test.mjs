@@ -153,3 +153,15 @@ test('snapshot-aware readiness protects workflow controls and queue namespaces w
   }
   for(const path of ['requirements-code/service.ts','review-notes-util.ts','templates/ordinary-document.md','checks/business-rule.ts','AGENTS.md','CLAUDE.md']) assert.equal(validateFeatureReadiness(request.replace('src/navigation.ts',path),ready(),'codex-cli',template,scope).valid,true,path);
 });
+test('definitionRef is a typed request field, never author metadata, and cannot be combined with definitionId',()=>{
+  const withRef=request.replace('mode: patch\n','mode: patch\ndefinitionRef: team-reviewer\nagent: root\n');
+  const result=validateFeatureReadiness(withRef,ready(),'codex-cli',template);
+  assert.equal(result.valid,true,JSON.stringify(result.errors));
+  assert.equal(result.input.definitionRef,'team-reviewer');assert.equal(result.input.agent,'root');
+  assert.deepEqual(result.input.metadata,{});assert.doesNotMatch(result.input.message,/Request metadata/);
+  assert.notEqual(result.inputHash,validateFeatureReadiness(request,ready(),'codex-cli',template).inputHash);
+  assert.match(validateFeatureReadiness(withRef.replace('agent: root\n','agent: root\ndefinitionId: local-id\n'),ready(),'codex-cli',template).errors[0].message,/not both/);
+  assert.match(validateFeatureReadiness(withRef.replace('team-reviewer','Team Reviewer'),ready(),'codex-cli',template).errors[0].message,/definitionRef/);
+  const templateWithRef=template.replace('mode: patch\n','mode: patch\ndefinitionRef: team-reviewer\nagent: root\n');
+  assert.deepEqual(validateFeatureTemplate(templateWithRef).fields,[],'a template may preset the shared reference without making it a required custom field');
+});

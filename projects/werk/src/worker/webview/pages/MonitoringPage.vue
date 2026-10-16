@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ConsumptionPanel from '../components/ConsumptionPanel.vue';
 import RepositoryPanel from '../components/RepositoryPanel.vue';
 import SharedIntakePanel from '../components/SharedIntakePanel.vue';
 import ExecutionProfilesPanel from '../components/ExecutionProfilesPanel.vue';
@@ -26,6 +27,14 @@ async function openLinkedSettings() {
   await nextTick();
   if (route.fullPath !== path) return;
   const target = route.hash === '#provider-connections' ? providerDetails.value : route.hash === '#agent-definitions' ? definitionDetails.value : route.hash === '#execution-profiles' ? profileDetails.value : route.hash === '#tool-access' ? toolDetails.value : route.hash === '#shared-intake' ? sharedIntakeDetails.value : null;
+  if (route.hash === '#consumption-limits') {
+    const section = document.getElementById('consumption-limits');
+    const editor = section?.querySelector<HTMLDetailsElement>('.consumption-editor');
+    if (editor) editor.open = true;
+    section?.querySelector('h2')?.focus({ preventScroll: true });
+    section?.scrollIntoView({ block: 'start' });
+    return;
+  }
   if (!target) return;
   target.open = true;
   target.querySelector('summary')?.focus({ preventScroll: true });
@@ -44,10 +53,12 @@ const executionTitle = computed(() => {
   if (runningSession.value) return runningSession.value.title;
   if (state.sessions.execution.currentSessionId) return 'Task running';
   if (state.settings?.board.paused) return 'Queue paused';
+  if (state.consumption?.blocked) return 'Consumption limit blocks new model calls';
   return 'Ready for your next task';
 });
 const executionNote = computed(() => state.settings?.board.paused
   ? 'New work can join the queue. Waiting tasks will start when you resume; an active task can finish.'
+  : state.consumption?.blocked ? 'Review Consumption limits below for the reason and the next reset. An active model call can finish.'
   : 'Chat, file tasks and assignments share one execution slot. Waiting work starts automatically.');
 const memoryPercent = computed(() => env.value?.memory.hostTotalBytes ? Math.round((1 - env.value.memory.hostFreeBytes / env.value.memory.hostTotalBytes) * 100) : 0);
 const diskPercent = computed(() => env.value?.disk?.totalBytes ? Math.round((1 - env.value.disk.freeBytes / env.value.disk.totalBytes) * 100) : 0);
@@ -80,6 +91,7 @@ async function openRunning() {
     </div>
     <nav class="setup-shortcuts" aria-label="Worker setup">
       <span>Set up this worker</span>
+      <RouterLink to="/dashboard#consumption-limits">Consumption limits</RouterLink>
       <RouterLink to="/dashboard#provider-connections">Provider connections</RouterLink>
       <RouterLink to="/dashboard#tool-access">Tool access</RouterLink>
       <RouterLink to="/dashboard#shared-intake">Shared request intake</RouterLink>
@@ -116,6 +128,8 @@ async function openRunning() {
       </ul>
       <p class="page-note">{{ state.sessions?.records.filter(session => !session.archived).length ?? '—' }} saved tasks · {{ worker?.queuedTasks?.length ?? 0 }} remote assignments waiting</p>
     </section>
+
+    <ConsumptionPanel v-if="state.unlocked" />
 
     <div class="monitor-columns">
       <section class="monitor-section">

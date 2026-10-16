@@ -37,6 +37,7 @@ follows [Diátaxis](https://diataxis.fr/).
 - [Markdown feature-request contract](reference/feature-requests.md)
 - [Use the worker webview](how-to/use-worker-webview.md): Taskboard, History and Dashboard.
 - [Manage model tools](how-to/manage-model-tools.md): built-in grants, MCP connections and revocation.
+- [Set a worker consumption limit](how-to/worker-consumption-limits.md): daily/monthly token allowance, worker share, reservations and recovery.
 
 - [Operate, back up and replace a Linux VM](how-to/operate-linux-vm.md)
 

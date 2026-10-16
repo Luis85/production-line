@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 
 // Tests execute the same frontend state modules used by Vue, with controlled I/O.
+// Browser code may share pure application policy; resolve its source dependencies too.
 // Browser components and their mounted behavior are additionally exercised by browser journeys.
 registerHooks({
   resolve(specifier, context, nextResolve) {
@@ -12,7 +13,7 @@ registerHooks({
     } catch (error) {
       if (
         specifier.startsWith(".") &&
-        context.parentURL?.includes("/webview/")
+        /(?:\/webview\/|\/src\/worker\/application\/)/.test(context.parentURL ?? "")
       ) {
         for (const candidate of [
           specifier.replace(/\.js$/, ".ts"),

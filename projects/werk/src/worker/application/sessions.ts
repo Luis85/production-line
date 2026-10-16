@@ -78,6 +78,7 @@ export class WorkerSessions {
     runs: RunJournal;
     definitions: WorkerDefinitions;
     activeOutsideChat?: () => number;
+    consumptionBlocked?: () => boolean;
   }) {
     this.activeOutsideChat = dependencies.activeOutsideChat ?? (() => 0);
     this.requests = dependencies.requests;
@@ -87,7 +88,7 @@ export class WorkerSessions {
     this.model = dependencies.model;
     this.storage = dependencies.storage;
     this.settings = settings;
-    this.executor = new SerialExecutor(() => settings.value.board.paused);
+    this.executor = new SerialExecutor(() => settings.value.board.paused || !!dependencies.consumptionBlocked?.());
   }
   async init() {
     await this.requests.init();
@@ -516,6 +517,7 @@ export class WorkerSessions {
         "title",
         "provider",
         "definitionId",
+        "definitionRef",
         "agent",
         "useInstructionsOnly",
       ]);
@@ -545,6 +547,7 @@ export class WorkerSessions {
       } else {
         if (
           body.definitionId !== undefined ||
+          body.definitionRef !== undefined ||
           body.agent !== undefined ||
           body.useInstructionsOnly !== undefined
         )

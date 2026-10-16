@@ -1,5 +1,5 @@
 import { readResponseBody, ResponseBodyLimitError } from '../../shared/http/response-body.js';
-import { classifyProviderStatus, parseModelResult, ProviderModelError, type ModelRequest } from '../application/model-contract.js';
+import { classifyProviderStatus, parseModelResult, ProviderModelError, type ModelRequest, type ModelInvocationControl } from '../application/model-contract.js';
 import type { ProviderUsage } from '../application/run-evidence.js';
 import type { ToolRuntime } from '../application/tool-runtime.js';
 import type { ProviderConnection } from './providers.js';
@@ -28,7 +28,7 @@ async function readResponse(response: Response, signal: AbortSignal) {
   catch { throw response.ok ? new ProviderModelError('protocol') : classifyProviderStatus(response.status); }
 }
 /** Stateless tool loops: each turn replays this invocation only; server-side conversation storage stays off. */
-export async function apiReply(connection: ProviderConnection, request: ModelRequest, signal: AbortSignal, transport: typeof fetch, onUsage?: (usage: ProviderUsage) => void, runtime?: ToolRuntime) {
+export async function apiReply(connection: ProviderConnection, request: ModelRequest, signal: AbortSignal, transport: typeof fetch, onUsage?: (usage: ProviderUsage) => void, runtime?: ToolRuntime, control?: ModelInvocationControl) {
   const openai = connection.id === 'openai-api';
   const history: any[] = request.messages.map(({ role, text }) => ({ role, content: text }));
   const definitions = runtime?.manifest.tools.map(tool => openai
@@ -42,6 +42,7 @@ export async function apiReply(connection: ProviderConnection, request: ModelReq
       ? { model: request.provider.model, instructions: request.protocolInstructions, store: false, max_output_tokens: 8192, input: history, ...(definitions ? { tools: definitions, parallel_tool_calls: false, include: ['reasoning.encrypted_content'] } : {}) }
       : { model: request.provider.model, system: request.protocolInstructions, max_tokens: 8192, messages: history, ...(definitions ? { tools: definitions } : {}) };
     if (Buffer.byteLength(JSON.stringify(body)) > 4194304) throw new ProviderModelError('protocol');
+    control?.beforeCall();
     let response: Response;
     try {
       response = await transport(openai ? 'https://api.openai.com/v1/responses' : 'https://api.anthropic.com/v1/messages', {

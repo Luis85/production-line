@@ -1,3 +1,4 @@
+import type { ConsumptionPolicy } from './consumption.js';
 import type { ProviderConnection } from './provider-contract.js';
 import type { RepositoryConfiguration } from './repositories.js';
 import type { ResourcePolicy } from './resources.js';
@@ -15,6 +16,7 @@ export interface WorkerSettingsView {
   repositories: RepositoryConfiguration;
   executionSource: 'environment' | 'saved_settings' | 'default';
   resources: ResourcePolicy;
+  consumption: ConsumptionPolicy;
   execution: ExecutionPolicy;
   providers: Array<Omit<ProviderConnection, 'apiKey'> & { label: string; configured: boolean; hasApiKey: boolean; authentication: string }>;
   connection: { enabled: boolean; url: string; hasEnrollmentToken: boolean };

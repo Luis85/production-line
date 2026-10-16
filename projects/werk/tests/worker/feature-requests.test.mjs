@@ -231,3 +231,11 @@ test('canonical feature gates project findings separately and edited companions 
   assert.equal(controls,1); assert.equal((await f.folder.documents.read('gated.md')).revision,acknowledgedFile.revision);
   request.phase='done'; request.revision=6; f.tasks.set(record.taskId,{status:'completed',text:'Actual output retained separately.',request}); await f.service.tick(true); parsed=await f.read('gated.md'); assert.equal(parsed.body,body); assert.equal(parsed.data.status,'completed'); assert.equal(parsed.data.werk.gates.phase,'done'); assert.equal(parsed.data.werk.executionStatus,'completed'); assert.ok(parsed.data.werk.result); assert.equal(f.submissions.length,1);
 });
+
+test('local folder requests submit a stable definitionRef unchanged and reject mixed or malformed references', async t => {
+  const f = await fixture(t);
+  await f.put('reviewed.md', source('definitionRef: team-reviewer\nagent: root\n')); await scan(f.service);
+  assert.equal(f.submissions.length, 1); assert.equal(f.submissions[0].input.definitionRef, 'team-reviewer'); assert.equal(f.submissions[0].input.definitionId, undefined);
+  for (const extra of ['definitionRef: team-reviewer\ndefinitionId: local-id\n', 'definitionRef: Team Reviewer\n', 'definitionRef: 7\n'])
+    assert.throws(() => featureInput(parseFeature(source(extra)), 'codex-cli'), /definitionRef/);
+});

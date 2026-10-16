@@ -237,7 +237,7 @@ async function runLockedWorker(
     };
   };
   const adapter = dependencies.adapter ?? (config.codex
-    ? new CodexAdapter(config.codex, config.stateDir, config.systemPrompt, workspace.repositories, path => workspace.repositoryDiscovery.assertAllowed(path))
+    ? new CodexAdapter(config.codex, config.stateDir, config.systemPrompt, workspace.repositories, path => workspace.repositoryDiscovery.assertAllowed(path), workspace.consumption)
     : new MockAdapter(config.mockMs));
   const gateReconciler = new RemoteGateReconciler(
     workspace.sessions.requests,
@@ -501,6 +501,7 @@ async function runLockedWorker(
                   let n = 0;
                   n < capacity &&
                   !board.paused &&
+                  !workspace.consumption.status().blocked &&
                   running.size + waiting.size < capacity &&
                   !stopping.aborted;
                   n++
@@ -532,6 +533,7 @@ async function runLockedWorker(
                 running.size ||
                 stopping.aborted ||
                 workspace.settings.value.board.paused ||
+                workspace.consumption.status().blocked ||
                 workspace.executor.busy
               )
                 break;
@@ -545,14 +547,14 @@ async function runLockedWorker(
               if (
                 stopping.aborted ||
                 entry.lease.signal.aborted ||
-                workspace.settings.value.board.paused
+                workspace.settings.value.board.paused || workspace.consumption.status().blocked
               ) {
                 release();
                 continue;
               }
               try {
                 await entry.lease.close();
-                if (stopping.aborted || workspace.settings.value.board.paused) {
+                if (stopping.aborted || workspace.settings.value.board.paused || workspace.consumption.status().blocked) {
                   if (!stopping.aborted) {
                     const lease = new AttemptLease(task, client, state, now);
                     try {

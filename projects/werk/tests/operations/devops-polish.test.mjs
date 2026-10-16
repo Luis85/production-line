@@ -62,6 +62,10 @@ test('clean standalone build removes stale output and compiles nested shared mod
     await mkdir(join(root,'src/worker/authoring'));
     await writeFile(join(root,'src/worker/authoring/cli.ts'),'import { parse } from "yaml"; import { value } from "../../shared/nested/value.js"; console.log(parse("value: " + value).value);\n');
     await writeFile(join(root,'src/worker/dist/stale.js'),'old build');
+    // The worker webview shares pure consumption policy with the application.
+    await mkdir(join(root,'src/worker/application'),{recursive:true});
+    for (const file of ['consumption.ts','run-evidence.ts']) await cp(new URL('../../src/worker/application/' + file,import.meta.url),join(root,'src/worker/application',file));
+    await cp(new URL('../../src/shared/errors.ts',import.meta.url),join(root,'src/shared/errors.ts'));
     await cp(new URL('../../src/shared/webview',import.meta.url),join(root,'src/shared/webview'),{recursive:true});
     await cp(new URL('../../src/worker/webview',import.meta.url),join(root,'src/worker/webview'),{recursive:true,filter:path=>!path.includes('.nuxt-ui')});
     await symlink(fileURLToPath(new URL('../../node_modules',import.meta.url)),join(root,'node_modules'),process.platform==='win32'?'junction':'dir');
@@ -92,7 +96,9 @@ test('fleet reuses credentials, exports custom URL and drains workers before ser
     await mkdir(join(root,'.state/fleet'),{recursive:true});
     await writeFile(join(root,'.state/fleet/credentials.json'),JSON.stringify(preserved));
     await writeFile(join(root,'src/orchestrator/dist/orchestrator/cli.js'),`const http=require('node:http'),fs=require('node:fs');const p=Number(process.argv[process.argv.indexOf('--port')+1]);const s=http.createServer((req,res)=>res.end('{}'));s.listen(p,'127.0.0.1');process.once('SIGTERM',()=>{fs.appendFileSync(${JSON.stringify(events)},'server\\n');s.close();});`);
-    await writeFile(join(root,'src/worker/dist/worker/cli.js'),`const fs=require('node:fs');fs.appendFileSync(${JSON.stringify(events)},'started\\n');const timer=setInterval(()=>{},1000);process.once('SIGTERM',()=>{fs.appendFileSync(${JSON.stringify(events)},'worker\\n');clearInterval(timer);});`);
+    // Install the shutdown handler before announcing readiness: the test signals as soon as it reads "started",
+    // and a SIGTERM delivered before the handler exists ends the worker without its drain record.
+    await writeFile(join(root,'src/worker/dist/worker/cli.js'),`const fs=require('node:fs');const timer=setInterval(()=>{},1000);process.once('SIGTERM',()=>{fs.appendFileSync(${JSON.stringify(events)},'worker\\n');clearInterval(timer);});fs.appendFileSync(${JSON.stringify(events)},'started\\n');`);
     const {spawn}=await import('node:child_process');
     const alias = join(root, 'project-alias'); await symlink(root, alias, 'dir');
     child=spawn(process.execPath,[join(alias,'scripts/fleet.mjs'),'--workers','1'],{env:{...process.env,WERK_DEV_PORT:String(port),WERK_STATUS_BASE:String(status)},stdio:'pipe'});
