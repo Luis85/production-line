@@ -3,7 +3,7 @@ import { inputError } from "../config.mjs";
 // Git fetch, claim and publication can outlast the default 10 s API wait on slow remotes.
 const GIT_REQUEST_TIMEOUT_MS = 120000;
 export function workerCommands(catalog) {
-  catalog["feature setup"] = { local: true, required: [], options: ["project-dir", "features-dir"], mutating: true, description: "Install a standalone feature authoring kit without starting or installing a worker; preserve existing project files." };
+  catalog["feature setup"] = { local: true, required: [], options: ["project-dir", "features-dir", "if-match"], mutating: true, description: "Install a standalone feature authoring kit without starting or installing a worker; preserve existing project files. The authoring script is refreshed only while it matches the content recorded in .werk/authoring/manifest.json; --if-match REVISION replaces an unrecorded script with that revision." };
   for (const action of ["create", "validate", "ready"]) catalog["feature author " + action] = {
     local: true, required: action === "create" ? ["name", "title"] : ["file", ...(action === "ready" ? ["if-match"] : [])],
     options: ["project-dir"], mutating: action !== "validate",

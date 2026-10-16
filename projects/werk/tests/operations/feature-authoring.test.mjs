@@ -1,7 +1,8 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, readFile, writeFile, mkdir, rm, access, symlink, link } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, writeFile, mkdir, rm, access, symlink, link } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -37,7 +38,7 @@ async function completedDraft(f, name = 'search.md') {
 test('authoring setup installs a standalone team kit and preserves customized files', async () => {
   const f = await fixture({ featuresDirectory: 'requests/features' });
   assert.equal(f.installed.workflow.requestsDirectory, 'requests/features');
-  assert.equal(f.installed.files.length, 9);
+  assert.equal(f.installed.files.length, 10);
   await assert.rejects(access(join(f.root, 'bin/apps/worker')));
   await assert.rejects(access(join(f.root, '.werk/worker.json')));
   const base = parse(await readFile(join(f.root, 'Feature Requests.base'), 'utf8'));
@@ -195,4 +196,94 @@ test('repeated setup preserves an outdated committed authoring script but report
   assert.deepEqual(repeated.warnings.map(warning => warning.code), ['authoring_script_outdated']);
   assert.equal(repeated.files.find(file => file.path === '.werk/authoring/feature-request.mjs').status, 'preserved');
   assert.equal(await readFile(path, 'utf8'), older);
+});
+
+const scriptPath = '.werk/authoring/feature-request.mjs', manifestPath = '.werk/authoring/manifest.json';
+const sha256 = text => createHash('sha256').update(text).digest('hex');
+const released = '// Werk 0.7.0 authoring script without definitionRef support\nexport {};\n';
+const statusOf = (result, path) => result.files.find(file => file.path === path)?.status;
+const recorded = async root => JSON.parse(await readFile(join(root, manifestPath), 'utf8')).files[scriptPath].sha256;
+
+test('setup records the installed script and refreshes it after an upgrade only while unmodified', async () => {
+  // Simulate a kit installed by an older release, committed on Windows with CRLF line endings.
+  const f = await fixture({ script: released });
+  assert.equal(statusOf(f.installed, manifestPath), 'created');
+  assert.equal(await recorded(f.root), sha256(released));
+  await writeFile(join(f.root, scriptPath), released.replace(/\n/g, '\r\n'));
+  const planned = await planFeatureAuthoring(f.root, { script });
+  assert.deepEqual([statusOf(planned, scriptPath), statusOf(planned, manifestPath), planned.script.action], ['update', 'update', 'refresh']);
+  assert.deepEqual(planned.warnings, []);
+  assert.equal(await readFile(join(f.root, scriptPath), 'utf8'), released.replace(/\n/g, '\r\n'), 'planning never writes');
+  const upgraded = await initializeFeatureAuthoring(f.root, { script });
+  assert.deepEqual([statusOf(upgraded, scriptPath), statusOf(upgraded, manifestPath)], ['updated', 'updated']);
+  assert.deepEqual(upgraded.warnings, []);
+  assert.match(upgraded.next, /commit the refreshed authoring script/);
+  assert.equal(await readFile(join(f.root, scriptPath), 'utf8'), script);
+  assert.equal(await recorded(f.root), sha256(script));
+  const repeated = await initializeFeatureAuthoring(f.root, { script });
+  assert.ok(repeated.files.every(file => file.status === 'preserved'));
+  await assert.rejects(access(join(f.root, '.werk/authoring/write.lock')));
+});
+
+test('a customized or unrecorded script is replaced only with an explicit matching revision', async () => {
+  const f = await fixture({ script: released });
+  const customized = released + '// Team rule: always add a reviewer.\n';
+  await writeFile(join(f.root, scriptPath), customized);
+  const preserved = await initializeFeatureAuthoring(f.root, { script });
+  assert.equal(statusOf(preserved, scriptPath), 'preserved');
+  assert.equal(statusOf(preserved, manifestPath), undefined, 'a customized script is never recorded as managed');
+  assert.deepEqual(preserved.warnings.map(warning => [warning.code, warning.revision]), [['authoring_script_outdated', sha256(customized)]]);
+  assert.match(preserved.warnings[0].message, new RegExp('feature setup --if-match ' + sha256(customized)));
+  assert.equal(await readFile(join(f.root, scriptPath), 'utf8'), customized);
+  assert.equal(await recorded(f.root), sha256(released));
+  await assert.rejects(initializeFeatureAuthoring(f.root, { script, ifMatch: sha256(released) }), /another revision/);
+  await assert.rejects(initializeFeatureAuthoring(f.root, { script, ifMatch: 'HEAD' }), /64-character SHA-256/);
+  assert.equal(await readFile(join(f.root, scriptPath), 'utf8'), customized);
+  const replaced = await initializeFeatureAuthoring(f.root, { script, ifMatch: sha256(customized) });
+  assert.deepEqual([statusOf(replaced, scriptPath), statusOf(replaced, manifestPath)], ['updated', 'updated']);
+  assert.equal(await readFile(join(f.root, scriptPath), 'utf8'), script);
+  assert.equal(await recorded(f.root), sha256(script));
+
+  // Projects set up before the manifest existed have no record: the same explicit path applies.
+  const legacy = await fixture({ script: released });
+  await rm(join(legacy.root, manifestPath));
+  const unrecorded = await initializeFeatureAuthoring(legacy.root, { script });
+  assert.deepEqual(unrecorded.warnings.map(warning => warning.code), ['authoring_script_outdated']);
+  await assert.rejects(access(join(legacy.root, manifestPath)));
+  const adopted = await initializeFeatureAuthoring(legacy.root, { script, ifMatch: sha256(released) });
+  assert.deepEqual([statusOf(adopted, scriptPath), statusOf(adopted, manifestPath)], ['updated', 'created']);
+  assert.equal(await recorded(legacy.root), sha256(script));
+});
+
+test('a current script without a record gains one, and --if-match needs an installed script', async () => {
+  const f = await fixture();
+  await rm(join(f.root, manifestPath));
+  const recordedNow = await initializeFeatureAuthoring(f.root, { script });
+  assert.deepEqual([statusOf(recordedNow, scriptPath), statusOf(recordedNow, manifestPath)], ['preserved', 'created']);
+  assert.deepEqual(recordedNow.warnings, []);
+  const empty = await mkdtemp(join(scratch, 'project-'));
+  await assert.rejects(initializeFeatureAuthoring(empty, { script, ifMatch: sha256(script) }), /none is installed/);
+  await assert.rejects(access(join(empty, '.werk')));
+});
+
+test('a guarded replacement refuses a file that changed after inspection', async () => {
+  const { replaceAuthoringFile } = await import(pathToFileURL(join(project, 'src/worker/dist/worker/infrastructure/feature-authoring-files.js')).href);
+  const f = await fixture();
+  await writeFile(join(f.root, scriptPath), 'changed by a teammate\n');
+  await assert.rejects(replaceAuthoringFile(f.root, scriptPath, 'replacement\n', sha256(script)), /changed during setup/);
+  assert.equal(await readFile(join(f.root, scriptPath), 'utf8'), 'changed by a teammate\n');
+  assert.deepEqual((await readdir(join(f.root, '.werk/authoring'))).filter(name => name.endsWith('.tmp')), []);
+});
+
+test('portable feature setup accepts --if-match and rejects a malformed revision before writing', async () => {
+  const f = await fixture({ script: released });
+  await writeFile(join(f.root, scriptPath), released + '// customized\n');
+  const cli = new URL('../../scripts/runtime/portable/cli.mjs', import.meta.url).href;
+  const run = (...args) => execFileSync(process.execPath, ['--input-type=module', '-e', `import { main } from ${JSON.stringify(cli)}; await main('worker', process.argv.slice(1));`, 'feature', 'setup', '--project-dir', f.root, ...args], { encoding: 'utf8', stdio: 'pipe' });
+  assert.throws(() => run('--if-match', 'not-a-revision'), error => error.status === 2 && /64-character SHA-256/.test(error.stderr));
+  const warned = JSON.parse(run());
+  const revision = warned.warnings.find(warning => warning.code === 'authoring_script_outdated').revision;
+  const replaced = JSON.parse(run('--if-match', revision));
+  assert.equal(statusOf(replaced, scriptPath), 'updated');
+  assert.equal(await readFile(join(f.root, scriptPath), 'utf8'), await readFile(join(project, 'src/worker/dist/worker/authoring/feature-request.mjs'), 'utf8'));
 });

@@ -16,7 +16,8 @@ node /path/to/werk/bin/apps/worker/cli.mjs feature setup --project-dir /path/to/
 Use `--features-dir requests/features` to choose a different queue. Setup also
 runs during [project worker initialization](project-worker.md). When a worker
 configuration already exists, standalone setup adopts its feature directory.
-Repeating setup preserves existing files and team customization. A configured
+Repeating setup preserves existing files and team customization; only an
+unmodified authoring script is refreshed (see below). A configured
 folder mismatch or malformed check file is reported before setup writes files.
 An older template is preserved with a warning explaining the required update.
 
@@ -27,6 +28,7 @@ Commit these generated files with the project:
 | `.werk/feature-workflow.json` | Paths and stable identity for the shared workflow |
 | `.werk/authoring/feature-request.mjs` | Self-contained authoring CLI |
 | `.werk/authoring/.gitignore` | Excludes the temporary authoring write lock |
+| `.werk/authoring/manifest.json` | Content hash of the authoring script that Werk installed |
 | `fr-ready-check.json`, `fr-done-check.json` | Team readiness and completion rules |
 | `features/_templates/feature-request.md` | Editable request template |
 | `Feature Requests.base` | Obsidian table of requests in the configured queue |
@@ -40,21 +42,36 @@ shared Git updates to see teammates' requests and worker notes.
 
 ### Refresh the authoring script after an upgrade
 
-Setup never replaces committed kit files, including the authoring script. After
-updating the worker app, run `feature setup` again. If the result contains the
-warning `authoring_script_outdated`, the committed `.werk/authoring/feature-request.mjs`
-differs from the script bundled with the new worker. An outdated script can reject
-fields that the new worker accepts, such as `definitionRef`. Compare the two files
-before you replace the committed copy:
+After updating the worker app, run `feature setup` again so the committed
+`.werk/authoring/feature-request.mjs` matches the new worker. An outdated script
+can reject fields that the new worker accepts, such as `definitionRef`.
+
+Setup records the content hash of the script it installs in
+`.werk/authoring/manifest.json`. Line endings are ignored, so a Windows checkout
+with CRLF still matches. While the committed script still matches that record,
+setup replaces it with the bundled script and reports both files as `updated`.
+Review and commit both files so teammates receive them with their next pull.
+
+Setup preserves the script and returns the warning `authoring_script_outdated` with
+the file's current `revision` when it cannot prove the script is unmodified. This
+happens when the team changed the script, or when the project was set up before
+Werk 0.9.1 and has no manifest. Compare the two files:
 
 ```sh
 git diff --no-index .werk/authoring/feature-request.mjs bin/apps/worker/src/worker/dist/worker/authoring/feature-request.mjs
 ```
 
-If the team has not customized the script, copy the bundled file over the
-committed one. Run `node .werk/authoring/feature-request.mjs validate --file` on
-an existing request, then commit the change so teammates receive it with their
-next pull. Line-ending differences alone do not produce the warning.
+If the bundled script should replace the committed one, name the revision you
+inspected. Setup refuses the replacement if the file changed since then:
+
+```sh
+node bin/apps/worker/cli.mjs feature setup --if-match REVISION
+```
+
+The replacement also records the new script in the manifest, so later upgrades
+refresh it automatically. Run `node .werk/authoring/feature-request.mjs validate --file`
+on an existing request, then commit the script and manifest. To keep a customized
+script, leave it as it is; setup never records a customized script as managed.
 
 ## Create and finish a draft
 

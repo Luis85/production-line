@@ -12,7 +12,10 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 ### Added
 
 - Portable client option `--request-timeout-ms` (1,000–600,000) overrides how long a command waits for the API.
-- `feature setup` and its plan warn with `authoring_script_outdated` when the committed `.werk/authoring/feature-request.mjs` differs from the bundled script. The guide explains how to compare and refresh it after an upgrade.
+- `feature setup` keeps the committed `.werk/authoring/feature-request.mjs` current after upgrades.
+  - Setup records the installed script's content hash in `.werk/authoring/manifest.json` and replaces the script while it still matches that record.
+  - A customized or unrecorded script is preserved, and setup reports `authoring_script_outdated` with its `revision`.
+  - `feature setup --if-match REVISION` replaces exactly that revision.
 - `state_write_error` service events name the failing writer in `site` and include an allowlisted system error code such as `EPERM` or `EBUSY`.
 
 ### Changed
