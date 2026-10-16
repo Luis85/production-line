@@ -178,3 +178,23 @@ test('standalone authoring runs through a symlinked parent and stays inert when 
     assert.equal(execFileSync(process.execPath, ['--input-type=module', '-e', code], { cwd: f.root, encoding: 'utf8' }).trim(), 'imported');
   }
 });
+
+test('the copied script validates and readies vault requests with Unicode approved paths', async () => {
+  const f = await fixture();
+  const entry = join(f.root, '.werk/authoring/feature-request.mjs');
+  const created = JSON.parse(execFileSync(process.execPath, [entry, 'create', '--name', 'Zollabwicklung prüfen.md', '--title', 'Zollabwicklung prüfen'], { cwd: f.root, encoding: 'utf8' }));
+  const draft = await completedDraft(f, 'Wareneingang.md');
+  const paths = ['docs/requirements/FA-9_Material-Logistics/LACF-REQ-033 Warenein- und -ausgang einschließlich Zoll abwickeln.md', "docs/Kunden's Änderungen (Größe) & Fristen – Prüfung → Freigabe.md"];
+  const unicode = draft.raw.replace('paths: [src/search.ts]', 'paths:\n' + paths.map(path => '  - ' + JSON.stringify(path.normalize('NFD'))).join('\n'));
+  await writeFile(draft.fullPath, unicode);
+  const valid = JSON.parse(execFileSync(process.execPath, [entry, 'validate', '--file', draft.path], { cwd: f.root, encoding: 'utf8' }));
+  assert.equal(valid.valid, true, JSON.stringify(valid.errors));
+  assert.deepEqual(valid.input.paths, paths);
+  const ready = await f.run(['ready', '--file', draft.path, '--if-match', valid.revision]);
+  assert.equal(ready.valid, true);
+  assert.match(created.path, /Zollabwicklung prüfen\.md$/);
+  await writeFile(draft.fullPath, draft.raw.replace('paths: [src/search.ts]', 'paths: [docs/nul.md]'));
+  const device = await f.run(['validate', '--file', draft.path]);
+  assert.equal(device.valid, false);
+  assert.match(device.errors[0].message, /safe relative non-secret/);
+});

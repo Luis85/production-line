@@ -469,13 +469,15 @@ export class LocalTaskboard {
       !Array.isArray(result.files) ||
       !result.files.length ||
       result.files.length > task.files.length ||
-      new Set(result.files.map((item: any) => item.path)).size !==
+      result.files.some((item: any) => typeof item?.path !== "string") ||
+      new Set(result.files.map((item: any) => item.path.normalize("NFC"))).size !==
         result.files.length
     )
       throw Error("Invalid change set");
     let patch = "";
     for (const change of result.files) {
-      const before = task.files.find((file) => file.path === change.path);
+      // Approved paths are NFC; a model may echo a decomposed spelling of the same name.
+      const before = task.files.find((file) => file.path === change.path.normalize("NFC"));
       if (
         !before ||
         typeof change.content !== "string" ||

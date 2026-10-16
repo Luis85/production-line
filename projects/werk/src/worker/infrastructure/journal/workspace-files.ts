@@ -1,4 +1,4 @@
-import { lstat, realpath } from 'node:fs/promises';
+import { lstat, readdir, realpath } from 'node:fs/promises';
 import { join, resolve, relative } from 'node:path';
 import { DomainError } from '../../../shared/errors.js';
 import type { ToolWorktreeIdentity } from '../../application/tool-runtime.js';
@@ -32,6 +32,12 @@ export function localTaskStorage(directory: string): LocalTaskStorage {
     async writePatch(id, patch) { await ensureDirectory(join(directory, 'local-review')); await atomicWrite(join(directory, 'local-review', id + '.patch'), patch); },
   };
 }
+/** Linux and Git compare names byte-wise, so a decomposed on-disk spelling would otherwise become a second, NFC-named file. */
+async function assertComposedName(parent: string, name: string) {
+  const entries = await readdir(parent).catch((error) => { if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return []; throw error; });
+  if (entries.some(entry => entry !== name && entry.normalize('NFC') === name))
+    throw new DomainError('invalid_input', 'An approved path differs from an existing file or folder only by Unicode normalization. Rename it to its composed (NFC) spelling first.');
+}
 async function worktreeIdentity(path: string): Promise<ToolWorktreeIdentity> {
   const info = await lstat(path);
   if (!info.isDirectory() || info.isSymbolicLink() || await realpath(path) !== path)
@@ -58,6 +64,7 @@ export const approvedTaskFiles: ApprovedTaskFiles = {
           if (error.code !== "ENOENT") throw error;
           return null;
         });
+        if (!info) { await assertComposedName(join(snapshotRoot, ...parts.slice(0, i - 1)), parts[i - 1]); break; }
         if (
           info?.isSymbolicLink() ||
           (info && i < parts.length && !info.isDirectory())

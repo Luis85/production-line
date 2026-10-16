@@ -54,7 +54,18 @@ characters. Shared implementation requests use `mode: patch`; replace the empty
 
 For example, replace `paths: []` with `paths: [src/search.ts]`, describe the user
 problem, add an observable checklist item, and explain how a reviewer will verify
-it. Comment-only placeholders do not count as answers. Ask your coding assistant
+it. Approved paths may use umlauts, `ß`, commas, parentheses, `&`, apostrophes,
+dashes and arrows. Use a block list for names with such characters, because in
+`[a, b]` a comma separates two paths:
+
+```yaml
+paths:
+  - docs/requirements/LACF-REQ-033 Warenein- und -ausgang einschließlich Zoll abwickeln.md
+  - "docs/Kunden's Änderungen (Größe).md"
+```
+
+See [approved file paths](../reference/feature-requests.md#approved-file-paths)
+for the complete rule. Comment-only placeholders do not count as answers. Ask your coding assistant
 to use **Create Feature Request** if you want help identifying gaps. The skill
 instructs it to clarify missing decisions with you instead of inventing them.
 

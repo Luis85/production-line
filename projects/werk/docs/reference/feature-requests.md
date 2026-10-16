@@ -82,6 +82,58 @@ produces a patch for review; it does **not** apply changes or run project tests.
 Chat does not discover project files. Both modes use configured providers and may
 consume subscription/API usage when admitted; importing a draft does not prompt.
 
+### Approved file paths
+
+File tasks, local feature folders, shared Git intake, offline authoring and the
+live Codex `allowedPaths` setting use the same rule for approved paths.
+
+- Paths are relative and use `/` as the separator.
+- Names may use letters, digits and combining marks in any script, such as
+  `ä ö ü Ä Ö Ü ß é 日本`.
+- Names may also use spaces and these characters: `_ . - , ( ) & ' ’ + – — →`.
+- The worker stores and compares paths in Unicode NFC form. A decomposed spelling,
+  such as one typed on macOS, is converted to NFC, and two spellings of one name
+  count as a duplicate.
+- A path is at most 240 characters. Each segment is at most 255 UTF-8 bytes.
+
+The worker rejects these paths:
+
+- `.` or `..` segments, empty segments, and absolute paths.
+- Paths that start with `-`.
+- Dot-prefixed files or folders, such as `.env` or `.werk/…`.
+- Segments that end in a dot or a space, because Windows silently removes them.
+- Windows device names such as `CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9` and
+  `LPT1`–`LPT9`, with any extension, such as `nul.md`.
+- Control and invisible formatting characters.
+- Windows-reserved characters: `< > : " | ? *` and `\`.
+- Shell, glob and wiki-link characters such as `$`, `` ` ``, `~`, `[`, `]` and `#`.
+- Credential or secret file names (`credentials`, `secrets`, `id_rsa`,
+  `id_ed25519`) and private-key extensions (`.pem`, `.key`, `.p12`, `.pfx`). These
+  checks also cover look-alike spellings, such as full-width letters.
+
+Example of an accepted path:
+`docs/requirements/FA-9_Material-Logistics/LACF-REQ-033 Warenein- und -ausgang einschließlich Zoll abwickeln.md`.
+
+YAML gives some characters special meaning, so write paths that contain them as
+a block list:
+
+```yaml
+paths:
+  - docs/requirements/LACF-REQ-101 Angebote prüfen, freigeben & versenden.md
+  - "docs/Kunden's Änderungen (Größe).md"
+```
+
+In flow style, `paths: [a, b.md]`, a comma separates two paths. Quote a name that
+contains a comma, or one that starts with `&`, `'` or `"`.
+
+A file task refuses a path when an existing file or folder has the same name in a
+different Unicode normalization. Rename that file to its composed (NFC) spelling
+first. Otherwise the patch would create a second file that looks identical.
+Shared publication refuses a new file that differs from a tracked file only by
+letter case or Unicode normalization.
+
+Patches quote every path in Git's C-style form, which `git apply` accepts.
+
 ## Lifecycle and recovery
 
 The worker writes `id`, `status` and a `werk` mapping containing `source`, `taskId`,

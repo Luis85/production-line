@@ -131,7 +131,7 @@ test('done verdicts require recorded artifacts and never infer test/build eviden
 });
 
 test('readiness shares execution static scope rules before a request can be claimed',()=>{
-  const paths=['.werk/worker.json','.agents/skills/example/SKILL.md','.env','src/.cache/output.ts','credentials.txt','config/secrets.json','id_rsa','keys/id_ed25519.pub','config/client.pem','config/client.key','config/client.p12','config/client.pfx','src/with+plus.ts','-option.ts','x'.repeat(241)];
+  const paths=['.werk/worker.json','.agents/skills/example/SKILL.md','.env','src/.cache/output.ts','credentials.txt','config/secrets.json','id_rsa','keys/id_ed25519.pub','config/client.pem','config/client.key','config/client.p12','config/client.pfx','docs/a:b.md','docs/con.md','docs/trailing.','-option.ts','x'.repeat(241)];
   for(const path of paths){
     assert.throws(()=>validateApprovedPaths([path]),/safe relative non-secret/);
     const result=validateFeatureReadiness(request.replace('src/navigation.ts',path),ready(),'codex-cli',template);
@@ -139,10 +139,12 @@ test('readiness shares execution static scope rules before a request can be clai
   }
   assert.throws(()=>validateApprovedPaths(['src/a.ts','src/a.ts']),/unique/);
   for(const paths of [[],Array.from({length:33},(_,i)=>'src/file'+i+'.ts')]) assert.throws(()=>validateApprovedPaths(paths));
-  for(const path of ['AGENTS.md','CLAUDE.md','src/new-feature.ts','docs/new feature.md','src/secretary.ts']){
+  for(const path of ['AGENTS.md','CLAUDE.md','src/new-feature.ts','docs/new feature.md','src/secretary.ts','src/with+plus.ts','docs/requirements/LACF-REQ-033 Warenein- und -ausgang einschließlich Zoll abwickeln.md']){
     assert.deepEqual(validateApprovedPaths([path]),[path]);
     assert.equal(validateFeatureReadiness(request.replace('src/navigation.ts',path),ready(),'codex-cli',template,{configuration:defaultFeatureWorkflow()}).valid,true,path);
   }
+  const quoted="docs/Kunden's Änderungen (Größe) & Fristen – A → B.md";
+  assert.equal(validateFeatureReadiness(request.replace('src/navigation.ts',JSON.stringify(quoted)),ready(),'codex-cli',template,{configuration:defaultFeatureWorkflow()}).input.paths[0],quoted);
 });
 test('snapshot-aware readiness protects workflow controls and queue namespaces without broad code denial',()=>{
   const configuration={...defaultFeatureWorkflow(),requestsDirectory:'requirements',reviewDirectory:'review-notes',template:'templates/request.md',base:'Project.base',readyCheck:'checks/ready.json',doneCheck:'checks/done.json'};
