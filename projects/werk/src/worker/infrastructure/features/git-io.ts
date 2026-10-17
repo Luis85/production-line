@@ -3,7 +3,7 @@ import { gitLaunchMode } from '../../../shared/git/launch-mode.js';
 import { gitEnvironment } from '../../../shared/git/environment.js';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import { lstat, mkdir, open, readdir, realpath } from 'node:fs/promises';
+import { lstat, mkdir, open, readdir, realpath, rmdir, unlink } from 'node:fs/promises';
 import { isAbsolute, join, parse, resolve, sep, win32 } from 'node:path';
 import { runProcess, ProcessRunError } from '../../../shared/process/launcher.js';
 import { repositoryRoot, repositoryWorktreeArgument, type RepositoryRoot } from '../repositories-git.js';
@@ -51,6 +51,32 @@ async function publicationDirectory(storage: string, signal: AbortSignal) {
   }
   throw new GitFeatureError('unavailable', 'Unable to reserve a private publication worktree. Retry publication.');
 }
+/**
+ * Git for Windows' `worktree remove` follows NTFS junctions inside the worktree and
+ * deletes the target's files. Remove each link entry itself, never descending into
+ * one, so Git only deletes ordinary entries. Returns the number of links removed, or
+ * null when the walk exceeds its bound or a link survives removal.
+ * Task worktree removal refuses links instead (`linkFree` in repositories-git.ts).
+ */
+export async function removeLinks(path: string, limit = 500000): Promise<number | null> {
+  const pending = [path];
+  let entries = 0, removed = 0;
+  while (pending.length) {
+    const current = pending.pop()!;
+    for (const entry of await readdir(current, { withFileTypes: true })) {
+      if (++entries > limit) return null;
+      if (entry.isFile()) continue;
+      const child = join(current, entry.name), info = await lstat(child);
+      if (!info.isSymbolicLink()) { if (info.isDirectory()) pending.push(child); continue; }
+      // rmdir removes a junction or directory link itself and never a populated directory.
+      await unlink(child).catch(() => rmdir(child)).catch(() => {});
+      if (await lstat(child).then(() => true, () => false)) return null;
+      removed++;
+    }
+  }
+  return removed;
+}
+const retainedReason = 'Werk kept this publication worktree because it contains symbolic links or junctions it could not safely remove. Delete the links themselves, then remove the worktree.';
 export interface GitBlob { revision: string; content: string; mode: string; }
 export interface GitIoOptions { repository: string; remote: string; stateDirectory: string; }
 /**
@@ -133,8 +159,22 @@ export class FeatureGitIo {
     } finally {
       const actual = await lstat(path).catch(() => null);
       if (added && actual?.isDirectory() && !actual.isSymbolicLink() && actual.dev === identity.dev && actual.ino === identity.ino && actual.birthtimeMs === identity.birthtimeMs && await realpath(path) === path)
-        await this.git(root.path, ['worktree', 'remove', '--force', '--', path], AbortSignal.timeout(10000), undefined, true).catch(() => {});
+        await this.removeWorktree(root, path);
     }
+  }
+  /** Best-effort cleanup that never deletes outside the worktree; an unsafe worktree stays locked with a reason. */
+  private async removeWorktree(root: RepositoryRoot, path: string) {
+    let linkFree = false;
+    try {
+      // A further pass confirms that nothing recreated a link after the previous one.
+      for (let pass = 0; pass < 3 && !linkFree; pass++) {
+        const removed = await removeLinks(path);
+        if (removed === null) break;
+        linkFree = removed === 0;
+      }
+    } catch {}
+    const args = linkFree ? ['worktree', 'remove', '--force', '--', path] : ['worktree', 'lock', '--reason', retainedReason, '--', path];
+    await this.git(root.path, args, AbortSignal.timeout(10000), undefined, true).catch(() => {});
   }
   async write(worktree: string, path: string, content: string, mode: string, signal: AbortSignal) {
     const parts = gitPath(path).split('/');

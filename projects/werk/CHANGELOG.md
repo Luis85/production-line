@@ -7,6 +7,10 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+### Fixed
+
+- Shared feature publication no longer deletes files outside its temporary worktree on Windows. Git for Windows' `worktree remove` follows NTFS junctions, so cleanup now removes symbolic links and junctions themselves first. A worktree whose links cannot be removed is kept and locked in Git with a reason for manual review.
+
 ## [0.9.0] - 2026-10-16
 
 ### Added
