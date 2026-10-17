@@ -317,14 +317,14 @@ input and inspect current state before retrying an ambiguous creation. Stop a
 preparation with `file-task cancel --id ID`; dismiss a failed entry with
 `file-task delete --id ID`. These compatible CLI commands use the legacy
 taskboard API. The unified webview uses `POST /api/tasks` with a caller-retained
-request ID; see [background preparation](feature-requests.md#automatic-task-tracking).
+request ID; see [background preparation](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/feature-requests.md#automatic-task-tracking).
 
 Use background preparation with large repositories, where checkout can outlast
 the CLI request timeout. Inspect `file-task list`, `file-task get --id ID`, or
 use `file-task action --file` for taskboard operations. Eligible new Git-backed
 requests edit approved paths in their retained worktree and run required checks;
 other requests retain the proposal-only workflow. Both produce a review patch
-and leave the developer checkout separate. See [implement a feature](../how-to/implement-feature.md).
+and leave the developer checkout separate. See [implement a feature](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/implement-feature.md).
 `session action --file` supports rename/archive/delete with the same restrictions
 as the webview. `settings set` configures the local queue, provider connections
 and optional orchestrator:
