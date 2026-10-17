@@ -74,9 +74,12 @@ reference and creation time, and records `updatedAt`. The dry run writes nothing
 and reports the current `revision`, the `nextRevision`, any name change, the old
 and new digest, and which agents are added, removed or changed (by field:
 `description`, `instruction`, `model`, `provider`, `unsupported`). `revision` is
-also listed per definition by `definition list`; it covers the name and YAML
-content. A stale revision is refused with `conflict` so a concurrent edit is not
-overwritten, and an unknown reference returns `not_found`. Removing an agent makes
+also listed per definition by `definition list`; it binds the definition ID,
+shared reference, name and YAML content. Moving the reference invalidates a
+previously reviewed revision even when another definition has the same name and
+content. A stale revision is refused with `conflict` so a concurrent edit or
+reference reassignment cannot redirect the update, and an unknown reference
+returns `not_found`. Removing an agent makes
 requests that select it fail until they choose another agent.
 
 Updating, moving or removing a reference affects only tasks created afterwards;

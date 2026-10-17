@@ -66,7 +66,7 @@ The earlier feature-development browser confirmation passed 11 interaction check
 
 A live preflight used installed stock Codex CLI 0.159.2, which reported ChatGPT sign-in. The worker adapter did not receive an accepted response before its 120-second deadline. A bounded diagnostic reported connection, WebSocket and authentication-refresh failures. This environment therefore did **not** qualify live model implementation; no successful commercial-model run is claimed. Claude CLI was not installed.
 
-PRs #24, #26, #27, #28, #29 and #30 are incorporated into the open integration branch with preserved ancestry. Full integrated test/Storybook results and cross-platform CI are recorded on PR #25. The user paused merge and release while another session is active; this report does not imply publication. A protocol fixture proves harness behavior, not a commercial model's feature quality or every provider/version combination.
+PRs #24, #26, #27, #28, #29 and #30 were incorporated into the integration branch with preserved ancestry. On 2026-10-17 the user authorized consolidating the remaining open pull requests and publishing 0.10.0 after successful integrated checks and merge. Full test/Storybook results, cross-platform CI and final consolidation are recorded on PR #25; publication is established separately by the tagged release workflow. A protocol fixture proves harness behavior, not a commercial model's feature quality or every provider/version combination.
 
 ## Remaining boundaries
 

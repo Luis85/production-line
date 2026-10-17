@@ -43,4 +43,4 @@ PR #29's original desktop/mobile PNGs are author-provided captures from before i
 
 The exact integrated application, browser, archive and cross-platform CI results are recorded on [PR #25](https://github.com/Luis85/production-line/pull/25). Focused regressions exercise shared policy behavior and actual callers, including invalid/stale receipts, private-field projection, conflicting settings drafts, scoped command execution, endpoint changes and transport cleanup. The full application check includes AST dependency-boundary rules and their negative fixtures.
 
-Merge and release remain on hold at the user's request while another session is active. No release tag or publication is authorized by this report.
+On 2026-10-17 the user authorized consolidating the remaining open pull requests, merging after successful integrated checks and publishing 0.10.0. Final qualification and release status are recorded on PR #25 and the tagged release workflow; this review does not itself establish that publication has completed.
