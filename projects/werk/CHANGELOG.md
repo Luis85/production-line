@@ -50,6 +50,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Fixed
 
+- Shared feature publication no longer deletes files outside its temporary worktree on Windows. Git for Windows' `worktree remove` follows NTFS junctions, so cleanup now removes symbolic links and junctions themselves first. A worktree whose links cannot be removed is kept and locked in Git with a reason for manual review.
 - Task worktree removal never runs Git on a worktree containing symbolic links or junctions: Git for Windows deletes the junction target's files, also in ignored folders and without `--force`.
 - Test fixtures that start portable apps no longer leave detached workers running on Windows after a failed, timed-out or interrupted run. Cleanup stops each app and then terminates any process still running from the fixture's temporary directory. It waits for those processes to exit before removing the directory.
 - An exhausted tool budget no longer removes tools silently or fails the invocation. Calls beyond the limit or after the tool window, and calls stopped when the window ends, return a clear tool error telling the model to finish or ask the operator. API adapters allow one more response to finish. The Claude Code and Codex bridge returns the error instead of dropping the call.
