@@ -201,6 +201,8 @@ test('authored requests and templates cannot supply worker-owned progress links'
     assert.match(validateFeatureReadiness(input, ready(), 'codex-cli', template).errors[0].message, /worker-owned progress/);
     const recovered = validateFeatureReadiness(input, ready(), 'codex-cli', template, { configuration: defaultFeatureWorkflow(), allowLegacyProgressMetadata: true });
     assert.equal(recovered.valid, true); assert.equal(recovered.input.metadata[key], 'forged');
+    const legacyTemplate = template.replace('status: draft', 'status: draft\n' + key + ': original-team-field');
+    assert.equal(validateFeatureReadiness(input, ready(), 'codex-cli', legacyTemplate, { configuration: defaultFeatureWorkflow(), allowLegacyProgressMetadata: true }).valid, true);
     assert.throws(() => validateFeatureTemplate(template.replace('status: draft', 'status: draft\n' + key + ': forged')), /worker-owned progress/);
   }
 });

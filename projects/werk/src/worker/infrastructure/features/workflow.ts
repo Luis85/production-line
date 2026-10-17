@@ -40,9 +40,9 @@ export function featureRequestSections(body: string): Record<SectionName, string
   return Object.fromEntries(sectionNames.map(name => [name, sections.get(name)!.join('\n').trim()])) as Record<SectionName, string>;
 }
 export interface FeatureTemplateContract { templateId: string; headings: string[]; fields: string[]; }
-export function validateFeatureTemplate(markdown: string): FeatureTemplateContract {
+export function validateFeatureTemplate(markdown: string, allowLegacyProgressMetadata = false): FeatureTemplateContract {
   const parsed = parseFeature(markdown), data = parsed.data;
-  if (['werkOwner', 'werkTask', 'werkPullRequest'].some(key => Object.hasOwn(data, key))) invalid('Templates must not contain worker-owned progress links.');
+  if (!allowLegacyProgressMetadata && ['werkOwner', 'werkTask', 'werkPullRequest'].some(key => Object.hasOwn(data, key))) invalid('Templates must not contain worker-owned progress links.');
   if (data.status !== 'draft' || data.mode !== 'patch' || data.source !== undefined || data.werk !== undefined) invalid('Shared feature templates require draft patch mode without worker-owned metadata.');
   if (typeof data.templateId !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(data.templateId)) invalid('Feature templates require a stable templateId.');
   featureRequestSections(parsed.body);
@@ -79,7 +79,7 @@ export function validateFeatureReadiness(markdown: string, readyCheck: FeatureCh
     if (new Set(base.paths.map(path => path.toLowerCase())).size !== base.paths.length) invalid('Approved paths must be distinct, including on case-insensitive filesystems.');
     const sections = featureRequestSections(parsed.body);
     if (template !== undefined) {
-      const contract = validateFeatureTemplate(template), allSections = markdownSections(parsed.body);
+      const contract = validateFeatureTemplate(template, scope?.allowLegacyProgressMetadata), allSections = markdownSections(parsed.body);
       if (parsed.data.templateId !== contract.templateId) invalid('Feature request templateId does not match the configured template.');
       for (const heading of contract.headings) if (!allSections.has(heading) || !meaningful(allSections.get(heading)!.join('\n'))) invalid(`Fill in the template's ${heading} section.`);
       for (const field of contract.fields) if (!meaningful(parsed.data[field])) invalid(`Fill in the template's ${field} frontmatter field.`);

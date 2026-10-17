@@ -122,7 +122,7 @@ export function workerCommands(catalog) {
   };
   catalog["shared setup"] = {
     method: "POST", path: "/api/shared-intake", body: true, timeoutMs: GIT_REQUEST_TIMEOUT_MS,
-    description: "Connect a notes-only team through existing guarded APIs: pause, verify the local provider, accept only the explicitly selected repository, apply explicit tool grants, configure and synchronize committed Git intake, then optionally resume. --dry-run reads and previews without writes or provider processes. Failure retains completed changes and leaves starts paused.",
+    description: "Connect a notes-only team through existing guarded APIs: pause, verify the local provider, accept only the explicitly selected repository, apply explicit tool grants, configure and synchronize committed Git intake, then optionally resume. --dry-run reads and previews without writes or provider processes. Failure retains completed changes; starts stay paused until final resume. Inspect queue state if an acknowledgement is uncertain.",
     input: "Use expectedRevision from shared status and exactly one repositoryId or discoveryId from repository status. provider selects codex-cli or claude-cli; optional executable/model update it. toolAccess is optional and uses the tool-access set format; omitted grants are unchanged. resume must be explicit.",
     example: { expectedRevision: 0, repositoryId: "ASSIGNMENT_ID", provider: { id: "claude-cli" }, intake: { remote: "origin", branch: "main", workflowPath: ".werk/feature-workflow.json", pollMs: 5000 }, resume: true },
   };
