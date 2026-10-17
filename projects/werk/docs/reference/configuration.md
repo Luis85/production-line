@@ -429,7 +429,13 @@ records a numeric revision, worktree-file access, fixed command presets,
 CLI tools, web origins, MCP connection details and discovered per-tool grants. A stdio
 connection's `secretEnv` names the variable that receives its secret; it may be
 empty only when the connection stores no secret, and an omitted value defaults to
-`MCP_AUTH_TOKEN`. Its credentials
+`MCP_AUTH_TOKEN`. A command
+preset or stdio MCP connection may add `"chatDirectory": "repository:<id>"`, which
+names an assigned repository whose live checkout starts that grant's Chat calls
+and MCP discovery. Omitted, Chat calls start in the private, empty
+`chat-workspace` folder in worker state. Task invocations always use their task
+worktree. Saving requires the repository to be assigned; calls recheck the
+assignment and its resolved directory. Its credentials
 are redacted from authenticated views; they never enter the public status or
 model dispatch manifest. Preserve this file with the rest of stopped worker state.
 

@@ -5,10 +5,16 @@ import { cliToolDescription, cliToolInputSchema, cliToolLimits, validateCliTool,
 export type { CliCommandRule, ToolCliTool } from './cli-tool-policy.js';
 
 export interface ToolDefinition { name: string; description: string; inputSchema: Record<string, unknown>; }
-export interface ToolCommandPreset { id: string; name: string; executable: string; args: string[]; enabled: boolean; /** Required check for newly accepted implementation requests. Absence grants no verification authority. */ verification?: boolean; /** Additional cap; absence inherits the invocation command limit. */ timeoutMs?: number; }
+/**
+ * Chat sessions have no task worktree. `chatDirectory: "repository:<id>"` is an explicit operator opt-in that
+ * starts this grant's chat calls in that assigned repository's live checkout; omitted means the private, empty
+ * chat workspace. Task invocations always use their pinned task worktree.
+ */
+export interface ToolChatDirectory { chatDirectory?: string; }
+export interface ToolCommandPreset extends ToolChatDirectory { id: string; name: string; executable: string; args: string[]; enabled: boolean; /** Required check for newly accepted implementation requests. Absence grants no verification authority. */ verification?: boolean; /** Additional cap; absence inherits the invocation command limit. */ timeoutMs?: number; }
 export type CommandPreset = ToolCommandPreset;
 export interface ToolBuiltinPolicy { files: boolean; commands: ToolCommandPreset[]; cliTools: ToolCliTool[]; webOrigins: string[]; }
-export interface ToolMcpConnection {
+export interface ToolMcpConnection extends ToolChatDirectory {
   id: string; name: string; transport: 'stdio' | 'http'; enabled: boolean;
   command: string; args: string[]; url: string; secretEnv: string; secret: string;
   allowedTools: string[]; discoveredTools: ToolDefinition[];
@@ -53,6 +59,22 @@ function url(value: unknown, originOnly: boolean): string {
   if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash || !['', '/'].includes(parsed.pathname)) invalid('Use an HTTP(S) address without credentials, query or fragment; web grants use origins only.');
   return parsed.origin;
 }
+const chatRepository = /^repository:([a-zA-Z0-9_-]{1,100})$/;
+/** The assigned repository ID a grant's chat calls start in, or undefined for the private chat workspace. */
+export function chatRepositoryId(grant: ToolChatDirectory): string | undefined { return grant.chatDirectory === undefined ? undefined : chatRepository.exec(grant.chatDirectory)?.[1]; }
+function chatDirectory(value: unknown, label: string): ToolChatDirectory {
+  // Omitted keeps the 0.9.0 document shape and the private chat workspace.
+  if (value === undefined) return {};
+  if (typeof value !== 'string' || !chatRepository.test(value)) invalid(`${label}: chatDirectory must be "repository:<assigned repository ID>". Omit it to keep chat calls in the private chat workspace.`);
+  return { chatDirectory: value };
+}
+/** Save-time check: a chat directory names a repository currently assigned to this worker. Calls check again. */
+export function assertChatDirectories(policy: ToolPolicy, assignedRepositoryIds: readonly string[]): void {
+  for (const [label, grant] of [...policy.builtins.commands.map(item => [`Command preset "${item.id}"`, item] as const), ...policy.mcp.map(item => [`MCP connection "${item.id}"`, item] as const)]) {
+    const repository = chatRepositoryId(grant);
+    if (repository !== undefined && !assignedRepositoryIds.includes(repository)) invalid(`${label} runs chat calls in repository "${repository}", which is not assigned to this worker. Choose an assigned repository or the private chat workspace.`);
+  }
+}
 export function defaultToolPolicy(): ToolPolicy { return { schemaVersion: 1, revision: 0, builtins: { files: false, commands: [], cliTools: [], webOrigins: [] }, mcp: [] }; }
 export function validateToolDefinitions(value: unknown): ToolDefinition[] {
   if (!Array.isArray(value) || value.length > 64) invalid('An MCP connection may expose at most 64 tools.');
@@ -79,9 +101,9 @@ function builtins(value: unknown, previous?: ToolBuiltinPolicy): ToolBuiltinPoli
   const input = fields(value, ['files', 'commands', 'cliTools', 'webOrigins'], 'built-in tool policy');
   if (!Array.isArray(input.commands) || input.commands.length > 16) invalid('Configure at most 16 command presets.');
   const commands = input.commands.map(item => {
-    const command = fields(previous ? withSavedTimeout(item, previous.commands.find(saved => record(item) && saved.id === item.id)) : item, ['id', 'name', 'executable', 'args', 'enabled', 'verification', 'timeoutMs'], 'command preset');
+    const command = fields(previous ? withSavedTimeout(item, previous.commands.find(saved => record(item) && saved.id === item.id)) : item, ['id', 'name', 'executable', 'args', 'enabled', 'verification', 'timeoutMs', 'chatDirectory'], 'command preset');
     const timeoutMs = callTimeout(command.timeoutMs, 'Command preset');
-    return { id: id(command.id), name: string(command.name, 'command name', 120), executable: absolute(command.executable, 'Command executable'), args: strings(command.args, 'command arguments', 32, 2048), enabled: boolean(command.enabled, 'Command enabled'), ...(command.verification === undefined || boolean(command.verification, 'Required feature check') === false ? {} : { verification: true }), ...(timeoutMs === undefined ? {} : { timeoutMs }) };
+    return { id: id(command.id), name: string(command.name, 'command name', 120), executable: absolute(command.executable, 'Command executable'), args: strings(command.args, 'command arguments', 32, 2048), enabled: boolean(command.enabled, 'Command enabled'), ...(command.verification === undefined || boolean(command.verification, 'Required feature check') === false ? {} : { verification: true }), ...chatDirectory(command.chatDirectory, 'Command preset'), ...(timeoutMs === undefined ? {} : { timeoutMs }) };
   });
   if (new Set(commands.map(item => item.id)).size !== commands.length) invalid('Command preset IDs must be unique.');
   // Documents saved before CLI tools existed omit the list; absence grants nothing.
@@ -93,12 +115,13 @@ function builtins(value: unknown, previous?: ToolBuiltinPolicy): ToolBuiltinPoli
   return { files: boolean(input.files, 'File access'), commands, cliTools, webOrigins };
 }
 function connection(value: unknown): ToolMcpConnection {
-  const input = fields(value, ['id', 'name', 'transport', 'enabled', 'command', 'args', 'url', 'secretEnv', 'secret', 'allowedTools', 'discoveredTools', 'timeoutMs'], 'saved MCP connection');
+  const input = fields(value, ['id', 'name', 'transport', 'enabled', 'command', 'args', 'url', 'secretEnv', 'secret', 'allowedTools', 'discoveredTools', 'timeoutMs', 'chatDirectory'], 'saved MCP connection');
   if (!['stdio', 'http'].includes(String(input.transport))) invalid('Choose stdio or HTTP for the MCP transport.');
   const transport = input.transport as 'stdio' | 'http';
   const command = transport === 'stdio' ? absolute(input.command, 'MCP executable') : string(input.command, 'unused MCP executable', 0, true);
   const args = strings(input.args, 'MCP arguments', 32, 2048);
   if (transport === 'http' && args.length) invalid('HTTP MCP connections do not take command arguments.');
+  if (transport === 'http' && input.chatDirectory !== undefined) invalid('HTTP MCP connections have no working directory. Remove chatDirectory.');
   const address = transport === 'http' ? url(input.url, false) : string(input.url, 'unused MCP address', 0, true);
   // A local server without a credential needs no variable; a stored secret always needs its dedicated destination.
   const secretEnv = transport === 'stdio' ? string(input.secretEnv ?? 'MCP_AUTH_TOKEN', 'secret environment variable', 80, true) : string(input.secretEnv ?? '', 'unused secret environment variable', 0, true);
@@ -108,7 +131,7 @@ function connection(value: unknown): ToolMcpConnection {
   const allowedTools = strings(input.allowedTools, 'granted tool names', 64, 128);
   if (new Set(allowedTools).size !== allowedTools.length || allowedTools.some(name => !discoveredTools.some(tool => tool.name === name))) invalid('Grant only tools from the current discovered MCP catalog.');
   const timeoutMs = callTimeout(input.timeoutMs, 'MCP connection', transport === 'http' ? toolTimeLimits.httpMcpMaxMs : toolTimeLimits.mcpMaxMs);
-  return { id: id(input.id), name: string(input.name, 'connection name', 120), transport, enabled: boolean(input.enabled, 'MCP enabled'), command, args, url: address, secretEnv, secret: string(input.secret, 'MCP secret', 4096, true), allowedTools, discoveredTools, ...(timeoutMs === undefined ? {} : { timeoutMs }) };
+  return { id: id(input.id), name: string(input.name, 'connection name', 120), transport, enabled: boolean(input.enabled, 'MCP enabled'), command, args, url: address, secretEnv, secret: string(input.secret, 'MCP secret', 4096, true), allowedTools, discoveredTools, ...chatDirectory(input.chatDirectory, 'MCP connection'), ...(timeoutMs === undefined ? {} : { timeoutMs }) };
 }
 export function validateToolPolicy(value: unknown): ToolPolicy {
   const input = fields(value, ['schemaVersion', 'revision', 'builtins', 'mcp'], 'tool policy');
@@ -124,12 +147,13 @@ export function validateToolPolicy(value: unknown): ToolPolicy {
   return { schemaVersion: 1, revision: Number(input.revision), builtins: builtinPolicy, mcp };
 }
 const destination = (item: Pick<ToolMcpConnection, 'transport' | 'command' | 'args' | 'url' | 'secretEnv'>) => JSON.stringify([item.transport, item.command, item.args, item.url, item.secretEnv]);
-export function updateToolPolicy(previous: ToolPolicy, value: unknown): ToolPolicy {
+/** `assignedRepositoryIds` are the worker's current repository assignments; chat directories must name one of them. */
+export function updateToolPolicy(previous: ToolPolicy, value: unknown, assignedRepositoryIds: readonly string[] = []): ToolPolicy {
   const input = fields(value, ['expectedRevision', 'builtins', 'mcp'], 'tool access update');
   if (input.expectedRevision !== previous.revision) throw new DomainError('conflict', 'Tool access changed. Reload the saved policy before applying your changes.');
   if (!Array.isArray(input.mcp) || input.mcp.length > 8) invalid('Configure at most eight MCP connections.');
   const mcp = input.mcp.map(raw => {
-    const entry = fields(raw, ['id', 'name', 'transport', 'enabled', 'command', 'args', 'url', 'secretEnv', 'secret', 'clearSecret', 'allowedTools', 'timeoutMs'], 'MCP connection');
+    const entry = fields(raw, ['id', 'name', 'transport', 'enabled', 'command', 'args', 'url', 'secretEnv', 'secret', 'clearSecret', 'allowedTools', 'timeoutMs', 'chatDirectory'], 'MCP connection');
     if (entry.clearSecret !== undefined && typeof entry.clearSecret !== 'boolean') invalid('Clear secret must be true or false.');
     if (entry.secret !== undefined && typeof entry.secret !== 'string') invalid('MCP secret must be a string.');
     if (entry.clearSecret === true && entry.secret) invalid('Choose replacing or clearing the MCP secret.');
@@ -140,7 +164,9 @@ export function updateToolPolicy(previous: ToolPolicy, value: unknown): ToolPoli
     const secret = clearSecret === true ? '' : entry.secret !== undefined && entry.secret !== '' ? entry.secret : same ? saved.secret : '';
     return connection(withSavedTimeout({ ...rest, secret, allowedTools: same ? entry.allowedTools : [], discoveredTools: same ? saved.discoveredTools : [] }, saved));
   });
-  return validateToolPolicy({ schemaVersion: 1, revision: previous.revision + 1, builtins: builtins(input.builtins, previous.builtins), mcp });
+  const next = validateToolPolicy({ schemaVersion: 1, revision: previous.revision + 1, builtins: builtins(input.builtins, previous.builtins), mcp });
+  assertChatDirectories(next, assignedRepositoryIds);
+  return next;
 }
 export function discoveredToolPolicy(previous: ToolPolicy, connectionId: string, expectedRevision: number, definitions: unknown): ToolPolicy {
   if (expectedRevision !== previous.revision) throw new DomainError('conflict', 'Tool access changed while discovering tools. Reload and retry.');

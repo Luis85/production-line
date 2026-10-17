@@ -46,7 +46,7 @@ export class WorkerSettings {
   toolPolicy(): ToolPolicy { return structuredClone(this.tools); }
   toolAccess() { return publicToolPolicy(this.tools); }
   async updateToolAccess(input: unknown) {
-    return this.saveToolPolicy(previous => updateToolPolicy(previous, input));
+    return this.saveToolPolicy(previous => updateToolPolicy(previous, input, this.value.repositories.items.map(item => item.id)));
   }
   async discoveredTools(id: string, expectedRevision: number, tools: unknown) {
     return this.saveToolPolicy(previous => discoveredToolPolicy(previous, id, expectedRevision, tools));

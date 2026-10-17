@@ -12,7 +12,7 @@ import { createWorkerSessions, createLocalTaskboard } from '../infrastructure/wo
 import { ProviderAccountChecks } from '../infrastructure/provider-account.js';
 import { SharedIntakeRuntime } from '../infrastructure/features/shared-intake-runtime.js';
 import type { SharedExecution, SharedFeatureRecord } from '../application/shared-feature-state.js';
-import type { ToolAccessView } from '../application/tool-policy.js';
+import { chatRepositoryId, type ToolAccessView } from '../application/tool-policy.js';
 import { discoverMcpTools, mcpTransportConfiguration, McpClientError } from '../infrastructure/tool-mcp.js';
 import type { ExecutionProfilesControl } from '../application/execution-profiles.js';
 import { RepositoryDiscovery } from '../infrastructure/repository-discovery.js';
@@ -1041,8 +1041,16 @@ export class WorkerWorkspace {
       if (body.expectedRevision !== policy.revision) throw new DomainError('conflict', 'Tool access changed. Reload before discovering tools.');
       const connection = policy.mcp.find(item => item.id === id);
       if (!connection) throw new DomainError('not_found', 'MCP connection not found.');
+      // A connection whose chat calls start in a repository is discovered there too, so its catalog matches those calls.
+      const repository = chatRepositoryId(connection);
+      let directory: string | undefined;
+      if (repository !== undefined) {
+        const assignment = this.settings.value.repositories.items.find(item => item.id === repository);
+        directory = assignment && await realpath(assignment.path).catch(() => undefined);
+        if (!directory) throw new DomainError('invalid_input', `MCP connection "${id}" starts chat calls in repository "${repository}", which is not assigned or not available. Choose an assigned repository or the private chat workspace, save, and discover again.`);
+      }
       let definitions;
-      try { definitions = await discoverMcpTools(mcpTransportConfiguration(connection), { signal: this.repositoryStop.signal }); }
+      try { definitions = await discoverMcpTools(mcpTransportConfiguration(connection), { signal: this.repositoryStop.signal, directory }); }
       catch (error) {
         // MCP errors contain only worker-owned messages, never server diagnostics or credentials.
         if (error instanceof McpClientError) throw new DomainError(

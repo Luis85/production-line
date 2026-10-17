@@ -25,7 +25,7 @@ export function workspaceModelFactory(directory: string, settings: WorkerSetting
     const instance = model(connection, executionDirectory, undefined, scope ? {
       tools: policy => createToolRuntime({
         policy: settings.toolPolicy(), currentRevision: () => settings.toolPolicy().revision,
-        directory: executionDirectory, worktree: scope.worktree, worktreeIdentity: scope.worktreeIdentity, development: scope.development,
+        directory: executionDirectory, worktree: scope.worktree, worktreeIdentity: scope.worktreeIdentity, development: scope.development, repositories: () => settings.value.repositories.items,
         maxCalls: policy ? policy.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS : settings.value.execution.maxToolCalls,
         maxRuntimeMs: policy ? policy.maxRuntimeMs ?? DEFAULT_MAX_RUNTIME_MS : settings.value.execution.maxRuntimeMs,
         commandTimeoutMs: policy ? policy.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS : settings.value.execution.commandTimeoutMs,

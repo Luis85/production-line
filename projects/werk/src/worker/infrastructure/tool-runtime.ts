@@ -1,19 +1,18 @@
 import { createHash } from 'node:crypto';
-import { mkdir } from 'node:fs/promises';
 import { lstatSync, realpathSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import type { ToolPolicy } from '../application/tool-policy.js';
+import { resolve } from 'node:path';
+import { chatRepositoryId, type ToolPolicy } from '../application/tool-policy.js';
 import type { DevelopmentRuntime } from '../application/development.js';
 import { resolveToolLimits, type ResolvedToolLimits } from '../application/tool-limits.js';
 import { cliToolName } from '../application/cli-tool-policy.js';
 import { ToolAccessError, type ToolManifest, type ToolResult, type ToolRuntime, type ToolWorktreeIdentity } from '../application/tool-runtime.js';
-import { builtinToolOperations, BuiltinToolError, type ToolOperation } from './builtin-tools.js';
+import { builtinToolOperations, BuiltinToolError, chatRepositoryNote, chatToolDirectory, chatWorkspaceHint, chatWorkspaceNote, type ToolOperation, type ToolRepository } from './builtin-tools.js';
 import { callMcpTool, mcpTransportConfiguration } from './tool-mcp.js';
 
 export interface ToolRuntimeOptions {
   policy: ToolPolicy;
   currentRevision: () => number;
-  /** Private worker state directory. Chat commands start in its chat-workspace child. */
+  /** Private worker state directory. Chat commands start in its chat-workspace child unless a grant opts in to a repository. */
   directory: string;
   /** An approved, worker-owned task worktree, never a path supplied by the model. */
   worktree?: string;
@@ -23,6 +22,8 @@ export interface ToolRuntimeOptions {
   maxRuntimeMs?: number;
   commandTimeoutMs?: number;
   fetch?: typeof globalThis.fetch;
+  /** Current repository assignments. Only grants with an operator-set chat directory use them, and only in chat. */
+  repositories?: () => readonly ToolRepository[];
 }
 const freeze = <T>(value: T): T => {
   if (value && typeof value === 'object') { for (const item of Object.values(value)) freeze(item); Object.freeze(value); }
@@ -56,17 +57,27 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
   const { maxCalls, maxRuntimeMs, commandTimeoutMs } = resolved;
   const operations: ToolOperation[] = builtinToolOperations({ ...options, policy, commandTimeoutMs, limits: resolved });
   const mcpTimeouts = new Map<string, number>();
+  const directoryFor = chatToolDirectory(options);
+  // Names that receive the chat-workspace hint when they fail; task invocations and HTTP servers have no such hint.
+  const workspaceTools = new Set<string>();
   for (const connection of policy.mcp.filter(item => item.enabled)) {
     const granted = connection.discoveredTools.filter(tool => connection.allowedTools.includes(tool.name));
     for (const tool of granted) mcpTimeouts.set(mcpToolName(connection.id, tool.name), resolved.mcpTimeoutMs[connection.id]);
-    for (const tool of granted) operations.push({
-      definition: { ...tool, name: mcpToolName(connection.id, tool.name), description: `[${connection.name}] ${tool.description}` },
-      call: async (args, signal) => {
-        const directory = options.worktree ?? join(options.directory, 'chat-workspace');
-        if (!options.worktree) await mkdir(directory, { recursive: true, mode: 0o700 });
-        return callMcpTool(mcpTransportConfiguration(connection), tool.name, args, granted, { signal, directory, timeoutMs: resolved.mcpTimeoutMs[connection.id] });
-      }
-    });
+    const repository = chatRepositoryId(connection);
+    const note = options.worktree || connection.transport !== 'stdio' ? '' : ' (' + (repository === undefined ? chatWorkspaceNote : chatRepositoryNote(repository)) + ')';
+    for (const tool of granted) {
+      const name = mcpToolName(connection.id, tool.name);
+      if (note && repository === undefined) workspaceTools.add(name);
+      operations.push({
+        definition: { ...tool, name, description: `[${connection.name}] ${tool.description}${note}` },
+        call: async (args, signal) => {
+          const directory = await directoryFor(connection);
+          const result = await callMcpTool(mcpTransportConfiguration(connection), tool.name, args, granted, { signal, directory, timeoutMs: resolved.mcpTimeoutMs[connection.id] });
+          // A server reporting an error from the empty chat workspace often expected project files.
+          return result.isError && workspaceTools.has(name) ? { ...result, content: [...result.content, { type: 'text', text: chatWorkspaceHint }] } : result;
+        }
+      });
+    }
   }
   if (operations.length > 64) throw new ToolAccessError('At most 64 tools may be granted for one invocation.');
   const catalog = new Map(operations.map(operation => [operation.definition.name, operation]));
@@ -111,7 +122,8 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
           return result;
         } catch (error) {
           authorize(combined);
-          return { content: [{ type: 'text', text: error instanceof BuiltinToolError ? error.message : 'Tool execution failed. Check the saved connection, command, or worktree and try again.' }], isError: true };
+          const text = error instanceof BuiltinToolError ? error.message : 'Tool execution failed. Check the saved connection, command, or worktree and try again.' + (workspaceTools.has(name) ? ' ' + chatWorkspaceHint : '');
+          return { content: [{ type: 'text', text }], isError: true };
         }
       });
       previous = operation.catch(() => {});

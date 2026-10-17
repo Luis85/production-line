@@ -45,7 +45,10 @@ existing patch workflow, or create a new task to use the new grants.
 
 Use absolute executable paths for command presets and enter each argument
 separately. Commands start in the task worktree when one exists, otherwise in the
-worker's private model workspace. A working directory is not a sandbox: configured
+worker's private Chat workspace, which has no project files. To run a preset's
+Chat calls in a repository, see
+[run Chat tools in a repository checkout](#run-chat-tools-in-a-repository-checkout).
+A working directory is not a sandbox: configured
 commands run as the worker's operating-system account and can read or change
 anything that account can access. Review commands and their arguments before
 enabling them. Output and runtime are bounded, and cancellation stops their
@@ -248,6 +251,63 @@ server destination, including its secret environment variable, removes the saved
 secret and resets discovery and grants; enter the secret again for the new
 variable. Rediscovering a changed tool definition removes its previous grant so
 you can review it again.
+
+## Run Chat tools in a repository checkout
+
+Chat has no task worktree. By default, command presets and stdio MCP servers
+start Chat calls in the private `chat-workspace` folder in worker state. That
+folder is empty, so a project script, a `bin/` wrapper or an MCP server that
+expects the project directory fails there. The model is told: in Chat, tool
+descriptions say where each preset or server starts, command results include a
+`workingDirectory` field, and failures from the private workspace add a hint to
+ask the operator for a repository. The descriptions are part of the saved
+dispatch evidence.
+
+To run one grant's Chat calls in a project:
+
+1. Assign the repository in **Dashboard → Repositories**.
+2. Pause and drain the worker, open **Tool access** and, for that command preset
+   or stdio MCP connection, set **Working directory in chat** to
+   **Live checkout of repository "ID"**. Save.
+3. For an MCP connection, discover its tools again. Discovery starts the server in
+   the same checkout, so its catalog matches its Chat calls.
+
+The API and `tool-access.json` field is `"chatDirectory": "repository:<id>"` on a
+command preset or stdio MCP connection. An omitted field means the private Chat
+workspace.
+
+**This is the live checkout, not an isolated worktree.** A writing command or MCP
+tool can change, delete or stage files in your working tree, including
+uncommitted work, and can affect a task that prepares a worktree from the same
+repository. Enable it only for read-only tools, or for tools that write only
+behind a flag the tool itself enforces.
+
+How the option behaves:
+
+- **Off by default, per grant.** Each preset or connection opts in separately.
+  Other grants, existing policies and upgraded workers keep the private
+  workspace.
+- **Chat only.** Approved-file and other task invocations always start in their
+  pinned task worktree, with or without the option.
+- **Operator-chosen paths only.** The worker resolves the repository's assigned
+  path, following links to the real directory. The model cannot supply or change
+  a path, and tool descriptions name the repository ID, not its host path.
+- **Checked at save and at every call.** A save refuses a repository that is not
+  assigned. A Chat reply uses the assignments current when it starts; if the
+  repository is unassigned, moved or missing, its calls are refused before any
+  process starts. The next tool-access save names the stale grant until you
+  choose another repository or the private workspace.
+- **Built-in file tools stay task-only.** Chat has no `werk_files_*` tools, with
+  or without this option. Use an approved-file task for identity-pinned,
+  read-only repository access.
+- **HTTP MCP connections** have no working directory and reject the field.
+- **Provider CLIs keep their own folder.** Claude Code CLI and Codex CLI processes
+  still start in a private temporary folder with their native tools disabled.
+  Only the granted tool processes start in the repository.
+
+Before rolling back to Werk 0.9.0, set every grant back to the private Chat
+workspace and save. A 0.9.0 worker refuses to start with a `chatDirectory` field
+in `tool-access.json`.
 
 ## Revoke access and resolve conflicts
 

@@ -1,7 +1,7 @@
 <script lang="ts">
 import { createToolAccessEditor } from '../tool-access-editor';
 import { state as workerState, toolAccessAction, toolAccessDiscover, refresh } from '../store';
-const editor = createToolAccessEditor({ view: () => workerState.toolAccess, unlocked: () => workerState.unlocked, epoch: () => workerState.draftEpoch, write: toolAccessAction, discover: toolAccessDiscover, refresh, commandTimeoutMs: () => workerState.settings?.execution.commandTimeoutMs, executionBudgetMs: () => workerState.settings?.execution.maxRuntimeMs });
+const editor = createToolAccessEditor({ view: () => workerState.toolAccess, unlocked: () => workerState.unlocked, epoch: () => workerState.draftEpoch, write: toolAccessAction, discover: toolAccessDiscover, refresh, repositories: () => workerState.settings?.repositories.items.map(item => item.id) ?? [], commandTimeoutMs: () => workerState.settings?.execution.commandTimeoutMs, executionBudgetMs: () => workerState.settings?.execution.maxRuntimeMs });
 </script>
 <script setup lang="ts">
 import { computed, ref } from 'vue';
@@ -9,6 +9,7 @@ import UButton from '@nuxt/ui/components/Button.vue';
 import UInput from '@nuxt/ui/components/Input.vue';
 import UTextarea from '@nuxt/ui/components/Textarea.vue';
 import UBadge from '@nuxt/ui/components/Badge.vue';
+import USelect from '@nuxt/ui/components/Select.vue';
 import McpConnectionsEditor from './McpConnectionsEditor.vue';
 import CliToolsEditor from './CliToolsEditor.vue';
 import { state, workspaceAction } from '../store';
@@ -57,6 +58,8 @@ async function pause() {
               <label :for="`tool-command-args-${index}`">Fixed arguments · JSON array</label><UTextarea :id="`tool-command-args-${index}`" v-model="command.arguments" :rows="2" placeholder='["--version"]' class="w-full" />
               <label :for="`tool-command-timeout-${index}`">Timeout override · seconds, optional</label><UInput :id="`tool-command-timeout-${index}`" v-model.number="command.timeoutSeconds" type="number" min="1" :max="toolLimitSeconds.commandMax" step="0.001" placeholder="Inherit worker limit" class="w-full timeout-input" :aria-describedby="`tool-command-timeout-help-${index}`" />
               <p :id="`tool-command-timeout-help-${index}`" class="page-note">{{ editor.timeoutNote(command.timeoutSeconds, 'command') }}</p>
+              <label :for="`tool-command-chat-${index}`">Working directory in chat</label><USelect :id="`tool-command-chat-${index}`" v-model="command.chatDirectory" :items="editor.chatDirectories(command.chatDirectory)" class="w-full" :aria-describedby="`tool-command-chat-help-${index}`" />
+              <p :id="`tool-command-chat-help-${index}`" :class="command.chatDirectory === 'workspace' ? 'page-note' : 'authority-note'">{{ command.chatDirectory === 'workspace' ? 'Chat has no task worktree, so this command starts in an empty private folder without project files. Tasks always use their task worktree.' : 'Chat runs this command in the live repository checkout, not an isolated worktree. A writing command can change your working tree. Tasks still use their task worktree.' }}</p>
               <label class="check-label"><input v-model="command.enabled" type="checkbox"> Allow models to run this command</label>
               <label class="check-label"><input v-model="command.verification" type="checkbox" :aria-describedby="`tool-command-check-help-${index}`"> Required feature check</label>
               <p :id="`tool-command-check-help-${index}`" class="page-note">When enabled, this check must pass on the current changes before a new implementation request is ready for review. Use a test, lint or build command that exits when finished. Disabling the command excludes it from new requests.</p>

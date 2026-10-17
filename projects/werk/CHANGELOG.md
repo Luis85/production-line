@@ -11,6 +11,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Added
 
+- Opt-in chat working directory for command presets and stdio MCP connections. Chat has no task worktree, so these tools start in the worker's empty private chat workspace by default. Choose **Working directory in chat → Live checkout of repository** in **Tool access** (`"chatDirectory": "repository:<id>"`) to start that grant's chat calls, and MCP discovery, in an assigned repository's live checkout. Saving and every call check the assignment; removing or moving the repository refuses the call before any process starts. Task invocations keep their pinned task worktree.
 - `definition update --ref REF --file PATH` replaces the instruction profile behind a stable reference in place, keeping its id and reference. `--dry-run` previews the name, digest and per-agent changes without writing; applying requires `--if-match` with the current definition `revision`, now listed by `definition list`. Existing tasks keep their accepted profile snapshot.
 - An "Operate a project worker" how-to with a day-to-day checklist and Windows PowerShell 5.1 guidance: BOM-free JSON input files, why piping to `--file -` loses non-ASCII text, task worktree location and manual cleanup, tool limits and the chat workspace, and the answer protocol. It ships in the release documentation.
 - Portable client option `--request-timeout-ms` (1,000–600,000) overrides how long a command waits for the API.
@@ -28,6 +29,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Changed
 
+- In chat, tool descriptions, command results (`workingDirectory`) and failures of tools that start in the private chat workspace say that it has no project files and how an operator can choose a repository. Task tool descriptions and results are unchanged.
 - File-task review patches contain minimal Git hunks with three context lines instead of replacing every line of a changed file. Quoted paths, missing final newlines and `git apply` compatibility are preserved.
 - The file-task prompt states the exact patch reply limits. A single patch object surrounded by prose or a Markdown fence is accepted; two different objects are refused as ambiguous.
 - Worker architecture shares candidate receipt classification, guarded settings state, sensitive-patch and MCP endpoint policies, and contained tool launch mechanics. Explicit public task DTOs and allowlist projections keep private execution data behind the application boundary.

@@ -3,7 +3,7 @@ import { constants, realpathSync, statSync } from 'node:fs';
 import { lstat, mkdir, open, opendir, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { ProcessRunError } from '../../shared/process/launcher.js';
-import type { ToolDefinition, ToolPolicy } from '../application/tool-policy.js';
+import { chatRepositoryId, type ToolChatDirectory, type ToolDefinition, type ToolPolicy } from '../application/tool-policy.js';
 import { cliToolDescription, cliToolInputSchema, cliToolName } from '../application/cli-tool-policy.js';
 import { CliToolError, runCliTool } from './cli-tools.js';
 import { resolveToolLimits, formatToolDuration, type ResolvedToolLimits } from '../application/tool-limits.js';
@@ -13,7 +13,9 @@ import type { ToolResult, ToolWorktreeIdentity } from '../application/tool-runti
 
 export class BuiltinToolError extends Error {}
 export interface ToolOperation { definition: ToolDefinition; call(args: unknown, signal: AbortSignal): Promise<ToolResult>; }
-export interface BuiltinToolOptions { policy: ToolPolicy; directory: string; worktree?: string; worktreeIdentity?: ToolWorktreeIdentity; development?: DevelopmentRuntime; commandTimeoutMs?: number; limits?: ResolvedToolLimits; fetch?: typeof globalThis.fetch; }
+export interface BuiltinToolOptions { policy: ToolPolicy; directory: string; worktree?: string; worktreeIdentity?: ToolWorktreeIdentity; development?: DevelopmentRuntime; commandTimeoutMs?: number; limits?: ResolvedToolLimits; fetch?: typeof globalThis.fetch; repositories?: () => readonly ToolRepository[]; }
+/** A current worker repository assignment (settings `repositories.items`), never a path supplied by the model. */
+export interface ToolRepository { id: string; path: string; }
 const output = (data: unknown): ToolResult => ({ content: [{ type: 'text', text: typeof data === 'string' ? data : JSON.stringify(data) }] });
 const schema = (properties: Record<string, unknown>, required: string[] = []) => ({ type: 'object', properties, required, additionalProperties: false });
 const pathProperty = { type: 'string', maxLength: 1000, description: 'Relative path inside the task worktree. Defaults to its root.' };
@@ -32,6 +34,36 @@ function string(value: unknown, maximum: number): string {
 }
 function check(signal: AbortSignal) { if (signal.aborted) throw new BuiltinToolError('Tool execution was cancelled.'); }
 function below(root: string, path: string) { const part = relative(root, path); return part === '' || part !== '..' && !part.startsWith('..' + sep) && !isAbsolute(part); }
+
+/** Model-facing working-directory notes name repository IDs only, never host paths. */
+export const chatWorkspaceNote = 'Chat: starts in an empty private workspace without project files.';
+export const chatRepositoryNote = (repository: string) => `Chat: starts in the live checkout of assigned repository "${repository}".`;
+export const chatWorkspaceHint = "In chat this grant starts in the worker's empty private chat workspace, which has no project files. A worker operator can set its chat directory to an assigned repository under Tool access.";
+
+/**
+ * Working directory for one chat call of a command preset or stdio MCP grant. Task invocations keep their pinned
+ * worktree. A chat directory resolves only from the operator's grant and the assignments current at invocation
+ * start; it is checked again before every call, so removing or moving the assignment revokes it.
+ */
+export function chatToolDirectory(options: Pick<BuiltinToolOptions, 'directory' | 'worktree' | 'repositories'>) {
+  const pinned = new Map((options.repositories?.() ?? []).map(item => [item.id, item.path]));
+  return async (grant: ToolChatDirectory): Promise<string> => {
+    if (options.worktree) return options.worktree;
+    const repository = chatRepositoryId(grant);
+    if (repository === undefined) {
+      const workspace = join(options.directory, 'chat-workspace');
+      await mkdir(workspace, { recursive: true, mode: 0o700 });
+      return workspace;
+    }
+    const current = (options.repositories?.() ?? []).find(item => item.id === repository);
+    if (!current) throw new BuiltinToolError(`Repository "${repository}" is no longer assigned to this worker, so this chat tool was not started. Ask the worker operator to update its chat directory under Tool access.`);
+    if (pinned.get(repository) !== current.path) throw new BuiltinToolError(`The assignment of repository "${repository}" changed during this reply, so this chat tool was not started. Send a new message to use the current assignment.`);
+    let path: string;
+    try { path = await realpath(current.path); if (!(await lstat(path)).isDirectory()) throw Error('Not a directory'); }
+    catch { throw new BuiltinToolError(`The checkout of assigned repository "${repository}" is unavailable, so this chat tool was not started.`); }
+    return path;
+  };
+}
 
 /** Read-only worktree access deliberately excludes links and Git administrative files. */
 class WorktreeReader {
@@ -173,7 +205,12 @@ export function builtinToolOperations(options: BuiltinToolOptions): ToolOperatio
     }));
   }
   const commands = options.policy.builtins.commands.filter(command => command.enabled);
-  if (commands.length) add('werk_command_run', 'Run one operator-approved executable with its fixed arguments, as the worker account. Starts in the task worktree or private chat workspace. Commands may change files or access resources outside that directory. No extra arguments or shell expansion.', schema({ preset: { type: 'string', enum: commands.map(command => command.id), description: commands.map(command => `${command.id}: ${command.name}${command.timeoutMs === undefined ? '' : ` (additional timeout cap ${formatToolDuration(command.timeoutMs)}; invocation limits may stop sooner)`}`).join('; ') } }, ['preset']), async (value, signal) => {
+  const directory = chatToolDirectory(options), chat = !options.worktree;
+  // Task manifests and results keep their 0.9.0 form; in chat the model learns where each preset starts.
+  const where = (command: ToolChatDirectory) => { const repository = chatRepositoryId(command); return repository === undefined ? 'private chat workspace, no project files' : `live checkout of repository "${repository}"`; };
+  if (commands.length) add('werk_command_run', chat
+    ? 'Run one operator-approved executable with its fixed arguments, as the worker account. In chat a preset starts in the empty private chat workspace, which has no project files, unless its entry names an assigned repository checkout. Commands may change files or access resources outside that directory. No extra arguments or shell expansion.'
+    : 'Run one operator-approved executable with its fixed arguments, as the worker account. Starts in the task worktree or private chat workspace. Commands may change files or access resources outside that directory. No extra arguments or shell expansion.', schema({ preset: { type: 'string', enum: commands.map(command => command.id), description: commands.map(command => `${command.id}: ${command.name}${chat ? ` (${where(command)})` : ''}${command.timeoutMs === undefined ? '' : ` (additional timeout cap ${formatToolDuration(command.timeoutMs)}; invocation limits may stop sooner)`}`).join('; ') } }, ['preset']), async (value, signal) => {
     const args = object(value, ['preset']); const preset = commands.find(command => command.id === args.preset);
     if (!preset) throw new BuiltinToolError('That command preset is not granted.');
     // A required check has one receipt regardless of the broker tool name used.
@@ -183,15 +220,15 @@ export function builtinToolOperations(options: BuiltinToolOptions): ToolOperatio
         return { ...output({ preset: preset.id, ...receipt }), ...(receipt.status === 'passed' ? {} : { isError: true }) };
       } catch (error) { if (error instanceof CandidateToolError) throw new BuiltinToolError(error.message); throw error; }
     }
-    const cwd = options.worktree ?? join(options.directory, 'chat-workspace');
-    if (!options.worktree) await mkdir(cwd, { recursive: true, mode: 0o700 });
+    const cwd = await directory(preset);
+    const workspace = chat && chatRepositoryId(preset) === undefined, hint = workspace ? ' ' + chatWorkspaceHint : '';
     check(signal);
     try {
       const command = await runApprovedToolProcess(preset.executable, preset.args, { cwd, signal, timeoutMs: limits.presetTimeoutMs[preset.id], maxOutputBytes: 32768 });
-      return output({ preset: preset.id, exitCode: command.exitCode, stdout: command.stdout.toString('utf8'), stderr: command.stderr.toString('utf8') });
+      return output({ preset: preset.id, exitCode: command.exitCode, stdout: command.stdout.toString('utf8'), stderr: command.stderr.toString('utf8'), ...(chat ? { workingDirectory: where(preset) } : {}), ...(workspace && command.exitCode !== 0 ? { hint: chatWorkspaceHint } : {}) });
     } catch (error) {
-      if (error instanceof ProcessRunError) throw new BuiltinToolError(`Command stopped (${error.reason}); no automatic retry was made.`);
-      throw new BuiltinToolError('Command could not be started. Check its executable and working directory.');
+      if (error instanceof ProcessRunError) throw new BuiltinToolError(`Command stopped (${error.reason}); no automatic retry was made.${hint}`);
+      throw new BuiltinToolError(`Command could not be started. Check its executable and working directory.${hint}`);
     }
   });
   // CLI tools resolve relative fixed arguments such as bin/tool.mjs against a project, so chat without a worktree has none.
