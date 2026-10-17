@@ -704,6 +704,17 @@ export class WorkerConversation {
               }
             }
           },
+          {
+            beforeCall() {},
+            observeToolBudget: (evidence) => {
+              if (!turn) return;
+              try {
+                interactions!.observeToolBudget(this.sessionId, turn.id, evidence);
+              } catch {
+                evidenceError = true;
+              }
+            },
+          },
         );
         signal.throwIfAborted();
         if (

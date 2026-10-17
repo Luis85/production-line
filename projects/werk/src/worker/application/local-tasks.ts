@@ -1456,6 +1456,20 @@ export class LocalTaskboard {
             this.evidencePersistenceError = true;
           }
         },
+        {
+          beforeCall() {},
+          observeToolBudget: (evidence) => {
+            try {
+              this.sessions.interactions.observeToolBudget(
+                task.sessionId,
+                turnId!,
+                evidence,
+              );
+            } catch {
+              this.evidencePersistenceError = true;
+            }
+          },
+        },
       );
       signal.throwIfAborted();
       let valid: { summary: string; patch: string; changedFileCount: number } | null = null;

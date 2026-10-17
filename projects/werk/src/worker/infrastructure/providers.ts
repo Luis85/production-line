@@ -40,7 +40,7 @@ export function modelFor(saved: ProviderConnection, directory: string, transport
       requireModelRequest(request, connection.id);
       return observeModelInvocation(signal, onUsage, observe => withProviderTools(request, signal, options.tools, (runtime, bounded) => connection.id === 'claude-cli'
         ? claudeReply(connection, directory, request, bounded, observe, runtime, control)
-        : apiReply(connection, request, bounded, transport, observe, runtime, control)));
+        : apiReply(connection, request, bounded, transport, observe, runtime, control), control));
     }
   };
   return model;

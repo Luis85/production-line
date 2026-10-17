@@ -1,5 +1,6 @@
 import type { ModelRequest, ModelResult } from './model-contract.js';
 import type { ProviderUsage } from './run-evidence.js';
+import type { ToolBudgetEvidence } from './tool-runtime.js';
 
 export type InteractionPhase = 'idle' | 'queued' | 'running' | 'waiting_input' | 'escalated' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
 export interface PendingInteraction {
@@ -30,6 +31,8 @@ export interface InteractionTurn extends InteractionTurnSummary {
   result: ModelResult | null;
   usage: ProviderUsage | null;
   errorCode: string | null;
+  /** Present when this turn's tool budget ran out. Turns saved by earlier workers omit it. */
+  toolBudget?: ToolBudgetEvidence;
 }
 export interface InteractionView {
   schemaVersion: 1;
@@ -61,7 +64,7 @@ export interface InteractionCommand {
   answer?: string;
   message?: string;
 }
-export type InteractionEventType = 'accepted' | 'prepared' | 'started' | 'usage_observed' | 'input_requested' | 'escalated' | 'completed' | 'failed' | 'cancelled' | 'interrupted' | 'pending_cancelled';
+export type InteractionEventType = 'accepted' | 'prepared' | 'started' | 'usage_observed' | 'tool_budget_exhausted' | 'input_requested' | 'escalated' | 'completed' | 'failed' | 'cancelled' | 'interrupted' | 'pending_cancelled';
 interface InteractionEventBase {
   schemaVersion: 1;
   id: string;
@@ -76,12 +79,14 @@ interface InteractionEventBase {
   pendingId?: string;
   requestKind?: 'question' | 'escalation';
   errorCode?: string;
+  toolBudget?: ToolBudgetEvidence;
 }
 export type InteractionEvent = InteractionEventBase & (
   | { type: 'usage_observed'; usage: ProviderUsage }
+  | { type: 'tool_budget_exhausted'; toolBudget: ToolBudgetEvidence }
   | { type: 'input_requested' | 'escalated'; pendingId: string; requestKind: 'question' | 'escalation' }
   | { type: 'failed' | 'interrupted'; errorCode: string }
-  | { type: Exclude<InteractionEventType, 'usage_observed' | 'input_requested' | 'escalated' | 'failed' | 'interrupted'> }
+  | { type: Exclude<InteractionEventType, 'usage_observed' | 'tool_budget_exhausted' | 'input_requested' | 'escalated' | 'failed' | 'interrupted'> }
 );
 export interface InteractionEventPage {
   schemaVersion: 1;
@@ -93,6 +98,8 @@ export interface InteractionEventPage {
 export interface InteractionStore {
   events(sessionId: string, after?: number, limit?: number): InteractionEventPage;
   observeUsage(sessionId: string, turnId: string, usage: ProviderUsage): void;
+  /** Record once per running turn that its tool budget ran out; later observations are ignored. */
+  observeToolBudget(sessionId: string, turnId: string, evidence: ToolBudgetEvidence): void;
   abandon(sessionId: string, expectedRevision?: number, operationId?: string, pendingId?: string): void;
   deleteSession(sessionId: string): void;
   view(sessionId: string): InteractionView;

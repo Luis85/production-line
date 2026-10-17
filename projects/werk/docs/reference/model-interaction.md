@@ -211,11 +211,13 @@ Each event contains `schemaVersion`, stable `id`, monotonic `sequence`,
 `sessionId`, interaction `revision`, `turnId`, `runId`, `type`, `at` and
 `phase`. `turnId` and `runId` can be null before that identity exists; event and
 session IDs are always present. A `usage_observed` event requires normalized
-numeric `usage`. Input events require `pendingId` and `requestKind`; failed and
-interrupted events require a safe `errorCode`. Event types are:
+numeric `usage`. A `tool_budget_exhausted` event requires `toolBudget`. Input
+events require `pendingId` and `requestKind`; failed and interrupted events
+require a safe `errorCode`. Event types are:
 
 - `accepted`, `prepared`, `started`: durable command, dispatch and execution boundaries.
 - `usage_observed`: the latest cumulative usage for this invocation, not an additive delta.
+- `tool_budget_exhausted`: the invocation's shared tool budget ran out, at most once per turn. See [tool budget](#tool-budget).
 - `input_requested`, `escalated`: a persisted blocking decision; fetch the current view for its content and answer guard.
 - `completed`, `failed`, `cancelled`, `interrupted`: the invocation's terminal state.
 - `pending_cancelled`: the pending decision was cancelled; the earlier invocation/result stays in history.
@@ -289,6 +291,47 @@ function calls and results, while CLI adapters receive a private MCP bridge.
 Provider-native tools remain disabled. Tool calls and output are bounded; a
 revoked policy or ungranted tool fails closed. Tool output is untrusted data and
 cannot authorize additional tools.
+
+### Tool budget
+
+All tool calls of one invocation share a budget: at most 32 calls, and a tool
+window of 120 seconds that starts with the first call. The model sees the budget
+in its tool results, never as a silently missing tool:
+
+- **Low budget note.** Once a quarter or less of the calls or of the window
+  remains (8 of 32 calls, or 30 of 120 seconds), every tool result ends with an
+  extra text item, for example
+  `Tool budget: 5 of 32 calls and 38 s of the 120 s tool window remain.`
+  The result of the last allowed call says that no further calls will run.
+  The note is a separate content item, so JSON tool output stays parseable and
+  the 128 KiB limit still applies to the tool's own output. Earlier results are
+  unchanged. Remaining time is rounded down to whole seconds.
+- **Exhaustion.** A call beyond the limit, or after the window ended, runs
+  nothing and returns a normal tool error (`isError: true`), for example
+  `Tool budget exhausted (32 calls / 120 s window): the 32-call limit of this invocation is reached. No further tool calls will run in this invocation. Finish with the information you have, or ask the operator with a werkInteraction question.`
+  A call still running when the window ends is stopped and returns the same kind
+  of error, stating that its result is unavailable.
+- **Provider loops.** Claude Code and Codex receive the error as an MCP tool
+  result. API adapters return it as a function or tool result and allow one more
+  model response to finish. A model that requests tools again after it received
+  the refusal is stopped with `protocol`.
+
+Cancellation, revoked grants and a replaced worktree still fail closed with a
+`tool_access` or `cancelled` error; only the budget is reported this way.
+
+When a budget runs out, the turn records `toolBudget` and the event journal adds
+one `tool_budget_exhausted` event:
+
+```json
+{ "reason": "calls", "maxCalls": 32, "windowMs": 120000, "callsUsed": 32, "refusedCalls": 1 }
+```
+
+`reason` is `calls` or `window`. `callsUsed` counts calls admitted to execution;
+`refusedCalls` counts calls that returned the budget error, including a call
+stopped by the window. The record contains counts and durations only: no tool
+names, arguments, results or paths. Using exactly the whole budget without a
+further call is not exhaustion. Turns saved by earlier workers have no
+`toolBudget`. The Dashboard shows it with the latest turn's consumption.
 Claude Code restriction flags require version 2.1.248 or newer. The saved
 connection check reports a known older version with upgrade guidance; an unknown
 version remains unverified. Execution never drops required flags. Provider

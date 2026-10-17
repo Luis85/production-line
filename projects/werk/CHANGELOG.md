@@ -29,6 +29,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Changed
 
+- Model tool results tell the model when its tool budget runs low. Once a quarter or less of the 32 calls or of the 120-second tool window remains, each result ends with a separate note, such as "Tool budget: 5 of 32 calls and 38 s of the 120 s tool window remain."
 - In chat, tool descriptions, command results (`workingDirectory`) and failures of tools that start in the private chat workspace say that it has no project files and how an operator can choose a repository. Task tool descriptions and results are unchanged.
 - File-task review patches contain minimal Git hunks with three context lines instead of replacing every line of a changed file. Quoted paths, missing final newlines and `git apply` compatibility are preserved.
 - The file-task prompt states the exact patch reply limits. A single patch object surrounded by prose or a Markdown fence is accepted; two different objects are refused as ambiguous.
@@ -41,6 +42,8 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Fixed
 
+- An exhausted tool budget no longer removes tools silently or fails the invocation. Calls beyond the limit or after the tool window, and calls stopped when the window ends, return a clear tool error telling the model to finish or ask the operator. API adapters allow one more response to finish. The Claude Code and Codex bridge returns the error instead of dropping the call.
+- Budget exhaustion is recorded as a `tool_budget_exhausted` interaction event and a `toolBudget` field on the turn, with counts only, and is shown with the latest turn's consumption.
 - Local stdio MCP connections that need no credential can be saved without a secret environment variable. A secret still requires a dedicated variable name, and clearing or changing the variable removes the saved secret instead of passing it to another variable.
 - Approved file paths accept real-world vault names. Names may use Unicode letters and marks, such as umlauts and `ß`, plus spaces and `, ( ) & ' ’ + – — →`. This applies to file tasks, local and shared feature requests, offline authoring and live Codex `allowedPaths`. Paths are compared and stored in NFC form, so a decomposed duplicate is rejected. A project's committed `.werk/authoring/feature-request.mjs` keeps the old rule until the script is refreshed.
 - The rule now also rejects Windows-reserved characters, device names such as `nul.md`, and segments that end in a dot or space. It also rejects segments over 255 UTF-8 bytes and look-alike secret names.

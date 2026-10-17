@@ -1,4 +1,4 @@
-import type { ToolManifest } from './tool-runtime.js';
+import type { ToolBudgetEvidence, ToolManifest } from './tool-runtime.js';
 import { DEFAULT_MAX_RUNTIME_MS, MAX_MAX_RUNTIME_MS, MAX_TOOL_CALLS, MAX_COMMAND_TIMEOUT_MS } from './execution-policy.js';
 import type { ChatMessage, ConversationModel } from './conversation.js';
 import type { ProviderUsage } from './run-evidence.js';
@@ -13,8 +13,10 @@ export interface ModelRequest {
 }
 export interface ModelQuestion { schemaVersion: 1; kind: 'question' | 'escalation'; message: string; choices?: { id: string; label: string }[]; reason?: string; }
 export type ModelResult = { type: 'completed'; text: string } | { type: 'needs_input'; request: ModelQuestion };
-/** Adapter hook immediately before each model request, including subsequent API tool rounds. */
-export interface ModelInvocationControl { beforeCall(): void; }
+/** Adapter hook immediately before each model request, including subsequent API tool rounds.
+ * `observeToolBudget` receives counts once when an invocation's tool budget ran out; it cannot change the outcome.
+ */
+export interface ModelInvocationControl { beforeCall(): void; observeToolBudget?(evidence: ToolBudgetEvidence): void; }
 export interface StructuredModel extends ConversationModel {
   readonly configuration: ModelProvider; readonly capabilities: ModelCapabilities; readonly toolManifest?: ToolManifest; readonly executionPolicy?: { maxToolCalls?: number; commandTimeoutMs?: number };
   /** Lazy metadata only: resolve a manifest using the same frozen budgets as dispatch. */

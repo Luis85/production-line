@@ -1,4 +1,4 @@
-import { ProviderModelError, type ModelRequest } from '../application/model-contract.js';
+import { ProviderModelError, type ModelInvocationControl, type ModelRequest } from '../application/model-contract.js';
 import type { ToolManifest, ToolRuntime } from '../application/tool-runtime.js';
 export type ToolRuntimeFactory = (policy?: ModelRequest['policy']) => ToolRuntime;
 export interface ProviderOptions { tools?: ToolRuntimeFactory; }
@@ -14,7 +14,7 @@ function sameManifest(saved: ToolManifest | undefined, current: ToolManifest): b
   return JSON.stringify({ revision: saved.revision, tools: saved.tools }) === JSON.stringify({ revision: current.revision, tools: current.tools });
 }
 /** The saved dispatch carries descriptions, never authority. Only the current runtime can execute tools. */
-export async function withProviderTools<T>(request: ModelRequest, signal: AbortSignal, factory: ToolRuntimeFactory | undefined, run: (runtime: ToolRuntime | undefined, signal: AbortSignal) => Promise<T>): Promise<T> {
+export async function withProviderTools<T>(request: ModelRequest, signal: AbortSignal, factory: ToolRuntimeFactory | undefined, run: (runtime: ToolRuntime | undefined, signal: AbortSignal) => Promise<T>, control?: ModelInvocationControl): Promise<T> {
   const runtime = factory?.(request.policy);
   const bounded = request.policy.maxRuntimeMs ? AbortSignal.any([signal, AbortSignal.timeout(request.policy.maxRuntimeMs)]) : signal;
   try {
@@ -22,7 +22,11 @@ export async function withProviderTools<T>(request: ModelRequest, signal: AbortS
     const result = await run(request.policy.tools === 'granted' ? runtime : undefined, bounded);
     if (bounded.aborted) throw new ProviderModelError('cancelled');
     return result;
-  } finally { await runtime?.close(); }
+  } finally {
+    await runtime?.close();
+    const exhausted = runtime?.budget?.().exhausted;
+    if (exhausted) try { control?.observeToolBudget?.(structuredClone(exhausted)); } catch { /* Evidence observers never replace the provider outcome. */ }
+  }
 }
 export async function invokeGrantedTool(runtime: ToolRuntime, name: unknown, args: unknown, signal: AbortSignal) {
   if (signal.aborted) throw new ProviderModelError('cancelled');

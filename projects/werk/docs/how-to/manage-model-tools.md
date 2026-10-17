@@ -417,6 +417,26 @@ Before rollback, clear the optional timeouts rather than saving their numeric
 defaults; see the compatibility steps above. Old worker versions do not understand
 these fields. Preserve a stopped-state backup before upgrading.
 
+### When the tool budget runs out
+
+The model is told before and when its tools run out:
+
+- Once 8 or fewer calls, or 30 or fewer seconds of the window, remain, each tool
+  result ends with a note such as
+  `Tool budget: 5 of 32 calls and 38 s of the 120 s tool window remain.`
+- A call after the budget is used runs nothing and returns a tool error that
+  starts with `Tool budget exhausted` and tells the model to finish with what it
+  has or ask you a question. A call still running when the window ends is stopped
+  with the same kind of error.
+
+To check whether a task's results are incomplete because of the budget, open the
+task: **Tool budget exhausted** appears next to the latest turn's consumption with
+the reason, calls used, the window and the number of refused calls. Integrations
+can read the `tool_budget_exhausted` interaction event or the turn's `toolBudget`
+field; see the [tool budget reference](../reference/model-interaction.md#tool-budget).
+If a task regularly hits the budget, split it into smaller tasks or narrow the
+granted tools so the model needs fewer calls.
+
 File reads return at most 32 KiB per call and expose an offset for another chunk.
 Web and MCP results are bounded to 64 KiB. CLI tool output is cut at its
 configured limit (32 KiB by default, at most 64 KiB); a CLI that writes more than
