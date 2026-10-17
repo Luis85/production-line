@@ -37,7 +37,7 @@ export function createInBackground(host: Pick<LocalTaskRuntime, "closed" | "prep
     const retainedOwner = retained ? host.preparationOwners.get(retained.id) : undefined;
     if (retained) {
       const accepted = retainedOwner?.submission;
-      if (accepted?.hash !== submission.hash || submissionContextHash(accepted) !== submissionContextHash(submission))
+      if (accepted?.hash !== submission.hash || submissionContextHash(accepted) !== submissionContextHash(submission) || accepted?.feature?.key !== submission.feature?.key)
         throw new DomainError('conflict', 'Task ID belongs to different input.');
       if (retained.state === 'preparing') return { ...host.view(), preparationId: retained.id };
       // A new explicit create command retries a failed preparation. Status polling never calls this method.

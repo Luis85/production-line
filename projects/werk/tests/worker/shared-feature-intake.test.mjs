@@ -425,3 +425,25 @@ test('editing a diagnostic never executes input or silently overwrites the teamm
   assert.equal(f.tasks.size, 1, 'a diagnostic conflict does not starve another request');
   assert.equal(f.repositories.get('shared').files.get(path), edited);
 });
+
+
+test('webview Task publication survives the actual journal and rejects a changed saved answer', async t => {
+  const f = await fixture(t); await f.intake.sync();
+  const at = '2026-10-17T00:00:00.000Z', record = (await f.state()).records[0];
+  f.controls.inspect = execution => ({ ...execution, status: 'waiting_input', interaction: {
+    schemaVersion: 1, sessionId: 'local-' + record.taskId, revision: 2, phase: 'waiting_input',
+    pending: { id: 'question-one', kind: 'question', message: 'Which timezone?', createdAt: at, turnId: 'turn-one' },
+    latestTurn: { id: 'turn-one', runId: null, kind: 'message', status: 'waiting_input', createdAt: at, finishedAt: at, priorTurnId: null }, turns: [], totalTurns: 1,
+  } });
+  await f.intake.sync();
+  await f.intake.respond(record.taskId, { action: 'answer', sessionId: 'local-' + record.taskId, expectedRevision: 2, pendingId: 'question-one', operationId: 'ui-publication-one', answer: 'Use UTC dates.' });
+  const saved = await f.state();
+  assert.equal(saved.records[0].task.uiResponse.command.answer, 'Use UTC dates.');
+  assert.match(saved.records[0].task.uiResponse.markdown, /status: ready/);
+  await f.restart(); assert.equal(f.intake.view().requests.length, 1);
+  const path = join(f.directory, 'shared-intake.json');
+  const changed = structuredClone(saved); changed.records[0].task.uiResponse.command.answer = 'Use local dates.';
+  await writeFile(path, JSON.stringify(changed));
+  await assert.rejects(new SharedFeatureJournal(f.directory).load(), /UI response reservation/);
+  await writeFile(path, JSON.stringify(saved));
+});

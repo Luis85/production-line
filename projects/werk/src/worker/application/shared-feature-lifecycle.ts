@@ -1,5 +1,8 @@
+import { sharedFeatureRequestReference } from './feature-request-reference.js';
 import { createTaskNoteIdentity } from './task-notes.js';
 import { SharedFeatureFeedback } from './shared-feature-feedback.js';
+import { recoverSharedFeatureResponseConflict } from './shared-feature-response.js';
+import { DomainError } from '../../shared/errors.js';
 import { featureTaskDirectory } from './feature-workflow.js';
 import { sharedTaskActive, sharedTerminal, type SharedExecution, type SharedFeatureRecord, type SharedIntakePorts, type SharedRepositoryPort } from './shared-feature-state.js';
 import { doneEvidence, renderSharedBlocker, renderSharedReview, sharedHash, sharedFeaturePublicationDigest } from './shared-feature-notes.js';
@@ -21,6 +24,11 @@ export class SharedFeatureLifecycle {
     const write = record.pending;
     try { await repository.publishLifecycle(write, signal); }
     catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'conflict' &&
+          await recoverSharedFeatureResponseConflict(record, repository, signal)) {
+        await this.save();
+        throw new DomainError('conflict', 'A teammate changed the Task before this response was published. Their note was preserved; refresh the Feature Request before responding again.');
+      }
       const operation = write.operationId;
       await this.feedback.refreshAcknowledgement(record, repository, signal);
       if (operation === write.operationId) throw error;
@@ -60,7 +68,7 @@ export class SharedFeatureLifecycle {
     // Confirmed terminal publications survive removed assignments or archived local
     // history. A resumed task still has to publish its new lifecycle and evidence.
     if (!execution) return true;
-    const actionable = execution.interaction && createTaskNoteIdentity(record.id, record.owner!, execution.interaction);
+    const actionable = execution.interaction && createTaskNoteIdentity(record.id, record.owner!, execution.interaction, sharedFeatureRequestReference(record).key, record.task?.identity);
     if (actionable && actionable.id !== record.task?.identity.id) return false;
     if (record.status === 'ready_for_review') return !!record.featureCommit && !!doneEvidence(record, execution) && record.outputDigest === execution.request?.execution?.outputDigest;
     return executionStatus(execution) === record.status && (execution.error ?? null) === record.error;

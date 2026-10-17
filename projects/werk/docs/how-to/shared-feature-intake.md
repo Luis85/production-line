@@ -2,9 +2,11 @@
 
 One teammate runs the worker from `bin/apps/worker` in the project. Everyone else
 uses the repository's template and **Create Feature Request** skill in their own
-editor or coding assistant. Requests, progress, human answers and review handoffs
-are Obsidian-compatible Markdown. The webview is optional; authors need no worker
-connection or provider credentials.
+editor or coding assistant. A teammate with worker access can also create requests
+and answer questions in the webview chat interface. Both interfaces target the
+same Feature Request and shared Git lifecycle. Requests, progress, human answers
+and review handoffs are Obsidian-compatible Markdown; offline authors need no
+worker connection or provider credentials.
 
 The shared branch is the communication channel: **commit and push** ready requests
 and Task answers, then **pull** the worker's updates. Saving a file or making a
@@ -124,6 +126,27 @@ and may need restoration before the worker can publish its acknowledgement.
 Other independent requests can continue. A competing worker cannot silently
 replace a confirmed owner.
 
+## Submit through the worker webview
+
+Open **Taskboard → New request** and describe the outcome in **Request instructions**.
+Choose **Prepare request** to create a draft from the committed project template.
+This is guided authoring, not a model invocation. Complete the request details,
+approved paths and project-specific sections; **Check readiness** reports the
+same configured rules used by offline authoring and shared intake.
+
+**Save draft to Git** commits and pushes an unfinished request. **Mark ready and
+publish** requires passing readiness checks and publishes a ready request. The
+worker then observes, validates and claims that note through the existing shared
+intake. The chat interface does not dispatch a separate implementation directly.
+The displayed repository and branch are the publication destination; the
+operator's developer checkout and index stay unchanged.
+
+Open saved drafts under **Shared requests**. Once owned, use **Open conversation**
+to inspect execution and answer pending questions. An unconfirmed publication
+retains its exact command for **Retry same request**. Conflicting edits or changed
+workflow files require rereading rather than overwriting another teammate's work.
+See the [webview guide](use-worker-webview.md#create-and-follow-up-on-a-task).
+
 ## Read progress and answer a Task
 
 Pull the shared branch. The original request shows `werkOwner`, lifecycle status,
@@ -144,6 +167,11 @@ section. Preserve its IDs, owner, checkpoint, action and expected revision.
 4. Pull the acknowledgement. `processed` means the worker accepted that response;
    continuation can still wait for capacity or a paused queue. `error` needs
    inspection and reconciliation, not copying the response into a new identity.
+
+You can also submit the answer or supported continuation from the request
+conversation in the webview. The worker publishes the same Task note response
+and lets the existing Markdown consumer process it; this does not introduce a
+second continuation path. A teammate can pull that answer and acknowledgement.
 
 The worker checks the exact owned session, checkpoint and revision before issuing
 the guarded interaction command. A valid response continues the existing request
@@ -213,7 +241,10 @@ ownership. A remote claim without its local journal stays blocked: restore the
 owning state instead of deleting metadata or changing the request back to ready.
 
 A saved shared repository binding also suspends legacy folder admission and
-mutations; local history remains readable. To return deliberately to local
+mutations and refuses direct chat/file-task creation, including while new shared
+claims are disabled. Local history remains readable. This prevents two intake
+processes from executing the same project request; the webview still publishes
+drafts and ready notes through the shared workflow. To return deliberately to local
 intake, finish owned work/publication, then save a disabled connection with an
 empty repository ID. This re-enables local ready files and normal clean-checkout
 fast-forwarding when repository watching remains enabled.

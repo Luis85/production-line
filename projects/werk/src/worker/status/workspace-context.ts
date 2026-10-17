@@ -122,6 +122,11 @@ export class WorkspaceContext {
       config.stateDir, this.settings, modelFor, undefined, () => this.board.active, this.consumption,
       { remote: () => { const status = this.get(); return { waiting: status.queuedTasks?.length ?? null, running: status.activeTasks.length }; } },
     );
+    this.sessions.featureSource = record => {
+      const shared = record.kind === 'local' && record.id.startsWith('local-')
+        ? this.sharedRuntime?.intake.referenceForTask(record.id.slice(6), record.feature?.key) : undefined;
+      return shared ?? this.features?.referenceForSession(record.id, record.feature?.key);
+    };
     this.board = createLocalTaskboard(
       config.stateDir,
       this.settings,
@@ -202,6 +207,7 @@ export class WorkspaceContext {
         {
           submit: (record) => submitFeature(this, record),
           inspect: (record) => inspectFeature(this, record),
+          reference: id => this.sessions.view().records.find(record => record.id === id)?.feature,
           interact: (record, command) => continueFeatureInteraction(this, record.sessionId, command),
           control: (record, action) =>
             record.input?.mode === "patch"

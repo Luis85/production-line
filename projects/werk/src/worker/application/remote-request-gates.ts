@@ -1,3 +1,4 @@
+import { featureRequestReference } from './feature-request-reference.js';
 import type { Snapshot } from "../../shared/snapshots.js";
 import { DomainError } from "../../shared/errors.js";
 import type { Task, Adapter } from "../../shared/contracts.js";
@@ -69,6 +70,7 @@ export class RemoteRequestGates implements AttemptRequestGates {
         sessionId,
         rootTurnId,
         taskId: task.id,
+        featureId: featureRequestReference({ id: task.source?.featureId ?? task.id, source: 'orchestrator', scope: this.origin }).key,
         remote: {
           origin: this.origin,
           taskId: task.id,

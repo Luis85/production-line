@@ -8,6 +8,7 @@ import type { InteractionCommand, InteractionView } from './interactions.js';
 export interface TaskNoteIdentity {
   id: string;
   featureId: string;
+  featureRequestKey?: string;
   owner: string;
   sessionId: string;
   action: 'answer' | 'resume';
@@ -33,11 +34,11 @@ interface TaskNoteProjection {
   error?: string;
   responseDigest?: string;
 }
-const identityFields = ['id', 'featureId', 'owner', 'sessionId', 'action', 'pendingId', 'turnId', 'expectedRevision'] as const;
+const identityFields = ['id', 'featureId', 'owner', 'sessionId', 'action', 'pendingId', 'turnId', 'expectedRevision', 'featureRequestKey'] as const;
 const statuses = new Set<TaskNote['status']>(['draft', 'open', 'ready', 'processed', 'error']);
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 function invalid(message: string): never { throw new DomainError('invalid_input', message); }
-const fingerprint = (identity: TaskNoteIdentity) => JSON.stringify(identityFields.map(key => identity[key]));
+const fingerprint = (identity: TaskNoteIdentity) => JSON.stringify(identityFields.filter(key => key !== 'featureRequestKey' || identity[key] !== undefined).map(key => identity[key]));
 function exactId(value: unknown, name: string): string {
   const checked = identifier(value, name);
   if (checked !== value) invalid(`Task ${name} must not contain surrounding whitespace.`);
@@ -45,6 +46,7 @@ function exactId(value: unknown, name: string): string {
 }
 function identityValue(value: unknown): TaskNoteIdentity {
   const data = object(value, 'Task identity', identityFields);
+  if (data.featureRequestKey !== undefined && (typeof data.featureRequestKey !== 'string' || !/^fr-[a-f0-9]{64}$/.test(data.featureRequestKey))) invalid('Invalid Feature Request parent key.');
   const action = data.action;
   if (action !== 'answer' && action !== 'resume') invalid('Task action must be answer or resume.');
   if (typeof data.expectedRevision !== 'number' || !Number.isSafeInteger(data.expectedRevision) || data.expectedRevision < 0)
@@ -52,12 +54,13 @@ function identityValue(value: unknown): TaskNoteIdentity {
   const pendingId = data.pendingId === null ? null : exactId(data.pendingId, 'pendingId');
   if ((action === 'answer') !== (pendingId !== null)) invalid('Only answer Tasks bind a pending question.');
   return {
+    ...(data.featureRequestKey === undefined ? {} : { featureRequestKey: data.featureRequestKey as string }),
     id: exactId(data.id, 'id'), featureId: exactId(data.featureId, 'featureId'), owner: exactId(data.owner, 'owner'),
     sessionId: exactId(data.sessionId, 'sessionId'), action, pendingId, turnId: exactId(data.turnId, 'turnId'), expectedRevision: data.expectedRevision,
   };
 }
 /** Derive a note from an actual checkpoint; cancelled/completed/active turns never become resumable Tasks. */
-export function createTaskNoteIdentity(featureId: string, owner: string, view: InteractionView): TaskNoteIdentity | null {
+export function createTaskNoteIdentity(featureId: string, owner: string, view: InteractionView, featureRequestKey?: string, previous?: TaskNoteIdentity): TaskNoteIdentity | null {
   const pending = view.pending;
   let action: TaskNoteIdentity['action'], turnId: string;
   if (pending && ['waiting_input', 'escalated'].includes(view.phase)) {
@@ -66,7 +69,9 @@ export function createTaskNoteIdentity(featureId: string, owner: string, view: I
   } else if (!pending && ['failed', 'interrupted'].includes(view.phase) && view.latestTurn && view.latestTurn.status === view.phase) {
     action = 'resume'; turnId = view.latestTurn.id;
   } else return null;
-  const identity = identityValue({ id: 'pending', featureId, owner, sessionId: view.sessionId, action, pendingId: pending?.id ?? null, turnId, expectedRevision: view.revision });
+  // An upgrade must not invalidate an already published human-answer checkpoint.
+  const legacy = previous && previous.featureRequestKey === undefined && previous.turnId === turnId && previous.pendingId === (pending?.id ?? null) && previous.expectedRevision === view.revision;
+  const identity = identityValue({ id: 'pending', featureId, owner, sessionId: view.sessionId, action, pendingId: pending?.id ?? null, turnId, expectedRevision: view.revision, ...(featureRequestKey && !legacy ? { featureRequestKey } : {}) });
   identity.id = 'task-' + hash(fingerprint(identity)).slice(0, 40);
   return identity;
 }
@@ -109,7 +114,7 @@ function parse(markdown: string, expected: TaskNoteIdentity) {
   };
   return { document, note, body: markdown.slice(match[0].length), newline: markdown.includes('\r\n') ? '\r\n' : '\n' };
 }
-function answerSection(body: string): string {
+function answerRange(body: string) {
   // Markdown tokens distinguish real top-level headings from fenced examples, quotes and HTML comments.
   const normalized = body.replace(/\r\n?/g, '\n');
   let offset = 0, start: number | undefined, end: number | undefined;
@@ -124,10 +129,29 @@ function answerSection(body: string): string {
     offset += token.raw.length;
   }
   if (start === undefined) invalid('Task note needs an editable ## Answer section.');
+  return { normalized, start, end };
+}
+function answerSection(body: string): string {
+  const { normalized, start, end } = answerRange(body);
   return bounded(normalized.slice(start, end).trim(), 'answer', 8000, true);
 }
 /** Read against a trusted, durably saved identity, never metadata supplied by the editor alone. */
 export function readTaskNote(markdown: string, expected: TaskNoteIdentity): TaskNote { return parse(markdown, expected).note; }
+
+/** A webview response edits only the existing answer section and response metadata. */
+export function writeTaskNoteAnswer(markdown: string, expected: TaskNoteIdentity, answer: string): string {
+  const parsed = parse(markdown, expected);
+  const value = bounded(answer.replace(/\r\n?/g, '\n').trim(), 'answer', 8000);
+  const { normalized, start, end } = answerRange(parsed.body);
+  const body = normalized.slice(0, start) + '\n' + value + '\n\n' + (end === undefined ? '' : normalized.slice(end));
+  parsed.document.set('status', 'ready');
+  parsed.document.delete('error');
+  parsed.document.delete('responseDigest');
+  const result = '---' + parsed.newline + parsed.document.toString({ lineWidth: 0 }).replace(/\r?\n/g, parsed.newline) + '---' + parsed.newline + body.replace(/\n/g, parsed.newline);
+  const response = taskNoteResponse(result, expected);
+  if (!response || response.note.answer !== value) invalid('Keep the reply within the Task Answer section; use level-three headings or fenced examples inside an answer.');
+  return result;
+}
 
 export function renderTaskNote(input: TaskNoteProjection): string {
   const identity = identityValue(input.identity);

@@ -11,6 +11,8 @@ const reader = createFeatureRequestNoteReader({ sessionId: () => props.session.i
 const { view } = reader;
 const record = computed(() => props.session.featureRequest ?? view.note);
 const content = computed(() => splitFeatureRequestMarkdown(view.note?.markdown ?? ''));
+const source = computed(() => props.session.feature?.sourcePath);
+const sourceBacked = computed(() => !!props.session.feature && props.session.feature.source !== 'interaction');
 const trackingError = computed(() => state.sessions?.featureTracking?.error);
 watch(open, value => { if (value && active.value) void reader.load(); });
 watch(() => props.session.featureRequest?.revision, () => { if (open.value && active.value) void reader.load(true); });
@@ -27,16 +29,17 @@ async function download() {
 }
 </script>
 <template>
-  <section id="feature-request-note" class="feature-request-note" aria-label="Feature request record">
-    <p v-if="record" class="feature-request-filename"><strong>{{ record.filename }}</strong><span>Recorded status: {{ taskStatus(record.status).replaceAll('_', ' ') }} · {{ date(record.updatedAt) }}</span></p>
-    <p v-else role="status" class="page-note">{{ trackingError ? 'The request is accepted; its Markdown record is not available yet.' : 'Saving the feature request record…' }}</p>
+  <section id="feature-request-note" class="feature-request-note" :aria-label="sourceBacked ? 'Execution progress' : 'Feature request record'">
+    <p v-if="session.feature" class="canonical-feature-source"><strong>Feature Request · {{ session.feature.id }}</strong><template v-if="source"><br>{{ source }}</template></p>
+    <p v-if="record" class="feature-request-filename"><strong>{{ sourceBacked ? 'Progress note · ' : '' }}{{ record.filename }}</strong><span>Recorded status: {{ taskStatus(record.status).replaceAll('_', ' ') }} · {{ date(record.updatedAt) }}</span></p>
+    <p v-else role="status" class="page-note">{{ trackingError ? 'The request is accepted; its execution progress note is not available yet.' : 'Saving execution progress…' }}</p>
     <p v-if="trackingError" class="error-text" role="status">Request tracking could not update every Markdown record. Latest progress may not be reflected. {{ trackingError }}</p>
     <details :open="open" @toggle="open = ($event.target as HTMLDetailsElement).open">
-      <summary>Feature request Markdown</summary>
-      <p class="page-note">The worker maintains this record as the request progresses. Readiness, results and human review remain recorded separately.</p>
+      <summary>{{ sourceBacked ? 'Execution progress' : 'Feature request Markdown' }}</summary>
+      <p class="page-note">{{ sourceBacked ? 'This generated note shows execution evidence for the Feature Request above. It does not replace that source or accept replies.' : 'The worker maintains this record as the request progresses. Readiness, results and human review remain recorded separately.' }}</p>
       <p v-if="record" class="feature-request-path">{{ record.path }}</p>
-      <div class="note-actions"><UButton type="button" color="neutral" variant="outline" :loading="view.loading" :disabled="!state.unlocked" @click="refreshRecord">Refresh request record</UButton><UButton type="button" color="neutral" variant="ghost" :disabled="!state.unlocked || view.loading" @click="download">Download Markdown</UButton></div>
-      <p v-if="view.loading && !view.note" role="status">Reading the feature request record…</p>
+      <div class="note-actions"><UButton type="button" color="neutral" variant="outline" :loading="view.loading" :disabled="!state.unlocked" @click="refreshRecord">{{ sourceBacked ? 'Refresh progress' : 'Refresh request record' }}</UButton><UButton type="button" color="neutral" variant="ghost" :disabled="!state.unlocked || view.loading" @click="download">Download Markdown</UButton></div>
+      <p v-if="view.loading && !view.note" role="status">Reading execution progress…</p>
       <p v-if="view.error" class="error-text" role="alert">{{ view.error }} The accepted request is retained. Refresh the record to try again.</p>
       <p v-if="view.stale" class="page-note" role="status">This displayed note may be older than the current request. Refresh the record to check the latest progress.</p>
       <MessageContent v-if="view.note" :text="content.body" class="request-markdown" /><details v-if="view.note && content.metadata" class="note-metadata"><summary>Record metadata</summary><pre>{{ content.metadata }}</pre></details>

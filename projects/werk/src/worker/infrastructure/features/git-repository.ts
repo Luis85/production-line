@@ -1,3 +1,4 @@
+import type { FeatureRequestPublication } from '../../application/feature-authoring-contracts.js';
 import { approvedPathsCollide } from '../../application/approved-paths.js';
 import { containsSensitivePatchMaterial } from '../../application/review-patch-policy.js';
 import { acceptedSharedBody, sharedSourceProjectionKeys } from './shared-progress.js';
@@ -113,30 +114,67 @@ export class GitFeatureRepository {
   }
   publishLifecycle(value: GitLifecyclePublication, signal?: AbortSignal): Promise<GitFeaturePublication> {
     const input = structuredClone(value), changes = this.validateLifecycle(input), bounded = this.signal(signal);
+    return this.publishGuarded(input.operationId, changes, bounded, async (_root, _head, originals) => {
+      unchangedRequest(originals.get(input.request.path)!.content, input.request.content);
+    });
+  }
+  publishRequest(value: FeatureRequestPublication, signal?: AbortSignal): Promise<GitFeaturePublication> {
+    const input = structuredClone(value), bounded = this.signal(signal);
+    operation(input.operationId);
+    const path = gitPath(input.request.path), name = path.slice(this.options.requestsDirectory.length + 1);
+    if (!beneath(path, this.options.requestsDirectory) || !requestName(name) || input.request.expectedRevision !== null && !revision(input.request.expectedRevision)) throw new GitFeatureError('invalid_input', 'Request authoring requires one guarded request in the configured intake directory.');
+    textBytes(input.request.content, 65536);
+    const next = this.authoringRequest(input.request.content);
+    if (!Array.isArray(input.workflowFiles) || !input.workflowFiles.length || input.workflowFiles.length > 8 || new Set(input.workflowFiles.map(file => file.path)).size !== input.workflowFiles.length) throw new GitFeatureError('invalid_input', 'Provide the bounded workflow files used to prepare this request.');
+    for (const file of input.workflowFiles) { gitPath(file.path); if (!revision(file.sha256)) throw new GitFeatureError('invalid_input', 'Workflow files require their exact SHA-256 revisions.'); }
+    if (!revision(input.workflowDigest) || !input.binding || input.binding.remote !== this.options.remote || input.binding.branch !== this.options.branch || typeof input.binding.repositoryId !== 'string' || !input.binding.repositoryId || typeof input.binding.workflowPath !== 'string') throw new GitFeatureError('invalid_input', 'Authoring publication requires its exact prepared workflow and repository binding.');
+    gitPath(input.binding.workflowPath);
+    return this.publishGuarded(input.operationId, [input.request], bounded, async (root, head, originals) => {
+      if (hash(canonicalJson([...input.workflowFiles].sort((a, b) => a.path.localeCompare(b.path)))) !== input.workflowDigest) throw new GitFeatureError('conflict', 'The shared template or checks changed. Prepare the request again before publishing.');
+      if (input.readinessError) throw new GitFeatureError('invalid_input', input.readinessError);
+      for (const file of input.workflowFiles) if ((await this.io.blob(root, head, file.path, bounded))?.revision !== file.sha256) throw new GitFeatureError('conflict', 'The shared workflow changed before publication. Prepare this request again.');
+      const before = originals.get(path);
+      if (before) {
+        const previous = this.authoringRequest(before.content);
+        if (previous.status !== 'draft' || previous.id !== next.id) throw new GitFeatureError('conflict', 'Only the same unclaimed draft can be revised. Ready requests retain their accepted identity and content.');
+      } else await this.assertNoAlias(root.path, head, path, bounded);
+      for (const file of await this.list(head, this.options.requestsDirectory, bounded)) {
+        if (file.path === path) continue;
+        let id: unknown; try { id = parseFeature(file.content).data.id; } catch { continue; }
+        if (id === next.id) throw new GitFeatureError('conflict', 'This feature ID already belongs to another request. Open that request or create a new identity.');
+      }
+    }, { workflowDigest: input.workflowDigest, binding: input.binding });
+  }
+  private authoringRequest(markdown: string) {
+    const { data } = parseFeature(markdown);
+    if (typeof data.id !== 'string' || data.id.startsWith('remote-') || !['draft', 'ready'].includes(String(data.status)) || data.mode !== 'patch' || typeof data.templateId !== 'string' || ['source', 'werk', 'werkOwner', 'werkTask', 'werkPullRequest', 'werkTracking'].some(key => Object.hasOwn(data, key)) || data.type === 'Task' || data.type === 'PullRequest') throw new GitFeatureError('conflict', 'Author only unclaimed draft or ready feature requests with a stable ID and template.');
+    return data;
+  }
+  private publishGuarded(operationId: string, changes: GitFeatureChange[], bounded: AbortSignal, validate: (root: RepositoryRoot, head: string, originals: Map<string, GitBlob | null>) => Promise<void>, intent?: Pick<FeatureRequestPublication, 'workflowDigest' | 'binding'>): Promise<GitFeaturePublication> {
     return this.serialize(async () => {
-      const root = await this.io.root(bounded), digest = hash(canonicalJson({ workerId: this.options.workerId, branch: this.options.branch, changes }));
-      const marker = `${this.options.reviewDirectory}/_operations/${hash(input.operationId)}.json`;
-      const receipt = JSON.stringify({ schemaVersion: 1, workerId: this.options.workerId, operationId: input.operationId, digest }) + '\n';
+      const root = await this.io.root(bounded), digest = hash(canonicalJson({ workerId: this.options.workerId, branch: this.options.branch, changes, ...(intent ? { authoring: intent } : {}) }));
+      const marker = `${this.options.reviewDirectory}/_operations/${hash(operationId)}.json`;
+      const receipt = JSON.stringify({ schemaVersion: 1, workerId: this.options.workerId, operationId, digest }) + '\n';
       for (let attempt = 0; attempt < 3; attempt++) {
         const head = (await this.io.fetch(root, this.options.branch, bounded))!;
-        const previous = await this.receipt(root, head, marker, receipt, input.operationId, bounded);
+        const previous = await this.receipt(root, head, marker, receipt, operationId, bounded);
         if (previous) return previous;
         const originals = new Map<string, GitBlob | null>();
         for (const change of changes) {
           const before = await this.io.blob(root, head, change.path, bounded, 524288); originals.set(change.path, before);
           if ((before?.revision ?? null) !== change.expectedRevision) throw new GitFeatureError('conflict', 'Shared feature content changed before publication. Refresh the remote request and preserve the teammate edit.');
         }
-        unchangedRequest(originals.get(input.request.path)!.content, input.request.content);
+        await validate(root, head, originals);
         const commit = await this.io.worktree(root, head, bounded, async worktree => {
           for (const change of changes) await this.io.write(worktree, change.path, change.content, originals.get(change.path)?.mode ?? '100644', bounded);
           await this.io.write(worktree, marker, receipt, '100644', bounded);
-          return this.io.commit(worktree, head, input.operationId, digest, bounded);
+          return this.io.commit(worktree, head, operationId, digest, bounded);
         });
         // A lost push acknowledgement is resolved by reading the immutable receipt before retrying.
         try { await this.io.push(root, commit, this.options.branch, bounded); }
         catch (error) { if (bounded.aborted) throw error; }
         const confirmedHead = (await this.io.fetch(root, this.options.branch, bounded))!;
-        const confirmed = await this.receipt(root, confirmedHead, marker, receipt, input.operationId, bounded);
+        const confirmed = await this.receipt(root, confirmedHead, marker, receipt, operationId, bounded);
         if (confirmed) return { ...confirmed, replayed: false };
       }
       throw new GitFeatureError('conflict', 'Shared intake advanced repeatedly. Publication remains pending and can be retried.');

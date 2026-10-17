@@ -1,3 +1,4 @@
+import type { FeatureRequestReference } from './feature-request-reference.js';
 import type { FeatureTrackingRecord, FeatureTrackingStatus } from './feature-tracking.js';
 import type { WorkerCapacitySnapshot } from './worker-capacity.js';
 import type { ConsumptionPolicy } from './consumption.js';
@@ -37,6 +38,7 @@ export interface SessionView {
 }
 /** Shared public task fields are an allowlist, independent of the private execution aggregate. */
 export interface LocalTaskView {
+  feature?: FeatureRequestReference;
   id: string;
   title: string;
   sessionId: string;

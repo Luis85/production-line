@@ -1,3 +1,4 @@
+import { sharedFeatureRequestReference } from './feature-request-reference.js';
 import { DomainError } from '../../shared/errors.js';
 import { featureTaskDirectory } from './feature-workflow.js';
 import { createTaskNoteIdentity, markTaskNoteResponse, readTaskNote, renderTaskNote, taskNoteResponse } from './task-notes.js';
@@ -20,7 +21,7 @@ export class SharedFeatureFeedback {
       if (artifact || error && record.task.response?.status === 'pending') return { artifacts: artifact ? [artifact] : [], ...(error ? { error } : {}) };
     }
     const current = this.ports.inspect(record.taskId!) ?? execution;
-    const identity = current.interaction && createTaskNoteIdentity(record.id, record.owner!, current.interaction);
+    const identity = current.interaction && createTaskNoteIdentity(record.id, record.owner!, current.interaction, sharedFeatureRequestReference(record).key, record.task?.identity);
     if (identity && identity.id !== record.task?.identity.id) {
       const pending = current.interaction!.pending;
       const markdown = renderTaskNote({ identity, title: record.title, question: pending?.message ?? 'The previous attempt stopped. Describe how the worker should continue.', choices: pending?.choices, reason: pending?.reason ?? current.error ?? undefined });

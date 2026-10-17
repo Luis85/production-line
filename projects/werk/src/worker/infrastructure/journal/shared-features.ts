@@ -8,7 +8,8 @@ import { atomicWrite, readBoundedFile } from './files.js';
 import { defaultSharedIntakeConfig, validateSharedIntakeConfig, bindingKey, type SharedFeatureState } from '../../application/shared-feature-state.js';
 import { sharedHash, sharedFeaturePublicationDigest } from '../../application/shared-feature-notes.js';
 import { validateFeatureWorkflow, validateFeatureCheck, featureWorkflowPolicy, featureTaskDirectory } from '../../application/feature-workflow.js';
-import { gateDigest } from '../../application/request-gates.js';
+import { identifier } from '../../../shared/validation.js';
+import { gateDigest, canonicalJson } from '../../application/request-gates.js';
 import { validateFeatureReadiness } from '../features/workflow.js';
 
 /** Private recovery journal. No claim is dispatched from an unvalidated or partially written record. */
@@ -37,6 +38,11 @@ export class SharedFeatureJournal {
         if (task) {
           if (!task.identity || task.identity.featureId !== record.id || task.identity.owner !== state.workerId || !/^task-[a-f0-9]{40}$/.test(task.identity.id) || task.path !== taskDirectory + '/' + task.identity.id + '.md' || typeof task.markdown !== 'string' || task.revision !== null && !/^[a-f0-9]{64}$/.test(task.revision) || task.closed !== undefined && typeof task.closed !== 'boolean') throw Error('Invalid shared Task checkpoint.');
           readTaskNote(task.markdown, task.identity);
+          if (task.uiResponse) {
+            const reply = task.uiResponse, expected = taskNoteResponse(reply.markdown, task.identity);
+            identifier(reply.command.operationId, 'Task publication operation');
+            if (!expected || canonicalJson({ ...expected.command, operationId: reply.command.operationId }) !== canonicalJson(reply.command)) throw Error('Invalid shared UI response reservation.');
+          }
           if (task.response) {
             const response = task.response, expected = taskNoteResponse(response.markdown, task.identity);
             if (!expected || expected.responseDigest !== response.digest || JSON.stringify(expected.command) !== JSON.stringify(response.command) || response.revision !== sharedHash(response.markdown) || !['pending', 'processed', 'error'].includes(response.status) || response.error !== undefined && (typeof response.error !== 'string' || response.error.length > 500)) throw Error('Invalid shared Task response reservation.');

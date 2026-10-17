@@ -88,8 +88,6 @@ export async function statusServer(
               await workspace.featureList(),
             );
           if (req.method === "POST" && req.url === "/api/features") {
-            if (!workspace.features)
-              throw new ApiError(409, "Configure a feature folder first.");
             return json(
               res,
               200,
@@ -152,7 +150,7 @@ export async function statusServer(
             return json(
               res,
               200,
-              await workspace.withFeatureTracking(async () => workspace.sessions.action(await readJson(req))).then(() => workspace.sessions.view()),
+              await workspace.withFeatureTracking(async () => workspace.sessionCommand(await readJson(req))).then(() => workspace.sessions.view()),
             );
           if (req.method === "GET" && req.url === "/api/taskboard")
             return json(res, 200, workspace.board.view());
@@ -160,7 +158,7 @@ export async function statusServer(
             return json(
               res,
               202,
-              await workspace.withFeatureTracking(async () => { const input = await readJson(req); return workspace.withRepositoryAdmission(() => workspace.board.create(input)); }),
+              await workspace.withFeatureTracking(async () => { const input = await readJson(req); return workspace.createTaskboard(input); }),
             );
           if (req.method === "GET" && req.url === "/api/worktrees")
             return json(res, 200, await workspace.worktrees());

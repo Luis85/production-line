@@ -12,11 +12,11 @@ const sectionNames = ['goal', 'context', 'acceptance criteria', 'verification pl
 type SectionName = typeof sectionNames[number];
 function invalid(message: string): never { throw new DomainError('invalid_input', message); }
 /** A deliberately small, stable Markdown structure, shared by offline authoring and worker admission. */
-function markdownSections(body: string): Map<string, string[]> {
+function markdownSections(body: string, onHeading?: (name: string, line: number) => void): Map<string, string[]> {
   const sections = new Map<string, string[]>();
   let current: string | undefined, fence: { character: string; length: number } | undefined;
-  const visible = body.replace(/<!--[\s\S]*?-->/g, '');
-  for (const line of visible.split(/\r?\n/)) {
+  const visible = body.replace(/<!--[\s\S]*?-->/g, comment => comment.replace(/[^\r\n]/g, ''));
+  for (const [index, line] of visible.split(/\r?\n/).entries()) {
     const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line);
     if (fence) {
       if (marker && marker[1][0] === fence.character && marker[1].length >= fence.length && /^ {0,3}(?:`+|~+)\s*$/.test(line)) fence = undefined;
@@ -26,6 +26,7 @@ function markdownSections(body: string): Map<string, string[]> {
     const heading = /^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/.exec(line);
     if (heading) {
       const name = heading[1].trim().toLowerCase();
+      onHeading?.(name, index);
       current = name;
       if (sections.has(current)) invalid(`Use exactly one ${current} section.`);
       sections.set(current, []);
@@ -33,6 +34,18 @@ function markdownSections(body: string): Map<string, string[]> {
   }
   if (fence) invalid('Close fenced code blocks before submitting the feature request.');
   return sections;
+}
+/** Authoring uses the readiness parser's visible headings, preserving fenced examples and comments. */
+export function replaceFeatureSection(body: string, section: SectionName, content: string): string {
+  let start = -1, end = -1;
+  markdownSections(body, (name, line) => {
+    if (start >= 0 && end < 0) end = line;
+    if (name === section) start = line;
+  });
+  if (start < 0) invalid(`Feature requests require a ${section} heading.`);
+  const newline = body.includes('\r\n') ? '\r\n' : '\n', lines = body.split(/\r?\n/);
+  lines.splice(start + 1, (end < 0 ? lines.length : end) - start - 1, '', content.trim(), '');
+  return lines.join(newline);
 }
 export function featureRequestSections(body: string): Record<SectionName, string> {
   const sections = markdownSections(body);

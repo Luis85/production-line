@@ -1,8 +1,14 @@
-# Factory, production lines, workers and tasks
+# Feature Requests, Factory, production lines and workers
 
-Werk models a Factory as a collection of production lines. Each line has one
-orchestrator and one or more workers. A task belongs to one line's orchestrator;
-a worker receives a leased attempt to execute it. Mock execution is the default:
+A Feature Request names the work and connects its source, conversation, attempts,
+checks, human decisions and review evidence. A local worker can own its execution
+without a Factory. The shared repository workflow offers Markdown and webview
+authoring of that same request; neither interface owns another implementation
+process. See the [Feature Request contract](../reference/feature-requests.md).
+
+Werk also models a Factory as a collection of production lines. Each line has one
+orchestrator and one or more workers. An execution task belongs to one line's
+orchestrator; a worker receives a leased attempt to execute it. Mock execution is the default:
 completed attempts produce a `simulated` task and evidence. Explicitly enabled
 native Linux Codex execution can produce a local change set in `review`; human
 validation, publication and merge remain separate operator actions.
@@ -37,6 +43,7 @@ by that line. Factory identity and project identity serve different purposes.
 
 | Entity | Authoritative state | Where to inspect it |
 | --- | --- | --- |
+| Feature Request | Accepted source identity and frozen requirements; shared Git supplies the team note, while durable execution journals retain claims and evidence | Source Markdown, worker request conversation and linked Task/PullRequest notes |
 | Factory/root and subfactory | One Factory registry/database owns hierarchy and line registrations | Dedicated Factory webview, including its hierarchy and portfolio summaries |
 | Production line | Stable Factory registration points to its independent orchestrator | Factory line Dashboard links to its independent orchestrator; line data remains local to that orchestrator |
 | Orchestrator | Its own SQLite database owns tasks, claims, leases, context and accepted evidence | Dedicated line map, Intake/taskboard and task/worker inspectors |
@@ -95,8 +102,9 @@ an existing enrollment.
 
 ## Task and attempt
 
-A task is requested work accepted by one orchestrator, with a generated task ID,
-project, requirement input, status and attempt history. Tasks are submitted at
+A task is an execution record beneath a Feature Request, not a second product
+request. For orchestrated work, it is accepted by one orchestrator, with a
+generated task ID, project, requirement input, status and attempt history. Tasks are submitted at
 runtime through that line's Intake or API. They are not seeded by system YAML.
 A stable submission key makes retries of the same intent idempotent within the
 line.

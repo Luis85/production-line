@@ -63,6 +63,11 @@ export function workerCommands(catalog) {
       input:
         "Frontmatter + Markdown from --markdown PATH or - (stdin), at most 64 KiB; status: draft.",
     };
+  for (const name of ['prepare', 'publish']) catalog['feature ' + name] = {
+    ...action('/api/features', name, [], true), timeoutMs: GIT_REQUEST_TIMEOUT_MS,
+    description: name === 'prepare' ? 'Prepare or reopen the shared Feature Request from its configured template, with readiness feedback. Does not dispatch work.' : 'Publish the same Feature Request draft or ready revision to shared Git; the existing intake validates and dispatches it after push.',
+    input: name === 'prepare' ? 'JSON operationId and optional seed {title,message,provider,paths}, or name to reopen a draft. Keep returned binding, workflow digest and revision for publication.' : 'JSON operationId, name, markdown, status (draft|ready), expectedRevision, expectedWorkflowDigest and expectedBinding from prepare. Reuse the exact command after an uncertain response.',
+  };
   catalog["feature template"] = {
     local: true,
     required: [],

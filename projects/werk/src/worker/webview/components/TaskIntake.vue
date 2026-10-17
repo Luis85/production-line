@@ -16,7 +16,10 @@ import UTextarea from '@nuxt/ui/components/Textarea.vue';
 import { createFeatureRequest, getCapacityFreshness, state, type FeatureRequestPreparation } from '../store';
 import { validateApprovedPaths } from '../../application/approved-paths';
 import RunTask from './RunTask.vue';
+import SharedFeatureComposer from './SharedFeatureComposer.vue';
 import { buildWorkerCapacityView } from '../worker-capacity';
+const sharedComposer = ref<InstanceType<typeof SharedFeatureComposer> | null>(null);
+const sharedBinding = computed(() => !!state.environment?.sharedIntake.config.repositoryId);
 const emit = defineEmits<{ created: [sessionId: string, previousSessionId: string]; busy: [boolean] }>();
 const sending = ref(false), optionsOpen = ref(false), filesOpen = ref(false);
 const preparation = ref<FeatureRequestPreparation | null>(null);
@@ -51,7 +54,7 @@ watch(() => state.settings?.providers, () => {
 watch(() => intake.definitionId, () => { intake.agent = definition.value?.agents.find(item => item.name === 'root')?.name ?? definition.value?.agents[0]?.name ?? ''; intake.adapt = false; });
 watch(() => intake.agent, () => { intake.adapt = false; });
 watch(repositories, () => { if (!intake.repository && repositories.value.length === 1) intake.repository = repositories.value[0].id; }, { immediate: true });
-async function focusInstructions() { await nextTick(); document.getElementById('new-task-instructions')?.focus(); }
+async function focusInstructions() { await nextTick(); if (sharedBinding.value) await sharedComposer.value?.focusInstructions(); else document.getElementById('new-task-instructions')?.focus(); }
 async function create() {
   if (!canCreate.value) return;
   const epoch = state.draftEpoch, previousSessionId = state.sessions?.selected ?? '';
@@ -86,7 +89,8 @@ function keydown(event: KeyboardEvent) {
 defineExpose({ focusInstructions });
 </script>
 <template>
-  <section class="task-intake" aria-labelledby="task-intake-title">
+  <SharedFeatureComposer v-if="sharedBinding" ref="sharedComposer" @created="(id, previous) => emit('created', id, previous)" @busy="emit('busy', $event)" />
+  <section v-else class="task-intake" aria-labelledby="task-intake-title">
     <h3 id="task-intake-title">Create a feature request</h3>
     <p class="intake-intro">Describe the outcome. The worker saves a Markdown feature request and tracks its progress and results.</p>
     <form :aria-busy="sending" @submit.prevent="create">

@@ -1,18 +1,29 @@
 # Docker Agent definitions in a worker
 
 Workers can import Docker Agent YAML, preview its named agents, and choose one as
-an instruction profile for a task. The selected instructions and compatible model
-are passed to the worker's existing provider. Each task retains an immutable copy
-of the selection, including the source digest. Follow-ups and retries use that
-copy even if the imported definition is later removed.
+an instruction profile for a Feature Request's execution. The selected instructions
+and compatible model are passed to the worker's existing provider. Admission
+retains an immutable copy of the selection, including the source digest. Answers,
+continuations and retries use that copy even if the imported definition is later
+removed.
 
 ## Import and select
 
-From Chat, open the agent definitions editor. Paste YAML or choose a `.yaml`/`.yml`
-file, preview its agents and compatibility notes, then name and import it. Before
-starting a new task, choose the definition and named agent together with the
-worker provider. An existing task keeps its original selection; start a new task
-to use another agent. Explicit file tasks can also choose an agent profile.
+Open **Settings → Agent definitions**. Paste YAML or choose a `.yaml`/`.yml`
+file, preview its agents and compatibility notes, then name and import it. Assign
+a stable shared reference for use in project requests.
+
+For a shared project, choose the profile in the canonical Feature Request draft:
+set `definitionRef` and `agent` in its frontmatter, using **Advanced template
+editing** in the webview or your Markdown editor. The connected `feature prepare`
+command can seed these fields too. Validate and publish the same request through
+shared Git intake; selecting a profile does not start a separate task workflow.
+An accepted request keeps its original selection. Use a successor request for
+work requiring another profile.
+
+Private workers without a shared repository binding also expose the definition
+and named-agent selectors in **New request → Task options**. These local requests
+use the same profile snapshot behavior.
 
 For example, this definition supplies an instruction without overriding the
 worker's configured model:
@@ -134,11 +145,15 @@ instruction, and 2 MiB total definition storage. YAML input is bounded at 64 KiB
 the complete JSON API/CLI request must also fit the 64 KiB request limit, including
 JSON escaping. Large definitions should be reduced to the selected agent's needs.
 
-Every worker still executes exactly one task at a time. Profiles do not authorize
-filesystem access or change execution policy. Chat has no repository tools;
-explicit file tasks use approved snapshots and produce a review patch without
-applying changes or running tests. Docker's own native session identifiers and
-multi-agent execution are not imported into Werk task sessions.
+Every worker still executes one attempt at a time. Profiles do not authorize
+filesystem access, grant tools or change execution policy. Operator-configured
+tool grants remain separate. With approved repository paths, task-worktree file
+access and at least one enabled required check, implementation mode can edit its
+isolated worktree, run the required checks and repair failures. Other approved-file
+requests retain proposal-only patch generation. Inspect the accepted execution
+mode and candidate-bound evidence; see [implement a feature](../how-to/implement-feature.md).
+Docker's native session identifiers and multi-agent execution are not imported
+into Werk task sessions.
 
 ## CLI and API
 
@@ -150,31 +165,57 @@ node bin/apps/worker/cli.mjs definition import --file .werk/agents/project-revie
 node bin/apps/worker/cli.mjs definition list
 node bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-reviewer
 node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --dry-run
-node bin/apps/worker/cli.mjs task create --file task.json
 node bin/apps/worker/cli.mjs definition delete --id DEFINITION_ID
 ```
 
 A `.yaml` or `.yml` file is the profile itself; import requires `--name` with it,
 and `definition ref` assigns the reference afterwards. The JSON form
 `{"name":"Project reviewer","ref":"project-reviewer","yaml":"YAML_TEXT"}` (from another `--file` path or stdin) can also set the optional `ref` in one step; preview
-takes `{"yaml":"YAML_TEXT"}`. Select the definition in task input by its reference:
+takes `{"yaml":"YAML_TEXT"}`.
+
+For a shared project, prepare the canonical Feature Request with a stable
+operation ID and profile reference, for example in `prepare.json`:
+
+```json
+{"operationId":"csv-export-draft-001","seed":{"title":"Add CSV export","message":"Export orders as CSV; retain existing access controls.","provider":"codex-cli","paths":["src/orders/export.ts"],"definitionRef":"project-reviewer","agent":"root"}}
+```
+
+```sh
+node bin/apps/worker/cli.mjs feature prepare --file prepare.json
+node bin/apps/worker/cli.mjs feature publish --file publish.json
+```
+
+Complete the returned Markdown template and readiness requirements before
+publishing. `publish.json` carries the reviewed Markdown, name, a stable operation
+ID, `status: "draft"` or `"ready"`, and the `expectedRevision`,
+`expectedWorkflowDigest` and `expectedBinding` from preparation. Follow the
+[shared authoring contract](feature-requests.md#shared-authoring-api). Only shared
+intake claims and dispatches the published ready request.
+
+For an unbound private worker, the compatible `task create --file task.json`
+command still accepts the profile selection in direct interaction input:
 
 ```json
 {"id":"review-001","title":"Review the feature","provider":"codex-cli","definitionRef":"project-reviewer","agent":"root","message":"Review these acceptance criteria: ..."}
 ```
 
-Alternatively, read the generated definition ID from the import/list response and
-use `"definitionId":"DEFINITION_ID"` in place of `definitionRef`.
+For that worker-local input, you can instead read the generated definition ID
+from import/list and use `"definitionId":"DEFINITION_ID"` in place of
+`definitionRef`. Keep stable references in shared project notes.
 
 Where required, add `"useInstructionsOnly":true` after reviewing preview diagnostics.
 The CLI derives action names from its commands. Direct HTTP callers use
 `GET /api/definitions` or `POST /api/definitions` with `action` set to
 `preview`, `import`, `ref` (with `id` and `ref`; an empty `ref` removes the
 reference), `update` (with `ref`, `yaml`, optional `name`, and `revision`, or
-`"dryRun":true` for a preview) or `delete`. Task/session creation and file-task creation accept
-`definitionRef` or `definitionId`, plus `agent` and `useInstructionsOnly`. Local
-folder and shared Git feature requests accept the same frontmatter fields. Authenticated browser sessions
-and bearer-authenticated automation use the same validation and task queue.
+`"dryRun":true` for a preview) or `delete`. Private task/session and file-task
+creation accept `definitionRef` or `definitionId`, plus `agent` and
+`useInstructionsOnly`. Local folder and shared Git requests accept those
+frontmatter fields; shared authoring seeds support the stable `definitionRef`.
+Authenticated browser sessions and bearer-authenticated automation use the same
+validation and execution queue. A saved shared binding refuses direct creation,
+including while new shared claims are paused; use `feature prepare`/`publish`
+for that project.
 
 See [portable applications](portable-apps.md) for state paths and automation,
 [the worker guide](../how-to/use-worker-webview.md) for access and provider setup,

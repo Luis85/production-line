@@ -1,3 +1,4 @@
+import { featureRequestReference } from '../../src/worker/dist/worker/application/feature-request-reference.js';
 import { parseTrackedFeature, featureRecord } from './feature-fixtures.mjs';
 import { cleanup } from './fixture-cleanup.mjs';
 import test from 'node:test';
@@ -244,4 +245,26 @@ test('local folder requests submit a stable definitionRef unchanged and reject m
   assert.equal(f.submissions.length, 1); assert.equal(f.submissions[0].input.definitionRef, 'team-reviewer'); assert.equal(f.submissions[0].input.definitionId, undefined);
   for (const extra of ['definitionRef: team-reviewer\ndefinitionId: local-id\n', 'definitionRef: Team Reviewer\n', 'definitionRef: 7\n'])
     assert.throws(() => featureInput(parseFeature(source(extra)), 'codex-cli'), /definitionRef/);
+});
+
+
+test('legacy orchestrator folder projections use the restored session parent and persist it on renewed assignment', async t => {
+  const reference = featureRequestReference({ id: 'upstream-request', source: 'orchestrator', scope: 'https://factory.example' });
+  const task = { id: 'assignment', title: 'Assigned feature', criteria: ['Evidence'], attempt: 1 };
+  const queue = { async submit() { throw Error('Remote projection must not dispatch locally.'); }, inspect() { return undefined; }, reference(id) { return id === 'remote-assignment' ? reference : undefined; } };
+  const f = await fixture(t, queue);
+  await f.service.rememberRemote(task);
+  assert.equal(f.service.view().records[0].feature.key, reference.key);
+  assert.equal(f.service.referenceForSession('remote-assignment').key, reference.key);
+  const legacy = JSON.parse(await readFile(join(f.state, 'feature-index.json'), 'utf8'));
+  assert.equal(legacy.records[0].feature, undefined);
+  await f.service.rememberRemote({ ...task, attempt: 2 }, reference);
+  const saved = JSON.parse(await readFile(join(f.state, 'feature-index.json'), 'utf8'));
+  assert.equal(saved.records[0].feature.key, reference.key);
+  await assert.rejects(f.service.rememberRemote(task, featureRequestReference({ id: 'unrelated-request', source: 'orchestrator', scope: 'https://factory.example' })), /another Feature Request/);
+  assert.equal(f.service.view().records[0].feature.key, reference.key);
+  await f.service.close();
+  const restored = new FeatureRequests(new MarkdownFeatureFolder(f.directory, f.state, 'codex-cli', f.project), queue, 0);
+  await restored.init();
+  try { assert.equal(restored.view().records[0].feature.key, reference.key); } finally { await restored.close(); }
 });

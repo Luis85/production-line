@@ -84,10 +84,20 @@ start shared work.
 
 ## Shared feature requests for a distributed team
 
+The Feature Request is the central workflow entity. Markdown, webview chat and
+CLI intake create or act on it; conversations, execution attempts, questions and
+review notes retain its identity.
+
 Commit the authoring kit, template, Base, and `fr-ready-check.json` /
 `fr-done-check.json`. Teammates draft and validate requests locally, mark them
 ready, then commit and push to the watched branch. They need neither a worker
 connection nor its provider credentials.
+
+In the worker webview, **New request** prepares the same project template from
+your instructions. Complete the request details, check readiness, then save a
+draft or mark it ready and publish it to Git. Shared intake claims the resulting
+note through the same workflow. Webview answers publish the same Task responses
+as Markdown edits; they continue the existing request.
 
 The worker claims ready requests from the remote Git branch, executes in isolated
 worktrees and publishes progress into the original request. Pull updates to follow
@@ -217,7 +227,11 @@ Shared contracts remain in `src/shared`. Source and tests are grouped by concern
 
 The complete source check also requires Python 3 on Linux/macOS for the infrastructure safety suite. The downloaded native runtime has no host Python dependency.
 
-The [worker webview](docs/how-to/use-worker-webview.md) opens on the taskboard, with one interaction for instructions and optional repository-file approval, plus Metrics, History and Settings pages. Every task has automatic Markdown feature-request tracking; follow-ups keep its record. Optional native Linux Codex chat uses the worker account’s existing login.
+The [worker webview](docs/how-to/use-worker-webview.md) opens on the taskboard, with
+a request conversation plus Metrics, History and Settings. Shared projects author
+their configured Feature Request template there and publish through Git; private
+workers retain direct interaction with optional repository-file approval. Every
+execution keeps its Feature Request identity and automatic Markdown tracking.
 
 ## Generated UI reference
 

@@ -2,6 +2,7 @@ import type { WorkspaceContext } from './workspace-context.js';
 import { publicTaskConversation } from '../application/public-task-transcript.js';
 import { object, identifier } from "../../shared/contracts.js";
 import { DomainError } from "../../shared/errors.js";
+import { assertDirectFeatureCreation, isSharedFeatureSession } from './workspace-feature-authoring.js';
 import { withRepositoryAdmission } from './workspace-settings.js';
 
 /** Keep Markdown projections current before acknowledging task commands, including partial failures. */
@@ -43,8 +44,13 @@ export function taskboardDetail(workspace: WorkspaceContext, id: string){
 }
 
 export async function taskboardAction(workspace: WorkspaceContext, input: unknown){
-  if ((input as Record<string, unknown> | null)?.action === 'retry')
+  if ((input as Record<string, unknown> | null)?.action === 'retry') {
+    const id = String((input as Record<string, unknown>).id);
+    const task = workspace.board.view().tasks.find(item => item.id === id);
+    if (task && isSharedFeatureSession(workspace, task.sessionId))
+      throw new DomainError('conflict', 'Continue this shared Feature Request through its current Task checkpoint in the interaction controls or Markdown note.');
     return withRepositoryAdmission(workspace, () => workspace.board.action(input));
+  }
   return workspace.board.action(input);
 }
 
@@ -67,6 +73,9 @@ export async function startChat(workspace: WorkspaceContext, message: unknown){
   )
     throw new DomainError("conflict", "Worker task queue is full.");
   const id = workspace.sessions.current.id;
+  if (isSharedFeatureSession(workspace, id))
+    throw new DomainError('conflict', 'Use this Feature Request’s current Task checkpoint to answer or resume. Create a new Feature Request for new scope.');
+  if (!workspace.sessions.detail(id).chat.messages.length) assertDirectFeatureCreation(workspace);
   assertTaskCanContinue(workspace, id);
   await withFeatureTracking(workspace, () => workspace.sessions.start(message, id));
   return chatSnapshot(workspace, id);

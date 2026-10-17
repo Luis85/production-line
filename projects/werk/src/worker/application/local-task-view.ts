@@ -1,3 +1,4 @@
+import { interactionFeatureRequest } from './feature-request-reference.js';
 import { createHash } from 'node:crypto';
 import { developmentScopeView } from './development.js';
 import type { LocalTask } from './local-tasks.js';
@@ -9,6 +10,7 @@ import type { LocalTaskDetailView, LocalTaskSummaryView, LocalTaskView } from '.
 function publicFields(task: LocalTask): LocalTaskView {
   return {
     id: task.id,
+    feature: task.feature ?? interactionFeatureRequest(task.id),
     title: task.title,
     sessionId: task.sessionId,
     provider: task.provider,

@@ -42,6 +42,8 @@ export interface SharedTaskCheckpoint {
   markdown: string;
   revision: string | null;
   closed?: boolean;
+  /** Retains a webview publication attempt until the same Markdown response is consumed. */
+  uiResponse?: { command: InteractionCommand; markdown: string };
   response?: { command: InteractionCommand; digest: string; markdown: string; revision: string; status: 'pending' | 'processed' | 'error'; error?: string };
 }
 export interface SharedFeatureRecord extends SharedFeatureView {

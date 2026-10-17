@@ -1,3 +1,4 @@
+import { validateFeatureRequestReference, type FeatureRequestReference } from './feature-request-reference.js';
 import type { DefinitionSnapshot } from './definitions.js';
 import { definitionConnection, validateSnapshot } from './definitions.js';
 import type { ProviderId } from './provider-contract.js';
@@ -14,6 +15,7 @@ export type TaskState =
   | "escalated"
   | "needs_rework";
 export interface SessionRecord {
+  feature?: FeatureRequestReference;
   definition?: DefinitionSnapshot;
   submissionHash?: string;
   /** A failed admission without accepted snapshots can never become a continuation. */
@@ -51,6 +53,7 @@ export function restoreSessionCatalog(saved: string | undefined, settings: Worke
         identifier(record.id, "session");
         text(record.title, "Session title", 120);
         settings.provider(record.provider);
+        if (record.feature) validateFeatureRequestReference(record.feature);
         if (record.continuationBlockedReason !== undefined) text(record.continuationBlockedReason, 'Continuation block reason', 1000);
         if (record.definition) {
           validateSnapshot(record.definition);

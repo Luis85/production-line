@@ -6,7 +6,8 @@ import type { InteractionCommand } from '../../application/interactions';
 const answerDrafts = reactive(new Map<string, string>());
 type CheckpointCommand = InteractionCommand | { action: 'cancel'; sessionId: string; pendingId: string; expectedRevision: number; operationId: string };
 const operations = reactive(new Map<string, CheckpointCommand>());
-watchPrivateDrafts(() => workerState.draftEpoch, () => { answerDrafts.clear(); operations.clear(); }, { flush: 'sync' });
+const publishedResponses = reactive(new Set<string>());
+watchPrivateDrafts(() => workerState.draftEpoch, () => { answerDrafts.clear(); operations.clear(); publishedResponses.clear(); }, { flush: 'sync' });
 </script>
 <script setup lang="ts">
 import { computed, nextTick, onActivated, onDeactivated, onMounted, ref, watch } from 'vue';
@@ -21,19 +22,28 @@ const view = ref<InteractionView | null>(null), lastTurn = ref<InteractionTurn |
 const reading = ref(false), loading = ref(false), busy = ref(false), active = ref(true), error = ref(''), readError = ref(''), notice = ref('');
 let generation = 0, consumptionKey = '';
 const sessionId = computed(() => state.sessions?.selected ?? '');
-const resumable = computed(() => !!view.value?.latestTurn && ['failed', 'cancelled', 'interrupted'].includes(view.value.phase));
+const selectedSession = computed(() => state.sessions?.records?.find(session => session.id === sessionId.value));
+const sharedRequest = computed(() => selectedSession.value?.feature?.source === 'shared_git');
+const sharedRecord = computed(() => sharedRequest.value ? state.environment?.sharedIntake.requests.find(item => item.isLocal && (item.feature?.key === selectedSession.value?.feature?.key || item.taskId === selectedSession.value?.taskId)) : undefined);
+const savedResponse = computed(() => {
+  const response = sharedRecord.value?.taskResponse;
+  return response?.sessionId === sessionId.value && response.expectedRevision === view.value?.revision ? response : undefined;
+});
+const responseKey = computed(() => sessionId.value + ':' + view.value?.revision);
+const responsePending = computed(() => sharedRequest.value && savedResponse.value?.status !== 'error' && (publishedResponses.has(responseKey.value) || ['ready', 'publication_pending'].includes(savedResponse.value?.status ?? '')));
+const resumable = computed(() => !!view.value?.latestTurn && (sharedRequest.value ? ['failed', 'interrupted'] : ['failed', 'cancelled', 'interrupted']).includes(view.value.phase));
 const checkpoint = computed(() => view.value?.pending?.id ?? (resumable.value ? view.value?.latestTurn?.id : ''));
 const draftKey = computed(() => `${sessionId.value}:${checkpoint.value}`);
 const draft = computed({ get: () => answerDrafts.get(draftKey.value) ?? '', set: value => answerDrafts.set(draftKey.value, value) });
 const earlierDrafts = computed(() => [...answerDrafts.entries()].filter(([key, text]) => key.startsWith(sessionId.value + ':') && key !== draftKey.value && text.trim()).map(([key, text]) => ({ key, text })));
 const retry = computed(() => [...operations.entries()].find(([, command]) => command.sessionId === sessionId.value));
-const mutationBlocked = computed(() => busy.value || loading.value || !!readError.value || !!retry.value);
-const legacyStopped = computed(() => !view.value?.latestTurn && ['failed', 'cancelled', 'interrupted'].includes(props.currentStatus ?? ''));
+const mutationBlocked = computed(() => busy.value || loading.value || !!readError.value || !!retry.value || responsePending.value);
+const legacyStopped = computed(() => !sharedRequest.value && !view.value?.latestTurn && ['failed', 'cancelled', 'interrupted'].includes(props.currentStatus ?? ''));
 const measured = (value: number | null | undefined) => value == null ? 'Unavailable' : value.toLocaleString();
 const cost = (value: number | null | undefined) => value == null ? 'Unavailable' : '$' + value.toFixed(4) + ' USD';
 const budgetSummary = (budget: NonNullable<InteractionTurn['toolBudget']>) => `${budget.reason === 'calls' ? 'Call limit reached' : 'Tool window ended'} · ${budget.callsUsed} of ${budget.maxCalls} calls used · ${Math.round(budget.windowMs / 1000)} s window · ${budget.refusedCalls} ${budget.refusedCalls === 1 ? 'call' : 'calls'} refused`;
 const costHeading = (basis?: string) => basis === 'reported_estimate' ? 'Provider-reported estimate' : basis === 'reported_billed' ? 'Provider-reported billed cost' : basis === 'unavailable' ? 'Cost unavailable' : 'Reported cost · basis unknown';
-const phaseLabel = computed(() => ({ waiting_input: 'Waiting for your answer', escalated: 'Your decision is needed', cancelled: 'Task stopped', failed: 'This attempt failed', interrupted: 'Worker interrupted', queued: 'Continuation queued', running: 'Continuation running', completed: 'Turn completed', idle: 'No checkpoint' }[view.value?.phase ?? 'idle']));
+const phaseLabel = computed(() => responsePending.value ? savedResponse.value?.status === 'publication_pending' ? 'Response saved · Git publication pending' : view.value?.pending ? 'Answer saved · waiting for worker' : 'Continuation saved · waiting for worker' : ({ waiting_input: 'Waiting for your answer', escalated: 'Your decision is needed', cancelled: 'Task stopped', failed: 'This attempt failed', interrupted: 'Worker interrupted', queued: 'Continuation queued', running: 'Continuation running', completed: 'Turn completed', idle: 'No checkpoint' }[view.value?.phase ?? 'idle']));
 async function load(manual = false) {
   if (!active.value || !state.unlocked || !sessionId.value || busy.value) return;
   if (reading.value) { if (manual) loading.value = true; return; }
@@ -78,7 +88,10 @@ async function send(key: string, command: CheckpointCommand) {
     if (command.action !== 'cancel' && answerDrafts.get(key)?.trim() === (command.answer ?? command.message ?? '')) answerDrafts.delete(key);
     if (current !== generation || !state.unlocked || command.sessionId !== sessionId.value) return;
     readError.value = ''; view.value = result; if (result.latestTurn?.id !== lastTurn.value?.id) { lastTurn.value = null; consumptionKey = ''; } emit('change', result);
-    notice.value = command.action === 'cancel' ? 'Task stopped. Its saved context and earlier question remain available for an explicit continuation.' : command.action === 'answer' ? 'Answer accepted. The continuation uses this task’s retained context.' : 'Continuation accepted. A new attempt keeps the earlier evidence.';
+    if (sharedRequest.value && command.action !== 'cancel' && result.revision === command.expectedRevision) publishedResponses.add(command.sessionId + ':' + command.expectedRevision);
+    notice.value = sharedRequest.value && command.action !== 'cancel' && result.revision === command.expectedRevision
+      ? 'Your response is committed and pushed. The worker will continue when its queue and limits allow. No further answer is needed.'
+      : command.action === 'cancel' ? sharedRequest.value ? 'Shared request stopped. Create a new Feature Request for additional work.' : 'Task stopped. Its saved context and earlier question remain available for an explicit continuation.' : command.action === 'answer' ? 'Answer accepted. The continuation uses this task’s retained context.' : 'Continuation accepted. A new attempt keeps the earlier evidence.';
     await refresh();
   } catch (failure) {
     if (current !== generation || !state.unlocked || command.sessionId !== sessionId.value) return;
@@ -106,7 +119,9 @@ onDeactivated(() => { active.value = false; generation++; reading.value = false;
     <template v-if="view?.pending"><MessageContent :text="view.pending.message" /><p v-if="view.pending.reason" class="page-note">{{ view.pending.reason }}</p><p class="page-note">Asked {{ date(view.pending.createdAt) }}. This question or decision request is saved with the task. Opening it does not answer it. Unsent drafts survive automatic refresh and access expiry, but a page reload clears them.</p></template>
     <p v-else-if="legacyStopped" class="page-note">This older conversation has no durable model checkpoint. A follow-up starts a new turn with its saved transcript.</p>
     <p v-else class="page-note">Continue from the task’s saved context in a new attempt. The worker replays its context; it does not restore a native provider process. Existing run evidence remains unchanged.</p>
-    <form v-if="!legacyStopped" class="settings-form checkpoint-form" @submit.prevent="submit"><fieldset :disabled="busy || !!retry" class="contents"><div v-if="view?.pending?.choices?.length" class="actions checkpoint-choices" role="group" aria-label="Suggested answers"><UButton v-for="choice in view.pending.choices" :key="choice.id" type="button" color="neutral" variant="outline" @click="useChoice(choice.label)">{{ choice.label }}</UButton></div><label for="checkpoint-answer">{{ view?.pending ? 'Your answer or decision' : 'Revised instructions · optional' }}</label><UTextarea id="checkpoint-answer" v-model="draft" :rows="3" :maxrows="8" autoresize :maxlength="8000" :required="!!view?.pending" :placeholder="view?.pending ? 'Answer the question or explain how the worker should proceed…' : 'Clarify or revise the goal before continuing…'" class="w-full" /><p class="page-note">{{ view?.pending ? 'Review suggested answers before sending. Selecting one does not submit it.' : 'Leave blank to continue the saved task. Add instructions to revise its next attempt.' }}</p><UButton type="submit" :loading="busy" :disabled="mutationBlocked || (!!view?.pending && !draft.trim())">{{ view?.pending ? 'Answer & continue' : 'Resume with context' }}</UButton><UButton v-if="view?.pending" type="button" color="neutral" variant="outline" :disabled="mutationBlocked" @click="stopPending">Stop this task</UButton></fieldset></form>
+    <p v-if="responsePending" class="page-note" role="status">{{ savedResponse?.status === 'publication_pending' ? 'Your response is retained while its Git publication is confirmed. Retry the same operation if offered; do not send another answer.' : 'Your response is saved in the shared Task note. The worker will resume when its queue and limits allow. No additional answer is needed.' }}</p>
+    <p v-if="savedResponse?.status === 'error' && savedResponse.error" class="error-text" role="alert">{{ savedResponse.error }}</p>
+    <form v-if="!legacyStopped && !responsePending" class="settings-form checkpoint-form" @submit.prevent="submit"><fieldset :disabled="busy || !!retry" class="contents"><div v-if="view?.pending?.choices?.length" class="actions checkpoint-choices" role="group" aria-label="Suggested answers"><UButton v-for="choice in view.pending.choices" :key="choice.id" type="button" color="neutral" variant="outline" @click="useChoice(choice.label)">{{ choice.label }}</UButton></div><label for="checkpoint-answer">{{ view?.pending ? 'Your answer or decision' : sharedRequest ? 'Continuation context · optional' : 'Revised instructions · optional' }}</label><UTextarea id="checkpoint-answer" v-model="draft" :rows="3" :maxrows="8" autoresize :maxlength="8000" :required="!!view?.pending" :placeholder="view?.pending ? 'Answer the question or explain how the worker should proceed…' : sharedRequest ? 'Add context for the same accepted Feature Request…' : 'Clarify or revise the goal before continuing…'" class="w-full" /><p class="page-note">{{ view?.pending ? 'Review suggested answers before sending. Selecting one does not submit it.' : sharedRequest ? 'Leave blank to continue the same accepted scope. Create a new Feature Request for changed requirements.' : 'Leave blank to continue the saved task. Add instructions to revise its next attempt.' }}</p><UButton type="submit" :loading="busy" :disabled="mutationBlocked || (!!view?.pending && !draft.trim())">{{ view?.pending ? 'Answer & continue' : 'Resume with context' }}</UButton><UButton v-if="view?.pending" type="button" color="neutral" variant="outline" :disabled="mutationBlocked" @click="stopPending">Stop this task</UButton></fieldset></form>
   </template>
   <p v-if="readError" role="alert" class="error-text">{{ readError }} Task checkpoint data may be stale. Refresh the task state to retry.</p>
   <p v-if="error" role="alert" class="error-text">{{ error }}</p><p v-if="notice" role="status" class="page-note">{{ notice }}</p>

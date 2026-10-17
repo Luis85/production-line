@@ -14,12 +14,15 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 - The portable worker provides `shared setup --file` with a read-only preview, explicit repository selection, local CLI provider checks and optional reviewed tool grants for headless team setup.
 - `definition preview|import|update --file` accept `.yaml` and `.yml` profile files directly. A new `--name` option sets the profile name for import and update; importing a YAML file requires `--name`, and a `--name` that conflicts with a JSON `name` is refused.
 - The `tool-access set` catalog example includes a command preset with `"verification": true`, so `schema` shows how to mark a required feature check.
+- Shared-project webview chat prepares a Feature Request from the committed template, exposes editable request details and readiness findings, and saves drafts or publishes ready notes to Git. Connected CLI `feature prepare`/`feature publish` use the same guarded authoring API.
 
 ### Changed
 
 - `tool-access set` always drops the view-only fields of an edited `tool-access get` output (`revision`, `schemaVersion`, `canEdit`, `saveBlockedReason`, `workerNode`, and MCP `hasSecret` and `discoveredTools`) and refuses a `revision` that differs from `expectedRevision`. Tool-access and MCP connection validation errors name the unexpected fields (the first five); CLI tool entries keep their allowed-field message.
 - The update error for a locked app folder now says that another process holds a file or directory open, lists likely causes (editors, indexers, antivirus scans, MCP or language servers started in the project folder) and states that nothing was replaced.
 - The implementation-mode guide explains that a task worktree has no `node_modules` and must not link the checkout's dependencies, and that existing grants such as `git checkout`, `git clean` or `git stash` operate on the candidate. The portable-apps reference gains troubleshooting for the locked-folder update error.
+- Feature Requests carry a stable parent identity across intake, sessions, execution/gate requests, Task answers and review notes. Generated tracking for source-backed requests is a `FeatureRequestProgress` projection, preventing a second intake entity. Existing executors and journals keep their owned state.
+- Webview and Markdown requests share Git admission, claims and completion. Webview answers publish the same Task response for the existing consumer; shared-bound projects refuse legacy direct creation even while new claims are paused.
 
 ### Fixed
 

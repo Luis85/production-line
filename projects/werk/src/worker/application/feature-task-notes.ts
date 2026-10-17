@@ -81,7 +81,7 @@ export class FeatureTaskNotes {
 
   async project(record: FeatureRecord, current: NonNullable<ReturnType<FeatureQueuePort['inspect']>>, owner: string, persist: () => Promise<void>) {
     if (record.taskNote?.submission && (!record.taskNote.submission.outcome || !record.taskNote.submission.acknowledged)) return;
-    const identity = current.interaction && createTaskNoteIdentity(record.id, owner, current.interaction);
+    const identity = current.interaction && createTaskNoteIdentity(record.id, owner, current.interaction, current.request?.owner.featureId, record.taskNote?.identity);
     if (!identity) {
       const attention = await this.port.attention(record, current);
       if (attention) record.attention = attention; else delete record.attention;

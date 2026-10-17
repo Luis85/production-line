@@ -1,3 +1,5 @@
+import { admitFeatureRequest, type FeatureAdmissionPorts } from '../application/feature-admission.js';
+import { featureRequestReference, sharedFeatureRequestReference } from '../application/feature-request-reference.js';
 import type { WorkspaceContext } from './workspace-context.js';
 import type { InteractionCommand } from '../application/interactions.js';
 import { interaction } from './workspace-interactions.js';
@@ -13,16 +15,19 @@ import { task } from './workspace-tasks.js';
 import { toolAccessBlockedReason, withIdleConfiguration, withRepositoryAdmission } from './workspace-settings.js';
 
 export function featureTrackingSnapshot(workspace: WorkspaceContext): FeatureTrackingInput[]{
-  const sources = new Map(workspace.features?.view().records.map(record => [record.sessionId, join(workspace.config.features!.directory, record.name)]) ?? []);
   const tasks = new Map(workspace.board.view().tasks.map(task => [task.sessionId, task.id]));
   return workspace.sessions.details().map(({ session, chat }) => {
     const interaction = session.interaction;
     const taskId = tasks.get(session.id), local = taskId ? workspace.board.executionDetail(taskId) : undefined;
-    const sharedSource = taskId ? workspace.sharedRuntime.intake.sourceForTask(taskId) : undefined;
+    const sharedTaskId = taskId ?? (session.kind === 'local' && session.id.startsWith('local-') ? session.id.slice(6) : undefined);
+    const sharedReference = sharedTaskId ? workspace.sharedRuntime.intake.referenceForTask(sharedTaskId, session.feature?.key) : undefined;
+    const folderReference = workspace.features?.referenceForSession(session.id, session.feature?.key);
+    const sharedSource = sharedTaskId && sharedReference ? workspace.sharedRuntime.intake.sourceForTask(sharedTaskId) : undefined;
     const sourceRepository = sharedSource && workspace.settings.value.repositories.items.find(item => item.id === sharedSource.repositoryId);
-    const sourcePath = sharedSource ? sourceRepository ? join(sourceRepository.path, sharedSource.path) : sharedSource.path : sources.get(session.id);
+    const sourcePath = sharedSource ? sourceRepository ? join(sourceRepository.path, sharedSource.path) : sharedSource.path : folderReference?.sourcePath ? join(workspace.config.features!.directory, folderReference.sourcePath) : undefined;
+    const reference = sharedReference ?? folderReference;
     const runs = workspace.sessions.runs.list({ sessionId: session.id, limit: 100 }).rows;
-    return { session, messages: publicTaskConversation(chat, local ? { instruction: local.instruction, paths: local.admissionFailure?.paths ?? local.files.map(file => file.path) } : undefined).messages, request: workspace.sessions.requests.forSession(session.id),
+    return { session: reference ? { ...session, feature: reference } : session, messages: publicTaskConversation(chat, local ? { instruction: local.instruction, paths: local.admissionFailure?.paths ?? local.files.map(file => file.path) } : undefined).messages, request: workspace.sessions.requests.forSession(session.id),
       turns: interaction.turns.map(turn => workspace.sessions.interactions.turn(session.id, turn.id)), runs,
       ...(local ? { local: { instruction: local.instruction, summary: local.summary, error: local.error, hasPatch: !!local.patch, repository: local.repository, paths: local.files.map(file => file.path), ...(local.implementation ? { implementation: developmentScopeView(local.implementation), developmentEvidence: local.developmentEvidence } : {}) } } : {}),
       ...(sourcePath ? { sourcePath } : {}),
@@ -86,59 +91,48 @@ export async function continueFeatureInteraction(workspace: WorkspaceContext, se
   if (workspace.settings.value.board.paused) throw new DomainError('unavailable', 'Task response is saved. Resume the worker queue to continue.');
   if (workspace.consumption.status().blocked) throw new DomainError('unavailable', 'Task response is saved. The worker consumption limit currently prevents execution.');
   if (workspace.sessions.chatActive + workspace.board.active >= workspace.settings.value.board.queueCapacity) throw new DomainError('unavailable', 'Task response is saved. It will resume when queue capacity is available.');
-  return interaction(workspace, command);
+  return interaction(workspace, command, { fromFeatureNote: true });
+}
+
+function featureAdmissionPorts(workspace: WorkspaceContext): FeatureAdmissionPorts {
+  return {
+    patch: (input, reservation) => withRepositoryAdmission(workspace, () => workspace.board.create(input, reservation)),
+    chat: (input, reference) => task(workspace, input, reference),
+  };
 }
 
 export async function submitSharedFeature(workspace: WorkspaceContext, record: SharedFeatureRecord){
-  const input = record.accepted;
   const assignment = workspace.repositories.resolve(record.binding.repositoryId);
-  await withRepositoryAdmission(workspace, () => workspace.board.create({ title: input.title, instruction: input.message, provider: input.provider, repository: assignment.path, paths: input.paths, priority: input.priority, definitionId: input.definitionId, definitionRef: input.definitionRef, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly }, { id: record.taskId!, hash: record.inputHash, policy: record.workflow.policy, criteria: input.criteria, repositoryId: record.binding.repositoryId, baseCommit: record.sourceCommit }));
+  await admitFeatureRequest(featureAdmissionPorts(workspace), {
+    input: record.accepted, taskId: record.taskId!, submissionHash: record.inputHash, repository: assignment.path,
+    reference: sharedFeatureRequestReference(record),
+    submission: { policy: record.workflow.policy, criteria: record.accepted.criteria, repositoryId: record.binding.repositoryId, baseCommit: record.sourceCommit },
+  });
   await workspace.featureTracking.sync();
 }
 
 export async function rememberTask(workspace: WorkspaceContext, task: Task){
   await workspace.taskIndex.remember(task);
-  await workspace.features?.rememberRemote(task);
+  const reference = featureRequestReference({ id: task.source?.featureId ?? task.id, source: 'orchestrator', scope: workspace.config.url ? new URL(workspace.config.url).origin : 'legacy-worker-assignment' });
+  await workspace.features?.rememberRemote(task, reference);
   await workspace.sessions.ensureTask(
     "remote-" + task.id,
     "orchestrator",
     task.title,
     task.provider === "claude" ? "claude-cli" : "codex-cli",
+    undefined, undefined,
+    reference,
   );
   await workspace.featureTracking.sync();
   workspace.historyCache = undefined;
 }
 
 export async function submitFeature(workspace: WorkspaceContext, record: FeatureRecord){
-  const input = record.input!;
-  if (input.mode === "patch") {
-    await withRepositoryAdmission(workspace, () => workspace.board.create(
-      {
-        title: input.title,
-        instruction: input.message,
-        provider: input.provider,
-        repository: resolve(workspace.config.projectDir ?? process.cwd()),
-        paths: input.paths,
-        priority: input.priority,
-        definitionId: input.definitionId,
-        definitionRef: input.definitionRef,
-        agent: input.agent,
-        useInstructionsOnly: input.useInstructionsOnly,
-      },
-      { id: record.taskId, hash: record.inputHash },
-    ));
-  } else
-    await task(workspace, {
-      action: "create",
-      id: record.taskId,
-      title: input.title,
-      provider: input.provider,
-      message: input.message,
-      definitionId: input.definitionId,
-      definitionRef: input.definitionRef,
-      agent: input.agent,
-      useInstructionsOnly: input.useInstructionsOnly,
-    });
+  await admitFeatureRequest(featureAdmissionPorts(workspace), {
+    input: record.input!, taskId: record.taskId, submissionHash: record.inputHash,
+    repository: resolve(workspace.config.projectDir ?? process.cwd()),
+    reference: featureRequestReference({ id: record.id, source: 'folder', scope: workspace.features!.view().directory, sourcePath: record.name }),
+  });
   await workspace.featureTracking.sync();
 }
 
