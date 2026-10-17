@@ -86,7 +86,7 @@ async function move(from, to) {
     catch (error) {
       // Windows refuses to rename a folder while an editor, indexer, antivirus scan or exiting process holds a file in it.
       if (process.platform !== 'win32' || !['EPERM', 'EBUSY', 'EACCES'].includes(error.code) || attempt >= 40) {
-        throw Object.assign(Error(`Could not move ${from} (${error.code}). Close terminals, editors or indexers using that folder and retry.`), { code: error.code });
+        throw Object.assign(Error(`Could not move ${from} (${error.code}). Another process holds a file or directory open inside it: an editor, indexer or antivirus scan, or a long-running process started in the project folder such as an MCP or language server. Stop it and retry; the previous version keeps running.`), { code: error.code });
       }
       await delay(250);
     }

@@ -152,7 +152,7 @@ export function workerCommands(catalog) {
   catalog["tool-access set"] = {
     method: "POST", path: "/api/tool-access", body: true, inputLimit: 1048576,
     input: "JSON file/stdin up to 1 MiB, including discovered MCP catalogs. After removing read-only fields, the update must fit the 64 KiB API limit.",
-    example: { expectedRevision: 0, builtins: { files: true, commands: [], cliTools: [{ id: "harness", name: "Project harness", description: "Reads the backlog and runs project checks.", enabled: true, executable: "/absolute/path/to/node", args: ["bin/harness.mjs"], commands: [{ command: "help" }, { command: "backlog context" }, { command: "backlog set", requireOneOf: ["--dry-run"] }], refusedOptions: ["--root", "--config", "--out"] }], webOrigins: [] }, mcp: [] },
+    example: { expectedRevision: 0, builtins: { files: true, commands: [{ id: "project-check", name: "Project check", executable: "/absolute/path/to/node", args: ["scripts/check.mjs"], enabled: true, verification: true }], cliTools: [{ id: "harness", name: "Project harness", description: "Reads the backlog and runs project checks.", enabled: true, executable: "/absolute/path/to/node", args: ["bin/harness.mjs"], commands: [{ command: "help" }, { command: "backlog context" }, { command: "backlog set", requireOneOf: ["--dry-run"] }], refusedOptions: ["--root", "--config", "--out"] }], webOrigins: [] }, mcp: [] },
     description: "Replace all model tool grants from JSON file/stdin while new starts are paused and idle. Edit the output of tool-access get and send it back, or supply expectedRevision with builtins and mcp. Omitted MCP connections are removed.",
   };
   catalog["tool-access discover"] = {
