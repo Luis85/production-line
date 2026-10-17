@@ -154,7 +154,9 @@ export class LocalTaskboard {
   private writing = Promise.resolve();
   private admitting = Promise.resolve();
   private admissionReserved = false;
+  private admissionTaskId?: string;
   private preparations: LocalTaskPreparation[] = [];
+  private preparationOwners = new Map<string, { submission?: LocalTaskSubmission; controller: AbortController }>();
   private continuationReservations = 0;
   private continuations = new Set<Promise<unknown>>();
   private workspaces?: LocalTaskWorkspaces;
@@ -645,11 +647,19 @@ export class LocalTaskboard {
   }
   get active() {
     return (
-      Number(this.admissionReserved) + this.continuationReservations + this.waitingPreparations +
+      this.admissionOccupancy + this.continuationReservations + this.waitingPreparations +
       this.tasks.filter((task) =>
         ["queued", "running"].includes(task.status),
       ).length
     );
+  }
+  /** A task already present in the queue represents its admission reservation exactly once. */
+  private get admissionOccupancy() {
+    return Number(this.admissionReserved && !this.tasks.some(task => task.id === this.admissionTaskId && ['queued', 'running'].includes(task.status)));
+  }
+  preparation(id: string): LocalTaskPreparation | undefined {
+    const preparation = this.preparations.find(item => item.id === id);
+    return preparation ? { ...preparation } : undefined;
   }
   view(): LocalTaskboardView {
     return {
@@ -718,8 +728,8 @@ export class LocalTaskboard {
   }
   async create(input: unknown, submission?: LocalTaskSubmission) {
     const frozen = submission === undefined ? undefined : freezeSubmission(submission);
-    if (!frozen && (input as Record<string, unknown> | null)?.background === true)
-      return this.createInBackground(input);
+    if ((input as Record<string, unknown> | null)?.background === true && (!frozen || !this.tasks.some(task => task.id === frozen.id)))
+      return this.createInBackground(input, frozen);
     // Serialize admission so duplicate durable IDs never prepare a second worktree.
     const operation = this.admitting
       .catch(() => {})
@@ -727,7 +737,7 @@ export class LocalTaskboard {
         try {
           return await this.createTask(input, frozen);
         } finally {
-          this.admissionReserved = false;
+          this.admissionReserved = false; this.admissionTaskId = undefined;
         }
       });
     this.admitting = operation.then(() => {}, () => {});
@@ -738,33 +748,52 @@ export class LocalTaskboard {
    * chain afterwards. The task appears once admitted; a failure stays visible with
    * its reason until the operator deletes the preparation entry.
    */
-  private createInBackground(input: unknown) {
+  private forgetPreparation(preparation: LocalTaskPreparation) {
+    const index = this.preparations.indexOf(preparation);
+    if (index >= 0) this.preparations.splice(index, 1);
+    this.preparationOwners.delete(preparation.id);
+  }
+  private createInBackground(input: unknown, submission?: LocalTaskSubmission) {
     if (this.closed) throw new DomainError("unavailable", "Worker is stopping");
-    const { title, selector } = this.admissionInput(input);
-    // The admission currently preparing is not in `tasks` yet but holds a slot.
-    this.assertAdmissionCapacity(this.tasks, Number(this.admissionReserved));
+    const retained = submission && this.preparations.find(item => item.id === submission.id);
+    if (retained) {
+      const accepted = this.preparationOwners.get(retained.id)?.submission;
+      if (accepted?.hash !== submission.hash || submissionContextHash(accepted) !== submissionContextHash(submission))
+        throw new DomainError('conflict', 'Task ID belongs to different input.');
+      if (retained.state === 'preparing') return { ...this.view(), preparationId: retained.id };
+      // A new explicit create command retries a failed preparation. Status polling never calls this method.
+      this.forgetPreparation(retained);
+    }
+    const snapshot = structuredClone(input);
+    const { title, selector } = this.admissionInput(snapshot, submission);
+    this.assertAdmissionCapacity(this.tasks, this.admissionOccupancy);
     const preparation: LocalTaskPreparation = {
-      id: randomUUID(), title, repository: selector, state: "preparing", phase: "waiting",
+      id: submission?.id ?? randomUUID(), title, repository: selector, state: "preparing", phase: "waiting",
       error: null, createdAt: new Date().toISOString(), finishedAt: null,
     };
-    const failed = this.preparations.filter((item) => item.state === "failed");
-    if (failed.length >= 20) this.preparations.splice(this.preparations.indexOf(failed[0]), 1);
+    const failed = this.preparations.filter(item => item.state === 'failed');
+    if (failed.length >= 20) this.forgetPreparation(failed[0]!);
+    const controller = new AbortController();
+    this.preparationOwners.set(preparation.id, { submission, controller });
     this.preparations.push(preparation);
     this.admitting = this.admitting
       .catch(() => {})
       .then(async () => {
         try {
+          controller.signal.throwIfAborted();
           preparation.phase = "worktree";
-          await this.createTask(input, undefined, { id: preparation.id, budgetMs: BACKGROUND_ADMISSION_TIMEOUT_MS, preparation });
-          this.preparations.splice(this.preparations.indexOf(preparation), 1);
+          await this.createTask(snapshot, submission, { id: preparation.id, budgetMs: BACKGROUND_ADMISSION_TIMEOUT_MS, preparation, signal: controller.signal });
+          // A cancellation that raced the durable write still cancels before tick can start this task.
+          const task = this.tasks.find(item => item.id === preparation.id);
+          if (controller.signal.aborted && task?.status === 'queued') await this.action({ id: task.id, action: 'cancel' });
+          this.forgetPreparation(preparation);
         } catch (error) {
           Object.assign(preparation, {
-            state: "failed",
-            finishedAt: new Date().toISOString(),
-            error: error instanceof DomainError ? error.message : "The task could not be admitted. Check the repository status and worker log, then create it again.",
+            state: "failed", finishedAt: new Date().toISOString(),
+            error: controller.signal.aborted ? 'Task preparation was cancelled. Retry the same request to try again.' : error instanceof DomainError ? error.message : "The task could not be admitted. Check the repository status and worker log, then retry the same request.",
           });
         } finally {
-          this.admissionReserved = false;
+          this.admissionReserved = false; this.admissionTaskId = undefined;
         }
       });
     return { ...this.view(), preparationId: preparation.id };
@@ -845,7 +874,7 @@ export class LocalTaskboard {
   private async createTask(
     input: unknown,
     submission?: LocalTaskSubmission,
-    options: { id?: string; budgetMs?: number; preparation?: LocalTaskPreparation } = {},
+    options: { id?: string; budgetMs?: number; preparation?: LocalTaskPreparation; signal?: AbortSignal } = {},
   ) {
     if (this.closed) throw new DomainError("unavailable", "Worker is stopping");
     if (submission) {
@@ -866,6 +895,7 @@ export class LocalTaskboard {
     this.assertAdmissionCapacity(this.tasks);
     this.admissionReserved = true;
     const id = submission?.id ?? options.id ?? randomUUID();
+    this.admissionTaskId = id;
     // Bind interrupted preparation to the exact trusted command and frozen policy.
     // Legacy tasks keep their original key; the persisted key also verifies tool access.
     const worktreeKey = submission
@@ -874,7 +904,7 @@ export class LocalTaskboard {
     // One deadline covers repository queueing, fetch, checkout and the tool
     // workspace verification below; each phase used to get its own 30 s budget.
     const budgetMs = options.budgetMs ?? ADMISSION_TIMEOUT_MS, deadline = AbortSignal.timeout(budgetMs);
-    const admission = AbortSignal.any([this.workspaceController.signal, deadline]);
+    const admission = AbortSignal.any([this.workspaceController.signal, deadline, ...(options.signal ? [options.signal] : [])]);
     const timedOut = (error: unknown) => {
       if (!this.workspaceController.signal.aborted && deadline.aborted) return new DomainError("unavailable", `Task worktree preparation did not finish within ${budgetMs / 1000} seconds. Check the repository status, then create the task again.`);
       return error;
@@ -892,6 +922,7 @@ export class LocalTaskboard {
     } catch (error) {
       throw timedOut(error);
     }
+    admission.throwIfAborted();
     if (options.preparation) options.preparation.phase = "admission";
     if (
       assignment &&
@@ -914,6 +945,7 @@ export class LocalTaskboard {
     const { repository, path: snapshotRoot, files } = interruptedWorktree
       ? { repository: prepared.repository, path: prepared.path, files: [] }
       : await this.files.snapshot(prepared, allowedPaths);
+    admission.throwIfAborted();
     if (this.closed) throw new DomainError("unavailable", "Worker is stopping");
     const task: LocalTask = {
       ...(submission ? { submissionHash: submission.hash, submissionContextHash: submissionContextHash(submission) } : {}),
@@ -1317,11 +1349,16 @@ export class LocalTaskboard {
         throw new DomainError("invalid_input", `${flag} is a true/false option of the delete action.`);
     const preparation = this.preparations.find((item) => item.id === id);
     if (preparation && !this.tasks.some((task) => task.id === id)) {
+      if (body.action === 'cancel') {
+        this.preparationOwners.get(id)?.controller.abort();
+        if (preparation.phase === 'waiting') Object.assign(preparation, { state: 'failed', finishedAt: new Date().toISOString(), error: 'Task preparation was cancelled. Retry the same request to try again.' });
+        return this.view();
+      }
       if (body.action !== "delete")
         throw new DomainError("conflict", "This task is still being admitted. Delete a failed preparation or wait for the task.");
       if (preparation.state === "preparing")
         throw new DomainError("conflict", "The task worktree is still being prepared. Wait for it to finish or fail.");
-      this.preparations.splice(this.preparations.indexOf(preparation), 1);
+      this.forgetPreparation(preparation);
       return this.view();
     }
     let worktree: { outcome: "removed" | "kept" | "not_applicable"; reason?: string } | undefined;
@@ -1504,7 +1541,7 @@ export class LocalTaskboard {
     if (this.settings.value.board.paused) return;
     const limit = 1;
     for (const task of this.tasks
-      .filter((item) => item.status === "queued")
+      .filter((item) => item.status === "queued" && item.id !== this.admissionTaskId && !this.preparations.some(preparation => preparation.id === item.id && preparation.state === "preparing"))
       .sort(
         (a, b) =>
           (this.settings.value.board.order === "priority"

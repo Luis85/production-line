@@ -5,6 +5,8 @@ import type { ToolAccessView, ToolAccessUpdate } from '../application/tool-polic
 import type { ExecutionProfilesView } from '../application/execution-profiles';
 import type { WorkerSettingsView, SessionView, LocalTaskboardView } from '../application/workspace-view';
 import { reactive } from 'vue';
+import { waitForPreparedSession, type FeatureRequestPreparation } from './request-preparation';
+export type { FeatureRequestPreparation } from './request-preparation';
 import type { CapacityFreshness } from './worker-capacity';
 import type { Status } from '../status/server';
 import type { WorkerWorkspace } from '../status/workspace';
@@ -25,6 +27,7 @@ export const state = reactive({
 });
 // Read revisions invalidate stale snapshots; access revisions also invalidate private results.
 let generation = 0, accessGeneration = 0;
+let featureAdmission: object | null = null;
 const drafts = new Map<string, string>();
 function adoptSessions(sessions: NonNullable<typeof state.sessions>) {
   if (sessions.selected !== state.sessions?.selected) {
@@ -52,17 +55,33 @@ export interface FeatureRequestCommand {
   action: 'create'; id: string; title: string; message: string; provider: string;
   definitionId?: string; agent?: string; useInstructionsOnly?: boolean;
   files?: { repository: string; paths: string[] };
+  background?: true;
 }
 export interface FeatureRequestDetail { session: SessionView['records'][number]; chat: NonNullable<typeof state.chat>; featureTracking?: SessionView['featureTracking']; }
 /** One durable admission owns its first message; replaying its exact command cannot dispatch twice. */
-export async function createFeatureRequest(command: FeatureRequestCommand): Promise<FeatureRequestDetail | undefined> {
-  if (!state.unlocked || state.workspaceBusy) return;
-  const access = accessGeneration;
+export async function createFeatureRequest(command: FeatureRequestCommand, onProgress?: (preparation: FeatureRequestPreparation) => void): Promise<FeatureRequestDetail | undefined> {
+  if (!state.unlocked || state.workspaceBusy || featureAdmission) return;
+  const access = accessGeneration, admission = {};
+  featureAdmission = admission;
+  let ownsWorkspaceBusy = true;
   state.workspaceBusy = true; state.actionError = ''; const current = ++generation;
   let accepted: FeatureRequestDetail | undefined;
   try {
-    const result: FeatureRequestDetail = await request('/api/tasks', 'POST', JSON.parse(JSON.stringify(command)));
-    if (access !== accessGeneration || !state.unlocked) return;
+    const submitted: FeatureRequestCommand = JSON.parse(JSON.stringify(command));
+    let response: FeatureRequestDetail | { preparation: FeatureRequestPreparation } = await request('/api/tasks', 'POST', submitted);
+    const active = () => access === accessGeneration && state.unlocked;
+    if (!active()) return;
+    if (response && 'preparation' in response) {
+      if (!submitted.background || !submitted.files) throw Error('The worker returned unexpected request preparation. Retry the same request to recover its result.');
+      // Preparation owns only its composer. Existing tasks remain selectable and stoppable.
+      state.workspaceBusy = false; ownsWorkspaceBusy = false;
+      const sessionId = await waitForPreparedSession(submitted.id, response.preparation, { active, read: () => request<LocalTaskboardView>('/api/taskboard'), progress: preparation => onProgress?.(preparation) });
+      if (!sessionId || !active()) return;
+      response = await request<FeatureRequestDetail>('/api/tasks', 'POST', { action: 'get', id: sessionId });
+      if (!active()) return;
+      if (response?.session?.id !== sessionId) throw Error('The worker did not confirm the prepared request identity. Retry the same request to recover its result.');
+    }
+    const result = response as FeatureRequestDetail;
     if (!result?.session?.id || !result.chat) throw Error('The worker did not confirm the created request. Retry the same request to recover its result.');
     // Preserve admission evidence if later reads fail, without changing anyone's selected conversation.
     if (current === generation && state.sessions) {
@@ -73,7 +92,8 @@ export async function createFeatureRequest(command: FeatureRequestCommand): Prom
     accepted = result;
   } catch (error) { if (access === accessGeneration && state.unlocked) throw error; }
   finally {
-    if (access === accessGeneration) { state.workspaceBusy = false; await refresh(); }
+    if (featureAdmission === admission) featureAdmission = null;
+    if (access === accessGeneration) { if (ownsWorkspaceBusy) state.workspaceBusy = false; await refresh(); }
   }
   return access === accessGeneration && state.unlocked ? accepted : undefined;
 }
@@ -86,7 +106,7 @@ export async function request<T = any>(path: string, method = 'GET', body?: unkn
 }
 function relock() {
   if (state.sessions?.selected) drafts.set(state.sessions.selected, state.draft);
-  generation++; accessGeneration++; state.unlocked = false; state.environment = null; state.executionProfiles = null; state.toolAccess = null; state.consumption = null; state.consumptionError = ''; state.history = null; state.chat = null; state.settings = null; state.sessions = null; state.sessionsReadAt = ''; state.sessionsStale = false; state.board = null; state.definitions = []; state.actionError = ''; state.workspaceBusy = false;
+  generation++; accessGeneration++; featureAdmission = null; state.unlocked = false; state.environment = null; state.executionProfiles = null; state.toolAccess = null; state.consumption = null; state.consumptionError = ''; state.history = null; state.chat = null; state.settings = null; state.sessions = null; state.sessionsReadAt = ''; state.sessionsStale = false; state.board = null; state.definitions = []; state.actionError = ''; state.workspaceBusy = false;
 }
 export async function lock() {
   try { await request('/api/access', 'DELETE'); state.draftEpoch++; relock(); state.draft = ''; drafts.clear(); state.accessMessage = 'This browser is locked and unsent drafts were cleared. Running tasks continue on the worker.'; }

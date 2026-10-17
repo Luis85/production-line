@@ -79,3 +79,51 @@ test('admission tracking error and record remain visible when all follow-up read
   assert.equal(f.state.sessions.featureTracking.error, 'Markdown directory is read-only');
   assert.ok(f.state.sessions.records.some(record => record.id === 'stable-operation')); assert.equal(f.state.draft, 'An unrelated follow-up');
 });
+
+
+test('background admission observes only its preparation then retrieves the exact saved session', async t => {
+  const f = await fixture(t), progress = [], input = { ...command(), background: true, files: { repository: 'web', paths: ['README.md'] } };
+  f.detail.session.id = 'local-' + input.id;
+  const preparation = { id: input.id, state: 'preparing', phase: 'worktree' };
+  globalThis.fetch = async (path, init) => {
+    const body = init.body ? JSON.parse(init.body) : undefined; f.calls.push({ path, method: init.method, body });
+    if (path === '/api/tasks') return Response.json(body.action === 'create' ? { preparation } : f.detail);
+    return Response.json({ preparations: [], tasks: [{ id: 'unrelated', sessionId: 'unrelated' }, { id: input.id, sessionId: f.detail.session.id }] });
+  };
+  const result = await f.createFeatureRequest(input, item => progress.push(item.phase));
+  assert.equal(result.session.id, f.detail.session.id); assert.deepEqual(progress, ['worktree']);
+  assert.deepEqual(f.calls.map(call => [call.path, call.method, call.body?.action]), [['/api/tasks', 'POST', 'create'], ['/api/taskboard', 'GET', undefined], ['/api/tasks', 'POST', 'get']]);
+  assert.equal(f.calls[2].body.id, 'local-' + input.id); assert.equal(f.state.sessions.selected, 'previous');
+});
+test('failed background preparation never re-posts create or claims a saved request', async t => {
+  const f = await fixture(t), input = { ...command(), background: true, files: { repository: 'web', paths: ['README.md'] } };
+  globalThis.fetch = async (path, init) => { f.calls.push({ path, method: init.method }); return Response.json(path === '/api/tasks' ? { preparation: { id: input.id, state: 'preparing', phase: 'worktree' } } : { preparations: [{ id: input.id, state: 'failed', phase: 'worktree', error: 'Git checkout is locked.' }], tasks: [] }); };
+  await assert.rejects(f.createFeatureRequest(input), /Git checkout is locked.*Retry the same request/);
+  assert.deepEqual(f.calls.map(call => call.method), ['POST', 'GET']); assert.equal(f.state.workspaceBusy, false); assert.equal(f.state.sessions.records.length, 1);
+});
+test('background preparation rejects a different operation before observing progress', async t => {
+  const f = await fixture(t), progress = [];
+  globalThis.fetch = async () => Response.json({ preparation: { id: 'other-request', state: 'preparing', phase: 'worktree' } });
+  await assert.rejects(f.createFeatureRequest({ ...command(), background: true, files: { repository: 'web', paths: ['README.md'] } }, item => progress.push(item)), /could not be confirmed/);
+  assert.deepEqual(progress, []); assert.equal(f.state.sessions.records.length, 1);
+});
+
+
+test('background preparation releases existing-task controls but retains its own duplicate guard', async t => {
+  const f = await fixture(t), observed = deferred(), poll = deferred(), input = { ...command(), background: true, files: { repository: 'web', paths: ['README.md'] } };
+  f.detail.session.id = 'local-' + input.id;
+  globalThis.fetch = async (path, init) => {
+    const body = init.body ? JSON.parse(init.body) : undefined; f.calls.push({ path, method: init.method, body });
+    if (path === '/api/tasks') return Response.json(body.action === 'create' ? { preparation: { id: input.id, state: 'preparing', phase: 'worktree' } } : f.detail);
+    if (path === '/api/taskboard') return poll.promise;
+    if (path === '/api/chat/session') return Response.json({ sessions: f.state.sessions, chat: {} });
+    return Response.json({});
+  };
+  const submitting = f.createFeatureRequest(input, () => observed.resolve()); await observed.promise;
+  assert.equal(f.state.workspaceBusy, false); assert.equal(await f.createFeatureRequest(command()), undefined);
+  await f.chatAction('cancel'); assert.ok(f.calls.some(call => call.path === '/api/chat/cancel'));
+  f.state.sessions.selected = 'newer-conversation';
+  poll.resolve(Response.json({ preparations: [], tasks: [{ id: input.id, sessionId: f.detail.session.id }] }));
+  await submitting; assert.equal(f.state.sessions.selected, 'newer-conversation');
+  assert.equal(f.calls.filter(call => call.body?.action === 'create').length, 1);
+});

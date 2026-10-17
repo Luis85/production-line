@@ -18,6 +18,8 @@ import { buildWorkerCapacityView } from '../worker-capacity';
 const emit = defineEmits<{ busy: [boolean]; board: [] }>();
 const capacity = computed(() => buildWorkerCapacityView(state.sessions?.capacity, getCapacityFreshness()));
 const mode = ref<'new' | 'followup'>('new');
+const savedRequest = ref('');
+watch(() => state.unlocked, unlocked => { if (!unlocked) savedRequest.value = ''; }, { flush: 'sync' });
 const controlsOpen = ref(false), evidenceOpen = ref(false), gateDetails = ref<HTMLDetailsElement | null>(null);
 const intake = ref<InstanceType<typeof TaskIntake> | null>(null);
 const sending = ref(false), intakeBusy = ref(false), interactionBusy = ref(false), settingsBusy = ref(false);
@@ -84,8 +86,11 @@ async function focusComposer() { await nextTick(); const composer = document.get
 function toggleEvidence(event: Event) {
   if (!checkpointBlocked.value) evidenceOpen.value = (event.target as HTMLDetailsElement).open;
 }
-async function created(sessionId: string) {
+async function created(sessionId: string, previousSessionId: string) {
   if (!state.unlocked) return;
+  const selected = state.sessions?.selected ?? '';
+  if (!active.value || state.workspaceBusy || mode.value !== 'new' || selected !== previousSessionId && selected !== sessionId) { savedRequest.value = sessionId; return; }
+  savedRequest.value = '';
   if (state.sessions?.selected !== sessionId) {
     const creationError = state.actionError;
     const selected = await workspaceAction('/api/sessions', { action: 'select', id: sessionId });
@@ -129,6 +134,7 @@ defineExpose({ openNewTask, focusConversation, focusControls });
 <template>
   <aside class="task-interaction" aria-labelledby="task-interaction-title">
     <header class="interaction-heading"><h2 id="task-interaction-title" tabindex="-1">Task interaction</h2><button type="button" class="back-to-board" @click="emit('board')"><UIcon name="i-lucide-arrow-up" />Back to taskboard</button></header>
+    <p v-if="savedRequest" class="interaction-notice" role="status">Your feature request was saved. <RouterLink :to="'/taskboard?session=' + encodeURIComponent(savedRequest)">Open saved request</RouterLink></p>
     <div class="interaction-tabs" role="tablist" aria-label="Task interaction mode" @keydown="tabKey">
       <button id="new-task-tab" role="tab" :aria-selected="mode === 'new'" :tabindex="mode === 'new' ? 0 : -1" aria-controls="new-task-pane" :disabled="busy || state.workspaceBusy" @click="switchMode('new')"><UIcon name="i-lucide-plus" />New request</button>
       <button id="followup-task-tab" role="tab" :aria-selected="mode === 'followup'" :tabindex="mode === 'followup' ? 0 : -1" aria-controls="followup-task-pane" :disabled="!current || busy || state.workspaceBusy" @click="switchMode('followup')"><UIcon name="i-lucide-message-circle" />Follow up</button>

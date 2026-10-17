@@ -12,7 +12,7 @@ const serialized = () => JSON.stringify({ seconds: seconds.value, worktreeDirect
 const dirty = computed(() => baseline.value !== serialized());
 const assigned = computed(() => state.settings?.repositories?.items ?? []);
 const observed = computed(() => state.environment?.repositories?.items ?? []);
-const queued = computed(() => !!state.sessions?.execution.currentSessionId || !!state.sessions?.execution.queued || !!state.status?.activeTasks.length || !!state.status?.queuedTasks?.length);
+const queued = computed(() => !!state.sessions?.execution.currentSessionId || !!state.sessions?.execution.queued || !!state.status?.activeTasks.length || !!state.status?.queuedTasks?.length || !!state.board?.preparations?.some(item => item.state === 'preparing'));
 const editingLocked = computed(() => busy.value || !state.unlocked);
 function reload() {
   seconds.value = (state.settings?.repositories?.pollMs ?? 30000) / 1000;
@@ -21,12 +21,12 @@ function reload() {
   baseline.value = serialized(); stale.value = false; error.value = ''; notice.value = '';
 }
 watch(() => JSON.stringify(state.settings?.repositories), (value, previous) => {
-  if (!state.unlocked) { entries.value = []; baseline.value = serialized(); return; }
+  if (!state.unlocked) { entries.value = []; worktreeDirectory.value = ''; baseline.value = serialized(); return; }
   if (value === previous) return;
   if (!baseline.value || !dirty.value) reload();
   else stale.value = true;
 }, { immediate: true });
-watch(() => state.unlocked, unlocked => { if (!unlocked) { entries.value = []; seconds.value = 30; baseline.value = serialized(); stale.value = false; error.value = ''; notice.value = ''; } });
+watch(() => state.unlocked, unlocked => { if (!unlocked) { entries.value = []; seconds.value = 30; worktreeDirectory.value = ''; baseline.value = serialized(); stale.value = false; error.value = ''; notice.value = ''; } });
 async function add() {
   entries.value.push({ id: '', path: '', remote: 'origin', branch: '', watch: true });
   await nextTick(); document.getElementById(`repository-id-${entries.value.length - 1}`)?.focus();

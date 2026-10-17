@@ -13,12 +13,14 @@ import UButton from '@nuxt/ui/components/Button.vue';
 import UInput from '@nuxt/ui/components/Input.vue';
 import USelect from '@nuxt/ui/components/Select.vue';
 import UTextarea from '@nuxt/ui/components/Textarea.vue';
-import { createFeatureRequest, getCapacityFreshness, state } from '../store';
+import { createFeatureRequest, getCapacityFreshness, state, type FeatureRequestPreparation } from '../store';
 import { validateApprovedPaths } from '../../application/approved-paths';
 import RunTask from './RunTask.vue';
 import { buildWorkerCapacityView } from '../worker-capacity';
-const emit = defineEmits<{ created: [sessionId: string]; busy: [boolean] }>();
+const emit = defineEmits<{ created: [sessionId: string, previousSessionId: string]; busy: [boolean] }>();
 const sending = ref(false), optionsOpen = ref(false), filesOpen = ref(false);
+const preparation = ref<FeatureRequestPreparation | null>(null);
+const preparationNote = computed(() => preparation.value?.phase === 'waiting' ? 'Waiting for an earlier request to finish preparation…' : preparation.value?.phase === 'worktree' ? 'Preparing this request’s Git worktree…' : 'Saving approved files and the feature request…');
 const options = ref<HTMLDetailsElement | null>(null);
 const capacity = computed(() => buildWorkerCapacityView(state.sessions?.capacity, getCapacityFreshness()));
 const definition = computed(() => state.definitions.find(item => item.id === intake.definitionId));
@@ -36,7 +38,7 @@ const fileIssue = computed(() => {
 const canCreate = computed(() => state.unlocked && !state.workspaceBusy && !sending.value && (!!intake.pending || connection.value?.configured && capacity.value.admissionAvailable !== false && !!intake.message.trim() && !incompatible.value && !missingAgent.value && !fileIssue.value && (!agent.value?.requiresAdaptation || intake.adapt)));
 const model = computed(() => agent.value?.model || connection.value?.model || 'Provider default');
 const optionIssue = computed(() => missingAgent.value ? 'This definition or agent is no longer available. Choose another definition.' : incompatible.value ? 'Choose a ' + agent.value?.provider + ' connection for this agent’s model.' : agent.value?.requiresAdaptation && !intake.adapt ? 'Review this agent’s omitted features and accept instructions-only use before creating the task.' : '');
-const admissionNote = computed(() => intake.pending ? 'Retry checks the same request. It does not create a second request.' : capacity.value.admissionAvailable === false ? 'Local admission is full. Your instructions stay here while accepted work finishes.' : capacity.value.stale || capacity.value.state === 'unknown' ? 'Capacity needs refresh. The worker checks admission when you submit.' : capacity.value.startBlocked ? 'You can add this request to the queue. New model calls wait until the start conditions below are resolved.' : capacity.value.state === 'running' ? 'Joins the queue behind the active task.' : 'Joins this worker’s shared execution queue.');
+const admissionNote = computed(() => sending.value && preparation.value ? 'Your request is being prepared. It has not joined the queue yet.' : intake.pending ? 'Retry checks the same request. It does not create a second request.' : capacity.value.admissionAvailable === false ? 'Local admission is full. Your instructions stay here while accepted work finishes.' : capacity.value.stale || capacity.value.state === 'unknown' ? 'Capacity needs refresh. The worker checks admission when you submit.' : capacity.value.startBlocked ? 'You can add this request to the queue. New model calls wait until the start conditions below are resolved.' : capacity.value.state === 'running' ? 'Joins the queue behind the active task.' : 'Joins this worker’s shared execution queue.');
 async function reviewOptions() { optionsOpen.value = true; await nextTick(); options.value?.querySelector('summary')?.focus(); }
 const toolSummary = computed(() => {
   const tools = state.toolAccess;
@@ -52,29 +54,31 @@ watch(repositories, () => { if (!intake.repository && repositories.value.length 
 async function focusInstructions() { await nextTick(); document.getElementById('new-task-instructions')?.focus(); }
 async function create() {
   if (!canCreate.value) return;
-  const epoch = state.draftEpoch;
+  const epoch = state.draftEpoch, previousSessionId = state.sessions?.selected ?? '';
   if (!intake.pending) intake.pending = {
     action: 'create', id: crypto.randomUUID(), title: intake.title.trim() || intake.message.trim().slice(0, 80),
     message: intake.message, provider: intake.provider!,
     ...(definition.value ? { definitionId: definition.value.id, agent: intake.agent, useInstructionsOnly: intake.adapt } : {}),
-    ...(intake.fileChanges ? { files: { repository: intake.repository.trim(), paths: approvedPaths() } } : {}),
+    ...(intake.fileChanges ? { background: true as const, files: { repository: intake.repository.trim(), paths: approvedPaths() } } : {}),
   };
   const command = JSON.parse(JSON.stringify(intake.pending)) as FeatureRequestCommand;
-  sending.value = true; intake.error = ''; emit('busy', true);
+  sending.value = true; preparation.value = null; intake.error = ''; emit('busy', true);
   try {
-    const result = await createFeatureRequest(command);
+    const result = await createFeatureRequest(command, progress => {
+      if (epoch === state.draftEpoch && state.unlocked) { preparation.value = progress; emit('busy', false); }
+    });
     if (epoch !== state.draftEpoch) return;
     if (result) {
       if (intake.message === command.message) intake.message = '';
       intake.title = ''; intake.pending = null; intake.fileChanges = false; intake.paths = '';
-      emit('created', result.session.id);
+      emit('created', result.session.id, previousSessionId);
     } else intake.error = 'Creation could not be confirmed. Unlock if needed, then retry this same request.';
   } catch (error) {
     if (epoch !== state.draftEpoch) return;
     // Invalid input is rejected before admission. Every ambiguous outcome keeps the exact operation.
     if ((error as Error & { status?: number }).status === 400) intake.pending = null;
     intake.error = (error as Error).message;
-  } finally { sending.value = false; emit('busy', false); }
+  } finally { preparation.value = null; sending.value = false; emit('busy', false); }
 }
 function keydown(event: KeyboardEvent) {
   if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing && canCreate.value) { event.preventDefault(); void create(); }
@@ -136,10 +140,11 @@ defineExpose({ focusInstructions });
         <p v-if="!connection?.configured" class="intake-notice" role="status">Choose a configured connection in Task options or <RouterLink to="/settings#provider-connections">set up a provider</RouterLink> before creating a request.</p>
         <div v-if="optionIssue" class="intake-notice" role="status"><p>{{ optionIssue }}</p><button type="button" class="options-review" @click="reviewOptions">Review task options</button></div>
       </fieldset>
+        <p v-if="sending && preparation && state.unlocked" class="intake-notice" role="status">{{ preparationNote }} Your original instructions stay here until the request is saved.</p>
         <p v-if="intake.pending && !sending" class="intake-notice" role="status">The submitted request is kept until its creation is confirmed. Retry uses its original instructions and request ID.</p>
         <div class="intake-submit">
           <p>{{ admissionNote }}</p>
-          <UButton type="submit" :loading="sending" :disabled="!canCreate">{{ sending ? 'Creating request' : intake.pending ? 'Retry same request' : 'Create request' }}</UButton>
+          <UButton type="submit" :loading="sending" :disabled="!canCreate">{{ sending ? preparation ? 'Preparing request' : 'Creating request' : intake.pending ? 'Retry same request' : 'Create request' }}</UButton>
         </div>
         <p v-if="capacity.startBlocked" class="intake-help intake-start-condition">{{ capacity.description }} <RouterLink :to="state.sessions?.capacity?.starts.consumption?.blocked ? '/settings#consumption-limits' : '/settings#queue'">Review start conditions</RouterLink></p>
         <p v-if="intake.error" class="error-text" role="alert">{{ intake.error }}</p>

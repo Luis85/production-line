@@ -264,7 +264,7 @@ export async function statusServer(
             return json(
               res,
               202,
-              await workspace.withFeatureTracking(async () => workspace.board.create(await readJson(req))),
+              await workspace.withFeatureTracking(async () => { const input = await readJson(req); return workspace.withRepositoryAdmission(() => workspace.board.create(input)); }),
             );
           if (req.method === "GET" && req.url === "/api/worktrees")
             return json(res, 200, await workspace.worktrees());

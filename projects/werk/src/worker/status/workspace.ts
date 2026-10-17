@@ -12,7 +12,8 @@ import { createWorkerSessions, createLocalTaskboard } from '../infrastructure/wo
 import { ProviderAccountChecks } from '../infrastructure/provider-account.js';
 import { SharedIntakeRuntime } from '../infrastructure/features/shared-intake-runtime.js';
 import type { SharedExecution, SharedFeatureRecord } from '../application/shared-feature-state.js';
-import { chatRepositoryId, type ToolAccessView } from '../application/tool-policy.js';
+import type { ToolAccessView } from '../application/tool-policy.js';
+import { BuiltinToolError, chatToolDirectory } from '../infrastructure/builtin-tools.js';
 import { discoverMcpTools, mcpTransportConfiguration, McpClientError } from '../infrastructure/tool-mcp.js';
 import type { ExecutionProfilesControl } from '../application/execution-profiles.js';
 import { RepositoryDiscovery } from '../infrastructure/repository-discovery.js';
@@ -624,7 +625,10 @@ export class WorkerWorkspace {
           "agent",
           "useInstructionsOnly",
           "files",
+          "background",
         ]);
+        if (body.background !== undefined && (typeof body.background !== "boolean" || body.action !== "create" || body.background && body.files === undefined))
+          throw new DomainError("invalid_input", "background is a true/false option when creating a task with approved files.");
         if (
           !["create", "get", "send", "cancel", "retry"].includes(
             String(body.action),
@@ -674,6 +678,7 @@ export class WorkerWorkspace {
         if (body.action === "create") {
           const files = body.files === undefined ? undefined : object(body.files, 'Approved task files', ['repository', 'paths']);
           const approved = files ? { repository: text(files.repository, 'repository', 4096), paths: validateApprovedPaths(files.paths) } : undefined;
+          if (!approved && this.board.preparation(id)) throw new DomainError("conflict", "Task id already belongs to an approved-file preparation.");
           if (approved && !/^[a-z0-9-]{1,90}$/.test(id)) throw new DomainError('invalid_input', 'File task IDs use 1–90 lowercase letters, digits or hyphens.');
           const selection = definitionSelection(body);
           const title = text(body.title, "title", 120),
@@ -708,8 +713,11 @@ export class WorkerWorkspace {
             if (this.sessions.view().records.some(session => session.id === id) || existing && (existing.kind !== 'local' || !fileTask && existing.submissionHash !== submissionHash))
               throw new DomainError('conflict', 'Task id already belongs to different input.');
             await this.withRepositoryAdmission(() => this.board.create({ title, instruction: message, provider: provider.id, ...approved,
+              ...(body.background === true ? { background: true } : {}),
               definitionId: body.definitionId, definitionRef: body.definitionRef, agent: body.agent, useInstructionsOnly: body.useInstructionsOnly,
             }, { id, hash: submissionHash }));
+            const preparation = this.board.preparation(id);
+            if (preparation) return { preparation };
             return this.sessions.detail(this.board.executionDetail(id).sessionId);
           }
           if (fileTask || this.sessions.view().records.some(session => session.id === 'local-' + id && session.kind === 'local')) throw new DomainError('conflict', 'Task id already belongs to different input.');
@@ -752,6 +760,8 @@ export class WorkerWorkspace {
       () => {},
     );
     const detail = await this.withFeatureTracking(() => operation);
+    // Preparation progress is not durable admission; only a real session acknowledges the request.
+    if ("preparation" in detail) return detail;
     const { directory, lastSyncedAt, error } = this.featureTracking.status();
     return { ...this.taskDetail(detail.session.id), featureTracking: { directory, lastSyncedAt, error } };
   }
@@ -1052,17 +1062,16 @@ export class WorkerWorkspace {
       if (body.expectedRevision !== policy.revision) throw new DomainError('conflict', 'Tool access changed. Reload before discovering tools.');
       const connection = policy.mcp.find(item => item.id === id);
       if (!connection) throw new DomainError('not_found', 'MCP connection not found.');
-      // A connection whose chat calls start in a repository is discovered there too, so its catalog matches those calls.
-      const repository = chatRepositoryId(connection);
-      let directory: string | undefined;
-      if (repository !== undefined) {
-        const assignment = this.settings.value.repositories.items.find(item => item.id === repository);
-        directory = assignment && await realpath(assignment.path).catch(() => undefined);
-        if (!directory) throw new DomainError('invalid_input', `MCP connection "${id}" starts chat calls in repository "${repository}", which is not assigned or not available. Choose an assigned repository or the private chat workspace, save, and discover again.`);
-      }
       let definitions;
-      try { definitions = await discoverMcpTools(mcpTransportConfiguration(connection), { signal: this.repositoryStop.signal, directory }); }
+      try {
+        // Discovery and chat calls use the same checked directory, including the private default workspace.
+        const directory = connection.transport === 'stdio'
+          ? await chatToolDirectory({ directory: this.config.stateDir, repositories: () => this.settings.value.repositories.items })(connection)
+          : undefined;
+        definitions = await discoverMcpTools(mcpTransportConfiguration(connection), { signal: this.repositoryStop.signal, directory });
+      }
       catch (error) {
+        if (error instanceof BuiltinToolError) throw new DomainError('invalid_input', error.message);
         // MCP errors contain only worker-owned messages, never server diagnostics or credentials.
         if (error instanceof McpClientError) throw new DomainError(
           ['configuration', 'output_limit'].includes(error.reason) ? 'invalid_input' : 'unavailable', error.message,
@@ -1126,8 +1135,8 @@ export class WorkerWorkspace {
   }
   /** Owned task worktrees of assigned repositories, with the file task that still uses each. */
   async worktrees() {
-    const users = new Map(this.board.view().tasks.filter(task => task.worktree).map(task => [task.worktree!, task.id]));
     const repositories = await this.repositories.worktrees(AbortSignal.any([AbortSignal.timeout(120000), this.repositoryStop.signal]));
+    const users = new Map(this.board.view().tasks.filter(task => task.worktree).map(task => [task.worktree!, task.id]));
     return {
       worktreeDirectory: this.settings.value.repositories.worktreeDirectory ?? null,
       repositories: repositories.map(item => ({ ...item, worktrees: item.worktrees.map(worktree => ({ ...worktree, taskId: worktree.path ? users.get(worktree.path) ?? null : null })) })),
@@ -1144,20 +1153,23 @@ export class WorkerWorkspace {
     if (body.repositoryId !== undefined) identifier(body.repositoryId, "Repository id");
     for (const flag of ["dryRun", "discardChanges"]) if (body[flag] !== undefined && typeof body[flag] !== "boolean") throw new DomainError("invalid_input", `${flag} must be true or false.`);
     const dryRun = body.dryRun === true;
-    if (!this.acceptingTasks || this.repositoriesUpdating || this.configurationUpdating)
+    if (!this.acceptingTasks || this.repositoriesUpdating || this.configurationUpdating || this.executionProfiles?.pending())
       throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
     // Running work and admissions may be creating or using a worktree that no task records yet.
-    if (!dryRun && (this.repositoryPreparations || this.board.active || this.sharedRuntime.intake.busy || this.get().activeTasks.length || this.get().queuedTasks?.length))
+    if (!dryRun && (this.repositoryPreparations || this.sessions.busy || this.board.active || this.sharedRuntime.intake.busy || this.get().activeTasks.length || this.get().queuedTasks?.length))
       throw new DomainError("conflict", "Finish or cancel queued and running tasks before pruning task worktrees; a dry run is available now.");
-    const listing = await this.worktrees(), results: Array<Record<string, unknown>> = [];
+    // Reserve synchronously before listing: all admission and configuration paths use this gate.
+    if (!dryRun) this.configurationUpdating = true;
     this.repositoryPreparations++;
     try {
+      const listing = await this.worktrees(), results: Array<Record<string, unknown>> = [];
       for (const repository of listing.repositories) {
         if (body.repositoryId !== undefined && repository.repositoryId !== body.repositoryId) continue;
         for (const worktree of repository.worktrees) {
           if (body.id !== undefined && worktree.name !== body.id) continue;
           const entry = { repositoryId: repository.repositoryId, name: worktree.name, path: worktree.path ?? null, taskKey: worktree.taskKey ?? null };
-          if (worktree.taskId) { if (body.id !== undefined) results.push({ ...entry, outcome: "kept", reason: "A file task uses this worktree. Delete the task to remove it." }); continue; }
+          const taskId = worktree.taskId ?? this.board.view().tasks.find(task => task.worktree === worktree.path)?.id;
+          if (taskId) { if (body.id !== undefined) results.push({ ...entry, outcome: "kept", reason: "A file task uses this worktree. Delete the task to remove it." }); continue; }
           if (worktree.state === "invalid") { results.push({ ...entry, outcome: "kept", reason: "Its ownership record is invalid. Review it manually." }); continue; }
           try {
             results.push({ ...entry, ...await this.repositories.removeWorktree(repository.repositoryId, { name: worktree.name }, AbortSignal.any([AbortSignal.timeout(WORKTREE_CHECKOUT_TIMEOUT_MS), this.repositoryStop.signal]), { dryRun, discardChanges: body.discardChanges === true }) });
@@ -1167,9 +1179,9 @@ export class WorkerWorkspace {
           }
         }
       }
-    } finally { this.repositoryPreparations--; }
-    if (body.id !== undefined && !results.length) throw new DomainError("not_found", "No retained task worktree has this name.");
-    return { dryRun, results, errors: listing.repositories.filter(item => item.error).map(item => ({ repositoryId: item.repositoryId, error: item.error })) };
+      if (body.id !== undefined && !results.length) throw new DomainError("not_found", "No retained task worktree has this name.");
+      return { dryRun, results, errors: listing.repositories.filter(item => item.error).map(item => ({ repositoryId: item.repositoryId, error: item.error })) };
+    } finally { this.repositoryPreparations--; if (!dryRun) this.configurationUpdating = false; }
   }
   async updateSettings(body: unknown) {
     const input = body as Record<string, unknown>;
@@ -1275,7 +1287,7 @@ export class WorkerWorkspace {
   private async submitFeature(record: FeatureRecord) {
     const input = record.input!;
     if (input.mode === "patch") {
-      await this.board.create(
+      await this.withRepositoryAdmission(() => this.board.create(
         {
           title: input.title,
           instruction: input.message,
@@ -1289,7 +1301,7 @@ export class WorkerWorkspace {
           useInstructionsOnly: input.useInstructionsOnly,
         },
         { id: record.taskId, hash: record.inputHash },
-      );
+      ));
     } else
       await this.task({
         action: "create",

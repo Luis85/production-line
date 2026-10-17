@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import { lstat, mkdir, open, readFile, readdir, realpath, unlink, writeFile } from 'node:fs/promises';
 import { availableParallelism } from 'node:os';
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 export class RepositoryGitError extends Error {
   readonly reason: 'failed' | 'timeout' | 'cancelled';
@@ -47,6 +47,8 @@ export interface RepositoryWorktree {
 export interface WorktreeOptions {
   /** Absolute operator-selected parent for new task worktrees. Default: `<repository>/.werk/worktrees`. */
   directory?: string;
+  /** Other assigned checkouts and known Git metadata are excluded from external storage. */
+  excludedDirectories?: string[];
   /** Checkout time grows with the tree; this bounds only `worktree add`/`remove`, within the caller's signal. */
   checkoutTimeoutMs?: number;
   /** Verify an existing owned worktree; never create one. */
@@ -86,15 +88,29 @@ async function excludeWorktrees(root: RepositoryRoot, signal: AbortSignal, timeo
   } finally { await handle.close(); }
 }
 
-/** An operator-selected parent outside the checkout keeps project tools from scanning task copies. */
-async function configuredStorage(root: RepositoryRoot, configured: string) {
+/** Resolve existing ancestors too, so an unavailable checkout cannot hide a parent-directory alias. */
+async function canonicalLocation(value: string): Promise<string> {
+  let current = resolve(value); const suffix: string[] = [];
+  for (;;) {
+    try { return join(await realpath(current), ...suffix); }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || dirname(current) === current) throw new WorktreeProblem('Assigned repository storage could not be verified.');
+      suffix.unshift(basename(current)); current = dirname(current);
+    }
+  }
+}
+/** Validate all locations before creating storage; task copies must stay outside every assigned checkout. */
+async function configuredStorage(root: RepositoryRoot, configured: string, excludedDirectories: string[] = []) {
   const target = resolve(configured), name = basename(target);
   if (!isAbsolute(configured) || !name) throw new WorktreeProblem('The task worktree directory must be an absolute folder path.');
   const parent = await realpath(dirname(target)).catch(() => { throw new WorktreeProblem('The parent folder of the task worktree directory must exist.'); });
-  const storage = await directory(parent, name);
-  const inside = (base: string) => { const path = relative(base, storage); return path === '' || (!path.startsWith('..') && !isAbsolute(path)); };
-  if (inside(root.path) || inside(root.commonDirectory)) throw new WorktreeProblem('Place the task worktree directory outside the repository checkout.');
-  return storage;
+  const storage = join(parent, name);
+  for (const source of new Set([root.path, root.commonDirectory, ...excludedDirectories])) {
+    const base = await canonicalLocation(source), path = relative(base, storage);
+    if (path === '' || (path !== '..' && !path.startsWith('..' + sep) && !isAbsolute(path)))
+      throw new WorktreeProblem('Place the task worktree directory outside the repository checkout.');
+  }
+  return directory(parent, name);
 }
 
 interface Ownership { version: 1; repositoryId?: string; repository: string; taskKey: string; path: string; baseCommit: string; }
@@ -159,23 +175,15 @@ export async function createRepositoryWorktree(root: RepositoryRoot, repositoryI
   if (!taskKey || taskKey.length > 1024 || !/^[a-zA-Z0-9_-]{1,100}$/.test(repositoryId)) throw new WorktreeProblem('Invalid repository task identity.');
   if (baseCommit !== undefined && !commitId(baseCommit)) throw new WorktreeProblem('Task base must be a full Git commit identifier.');
   const name = worktreeName(repositoryId, taskKey);
-  const metadata = await directory(root.commonDirectory, 'werk-worktrees'), marker = join(metadata, `${name}.json`);
+  const metadata = join(root.commonDirectory, 'werk-worktrees'), marker = join(metadata, `${name}.json`);
+  const metadataInfo = await lstat(metadata).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
+  if (metadataInfo && (!metadataInfo.isDirectory() || metadataInfo.isSymbolicLink() || await realpath(metadata) !== metadata)) throw new WorktreeProblem('Task worktree ownership storage is invalid.');
   const inRepository = join(root.path, '.werk', 'worktrees', name);
-  const configured = options.directory === undefined ? undefined : join(await configuredStorage(root, options.directory), name);
   let owner = await readOwnership(marker);
   if (owner && ((owner.repositoryId !== repositoryId && !(owner.repositoryId === undefined && repositoryId.length <= 24)) || owner.taskKey !== taskKey || owner.repository !== root.path || !recordedLocation(owner.path, name) || (baseCommit && owner.baseCommit !== baseCommit))) throw new WorktreeProblem('Task worktree ownership does not match this task.');
-  // Retained worktrees are found where they were recorded, also after the configured directory changed.
-  const path = owner?.path ?? configured ?? inRepository;
-  const managed = path === inRepository || path === configured;
-  if (path === inRepository) {
-    await directory(await directory(root.path, '.werk'), 'worktrees');
-    await excludeWorktrees(root, signal, timeoutMs);
-  }
-  const argument = repositoryWorktreeArgument(root.path, path);
-  if (process.platform === 'win32' && (join(path, '.git').length >= 260 || Buffer.byteLength(join(argument, '.git')) > 220)) throw new WorktreeProblem(path === inRepository ? 'Use a shorter repository path for task worktrees on Windows.' : 'Use a shorter task worktree directory on Windows.');
-  const exists = await lstat(path).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
-  if (exists) {
-    if (!owner) throw new WorktreeProblem('Task worktree already exists without ownership metadata.');
+  // Retained ownership takes precedence over new storage settings, even if their parent is unavailable.
+  if (owner && await lstat(owner.path).then(() => true, error => { if (error.code !== 'ENOENT') throw error; return false; })) {
+    const path = owner.path;
     await ownedWorktree(path, owner, root, signal, timeoutMs);
     // Include ignored and untracked files: either can change approved snapshots.
     // Refuse index flags that could hide changes from Git's worktree comparison.
@@ -185,7 +193,17 @@ export async function createRepositoryWorktree(root: RepositoryRoot, repositoryI
     return { repositoryId, repository: root.path, path, baseCommit: owner.baseCommit, reused: true, pristine };
   }
   if (options.reuseOnly) throw new WorktreeProblem('The retained task worktree is missing.');
-  if (!managed) throw new WorktreeProblem('The retained task worktree is missing from its recorded location. Prune it before submitting this task again.');
+  const configured = options.directory === undefined ? undefined : join(await configuredStorage(root, options.directory, options.excludedDirectories), name);
+  const path = owner?.path ?? configured ?? inRepository;
+  if (path !== inRepository && path !== configured) throw new WorktreeProblem('The retained task worktree is missing from its recorded location. Prune it before submitting this task again.');
+  const argument = repositoryWorktreeArgument(root.path, path);
+  if (process.platform === 'win32' && (join(path, '.git').length >= 260 || Buffer.byteLength(join(argument, '.git')) > 220)) throw new WorktreeProblem(path === inRepository ? 'Use a shorter repository path for task worktrees on Windows.' : 'Use a shorter task worktree directory on Windows.');
+  if (await lstat(path).then(() => true, error => { if (error.code !== 'ENOENT') throw error; return false; })) throw new WorktreeProblem('Task worktree already exists without ownership metadata.');
+  if (path === inRepository) {
+    await directory(await directory(root.path, '.werk'), 'worktrees');
+    await excludeWorktrees(root, signal, timeoutMs);
+  }
+  await directory(root.commonDirectory, 'werk-worktrees');
   if (!owner) {
     const commit = (await repositoryGit(root.path, ['rev-parse', '--verify', `${baseCommit ?? 'HEAD'}^{commit}`], signal, timeoutMs)).trim();
     if (!commitId(commit)) throw new WorktreeProblem('Repository base commit is invalid.');

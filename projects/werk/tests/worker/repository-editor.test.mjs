@@ -20,7 +20,7 @@ export function onSave(handler) { action = handler; }
 const workspaceAction = (...args) => action(...args);
 const date = value => value;
 ${script}
-export { entries, seconds, busy, dirty, stale, notice, error, reload, save, sync };
+export { entries, seconds, worktreeDirectory, busy, dirty, stale, notice, error, reload, save, sync };
 `;
   await mkdir(join(root, 'work'), { recursive: true });
   const directory = await mkdtemp(join(root, 'work/repository-editor-')), path = join(directory, 'editor.mjs');
@@ -54,4 +54,18 @@ test('repository editor blocks assignment replacement while tasks wait and retai
   e.state.sessions.execution.queued = 1; await e.save(); assert.equal(writes, 0);
   e.state.sessions.execution.queued = 0; await e.save(); assert.equal(writes, 1);
   assert.equal(e.entries.value[0].branch, 'main'); assert.match(e.error.value, /edits are retained/);
+});
+
+
+test('worktree folder drafts survive polling, block saves during preparation, and clear on lock', async t => {
+  const e = await editor(t); e.worktreeDirectory.value = '/worktrees/draft';
+  e.state.settings.repositories = JSON.parse(JSON.stringify(e.state.settings.repositories)); await nextTick();
+  assert.equal(e.worktreeDirectory.value, '/worktrees/draft'); assert.equal(e.stale.value, false);
+  let writes = 0; e.onSave(async () => { writes++; }); e.state.board = { preparations: [{ state: 'preparing' }] };
+  await e.save(); assert.equal(writes, 0);
+  e.state.board.preparations = []; e.state.settings.repositories.worktreeDirectory = '/worktrees/external'; await nextTick();
+  assert.equal(e.worktreeDirectory.value, '/worktrees/draft'); assert.equal(e.stale.value, true);
+  e.reload(); assert.equal(e.worktreeDirectory.value, '/worktrees/external');
+  e.worktreeDirectory.value = '/private/unsaved'; e.state.unlocked = false; e.state.draftEpoch++; await nextTick();
+  assert.equal(e.worktreeDirectory.value, ''); assert.equal(e.dirty.value, false);
 });

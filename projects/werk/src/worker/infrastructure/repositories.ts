@@ -124,7 +124,7 @@ export class RepositoryManager {
     return this.enqueue(item.id, async () => removeRepositoryWorktree(await this.inspectRoot(item, bounded), name, bounded, this.timeoutMs, { checkoutTimeoutMs: WORKTREE_CHECKOUT_TIMEOUT_MS, ...options }), bounded);
   }
   private worktreeOptions() {
-    return { checkoutTimeoutMs: WORKTREE_CHECKOUT_TIMEOUT_MS, ...(this.config.worktreeDirectory ? { directory: this.config.worktreeDirectory } : {}) };
+    return { checkoutTimeoutMs: WORKTREE_CHECKOUT_TIMEOUT_MS, ...(this.config.worktreeDirectory ? { directory: this.config.worktreeDirectory, excludedDirectories: [...this.config.items.map(item => item.path), ...[...this.roots.values()].flatMap(root => [root.path, root.commonDirectory])] } : {}) };
   }
   async close() {
     if (!this.closed) { this.closed = true; this.running = false; if (this.timer) clearTimeout(this.timer); this.shutdown.abort(); }

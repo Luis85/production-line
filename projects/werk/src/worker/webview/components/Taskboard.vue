@@ -23,6 +23,8 @@ const busy = ref(false),
   detail = ref<LocalTaskDetailView | null>(null),
   removing = ref(false),
   active = ref(false);
+// Explicit cleanup must succeed before deleting a task; keeping its worktree is a separate choice.
+const removeWorktree = ref(true), worktreeNotice = ref("");
 const search = ref(""),
   status = ref("all"),
   selectedId = ref(""),
@@ -203,6 +205,7 @@ watch(
       detailLoading.value = false;
       detailError.value = "";
       actionError.value = "";
+      removing.value = false; removeWorktree.value = true; worktreeNotice.value = "";
     }
   },
   { flush: "sync" },
@@ -216,24 +219,27 @@ onDeactivated(() => {
   detailLoading.value = false;
 });
 const preparations = computed(() => state.board?.preparations ?? []);
-// Delete removes a clean Git worktree by default; the worker keeps a changed one and says why.
-const removeWorktree = ref(true);
-const worktreeNotice = ref("");
+function beginRemoval() { removeWorktree.value = true; removing.value = true; actionError.value = ""; }
 async function dismissPreparation(id: string) {
-  if (busy.value) return;
-  busy.value = true;
-  try { await workspaceAction("/api/taskboard/action", { id, action: "delete" }); }
+  if (busy.value || !state.unlocked) return;
+  const epoch = state.draftEpoch;
+  busy.value = true; actionError.value = "";
+  try {
+    const result = await workspaceAction("/api/taskboard/action", { id, action: "delete" });
+    if (epoch === state.draftEpoch && state.unlocked && !result) actionError.value = state.actionError || "The failed preparation could not be dismissed. Try again.";
+  }
   finally { busy.value = false; }
 }
 async function action(body: { id: string; action: string; priority?: number; removeWorktree?: boolean }) {
-  if (busy.value) return;
+  if (busy.value || !state.unlocked) return;
+  const epoch = state.draftEpoch, revision = detailRevision;
   const failedAdmission = state.board?.tasks.find(item => item.id === body.id)?.admissionFailure || (detail.value?.id === body.id && detail.value.admissionFailure);
   if (body.action === "retry" && failedAdmission) return;
   busy.value = true;
   actionError.value = "";
   try {
     const result = await workspaceAction("/api/taskboard/action", body);
-    if (!state.unlocked || selectedId.value !== body.id) return;
+    if (!state.unlocked || epoch !== state.draftEpoch || revision !== detailRevision || selectedId.value !== body.id) return;
     if (!result) {
       actionError.value =
         state.actionError || "The task could not be updated. Try again.";
@@ -251,6 +257,7 @@ async function inspect(id: string, event?: MouseEvent) {
   inspectTrigger = (event?.currentTarget ??
     document.activeElement) as HTMLElement;
   selectedId.value = id;
+  removeWorktree.value = true; worktreeNotice.value = "";
   detail.value = null;
   removing.value = false;
   actionError.value = "";
@@ -507,7 +514,7 @@ function download() {
             >
               {{ detail.archived ? "Restore" : "Archive" }}
             </UButton>
-            <UButton color="error" variant="ghost" @click="removing = !removing"
+            <UButton color="error" variant="ghost" @click="removing ? removing = false : beginRemoval()"
               >Delete</UButton
             >
           </template>
@@ -516,12 +523,12 @@ function download() {
           <p>Delete the saved task and its board evidence?</p>
           <label v-if="detail.worktree" class="check-label">
             <input v-model="removeWorktree" type="checkbox" />
-            Also remove its Git worktree when it has no uncommitted or untracked changes
+            Also remove its Git worktree. Deletion stops if it has changes or cannot be safely removed.
           </label>
           <UButton
             color="error"
             :disabled="busy"
-            @click="action({ id: detail.id, action: 'delete', ...(removeWorktree ? {} : { removeWorktree: false }) })"
+            @click="action({ id: detail.id, action: 'delete', ...(detail.worktree ? { removeWorktree } : {}) })"
           >
             Confirm deletion
           </UButton>

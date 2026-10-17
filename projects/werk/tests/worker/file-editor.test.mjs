@@ -33,7 +33,7 @@ test('file edits are opt-in and use the single request command, with duplicate s
   const commands = [], pending = deferred();
   const f = await editorFixture(command => { commands.push(structuredClone(command)); return pending.promise; });
   f.intake.fileChanges = true; const creating = f.create(); await f.create();
-  assert.equal(commands.length, 1); assert.equal(commands[0].action, 'create'); assert.deepEqual(commands[0].files, { repository: '/project', paths: ['src/a.ts'] });
+  assert.equal(commands.length, 1); assert.equal(commands[0].action, 'create'); assert.equal(commands[0].background, true); assert.deepEqual(commands[0].files, { repository: '/project', paths: ['src/a.ts'] });
   assert.equal(commands[0].message, 'Clarify the navigation.'); assert.equal(commands[0].provider, 'codex-cli');
   pending.resolve({ session: { id: 'local-' + commands[0].id }, chat: {} }); await creating;
   assert.equal(f.state.draft, 'Existing follow-up draft'); assert.equal(f.intake.message, ''); assert.equal(f.intake.fileChanges, false);
@@ -133,5 +133,19 @@ test('assigned repository choices display the complete checkout while the unifie
   await f.create(); assert.equal(submitted.files.repository, 'web');
   const source = await readFile(new URL('../../src/worker/webview/components/RunTask.vue', import.meta.url), 'utf8');
   assert.match(source, /selectedRepository\.path/);
-  assert.match(source, /aria-describedby=["'][^"']*file-task-checkout/);
+  assert.match(source, /:aria-describedby="[^"]*file-task-checkout/);
+});
+
+
+test('preparation progress retains instructions and operation until the durable session is confirmed', async () => {
+  const pending = deferred(); let progress;
+  const f = await editorFixture((command, observe) => { progress = observe; return pending.promise; });
+  f.intake.fileChanges = true; const creating = f.create(); const id = f.intake.pending.id;
+  progress({ id, phase: 'worktree', state: 'preparing' });
+  assert.equal(f.intake.message, 'Clarify the navigation.'); assert.equal(f.intake.paths, 'src/a.ts'); assert.equal(f.intake.pending.id, id);
+  assert.match(f.preparationNote.value, /Git worktree/); assert.match(f.admissionNote.value, /has not joined the queue/); assert.equal(f.canCreate.value, false);
+  assert.ok(!f.events.some(([event]) => event === 'created'));
+  progress({ id, phase: 'admission', state: 'preparing' }); assert.match(f.preparationNote.value, /Saving approved files/);
+  pending.resolve({ session: { id: 'local-' + id }, chat: {} }); await creating;
+  assert.equal(f.intake.pending, null); assert.equal(f.preparation.value, null); assert.equal(f.intake.message, '');
 });
