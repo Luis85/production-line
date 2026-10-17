@@ -220,3 +220,35 @@ test('existing tasks keep their accepted profile snapshot after an in-place defi
   assert.equal(later.session.definition.definitionId, entry.id); assert.notEqual(later.session.definition.digest, entry.digest); assert.match(later.session.definition.instruction, /thorough/);
   for (const id of ['snapshot-task', 'snapshot-task-2']) await workspace.task({ action: 'cancel', id });
 });
+
+
+test('definition update revisions bind the reviewed identity and reference even when content matches', async t => {
+  for (const scenario of ['moved reference', 'reimported profile', 'renamed reference']) await t.test(scenario, async t => {
+    const definitions = new WorkerDefinitions(await directory(t)); await definitions.init();
+    const { definitions: [original] } = await definitions.action({ action: 'import', name: 'Reviewer', ref: 'team-reviewer', yaml: source });
+    const yaml = source.replace('Give a concise answer.', 'Give a thorough answer.');
+    const preview = await definitions.action({ action: 'update', ref: 'team-reviewer', yaml, dryRun: true });
+    let ref = 'team-reviewer';
+    if (scenario === 'moved reference') {
+      const { definitions: [, replacement] } = await definitions.action({ action: 'import', name: 'Reviewer', yaml: source });
+      await definitions.action({ action: 'ref', id: replacement.id, ref });
+    } else if (scenario === 'reimported profile') {
+      await definitions.action({ action: 'delete', id: original.id });
+      await definitions.action({ action: 'import', name: 'Reviewer', ref, yaml: source });
+    } else {
+      ref = 'other-reviewer';
+      await definitions.action({ action: 'ref', id: original.id, ref });
+    }
+    const before = definitions.view(), current = before.definitions.find(item => item.ref === ref);
+    assert.equal(current.name, original.name); assert.equal(current.digest, original.digest);
+    assert.notEqual(current.revision, preview.definition.revision, 'a target identity or reference change invalidates the reviewed revision');
+    await assert.rejects(definitions.action({ action: 'update', ref, yaml, revision: preview.definition.revision }), error => error.code === 'conflict');
+    assert.deepEqual(definitions.view(), before, 'a stale update cannot mutate either profile');
+    const reviewed = await definitions.action({ action: 'update', ref, yaml, dryRun: true });
+    const saved = await definitions.action({ action: 'update', ref, yaml, revision: reviewed.definition.revision });
+    assert.equal(saved.updated.id, current.id); assert.equal(saved.updated.ref, ref);
+    assert.equal(saved.updated.revision, reviewed.definition.nextRevision);
+    assert.match(definitions.select({ definitionRef: ref }).instruction, /thorough/);
+    if (scenario === 'moved reference') assert.match(definitions.select({ definitionId: original.id }).instruction, /concise/);
+  });
+});

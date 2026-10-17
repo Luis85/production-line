@@ -7,8 +7,8 @@ import type { ProviderConnection } from './provider-contract.js';
 export interface DefinitionAgent { name: string; description: string; instruction: string; model: string; provider: 'openai' | 'anthropic' | ''; unsupported: string[]; requiresAdaptation: boolean; }
 /** `ref` is an operator-assigned stable name, unique per worker, that committed requests can use instead of the generated id. */
 export interface AgentDefinition { id: string; ref?: string; name: string; digest: string; createdAt: string; updatedAt?: string; agents: DefinitionAgent[]; }
-/** Guard for in-place updates: covers everything an update replaces (name and YAML content). */
-export function definitionRevision(definition: Pick<AgentDefinition, 'name' | 'digest'>): string { return createHash('sha256').update(JSON.stringify([definition.name, definition.digest])).digest('hex'); }
+/** Bind an update to its reviewed definition and reference as well as its name and YAML content. */
+export function definitionRevision(definition: Pick<AgentDefinition, 'id' | 'ref' | 'name' | 'digest'>): string { return createHash('sha256').update(JSON.stringify([definition.id, definition.ref ?? null, definition.name, definition.digest])).digest('hex'); }
 const agentFields = ['description', 'instruction', 'model', 'provider', 'unsupported'] as const;
 /** Summarize what an update changes without exposing more than the definition view already does. */
 function definitionChanges(before: AgentDefinition, after: Pick<AgentDefinition, 'name' | 'digest' | 'agents'>) {
@@ -195,6 +195,6 @@ export class WorkerDefinitions {
     const parsed = previewDefinition(body.yaml);
     const replacement = { name: body.name === undefined ? target.name : text(body.name, 'Definition name', 120), digest: createHash('sha256').update(String(body.yaml)).digest('hex'), agents: parsed.agents, updatedAt: new Date().toISOString() };
     const changes = definitionChanges(target, replacement);
-    return { target, replacement, preview: { compatibility: 'instruction-profile' as const, dryRun: true, definition: { id: target.id, ref, name: replacement.name, revision, nextRevision: definitionRevision(replacement) }, changes, agents: parsed.agents } };
+    return { target, replacement, preview: { compatibility: 'instruction-profile' as const, dryRun: true, definition: { id: target.id, ref, name: replacement.name, revision, nextRevision: definitionRevision({ ...target, ...replacement }) }, changes, agents: parsed.agents } };
   }
 }
