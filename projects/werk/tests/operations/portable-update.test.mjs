@@ -302,6 +302,27 @@ test('failed activation recovery leaves the app stopped and names the retained p
   await assert.rejects(fs.stat(join(state, 'portable.json')), { code: 'ENOENT' });
 });
 
+test('a failed folder move names the failure, replaces nothing and restarts the previous version', { timeout: 180000 }, async t => {
+  const { app, cwd, directory, cleanup } = await workspace(t, 'update move failure');
+  const state = join(cwd, 'state'), home = join(dirname(app), '.worker-update');
+  cleanup(() => invoke(cwd, ['stop', '--state-dir', state]).catch(() => {}));
+  const started = await invoke(cwd, ['start', '--state-dir', state, '--port', '0']);
+  assert.equal(started.code, 0, started.stderr);
+  filesystemFault(t, 'rename', async (original, from, to) => {
+    if (from === app && dirname(to) === home) throw Object.assign(Error('injected move failure'), { code: 'EIO' });
+    return original(from, to);
+  });
+  let error;
+  try { await applyUpdate('worker', app, state, { from: await extracted(directory, '99.0.0'), stop: true }); }
+  catch (value) { error = value; }
+  assert.match(error?.message ?? '', /Could not move .* \(EIO\)\. Nothing was replaced\. The previous version was restarted\./);
+  assert.doesNotMatch(error.message, /holds a file|keeps running/);
+  assert.equal(error.code, 'EIO');
+  assert.equal(await appVersion(app), installed);
+  assert.equal((await invoke(cwd, ['status', '--state-dir', state])).data.state, 'running');
+  assert.deepEqual(await leftovers(app), []);
+});
+
 test('update preserves effective launch settings supplied only by the original shell environment', { timeout: 180000 }, async t => {
   const { app, cwd, directory, cleanup } = await workspace(t, 'update launch settings');
   const state = join(cwd, 'custom-state'), config = join(cwd, 'custom-worker.json');
