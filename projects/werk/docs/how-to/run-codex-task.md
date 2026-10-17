@@ -44,8 +44,10 @@ workers:
 
 The executable, repository and exact file allowlist are trusted operator
 configuration. Use absolute paths for the executable and repository. The
-allowlist accepts up to 32 regular text-file paths; it excludes dotfiles,
-credential names, private-key extensions and path traversal. It has no globs.
+allowlist accepts up to 32 regular text-file paths that follow the
+[approved file path rule](../reference/feature-requests.md#approved-file-paths).
+That rule allows Unicode names and excludes dotfiles, credential names,
+private-key extensions and path traversal. The allowlist has no globs.
 The task cannot select a command, change the sandbox or broaden this allowlist.
 Keep deployment YAML outside the repository being edited.
 

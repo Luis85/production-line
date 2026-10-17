@@ -120,7 +120,9 @@ export function validatePatchReply(approved: readonly ReviewFile[], reply: strin
   for (const [index, change] of result.files.entries()) {
     if (!plainObject(change))
       throw new PatchProtocolError("patch_files_invalid", `File entry ${index + 1} is not an object with path and content.`);
-    const before = approved.find(file => file.path === change.path);
+    // Approved names are canonical; models may echo the same Unicode spelling decomposed.
+    const path = typeof change.path === "string" ? change.path.normalize("NFC") : undefined;
+    const before = approved.find(file => file.path === path);
     if (!before)
       throw new PatchProtocolError("patch_file_unapproved", `File entry ${index + 1} uses ${shownPath(change.path)}, which is not an approved path.`);
     if (seen.has(before.path))

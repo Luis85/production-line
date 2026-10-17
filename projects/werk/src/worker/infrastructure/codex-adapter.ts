@@ -20,8 +20,8 @@ export function codexConfiguration(value: unknown): CodexConfiguration {
     const config = value as Record<string, unknown>;
     if (Object.keys(config).some(key => !['executable', 'repository', 'allowedPaths'].includes(key)) ||
         typeof config.executable !== 'string' || !isAbsolute(config.executable) || (config.repository !== undefined && (typeof config.repository !== 'string' || !isAbsolute(config.repository)))) throw Error('Codex executable and optional legacy repository must be absolute operator-configured paths');
-    validateApprovedPaths(config.allowedPaths, 'Codex allowedPaths');
-    return { executable: config.executable, ...(typeof config.repository === 'string' ? { repository: config.repository } : {}), allowedPaths: config.allowedPaths as string[] };
+    const allowedPaths = validateApprovedPaths(config.allowedPaths, 'Codex allowedPaths');
+    return { executable: config.executable, ...(typeof config.repository === 'string' ? { repository: config.repository } : {}), allowedPaths };
 }
 
 /** Narrow native-Linux adapter. A successful command produces a local patch requiring human review. */

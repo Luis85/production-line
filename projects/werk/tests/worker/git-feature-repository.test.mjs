@@ -287,3 +287,18 @@ test('Windows shared publication rejects an excessive metadata path before reser
   assert.equal(checkoutAttempted, false); assert.equal(f.main(), f.sourceCommit);
   await assert.rejects(readdir(join(stateDirectory, 'worktrees')), { code: 'ENOENT' });
 });
+
+const addedFilePatch = (path, line) => `diff --git ${JSON.stringify('a/' + path)} ${JSON.stringify('b/' + path)}\nnew file mode 100644\n--- /dev/null\n+++ ${JSON.stringify('b/' + path)}\n@@ -0,0 +1,1 @@\n+${line}\n`;
+test('a quoted Unicode vault path publishes under its exact NFC name', async t => {
+  const f = await fixture(t), path = "docs/Kunden's Änderungen (Größe) & Fristen – Prüfung → Freigabe.md";
+  const result = await f.client().publishPatch({ ...f.publication('publish-unicode'), patch: addedFilePatch(path, 'Prüfung'), approvedPaths: [path] });
+  const listed = execFileSync('git', ['ls-tree', '-r', '-z', '--name-only', result.commit, '--', 'docs/'], { cwd: f.remote, encoding: 'utf8' }).split('\0').filter(Boolean);
+  assert.deepEqual(listed, [path]);
+  assert.equal(git(f.remote, 'show', `${result.commit}:${path}`), 'Prüfung');
+});
+test('a published file cannot alias a tracked name that differs only by Unicode normalization', { skip: process.platform === 'darwin' && 'APFS resolves both normalization forms to the same file' }, async t => {
+  const f = await fixture(t), path = 'docs/Übersicht.md';
+  const sourceCommit = await f.teammate(path.normalize('NFD'), 'decomposed\n');
+  git(f.repository, 'fetch', 'origin');
+  await assert.rejects(f.client().publishPatch({ ...f.publication('publish-alias'), sourceCommit, patch: addedFilePatch(path, 'composed'), approvedPaths: [path] }), error => error.code === 'conflict' && /Unicode normalization/.test(error.message));
+});

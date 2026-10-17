@@ -418,7 +418,7 @@ function download() {
         <CandidateEvidence v-if="!detail.admissionFailure" :key="detail.id" :task="detail" />
         <p class="break-anywhere">{{ detail.repository }}</p>
         <ul>
-          <li v-for="file in detail.files" :key="file.path">{{ file.path }}</li>
+          <li v-for="file in detail.files" :key="file.path" class="break-anywhere">{{ file.path }}</li>
         </ul>
         <div class="actions">
           <UButton

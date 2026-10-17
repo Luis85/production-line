@@ -150,6 +150,15 @@ export class GitFeatureRepository {
     }
     throw new GitFeatureError('conflict', 'The feature branch already belongs to different work. Existing commits were preserved.');
   }
+  /** A new file must not alias a tracked name that differs only by case or Unicode normalization. */
+  private async assertNoAlias(worktree: string, commit: string, path: string, signal: AbortSignal) {
+    const parts = path.split('/'), key = (name: string) => name.normalize('NFC').toLowerCase();
+    for (let i = 0; i < parts.length; i++) {
+      const parent = parts.slice(0, i).join('/');
+      const names = (await this.io.output(worktree, ['ls-tree', '-z', '--name-only', commit, ...(parent ? ['--', parent + '/'] : [])], signal)).split('\0').filter(Boolean).map(entry => entry.slice(parent ? parent.length + 1 : 0));
+      if (names.some(name => name !== parts[i] && key(name) === key(parts[i]!))) throw new GitFeatureError('conflict', 'Feature patch adds a path that differs from an existing file or folder only by case or Unicode normalization.');
+    }
+  }
   publishPatch(value: GitPatchPublication, signal?: AbortSignal): Promise<GitFeatureBranchPublication> {
     const input = structuredClone(value), bounded = this.signal(signal); operation(input.operationId);
     if (!/^[a-z0-9][a-z0-9-]{0,79}$/.test(input.featureId) || !commitId(input.sourceCommit) || !Array.isArray(input.approvedPaths) || !input.approvedPaths.length || input.approvedPaths.length > 32 || new Set(input.approvedPaths).size !== input.approvedPaths.length) throw new GitFeatureError('invalid_input', 'Feature publication requires a stable feature ID, source commit and explicit approved paths.');
@@ -176,6 +185,7 @@ export class GitFeatureRepository {
             : match[3] === 'D' ? match[1] !== '000000' && match[2] === '000000'
               : match[1] !== '000000' && match[1] === match[2]);
           if (!regularChange || !input.approvedPaths.includes(raw[i + 1]!)) throw new GitFeatureError('conflict', 'Feature patch changed an unapproved path, file mode or file type.');
+          if (match![3] === 'A') await this.assertNoAlias(worktree, input.sourceCommit, raw[i + 1]!, bounded);
         }
         const tree = (await this.io.output(worktree, ['write-tree'], bounded)).trim();
         return { tree, commit: prior ? null : await this.io.commit(worktree, input.sourceCommit, input.operationId, digest, bounded) };

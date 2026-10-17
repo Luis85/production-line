@@ -39,6 +39,9 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Fixed
 
+- Approved file paths accept real-world vault names. Names may use Unicode letters and marks, such as umlauts and `ß`, plus spaces and `, ( ) & ' ’ + – — →`. This applies to file tasks, local and shared feature requests, offline authoring and live Codex `allowedPaths`. Paths are compared and stored in NFC form, so a decomposed duplicate is rejected. A project's committed `.werk/authoring/feature-request.mjs` keeps the old rule until the script is refreshed.
+- The rule now also rejects Windows-reserved characters, device names such as `nul.md`, and segments that end in a dot or space. It also rejects segments over 255 UTF-8 bytes and look-alike secret names.
+- A file task refuses a path whose on-disk name differs only by Unicode normalization. Shared publication refuses a new file that differs from a tracked file only by case or normalization. Neither creates a second file that looks identical.
 - A file task whose model reply breaks the patch format now records the specific rule, such as `The summary has 2001 characters; the limit is 2000.`, in the task error, and a matching `patch_*` code on the interaction turn and its `failed` event, instead of the generic "Task could not produce a valid patch".
 - Tool deadline edits retain existing overrides when older clients omit them, support an explicit reset to inheritance, and preserve queued dispatch compatibility. Codex and Claude CLI bridges receive the accepted execution deadline.
 - Completed proposal transcripts show the model summary and changed-file line counts, with a link to the retained patch. Legacy protocol replies render readably when task evidence identifies them; ordinary JSON examples remain code. Paths and globs stay literal, and stored raw replies remain available for inspection and continuation.

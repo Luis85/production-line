@@ -492,7 +492,7 @@ export class LocalTaskboard {
   private completionMessage(task: LocalTask, summary: string, reply: string) {
     // Candidate implementations return prose; only validated proposals use replacement JSON.
     if (task.implementation) return reply;
-    const changes = (parsePatchReply(reply).files as Array<{ path: string; content: string }>).filter(change => {
+    const changes = (parsePatchReply(reply).files as Array<{ path: string; content: string }>).map(change => ({ ...change, path: change.path.normalize("NFC") })).filter(change => {
       const before = task.files.find(file => file.path === change.path);
       return !before?.existed || before.content !== change.content;
     });
