@@ -19,7 +19,7 @@ import RunTask from './RunTask.vue';
 import SharedFeatureComposer from './SharedFeatureComposer.vue';
 import { buildWorkerCapacityView } from '../worker-capacity';
 const sharedComposer = ref<InstanceType<typeof SharedFeatureComposer> | null>(null);
-const sharedBinding = computed(() => !!state.environment?.sharedIntake.config.repositoryId);
+const sharedBinding = computed(() => !!state.environment?.sharedIntake?.config.repositoryId);
 const emit = defineEmits<{ created: [sessionId: string, previousSessionId: string]; busy: [boolean] }>();
 const sending = ref(false), optionsOpen = ref(false), filesOpen = ref(false);
 const preparation = ref<FeatureRequestPreparation | null>(null);

@@ -96,19 +96,21 @@ export async function continueFeatureInteraction(workspace: WorkspaceContext, se
 
 function featureAdmissionPorts(workspace: WorkspaceContext): FeatureAdmissionPorts {
   return {
-    patch: (input, reservation) => withRepositoryAdmission(workspace, () => workspace.board.create(input, reservation)),
+    patch: (input, reservation) => workspace.board.create(input, reservation),
     chat: (input, reference) => task(workspace, input, reference),
   };
 }
 
 export async function submitSharedFeature(workspace: WorkspaceContext, record: SharedFeatureRecord){
-  const assignment = workspace.repositories.resolve(record.binding.repositoryId);
-  await admitFeatureRequest(featureAdmissionPorts(workspace), {
-    input: record.accepted, taskId: record.taskId!, submissionHash: record.inputHash, repository: assignment.path,
-    reference: sharedFeatureRequestReference(record),
-    submission: { policy: record.workflow.policy, criteria: record.accepted.criteria, repositoryId: record.binding.repositoryId, baseCommit: record.sourceCommit },
+  return withRepositoryAdmission(workspace, async () => {
+    const assignment = workspace.repositories.resolve(record.binding.repositoryId);
+    await admitFeatureRequest(featureAdmissionPorts(workspace), {
+      input: record.accepted, taskId: record.taskId!, submissionHash: record.inputHash, repository: assignment.path,
+      reference: sharedFeatureRequestReference(record),
+      submission: { policy: record.workflow.policy, criteria: record.accepted.criteria, repositoryId: record.binding.repositoryId, baseCommit: record.sourceCommit },
+    });
+    await workspace.featureTracking.sync();
   });
-  await workspace.featureTracking.sync();
 }
 
 export async function rememberTask(workspace: WorkspaceContext, task: Task){
@@ -128,12 +130,14 @@ export async function rememberTask(workspace: WorkspaceContext, task: Task){
 }
 
 export async function submitFeature(workspace: WorkspaceContext, record: FeatureRecord){
-  await admitFeatureRequest(featureAdmissionPorts(workspace), {
-    input: record.input!, taskId: record.taskId, submissionHash: record.inputHash,
-    repository: resolve(workspace.config.projectDir ?? process.cwd()),
-    reference: featureRequestReference({ id: record.id, source: 'folder', scope: workspace.features!.view().directory, sourcePath: record.name }),
+  return withRepositoryAdmission(workspace, async () => {
+    await admitFeatureRequest(featureAdmissionPorts(workspace), {
+      input: record.input!, taskId: record.taskId, submissionHash: record.inputHash,
+      repository: resolve(workspace.config.projectDir ?? process.cwd()),
+      reference: record.feature ? { ...record.feature, sourcePath: record.name } : featureRequestReference({ id: record.id, source: 'folder', scope: workspace.features!.view().directory, sourcePath: record.name }),
+    });
+    await workspace.featureTracking.sync();
   });
-  await workspace.featureTracking.sync();
 }
 
 function executionEvidence(workspace: WorkspaceContext, sessionId: string, runId?: string){

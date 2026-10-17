@@ -198,7 +198,12 @@ test('local patch results become human review notes with valid latest and immuta
   record.gates = { requestId: 'request-one', revision: 8, inputRevision: 1, phase: 'done', policyId: 'policy-one', policyVersion: 1, policyDigest: 'a'.repeat(64), ready: 'pass', done: 'pass', link: '_gates/' + record.id + '/request.md', questions: '_gates/' + record.id + '/questions.md', gaps: '_gates/' + record.id + '/gaps.md' };
   await f.folder.result(record, 'Implemented the requested behavior.', 'diff --git a/example.ts b/example.ts\n');
   assert.equal(await readFile(join(f.directory, '_results', record.id, 'review-run.md'), 'utf8'), immutable);
+  assert.match(immutable, new RegExp('featureRequestKey: ' + record.feature.key));
   assert.match(await readFile(join(f.directory, '_results', record.id + '.md'), 'utf8'), /Completion checks: pass/);
+  const priorReview = immutable.replace(/^featureRequestKey: .+\n/m, '');
+  await writeFile(join(f.directory, '_results', record.id, 'review-run.md'), priorReview);
+  await f.folder.result(record, 'Implemented the requested behavior.', 'diff --git a/example.ts b/example.ts\n');
+  assert.equal(await readFile(join(f.directory, '_results', record.id, 'review-run.md'), 'utf8'), priorReview);
   const legacy = '---\n' + stringify({ schemaVersion: 1, featureId: record.id, source: record.source, status: record.status, taskId: record.taskId, sessionId: record.sessionId, updatedAt: record.updatedAt, execution: record.execution }) + '---\n# Worker result\n\nImplemented the requested behavior.\n';
   await writeFile(join(f.directory, '_results', record.id, 'review-run.md'), legacy);
   await f.folder.result(record, 'Implemented the requested behavior.', 'diff --git a/example.ts b/example.ts\n');

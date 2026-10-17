@@ -268,3 +268,23 @@ test('legacy orchestrator folder projections use the restored session parent and
   await restored.init();
   try { assert.equal(restored.view().records[0].feature.key, reference.key); } finally { await restored.close(); }
 });
+
+
+test('moving an owned feature folder preserves its persisted parent namespace and pending admission identity', async t => {
+  let blocked = true;
+  const accepted = [];
+  const queue = { async submit(record) { if (blocked) throw Error('Provider unavailable.'); accepted.push(structuredClone(record)); }, inspect() { return undefined; } };
+  const f = await fixture(t, queue); await f.put('move.md', source()); await scan(f.service);
+  const before = f.service.view().records[0]; assert.equal(before.submitted, false); assert.ok(before.feature);
+  await f.service.close();
+  const relocated = join(f.project, 'relocated-features'); await rename(f.directory, relocated);
+  const service = new FeatureRequests(new MarkdownFeatureFolder(relocated, f.state, 'codex-cli', f.project), queue, 0);
+  await service.init();
+  try {
+    assert.equal(service.view().records[0].feature.key, before.feature.key);
+    blocked = false; await scan(service);
+    assert.equal(accepted.length, 1); assert.equal(accepted[0].feature.key, before.feature.key);
+    assert.equal(service.view().records[0].feature.scope, f.directory);
+    assert.equal(service.view().directory, relocated);
+  } finally { await service.close(); }
+});

@@ -43,7 +43,7 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
       if (index.version !== 1 || typeof index.owner !== 'string' || !featureId.test(index.owner) || !Array.isArray(index.records) || index.records.length > 1000 || new Set(index.records.map((r: FeatureRecord) => r.id)).size !== index.records.length) throw Error('Invalid feature index.');
       for (const record of index.records) if (!record || !featureId.test(record.id) || !requestName(record.name) || !['folder', 'orchestrator'].includes(record.source) || typeof record.submitted !== 'boolean' || typeof record.inputHash !== 'string' || typeof record.taskId !== 'string' || typeof record.sessionId !== 'string' || !record.submitted && !record.input) throw Error('Invalid feature index record.');
       for (const record of index.records) {
-        if (record.feature) { const reference = validateFeatureRequestReference(record.feature); if (record.source === 'folder' && (reference.source !== 'folder' || reference.id !== record.id || reference.scope !== this.directory)) throw Error('Invalid feature parent identity.'); }
+        if (record.feature) { const reference = validateFeatureRequestReference(record.feature); if (record.source === 'folder' && (reference.source !== 'folder' || reference.id !== record.id)) throw Error('Invalid feature parent identity.'); }
         validateFeatureTaskProjection(record, index.owner);
         validateFeatureExecution(record);
         validateFeatureGates(record);
@@ -132,7 +132,7 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
     const review = record.source === 'folder' && record.input?.mode === 'patch' && !!patch && ['review', 'completed'].includes(record.executionStatus ?? record.status);
     const details = (prefix: string, patchName: string, immutable: boolean) => review ? '\n## Review the proposed change\n\nThis is a proposed patch for human review. The worker has not merged or applied it. Inspect the [patch](' + patchName + ') and verify the acceptance criteria before applying any change.\n\n' +
       (immutable ? 'Review [current request checks](' + prefix + '_gates/' + record.id + '/request.md) where available; they may change after this run was recorded.\n' : record.gates ? 'Readiness: ' + record.gates.ready + '. Completion checks: ' + record.gates.done + '. [Saved checks](' + prefix + record.gates.link + ').\n' : 'Completion checks have not been recorded.\n') : '';
-    const render = (prefix: string, patchName: string, immutable = false) => '---\n' + stringify({ schemaVersion: 1, ...(review ? { type: 'PullRequest' } : {}), featureId: record.id, ...(record.feature ? { featureRequestKey: record.feature.key } : {}), source: record.source, status: record.executionStatus ?? record.status, taskId: record.taskId, sessionId: record.sessionId, updatedAt: record.execution?.completedAt ?? record.updatedAt, ...(record.execution ? { execution: record.execution } : {}) }) + '---\n# ' + (review ? 'Pull request review' : 'Worker result') + '\n\n' + text + '\n' + details(prefix, patchName, immutable);
+    const render = (prefix: string, patchName: string, immutable = false, parentIdentity = true) => '---\n' + stringify({ schemaVersion: 1, ...(review ? { type: 'PullRequest' } : {}), featureId: record.id, ...(parentIdentity && record.feature ? { featureRequestKey: record.feature.key } : {}), source: record.source, status: record.executionStatus ?? record.status, taskId: record.taskId, sessionId: record.sessionId, updatedAt: record.execution?.completedAt ?? record.updatedAt, ...(record.execution ? { execution: record.execution } : {}) }) + '---\n# ' + (review ? 'Pull request review' : 'Worker result') + '\n\n' + text + '\n' + details(prefix, patchName, immutable);
     const raw = render('../', record.id + '.patch');
     if (record.execution?.after) {
       const executionDirectory = join(directory, record.id); await realDirectory(executionDirectory, true);
@@ -140,8 +140,9 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
       const path = join(executionDirectory, record.execution.runId + '.md');
       const previous = await readBoundedFile(path, 524288).catch(error => { if (error.code !== 'ENOENT') throw error; return undefined; });
       // Keep byte-identical evidence written before PullRequest notes were introduced.
-      const legacy = '---\n' + stringify({ schemaVersion: 1, featureId: record.id, ...(record.feature ? { featureRequestKey: record.feature.key } : {}), source: record.source, status: record.executionStatus ?? record.status, taskId: record.taskId, sessionId: record.sessionId, updatedAt: record.execution.completedAt ?? record.updatedAt, execution: record.execution }) + '---\n# Worker result\n\n' + text + '\n';
-      if (previous !== legacy) await writeImmutableFeatureArtifact(path, render('../../', record.execution.runId + '.patch', true));
+      const legacy = '---\n' + stringify({ schemaVersion: 1, featureId: record.id, source: record.source, status: record.executionStatus ?? record.status, taskId: record.taskId, sessionId: record.sessionId, updatedAt: record.execution.completedAt ?? record.updatedAt, execution: record.execution }) + '---\n# Worker result\n\n' + text + '\n';
+      const priorReview = render('../../', record.execution.runId + '.patch', true, false);
+      if (previous !== legacy && previous !== priorReview) await writeImmutableFeatureArtifact(path, render('../../', record.execution.runId + '.patch', true));
       if (patch) await writeImmutableFeatureArtifact(join(executionDirectory, record.execution.runId + '.patch'), patch);
     }
     await this.writeChanged(join(directory, record.id + '.md'), raw);

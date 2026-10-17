@@ -57,6 +57,7 @@ test('installed native worker consumes files, exports review patches and keeps t
   started = await cli(entry, cwd, 'start', '--port', '0'); running = true;
   await eventually(async () => (await api('/api/features')).records.length === 2);
   assert.deepEqual((await api('/api/features')).records.map(r => r.taskId).sort(), before.records.map(r => r.taskId).sort());
+  assert.deepEqual((await api('/api/features')).records.map(r => r.feature.key).sort(), before.records.map(r => r.feature.key).sort());
   assert.equal((await api('/api/sessions')).records.length, 3);
   assert.equal((await cli(entry, cwd, 'feature', 'list')).records.length, 2);
   await cli(entry, cwd, 'stop'); running = false;

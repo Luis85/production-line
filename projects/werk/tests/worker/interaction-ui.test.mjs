@@ -132,3 +132,9 @@ test('a rejected shared response reopens the checkpoint instead of retaining a l
   sharedSession(f, { sessionId: 'task-A', expectedRevision: 1, status: 'error', error: 'The response needs correction.' });
   assert.equal(f.responsePending.value, false); assert.equal(f.mutationBlocked.value, false);
 });
+
+test('a shared checkpoint remains readable while shared intake status has not loaded', async t => {
+  const f = await fixture(t, async () => checkpoint()); sharedSession(f); f.state.environment = {};
+  assert.equal(f.responsePending.value, false); assert.equal(f.mutationBlocked.value, false);
+  assert.match(f.phaseLabel.value, /Waiting/);
+});

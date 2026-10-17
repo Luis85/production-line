@@ -24,7 +24,7 @@ let generation = 0, consumptionKey = '';
 const sessionId = computed(() => state.sessions?.selected ?? '');
 const selectedSession = computed(() => state.sessions?.records?.find(session => session.id === sessionId.value));
 const sharedRequest = computed(() => selectedSession.value?.feature?.source === 'shared_git');
-const sharedRecord = computed(() => sharedRequest.value ? state.environment?.sharedIntake.requests.find(item => item.isLocal && (item.feature?.key === selectedSession.value?.feature?.key || item.taskId === selectedSession.value?.taskId)) : undefined);
+const sharedRecord = computed(() => sharedRequest.value ? state.environment?.sharedIntake?.requests.find(item => item.isLocal && (item.feature?.key === selectedSession.value?.feature?.key || item.taskId === selectedSession.value?.taskId)) : undefined);
 const savedResponse = computed(() => {
   const response = sharedRecord.value?.taskResponse;
   return response?.sessionId === sessionId.value && response.expectedRevision === view.value?.revision ? response : undefined;
