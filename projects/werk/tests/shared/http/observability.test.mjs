@@ -1,3 +1,5 @@
+import { workerStatus } from '../../helpers/worker-status.mjs';
+import { testListeningAddress } from '../../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -9,7 +11,7 @@ import { observeHttp } from '../../../src/orchestrator/dist/shared/http/observab
 import { statusServer } from '../../../src/worker/dist/worker/status/server.js';
 import { captureServiceLogs, safeServiceLog } from '../../../scripts/runtime/service-logs.mjs';
 import { logFile } from '../../../scripts/runtime/supervisor.mjs';
-async function listening(handler) { const server=createServer(handler); await new Promise(ok=>server.listen(0,'127.0.0.1',ok)); return {server,url:`http://127.0.0.1:${server.address().port}`}; }
+async function listening(handler) { const server=createServer(handler); await new Promise(ok=>server.listen(0, '127.0.0.1', () => ok(undefined))); return {server,url:`http://127.0.0.1:${testListeningAddress(server).port}`}; }
 async function close(server){server.closeAllConnections();await new Promise(ok=>server.close(ok));}
 test('request correlation and normalized diagnostics never include supplied secrets or thrown error text', async()=>{
  const events=[],secret='fixture-private-bearer-not-for-logs';
@@ -28,8 +30,8 @@ test('a failed diagnostic sink cannot break successful or failed HTTP responses'
  try{assert.equal(await(await fetch(url)).text(),'ready');assert.equal((await fetch(url+'/error')).status,500)}finally{await close(server)}
 });
 test('worker health fails when disconnected while its read-only status remains available',async()=>{
- const state={state:'disconnected',mode:'mock',workerId:'worker-fixture',project:'demo'};
- const server=await statusServer(()=>state,'127.0.0.1',0),url=`http://127.0.0.1:${server.address().port}`;
+ const state=workerStatus({state:'disconnected',mode:'mock',workerId:'worker-fixture',project:'demo'});
+ const server=await statusServer(()=>state,'127.0.0.1',0),url=`http://127.0.0.1:${testListeningAddress(server).port}`;
  try{assert.equal((await fetch(url+'/healthz')).status,503);assert.equal((await fetch(url+'/status')).status,200);state.state='idle';assert.equal((await fetch(url+'/healthz')).status,200);state.state='stopping';assert.equal((await fetch(url+'/healthz')).status,503)}finally{await close(server)}
 });
 test('child log capture drops raw/oversized input and strips unrecognized fields before storage',async()=>{
@@ -49,12 +51,12 @@ test('runtime logs rotate while running and refuse oversized records and symlink
 test('current worker and context routes retain useful diagnostics through private runtime log filtering', async () => {
  const events = [], secret = 'private-task-identifier';
  const routes = new Map([
-  ...['/api/access', '/api/providers/check', '/api/definitions'].map(path => [path, path]),
+  ...['/api/access', '/api/providers/check', '/api/definitions'].map(path => /** @type {[string, string]} */ ([path, path])),
   ['/v1/iteration/tasks', '/v1/iteration/tasks'],
   ['/v1/worker/assignments/next', '/v1/worker/assignments/next'],
   ['/v1/worker/snapshots', '/v1/worker/snapshots'],
   ['/v1/tasks/' + secret + '/context', '/v1/tasks/:id/context'],
-  ...['context', 'heartbeat', 'complete', 'abandon'].map(action => ['/v1/worker/tasks/' + secret + '/' + action, '/v1/worker/tasks/:id/' + action]),
+  ...['context', 'heartbeat', 'complete', 'abandon'].map(action => /** @type {[string, string]} */ (['/v1/worker/tasks/' + secret + '/' + action, '/v1/worker/tasks/:id/' + action])),
   ['/v1/worker/tasks/' + secret + '/unknown', 'unmatched'],
  ]);
  const {server, url} = await listening(observeHttp('orchestrator', (_req, res) => { res.writeHead(409); res.end('{}'); }, entry => events.push(entry)));

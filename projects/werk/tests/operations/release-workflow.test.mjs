@@ -90,6 +90,7 @@ test('stable publication uploads the complete draft before selecting latest', { 
   assert.match(notes, /https:\/\/github.com\/example\/werk\/releases\/latest\/download\/install.mjs/);
   assert.match(notes, /\$LASTEXITCODE -eq 0/);
   assert.match(notes, /werk-storybook-0\.1\.0\.zip/);
+  assert.match(notes, /handbook\/index\.html/);
   assert.match(notes, /storymap\/index\.html/);
 });
 
@@ -187,11 +188,11 @@ test('Pages permissions stay isolated to pinned deployment actions', () => {
 });
 
 test('Pages freshness permits the newest stable or prerelease across API pages and ignores drafts', { skip: !supported }, async t => {
-  for (const [current, pages] of [
+  for (const [current, pages] of /** @type {[typeof stableRelease, typeof stableRelease[][]][]} */ ([
     [stableRelease, [[priorRelease, newerDraft], [stableRelease]]],
     // Matching publication timestamps use the release ID as the tie-breaker.
     [prerelease, [[stableRelease, newerDraft], [priorRelease, prerelease]]],
-  ]) {
+  ])) {
     const { result, output } = await freshness(t, current.tag_name, pages);
     assert.equal(result.status, 0, result.stderr);
     assert.equal(output, 'current=true\n');
@@ -206,11 +207,11 @@ test('Pages freshness skips an older retry after a newer prerelease is published
 });
 
 test('Pages freshness fails closed when its release is missing or the release API fails', { skip: !supported }, async t => {
-  for (const [pages, apiFailure] of [
+  for (const [pages, apiFailure] of /** @type {[typeof stableRelease[][], boolean][]} */ ([
     [[[priorRelease]], false],
     [[[]], false],
     [[[stableRelease]], true],
-  ]) {
+  ])) {
     const { result, output } = await freshness(t, stableRelease.tag_name, pages, apiFailure);
     assert.notEqual(result.status, 0);
     assert.equal(output, '');
@@ -235,4 +236,52 @@ test('missing candidate notes stop publication before any GitHub mutation', { sk
   const { result, calls } = await publish(t, '0.1.0', 'missing-notes');
   assert.notEqual(result.status, 0);
   assert.deepEqual(calls, []);
+});
+
+
+test('mutation measurement is release-only advisory work, outside every publication dependency', async () => {
+  const mutation = workflow.jobs.mutation;
+  assert.equal(mutation.if, "startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'");
+  assert.equal(mutation['continue-on-error'], true);
+  assert.ok(mutation['timeout-minutes'] <= 20);
+  assert.equal(mutation.needs, undefined);
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    const dependencies = Array.isArray(job.needs) ? job.needs : [job.needs];
+    assert.ok(!dependencies.includes('mutation'), name + ' must not wait for advisory mutation testing');
+  }
+  const measurement = mutation.steps.find(step => step.id === 'mutation');
+  assert.equal(measurement.run, 'npm run mutation:release');
+  const artifact = mutation.steps.find(step => step.id === 'evidence');
+  assert.equal(artifact.if, 'always()');
+  assert.equal(artifact['continue-on-error'], true);
+  assert.equal(artifact.with.name, 'werk-mutation-report');
+  assert.equal(artifact.with['if-no-files-found'], 'warn');
+  const metadata = JSON.parse(await readFile(new URL('../../package.json', import.meta.url), 'utf8'));
+  for (const command of ['build', 'test', 'typecheck', 'check', 'storybook:ci', 'release:build']) {
+    assert.doesNotMatch(metadata.scripts[command], /mutation|stryker/i, command + ' must retain its normal development cost');
+  }
+});
+
+test('mutation infrastructure failures emit warnings and a durable summary without failing release', { skip: process.platform === 'win32' }, async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'werk mutation advisory '));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const step = workflow.jobs.mutation.steps.at(-1);
+  assert.equal(step.if, 'always()');
+  assert.equal(step['working-directory'], '/');
+  const outcomes = ['SOURCE_OUTCOME', 'NODE_OUTCOME', 'DEPENDENCIES_OUTCOME', 'MUTATION_OUTCOME', 'EVIDENCE_OUTCOME'];
+  for (const failure of [null, ...outcomes]) {
+    const summary = join(directory, failure || 'success');
+    const env = Object.fromEntries(outcomes.map(name => [name, name === failure ? 'failure' : 'success']));
+    if (failure === 'SOURCE_OUTCOME') env.MUTATION_OUTCOME = 'skipped';
+    const result = spawnSync('bash', ['--noprofile', '--norc', '-e', '-o', 'pipefail', '-c', step.run], {
+      cwd: directory, encoding: 'utf8', timeout: 5000,
+      env: { ...process.env, ...env, GITHUB_STEP_SUMMARY: summary },
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.includes('::warning title=Mutation testing incomplete::'), failure !== null);
+    const report = await readFile(summary, 'utf8');
+    assert.match(report, /does not gate publication/);
+    assert.ok(report.includes('measurement: ' + env.MUTATION_OUTCOME));
+    assert.ok(report.includes('artifact: ' + env.EVIDENCE_OUTCOME));
+  }
 });

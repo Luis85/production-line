@@ -1,18 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  line,
-  lineModule,
-  factory,
-  task,
-  worker,
-  page,
-  deferred,
-  httpError,
-  response,
-  status,
-  diagnosticModule,
-} from "../helpers/runtime-harness.mjs";
+import { line, lineModule, factory, task, worker, deferred, httpError, response, status, diagnosticModule } from "../helpers/runtime-harness.mjs";
 for (const format of ["json", "text"])
   for (const code of [401, 403, 503])
     test(`Factory ${code} ${format} response clears only expired access and preserves drafts`, async () => {
@@ -140,6 +128,7 @@ test("CLI diagnostics distinguish acknowledged review from simulations and rejec
   const mock = diagnosticModule.statusSummary(status());
   assert.match(mock.result, /not an implemented feature/);
   assert.throws(
+    // @ts-expect-error Deliberately invalid transport mode tests runtime rejection.
     () => diagnosticModule.validateStatus(status({ mode: "unknown" })),
     /Invalid/,
   );

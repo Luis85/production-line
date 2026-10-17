@@ -13,12 +13,16 @@ async function until(predicate) { const deadline = performance.now() + 10000; wh
 
 test('running worker keeps accepted chats queued and automatically resumes exactly once at the next UTC window', { timeout: 20000 }, async t => {
   const directory = await mkdtemp(join(tmpdir(), 'werk-consumption-runner-')), stop = new AbortController();
-  let workspace, run, requests = 0, clock = new Date('2026-10-16T23:59:59Z');
+  /** @type {WorkerWorkspace | undefined} */
+  let workspace;
+  let run, requests = 0, clock = new Date('2026-10-16T23:59:59Z');
   const originalInit = WorkerWorkspace.prototype.init;
   WorkerWorkspace.prototype.init = async function () {
     await originalInit.call(this);
+    // @ts-expect-error Inject the private clock to test UTC rollover without waiting a day.
     this.consumption.now = () => clock;
     await this.updateSettings({ consumption: { enabled: true, period: 'daily', allowance: 100, workerPercent: 50, perRunReservation: 40 }, provider: { id: 'openai-api', model: 'protocol-fixture', apiKey: 'fixture-only' } });
+    // @ts-expect-error Replace the private provider factory with a deterministic paid-call fixture.
     this.sessions.model = workspaceModelFactory(directory, this.settings, (connection, state) => modelFor(connection, state, async () => {
       requests++; return Response.json({ status: 'completed', usage: { input_tokens: 3, output_tokens: 2 }, output: [{ type: 'message', content: [{ type: 'output_text', text: 'Fixture reply after reset.' }] }] });
     }), this.consumption);
@@ -30,6 +34,7 @@ test('running worker keeps accepted chats queued and automatically resumes exact
   const config = await configuration({ 'poll-ms': '100', profiles: 'codex' });
   run = runWorker({ ...config, stateDir: directory, url: '', enrollmentToken: '', statusHost: '127.0.0.1', statusPort: 0 }, stop.signal);
   await Promise.race([until(() => workspace), run.then(() => { throw Error('Worker exited before readiness.'); })]);
+  assert.ok(workspace, 'Worker initialization must finish before submitting tasks.');
   for (const id of ['first', 'second']) await workspace.task({ action: 'create', id, title: 'Queued ' + id, provider: 'openai-api', message: 'Answer the fixture.' });
   await delay(350);
   assert.equal(requests, 0); assert.equal(workspace.executor.waiting, 2);

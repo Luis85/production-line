@@ -1,3 +1,5 @@
+import { completedText } from './model-fixtures.mjs';
+import { testErrorCode, testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -11,6 +13,7 @@ import { createToolRuntime, mcpToolName } from '../../src/worker/dist/worker/inf
 import { discoverMcpTools } from '../../src/worker/dist/worker/infrastructure/tool-mcp.js';
 import { modelFor } from '../../src/worker/dist/worker/infrastructure/providers.js';
 
+/** @type {import('../../src/worker/application/conversation-contracts.js').ChatMessage[]} */
 const input = [{ id: 'u1', role: 'user', state: 'complete', at: '2026-10-16T00:00:00.000Z', text: 'Read the fixture file and consult the granted MCP tool.' }];
 const definition = { name: 'inspect_fixture', description: 'Return a deterministic local fixture result.', inputSchema: { type: 'object', properties: { label: { type: 'string' } }, required: ['label'], additionalProperties: false } };
 
@@ -36,14 +39,14 @@ async function fixture(t) {
   });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   t.after(() => new Promise(resolve => server.close(resolve)));
-  const url = `http://127.0.0.1:${server.address().port}/mcp`;
+  const url = `http://127.0.0.1:${testListeningAddress(server).port}/mcp`;
   const catalog = await discoverMcpTools({ transport: 'http', url, headers: {} });
   const policy = defaultToolPolicy(); policy.revision = 1; policy.builtins.files = true;
   policy.mcp.push({ id: 'fixture', name: 'Fixture server', transport: 'http', enabled: true, command: '', args: [], url, secret: '', secretEnv: '', allowedTools: [definition.name], discoveredTools: catalog });
   return { directory, worktree, policy, get calls() { return calls; } };
 }
 
-for (const provider of ['openai-api', 'anthropic-api']) {
+for (const provider of /** @type {const} */ (['openai-api', 'anthropic-api'])) {
   test(`${provider} executes granted worktree and MCP tools through the same bounded catalog`, async t => {
     const f = await fixture(t), mcpName = mcpToolName('fixture', definition.name);
     let round = 0;
@@ -66,10 +69,12 @@ for (const provider of ['openai-api', 'anthropic-api']) {
         : { stop_reason: 'end_turn', usage: { input_tokens: 3, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, content: [{ type: 'text', text: 'Checked fixture.' }] });
     };
     const model = modelFor({ id: provider, executable: '', model: 'fixture', apiKey: 'not-a-real-key', instruction: '' }, f.directory, transport, { tools: () => createToolRuntime({ policy: f.policy, currentRevision: () => f.policy.revision, directory: f.directory, worktree: f.worktree }) });
-    const request = prepareModelRequest(model, input); let usage;
+    const request = prepareModelRequest(model, input);
+    /** @type {import('../../src/worker/application/run-evidence.js').ProviderUsage} */
+    let usage;
     assert.equal(request.policy.tools, 'granted');
     assert.equal(JSON.stringify(request).includes('not-a-real-key'), false);
-    assert.equal((await executeModel(model, request, new AbortController().signal, value => { usage = value; })).text, 'Checked fixture.');
+    assert.equal(completedText((await executeModel(model, request, new AbortController().signal, value => { usage = value; }))), 'Checked fixture.');
     assert.equal(f.calls, 1); assert.equal(round, 3); assert.equal(usage.inputTokens, 9); assert.equal(usage.outputTokens, 3);
     assert.equal(await readFile(join(f.worktree, 'accepted.txt'), 'utf8'), 'Approved fixture content.\n');
   });
@@ -82,6 +87,6 @@ test('a policy change between model tool rounds prevents the next MCP side effec
     if (requests === 2) revision++;
     return Response.json({ status: 'completed', output: [{ type: 'function_call', call_id: 'call-' + requests, name: requests === 1 ? 'werk_files_read' : mcpToolName('fixture', definition.name), arguments: JSON.stringify(requests === 1 ? { path: 'accepted.txt' } : { label: 'must not run' }) }] });
   }, { tools: () => createToolRuntime({ policy: f.policy, currentRevision: () => revision, directory: f.directory, worktree: f.worktree }) });
-  await assert.rejects(executeModel(model, prepareModelRequest(model, input), new AbortController().signal), error => error.code === 'tool_access');
+  await assert.rejects(executeModel(model, prepareModelRequest(model, input), new AbortController().signal), error => testErrorCode(error) === 'tool_access');
   assert.equal(f.calls, 0); assert.equal(requests, 2);
 });

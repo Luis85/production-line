@@ -1,3 +1,4 @@
+import { withOwnedResponse } from '../../shared/http/transport.js';
 import { validateMcpAddress } from '../application/mcp-endpoint.js';
 import { abortFailure, encodeMessage, MCP_WIRE_LIMIT, McpClientError, parseMessage, rpcResult, type McpClientOptions, type McpSession, type McpTransportConfiguration } from './tool-mcp-protocol.js';
 
@@ -52,19 +53,20 @@ export function openMcpHttp(config: Extract<McpTransportConfiguration, { transpo
   };
   const post = async (message: unknown, requestId?: number): Promise<unknown> => {
     if (signal.aborted) throw abortFailure(signal);
-    const response = await transport(endpoint, { method: 'POST', redirect: 'error', signal, headers: headers(), body: encodeMessage(message) });
-    const incomingId = response.headers.get('mcp-session-id');
-    if (incomingId !== null) {
-      if (!/^[\x21-\x7e]{1,1024}$/.test(incomingId) || (sessionId !== undefined && incomingId !== sessionId)) {
-        void response.body?.cancel().catch(() => {}); throw new McpClientError('protocol');
+    return withOwnedResponse(endpoint, { method: 'POST', redirect: 'error', signal, headers: headers(), body: encodeMessage(message) }, undefined, async response => {
+      const incomingId = response.headers.get('mcp-session-id');
+      if (incomingId !== null) {
+        if (!/^[\x21-\x7e]{1,1024}$/.test(incomingId) || (sessionId !== undefined && incomingId !== sessionId)) {
+          void response.body?.cancel().catch(() => {}); throw new McpClientError('protocol');
+        }
+        sessionId = incomingId;
       }
-      sessionId = incomingId;
-    }
-    if (requestId !== undefined ? response.status !== 200 : ![200, 202, 204].includes(response.status)) {
-      void response.body?.cancel().catch(() => {}); throw new McpClientError('unavailable');
-    }
-    if (requestId === undefined && !response.body) return undefined;
-    return body(response, requestId);
+      if (requestId !== undefined ? response.status !== 200 : ![200, 202, 204].includes(response.status)) {
+        void response.body?.cancel().catch(() => {}); throw new McpClientError('unavailable');
+      }
+      if (requestId === undefined && !response.body) return undefined;
+      return body(response, requestId);
+    }, true, transport);
   };
   const session: McpSession = {
     request(method, params) { const requestId = ++id; return post({ jsonrpc: '2.0', id: requestId, method, params }, requestId); },
@@ -72,8 +74,7 @@ export function openMcpHttp(config: Extract<McpTransportConfiguration, { transpo
     async close() {
       if (!sessionId) return;
       try {
-        const response = await transport(endpoint, { method: 'DELETE', redirect: 'error', signal: AbortSignal.timeout(1000), headers: headers() });
-        await response.body?.cancel();
+        await withOwnedResponse(endpoint, { method: 'DELETE', redirect: 'error', headers: headers() }, 1000, async response => { await response.body?.cancel(); }, true, transport);
       } catch { /* Session deletion is best effort; the original operation remains authoritative. */ }
     },
   };

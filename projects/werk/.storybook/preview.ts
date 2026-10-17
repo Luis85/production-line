@@ -45,7 +45,7 @@ setup(app => {
   } });
 });
 const preview: Preview = {
-  parameters: { layout: 'fullscreen', controls: { expanded: true }, options: { storySort: { order: ['System', 'Worker', 'Factory', 'Orchestrator', 'Shared', 'Concept', 'Guide'] } } },
+  parameters: { layout: 'fullscreen', controls: { expanded: true }, options: { storySort: { order: ['Documentation', ['Start here', 'Set up your workspace', 'Work with requests', 'Operate the system', 'Frontend reference', 'Architecture and contracts'], 'Guide', 'Worker', 'Factory', 'Orchestrator', 'Shared', 'Concept'] } } },
   loaders: [async context => {
     globals.__WERK_STORYMAP__ = context.parameters.storymap;
     globals.__WERK_MOUNTED_SOURCES__ = new Set();

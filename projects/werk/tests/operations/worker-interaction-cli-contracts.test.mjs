@@ -1,3 +1,4 @@
+import { testErrorStatus } from '../helpers/process-errors.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { commands } from '../../scripts/runtime/portable/commands.mjs';
@@ -26,7 +27,7 @@ test('interaction flags own identity and revision while message and file input m
 test('interaction input rejects ambiguous text, invalid revisions and caller-controlled target fields',async()=>{
   const flags={id:'session-a','question-id':'pending-a','if-match':'3',key:'answer-op-a'};
   const cases=[[undefined,flags],[{answer:' '},flags],[{answer:'a'.repeat(8001)},flags],[{answer:'One'},{...flags,message:'Two'}],[{answer:'Text',sessionId:'other'},flags],[{answer:'Text',operationId:'other'},flags],[{answer:'Text'},{...flags,'if-match':'-1'}],[{answer:'Text'},{...flags,'if-match':'1.5'}],[{answer:'Text'},{...flags,'if-match':'9007199254740992'}],[{answer:'Text'},{...flags,key:'spaces not allowed'}]];
-  for(const [body,options] of cases)await assert.rejects(workerBody(catalog['interaction answer'],body,options),error=>error.exitCode===2);
+  for(const [body,options] of cases)await assert.rejects(workerBody(catalog['interaction answer'],body,options),error=>testErrorStatus(error, 'exitCode')===2);
 });
 test('worker waits return immediately for pending questions/escalations and never label them completed',async()=>{
   const task={session:{status:'waiting_input'}},feature={record:{status:'escalated'},execution:{status:'escalated'}},local={status:'waiting_input'};
@@ -36,5 +37,5 @@ test('worker waits return immediately for pending questions/escalations and neve
 });
 
 test('normalized event polling rejects unsafe sequence/page arguments before a request',async()=>{
-  for(const options of [{after:'-1'},{after:'1.5'},{after:'9007199254740992'},{limit:'0'},{limit:'101'}]) await assert.rejects(workerBody(catalog['interaction events'],undefined,{id:'session-a',...options}),error=>error.exitCode===2);
+  for(const options of [{after:'-1'},{after:'1.5'},{after:'9007199254740992'},{limit:'0'},{limit:'101'}]) await assert.rejects(workerBody(catalog['interaction events'],undefined,{id:'session-a',...options}),error=>testErrorStatus(error, 'exitCode')===2);
 });

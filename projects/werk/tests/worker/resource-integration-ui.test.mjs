@@ -24,7 +24,8 @@ test('stale synchronization never retries automatically or loses the reviewed pr
  await f.preview(); await f.apply(); assert.equal(attempts, 1); assert.equal(f.reviewed.value.planId, 'reviewed'); assert.match(f.error.value, /fresh plan/);
 });
 test('access expiry retires an in-flight private project plan', async t => {
- let done; const f = await fixture(t, 'ProjectIntegrationsPanel', () => new Promise(resolve => { done = resolve; }));
+ const { promise, resolve: done } = Promise.withResolvers();
+ const f = await fixture(t, 'ProjectIntegrationsPanel', () => promise);
  const pending = f.preview(); f.state.unlocked = false; await nextTick(); done(plan('private')); await pending;
  assert.equal(f.report.value, null); assert.equal(f.reviewed.value, null);
 });

@@ -1,3 +1,4 @@
+import { trackingSharedRecord, trackingWorkflow } from './tracking-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
@@ -252,15 +253,20 @@ test('custom completion rules cannot mark unverified implementation work done or
   assert.equal(done.passed, false);
   assert.ok(done.rules.some(rule => rule.ruleId === 'worker-required-verification' && rule.result === 'fail'));
 
-  const writes = [], record = {
+  const writes = [], record = trackingSharedRecord({
     id: 'feature-unverified', title: 'Unverified implementation', taskId: id,
     sourcePath: 'features/unverified.md', sourceCommit: f.baseCommit, remoteRevision: 'a'.repeat(64),
-    binding: {}, workflow: { policyDigest: request.policyDigest },
+    workflow: trackingWorkflow({ policyDigest: request.policyDigest }),
     status: 'queued', error: null, claimed: true, submitted: true, publication: 'synced',
-  };
+  });
+  const unexpected = () => { throw Error('Unexpected shared intake operation.'); };
   const lifecycle = new SharedFeatureLifecycle({
+    load: unexpected, save: unexpected, loadWorkflow: unexpected, ready: unexpected, source: unexpected, submit: unexpected, canAdmit: unexpected,
     inspect: taskId => { assert.equal(taskId, id); return { ...task, request, developmentVerified: false }; },
     repository: () => ({
+      async head() { throw Error('Unexpected repository read.'); },
+      async readBlob() { throw Error('Unexpected repository read.'); },
+      async listRequests() { throw Error('Unexpected repository read.'); },
       async publishLifecycle(write) { writes.push(structuredClone(write)); return { commit: 'b'.repeat(40), head: 'b'.repeat(40) }; },
       async publishPatch() { assert.fail('Unverified implementation must not publish a feature branch.'); },
     }),

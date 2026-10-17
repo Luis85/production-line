@@ -1,3 +1,5 @@
+import { productionLine, intakeTask } from '../helpers/factory-intake.mjs';
+import { testErrorField, testErrorCode, testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readResponseBody, ResponseBodyLimitError } from '../../src/orchestrator/dist/shared/http/response-body.js';
@@ -36,33 +38,35 @@ test('provider cleanup cancels on read failure, suppresses cleanup errors, and r
     async cancel() { events.push('cancel'); throw Error('cleanup failed'); },
     releaseLock() { events.push('release'); },
   }) };
+  // @ts-expect-error Intentionally inject only the reader seam, including failing cleanup methods.
   await assert.rejects(readResponseBody(body, 8, { cancel: 'always' }), error => error === failure);
   assert.deepEqual(events, ['read', 'cancel', 'release']);
   events.length = 0;
+  // @ts-expect-error Intentionally inject only the reader seam to observe release after failure.
   await assert.rejects(readResponseBody(body, 8), error => error === failure);
   assert.deepEqual(events, ['read', 'release']);
 });
 
 test('HTTP adapters retain strict public decoding and permissive private decoding with private errors', async t => {
   const invalidUtf8 = Uint8Array.from([34, 0xc3, 0x28, 34]);
-  t.mock.method(globalThis, 'fetch', async () => new Response(invalidUtf8));
-  await assert.rejects(request('http://localhost', '/test', 'private'), error => error.status === 502 && /invalid JSON/.test(error.message));
+  const fetchMock = t.mock.method(globalThis, 'fetch', async () => new Response(invalidUtf8));
+  await assert.rejects(request('http://localhost', '/test', 'private'), error => testErrorField(error, 'status') === 502 && /invalid JSON/.test(testErrorMessage(error)));
   assert.equal(await privateJson(new URL('http://localhost/test'), 'private'), '\ufffd(');
-  globalThis.fetch.mock.mockImplementation(async () => Response.json({ error: 'PRIVATE_REMOTE_DIAGNOSTIC' }, { status: 403 }));
-  await assert.rejects(privateJson(new URL('http://localhost/test'), 'private'), error => error.code === 'unavailable' && !error.message.includes('PRIVATE_REMOTE_DIAGNOSTIC'));
-  await assert.rejects(request('http://localhost', '/test', 'private'), error => error.status === 403 && error.message === 'PRIVATE_REMOTE_DIAGNOSTIC');
+  fetchMock.mock.mockImplementation(async () => Response.json({ error: 'PRIVATE_REMOTE_DIAGNOSTIC' }, { status: 403 }));
+  await assert.rejects(privateJson(new URL('http://localhost/test'), 'private'), error => testErrorCode(error) === 'unavailable' && !testErrorMessage(error).includes('PRIVATE_REMOTE_DIAGNOSTIC'));
+  await assert.rejects(request('http://localhost', '/test', 'private'), error => testErrorField(error, 'status') === 403 && testErrorMessage(error) === 'PRIVATE_REMOTE_DIAGNOSTIC');
 });
 
 test('shared, private and Factory response adapters retain their separate byte limits and overflow policies', async t => {
   let current;
   t.mock.method(globalThis, 'fetch', async () => new Response(current.body));
   current = oversized(8 * 1024 * 1024 + 1);
-  await assert.rejects(request('http://localhost', '/test', 'private'), error => error.status === 502 && /8 MiB/.test(error.message));
+  await assert.rejects(request('http://localhost', '/test', 'private'), error => testErrorField(error, 'status') === 502 && /8 MiB/.test(testErrorMessage(error)));
   assert.equal(current.cancelled(), 1); assert.equal(current.body.locked, false);
   current = oversized(1048577);
-  await assert.rejects(privateJson(new URL('http://localhost/test'), 'private'), error => error.code === 'unavailable');
+  await assert.rejects(privateJson(new URL('http://localhost/test'), 'private'), error => testErrorCode(error) === 'unavailable');
   assert.equal(current.cancelled(), 1); assert.equal(current.body.locked, false);
-  const line = { orchestratorUrl: 'http://localhost', tokenEnv: 'LINE' };
+  const line = productionLine('http://localhost');
   const reader = new HttpLineReader({ LINE: 'private' }); t.after(() => reader.close());
   current = oversized(65537);
   const overview = await reader.read(line);
@@ -70,20 +74,22 @@ test('shared, private and Factory response adapters retain their separate byte l
   assert.equal(current.cancelled(), 1); assert.equal(current.body.locked, false);
   const delivery = new HttpLineDelivery({ LINE: 'private' }); t.after(() => delivery.close());
   current = oversized(65537);
-  await assert.rejects(delivery.send(line, { id: 'task', task: { project: 'demo' } }), /Oversized acknowledgement/);
+  await assert.rejects(delivery.send(line, intakeTask('task')), /Oversized acknowledgement/);
   assert.equal(current.cancelled(), 1); assert.equal(current.body.locked, false);
 });
 
 test('provider API preserves response limits, HTTP classification and cancellation without remote diagnostics', async () => {
-  const connection = { id: 'openai-api', apiKey: 'private' };
-  const request = prepareModelRequest({ configuration: { id: 'openai-api', model: 'fixture', instruction: '' }, async reply() { return ''; } }, []);
+  /** @type {import('../../src/worker/application/provider-contract.ts').ProviderConnection} */
+  const connection = { id: 'openai-api', apiKey: 'private', model: 'fixture', executable: '' };
+  const model = { configuration: { id: 'openai-api', model: 'fixture', instruction: '' }, async reply() { return ''; } };
+  const request = prepareModelRequest(model, []);
   const controller = new AbortController(), large = oversized(1048577);
-  await assert.rejects(apiReply(connection, request, controller.signal, async () => new Response(large.body)), error => error.code === 'protocol');
+  await assert.rejects(apiReply(connection, request, controller.signal, async () => new Response(large.body)), error => testErrorCode(error) === 'protocol');
   assert.equal(large.cancelled(), 1); assert.equal(large.body.locked, false);
-  await assert.rejects(apiReply(connection, request, controller.signal, async () => new Response('PRIVATE_REMOTE_DIAGNOSTIC', { status: 401 })), error => error.code === 'authentication' && !error.message.includes('PRIVATE_REMOTE_DIAGNOSTIC'));
+  await assert.rejects(apiReply(connection, request, controller.signal, async () => new Response('PRIVATE_REMOTE_DIAGNOSTIC', { status: 401 })), error => testErrorCode(error) === 'authentication' && !testErrorMessage(error).includes('PRIVATE_REMOTE_DIAGNOSTIC'));
   const failed = new ReadableStream({ start(controller) { controller.error(Error('PRIVATE_STREAM_ERROR')); } });
   // Abort after transport admission so the response-reader path performs the classification.
   const lateController = new AbortController();
-  await assert.rejects(apiReply(connection, request, lateController.signal, async () => { lateController.abort(); return new Response(failed); }), error => error.code === 'cancelled' && !error.message.includes('PRIVATE_STREAM_ERROR'));
+  await assert.rejects(apiReply(connection, request, lateController.signal, async () => { lateController.abort(); return new Response(failed); }), error => testErrorCode(error) === 'cancelled' && !testErrorMessage(error).includes('PRIVATE_STREAM_ERROR'));
   assert.equal(failed.locked, false);
 });

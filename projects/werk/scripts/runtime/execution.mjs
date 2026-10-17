@@ -7,7 +7,7 @@ const unsafeSegment = part => !part || part === '.' || part === '..' || part.sta
 const secret = path => [path, path.normalize('NFKC')].some(name => /(?:^|\/)(?:credentials?|secrets?|id_rsa|id_ed25519)(?:[./]|$)/iu.test(name) || /\.(?:pem|key|p12|pfx)$/iu.test(name));
 export const safeApprovedPath = path => path.length <= 240 && allowedPathCharacters.test(path) && !path.startsWith('-') && !path.split('/').some(unsafeSegment) && !secret(path);
 /** Files and their parent folders must retain one spelling across case-insensitive checkouts. */
-export function approvedPathsCollide(paths) {
+function approvedPathsCollide(paths) {
   const key = (path) => path.normalize('NFC').toLowerCase();
   const files = new Set(paths.map(key)), prefixes = new Map();
   if (files.size !== paths.length) return true;

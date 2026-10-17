@@ -77,6 +77,6 @@ export const Operations: Story = {
   render: renderConcept('operations'),
 };
 export const System: Story = {
-  parameters: parameters('Inspect architecture boundaries and the division of responsibilities across the complete system.', [component('ConceptDocumentation'), component('ConceptSystem')], 10),
+  parameters: parameters('Inspect architecture boundaries and the division of responsibilities across the complete system.', [component('ConceptDocumentation'), component('ConceptSystem'), component('ConceptRepositoryWorkflow'), component('ConceptRuntimeBoundaries'), component('ConceptAgentDelivery')], 10),
   render: renderConcept('system'),
 };

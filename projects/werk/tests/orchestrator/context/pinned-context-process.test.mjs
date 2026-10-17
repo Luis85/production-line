@@ -1,3 +1,4 @@
+import { testListeningAddress } from '../../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, execFile } from 'node:child_process';
@@ -22,7 +23,7 @@ async function until(predicate, label, milliseconds = 10000) {
 }
 async function freePort() {
   const server = createServer(); server.listen(0, '127.0.0.1'); await once(server, 'listening');
-  const port = server.address().port; await new Promise(resolve => server.close(resolve)); return port;
+  const port = testListeningAddress(server).port; await new Promise(resolve => server.close(resolve)); return port;
 }
 function launch(file, args, env) {
   const child = spawn(process.execPath, [file, ...args], { env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });

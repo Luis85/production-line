@@ -22,7 +22,7 @@ async function fixture(t) {
   const config = { version: '0.1.0', repository: 'example/werk', sha256: hash(tarGzip) };
   const transport = { fetcher: async url => {
     assert.equal(url, 'https://github.com/example/werk/releases/download/v0.1.0/werk-0.1.0.tar.gz');
-    return new Response(tarGzip);
+    return new Response(new Uint8Array(tarGzip));
   }, log() {} };
   return { directory, config, transport };
 }
@@ -89,6 +89,7 @@ for (const platform of ['linux', 'win32']) test(`installer restart guidance pres
   await mkdir(root);
   await writeFile(join(root, 'werk.mjs'), 'console.log(JSON.stringify(process.argv.slice(2)))');
   const options = { file: join(directory, "team's $system `definition`.yaml"), stateDir: join(directory, "state ' ; $(printf unexpected) &"), noOpen: true };
+  assert.ok(platform === 'win32' || platform === 'linux' || platform === 'darwin');
   const command = restartCommand(root, options, platform);
   const output = platform === 'win32'
     ? execFileSync(powerShell, ['-NoProfile', '-NonInteractive', '-Command', command], { encoding: 'utf8', cwd: directory })

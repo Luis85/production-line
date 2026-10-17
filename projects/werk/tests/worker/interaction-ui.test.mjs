@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 import { reactive, ref, computed, watch, nextTick, effectScope } from 'vue';
-const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
+import { deferred } from '../ui/helpers/frontend-loader.mjs';
 const checkpoint = (sessionId = 'task-A', revision = 1) => ({ schemaVersion: 1, sessionId, revision, phase: 'waiting_input', pending: { id: 'question-1', kind: 'question', message: 'Which retry budget?', createdAt: '2026-10-14T16:15:00Z', turnId: 'turn-1' }, latestTurn: { id: 'turn-1', kind: 'message', status: 'waiting_input', finishedAt: null }, turns: [], totalTurns: 1 });
 async function fixture(t, request) {
   const source = normalizeSource(await readFile(new URL('../../src/worker/webview/components/InteractionPanel.vue', import.meta.url), 'utf8'));
@@ -36,7 +36,7 @@ test('access expiry retains checkpoint draft in private tab memory; explicit loc
   f.state.draftEpoch++; await nextTick(); assert.equal(f.answerDrafts.size, 0); assert.equal(f.operations.size, 0);
 });
 test('late checkpoint reads cannot replace another selected task or expose prior turn usage', async t => {
-  let resolveA; const pending = new Promise(done => { resolveA = done; });
+  const { promise: pending, resolve: resolveA } = Promise.withResolvers();
   const f = await fixture(t, async (path, method, body) => body.sessionId === 'task-A' ? pending : checkpoint('task-B'));
   const first = f.load(); f.state.sessions.selected = 'task-B'; await nextTick(); await nextTick();
   resolveA(checkpoint('task-A')); await first; assert.equal(f.view.value.sessionId, 'task-B'); assert.equal(f.lastTurn.value, null);

@@ -5,13 +5,13 @@ import { readPrivate, inputError } from './config.mjs';
 import { join } from 'node:path';
 
 const hex = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
-export function validMetadata(value) {
+function validMetadata(value) {
   if (!value || value.schemaVersion !== 1 || !hex(value.runId) || !hex(value.controlToken) || !Number.isInteger(value.pid) || value.pid < 1 ||
       !Number.isInteger(value.controlPort) || value.controlPort < 1 || value.controlPort > 65535 || !Array.isArray(value.children) ||
       value.children.some(child => !Number.isInteger(child.pid) || child.pid < 1 || !['orchestrator', 'worker', 'line', 'factory'].includes(child.role))) throw inputError('Invalid supervisor metadata. Do not signal stored PIDs; inspect private state before recovery.');
   return value;
 }
-export async function metadata(stateDir) { return validMetadata(await readPrivate(join(stateDir, 'supervisor.json'))); }
+async function metadata(stateDir) { return validMetadata(await readPrivate(join(stateDir, 'supervisor.json'))); }
 export async function controlRequest(record, action = 'status') {
   validMetadata(record);
   return withOwnedResponse(`http://127.0.0.1:${record.controlPort}/${action}`, { method: action === 'stop' ? 'POST' : 'GET',

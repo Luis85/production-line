@@ -22,7 +22,7 @@ for (const kind of ['worker', 'factory', 'orchestrator']) test(`${kind} portable
   if (kind === 'worker') await exec('git', ['init', '--quiet'], { cwd: project });
   await mkdir(state, { recursive: true, mode: 0o700 });
   await writeFile(join(state, kind === 'worker' ? 'webview-token' : 'component.json'), kind === 'worker' ? 'a'.repeat(64) + '\n' : JSON.stringify({ schemaVersion: 1, kind, project: 'demo', adminToken: 'a'.repeat(64), enrollmentToken: 'd'.repeat(64) }), { mode: 0o600 });
-  await ownWorkspace(t, outer, () => invoke(entry, elsewhere, ['stop', '--state-dir', state]));
+  await ownWorkspace(t, outer, async () => { await invoke(entry, elsewhere, ['stop', '--state-dir', state]); });
   const prefix = `WERK_${kind.toUpperCase()}`, key = kind === 'worker' ? 'WERK_WORKER_TOKEN' : kind === 'factory' ? 'WERK_FACTORY_ADMIN_TOKEN' : 'WERK_ADMIN_TOKEN';
   const initial = `# Operator settings stay byte-for-byte intact\nCUSTOM_VALUE='literal $HOME'\n${prefix}_STATE_DIR='private-state/${kind}'\n${prefix}_PORT=45991\n`;
   await writeFile(path, initial, { mode: 0o644 });
@@ -67,7 +67,7 @@ test('project init and npm use the same root environment while Docker receives e
   await mkdir(project); await mkdir(elsewhere);
   const installed = await ok(join(root, 'bin/apps/worker/cli.mjs'), elsewhere, ['init', '--project-dir', project]);
   const entry = join(installed.application, 'cli.mjs'), state = join(project, '.werk/worker'), path = join(project, '.env');
-  await ownWorkspace(t, outer, () => invoke(entry, elsewhere, ['stop', '--state-dir', state]));
+  await ownWorkspace(t, outer, async () => { await invoke(entry, elsewhere, ['stop', '--state-dir', state]); });
   const contents = await readFile(path, 'utf8'), token = parseEnv(contents).WERK_WORKER_TOKEN;
   assert.equal(installed.environment.path, path); assert.ok(!JSON.stringify(installed).includes(token));
   assert.match(installed.commands.docker, /compose --env-file \.env -f/);

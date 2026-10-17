@@ -1,9 +1,10 @@
+import { testErrorCode, testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, writeFile, rm, symlink, mkdir, cp, readFile } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm, symlink, mkdir, cp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadDefinition, validateDefinition, planDefinition } from '../../scripts/system/definition.mjs';
 
@@ -38,7 +39,7 @@ test('rejects unknown fields, missing fields and nonplain objects at every level
   const targets = [v => v, v => v.factory, v => v.productionLines[0], v => v.productionLines[0].orchestrator, v => v.productionLines[0].workers];
   for (const target of targets) {
     const unknown = valid(); target(unknown).token = 'must-not-appear-in-errors';
-    assert.throws(() => validateDefinition(unknown), error => error.code === 'INVALID_SYSTEM_DEFINITION' && !error.message.includes('must-not-appear-in-errors'));
+    assert.throws(() => validateDefinition(unknown), error => testErrorCode(error) === 'INVALID_SYSTEM_DEFINITION' && !testErrorMessage(error).includes('must-not-appear-in-errors'));
     const missing = valid(); delete target(missing)[Object.keys(target(missing))[0]];
     assert.throws(() => validateDefinition(missing), /required field/);
   }
@@ -178,6 +179,6 @@ test('public webview origins normalize without changing private API plans and re
   assert.equal(plan.productionLines[0].orchestrator.url, 'http://127.0.0.1:3001');
   for (const url of ['http://line.example.com', 'https://user:secret@line.example.com', 'https://line.example.com/path', 'https://line.example.com?token=secret', 'https://line.example.com#secret', 'https://line.example.com?', 'https://line.example.com\\@evil.example', 'https://line.example.com\n']) {
     source.productionLines[0].orchestrator.webviewUrl = url;
-    assert.throws(() => validateDefinition(source), error => error.code === 'INVALID_SYSTEM_DEFINITION' && !error.message.includes('secret'));
+    assert.throws(() => validateDefinition(source), error => testErrorCode(error) === 'INVALID_SYSTEM_DEFINITION' && !testErrorMessage(error).includes('secret'));
   }
 });

@@ -1,3 +1,5 @@
+import { requiredValue } from '../ui/helpers/required-value.mjs';
+import { testErrorCode, testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -22,13 +24,14 @@ test('execution policy bounds are explicit and saved request budget is immutable
   assert.equal(request.policy.maxRuntimeMs,86400000); assert.ok(Object.isFrozen(request.policy));
 });
 test('chat snapshots admission budget and injected short deadline retains timeout guidance', async () => {
-  let budget = 30, seen;
+  let budget = 30;
+  const seen = /** @type {{ value?: AbortSignal }} */ ({});
   const store = {async read(){return {messages:[]}},async write(){}};
-  const model = {async reply(_messages,signal){seen=signal; await new Promise(resolve=>signal.addEventListener('abort',resolve,{once:true})); signal.throwIfAborted();}};
+  const model = {async reply(_messages,signal){seen.value=signal; await new Promise(resolve=>signal.addEventListener('abort',resolve,{once:true})); signal.throwIfAborted(); return '';}};
   const conversation = new WorkerConversation(store,model,()=>budget);
   await conversation.init(); await conversation.start('fixture'); budget=86400000;
   await new Promise(resolve=>setTimeout(resolve,70));
-  assert.equal(seen.aborted,true); assert.equal(conversation.snapshot().messages.at(-1).state,'error');
+  assert.equal(requiredValue(seen.value).aborted,true); assert.equal(conversation.snapshot().messages.at(-1).state,'error');
   assert.match(conversation.snapshot().messages.at(-1).text,/configured execution time limit/);
   await conversation.close();
 });
@@ -46,7 +49,7 @@ test('provider transport accepts delayed headers/body and aborts cleanly without
     if (calls === 1) firstStarted(response); else secondStarted(response);
   });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
-  const url = 'http://127.0.0.1:' + server.address().port;
+  const url = 'http://127.0.0.1:' + testListeningAddress(server).port;
   const requests = channel('undici:request:create'), responses = channel('undici:request:headers');
   const observeRequest = ({ request }) => { if (request.origin === url) dispatched++; };
   const observeHeaders = ({ request }) => { if (request.origin === url) receivedHeaders(); };
@@ -67,7 +70,7 @@ test('provider transport accepts delayed headers/body and aborts cleanly without
     response.end('"ok":true}');
     assert.deepEqual(await (await first).json(), { ok: true });
     const controller = new AbortController();
-    const cancelled = assert.rejects(providerTransport(url, { method: 'POST', body: '{}', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5000)]) }), error => error.name === 'AbortError' || error.code === 'cancelled');
+    const cancelled = assert.rejects(providerTransport(url, { method: 'POST', body: '{}', signal: AbortSignal.any([controller.signal, AbortSignal.timeout(5000)]) }), error => error instanceof Error && (error.name === 'AbortError' || testErrorCode(error) === 'cancelled'));
     await Promise.race([secondAdmission, cancelled]); controller.abort(); await cancelled;
     assert.equal(calls, 2); assert.equal(dispatched, 2, 'neither delayed nor cancelled inference is retried');
   } finally {
@@ -85,7 +88,7 @@ test('provider transport honors opt-in environment proxy without mutating global
   const keys=['NODE_USE_ENV_PROXY','http_proxy','HTTP_PROXY','https_proxy','HTTPS_PROXY','no_proxy','NO_PROXY'];
   const previous=Object.fromEntries(keys.map(key=>[key,process.env[key]]));
   try {
-    process.env.NODE_USE_ENV_PROXY='1';process.env.http_proxy='http://127.0.0.1:'+proxy.address().port;process.env.HTTP_PROXY=process.env.http_proxy;
+    process.env.NODE_USE_ENV_PROXY='1';process.env.http_proxy='http://127.0.0.1:'+testListeningAddress(proxy).port;process.env.HTTP_PROXY=process.env.http_proxy;
     process.env.no_proxy='';process.env.NO_PROXY='';
     const result=await providerTransport('http://werk-fixture.invalid/',{method:'POST',body:'{}',signal:AbortSignal.timeout(1000)});
     assert.deepEqual(await result.json(),{ok:true});assert.equal(tunnels,1);

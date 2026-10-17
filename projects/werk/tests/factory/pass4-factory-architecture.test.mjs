@@ -1,3 +1,4 @@
+import { testErrorCode, testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -7,6 +8,7 @@ import { HttpLineReader } from '../../src/factory/dist/factory/infrastructure/po
 
 const reference='WERK_LINE_ALPHA_TOKEN';
 const line=(id,factoryId='root')=>({id,name:id,factoryId,orchestratorUrl:`http://127.0.0.1:${id==='alpha'?3010:3020}`,webviewUrl:'http://127.0.0.1:3000/',tokenEnv:reference});
+/** @returns {import('../../src/shared/factory.ts').OrchestratorOverview} */
 const overview=()=>({schemaVersion:1,observedAt:new Date().toISOString(),mode:'mock',project:'demo',tasks:{total:1,queued:1,running:0,simulated:0,blocked:0},workers:{total:0,online:0,offline:0,slotsTotal:0,slotsBusy:0,slotsAvailable:0},snapshots:{total:0,before:0,after:0},cost:{amountUsd:null,reason:'unavailable_mock'}});
 const noReads={read:()=>{throw Error('CRUD must not query an orchestrator');}};
 
@@ -19,14 +21,15 @@ test('Existing registrations remain editable after deployment credentials become
     const restarted=new FactoryApplication(registry,noReads,new Set());
     const changed=restarted.updateLine('alpha',{name:'Renamed',factoryId:'child',webviewUrl:'http://127.0.0.1:8080/'});
     assert.equal(changed.name,'Renamed');assert.equal(changed.factoryId,'child');assert.equal(changed.tokenEnv,reference);
-    assert.throws(()=>restarted.updateLine('alpha',{tokenEnv:'WERK_LINE_UNCONFIGURED_TOKEN'}),error=>error.code==='invalid_input');
-    assert.throws(()=>restarted.createLine(line('beta')),error=>error.code==='invalid_input');
+    assert.throws(()=>restarted.updateLine('alpha',{tokenEnv:'WERK_LINE_UNCONFIGURED_TOKEN'}),error=>testErrorCode(error)==='invalid_input');
+    assert.throws(()=>restarted.createLine(line('beta')),error=>testErrorCode(error)==='invalid_input');
     assert.equal(restarted.line('alpha').name,'Renamed');
   }finally{registry.close();}
 });
 
 test('A rejected line adapter cannot erase healthy portfolio observations or reflect its diagnostic secrets',async()=>{
   const registry=new SqliteFactoryRegistry(':memory:'),secret='sensitive-adapter-diagnostic';
+  /** @type {import('../../src/factory/application/ports.ts').LineReader} */
   const reader={read:async registration=>{
     if(registration.id==='beta')throw Error(secret);
     return {line:registration,status:'available',checkedAt:new Date().toISOString(),error:null,overview:overview()};
@@ -49,11 +52,11 @@ test('Closing a line reader cancels an active body read and every queued poll wi
   const server=createServer((_request,response)=>{
     received++;response.writeHead(200,{'Content-Type':'application/json'});response.write('{');resolveFirst();
   });
-  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',()=>resolve(undefined)));
   const credentials={WERK_LINE_A_TOKEN:'secret-a',WERK_LINE_B_TOKEN:'secret-b',WERK_LINE_C_TOKEN:'secret-c'};
   const reader=new HttpLineReader(credentials,10000,1);
   try{
-    const url='http://127.0.0.1:'+server.address().port;
+    const url='http://127.0.0.1:'+testListeningAddress(server).port;
     const polls=Object.keys(credentials).map((tokenEnv,index)=>reader.read({...line('line'+index),orchestratorUrl:url,tokenEnv}));
     await firstRequest;
     reader.close();

@@ -1,0 +1,120 @@
+.spatial {
+  margin-block: 16px 24px;
+  min-width: 0;
+}
+.spatial-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.spatial-toolbar button {
+  font-size: 14px;
+  padding: 8px 12px;
+  min-height: 44px;
+}
+.spatial-toolbar button[aria-pressed="true"],
+.spatial-nodes button[aria-pressed="true"] {
+  border-color: #8be0b8;
+  background: #213d35;
+  color: #8be0b8;
+}
+.spatial-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  border: 1px solid #3b4b56;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.spatial-stage {
+  background: #132129;
+  min-width: 0;
+}
+.spatial-caption,
+.spatial-legend {
+  padding: 16px 20px;
+  margin: 0;
+  font-size: 14px;
+  color: #b5c4cd;
+}
+.spatial-caption {
+  border-bottom: 1px solid #30404a;
+}
+.spatial-scroll {
+  overflow: auto;
+  max-height: 640px;
+  overscroll-behavior: contain;
+  max-width: 100%;
+  scrollbar-color: #667a88 #132129;
+}
+.spatial-scroll canvas {
+  display: block;
+  touch-action: pan-x pan-y;
+  cursor: grab;
+}
+.spatial-scroll canvas:active {
+  cursor: grabbing;
+}
+.spatial-nodes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 16px 16px;
+}
+.spatial-nodes button {
+  font-size: 13px;
+  text-align: left;
+  overflow-wrap: anywhere;
+  min-height: 44px;
+  max-width: 100%;
+}
+.spatial-inspector {
+  padding: 24px;
+  background: #17262f;
+  min-width: 0;
+  border-left: 1px solid #3b4b56;
+}
+.spatial-inspector h2 {
+  font-size: 21px;
+  margin: 0 0 8px;
+  overflow-wrap: anywhere;
+}
+.spatial-kind {
+  color: #8be0b8;
+  font-size: 14px;
+}
+.spatial-inspector p {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.spatial-inspector dl {
+  margin: 24px 0;
+}
+.spatial-inspector dl > div {
+  padding: 10px 0;
+  border-bottom: 1px solid #3b4b56;
+}
+.spatial-inspector dt {
+  font-size: 13px;
+  color: #b5c4cd;
+}
+.spatial-inspector dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+}
+.spatial-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.spatial-actions a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+}
+.spatial-actions button {
+  text-align: left;
+  min-height: 44px;
+}

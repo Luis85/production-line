@@ -7,6 +7,25 @@ export function boundedSignal(signal: AbortSignal | null | undefined, timeoutMs:
   const deadline = AbortSignal.timeout(timeoutMs);
   return signal ? AbortSignal.any([signal, deadline]) : deadline;
 }
+export interface JsonRequestInput {
+  method?: string;
+  body?: unknown;
+  headers?: Record<string, string>;
+  credentials?: RequestCredentials;
+  signal?: AbortSignal | null;
+  timeoutMs: number;
+}
+/** Shared wire defaults; callers still own authentication, request identity and deadlines. */
+export function jsonRequestInit(options: JsonRequestInput): RequestInit {
+  return {
+    method: options.method ?? 'GET',
+    cache: 'no-store',
+    signal: boundedSignal(options.signal, options.timeoutMs),
+    headers: { ...options.headers, ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+    ...(options.credentials !== undefined ? { credentials: options.credentials } : {}),
+    ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+  };
+}
 export interface JsonRequestOptions {
   fetcher?: typeof fetch;
   onResponse?: (response: Response) => void;

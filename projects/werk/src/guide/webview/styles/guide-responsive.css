@@ -1,0 +1,84 @@
+@media (max-width: 800px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+    padding: 32px 16px;
+  }
+  header {
+    padding: 16px;
+  }
+  nav {
+    position: static;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 16px;
+    display: flex;
+    gap: 4px 20px;
+    flex-wrap: wrap;
+  }
+  nav p {
+    flex-basis: 100%;
+    margin: 8px 0 0;
+  }
+  nav a {
+    padding: 8px 0;
+  }
+  .tree {
+    padding: 16px;
+  }
+  .tree ul {
+    padding-left: 16px;
+  }
+  .flow {
+    align-items: stretch;
+  }
+  .flow span {
+    align-self: center;
+  }
+  section {
+    margin-bottom: 48px;
+  }
+  pre {
+    padding: 16px;
+  }
+  footer {
+    padding: 24px 16px;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  button {
+    transition: background-color 0.15s ease-out;
+  }
+}
+
+.visual-route {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin: var(--space-6) 0;
+}
+.visual-definition {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr);
+  gap: var(--space-8);
+  align-items: start;
+}
+.definition-field {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+.definition-field label {
+  font-size: 14px;
+  font-weight: 600;
+}
+.definition-field > div {
+  width: 100%;
+}
+.visual-definition h3 {
+  margin-top: 0;
+}
+@media (max-width: 760px) {
+  .visual-definition {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

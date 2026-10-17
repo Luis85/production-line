@@ -1,5 +1,10 @@
 # Werk documentation
 
+[Start here](handbook.md) to choose a setup path for a local worker, distributed
+team, system operator or frontend contributor. The
+[public documentation](https://luis85.github.io/production-line/handbook/) presents
+these maintained guides alongside the release’s component API and live examples.
+
 Werk coordinates software-factory tasks, with simulated assignments by default,
 opt-in native Linux Codex assignments, and local API/CLI workers with shared Git
 feature intake. See [execution modes](explanation/modes.md) for their boundaries. Start with a tutorial to

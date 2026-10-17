@@ -1,3 +1,4 @@
+import { workerClient, snapshotFixture } from './contract-fixtures.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -87,6 +88,7 @@ async function fixture(t) {
     { "output.protocolValid": true, "output.patchPresent": true },
   );
   const evaluation = held.evaluations.at(-1);
+  /** @type {import('../../src/shared/request-gate.js').RequestGateEvidence} */
   const blocked = {
     schemaVersion: 1,
     requestId: request.id,
@@ -99,15 +101,16 @@ async function fixture(t) {
     failedRules: 1,
     unknownRules: 0,
   };
-  const snapshot = {
+  const snapshot = snapshotFixture({
+    id: "lease-1-after", phase: "after", mode: "cli", provider: "codex",
     pairId: "lease-1",
     taskId: "task-1",
     attempt: 1,
     workerId: identity.id,
-    execution: { outcome: "change-set" },
+    execution: { ...snapshotFixture().execution, outcome: "change-set" },
     requestGate: blocked,
     review,
-  };
+  });
   const journal = {
     async read() {
       return structuredClone(snapshot);
@@ -137,11 +140,11 @@ async function fixture(t) {
 test("missing and tampered patches block hold release; restored exact evidence permits one acknowledgement", async (t) => {
   const f = await fixture(t),
     calls = [];
-  const client = {
+  const client = workerClient({
     async resolveHold(...args) {
       calls.push(args);
     },
-  };
+  });
   const reconciler = new RemoteGateReconciler(f.requests, f.journal, (s) =>
     verifyReviewArtifact(f.directory, s.pairId, s.review),
   );
@@ -166,9 +169,8 @@ test("missing and tampered patches block hold release; restored exact evidence p
 
 test("a cancelled decision while artifact verification is pending cannot release the remote hold", async (t) => {
   const f = await fixture(t);
-  let entered, release;
-  const waiting = new Promise((r) => (entered = r)),
-    gate = new Promise((r) => (release = r));
+  const { promise: waiting, resolve: entered } = Promise.withResolvers();
+  const { promise: gate, resolve: release } = Promise.withResolvers();
   let calls = 0;
   const reconciler = new RemoteGateReconciler(
     f.requests,
@@ -179,11 +181,11 @@ test("a cancelled decision while artifact verification is pending cannot release
     },
   );
   const pending = reconciler.tick(
-    {
+    workerClient({
       async resolveHold() {
         calls++;
       },
-    },
+    }),
     identity,
     1000,
   );
@@ -242,20 +244,21 @@ test("HTTP gate resolution acknowledgement must match the exact passed decision"
   const f = await fixture(t),
     current = f.requests.get(f.requestId),
     evaluation = current.evaluations.at(-1),
-    receipt = {
+    receipt = /** @satisfies {import('../../src/shared/request-gate.js').RequestGateEvidence} */ ({
       ...f.snapshot.requestGate,
       status: "passed",
       revision: current.revision,
       evaluationId: evaluation.id,
       failedRules: 0,
-    };
+    });
   let response = {
       id: "task-1",
       attempt: 1,
       status: "review",
       requestGate: receipt,
-    },
-    sent;
+    };
+  /** @type {{base: string; path: string; token: string; method: string; body: unknown}} */
+  let sent;
   const gateway = new HttpWorkerGateway(
     identity.url,
     "enroll",

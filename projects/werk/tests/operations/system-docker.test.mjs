@@ -1,3 +1,5 @@
+import { testErrorOutput } from '../helpers/process-errors.mjs';
+import { testErrorCode } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
@@ -21,7 +23,7 @@ async function fixture(t) {
 }
 test('Docker system plan is pure and setup preserves private credentials across retries',async t=>{
   const f=await fixture(t); const plan=JSON.parse((await f.run('plan')).stdout); assert.equal(plan.totals.workers,3); assert.equal(plan.totals.factories,2);
-  await assert.rejects(readFile(join(f.state,'system.json')),e=>e.code==='ENOENT');
+  await assert.rejects(readFile(join(f.state,'system.json')),e=>testErrorCode(e)==='ENOENT');
   const first=await f.setup(), credentials=await readFile(join(f.state,'lines/alpha/credentials.json'),'utf8'); const second=await f.setup();
   assert.equal(await readFile(join(f.state,'lines/alpha/credentials.json'),'utf8'),credentials); if (process.platform !== 'win32') assert.equal((await stat(join(f.state,'system.json'))).mode&0o777,0o600);
   const loaded=await loadSystem(join(f.state,'factory-input')); const keys=await factoryCredentials(join(f.state,'factory-input'),loaded).catch(()=>null);
@@ -43,17 +45,17 @@ test('Docker system generation keeps worker boundaries, loopback ports and insta
 });
 test('Docker system refuses environment and definition drift before rotating state',async t=>{
   const f=await fixture(t); await writeFile(f.file,JSON.stringify({...definition(),environment:'native'}));
-  await assert.rejects(f.setup(),e=>/requires environment docker/.test(e.stderr)); await assert.rejects(readFile(join(f.state,'system.json')),e=>e.code==='ENOENT');
+  await assert.rejects(f.setup(),e=>/requires environment docker/.test(testErrorOutput(e, 'stderr'))); await assert.rejects(readFile(join(f.state,'system.json')),e=>testErrorCode(e)==='ENOENT');
   await writeFile(f.file,JSON.stringify(definition())); await f.setup(); const credentials=await readFile(join(f.state,'factory/credentials.json'),'utf8');
   const changed=definition(); changed.productionLines[0].workers.count=1; await writeFile(f.file,JSON.stringify(changed));
-  await assert.rejects(f.setup(),e=>/differs/.test(e.stderr)); await assert.rejects(f.run('verify'),e=>/differs/.test(e.stderr));
+  await assert.rejects(f.setup(),e=>/differs/.test(testErrorOutput(e, 'stderr'))); await assert.rejects(f.run('verify'),e=>/differs/.test(testErrorOutput(e, 'stderr')));
   assert.equal(await readFile(join(f.state,'factory/credentials.json'),'utf8'),credentials);
 });
 test('Docker system metadata refuses symlink replacement and enrollment drift',async t=>{
   const f=await fixture(t); await f.setup(); const outside=join(f.root,'outside'); await writeFile(outside,'untouched'); await rm(join(f.state,'docker-compose.json')); await symlink(outside,join(f.state,'docker-compose.json'));
-  await assert.rejects(f.setup(),e=>/regular file/.test(e.stderr)); assert.equal(await readFile(outside,'utf8'),'untouched');
+  await assert.rejects(f.setup(),e=>/regular file/.test(testErrorOutput(e, 'stderr'))); assert.equal(await readFile(outside,'utf8'),'untouched');
   const enrollment=join(f.state,'lines/alpha/workers/worker-1/enrollment.json'); await writeFile(enrollment,JSON.stringify({bad:true}),{mode:0o600});
-  await assert.rejects(f.setup(),e=>/differs/.test(e.stderr));
+  await assert.rejects(f.setup(),e=>/differs/.test(testErrorOutput(e, 'stderr')));
 });
 
 // Source-contract guard only: Windows PowerShell itself is exercised on a Windows host.
@@ -80,11 +82,11 @@ function global:docker {
 exit $LASTEXITCODE
 `);
     await assert.rejects(exec('pwsh',['-NoProfile','-NonInteractive','-File',harness,'-Launcher',resolve('scripts/docker/system.ps1'),'-State',missing]),error=>
-      error.code===1 && /missing-state/.test(error.stderr) && /does not exist|Cannot find path/.test(error.stderr) && !/UnexpectedDockerMutation/.test(error.stdout+error.stderr));
+      testErrorCode(error)===1 && /missing-state/.test(testErrorOutput(error, 'stderr')) && /does not exist|Cannot find path/.test(testErrorOutput(error, 'stderr')) && !/UnexpectedDockerMutation/.test(testErrorOutput(error, 'stdout')+testErrorOutput(error, 'stderr')));
   } else {
     await writeFile(join(bin,'docker'), '#!/bin/sh\nif [ "$1" = compose ] && [ "$2" = version ]; then exit 0; fi\necho UnexpectedDockerMutation >&2\nexit 99\n',{mode:0o755});
-    await assert.rejects(exec('/bin/bash',[resolve('werk-docker.sh'),'system','start','--state-dir',missing,'--json'],{env:{...process.env,PATH:bin+':'+process.env.PATH}}),error=>/System state missing/.test(error.stderr)&&!error.stderr.includes('UnexpectedDockerMutation'));
+    await assert.rejects(exec('/bin/bash',[resolve('werk-docker.sh'),'system','start','--state-dir',missing,'--json'],{env:{...process.env,PATH:bin+':'+process.env.PATH}}),error=>/System state missing/.test(testErrorOutput(error, 'stderr'))&&!testErrorOutput(error, 'stderr').includes('UnexpectedDockerMutation'));
   }
-  await assert.rejects(stat(missing),error=>error.code==='ENOENT');
+  await assert.rejects(stat(missing),error=>testErrorCode(error)==='ENOENT');
   assert.match(await readFile('scripts/docker/system.ps1','utf8'),/\$setup=\$action -in @\('setup','up'\)/);
 });

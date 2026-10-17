@@ -1,3 +1,4 @@
+import { testErrorCode, testErrorMessage, testListeningAddress } from '../../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
@@ -20,10 +21,12 @@ test('v1 migration adds policy and attempt limits atomically and remains reopena
   try{
     const legacy=new DatabaseSync(file);
     legacy.exec('CREATE TABLE workers(id TEXT PRIMARY KEY,project TEXT NOT NULL,profiles TEXT NOT NULL,token_hash TEXT UNIQUE NOT NULL,seen INTEGER NOT NULL); PRAGMA user_version=1;');
-    legacy.prepare('INSERT INTO workers VALUES(?,?,?,?,?)').run('old-worker','demo',JSON.stringify(ps),'hash',1);legacy.close();
+    const workerToken = 'migration-worker-token';
+    legacy.prepare('INSERT INTO workers VALUES(?,?,?,?,?)').run('old-worker','demo',JSON.stringify(ps),createHash('sha256').update(workerToken).digest('hex'),1);legacy.close();
     s=new Store(file);assert.equal(s.db.prepare('PRAGMA user_version').get().user_version,7);
-    const w=s.workers()[0];assert.equal(w.config.maxParallel,1);assert.equal(w.config.order,'priority');
-    s.submit(task,'migration-task');const assigned=s.claim(w);assert.equal(assigned.attempt,1);
+    const summary=s.workers()[0];assert.equal(summary.config.maxParallel,1);assert.equal(summary.config.order,'priority');
+    const worker=s.worker(workerToken);assert.equal(worker.id,summary.id);
+    s.submit(task,'migration-task');const assigned=s.claim(worker);assert.equal(assigned.attempt,1);
     assert.equal(s.db.prepare('SELECT max_attempts FROM attempts').get().max_attempts,3);
     s.close();s=new Store(file);assert.equal(s.list().length,1);
   }finally{s?.close();await rm(dir,{recursive:true,force:true});}
@@ -47,7 +50,7 @@ test('reading task state reaps abandoned leases once using assignment-time retry
     s.db.prepare('UPDATE workers SET config=? WHERE id=?').run(JSON.stringify({...w.config,maxAttempts:5}),w.id);
     now=1101;assert.equal(s.get(id).status,'blocked');assert.deepEqual(s.current(w),[]);
     assert.equal(s.events(id).filter(x=>x.kind==='lease_expired').length,1);
-    assert.throws(()=>s.heartbeat(w,id,assigned.lease,assigned.attempt),e=>e.code==='conflict');
+    assert.throws(()=>s.heartbeat(w,id,assigned.lease,assigned.attempt),e=>testErrorCode(e)==='conflict');
     assert.equal(s.reapExpired(),0);
   }finally{s.close();}
 });
@@ -66,7 +69,7 @@ test('snapshot cursor reads latest pages without gaps, with explicit hasMore',as
   const app=await startServer(serverConfig);
   try{
     for(let n=1;n<=5;n++)app.store.db.prepare('INSERT INTO snapshots(id,task,attempt,phase,worker,project,captured,received,digest,payload) VALUES(?,?,?,?,?,?,?,?,?,?)').run('s'+n,'t'+n,1,'after','w','demo',new Date(n).toISOString(),n,'hash',JSON.stringify({n}));
-    const url='http://127.0.0.1:'+app.server.address().port,headers={Authorization:'Bearer '+serverConfig.adminToken};
+    const url='http://127.0.0.1:'+testListeningAddress(app.server).port,headers={Authorization:'Bearer '+serverConfig.adminToken};
     const page=await(await fetch(url+'/v1/snapshots?order=desc&limit=2',{headers})).json();assert.deepEqual(page.snapshots.map(x=>x.seq),[5,4]);assert.equal(page.hasMore,true);
     const next=await(await fetch(url+'/v1/snapshots?order=desc&before='+page.nextCursor+'&limit=2',{headers})).json();assert.deepEqual(next.snapshots.map(x=>x.seq),[3,2]);
     const last=await(await fetch(url+'/v1/snapshots?order=desc&before='+next.nextCursor+'&limit=2',{headers})).json();assert.deepEqual(last.snapshots.map(x=>x.seq),[1]);assert.equal(last.hasMore,false);
@@ -79,7 +82,7 @@ test('snapshot cursor reads latest pages without gaps, with explicit hasMore',as
 test('API rejects unknown registration and lease fields rather than silently ignoring them',async()=>{
   const app=await startServer(serverConfig);
   try{
-    const url='http://127.0.0.1:'+app.server.address().port;
+    const url='http://127.0.0.1:'+testListeningAddress(app.server).port;
     const post=(path,token,body)=>fetch(url+path,{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify(body)});
     assert.equal((await post('/v1/workers/register',serverConfig.enrollmentToken,{profiles:ps,parallel:8})).status,400);
     const auth=app.store.register('demo',ps);
@@ -91,8 +94,8 @@ test('API rejects unknown registration and lease fields rather than silently ign
 
 test('importer rejects a dry-run typo before reading Git or sending tasks',async()=>{
   const options={repo:'/does-not-exist',branch:'iteration/test',project:'demo',iteration:'test','iteration-pr':'https://git.example/pull/1','dry-run':'TRUE'};
-  await assert.rejects(importIteration(options,''),e=>e.code==='invalid_input'&&e.message.includes('--dry-run'));
-  await assert.rejects(importIteration({...options,'dry-run':'true',branch:'@{-1}'},''),e=>e.code==='invalid_input'&&e.message.includes('local branch'));
+  await assert.rejects(importIteration(options,''),e=>testErrorCode(e)==='invalid_input'&&testErrorMessage(e).includes('--dry-run'));
+  await assert.rejects(importIteration({...options,'dry-run':'true',branch:'@{-1}'},''),e=>testErrorCode(e)==='invalid_input'&&testErrorMessage(e).includes('local branch'));
 });
 
 test('headless commands reject unrelated options with machine-readable input errors',async()=>{
@@ -111,6 +114,6 @@ test('abandon replay cannot mutate a subsequent assignment or duplicate events',
     assert.equal(s.abandon(w,id,first.lease,first.attempt).lease,next.lease);
     assert.equal(s.events(id).filter(e=>e.kind==='abandoned').length,1);
     assert.equal(s.get(id).status,'running');
-    assert.throws(()=>s.abandon(w,id,'not-the-lease',first.attempt),e=>e.code==='conflict');
+    assert.throws(()=>s.abandon(w,id,'not-the-lease',first.attempt),e=>testErrorCode(e)==='conflict');
   }finally{s.close();}
 });

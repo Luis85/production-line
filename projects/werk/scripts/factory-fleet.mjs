@@ -78,6 +78,7 @@ export async function main(args=process.argv.slice(2),env=process.env){
       for(let n=0;n<workers;n++)launch('worker','worker',['run','--url',url,'--state-dir',join(state,name,'worker-'+(n+1)),'--status-port',String(statusBase+(name==='beta'?workers:0)+n)],{WERK_ENROLLMENT_TOKEN:enroll});
     }
     await ready(factoryUrl,secrets.WERK_FACTORY_ADMIN_TOKEN,'/v1/factories');
+    // oxlint-disable-next-line unicorn/no-invalid-fetch-options -- Dynamic method defaults are mistaken for a fixed GET; GET calls omit body.
     const call=async(path,method='GET',body)=>{const r=await fetch(factoryUrl+path,{method,headers:{Authorization:'Bearer '+secrets.WERK_FACTORY_ADMIN_TOKEN,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(5000)});const value=await r.json();if(!r.ok)throw Error(value.error??`Factory HTTP ${r.status}`);return value;};
     await bootstrapHierarchy(call,{alphaUrl,betaUrl});
     await writeFile(join(state,'config.json'),JSON.stringify(config,null,2)+'\n',{mode:0o600});

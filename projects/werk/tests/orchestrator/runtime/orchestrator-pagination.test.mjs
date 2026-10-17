@@ -1,3 +1,6 @@
+import { expectImported } from '../iteration-results.mjs';
+import { testErrorStatus } from '../../helpers/process-errors.mjs';
+import { testErrorCode, testErrorMessage, testListeningAddress } from '../../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
@@ -71,10 +74,10 @@ test('event pages are task-scoped with a stable first-page watermark', () => {
     const expected = store.events(one.id).map(event => event.seq);
     const first = store.eventPage(one.id, { limit: 2 });
     store.event(one.id, 'later', {});
-    assert.throws(() => store.eventPage(two.id, { cursor: first.nextCursor }), error => error.code === 'invalid_input');
+    assert.throws(() => store.eventPage(two.id, { cursor: first.nextCursor }), error => testErrorCode(error) === 'invalid_input');
     const rows = remaining(first, cursor => store.eventPage(one.id, { limit: 2, cursor }), 'events');
     assert.deepEqual(rows.map(event => event.seq), expected);
-    assert.throws(() => store.eventPage('missing', {}), error => error.code === 'not_found');
+    assert.throws(() => store.eventPage('missing', {}), error => testErrorCode(error) === 'not_found');
   } finally { store.close(); }
 });
 
@@ -99,15 +102,17 @@ test('page validation rejects malformed, mismatched and oversized cursor or limi
     for (let n = 0; n < 101; n++) store.submit(task(), 'task-' + n);
     assert.equal(store.taskPage({}).tasks.length, 100);
     for (const limit of [0, -1, 0.5, 1001, NaN, '2', null]) {
-      assert.throws(() => store.taskPage({ limit }), error => error.code === 'invalid_input');
+      // @ts-expect-error Intentionally send nonnumeric and out-of-range limits to runtime validation.
+      assert.throws(() => store.taskPage({ limit }), error => testErrorCode(error) === 'invalid_input');
     }
     const valid = store.taskPage({ limit: 1 }).nextCursor;
-    const decoded = JSON.parse(Buffer.from(valid, 'base64url'));
+    const decoded = JSON.parse(Buffer.from(valid, 'base64url').toString('utf8'));
     for (const cursor of ['', '*', 'x'.repeat(1025), encode(null), encode({ ...decoded, version: 2 }), encode({ ...decoded, watermark: -1 }), encode({ ...decoded, created: '1000' }), encode({ ...decoded, extra: true }), valid + '=']) {
-      assert.throws(() => store.taskPage({ cursor }), error => error.code === 'invalid_input');
+      assert.throws(() => store.taskPage({ cursor }), error => testErrorCode(error) === 'invalid_input');
     }
-    assert.throws(() => store.workerPage({ cursor: valid }), error => error.code === 'invalid_input');
-    assert.throws(() => store.taskPage({ unexpected: true }), error => error.code === 'invalid_input');
+    assert.throws(() => store.workerPage({ cursor: valid }), error => testErrorCode(error) === 'invalid_input');
+    // @ts-expect-error Unknown pagination options must be rejected at the runtime boundary.
+    assert.throws(() => store.taskPage({ unexpected: true }), error => testErrorCode(error) === 'invalid_input');
   } finally { store.close(); }
 });
 
@@ -117,7 +122,7 @@ test('HTTP and CLI expose additive pages while legacy list shapes remain unchang
     for (let n = 0; n < 3; n++) app.store.submit(task(), 'task-' + n);
     for (let n = 0; n < 3; n++) app.store.register('demo', profiles);
     const id = app.store.list()[0].id; app.store.event(id, 'extra', {});
-    const base = 'http://127.0.0.1:' + app.server.address().port;
+    const base = 'http://127.0.0.1:' + testListeningAddress(app.server).port;
     const get = path => fetch(base + path, { headers: { Authorization: 'Bearer ' + config.adminToken } });
     for (const [path, key] of [['/v1/tasks', 'tasks'], ['/v1/workers', 'workers'], ['/v1/tasks/' + id + '/events', 'events']]) {
       const legacy = await (await get(path)).json(); assert.deepEqual(Object.keys(legacy), [key]);
@@ -152,13 +157,13 @@ async function repository() {
 test('iteration import follows all pages so an old matching feature remains unchanged', async () => {
   const options = await repository(); const app = await startServer(config);
   try {
-    options.url = 'http://127.0.0.1:' + app.server.address().port;
-    const first = await importIteration(options, config.adminToken);
+    options.url = 'http://127.0.0.1:' + testListeningAddress(app.server).port;
+    const first = expectImported(await importIteration(options, config.adminToken));
     assert.equal(first.results[0].status, 'created');
     for (let n = 0; n < 105; n++) app.store.submit(task(), 'newer-' + n);
     // Ensure the matching feature is beyond the first page regardless of clock precision.
     app.store.db.prepare('UPDATE tasks SET created=0 WHERE id=?').run(first.results[0].taskId);
-    const next = await importIteration(options, config.adminToken);
+    const next = expectImported(await importIteration(options, config.adminToken));
     assert.equal(next.results[0].status, 'unchanged');
     assert.equal(next.results[0].taskId, first.results[0].taskId);
     assert.equal(app.store.list().length, 106);
@@ -168,10 +173,10 @@ test('iteration import follows all pages so an old matching feature remains unch
 test('iteration import fails closed when a server repeats a continuation cursor', async () => {
   const options = await repository(); let requests = 0;
   const server = createServer((_req, res) => { requests++; res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ tasks: [{ ...task(), id: 'existing-task' }], hasMore: true, nextCursor: 'repeated' })); });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  await new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(undefined)));
   try {
-    options.url = 'http://127.0.0.1:' + server.address().port;
-    await assert.rejects(importIteration(options, config.adminToken), error => error.status === 502 && error.message.includes('did not advance'));
+    options.url = 'http://127.0.0.1:' + testListeningAddress(server).port;
+    await assert.rejects(importIteration(options, config.adminToken), error => testErrorStatus(error, 'status') === 502 && testErrorMessage(error).includes('did not advance'));
     assert.equal(requests, 2);
   } finally { await new Promise(resolve => server.close(resolve)); await rm(options.repo, { recursive: true, force: true }); }
 });

@@ -1,3 +1,5 @@
+import { testErrorOutput } from '../helpers/process-errors.mjs';
+import { testErrorCode, testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -25,9 +27,9 @@ test('worktrees list and prune map flags to the authenticated API and validate t
     res.setHeader('content-type', 'application/json');
     res.end(JSON.stringify(req.method === 'GET' ? listing : { dryRun: !!JSON.parse(raw).dryRun, results: [], errors: [] }));
   });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  await new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(undefined)));
   t.after(async () => { await new Promise(resolve => server.close(resolve)); await rm(directory, { recursive: true, force: true }); });
-  const base = 'http://127.0.0.1:' + server.address().port;
+  const base = 'http://127.0.0.1:' + testListeningAddress(server).port;
   const command = (...args) => exec(process.execPath, ['--input-type=module', '-e', 'import { main } from ' + JSON.stringify(entry) + "; await main('worker', process.argv.slice(1));", ...args, '--url', base, '--token-file', tokenPath, '--state-dir', join(directory, 'state')], { timeout: 15000 });
   assert.deepEqual(JSON.parse((await command('worktrees', 'list')).stdout), listing);
   assert.deepEqual(calls.at(-1), { path: '/api/worktrees', method: 'GET', authorization: 'Bearer ' + token, body: undefined });
@@ -40,10 +42,10 @@ test('worktrees list and prune map flags to the authenticated API and validate t
   await command('file-task', 'delete', '--id', 'task-2', '--discard-changes', 'true');
   assert.deepEqual(calls.at(-1).body, { action: 'delete', id: 'task-2', discardChanges: true });
   const count = calls.length;
-  await assert.rejects(command('file-task', 'delete', '--id', 'task-3', '--remove-worktree', 'maybe'), error => error.code === 2 && /--remove-worktree must be true or false/.test(error.stderr));
-  await assert.rejects(command('file-task', 'archive', '--id', 'task-3', '--remove-worktree', 'true'), error => error.code === 2);
-  await assert.rejects(command('worktrees', 'prune', '--discard-changes', 'yes'), error => error.code === 2 && /--discard-changes must be true or false/.test(error.stderr));
-  await assert.rejects(command('worktrees', 'prune', '--id', '../escape'), error => error.code === 2 && /Invalid --id/.test(error.stderr));
-  await assert.rejects(command('worktrees', 'list', '--dry-run'), error => error.code === 2 && /--dry-run is supported only/.test(error.stderr));
+  await assert.rejects(command('file-task', 'delete', '--id', 'task-3', '--remove-worktree', 'maybe'), error => testErrorCode(error) === 2 && /--remove-worktree must be true or false/.test(testErrorOutput(error, 'stderr')));
+  await assert.rejects(command('file-task', 'archive', '--id', 'task-3', '--remove-worktree', 'true'), error => testErrorCode(error) === 2);
+  await assert.rejects(command('worktrees', 'prune', '--discard-changes', 'yes'), error => testErrorCode(error) === 2 && /--discard-changes must be true or false/.test(testErrorOutput(error, 'stderr')));
+  await assert.rejects(command('worktrees', 'prune', '--id', '../escape'), error => testErrorCode(error) === 2 && /Invalid --id/.test(testErrorOutput(error, 'stderr')));
+  await assert.rejects(command('worktrees', 'list', '--dry-run'), error => testErrorCode(error) === 2 && /--dry-run is supported only/.test(testErrorOutput(error, 'stderr')));
   assert.equal(calls.length, count, 'Invalid CLI input must not reach the API.');
 });

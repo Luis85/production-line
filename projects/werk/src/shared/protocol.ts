@@ -8,8 +8,19 @@ export interface WorkerRecord {
     seen: number;
     config: WorkerPolicy;
 }
-export interface WorkerSummary extends WorkerRecord {
+/** Public operational policy is an allowlist; configuration identity remains worker-owned. */
+export type PublicWorkerPolicy = Pick<WorkerPolicy, 'maxParallel' | 'order' | 'maxAttempts' | 'queueCapacity' | 'repositoryIds' | 'legacyRepository'>;
+export interface WorkerSummary extends Pick<WorkerRecord, 'id' | 'project' | 'profiles' | 'seen'> {
+    config: PublicWorkerPolicy;
     online: boolean;
+}
+export function publicWorkerPolicy(policy: WorkerPolicy): PublicWorkerPolicy {
+    return {
+        maxParallel: policy.maxParallel, order: policy.order, maxAttempts: policy.maxAttempts,
+        ...(policy.queueCapacity === undefined ? {} : { queueCapacity: policy.queueCapacity }),
+        ...(policy.repositoryIds === undefined ? {} : { repositoryIds: [...policy.repositoryIds] }),
+        ...(policy.legacyRepository === undefined ? {} : { legacyRepository: policy.legacyRepository }),
+    };
 }
 /** Admin projection; excludes worker credentials, config hashes and lease authority. */
 export interface WorkerDetail {

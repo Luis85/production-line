@@ -1,3 +1,5 @@
+import { toolPropertyDescription } from './model-fixtures.mjs';
+import { workerStatus } from '../helpers/worker-status.mjs';
 import { cleanup } from './fixture-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -73,7 +75,7 @@ test('without the option chat keeps the private workspace and says so; task invo
   assert.equal((await chat.call(mcpToolName('local', definition.name), {}, signal())).content[0].text, join(f.state, 'chat-workspace'));
   const tools = Object.fromEntries(chat.manifest.tools.map(tool => [tool.name, tool]));
   assert.match(tools.werk_command_run.description, /empty private chat workspace, which has no project files/);
-  assert.match(tools.werk_command_run.inputSchema.properties.preset.description, /cwd: Working directory \(private chat workspace, no project files\)/);
+  assert.match(toolPropertyDescription(tools.werk_command_run, 'preset'), /cwd: Working directory \(private chat workspace, no project files\)/);
   assert.match(tools[mcpToolName('local', definition.name)].description, /\(Chat: starts in an empty private workspace without project files\.\)$/);
 
   const optedIn = policyWith(policy => { policy.builtins.commands = [cwdPreset({ chatDirectory: 'repository:project' })]; policy.mcp = [stdio(['-e', server()], { chatDirectory: 'repository:project' })]; });
@@ -84,7 +86,7 @@ test('without the option chat keeps the private workspace and says so; task invo
   assert.equal((await task.call(mcpToolName('local', definition.name), {}, signal())).content[0].text, f.worktree);
   const taskTools = Object.fromEntries(task.manifest.tools.map(tool => [tool.name, tool]));
   assert.equal(taskTools.werk_command_run.description, 'Run one operator-approved executable with its fixed arguments, as the worker account. Starts in the task worktree or private chat workspace. Commands may change files or access resources outside that directory. No extra arguments or shell expansion.');
-  assert.equal(taskTools.werk_command_run.inputSchema.properties.preset.description, 'cwd: Working directory');
+  assert.equal(toolPropertyDescription(taskTools.werk_command_run, 'preset'), 'cwd: Working directory');
   assert.equal(taskTools[mcpToolName('local', definition.name)].description, '[Local project server] Report the server directory');
 });
 
@@ -122,7 +124,7 @@ test('a removed or moved repository assignment refuses chat calls before any pro
 
 test('worker settings validate chat directories against assignments and model scopes pass them to chat tools only', { timeout: 30000 }, async t => {
   const f = await fixture(t);
-  const settings = new WorkerSettings(f.state, '', '', '', { items: [{ id: 'project', path: f.repository, watch: false }] }); await settings.init();
+  const settings = new WorkerSettings(f.state, '', '', '', { pollMs: 30000, items: [{ id: 'project', path: f.repository, remote: 'origin', watch: false }] }); await settings.init();
   await assert.rejects(settings.updateToolAccess(edit(settings.toolPolicy(), { builtins: { ...defaultToolPolicy().builtins, commands: [cwdPreset({ chatDirectory: 'repository:other' })] } })), /not assigned to this worker/);
   await settings.updateToolAccess(edit(settings.toolPolicy(), { builtins: { ...defaultToolPolicy().builtins, commands: [cwdPreset({ chatDirectory: 'repository:project' })] } }));
   assert.match(await readFile(join(f.state, 'tool-access.json'), 'utf8'), /"chatDirectory":"repository:project"/);
@@ -142,6 +144,7 @@ test('Dashboard editor offers assigned repositories, saves the private workspace
   const preset = (extra = {}) => ({ id: 'cwd', name: 'Working directory', executable: process.execPath, args: [], enabled: true, ...extra });
   const view = commands => ({ schemaVersion: 1, revision: 0, builtins: { files: false, commands, webOrigins: [] }, mcp: [], canEdit: true, saveBlockedReason: null });
   const state = reactive({ view: view([preset(), preset({ id: 'repo', chatDirectory: 'repository:project' })]), repositories: ['project'] });
+  /** @type {import('../../src/worker/application/tool-policy.js').ToolAccessUpdate} */
   let submitted;
   const editor = createToolAccessEditor({ view: () => state.view, unlocked: () => true, epoch: () => 0, write: async command => { submitted = command; return undefined; }, discover: async () => state.view, refresh: async () => {}, repositories: () => state.repositories });
   t.after(editor.dispose);
@@ -164,7 +167,7 @@ test('discovering an opted-in stdio MCP connection starts the server in the assi
   const f = await fixture(t);
   execFileSync('git', ['init', '-b', 'main'], { cwd: f.repository, stdio: 'ignore' });
   const journal = new SnapshotJournal(f.state, 'a'.repeat(64), 'b'.repeat(64)); await journal.init();
-  const current = { activeTasks: [], queuedTasks: [] }, worker = new WorkerWorkspace({ stateDir: f.state, projectDir: f.directory, pollMs: 1000, timeoutMs: 60000 }, journal, () => current); await worker.init();
+  const current = workerStatus(), worker = new WorkerWorkspace({ stateDir: f.state, projectDir: f.directory, pollMs: 1000, timeoutMs: 60000 }, journal, () => current); await worker.init();
   cleanup(t, async () => { await worker.close(); journal.close(); });
   await worker.updateSettings({ board: { paused: true }, repositories: { items: [{ id: 'project', path: f.repository, remote: 'origin', watch: false }] } });
   const catalog = `const rl=require('node:readline').createInterface({input:process.stdin});rl.on('line',line=>{const m=JSON.parse(line);if(!('id'in m))return;let result;if(m.method==='initialize')result={protocolVersion:'2025-06-18',capabilities:{tools:{}},serverInfo:{name:'fixture',version:'1'}};if(m.method==='tools/list')result={tools:[{name:'where',description:process.cwd(),inputSchema:{type:'object'}}]};process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:m.id,result})+'\\n');});`;

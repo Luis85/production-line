@@ -1,3 +1,5 @@
+import { workerStatus } from '../helpers/worker-status.mjs';
+import { testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, rm, realpath } from 'node:fs/promises';
@@ -9,10 +11,10 @@ import { statusServer } from '../../src/worker/dist/worker/status/server.js';
 async function fixture(t, configured = true) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'werk-integrations-http-'))), state = join(root, '.state'); await mkdir(state);
   const journal = new SnapshotJournal(state, 'a'.repeat(64), 'b'.repeat(64)); await journal.init();
-  const current = { activeTasks: [] }, workspace = new WorkerWorkspace({ stateDir: state, ...(configured ? { integrationProjectDir: root } : {}), pollMs: 1000, timeoutMs: 60000 }, journal, () => current); await workspace.init();
+  const current = workerStatus(), workspace = new WorkerWorkspace({ stateDir: state, ...(configured ? { integrationProjectDir: root } : {}), pollMs: 1000, timeoutMs: 60000 }, journal, () => current); await workspace.init();
   const server = await statusServer(() => current, '127.0.0.1', 0, undefined, workspace);
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await workspace.close(); await journal.close(); await rm(root, { recursive: true, force: true }); });
-  const base = 'http://127.0.0.1:' + server.address().port, token = (await readFile(join(state, 'webview-token'), 'utf8')).trim(), headers = { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' };
+  const base = 'http://127.0.0.1:' + testListeningAddress(server).port, token = (await readFile(join(state, 'webview-token'), 'utf8')).trim(), headers = { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' };
   return { root, base, headers, get: (authorized = true) => fetch(base + '/api/integrations', { headers: authorized ? headers : {} }), post: body => fetch(base + '/api/integrations', { method: 'POST', headers, body: JSON.stringify(body) }) };
 }
 test('integration HTTP inspection is authenticated and read-only; guarded apply preserves operator changes', async t => {

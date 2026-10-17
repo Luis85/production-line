@@ -56,7 +56,7 @@ export function validateConfig(value) {
   if (value.orchestratorPort >= value.workerPort && value.orchestratorPort < value.workerPort + value.workers) throw inputError('Orchestrator and worker ports must not overlap.');
   return { schemaVersion: 1, project: value.project, orchestratorPort: value.orchestratorPort, workerPort: value.workerPort, workers: value.workers, mode: execution ? 'cli' : 'mock', runtime: value.runtime, ...(execution ? { execution } : {}), ...(chat ? { chat } : {}), ...(repositories ? { repositories } : {}) };
 }
-export function validateCredentials(value) {
+function validateCredentials(value) {
   const keys = ['WERK_ADMIN_TOKEN', 'WERK_ENROLLMENT_TOKEN']; fields(value, keys, 'credentials');
   if (keys.some(key => typeof value[key] !== 'string' || !/^[a-f0-9]{64}$/.test(value[key])) || value[keys[0]] === value[keys[1]]) throw inputError('Invalid credentials. Restore credentials.json from backup; do not replace credentials of an existing runtime.');
   return Object.fromEntries(keys.map(key => [key, value[key]]));
@@ -73,6 +73,7 @@ export async function loadSetup(stateDir) {
   try { return { config, credentials: validateCredentials(await readPrivate(join(stateDir, 'credentials.json'))) }; }
   catch (error) { if (error.code === 'ENOENT') throw inputError('Credentials are missing. Restore credentials.json from backup before starting the runtime.'); throw error; }
 }
+/** @param {{stateDir?: string, project?: string, port?: number, workerPort?: number, workers?: number, runtime?: string, execution?: unknown, chat?: unknown, repositories?: unknown}} [options] */
 export async function setup({ stateDir = resolveStateDir(), project, port, workerPort, workers, runtime = 'native', execution: rawExecution, chat: rawChat, repositories: rawRepositories } = {}) {
   const execution = normalizeExecution(rawExecution);
   const chat = normalizeChat(rawChat);

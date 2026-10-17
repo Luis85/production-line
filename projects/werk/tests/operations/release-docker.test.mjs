@@ -1,3 +1,5 @@
+import { testErrorOutput } from '../helpers/process-errors.mjs';
+import { testErrorCode } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
@@ -31,11 +33,11 @@ test('Docker setup is repeatable, mode-separated and never prints or rotates pri
 test('Docker metadata publication refuses symlinks and malformed private JSON has safe diagnostics', async t => {
   const f = await fixture(t); await f.run('setup','--host-state',f.state);
   const outside = join(f.root,'outside'); await writeFile(outside,'untouched'); await rm(join(f.state,'docker.env')); await symlink(outside,join(f.state,'docker.env'));
-  await assert.rejects(f.run('setup','--host-state',f.state), e=>/regular file/.test(e.stderr)); assert.equal(await readFile(outside,'utf8'),'untouched');
+  await assert.rejects(f.run('setup','--host-state',f.state), e=>/regular file/.test(testErrorOutput(e, 'stderr'))); assert.equal(await readFile(outside,'utf8'),'untouched');
   const secret='never-print-secret-value'; await writeFile(join(f.state,'credentials.json'),'{"x":"'+secret+'" invalid}',{mode:0o600});
-  await assert.rejects(f.run('url'),e=>!e.stderr.includes(secret)&&!e.stdout.includes(secret));
+  await assert.rejects(f.run('url'),e=>!testErrorOutput(e, 'stderr').includes(secret)&&!testErrorOutput(e, 'stdout').includes(secret));
 });
 test('Docker single-worker limitation rejects setup before generating credentials', async t => {
-  const f=await fixture(t); await assert.rejects(f.run('setup','--host-state',f.state,'--workers','2'),e=>/workers 1/.test(e.stderr));
-  await assert.rejects(readFile(join(f.state,'credentials.json')),e=>e.code==='ENOENT');
+  const f=await fixture(t); await assert.rejects(f.run('setup','--host-state',f.state,'--workers','2'),e=>/workers 1/.test(testErrorOutput(e, 'stderr')));
+  await assert.rejects(readFile(join(f.state,'credentials.json')),e=>testErrorCode(e)==='ENOENT');
 });

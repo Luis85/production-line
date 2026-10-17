@@ -34,7 +34,20 @@ export const overview = (extra = {}) => ({
   workers: { online: 0, total: 0 },
   ...extra,
 });
+/**
+ * @param {Partial<import('../../../src/worker/status/monitoring.js').Status>} [extra]
+ * @returns {import('../../../src/worker/status/monitoring.js').Status}
+ */
 export const status = (extra = {}) => ({
+  taskId: null,
+  attempt: null,
+  profile: null,
+  lastContact: null,
+  lastError: null,
+  updatedAt: '2026-10-17T00:00:00Z',
+  heartbeatErrors: 0,
+  configurationHash: '',
+  lastSnapshot: null,
   workerId: "worker-a",
   project: "demo",
   state: "idle",
@@ -54,6 +67,7 @@ export const response = (value, code = 200) => ({
 export const httpError = (status, message = "Unavailable") =>
   Object.assign(Error(message), { status });
 export const tick = () => new Promise((resolve) => setImmediate(resolve));
+/** @param {(path: string, init: RequestInit) => unknown} [handler] */
 export function line(
   handler = async () => undefined,
   { connected = true } = {},
@@ -107,6 +121,7 @@ export const factoryOverview = (extra = {}) => ({
   totals: { availableLines: 1, workers: { online: 1 } },
   ...extra,
 });
+/** @param {(path: string, init: RequestInit) => unknown} [handler] */
 export function factory(
   handler = async () => undefined,
   { connected = true } = {},

@@ -1,3 +1,4 @@
+import { parseTrackedFeature, featureRecord } from './feature-fixtures.mjs';
 import { cleanup } from './fixture-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -19,7 +20,7 @@ async function fixture(t, queue) {
   queue ??= { async submit(record) { if (!tasks.has(record.taskId)) { submissions.push(structuredClone(record)); tasks.set(record.taskId, { status: 'queued' }); } }, inspect(record) { return tasks.get(record.taskId); } };
   const folder = new MarkdownFeatureFolder(directory, state, 'codex-cli', project); const service = new FeatureRequests(folder, queue, 0); await service.init();
   cleanup(t, async () => { await service.close(); await rm(project, { recursive: true, force: true }); });
-  return { project, directory, state, folder, service, queue, tasks, submissions, put: (name, text) => writeFile(join(directory, name), text), read: async name => parseFeature(await readFile(join(directory, name), 'utf8')) };
+  return { project, directory, state, folder, service, queue, tasks, submissions, put: (name, text) => writeFile(join(directory, name), text), read: async name => parseTrackedFeature(await readFile(join(directory, name), 'utf8')) };
 }
 async function scan(service) { await service.tick(true); await service.tick(true); }
 test('feature configuration is opt-in and resolves relative to the project', async () => {
@@ -96,13 +97,13 @@ test('folder ownership and regular-file boundaries prevent a second consumer and
 test('optimistic request updates refuse a newer editor save', async t => {
   const f = await fixture(t); await f.put('a.md', source()); const [observed] = await f.folder.scan();
   await f.put('a.md', source('', '# Newer draft\n'));
-  assert.equal(await f.folder.update(observed, { id: 'request', source: 'folder', taskId: 'feature-request', sessionId: 'feature-request', status: 'queued' }, false), false);
+  assert.equal(await f.folder.update(observed, featureRecord(), false), false);
   assert.match(await readFile(join(f.directory, 'a.md'), 'utf8'), /Newer draft/);
 });
 test('feature patch submission is idempotent and shares the serial executor with chat', async t => {
   const f = await fixture(t); let active = 0, maximum = 0, calls = 0;
   const model = () => ({ async reply(messages) { calls++; maximum = Math.max(maximum, ++active); await new Promise(r => setTimeout(r, 20)); active--; return messages[0].text.startsWith('Implement') ? JSON.stringify({ summary: 'Patch fixture', files: [{ path: 'new.txt', content: 'hello\n' }] }) : 'Chat fixture'; } });
-  const settings = new WorkerSettings(f.state); await settings.init(); const sessions = new WorkerSessions(f.state, settings, model); await sessions.init(); const board = new LocalTaskboard(f.state, settings, sessions, model); await board.init();
+  const settings = new WorkerSettings(f.state); await settings.init(); const sessions = WorkerSessions(f.state, settings, model); await sessions.init(); const board = LocalTaskboard(f.state, settings, sessions, model); await board.init();
   cleanup(t, async () => { await board.close(); await sessions.close(); });
   await settings.update({ board: { paused: true } }); await sessions.start('Other task');
   const input = { title: 'Patch feature', instruction: 'Create approved file', repository: f.project, paths: ['new.txt'] }, submission = { id: 'feature-fixed', hash: 'a'.repeat(64) };
@@ -113,10 +114,14 @@ test('feature patch submission is idempotent and shares the serial executor with
   assert.equal(board.detail(submission.id).status, 'review'); assert.equal(maximum, 1); assert.equal(calls, 2); await assert.rejects(readFile(join(f.project, 'new.txt')), { code: 'ENOENT' });
 });
 
+/** @param {string} runId @param {number} attempt @param {import('../../src/worker/application/run-evidence.js').RunOutcome} [outcome]
+ * @returns {import('../../src/worker/application/feature-requests.js').FeatureExecutionEvidence} */
 function executionEvidence(runId, attempt, outcome = 'failed') {
   const consumption = { runs: attempt - 1, reportedRuns: 0, inputTokens: null, outputTokens: null, cacheReadTokens: null, cacheWriteTokens: null, providerReportedCostUsd: null, coverage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, providerReportedCostUsd: 0 } };
+  /** @type {import('../../src/worker/application/run-evidence.js').RunResources} */
   const resources = { scope: 'worker_process', processInstanceId: 'fixture-process', rssBytes: 100, heapUsedBytes: 50, cpuUserMicros: 20, cpuSystemMicros: 5, uptimeSeconds: 1 };
-  const before = { capturedAt: '2026-10-14T10:00:00.000Z', state: 'running', resources, consumption };
+  /** @type {import('../../src/worker/application/run-evidence.js').RunSnapshot} */
+  const before = { measurement: 'execution_boundary', capturedAt: '2026-10-14T10:00:00.000Z', state: 'running', resources, consumption };
   const after = { ...before, capturedAt: '2026-10-14T10:00:01.000Z', state: outcome, resources: { ...resources, cpuUserMicros: 30 }, consumption: { ...consumption, runs: attempt } };
   return { runId, attempt, before, after, durationMs: 1000, queueDurationMs: 100, usage: { inputTokens: null, outputTokens: null, cacheReadTokens: null, cacheWriteTokens: null, providerReportedCostUsd: null, source: 'unavailable', reason: 'No provider used by fixture.' } };
 }
@@ -225,6 +230,7 @@ test('canonical feature gates project findings separately and edited companions 
   f.tasks.set(record.taskId,{status:'failed',request}); await f.service.tick(true);
   const acknowledgedFile=await f.folder.documents.read('gated.md'); let controls=0;
   f.queue.control=async()=>{controls++; request.revision++;};
+  /** @type {import('../../src/worker/application/feature-management.js').FeatureManagementContext} */
   const management={documents:f.folder.documents,index:{version:1,owner:'fixture',records:[record]},queue:f.queue,persist:async()=>{throw Error('Fixture acknowledgement persistence failure');}};
   await assert.rejects(manageFeature({action:'retry',name:'gated.md',revision:acknowledgedFile.revision},management),/acknowledgement persistence failure/);
   await assert.rejects(manageFeature({action:'retry',name:'gated.md',revision:acknowledgedFile.revision},management),/stale request gate evidence/);

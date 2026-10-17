@@ -1,3 +1,5 @@
+import { testErrorStatus } from '../helpers/process-errors.mjs';
+import { testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, realpath, rm, writeFile, readFile, mkdir, stat, chmod, access, symlink, link } from 'node:fs/promises';
@@ -29,7 +31,7 @@ test('dotenv parsing interprets supported keys only, without expanding shell tex
   assert.throws(() => parseEnvironment('worker', 'WERK_WORKER_PORT=4100\nWERK_WORKER_PORT=4200'), /Duplicate .env assignment for WERK_WORKER_PORT/);
   for (const source of ['WERK_WORKER_HOST no-assignment', 'WERK_WORKER_HOST="unterminated', 'WERK_WORKER_HOST="value" trailing', 'WERK_WORKER_HOST="two\nlines"']) assert.throws(() => parseEnvironment('worker', source), /Invalid .env value/);
   const sensitive = 'sensitive-value-do-not-echo';
-  assert.throws(() => parseEnvironment('worker', 'WERK_WORKER_TOKEN="' + sensitive), error => !error.message.includes(sensitive) && error.exitCode === 2);
+  assert.throws(() => parseEnvironment('worker', 'WERK_WORKER_TOKEN="' + sensitive), error => !testErrorMessage(error).includes(sensitive) && testErrorStatus(error, 'exitCode') === 2);
 });
 
 test('loading is allowlisted and process values win, including disabled enrollment', async t => {
@@ -40,6 +42,7 @@ test('loading is allowlisted and process values win, including disabled enrollme
   assert.deepEqual(environment, { WERK_WORKER_TOKEN: tokenB, WERK_ENROLLMENT_TOKEN: '', WERK_WORKER_PORT: '4200' });
   assert.deepEqual(result.loaded, []);
   assert.equal(JSON.stringify(result).includes(tokenA), false);
+  /** @type {Record<string, string | undefined>} */
   const inherited = {}; await loadEnvironment('worker', project, inherited);
   assert.equal(inherited.WERK_ENROLLMENT_TOKEN, legacyEnrollment);
   assert.equal(inherited.WERK_APP_TOKEN, undefined);

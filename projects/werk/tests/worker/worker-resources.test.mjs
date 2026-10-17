@@ -1,3 +1,5 @@
+import { workerStatus } from '../helpers/worker-status.mjs';
+import { testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import { cleanup } from './fixture-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -71,7 +73,9 @@ test('restart preserves stable event history, ends old pressure episodes and sta
 
 test('event retention is bounded with replay-stable IDs, explicit gaps and future polling cursors', async t => {
   const f = await fixture(t);
-  for (let n = 0; n < 501; n++) { const alert = { id: 'episode-' + n, code: 'memory', severity: 'warning', openedAt: new Date().toISOString(), observed: 90, threshold: 85 }; f.journal.transition(alert, 'opened', 'threshold', alert.openedAt); f.journal.transition(alert, 'resolved', 'recovered', alert.openedAt); }
+  for (let n = 0; n < 501; n++) {
+    /** @type {import('../../src/worker/application/resources.ts').ResourceAlert} */
+    const alert = { id: 'episode-' + n, code: 'memory', severity: 'warning', openedAt: new Date().toISOString(), observed: 90, threshold: 85 }; f.journal.transition(alert, 'opened', 'threshold', alert.openedAt); f.journal.transition(alert, 'resolved', 'recovered', alert.openedAt); }
   let page = f.monitor.events(0, 100), events = [...page.events]; assert.equal(page.gap, true); assert.equal(page.oldestAvailableSequence, 3);
   while (page.hasMore) { page = f.monitor.events(page.nextAfter, 100); events.push(...page.events); }
   assert.equal(events.length, 1000); assert.equal(new Set(events.map(event => event.id)).size, 1000);
@@ -88,11 +92,16 @@ test('journal write failure is observable and retried without flooding or affect
 });
 
 test('monitor timer is unreferenced and shutdown drains a pending sample before disposing its journal', async t => {
-  const f = await fixture(t); f.monitor.start(); assert.equal(f.monitor.timer.hasRef(), false);
-  let release, entered; const waiting = new Promise(resolve => { entered = resolve; }); let reads = 0;
-  f.monitor.dependencies.read = async () => { if (++reads === 1) { entered(); await new Promise(resolve => { release = resolve; }); } return baseline(); };
+  const f = await fixture(t); f.monitor.start();
+  // @ts-expect-error Timer ownership is intentionally inspected to verify it cannot keep the worker process alive.
+  assert.equal(f.monitor.timer.hasRef(), false);
+  const {promise:waiting,resolve:entered}=Promise.withResolvers();
+  const {promise:blocked,resolve:release}=Promise.withResolvers(); let reads = 0;
+  // @ts-expect-error Inject a blocked sampler into the private dependency seam to verify shutdown drainage.
+  f.monitor.dependencies.read = async () => { if (++reads === 1) { entered(); await blocked; } return baseline(); };
   const sample = f.monitor.sample(); await waiting; let closed = false; const shutdown = f.monitor.close().then(() => { closed = true; });
   await Promise.resolve(); assert.equal(closed, false); release(); await sample; await shutdown;
+  // @ts-expect-error The same timer ownership seam must be cleared during shutdown.
   assert.equal(f.monitor.timer, undefined); assert.throws(() => f.journal.events(), /not open/); const before = reads; await f.monitor.sample(); assert.equal(reads, before);
 });
 
@@ -128,11 +137,11 @@ test('resource transition logs accept only fixed structured event names without 
 test('resource endpoints require worker access, reject arbitrary paths and expose only aggregate public metrics', async t => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-resource-api-')));
   const journal = new SnapshotJournal(directory, 'a'.repeat(64), 'b'.repeat(64)); await journal.init();
-  const status = () => ({ activeTasks: [], state: 'standalone', heartbeatErrors: 0, lastContact: null });
+  const status = () => workerStatus();
   const workspace = new WorkerWorkspace({ stateDir: directory, pollMs: 1000, timeoutMs: 60000 }, journal, status); await workspace.init();
   const server = await statusServer(status, '127.0.0.1', 0, undefined, workspace);
   cleanup(t, async () => { await new Promise(resolve => server.close(resolve)); await workspace.close(); await journal.close(); await rm(directory, { recursive: true, force: true }); });
-  const base = 'http://127.0.0.1:' + server.address().port, token = (await readFile(join(directory, 'webview-token'), 'utf8')).trim();
+  const base = 'http://127.0.0.1:' + testListeningAddress(server).port, token = (await readFile(join(directory, 'webview-token'), 'utf8')).trim();
   const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token };
   const post = body => fetch(base + '/api/resources', { method: 'POST', headers, body: JSON.stringify(body) });
   assert.equal((await fetch(base + '/api/resources')).status, 401);

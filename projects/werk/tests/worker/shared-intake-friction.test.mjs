@@ -1,3 +1,4 @@
+import { testErrorCode, testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import { cleanup } from './fixture-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -46,6 +47,7 @@ async function folderFixture(t, retained) {
 }
 const sharedId = 'fr-5c8c2981-7c51-4fe2-9eb3-3475020bc0d4';
 const shared = '---\nschemaVersion: 1\ntemplateId: feature-request-v1\nid: ' + sharedId + '\ntitle: Shared request\nstatus: ready\nmode: patch\npaths:\n  - docs/a.md\n---\n# Goal\n\nChange a.\n';
+/** @param {boolean} submitted @returns {import('../../src/worker/application/feature-requests.js').FeatureRecord} */
 const retainedRecord = submitted => ({ id: sharedId, name: 'shared.md', source: 'folder', taskId: 'feature-' + sharedId, sessionId: 'local-feature-' + sharedId,
   input: { title: 'Shared request', mode: 'patch', provider: 'claude-cli', message: '# Goal\n\nChange a.', paths: ['docs/a.md'], priority: 1 },
   inputHash: 'saved-input', submitted, status: submitted ? 'queued' : 'waiting', createdAt: '2026-10-16T10:00:00Z', updatedAt: '2026-10-16T10:00:00Z',
@@ -118,17 +120,17 @@ test('Windows publication preflight uses Windows paths and reports the actual vi
   // Same-drive relative metadata is short; only the absolute character limit fails.
   const deepRepository = 'C:\\' + 'x'.repeat(190), deep = win32.join(deepRepository, '.werk', 'worker', 'shared-git', key);
   assert.throws(() => assertPublicationPath(deep, deepRepository, 'win32'), error => {
-    assert.equal(error.code, 'invalid_input');
-    assert.match(error.message, /absolute metadata path has \d+ characters.*fewer than 260/);
-    assert.doesNotMatch(error.message, /220/);
-    assert.ok(error.message.includes('C:\\werk\\project'));
+    assert.equal(testErrorCode(error), 'invalid_input');
+    assert.match(testErrorMessage(error), /absolute metadata path has \d+ characters.*fewer than 260/);
+    assert.doesNotMatch(testErrorMessage(error), /220/);
+    assert.ok(testErrorMessage(error).includes('C:\\werk\\project'));
     return true;
   });
   // Different drives prevent a relative argument; multibyte names hit Git's byte bound first.
   const unicodeState = 'D:\\' + 'é'.repeat(105);
   assert.throws(() => assertPublicationPath(unicodeState, repository, 'win32'), error => {
-    assert.match(error.message, /Git worktree argument uses \d+ UTF-8 bytes.*at most 220/);
-    assert.doesNotMatch(error.message, /260/);
+    assert.match(testErrorMessage(error), /Git worktree argument uses \d+ UTF-8 bytes.*at most 220/);
+    assert.doesNotMatch(testErrorMessage(error), /260/);
     return true;
   });
   assert.doesNotThrow(() => assertPublicationPath(deep, deepRepository, 'linux'));
@@ -142,7 +144,7 @@ test('Windows shared configuration rejects an overlong publication path without 
   await runtime.intake.init();
   const before = runtime.intake.view(), saved = await readFile(join(state, 'shared-intake.json'), 'utf8');
   const config = { enabled: true, repositoryId: 'local-project', remote: 'origin', branch: 'main', workflowPath: '.werk/feature-workflow.json', pollMs: 60000 };
-  await assert.rejects(runtime.intake.configure(config, before.revision), error => error.code === 'invalid_input' && /shorter worker state directory/.test(error.message));
+  await assert.rejects(runtime.intake.configure(config, before.revision), error => testErrorCode(error) === 'invalid_input' && /shorter worker state directory/.test(testErrorMessage(error)));
   assert.deepEqual(runtime.intake.view().config, before.config); assert.equal(runtime.intake.view().revision, before.revision);
   assert.equal(await readFile(join(state, 'shared-intake.json'), 'utf8'), saved);
   assert.deepEqual(await readdir(state), ['shared-intake.json']); assert.deepEqual(calls, []);

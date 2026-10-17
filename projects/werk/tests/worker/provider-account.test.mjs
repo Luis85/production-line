@@ -12,7 +12,7 @@ test('Claude account parser exposes only bounded identity fields actually report
   assert.doesNotMatch(JSON.stringify(result), /secret-private|private-token|private-refresh|private-diagnostic/);
 });
 test('malformed, signed-out and nonzero Claude status cannot expose stale account identity', () => {
-  for (const [code, output, signedIn] of [[1, JSON.stringify({ loggedIn: false, email: 'old@example.com', subscriptionType: 'max' }), false], [1, JSON.stringify({ loggedIn: true, email: 'old@example.com' }), 'unknown'], [0, '{private-malformed', 'unknown'], [0, '[]', 'unknown'], [0, JSON.stringify({ loggedIn: 'true', email: 'old@example.com' }), 'unknown']]) {
+  for (const [code, output, signedIn] of /** @type {const} */ ([[1, JSON.stringify({ loggedIn: false, email: 'old@example.com', subscriptionType: 'max' }), false], [1, JSON.stringify({ loggedIn: true, email: 'old@example.com' }), 'unknown'], [0, '{private-malformed', 'unknown'], [0, '[]', 'unknown'], [0, JSON.stringify({ loggedIn: 'true', email: 'old@example.com' }), 'unknown']])) {
     const result = parseProviderAccount('claude-cli', code, output); assert.equal(result.signedIn, signedIn); assert.equal(result.email, null); assert.equal(result.subscription, null); assert.doesNotMatch(JSON.stringify(result), /old@example|private-malformed/);
   }
 });

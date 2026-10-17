@@ -1,3 +1,5 @@
+import { completedText } from './model-fixtures.mjs';
+import { testErrorCode, testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import { withProviderTools } from '../../src/worker/dist/worker/infrastructure/provider-tool-session.js';
 import { withCliToolBridge } from '../../src/worker/dist/worker/infrastructure/cli-tool-bridge.js';
 import { providerCommand } from '../../src/worker/dist/worker/infrastructure/codex-adapter.js';
@@ -8,21 +10,23 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { modelFor } from '../../src/worker/dist/worker/infrastructure/providers.js';
 import { prepareModelRequest, executeModel } from '../../src/worker/dist/worker/application/model-contract.js';
+/** @type {import('../../src/worker/application/conversation-contracts.js').ChatMessage[]} */
 const messages = [{ id: 'u', role: 'user', text: 'Use the granted fixture.', state: 'complete', at: '2026-10-16T00:00:00Z' }];
 const connection = id => ({ id, apiKey: 'fixture-only', model: 'fixture', executable: '' });
 const manifest = { revision: 3, tools: [{ name: 'fixture_read', description: 'Read a fixture', inputSchema: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'], additionalProperties: false } }] };
 const usage = { input_tokens: 10, output_tokens: 3, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
 const answer = id => id === 'openai-api' ? { status: 'completed', usage, output: [{ type: 'message', content: [{ type: 'output_text', text: 'Fixture complete.' }] }] } : { stop_reason: 'end_turn', usage, content: [{ type: 'text', text: 'Fixture complete.' }] };
 const call = (id, extra = {}) => id === 'openai-api' ? { status: 'completed', usage, output: [{ type: 'function_call', name: 'fixture_read', call_id: 'call_1', arguments: '{"path":"README.md"}', ...extra }] } : { stop_reason: 'tool_use', usage, content: [{ type: 'tool_use', name: 'fixture_read', id: 'call_1', input: { path: 'README.md' }, ...extra }] };
+/** @returns {import('../../src/worker/infrastructure/provider-tool-session.js').ToolRuntimeFactory} */
 function runtimeFactory(observed, override = {}) { return () => ({ manifest: structuredClone(manifest), async call(name, args, signal) { observed.calls.push({ name, args, aborted: signal.aborted }); return { content: [{ type: 'text', text: 'Fixture file contents' }] }; }, async close() { observed.closed++; }, ...override }); }
-for (const id of ['openai-api', 'anthropic-api']) {
+for (const id of /** @type {const} */ (['openai-api', 'anthropic-api'])) {
   test(`${id} executes only current granted tools, replays results and totals usage across turns`, async () => {
     const observed = { calls: [], closed: 0 }, bodies = [], measurements = [];
     const model = modelFor(connection(id), '/unused', async (_url, options) => { bodies.push(JSON.parse(options.body)); return Response.json(bodies.length === 1 ? call(id) : answer(id)); }, { tools: runtimeFactory(observed) });
     const request = prepareModelRequest(model, messages);
     assert.equal(request.policy.tools, 'granted'); assert.ok(Object.isFrozen(request.toolManifest.tools[0]));
     assert.doesNotMatch(JSON.stringify(request), /fixture-only/);
-    assert.equal((await executeModel(model, request, new AbortController().signal, value => measurements.push(value))).text, 'Fixture complete.');
+    assert.equal(completedText((await executeModel(model, request, new AbortController().signal, value => measurements.push(value)))), 'Fixture complete.');
     assert.deepEqual(observed.calls.map(({ name, args }) => ({ name, args })), [{ name: 'fixture_read', args: { path: 'README.md' } }]);
     assert.equal(observed.closed, 1); assert.equal(bodies.length, 2);
     assert.deepEqual(bodies[0].tools.map(tool => tool.name), ['fixture_read']);
@@ -39,17 +43,18 @@ for (const id of ['openai-api', 'anthropic-api']) {
     Object.defineProperty(model, 'executionPolicy', { get: () => saved });
     const request = prepareModelRequest(model, messages); saved = { maxToolCalls: 1, commandTimeoutMs: 1000 };
     const result = await executeModel(model, request, new AbortController().signal, undefined, { beforeCall() { boundaries++; } });
-    assert.equal(result.text, 'Fixture complete.'); assert.equal(observed.calls.length, 40); assert.equal(turn, 41); assert.equal(boundaries, 41); assert.equal(observed.closed, 1);
+    assert.equal(completedText(result), 'Fixture complete.'); assert.equal(observed.calls.length, 40); assert.equal(turn, 41); assert.equal(boundaries, 41); assert.equal(observed.closed, 1);
     assert.equal(request.policy.maxToolCalls, 40); assert.ok(Object.isFrozen(request.policy));
   });
   test(`${id} refuses a tool batch beyond its configured budget before any side effect`, async () => {
     const observed = { calls: [], closed: 0 };
     const model = modelFor(connection(id), '/unused', async () => {
-      const response = call(id), key = id === 'openai-api' ? 'output' : 'content';
-      response[key].push({ ...response[key][0], ...(id === 'openai-api' ? { call_id: 'second' } : { id: 'second' }) });
+      const response = call(id);
+      if ('output' in response) response.output.push({ ...response.output[0], call_id: 'second' });
+      else response.content.push({ ...response.content[0], id: 'second' });
       return Response.json(response);
     }, { tools: runtimeFactory(observed) });
-    model.executionPolicy = { maxToolCalls: 1, commandTimeoutMs: 1000 };
+    Object.defineProperty(model, 'executionPolicy', { value: { maxToolCalls: 1, commandTimeoutMs: 1000 } });
     await assert.rejects(executeModel(model, prepareModelRequest(model, messages), new AbortController().signal), { code: 'tool_access' });
     assert.equal(observed.calls.length, 0); assert.equal(observed.closed, 1);
   });
@@ -75,7 +80,7 @@ for (const id of ['openai-api', 'anthropic-api']) {
     for (const cancelled of [false, true]) {
       const controller = new AbortController(), denied = { calls: [], closed: 0 };
       const model = modelFor(connection(id), '/unused', async () => Response.json(call(id)), { tools: runtimeFactory(denied, { async call() { if (cancelled) controller.abort(); throw Error('PRIVATE_TOOL_DIAGNOSTIC'); } }) });
-      await assert.rejects(executeModel(model, prepareModelRequest(model, messages), controller.signal), error => error.code === (cancelled ? 'cancelled' : 'tool_access') && !error.message.includes('PRIVATE'));
+      await assert.rejects(executeModel(model, prepareModelRequest(model, messages), controller.signal), error => testErrorCode(error) === (cancelled ? 'cancelled' : 'tool_access') && !testErrorMessage(error).includes('PRIVATE'));
       assert.equal(denied.closed, 1);
     }
   });
@@ -86,12 +91,12 @@ test('stale or forged grant snapshots cannot reach provider transport; new turns
   const model = modelFor(connection('openai-api'), '/unused', async () => { requests++; return Response.json(answer('openai-api')); }, { tools: factory });
   const saved = prepareModelRequest(model, messages); revision++;
   await assert.rejects(executeModel(model, saved, new AbortController().signal), { code: 'tool_access' }); assert.equal(requests, 0);
-  assert.equal((await executeModel(model, prepareModelRequest(model, messages), new AbortController().signal)).text, 'Fixture complete.');
+  assert.equal(completedText((await executeModel(model, prepareModelRequest(model, messages), new AbortController().signal))), 'Fixture complete.');
   assert.equal(requests, 1); assert.equal(observed.closed, 2);
 });
 test('CLI adapters expose a private MCP bridge, exercise its actual stdio protocol, and remove it after completion', { skip: process.platform === 'win32', timeout: 20000 }, async t => {
   const directory = await mkdtemp(join(tmpdir(), 'werk-provider-tools-')); t.after(() => rm(directory, { recursive: true, force: true }));
-  for (const id of ['claude-cli', 'codex-cli']) {
+  for (const id of /** @type {const} */ (['claude-cli', 'codex-cli'])) {
     const observed = { calls: [], closed: 0 }, captured = join(directory, id + '.json'), executable = join(directory, id);
     const source = `#!${process.execPath}\nimport{readFile,writeFile}from'node:fs/promises';import{spawn}from'node:child_process';import{createInterface}from'node:readline';
 let prompt='';for await(const part of process.stdin)prompt+=part;
@@ -105,7 +110,7 @@ await writeFile(${JSON.stringify(captured)},JSON.stringify({initialized,listed,r
 if(${JSON.stringify(id)}==='claude-cli')console.log(JSON.stringify({type:'result',result:'Fixture complete.'}));else{console.log(JSON.stringify({type:'item.completed',item:{type:'mcp_tool_call',server:'werk',tool:'fixture_read'}}));console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:'Fixture complete.'}}))}\n`;
     await writeFile(executable, source, { mode: 0o700 });
     const model = modelFor({ ...connection(id), executable }, directory, undefined, { tools: runtimeFactory(observed) });
-    assert.equal((await executeModel(model, prepareModelRequest(model, messages), AbortSignal.timeout(8000))).text, 'Fixture complete.');
+    assert.equal(completedText((await executeModel(model, prepareModelRequest(model, messages), AbortSignal.timeout(8000)))), 'Fixture complete.');
     const saved = JSON.parse(await readFile(captured, 'utf8'));
     assert.equal(saved.initialized.result.protocolVersion, '2025-06-18'); assert.deepEqual(saved.listed.result.tools.map(tool => tool.name), ['fixture_read']);
     assert.equal(saved.result.result.content[0].text, 'Fixture file contents'); assert.ok(saved.denied.error);
@@ -122,10 +127,10 @@ test('private CLI bridge speaks MCP through the contained launcher on every plat
   try {
     const output = await withCliToolBridge(runtime, AbortSignal.timeout(20000), async bridge => {
       privateFile = bridge.args[1];
-      const input = [{ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } }, { jsonrpc: '2.0', id: 2, method: 'tools/list' }, { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'fixture_read', arguments: { path: 'README.md' } } }].map(JSON.stringify).join('\n') + '\n';
+      const input = [{ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } }, { jsonrpc: '2.0', id: 2, method: 'tools/list' }, { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'fixture_read', arguments: { path: 'README.md' } } }].map(value => JSON.stringify(value)).join('\n') + '\n';
       return providerCommand(bridge.command, bridge.args, tmpdir(), AbortSignal.timeout(15000), input, true, 'claude');
     });
-    const responses = output.toString('utf8').trim().split('\n').map(JSON.parse);
+    const responses = output.toString('utf8').trim().split('\n').map(value => JSON.parse(value));
     assert.equal(responses[0].result.protocolVersion, '2025-06-18');
     assert.deepEqual(responses[1].result.tools.map(tool => tool.name), ['fixture_read']);
     assert.equal(responses[2].result.content[0].text, 'Fixture file contents');
@@ -134,9 +139,14 @@ test('private CLI bridge speaks MCP through the contained launcher on every plat
 });
 
 test('cancelled CLI tool invocation holds execution until tool cleanup completes', { timeout: 30000 }, async t => {
-  const controller = new AbortController(); let reached, release, callDone, privateFile, settled = false, closed = false;
-  const entered = new Promise(resolve => { reached = resolve; });
-  const cleanup = new Promise(resolve => { release = resolve; });
+  const controller = new AbortController(); /** @type {() => void} */ let reached;
+  /** @type {() => void} */ let release;
+  let callDone;
+  let privateFile;
+  let settled = false;
+  let closed = false;
+  const entered = new Promise(resolve => { reached = () => resolve(undefined); });
+  const cleanup = new Promise(resolve => { release = () => resolve(undefined); });
   t.after(() => { controller.abort(); release(); });
   const runtime = { manifest, call(_name, _args, signal) {
     callDone = (async () => { reached(); await new Promise(resolve => signal.aborted ? resolve() : signal.addEventListener('abort', resolve, { once: true })); await cleanup; throw Error('fixture cancelled'); })();

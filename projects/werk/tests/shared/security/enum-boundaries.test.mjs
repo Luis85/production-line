@@ -1,3 +1,4 @@
+import { testErrorCode, testListeningAddress } from '../../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { startServer } from '../../../src/orchestrator/dist/orchestrator/server.js';
@@ -9,7 +10,7 @@ const invalidModes = [['mock'], ['cli'], [['mock']], {}, null, true, 1];
 
 test('HTTP rejects non-string execution modes before persistence and valid modes remain claimable', async () => {
   const app = await startServer({ db: ':memory:', host: '127.0.0.1', port: 0, project: 'demo', adminToken: admin, enrollmentToken: enrollment });
-  const base = 'http://127.0.0.1:' + app.server.address().port;
+  const base = 'http://127.0.0.1:' + testListeningAddress(app.server).port;
   const post = (path, token, body, key) => fetch(base + path, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', ...(key ? { 'Idempotency-Key': key } : {}) }, body: JSON.stringify(body) });
   const input = { project: 'demo', title: 'Strict execution mode', criteria: ['Use a supported mode'], provider: 'codex' };
   try {
@@ -45,10 +46,10 @@ test('remote overview and capability enums reject array coercion without losing 
   assert.equal(validateOverview(overview()).mode, 'mock');
   assert.deepEqual(validateLineCapabilities(capabilities()), capabilities());
   for (const mode of invalidModes) {
-    assert.throws(() => validateOverview({ ...overview(), mode }), error => error.code === 'invalid_input');
-    assert.throws(() => validateLineCapabilities({ ...capabilities(), execution: mode }), error => error.code === 'invalid_input');
-    assert.throws(() => validateLineCapabilities({ ...capabilities(), profiles: [{ id: 'default', provider: 'codex', mode }] }), error => error.code === 'invalid_input');
+    assert.throws(() => validateOverview({ ...overview(), mode }), error => testErrorCode(error) === 'invalid_input');
+    assert.throws(() => validateLineCapabilities({ ...capabilities(), execution: mode }), error => testErrorCode(error) === 'invalid_input');
+    assert.throws(() => validateLineCapabilities({ ...capabilities(), profiles: [{ id: 'default', provider: 'codex', mode }] }), error => testErrorCode(error) === 'invalid_input');
   }
-  for (const context of [['unbound'], ['pinned'], {}, null]) assert.throws(() => validateLineCapabilities({ ...capabilities(), context }), error => error.code === 'invalid_input');
-  assert.throws(() => validateLineCapabilities({ ...capabilities(), profiles: [{ id: 'default', provider: ['codex'], mode: 'mock' }] }), error => error.code === 'invalid_input');
+  for (const context of [['unbound'], ['pinned'], {}, null]) assert.throws(() => validateLineCapabilities({ ...capabilities(), context }), error => testErrorCode(error) === 'invalid_input');
+  assert.throws(() => validateLineCapabilities({ ...capabilities(), profiles: [{ id: 'default', provider: ['codex'], mode: 'mock' }] }), error => testErrorCode(error) === 'invalid_input');
 });

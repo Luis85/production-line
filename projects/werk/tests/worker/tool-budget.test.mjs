@@ -25,6 +25,7 @@ async function bridgeClient(bridge, use) {
 
 test('the real MCP bridge permits more than 32 tool calls and stops exactly at the frozen allowance', { timeout: 20000 }, async () => {
   let calls = 0;
+  /** @type {import('../../src/worker/application/tool-runtime.js').ToolRuntime} */
   const runtime = { manifest, limits: Object.freeze({ maxCalls: 40, maxRuntimeMs: 450000, commandTimeoutMs: 300000 }), async call() { calls++; return { content: [{ type: 'text', text: 'ok' }] }; }, async close() {} };
   await withCliToolBridge(runtime, signal(), async bridge => {
     const bridgeScript = await readFile(bridge.args[0], 'utf8');
@@ -33,7 +34,7 @@ test('the real MCP bridge permits more than 32 tool calls and stops exactly at t
     assert.equal(privateConfig.timeoutMs, 450000);
     assert.equal(bridge.toolTimeoutMs, 450000);
     assert.deepEqual(claudeToolEnvironment(bridge), { MCP_TOOL_TIMEOUT: '450000' });
-    assert.equal(bridgeToolTimeoutMs({ manifest }), 21600000, 'legacy runtimes use the existing invocation default');
+    assert.equal(bridgeToolTimeoutMs({ ...runtime, limits: undefined }), 21600000, 'legacy runtimes use the existing invocation default');
     assert.match(bridge.codexConfig, /required=true,tool_timeout_sec=450/);
     const config = JSON.parse(await readFile(bridge.configFile, 'utf8'));
     assert.equal(config.mcpServers.werk.timeout, 450000);

@@ -48,6 +48,7 @@ test("malformed diagnostics preserve the entire last good response and recover",
   });
   await f.refresh();
   const saved = structuredClone(f.state.snapshot);
+  // @ts-expect-error Deliberately malformed transport data must be rejected without replacing the last valid state.
   value = { ...status(), activeTasks: "bad", workerId: "wrong" };
   await f.refresh();
   assert.deepEqual(f.state.snapshot, saved);

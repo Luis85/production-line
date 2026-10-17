@@ -1,0 +1,88 @@
+@media (max-width: 1100px) {
+  .spatial-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .spatial-inspector {
+    border-left: 0;
+    border-top: 1px solid #3b4b56;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 24px;
+  }
+  .spatial-inspector h2,
+  .spatial-inspector .spatial-kind {
+    grid-column: 1/-1;
+  }
+  .spatial-inspector dl {
+    margin: 0 0 16px;
+  }
+  .spatial-actions {
+    grid-column: 1/-1;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .spatial-inspector .spatial-kind {
+    margin: 0 0 16px;
+  }
+}
+@media (max-width: 760px) {
+  .spatial-inspector {
+    display: block;
+    padding: 16px;
+  }
+  .spatial-inspector dl {
+    margin: 16px 0;
+  }
+  .spatial-toolbar button {
+    flex-grow: 1;
+  }
+  .spatial-nodes {
+    max-height: 180px;
+    overflow: auto;
+  }
+  .visual-definition {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .visual-form-preview {
+    position: static;
+  }
+  .visual-worker-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .visual-board {
+    grid-template-columns: repeat(5, 240px);
+  }
+  .visual-route {
+    gap: 4px;
+  }
+  .spatial-caption,
+  .spatial-legend {
+    padding: 12px 16px;
+  }
+  .spatial-actions {
+    flex-direction: column;
+  }
+  body:has(#factory-tree) .factory-tree {
+    max-height: 140px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spatial * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+.spatial-camera {
+  padding: 0 16px;
+  border-top: 1px solid #30404a;
+}
+.spatial-camera summary {
+  min-height: 44px;
+  padding: 10px 0;
+  color: #b5c4cd;
+  cursor: pointer;
+  font-size: 14px;
+}
+.spatial-camera .spatial-toolbar {
+  margin: 0 0 12px;
+}

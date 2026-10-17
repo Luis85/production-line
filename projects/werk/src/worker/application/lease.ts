@@ -10,11 +10,11 @@ export class AttemptLease {
   private heartbeat?: Promise<void>;
   private closed = false;
   private task: Task;
-  private client: WorkerClient;
+  private client: Pick<WorkerClient, 'heartbeat'>;
   private state: AttemptState;
   private now: () => number;
 
-  constructor(task: Task, client: WorkerClient, state: AttemptState, now = Date.now) {
+  constructor(task: Task, client: Pick<WorkerClient, 'heartbeat'>, state: AttemptState, now = Date.now) {
     this.task = task;
     this.client = client;
     this.state = state;

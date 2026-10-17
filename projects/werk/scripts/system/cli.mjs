@@ -28,7 +28,7 @@ export function parse(args, environment = process.env) {
   if (options.environment && !['native', 'docker'].includes(options.environment)) throw inputError('--environment must be native or docker.');
   return { command, options };
 }
-export async function doctorSystem(stateDir, definition) {
+async function doctorSystem(stateDir, definition) {
   const checks = [], status = await systemStatus(stateDir); let credentials;
   async function check(name, operation) { try { await operation(); checks.push({ name, ok: true }); } catch (error) { checks.push({ name, ok: false, message: error.message }); } }
   try { checks.push(...(await maintenanceDiagnose(stateDir)).checks.filter(item => item.name === 'disk-space' || item.name.startsWith('lock:'))); } catch { checks.push({ name: 'disk-space', ok: false, message: 'Cannot inspect storage. Check the state mount and permissions.' }); }

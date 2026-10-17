@@ -1,3 +1,5 @@
+import { withOwnedResponse } from '../../shared/http/transport.js';
+import { readResponseBody, ResponseBodyLimitError } from '../../shared/http/response-body.js';
 import { runApprovedToolProcess } from './tool-process.js';
 import { constants, lstatSync, realpathSync, statSync } from 'node:fs';
 import { lstat, mkdir, open, opendir, realpath } from 'node:fs/promises';
@@ -260,28 +262,26 @@ export function builtinToolOperations(options: BuiltinToolOptions): ToolOperatio
     const deadline = AbortSignal.any([signal, AbortSignal.timeout(limits.webTimeoutMs)]);
     for (let redirects = 0; redirects <= 3; redirects++) {
       check(deadline);
-      const response = await (options.fetch ?? globalThis.fetch)(url, { method: 'GET', redirect: 'manual', credentials: 'omit', headers: { Accept: 'text/*, application/json, application/xml' }, signal: deadline });
-      if ([301, 302, 303, 307, 308].includes(response.status)) {
-        await response.body?.cancel();
-        if (redirects === 3 || !response.headers.get('location')) throw new BuiltinToolError('Web redirect limit reached or redirect was invalid.');
-        url = validate(response.headers.get('location')!, url); continue;
-      }
-      if (!response.ok) { await response.body?.cancel(); return output({ url: url.href, status: response.status, text: '' }); }
-      const chunks: Uint8Array[] = []; let bytes = 0;
-      const reader = response.body?.getReader();
-      try {
-        while (reader) {
-          check(deadline); const part = await reader.read(); if (part.done) break;
-          bytes += part.value.byteLength;
-          if (bytes > 65536) throw new BuiltinToolError('Web response exceeded the 64 KiB limit.');
-          chunks.push(part.value);
+      const result = await withOwnedResponse(url, { method: 'GET', redirect: 'manual', credentials: 'omit', headers: { Accept: 'text/*, application/json, application/xml' }, signal: deadline }, undefined, async response => {
+        if ([301, 302, 303, 307, 308].includes(response.status)) {
+          await response.body?.cancel();
+          if (redirects === 3 || !response.headers.get('location')) throw new BuiltinToolError('Web redirect limit reached or redirect was invalid.');
+          url = validate(response.headers.get('location')!, url); return undefined;
         }
-      } finally { await reader?.cancel().catch(() => {}); reader?.releaseLock(); }
-      const body = Buffer.concat(chunks);
-      if (body.includes(0)) throw new BuiltinToolError('Binary web responses are not available through this tool.');
-      let text: string;
-      try { text = new TextDecoder('utf-8', { fatal: true }).decode(body); } catch { throw new BuiltinToolError('Only UTF-8 text web responses are supported.'); }
-      return output({ url: url.href, status: response.status, text });
+        if (!response.ok) { await response.body?.cancel(); return output({ url: url.href, status: response.status, text: '' }); }
+        let body: Uint8Array;
+        try { body = await readResponseBody(response.body, 65536, { cancel: 'always' }); }
+        catch (error) {
+          if (error instanceof ResponseBodyLimitError) throw new BuiltinToolError('Web response exceeded the 64 KiB limit.');
+          throw error;
+        }
+        check(deadline);
+        if (body.includes(0)) throw new BuiltinToolError('Binary web responses are not available through this tool.');
+        let text: string;
+        try { text = new TextDecoder('utf-8', { fatal: true }).decode(body); } catch { throw new BuiltinToolError('Only UTF-8 text web responses are supported.'); }
+        return output({ url: url.href, status: response.status, text });
+      }, true, options.fetch);
+      if (result !== undefined) return result;
     }
     throw new BuiltinToolError('Web redirect limit reached.');
   });

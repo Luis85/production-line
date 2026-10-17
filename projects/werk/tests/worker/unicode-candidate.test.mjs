@@ -1,3 +1,4 @@
+import { requiredValue } from '../ui/helpers/required-value.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -42,9 +43,9 @@ test('Unicode candidate edits, additions and deletions retain verified evidence 
   configured.builtins.commands = [{ id: 'check', name: 'Verify Unicode files', executable: process.execPath, args: ['check.mjs'], enabled: true, verification: true }];
   const policy = validateToolPolicy(configured), scope = freezeDevelopmentScope(prepared.baseCommit, snapshot.files.map(file => file.path), policy);
   const evidenceFile = join(directory, 'candidate-evidence.json');
-  let saved;
-  const runtime = () => createDevelopmentRuntime({ scope, worktree: prepared.path, worktreeIdentity: identity, repository, initialEvidence: saved, commandTimeoutMs: 30000, currentPolicy: () => policy,
-    checkpoint: async value => { await writeFile(evidenceFile, JSON.stringify(value)); saved = structuredClone(value); },
+  const retained = /** @type {{ value?: import('../../src/worker/application/development.js').DevelopmentEvidence }} */ ({});
+  const runtime = () => createDevelopmentRuntime({ scope, worktree: prepared.path, worktreeIdentity: identity, repository, initialEvidence: retained.value, commandTimeoutMs: 30000, currentPolicy: () => policy,
+    checkpoint: async value => { await writeFile(evidenceFile, JSON.stringify(value)); retained.value = structuredClone(value); },
     verifyWorkspace: async abort => {
       const retained = await createRepositoryWorktree(base, 'project', 'unicode-candidate', abort, prepared.baseCommit);
       assert.equal(retained.path, prepared.path); assert.equal(retained.reused, true);
@@ -55,13 +56,13 @@ test('Unicode candidate edits, additions and deletions retain verified evidence 
   for (const [path, content] of [[existing, 'after\n'], [added, 'created\n'], [removed, null]]) {
     const current = await candidate.capture(signal);
     await candidate.apply({ path, content, expectedHash: current.files.find(file => file.path === path).hash }, signal);
-    assert.deepEqual(saved.checks, [], 'each edit invalidates previous verification receipts');
+    assert.deepEqual(requiredValue(retained.value).checks, [], 'each edit invalidates previous verification receipts');
   }
   const passed = await candidate.check('check', signal);
   assert.equal(passed.status, 'passed'); assert.equal(passed.exitCode, 0); assert.match(passed.stdout, /Unicode candidate verified/);
   const final = await candidate.capture(signal);
-  assert.deepEqual(final.changedPaths, [existing, added, removed].sort()); assert.equal(developmentVerified(scope, final, saved), true);
-  saved = JSON.parse(await readFile(evidenceFile, 'utf8'));
+  assert.deepEqual(final.changedPaths, [existing, added, removed].sort()); assert.equal(developmentVerified(scope, final, requiredValue(retained.value)), true);
+  retained.value = JSON.parse(await readFile(evidenceFile, 'utf8'));
   const restarted = runtime(), recovered = await restarted.capture(signal);
   assert.equal(recovered.digest, final.digest); assert.equal(recovered.patch, final.patch);
   assert.equal(developmentVerified(scope, recovered, restarted.evidence()), true, 'the exact Unicode paths and receipts survive recovery');

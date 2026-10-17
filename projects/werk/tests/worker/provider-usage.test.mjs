@@ -1,3 +1,5 @@
+import { testErrorField } from '../helpers/typed-boundaries.mjs';
+import { testErrorCode } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, chmod, rm } from 'node:fs/promises';
@@ -6,6 +8,7 @@ import { join } from 'node:path';
 import { providerUsage, codexUsage } from '../../src/worker/dist/worker/infrastructure/provider-usage.js';
 import { modelFor } from '../../src/worker/dist/worker/infrastructure/providers.js';
 import { providerCommand } from '../../src/worker/dist/worker/infrastructure/codex-adapter.js';
+/** @type {import('../../src/worker/application/conversation-contracts.js').ChatMessage[]} */
 const messages = [{ id: 'fixture', role: 'user', text: 'Fixture input', state: 'complete', at: '2026-10-14T00:00:00Z' }];
 const signal = () => AbortSignal.timeout(5000);
 const connection = id => ({ id, model: 'fixture-model', apiKey: 'fixture-secret', executable: '' });
@@ -34,7 +37,7 @@ test('cost provenance distinguishes Claude client estimates from billing and unk
     assert.equal(usage.costBasis, 'unavailable');
     assert.equal(usage.outputTokens, 3);
   }
-  for (const protocol of ['openai', 'anthropic', 'codex']) {
+  for (const protocol of /** @type {const} */ (['openai', 'anthropic', 'codex'])) {
     const usage = providerUsage(protocol, { usage: { output_tokens: 3 }, total_cost_usd: 1, costBasis: 'reported_billed' });
     assert.equal(usage.providerReportedCostUsd, null);
     assert.equal(usage.costBasis, 'unavailable');
@@ -59,7 +62,7 @@ test('Claude crash zeros remain unknown while positive partial usage survives', 
 test('cache input is a subset of normalized input for every supported protocol', () => {
   assert.equal(providerUsage('codex', { usage: { input_tokens: 100, cached_input_tokens: 60, output_tokens: 8 } }).inputTokens, 100);
   assert.equal(providerUsage('openai', { usage: { input_tokens: 100, input_tokens_details: { cached_tokens: 60 }, output_tokens: 8 } }).inputTokens, 100);
-  for (const protocol of ['anthropic', 'claude']) {
+  for (const protocol of /** @type {const} */ (['anthropic', 'claude'])) {
     const usage = providerUsage(protocol, { usage: { input_tokens: 40, cache_read_input_tokens: 50, cache_creation_input_tokens: 10, output_tokens: 8 }, total_cost_usd: 0.012 });
     assert.equal(usage.inputTokens, 100); assert.equal(usage.cacheReadTokens, 50); assert.equal(usage.cacheWriteTokens, 10);
     assert.equal(usage.providerReportedCostUsd, protocol === 'claude' ? 0.012 : null);
@@ -67,21 +70,21 @@ test('cache input is a subset of normalized input for every supported protocol',
 });
 
 test('API usage survives incomplete and HTTP error results without storing response contents', async () => {
-  for (const id of ['openai-api', 'anthropic-api']) {
+  for (const id of /** @type {const} */ (['openai-api', 'anthropic-api'])) {
     for (const status of [200, 429]) {
-      let usage;
+      /** @type {import('../../src/worker/application/run-evidence.js').ProviderUsage} */ let usage;
       const model = modelFor(connection(id), '/unused', async () => Response.json({ status: 'incomplete', stop_reason: 'max_tokens', usage: { input_tokens: 12, output_tokens: 5, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, private_diagnostic: 'must-not-be-evidence' }, { status }));
       await assert.rejects(model.reply(messages, signal(), value => { usage = value; }), error => {
-        assert.equal(error.name, 'ProviderModelError');
-        assert.equal(error.code, status === 200 ? 'incomplete' : 'rate_limit');
-        assert.equal(error.status, status === 200 ? undefined : 429);
+        assert.equal(testErrorField(error, 'name'), 'ProviderModelError');
+        assert.equal(testErrorCode(error), status === 200 ? 'incomplete' : 'rate_limit');
+        assert.equal(testErrorField(error, 'status'), status === 200 ? undefined : 429);
         return true;
       });
       assert.equal(usage.inputTokens, 12); assert.equal(usage.outputTokens, 5); assert.equal(usage.providerReportedCostUsd, null);
       assert.equal(JSON.stringify(usage).includes('must-not-be-evidence'), false);
     }
     const model = modelFor(connection(id), '/unused', async () => Response.json(id === 'openai-api' ? { status: 'completed', usage: { input_tokens: 6, output_tokens: 2 }, output: [{ type: 'message', content: [{ type: 'output_text', text: 'Reply' }] }] } : { stop_reason: 'end_turn', usage: { input_tokens: 6, output_tokens: 2 }, content: [{ type: 'text', text: 'Reply' }] }));
-    let usage; assert.equal(await model.reply(messages, signal(), value => { usage = value; }), 'Reply'); assert.equal(usage.outputTokens, 2);
+    /** @type {import('../../src/worker/application/run-evidence.js').ProviderUsage} */ let usage; assert.equal(await model.reply(messages, signal(), value => { usage = value; }), 'Reply'); assert.equal(usage.outputTokens, 2);
   }
 });
 
@@ -94,9 +97,9 @@ async function cliFixture(t, output, exitCode = 0) {
 const posix = { skip: process.platform === 'win32' };
 test('Codex terminal usage survives turn failure and nonzero process exit', posix, async t => {
   for (const exitCode of [0, 7]) {
-    const output = [ { type: 'item.completed', item: { type: 'agent_message', text: 'private reply' } }, { type: 'turn.completed', usage: { input_tokens: 20, cached_input_tokens: 8, output_tokens: 4 } }, { type: 'turn.failed', error: { message: 'private diagnostic' } } ].map(JSON.stringify).join('\n');
+    const output = [ { type: 'item.completed', item: { type: 'agent_message', text: 'private reply' } }, { type: 'turn.completed', usage: { input_tokens: 20, cached_input_tokens: 8, output_tokens: 4 } }, { type: 'turn.failed', error: { message: 'private diagnostic' } } ].map(value => JSON.stringify(value)).join('\n');
     const fixture = await cliFixture(t, output, exitCode), model = modelFor({ ...connection('codex-cli'), executable: fixture.executable }, fixture.directory);
-    let usage; await assert.rejects(model.reply(messages, signal(), value => { usage = value; }), /Provider/);
+    /** @type {import('../../src/worker/application/run-evidence.js').ProviderUsage} */ let usage; await assert.rejects(model.reply(messages, signal(), value => { usage = value; }), /Provider/);
     assert.equal(usage.inputTokens, 20); assert.equal(usage.cacheReadTokens, 8); assert.equal(usage.outputTokens, 4);
     assert.equal(JSON.stringify(usage).includes('private'), false);
   }
@@ -105,14 +108,14 @@ test('Claude reported usage and USD cost survive unsuccessful result and exit', 
   for (const exitCode of [0, 9]) {
     const fixture = await cliFixture(t, JSON.stringify({ type: 'result', is_error: true, result: 'private diagnostic', usage: { input_tokens: 3, cache_read_input_tokens: 5, cache_creation_input_tokens: 2, output_tokens: 4 }, total_cost_usd: 0.025 }), exitCode);
     const model = modelFor({ ...connection('claude-cli'), executable: fixture.executable }, fixture.directory);
-    let usage; await assert.rejects(model.reply(messages, signal(), value => { usage = value; }));
+    /** @type {import('../../src/worker/application/run-evidence.js').ProviderUsage} */ let usage; await assert.rejects(model.reply(messages, signal(), value => { usage = value; }));
     assert.equal(usage.inputTokens, 10); assert.equal(usage.providerReportedCostUsd, 0.025); assert.equal(JSON.stringify(usage).includes('private'), false);
   }
 });
 test('Codex ignores non-terminal lookalike usage and accumulates actual completed turns', () => {
-  let usage;
+  /** @type {import('../../src/worker/application/run-evidence.js').ProviderUsage} */ let usage;
   const output = [{ type: 'item.completed', usage: { input_tokens: 999 } }, ...[3, 5].map(input_tokens => ({ type: 'turn.completed', usage: { input_tokens, cached_input_tokens: 1, output_tokens: 2 } }))];
-  codexUsage(Buffer.from(output.map(JSON.stringify).join('\n')), value => { usage = value; });
+  codexUsage(Buffer.from(output.map(value => JSON.stringify(value)).join('\n')), value => { usage = value; });
   assert.equal(usage.inputTokens, 8); assert.equal(usage.outputTokens, 4); assert.equal(usage.cacheReadTokens, 2);
 });
 test('telemetry observer failure cannot alter child success or mask child failure', posix, async t => {
@@ -125,14 +128,14 @@ test('telemetry observer failure cannot alter child success or mask child failur
 });
 
 test('an unmeasured Codex turn cannot become a falsely complete invocation total', () => {
-  let usage;
+  /** @type {import('../../src/worker/application/run-evidence.js').ProviderUsage} */ let usage;
   const output = [{ type: 'turn.completed' }, { type: 'turn.completed', usage: { input_tokens: 5, output_tokens: 2 } }];
-  codexUsage(Buffer.from(output.map(JSON.stringify).join('\n')), value => { usage = value; });
+  codexUsage(Buffer.from(output.map(value => JSON.stringify(value)).join('\n')), value => { usage = value; });
   assert.equal(usage.inputTokens, null); assert.equal(usage.outputTokens, null); assert.equal(usage.source, 'unavailable');
 });
 
 test('partial Anthropic input components never masquerade as a measured full input total', () => {
-  for (const protocol of ['anthropic', 'claude']) {
+  for (const protocol of /** @type {const} */ (['anthropic', 'claude'])) {
     for (const cache of [undefined, -2, Infinity, '4', 0.5]) {
       const usage = providerUsage(protocol, { usage: { input_tokens: 6, output_tokens: 2, cache_read_input_tokens: cache, cache_creation_input_tokens: 0 }, total_cost_usd: 0.01 });
       assert.equal(usage.inputTokens, null); assert.equal(usage.outputTokens, 2); assert.equal(usage.cacheReadTokens, null); assert.equal(usage.cacheWriteTokens, 0); assert.equal(usage.source, 'provider_reported');
@@ -150,7 +153,7 @@ test('Codex no-tools replies reject unknown events and tool items without accept
     { type: 'item.completed', item: { type: 'agent_message' } }
   ];
   for (const event of forbidden) {
-    const fixture = await cliFixture(t, [event, { type: 'item.completed', item: { type: 'agent_message', text: 'Do not accept this answer.' } }].map(JSON.stringify).join('\n'));
+    const fixture = await cliFixture(t, [event, { type: 'item.completed', item: { type: 'agent_message', text: 'Do not accept this answer.' } }].map(value => JSON.stringify(value)).join('\n'));
     const model = modelFor({ ...connection('codex-cli'), executable: fixture.executable }, fixture.directory);
     await assert.rejects(model.reply(messages, signal()), { name: 'ProviderModelError', code: 'protocol' });
   }
@@ -165,9 +168,9 @@ test('Codex no-tools event validation preserves reasoning, task lists and observ
     { type: 'item.completed', item: { type: 'agent_message', text: 'Accepted answer.' } },
     { type: 'turn.completed', usage: { input_tokens: 3, cached_input_tokens: 0, output_tokens: 2 } }
   ];
-  const fixture = await cliFixture(t, events.map(JSON.stringify).join('\n'));
+  const fixture = await cliFixture(t, events.map(value => JSON.stringify(value)).join('\n'));
   const model = modelFor({ ...connection('codex-cli'), executable: fixture.executable }, fixture.directory);
-  let usage;
+  /** @type {import('../../src/worker/application/run-evidence.js').ProviderUsage} */ let usage;
   assert.equal(await model.reply(messages, signal(), value => { usage = value; }), 'Accepted answer.');
   assert.equal(usage.inputTokens, 3); assert.equal(usage.outputTokens, 2);
 });

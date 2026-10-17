@@ -101,6 +101,7 @@ test('custom template identity, headings and frontmatter remain authoritative',(
   assert.throws(()=>validateFeatureTemplate(template.replace('templateId: feature-request-v1\n','')),/templateId/);
 });
 test('offline validation fails closed for facts that require runtime evidence',()=>{
+  /** @type {import('../../src/worker/application/feature-workflow.js').FeatureCheck} */
   const check={...ready(),rules:{chat:[],patch:[{id:'bounded-input-files',fact:'input.approvedBytes',op:'lte',value:5000}]}};
   const result=validateFeatureReadiness(request,check,'codex-cli',template);
   assert.equal(result.valid,false);assert.equal(result.errors[0].code,'ready_fact_unavailable');
@@ -121,6 +122,7 @@ test('missing or changed policy files fail closed instead of falling back to wor
   }
 });
 test('done verdicts require recorded artifacts and never infer test/build evidence from prose',()=>{
+  /** @type {import('../../src/worker/application/feature-workflow.js').FeatureCheck} */
   const check={...done(),rules:{chat:[],patch:[{id:'tests',fact:'tests.passed',op:'eq',value:true},{id:'build',fact:'build.passed',op:'neq',value:false}]}};
   const policy=featureWorkflowPolicy(ready(),check), facts={'execution.outcome':'completed','output.nonEmpty':true,'output.protocolValid':true,'output.patchPresent':true,'output.changedFileCount':1,'pending.count':0,'findings.blockingCount':0};
   assert.equal(evaluateFeatureDone(policy,facts).passed,false);

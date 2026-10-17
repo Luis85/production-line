@@ -1,12 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  line,
-  worker,
-  deferred,
-  httpError,
-  page,
-} from "../helpers/runtime-harness.mjs";
+import { line, worker, deferred, httpError } from "../helpers/runtime-harness.mjs";
 test("worker selection reads one bounded detail with profiles, capacity and active task identity", async () => {
   const detail = worker("a", {
     activeTasks: [

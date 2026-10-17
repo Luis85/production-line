@@ -15,7 +15,7 @@ async function until(predicate, timeout = process.platform === 'win32' ? 120000 
 async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(), 'werk-unicode-')); cleanup(t, () => rm(directory, { recursive: true, force: true }));
   const settings = new WorkerSettings(directory); await settings.init();
-  const sessions = new WorkerSessions(directory, settings); await sessions.init(); cleanup(t, () => sessions.close());
+  const sessions = WorkerSessions(directory, settings); await sessions.init(); cleanup(t, () => sessions.close());
   const repo = join(directory, 'repo'); await mkdir(repo);
   await git('git', ['init', repo]);
   for (const [key, value] of [['core.autocrlf', 'false'], ['core.eol', 'lf'], ['user.name', 'Werk Test'], ['user.email', 'werk@example.invalid']]) await git('git', ['config', key, value], { cwd: repo });
@@ -37,7 +37,7 @@ test('a file task with umlaut and punctuation paths produces a patch git apply a
     { path: decomposed, content: '# Prüfung\n' },
   ] }) + '\nReady for inspection.';
   let calls = 0;
-  const board = new LocalTaskboard(directory, settings, sessions, () => ({ async reply() { calls++; return reply; } })); await board.init(); cleanup(t, () => board.close());
+  const board = LocalTaskboard(directory, settings, sessions, () => ({ async reply() { calls++; return reply; } })); await board.init(); cleanup(t, () => board.close());
   await board.create({ title: 'Zoll', instruction: 'Ergänze die Zollabwicklung', repository: repo, paths: [existing, decomposed] });
   const id = board.view().tasks[0].id;
   assert.deepEqual(board.detail(id).files.map(file => file.path), [existing, created]);
@@ -47,9 +47,10 @@ test('a file task with umlaut and punctuation paths produces a patch git apply a
   assert.ok(transcript.includes(created));
   assert.ok(!transcript.includes(decomposed));
   assert.match(transcript, /1 line added, 0 removed/);
-  assert.equal(sessions.interactions.turn(sessionId, turnId).result.text, reply);
+  const result = sessions.interactions.turn(sessionId, turnId).result;
+  assert.equal(result.type, 'completed'); assert.ok('text' in result); assert.equal(result.text, reply);
   await board.close();
-  const restored = new LocalTaskboard(directory, settings, sessions, () => ({ async reply() { calls++; throw Error('Recovery must not replay'); } }));
+  const restored = LocalTaskboard(directory, settings, sessions, () => ({ async reply() { calls++; throw Error('Recovery must not replay'); } }));
   await restored.init(); cleanup(t, () => restored.close());
   assert.equal(restored.detail(id).status, 'review');
   assert.equal(calls, 1);
@@ -66,7 +67,7 @@ test('a file task refuses a decomposed on-disk name instead of creating a second
   const { directory, settings, sessions, repo } = await fixture(t);
   const name = 'docs/Übersicht.md';
   await mkdir(join(repo, 'docs')); await writeFile(join(repo, name.normalize('NFD')), '# Übersicht\n');
-  const board = new LocalTaskboard(directory, settings, sessions, () => ({ async reply() { throw Error('should not execute'); } })); await board.init(); cleanup(t, () => board.close());
+  const board = LocalTaskboard(directory, settings, sessions, () => ({ async reply() { throw Error('should not execute'); } })); await board.init(); cleanup(t, () => board.close());
   await assert.rejects(board.create({ title: 'Übersicht', instruction: 'Aktualisieren', repository: repo, paths: [name] }), /Unicode normalization/);
   await assert.rejects(board.create({ title: 'Geräte', instruction: 'Anlegen', repository: repo, paths: ['docs/CON.md'] }), /safe relative/);
 });
@@ -75,7 +76,7 @@ test('file task admission rejects a differently cased existing parent folder', a
   const { directory, settings, sessions, repo } = await fixture(t);
   await mkdir(join(repo, 'Änderungen'));
   await writeFile(join(repo, 'Änderungen', 'existing.md'), 'keep\n');
-  const board = new LocalTaskboard(directory, settings, sessions, () => ({ async reply() { throw Error('should not execute'); } }));
+  const board = LocalTaskboard(directory, settings, sessions, () => ({ async reply() { throw Error('should not execute'); } }));
   await board.init(); cleanup(t, () => board.close());
   await assert.rejects(board.create({ title: 'Case alias', instruction: 'Create note', repository: repo, paths: ['änderungen/new.md'] }), /case or Unicode normalization/);
 });
@@ -86,7 +87,7 @@ test('file task admission refuses coexisting NFC and NFD directory entries', asy
   await writeFile(join(repo, name.normalize('NFD')), 'decomposed\n');
   const aliases = (await readdir(repo)).filter(entry => entry.normalize('NFC') === name);
   if (aliases.length < 2) { t.skip('The filesystem resolves both normalization forms to one directory entry'); return; }
-  const board = new LocalTaskboard(directory, settings, sessions, () => ({ async reply() { throw Error('should not execute'); } }));
+  const board = LocalTaskboard(directory, settings, sessions, () => ({ async reply() { throw Error('should not execute'); } }));
   await board.init(); cleanup(t, () => board.close());
   await assert.rejects(board.create({ title: 'Ambiguous name', instruction: 'Update note', repository: repo, paths: [name] }), /Unicode normalization/);
   assert.equal(await readFile(join(repo, name), 'utf8'), 'composed\n');

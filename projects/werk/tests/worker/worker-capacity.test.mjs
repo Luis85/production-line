@@ -6,9 +6,16 @@ import { tmpdir } from 'node:os';
 import { workerCapacitySnapshot } from '../../src/worker/dist/worker/application/worker-capacity.js';
 import { WorkerSettings } from '../../src/worker/dist/worker/infrastructure/settings.js';
 import { createWorkerSessions, createLocalTaskboard } from '../../src/worker/dist/worker/infrastructure/workspace-services.js';
+import { WorkerConsumption } from '../../src/worker/dist/worker/application/consumption.js';
+import { WorkerConsumptionJournal } from '../../src/worker/dist/worker/infrastructure/journal/consumption.js';
+import { modelCapabilities } from '../../src/worker/dist/worker/application/model-contract.js';
 import { frontend } from '../ui/helpers/frontend-loader.mjs';
 const { buildWorkerCapacityView } = await frontend('src/worker/webview/worker-capacity.ts');
 
+/**
+ * @param {Partial<Parameters<typeof workerCapacitySnapshot>[0]>} [changes]
+ * @returns {Parameters<typeof workerCapacitySnapshot>[0]}
+ */
 const input = (changes = {}) => ({ capturedAt: '2026-10-16T12:00:00.000Z', currentSessionId: null, localUsed: 0, settings: { paused: false, queueCapacity: 4, orchestratorQueue: 2 }, remote: { waiting: 0, running: 0 }, consumption: { blocked: false, reason: 'disabled' }, ...changes });
 const snapshot = changes => workerCapacitySnapshot(input(changes));
 
@@ -82,20 +89,27 @@ async function workspace(t, prepare) {
   const repository = join(directory, 'project'); await mkdir(repository); await writeFile(join(repository, 'task.txt'), 'original\n');
   const settings = new WorkerSettings(directory); await settings.init(); await settings.update({ board: { paused: true, queueCapacity: 2, orchestratorQueue: 2 } });
   let board;
-  const remote = { waiting: 3, running: 0 }, consumption = { status: () => ({ blocked: false, reason: 'disabled' }) };
-  const model = () => ({ async reply() { throw Error('Paused fixture must not execute'); } });
+  const remote = { waiting: 3, running: 0 };
+  const consumption = new WorkerConsumption(new WorkerConsumptionJournal(directory), () => settings.value.consumption);
+  await consumption.init();
+  const model = () => ({
+    configuration: { id: 'fixture', model: 'fixture', instruction: '' },
+    capabilities: modelCapabilities,
+    async reply() { throw Error('Paused fixture must not execute'); },
+    async execute() { throw Error('Paused fixture must not execute'); },
+  });
   const sessions = createWorkerSessions(directory, settings, model, undefined, () => board?.active ?? 0, consumption, { remote: () => remote });
   await sessions.init();
   board = createLocalTaskboard(directory, settings, sessions, model, prepare ? { prepareWorktree: prepare } : undefined);
   await board.init();
-  t.after(async () => { await board.close(); await sessions.close(); await rm(directory, { recursive: true, force: true }); });
+  t.after(async () => { await board.close(); await sessions.close(); consumption.close(); await rm(directory, { recursive: true, force: true }); });
   return { settings, sessions, board, repository, remote, create: () => board.create({ title: 'A file task', instruction: 'Update this approved file.', repository, paths: ['task.txt'] }) };
 }
 
 test('session capacity includes preparation reservations before a task is visible and releases failed admission', async t => {
-  let entered, rejectPreparation;
-  const prepared = new Promise(resolve => { entered = resolve; });
-  const f = await workspace(t, () => new Promise((resolve, reject) => { rejectPreparation = reject; entered(); }));
+  const { promise: prepared, resolve: entered } = Promise.withResolvers();
+  const { promise: preparation, reject: rejectPreparation } = Promise.withResolvers();
+  const f = await workspace(t, () => { entered(undefined); return preparation; });
   await f.settings.update({ board: { queueCapacity: 1 } });
   const admission = assert.rejects(f.create(), /Preparation failed/);
   await prepared;

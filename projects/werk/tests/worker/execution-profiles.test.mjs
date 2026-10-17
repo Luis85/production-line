@@ -12,11 +12,14 @@ import { runWorker } from '../../src/worker/dist/worker/runner.js';
 import { Store } from '../../src/orchestrator/dist/orchestrator/persistence/store.js';
 import { cleanup } from './fixture-cleanup.mjs';
 const base = 'a'.repeat(64);
+/** @type {import('../../src/shared/domain.ts').Profile[]} */
 const initial = [{ id: 'codex-original', provider: 'codex', mode: 'mock', maxParallel: 1 }];
+/** @type {import('../../src/shared/domain.ts').Profile[]} */
 const replacement = [{ id: 'claude-edited', provider: 'claude', mode: 'mock', maxParallel: 1 }];
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(predicate, timeout = 10000) { const deadline = Date.now() + timeout; while (Date.now() < deadline) { const result = await predicate(); if (result) return result; await delay(20); } throw Error('Condition timed out'); }
 async function directory(t) { const path = await mkdtemp(join(tmpdir(), 'werk-profiles-')); cleanup(t, () => rm(path, {recursive:true,force:true})); return path; }
+/** @param {string} path @param {import('../../src/shared/domain.ts').Profile[]} [profiles] @param {string} [hash] @param {import('../../src/shared/domain.ts').Profile['mode']} [mode] */
 function manager(path, profiles = initial, hash = base, mode = 'mock') { return new ExecutionProfiles(hash, profiles, mode, executionProfilesStorage(path)); }
 
 test('profile overrides persist privately, recover staged intent, guard stale writes, and restore the original configuration hash', async t => {
@@ -50,11 +53,11 @@ test('identity recovery allows only the explicitly durable pending hash after ac
   const path=await directory(t),profiles=manager(path);await profiles.stage({expectedConfigurationHash:base,profiles:replacement});
   const desired=profiles.pending.configurationHash, identity={id:'worker',project:'alpha',token:'private-token',url:'http://localhost',configHash:desired};
   await writeFile(join(path,'identity.json'),JSON.stringify(identity));
-  const gateway={async register(){assert.fail('Must retain worker identity');}};
-  await assert.rejects(loadOrRegisterIdentity(path,identity.url,initial,{configHash:base},gateway,new AbortController().signal),/bound to server/);
-  assert.equal((await loadOrRegisterIdentity(path,identity.url,initial,{configHash:base},gateway,new AbortController().signal,desired)).id,'worker');
+  const gateway={async register(){assert.fail('Must retain worker identity');},connect(){assert.fail('Identity recovery must not connect');}};
+  await assert.rejects(loadOrRegisterIdentity(path,identity.url,initial,{configHash:base,maxParallel:1,order:'fifo',maxAttempts:1},gateway,new AbortController().signal),/bound to server/);
+  assert.equal((await loadOrRegisterIdentity(path,identity.url,initial,{configHash:base,maxParallel:1,order:'fifo',maxAttempts:1},gateway,new AbortController().signal,desired)).id,'worker');
   await profiles.commit(); const restarted=manager(path);await restarted.init();
-  assert.equal((await loadOrRegisterIdentity(path,identity.url,restarted.active.profiles,{configHash:desired},gateway,new AbortController().signal)).configHash,desired);
+  assert.equal((await loadOrRegisterIdentity(path,identity.url,restarted.active.profiles,{configHash:desired,maxParallel:1,order:'fifo',maxAttempts:1},gateway,new AbortController().signal)).configHash,desired);
 });
 
 async function boot(path, config, gateway, now) {
@@ -85,10 +88,12 @@ test('standalone HTTP editor authenticates, requires pause, rejects simultaneous
 });
 
 test('registered edits recover old incomplete evidence, survive a lost acknowledgement and restart, and route new work with the same identity', {timeout:25000},async t=>{
-  const path=await directory(t),config=await configuration({'poll-ms':'100','mock-ms':'1',profiles:'codex'});config.url='http://orchestrator.invalid';
-  let now=Date.now(), rejectAcknowledgement=true, registration, updateCalls=0, recoveryTaskId;
+  const path=await directory(t),config={...await configuration({'poll-ms':'100','mock-ms':'1',profiles:'codex'}),url:'http://orchestrator.invalid'};
+  let now=Date.now(), rejectAcknowledgement=true, updateCalls=0, recoveryTaskId;
+  /** @type {{id:string,token:string,project:string}|undefined} */
+  let registration;
   const store=new Store(':memory:',1000,()=>now);cleanup(t,()=>store.close());
-  const current=()=>store.worker(registration.token);
+  const current=()=>{assert.ok(registration);return store.worker(registration.token);};
   const gateway={async register(profiles,policy){registration={...store.register('alpha',profiles,policy),project:'alpha'};return registration;},connect(){return {
     async currentAssignments(){
       // This manually seeded lease models orphaned journal evidence, not a runnable live assignment.
@@ -108,7 +113,7 @@ test('registered edits recover old incomplete evidence, survive a lost acknowled
   const task=store.submit({project:'alpha',title:'Interrupted old attempt',criteria:['Done'],wikilinks:[],provider:'codex',priority:1},'old-incomplete');
   recoveryTaskId=task.id;
   const assigned=store.claim(current(),'interrupted',0,[],false);
-  const journal=new SnapshotJournal(path,old.configurationHash,config.systemPromptHash);await journal.init();
+  const journal=new SnapshotJournal(path,old.configurationHash,config.systemPromptHash);await journal.init();assert.ok(registration);
   await journal.persist(journal.capture(assigned,registration.id,config.profiles[0],{lastContact:null,heartbeatErrors:0},'before'));journal.close();
   now+=2000;store.reapExpired();
   // Block automatic retry of the recovered old task to keep this fixture focused on new-profile routing.

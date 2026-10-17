@@ -1,13 +1,13 @@
 # Develop and test from a source checkout
 
 Three independently deployable Node.js / TypeScript CLI applications, a Factory
-hierarchy/line registry, a SQLite orchestrator, configurable workers, a repository importer and measurable mock
-execution. Each orchestrator webview opens on its live **line map**; choose **Intake** to submit work. The 3D concept prototype is served
+hierarchy/line registry, a SQLite orchestrator, configurable workers, a repository
+importer and durable execution evidence. Each orchestrator webview opens on its live **line map**; choose **Intake** to submit work. The 3D concept prototype is served
 at `/concept`; it deliberately retains separate simulated browser state.
 
 This guide requires the source checkout, Node 24 and npm. For an extracted release with no build step, use the [local first-task tutorial](../tutorials/local-first-task.md) or [Docker tutorial](../tutorials/docker-first-task.md). Developer fleet launchers below retain their separate `.state` directories; release operators use `.werk`.
 
-## What works in this starter
+## Choose the development path
 
 - HTTP and CLI intake, including JSON on stdin and Obsidian wikilinks.
 - Import ready features from a committed iteration branch and YAML properties.
@@ -16,13 +16,26 @@ This guide requires the source checkout, Node 24 and npm. For an extracted relea
 - Immutable before/after snapshots, local Git-checkout artifact files, a retry
   outbox, server-side SHA-256 indexing and a paginated analysis API.
 - A portfolio/health dashboard and a local HTML/JSON status service per worker.
+- Local API/CLI worker execution, approved worktree implementation and check evidence.
+- Shared Git feature-request intake, lifecycle notes, feature branches and human review.
 - Three dedicated CLI builds, Dockerfiles, Compose and local one-line/two-line launchers.
 
-**Execution is explicitly mock.** No Claude/Codex CLI is invoked, no code is
-implemented, no Git push or real PR/review operation is performed. A mock run
-finishes as `simulated`, never `done` or `review`. Provider cost, tokens and
-unrun quality checks remain unknown. The full target PR lifecycle is documented
-in [docs/architecture.md](../explanation/architecture.md) and simulated in `/concept`.
+**The fleet commands in this guide use simulated orchestrator assignments by
+default.** In that mode no Claude/Codex CLI is invoked, no code is implemented,
+and no branch or pull request is published. A mock run finishes as `simulated`,
+never `done` or `review`; provider usage and unrun checks remain unknown.
+
+For real local work, follow [project-worker setup](project-worker.md),
+[provider and execution-profile configuration](use-worker-webview.md), and
+[implementing a feature](implement-feature.md). A configured local worker can
+use supported API providers or installed Claude/Codex CLIs, edit approved
+candidate worktrees through granted tools, run configured checks and retain
+review evidence. [Shared intake](shared-feature-intake.md) can publish configured
+feature branches and Obsidian review notes. Human review and merge remain
+separate. Orchestrator assignments have a different opt-in
+[native Linux Codex adapter](run-codex-task.md); the complete automatic PR/merge
+lifecycle remains future work. See [execution modes](../explanation/modes.md)
+for platform and authority boundaries.
 
 For the portfolio hierarchy and two independent lines, start with
 [Factory setup](factory.md). This guide covers execution inside an individual
@@ -84,7 +97,8 @@ node src/worker/dist/worker/cli.js --help
 
 Each `dist` directory can be moved to another machine with Node 24 and run
 independently. The orchestrator build includes its YAML parser and web assets;
-the worker has no third-party runtime dependency. Workspace packages also
+each build includes its required runtime dependencies. Keep the complete build
+directory together rather than copying only its CLI entrypoint. Workspace packages also
 expose `werk-factory`, `werk-orchestrator` and `werk-worker` in npm script/PATH
 contexts after install/build. The `node .../cli.js` commands work without a global
 installation and are used throughout setup.
@@ -106,10 +120,13 @@ Use `examples/vault-task.json` with `--file` or JSON on stdin. The API derives a
 display label from the reference in default unbound mock mode, with no fabricated
 acceptance criteria. Operator-bound intake instead resolves a committed ready
 note and persists its manifest before queuing; workers verify that context before
-mock execution. See [pinned context](../reference/pinned-context.md). Legacy manual intake and
+execution. The default development fleet still chooses the mock adapter. See
+[pinned context](../reference/pinned-context.md). Legacy manual intake and
 imports remain available on unbound lines. Bound lines support explicit
-[pinned iteration import](pinned-iteration-import.md); remote PR identity and live
-provider execution remain unimplemented.
+[pinned iteration import](pinned-iteration-import.md). The iteration PR URL is
+context, not independently verified remote PR identity; this importer does not
+publish or merge changes. Provider execution depends on the selected worker
+mode and its explicit grants, as described above.
 Do not combine `--file` with `--project`/`--wikilink`.
 
 ## Headless intake
@@ -176,10 +193,17 @@ Set `WERK_ENROLLMENT_TOKEN` and optionally `WERK_URL` first. Configuration cover
 
 Flags override config values where available (`--parallel`, `--profiles`,
 `--poll-ms`, `--mock-ms`, `--timeout-ms`). The effective configuration is hashed
-and bound to the worker identity and every attempt. No hot edits to active runs:
-finish or stop the worker, then use a new state directory for changed settings.
+and bound to the worker identity and every attempt. These launch options describe orchestrator-assignment configuration; do not
+change an active attempt’s accepted configuration. Follow the runtime identity
+rules when restarting with a changed startup configuration. Local worker
+settings and execution profiles can instead be edited through the authenticated
+webview or CLI; updates are guarded and accepted requests retain their frozen
+policy. See [worker settings](use-worker-webview.md).
 The server independently enforces slot limits. Live quota-group enforcement and
-production enrollment policy are still future integrations.
+production enrollment policy are still future integrations. The existing
+[local consumption limiter](worker-consumption-limits.md) enforces a configured
+daily/monthly allowance; it does not measure the remaining shared subscription
+balance or enforce a fleet-wide quota.
 
 ```bash
 node src/worker/dist/worker/cli.js status --url http://127.0.0.1:4201
@@ -193,8 +217,8 @@ excludes tokens, system-prompt contents and repository content.
 
 ## Worker snapshots and repository artifacts
 
-Every normal execution captures `before.json` before the mock adapter starts
-and `after.json` after it terminates. Completion is refused without both. Files
+Orchestrator assignments capture `before.json` before their execution adapter
+starts and `after.json` after it terminates. Completion is refused without both. Files
 are retained in the worker state directory; pending transfers live in an outbox.
 To also write them into an existing project Git checkout:
 
@@ -211,9 +235,12 @@ They appear under:
 .factory/runs/TASK_ID/attempt-N/LEASE_ID/after.json
 ```
 
-The starter writes these files but does **not** commit/push them. In the target
-workflow the worker submits code plus snapshots to a lease-checked publisher,
-which pushes them to the same feature PR. See [docs/snapshots.md](../explanation/snapshots.md)
+This orchestrator artifact path writes the files but does **not** commit or
+push them. A future lease-checked publisher would submit code and snapshots to
+a feature PR. Local worker runs have a separate
+[run-evidence ledger](../reference/worker-run-metrics.md), and shared Git intake
+has its own implemented publication workflow; neither changes this assignment
+artifact contract. See [docs/snapshots.md](../explanation/snapshots.md)
 for attribution, crash recovery, data gaps, cost semantics and PR provenance.
 
 ## Docker
@@ -267,10 +294,19 @@ secrets, per-project enrollment and TLS/reverse-proxy policy.
   The attempt ceiling is pinned when assigned, so later worker changes cannot
   silently extend an in-flight task's retry budget.
 
+During development, run the fast checks after a focused change, then complete
+the full gate before integration:
+
 ```bash
-npm run typecheck
-npm test
+npm run check:fast
+npm run check
 ```
+
+[Code-quality checks](../reference/code-quality.md) explains Oxlint, fallow
+architecture/dead-code analysis and the fast/full command boundaries. Mutation
+testing is a separate opt-in developer command and an advisory release job; it
+does not run inside these development checks. See
+[mutation testing](mutation-testing.md) for the baseline, reports and warnings.
 
 Tests cover intake, idempotency, routing, lease fencing, snapshot gates,
 persistence, multi-process execution, configuration, import and recovery.

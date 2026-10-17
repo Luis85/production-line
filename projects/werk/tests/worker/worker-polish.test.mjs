@@ -1,3 +1,4 @@
+import { testErrorCode } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile, writeFile, mkdir, readdir, symlink } from 'node:fs/promises';
@@ -9,7 +10,9 @@ import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/jou
 import { runWorker, reportWithRetry } from '../../src/worker/dist/worker/runner.js';
 import { ApiError } from '../../src/worker/dist/shared/http/errors.js';
 const digest='a'.repeat(64);
+/** @type {import('../../src/shared/domain.ts').Profile} */
 const profile={id:'claude-1',provider:'claude',mode:'mock',maxParallel:1};
+/** @type {import('../../src/shared/domain.ts').Task} */
 const task={id:'task-1',project:'demo',title:'Test',criteria:['Done'],wikilinks:[],provider:'claude',priority:1,status:'running',attempt:1,workerId:'worker-1',lease:'lease-1',expiresAt:Date.now()+60000,profile:profile.id,createdAt:Date.now()};
 const status={lastContact:null,heartbeatErrors:0};
 
@@ -17,7 +20,7 @@ test('worker configuration rejects null and array sections without crashing',asy
   const dir=await mkdtemp(join(tmpdir(),'werk-config-'));
   try{for(const section of ['scheduler','execution'])for(const value of [null,[],true]){
     const path=join(dir,'config.json');await writeFile(path,JSON.stringify({[section]:value}));
-    await assert.rejects(configuration({config:path}),e=>e.code==='invalid_input');
+    await assert.rejects(configuration({config:path}),e=>testErrorCode(e)==='invalid_input');
   }}finally{await rm(dir,{recursive:true,force:true});}
 });
 
@@ -59,8 +62,9 @@ test('report retry is bounded and never retries permanent lease errors',async()=
 
 test('worker renews leases throughout slow terminal upload and replays completion without execution', {timeout:12000}, async t=>{
   const dir=await mkdtemp(join(tmpdir(),'werk-renew-')),stop=new AbortController();
-  let clock=Date.now(),releaseExecution,releaseUpload;
-  const execution=new Promise(resolve=>{releaseExecution=resolve;}),upload=new Promise(resolve=>{releaseUpload=resolve;});
+  let clock=Date.now();
+  const {promise:execution,resolve:releaseExecution}=Promise.withResolvers();
+  const {promise:upload,resolve:releaseUpload}=Promise.withResolvers();
   const cancel=()=>{releaseExecution();releaseUpload();stop.abort();};
   t.signal.addEventListener('abort',cancel,{once:true});
   t.after(()=>{t.signal.removeEventListener('abort',cancel);cancel();});
@@ -88,6 +92,7 @@ test('worker renews leases throughout slow terminal upload and replays completio
     async abandon(){throw Error('Successful fixture execution must not be abandoned');}
   };
   const gateway={async register(){return {id:task.workerId,project:task.project,token:'test-identity'};},connect(){return client;}};
+  /** @type {import('../../src/shared/domain.ts').Adapter} */
   const adapter={mode:'mock',async run(){executions++;await execution;return {kind:'simulated',summary:'done'};}};
   let running,runtimeError;
   const state=async()=>{try{return JSON.parse(await readFile(join(dir,'status.json'),'utf8'));}catch{return null;}};
@@ -128,7 +133,7 @@ test('worker renews leases throughout slow terminal upload and replays completio
     assert.equal(uploads.size,2);assert.equal(uploads.get('after').execution.outcome,'simulated');
     const persisted=await state();
     assert.equal(persisted.state,'stopped');assert.equal(persisted.activeTasks.length,0);assert.equal(persisted.completedSimulations,1);assert.equal(persisted.lastError,'temporary completion outage');
-    await assert.rejects(readFile(join(dir,'worker.lock')),e=>e.code==='ENOENT');
+    await assert.rejects(readFile(join(dir,'worker.lock')),e=>testErrorCode(e)==='ENOENT');
   }finally{cancel();await running?.catch(()=>{});t.mock.timers.reset();await rm(dir,{recursive:true,force:true});}
 });
 
@@ -137,7 +142,7 @@ test('failed worker startup removes its process lock and writes a stopped state'
   try{
     const c=await configuration({});
     await assert.rejects(runWorker({...c,stateDir:dir,url:'http://127.0.0.1:1',enrollmentToken:'',statusHost:'127.0.0.1',statusPort:0,projectDir:join(dir,'missing')},new AbortController().signal),/Git checkout/);
-    await assert.rejects(readFile(join(dir,'worker.lock')),e=>e.code==='ENOENT');
+    await assert.rejects(readFile(join(dir,'worker.lock')),e=>testErrorCode(e)==='ENOENT');
     assert.equal(JSON.parse(await readFile(join(dir,'status.json'),'utf8')).state,'stopped');
   }finally{await rm(dir,{recursive:true,force:true});}
 });
@@ -145,7 +150,7 @@ test('failed worker startup removes its process lock and writes a stopped state'
 
 test('completion cannot conceal an outstanding orchestrator polling failure', {timeout:10000},async t=>{
   const dir=await mkdtemp(join(tmpdir(),'werk-state-')),stop=new AbortController();
-  let release;const execution=new Promise(resolve=>{release=resolve;});let claimed=false,completed=false,adapterStarted=false;
+  const {promise:execution,resolve:release}=Promise.withResolvers();let claimed=false,completed=false,adapterStarted=false;
   const adapterEntry=Promise.withResolvers();
   const cancel=()=>{release();stop.abort();};
   t.signal.addEventListener('abort',cancel,{once:true});
@@ -158,6 +163,7 @@ test('completion cannot conceal an outstanding orchestrator polling failure', {t
     async heartbeat(){return assigned;},async publishSnapshot(){},async abandon(){},async complete(){completed=true;}
   };
   const gateway={async register(){return {id:task.workerId,project:task.project,token:'test-identity'};},connect(){return client;}};
+  /** @type {import('../../src/shared/domain.ts').Adapter} */
   const adapter={mode:'mock',async run(){adapterStarted=true;adapterEntry.resolve();await execution;return {kind:'simulated',summary:'done'};}};
   let running,runtimeError;
   const readState=async()=>{try{return JSON.parse(await readFile(join(dir,'status.json'),'utf8'));}catch{return null;}};
@@ -189,6 +195,7 @@ test('an unwritable status snapshot is reported and retried without stopping a s
   const dir=await mkdtemp(join(tmpdir(),'werk-status-write-'));const stop=new AbortController();
   // A directory in place of status.json makes every snapshot replacement fail on every platform.
   await mkdir(join(dir,'status.json'));
+  /** @type {import('../../src/shared/domain.ts').Adapter} */
   const adapter={mode:'mock',async run(){throw Error('No task is expected');}};
   let runtimeError,running;
   try{

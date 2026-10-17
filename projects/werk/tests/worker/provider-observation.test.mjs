@@ -1,3 +1,6 @@
+import { testErrorField } from '../helpers/typed-boundaries.mjs';
+import { completedText } from './model-fixtures.mjs';
+import { testErrorCode, testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
@@ -9,7 +12,9 @@ import { SerialExecutor } from '../../src/worker/dist/worker/application/serial-
 import { unknownUsage } from '../../src/worker/dist/worker/application/run-evidence.js';
 import { modelFor } from '../../src/worker/dist/worker/infrastructure/providers.js';
 
+/** @type {import('../../src/worker/application/conversation-contracts.js').ChatMessage[]} */
 const messages = [{ id: 'input', role: 'user', state: 'complete', at: '2026-10-15T00:00:00Z', text: 'A fixture task.' }];
+/** @returns {import('../../src/worker/application/run-evidence.js').ProviderUsage} */
 const measured = () => ({ ...unknownUsage(), inputTokens: 8, outputTokens: 3, source: 'provider_reported', reason: null });
 const connection = id => ({ id, model: 'fixture-model', apiKey: 'fixture-private', executable: '' });
 const apiResult = id => id === 'openai-api'
@@ -17,7 +22,7 @@ const apiResult = id => id === 'openai-api'
   : { stop_reason: 'end_turn', usage: { input_tokens: 8, output_tokens: 3, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, content: [{ type: 'text', text: 'Fixture complete.' }] };
 
 test('API usage observers cannot replace successful results or classified provider failures', async () => {
-  for (const id of ['openai-api', 'anthropic-api']) {
+  for (const id of /** @type {const} */ (['openai-api', 'anthropic-api'])) {
     for (const observer of [() => { throw Error('PRIVATE_OBSERVER_FAILURE'); }, async () => { throw Error('PRIVATE_OBSERVER_FAILURE'); }]) {
       for (const direct of [false, true]) {
         for (const status of [200, 429]) {
@@ -27,8 +32,8 @@ test('API usage observers cannot replace successful results or classified provid
             return Response.json(status === 200 ? apiResult(id) : { error: { type: 'rate_limit', message: 'PRIVATE_PROVIDER_FAILURE' }, usage: { input_tokens: 8 } }, { status });
           });
           const invocation = direct ? model.execute(prepareModelRequest(model, messages), new AbortController().signal, observer) : model.reply(messages, new AbortController().signal, observer);
-          if (status === 200) assert.equal(direct ? (await invocation).text : await invocation, 'Fixture complete.');
-          else await assert.rejects(invocation, error => error.code === 'rate_limit' && error.status === 429 && !error.message.includes('PRIVATE'));
+          if (status === 200) assert.equal(direct ? completedText((await invocation)) : await invocation, 'Fixture complete.');
+          else await assert.rejects(invocation, error => testErrorCode(error) === 'rate_limit' && testErrorField(error, 'status') === 429 && !testErrorMessage(error).includes('PRIVATE'));
           assert.equal(calls, 1, 'observation failure never retries model work');
         }
       }
@@ -39,7 +44,12 @@ test('API usage observers cannot replace successful results or classified provid
 
 test('usage observations are detached and frozen for structured and legacy adapters', async () => {
   for (const typed of [false, true]) {
-    const original = measured(); let observed, providerAfterObserver, frozen, mutationAccepted;
+    const original = measured();
+    /** @type {import('../../src/worker/application/run-evidence.js').ProviderUsage} */
+    let observed;
+    let providerAfterObserver;
+    let frozen;
+    let mutationAccepted;
     const reply = async (_messages, _signal, notify) => {
       notify(original);
       providerAfterObserver = original.inputTokens;
@@ -52,7 +62,7 @@ test('usage observations are detached and frozen for structured and legacy adapt
       frozen = Object.isFrozen(value);
       mutationAccepted = Reflect.set(value, 'inputTokens', 700);
     });
-    assert.equal(result.text, 'Fixture complete.');
+    assert.equal(completedText(result), 'Fixture complete.');
     assert.notEqual(observed, original);
     assert.equal(frozen, true);
     assert.equal(mutationAccepted, false);
@@ -63,7 +73,7 @@ test('usage observations are detached and frozen for structured and legacy adapt
 
 test('settled model invocations discard late usage on success and failure', async () => {
   for (const fail of [false, true]) {
-    let retained; const observations = [];
+    /** @type {(usage: import('../../src/worker/application/run-evidence.js').ProviderUsage) => void} */ let retained; const observations = [];
     const failure = Error('provider failed');
     const model = { async reply(_messages, _signal, notify) { retained = notify; notify(measured()); if (fail) throw failure; return 'Done.'; } };
     const pending = executeModel(model, prepareModelRequest(model, messages), new AbortController().signal, value => observations.push(value));
@@ -77,14 +87,18 @@ test('settled model invocations discard late usage on success and failure', asyn
 test('slow asynchronous observers never delay model settlement', { timeout: 2000 }, async () => {
   const model = { async reply(_messages, _signal, notify) { notify(measured()); return 'Done.'; } };
   const result = await executeModel(model, prepareModelRequest(model, messages), new AbortController().signal, () => new Promise(() => {}));
-  assert.equal(result.text, 'Done.');
+  assert.equal(completedText(result), 'Done.');
 });
 
 test('cancelled adapters retain the execution permit until cleanup, then reject late success', { timeout: 2000 }, async () => {
   const controller = new AbortController(), executor = new SerialExecutor();
-  let settleCleanup, reachedAdapter, retained, settled = false, nextStarted = false;
-  const entered = new Promise(resolve => { reachedAdapter = resolve; });
-  const cleanup = new Promise(resolve => { settleCleanup = resolve; });
+  /** @type {() => void} */ let settleCleanup;
+  /** @type {() => void} */ let reachedAdapter;
+  /** @type {(usage: import('../../src/worker/application/run-evidence.js').ProviderUsage) => void} */ let retained;
+  let settled = false;
+  let nextStarted = false;
+  const entered = new Promise(resolve => { reachedAdapter = () => resolve(undefined); });
+  const cleanup = new Promise(resolve => { settleCleanup = () => resolve(undefined); });
   const observed = [];
   const model = { async reply(_messages, _signal, notify) { retained = notify; reachedAdapter(); await cleanup; notify(measured()); return 'Stale success.'; } };
   const first = executor.run('first', controller.signal, () => executeModel(model, prepareModelRequest(model, messages), controller.signal, value => observed.push(value)));
@@ -113,7 +127,9 @@ test('pre-aborted direct API invocation never reaches transport', async () => {
 });
 
 test('direct API execution rejects success returned after abort while preserving reported usage', async () => {
-  const controller = new AbortController(); let usage;
+  const controller = new AbortController();
+  /** @type {import('../../src/worker/application/run-evidence.js').ProviderUsage} */
+  let usage;
   const model = modelFor(connection('openai-api'), '/unused', async () => { controller.abort(); return Response.json(apiResult('openai-api')); });
   await assert.rejects(model.execute(prepareModelRequest(model, messages), controller.signal, value => { usage = value; }), { code: 'cancelled' });
   assert.equal(usage.inputTokens, 8);
@@ -122,16 +138,18 @@ test('direct API execution rejects success returned after abort while preserving
 test('CLI observations isolate asynchronous rejection and expose immutable snapshots', { skip: process.platform === 'win32', timeout: 10000 }, async t => {
   const directory = await mkdtemp(join(tmpdir(), 'werk-observation-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  for (const id of ['codex-cli', 'claude-cli']) {
+  for (const id of /** @type {const} */ (['codex-cli', 'claude-cli'])) {
     const output = id === 'codex-cli' ? [
       { type: 'item.completed', item: { type: 'agent_message', text: 'Fixture complete.' } },
       { type: 'turn.completed', usage: { input_tokens: 8, output_tokens: 3 } }
-    ].map(JSON.stringify).join('\n') : JSON.stringify({ type: 'result', result: 'Fixture complete.', usage: { input_tokens: 8, output_tokens: 3, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } });
+    ].map(value => JSON.stringify(value)).join('\n') : JSON.stringify({ type: 'result', result: 'Fixture complete.', usage: { input_tokens: 8, output_tokens: 3, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } });
     const executable = join(directory, id);
     await writeFile(executable, '#!' + process.execPath + '\nprocess.stdin.resume();process.stdin.on("end",()=>process.stdout.write(' + JSON.stringify(output) + '));\n', { mode: 0o700 });
-    const model = modelFor({ ...connection(id), executable }, directory); let observed;
+    const model = modelFor({ ...connection(id), executable }, directory);
+    /** @type {import('../../src/worker/application/run-evidence.js').ProviderUsage} */
+    let observed;
     const result = await model.execute(prepareModelRequest(model, messages), AbortSignal.timeout(5000), async value => { observed = value; throw Error('PRIVATE_OBSERVER_FAILURE'); });
-    assert.equal(result.text, 'Fixture complete.');
+    assert.equal(completedText(result), 'Fixture complete.');
     assert.equal(Object.isFrozen(observed), true);
     assert.equal(observed.outputTokens, 3);
   }

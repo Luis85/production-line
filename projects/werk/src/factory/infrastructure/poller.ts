@@ -1,3 +1,4 @@
+import { withOwnedResponse } from '../../shared/http/transport.js';
 import { readResponseBody, ResponseBodyLimitError } from '../../shared/http/response-body.js';
 import { privateJson } from '../../shared/http/bounded-client.js';
 import { checkedTaskPage } from '../application/task-pages.js';
@@ -104,28 +105,29 @@ export class HttpLineReader implements LineReader {
                 return unavailable('unavailable', 'Orchestrator summary timed out or was cancelled while waiting to poll');
             if (this.stopped)
                 return unavailable('unavailable', 'Factory service is stopping');
-            const response = await fetch(new URL('/v1/overview', line.orchestratorUrl), { headers: { Authorization: 'Bearer ' + credential }, redirect: 'error', signal: controller.signal });
-            if (response.status === 401 || response.status === 403) {
-                await response.body?.cancel();
-                return unavailable('unauthorized', 'The orchestrator rejected the configured line credential');
-            }
-            if (!response.ok) {
-                await response.body?.cancel();
-                return unavailable('unavailable', 'Orchestrator summary request failed (HTTP ' + response.status + ')');
-            }
-            let bytes: Uint8Array;
-            try { bytes = await readResponseBody(response.body, 65536); }
-            catch (error) {
-                if (error instanceof ResponseBodyLimitError) return unavailable('invalid', 'Orchestrator summary exceeds 64 KiB');
-                throw error;
-            }
-            try {
-                const overview = validateOverview(JSON.parse(Buffer.from(bytes).toString('utf8')));
-                return { status: 'available', error: null, overview, checkedAt: new Date().toISOString() };
-            }
-            catch {
-                return unavailable('invalid', 'The endpoint returned an unsupported or invalid overview');
-            }
+            return await withOwnedResponse(new URL('/v1/overview', line.orchestratorUrl), { headers: { Authorization: 'Bearer ' + credential }, redirect: 'error', signal: controller.signal }, this.timeoutMs, async response => {
+                if (response.status === 401 || response.status === 403) {
+                    await response.body?.cancel();
+                    return unavailable('unauthorized', 'The orchestrator rejected the configured line credential');
+                }
+                if (!response.ok) {
+                    await response.body?.cancel();
+                    return unavailable('unavailable', 'Orchestrator summary request failed (HTTP ' + response.status + ')');
+                }
+                let bytes: Uint8Array;
+                try { bytes = await readResponseBody(response.body, 65536); }
+                catch (error) {
+                    if (error instanceof ResponseBodyLimitError) return unavailable('invalid', 'Orchestrator summary exceeds 64 KiB');
+                    throw error;
+                }
+                try {
+                    const overview = validateOverview(JSON.parse(Buffer.from(bytes).toString('utf8')));
+                    return { status: 'available', error: null, overview, checkedAt: new Date().toISOString() };
+                }
+                catch {
+                    return unavailable('invalid', 'The endpoint returned an unsupported or invalid overview');
+                }
+            });
         }
         catch {
             return unavailable('unavailable', controller.signal.aborted ? 'Orchestrator summary timed out or was cancelled' : 'Unable to reach the orchestrator summary endpoint');

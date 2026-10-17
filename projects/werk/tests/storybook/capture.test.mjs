@@ -12,7 +12,7 @@ const components = [
   { name: 'AccessPanel', app: 'Shared', path: 'src/shared/webview/components/AccessPanel.vue', props: [], events: [] },
 ];
 const metadata = { app: 'Worker', summary: 'Review retained task evidence.', covers: [components[0].path], route: '/history', journey: 'Review a result', step: 1 };
-const story = { id: 'worker-board--review', title: 'Worker/Taskboard', name: 'Review patch', metadata, mounted: [components[0].path], meaningful: true };
+const story = { id: 'worker-board--review', title: 'Worker/Taskboard', name: 'Review patch', metadata, mounted: [components[0].path], meaningful: true, document: undefined };
 
 test('route examples match known parameterized paths without matching unrelated routes', () => {
   assert.equal(routeMatches('/factories/:id', '/factories/studio?line=alpha#overview'), true);

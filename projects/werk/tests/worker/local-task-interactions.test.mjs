@@ -1,3 +1,4 @@
+import { taskboardRuntime } from './runtime-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, realpath, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
@@ -22,7 +23,7 @@ async function fixture(t, execute) {
   let instruction = 'Original provider instruction';
   const factory = connection => ({ configuration: { id: connection.id, model: connection.model, instruction }, capabilities: modelCapabilities, async reply() { throw Error('Typed model expected'); }, execute });
   let sessions, board;
-  async function open() { sessions = new WorkerSessions(directory, settings, factory); await sessions.init(); board = new LocalTaskboard(directory, settings, sessions, factory); await board.init(); }
+  async function open() { sessions = WorkerSessions(directory, settings, factory); await sessions.init(); board = LocalTaskboard(directory, settings, sessions, factory); await board.init(); }
   await open();
   t.after(async () => { await board.close(); await sessions.close(); await rm(directory, { recursive: true, force: true }); });
   return {
@@ -117,14 +118,14 @@ test('accepted file answer survives a full queue before prepare, restart and exp
 
 test('validated file result recovers after patch projection failure without another model invocation', async t => {
   let calls = 0; const f = await fixture(t, async () => { calls++; return completed; });
-  const id = await f.create(); const writePatch = f.board.writePatch.bind(f.board);
-  f.board.writePatch = async () => { throw Error('Fixture patch persistence fault'); };
+  const id = await f.create(); const writePatch = taskboardRuntime(f.board).writePatch.bind(f.board);
+  taskboardRuntime(f.board).writePatch = async () => { throw Error('Fixture patch persistence fault'); };
   await f.board.tick();
   for (let attempt = 0; attempt < 400 && !f.board.view().persistenceError; attempt++) await delay(5);
   assert.equal(f.board.view().persistenceError, true); assert.equal(calls, 1);
   const sessionId = f.board.detail(id).sessionId, turnId = f.sessions.interactions.view(sessionId).latestTurn.id;
   assert.equal(f.sessions.interactions.turn(sessionId, turnId).result.type, 'completed');
-  f.board.writePatch = writePatch; await f.restart();
+  taskboardRuntime(f.board).writePatch = writePatch; await f.restart();
   assert.equal(calls, 1); assert.equal(f.board.detail(id).status, 'review');
   assert.match(await readFile(join(f.directory, 'local-review', id + '.patch'), 'utf8'), /\+after/);
 });

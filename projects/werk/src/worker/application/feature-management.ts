@@ -8,6 +8,21 @@ export interface FeatureDocumentPort {
   write(name: string, markdown: string, revision?: string): Promise<{ name: string; markdown: string; revision: string }>;
   remove(name: string, revision: string): Promise<void>;
 }
+/** Transport result fields vary by action; accepted record and execution types remain explicit. */
+export interface FeatureActionResult {
+  name: string;
+  markdown?: string;
+  revision?: string;
+  record?: FeatureRecord | null;
+  execution?: (Omit<NonNullable<ReturnType<FeatureQueuePort['inspect']>>, 'status'> & { status: unknown }) | null;
+  valid?: boolean;
+  input?: FeatureInput;
+  id?: unknown;
+  status?: unknown;
+  managed?: boolean;
+  deleted?: boolean;
+  retainedTaskId?: string | null;
+}
 export interface FeatureManagementContext {
   documents: FeatureDocumentPort; index: FeatureIndex; queue: FeatureQueuePort;
   persist(): Promise<void>;
@@ -17,7 +32,7 @@ function stoppedRequest(record: FeatureRecord, queue: FeatureQueuePort) {
   const current = queue.inspect(record);
   return current?.request ? ['done', 'failed', 'cancelled', 'interrupted'].includes(current.request.phase) : stopped.has(current?.status ?? record.status);
 }
-export async function manageFeature(input: unknown, context: FeatureManagementContext) {
+export async function manageFeature(input: unknown, context: FeatureManagementContext): Promise<FeatureActionResult> {
   const body = object(input, 'Feature command', ['action', 'name', 'markdown', 'revision']);
   const action = String(body.action), name = text(body.name, 'name', 200), { documents, index, queue } = context;
   if (!['get', 'validate', 'create', 'edit', 'submit', 'cancel', 'retry', 'archive', 'restore', 'delete', 'result'].includes(action)) throw new DomainError('invalid_input', 'Unknown feature action.');

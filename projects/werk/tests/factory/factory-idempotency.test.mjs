@@ -1,3 +1,4 @@
+import { testErrorCode, testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
@@ -15,7 +16,7 @@ const noReads = { read() { throw Error('Registry changes cannot poll a line'); }
 const appFor = (registry, configured = [reference]) => new FactoryApplication(registry, noReads, new Set(configured));
 const line = (extra = {}) => ({ name: 'Alpha', factoryId: 'root', orchestratorUrl: 'https://line.example', webviewUrl: 'https://line.example/', tokenEnv: reference, ...extra });
 async function directory(t) { const path = await mkdtemp(join(tmpdir(), 'werk-factory-receipts-')); t.after(() => rm(path, { recursive: true, force: true })); return path; }
-const conflict = fn => assert.throws(fn, error => error.code === 'conflict');
+const conflict = fn => assert.throws(fn, error => testErrorCode(error) === 'conflict');
 function child(args, env = {}, input = '') {
   return new Promise((resolve, reject) => {
     const processChild = spawn(process.execPath, args, { env: { ...process.env, ...env }, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -86,14 +87,14 @@ test('failed validation and domain constraints do not reserve a key; receipt ins
   const file = join(await directory(t), 'registry.sqlite'), registry = new SqliteFactoryRegistry(file), app = appFor(registry);
   const db = new DatabaseSync(file);
   try {
-    assert.throws(() => app.createFactory({ name: '' }, 'retry-validation'), error => error.code === 'invalid_input');
+    assert.throws(() => app.createFactory({ name: '' }, 'retry-validation'), error => testErrorCode(error) === 'invalid_input');
     app.createFactory({ id: 'root', name: 'Root' }, 'retry-validation');
     app.createFactory({ id: 'child', name: 'Child', parentId: 'root' });
     conflict(() => app.deleteFactory('root', 'retry-constraint'));
     app.deleteFactory('child'); app.deleteFactory('root', 'retry-constraint');
     db.exec("CREATE TRIGGER force_receipt_failure BEFORE INSERT ON mutation_receipts BEGIN SELECT RAISE(ABORT,'injected receipt write failure'); END");
     assert.throws(() => app.createFactory({ id: 'atomic', name: 'Atomic' }, 'atomic-key'), /injected receipt/);
-    assert.throws(() => app.factory('atomic'), error => error.code === 'not_found');
+    assert.throws(() => app.factory('atomic'), error => testErrorCode(error) === 'not_found');
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM mutation_receipts').get().n, 2);
     db.exec('DROP TRIGGER force_receipt_failure');
     app.createFactory({ id: 'atomic', name: 'Atomic' }, 'atomic-key');
@@ -135,7 +136,7 @@ test('independent concurrent processes serialize the same key into one generated
 async function server(t, file = ':memory:', credentials = { [reference]: secret }) {
   const app = await startFactoryServer({ db: file, host: '127.0.0.1', port: 0, adminToken: admin, credentials });
   t.after(() => app.close());
-  const base = 'http://127.0.0.1:' + app.server.address().port;
+  const base = 'http://127.0.0.1:' + testListeningAddress(app.server).port;
   const call = async (path, method, body, key) => {
     const response = await fetch(base + path, { method, headers: { Authorization: 'Bearer ' + admin, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(key === undefined ? {} : { 'Idempotency-Key': key }) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(5000) });
     return { status: response.status, body: await response.json() };

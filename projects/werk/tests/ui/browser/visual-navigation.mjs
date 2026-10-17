@@ -2,7 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 const { chromium } = await import(
-  process.env.WERK_PLAYWRIGHT_MODULE || "playwright-core"
+  process.env.WERK_PLAYWRIGHT_MODULE || "playwright"
 );
 // Use an isolated mock system with two saved tasks. Credentials stay in process memory.
 if (!process.env.WERK_VISUAL_STATE)
@@ -262,10 +262,7 @@ try {
       exact: true,
     })
     .click();
-  let release;
-  const held = new Promise((resolve) => {
-    release = resolve;
-  });
+  const { promise: held, resolve: release } = Promise.withResolvers();
   await page.route(
     new URL("/v1/tasks/" + taskA.id, lineUrl).href,
     async (route) => {
@@ -292,7 +289,7 @@ try {
   const reply = page.waitForResponse(
     (response) => new URL(response.url()).pathname === "/v1/tasks/" + taskA.id,
   );
-  release();
+  release(undefined);
   await reply;
   await page.waitForFunction(
     () =>

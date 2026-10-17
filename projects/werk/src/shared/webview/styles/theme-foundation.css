@@ -1,0 +1,142 @@
+:root {
+  --ui-primary: #8be0b8;
+  --ui-text-inverted: #111b22;
+  --ui-bg-inverted: #edf4f7;
+  --ui-text-toned: #b5c4cd;
+  --ui-border-muted: #3b4b56;
+  --ui-border-inverted: #edf4f7;
+  --ui-bg: #111b22;
+  --ui-bg-elevated: #1b2a34;
+  --ui-bg-muted: #17232c;
+  --ui-bg-accented: #233540;
+  --ui-text: #edf4f7;
+  --ui-text-muted: #b5c4cd;
+  --ui-text-dimmed: #a8bbc7;
+  --ui-text-highlighted: #edf4f7;
+  --ui-border: #3b4b56;
+  --ui-border-accented: #607581;
+  --ui-radius: 0.5rem;
+  color-scheme: dark;
+  font-family: system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  background: var(--ui-bg);
+  color: var(--ui-text);
+}
+* {
+  box-sizing: border-box;
+  scrollbar-color: #607581 #17232c;
+  scrollbar-width: thin;
+}
+::selection {
+  background: #8be0b8;
+  color: #111b22;
+}
+input,
+textarea {
+  caret-color: #8be0b8;
+}
+button,
+input,
+select,
+[role="combobox"] {
+  min-height: 44px;
+}
+button,
+a,
+summary {
+  touch-action: manipulation;
+}
+button:not(:disabled),
+summary {
+  cursor: pointer;
+}
+:focus-visible {
+  outline: 2px solid #8be0b8;
+  outline-offset: 4px;
+}
+h1 {
+  font-size: clamp(1.75rem, 2.4vw, 2.25rem);
+  font-weight: 680;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+h2 {
+  font-size: 1.125rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+p {
+  max-width: 75ch;
+}
+code,
+pre {
+  font-family: ui-monospace, monospace;
+  font-size: 0.875rem;
+}
+code {
+  overflow-wrap: anywhere;
+}
+pre {
+  max-height: 420px;
+  overflow: auto;
+  padding: 20px;
+  background: #0d151b;
+  border-radius: 8px;
+  margin-top: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.muted,
+.page-note,
+.page-heading p,
+.workspace-footer,
+.composer-footer > span {
+  color: var(--ui-text-muted);
+}
+.page-note {
+  margin-top: 20px;
+  font-size: 0.875rem;
+}
+.break-anywhere {
+  overflow-wrap: anywhere;
+}
+.numeric,
+time,
+meter,
+dd {
+  font-variant-numeric: tabular-nums;
+}
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+.skip-link {
+  position: fixed;
+  left: 16px;
+  top: 12px;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  background: #8be0b8;
+  color: #111b22;
+  z-index: 100;
+}
+.skip-link:focus {
+  width: auto;
+  height: auto;
+  padding: 12px 20px;
+  overflow: visible;
+  clip-path: none;
+  white-space: normal;
+}

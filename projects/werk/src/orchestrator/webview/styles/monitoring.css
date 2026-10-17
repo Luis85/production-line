@@ -1,0 +1,131 @@
+.worker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr));
+  gap: 24px;
+}
+.worker-card {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+  padding: 24px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+}
+.worker-card h2 {
+  overflow-wrap: anywhere;
+}
+.worker-card ul {
+  display: grid;
+  gap: 8px;
+  color: var(--ui-text-muted);
+}
+.worker-card button {
+  justify-self: start;
+}
+.status-dot.online {
+  background: #8be0b8;
+}
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 24px;
+}
+.facts dt {
+  color: var(--ui-text-muted);
+  font-size: 0.875rem;
+  margin-bottom: 8px;
+}
+.facts dd {
+  overflow-wrap: anywhere;
+}
+.flow-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px 48px;
+  padding-block: 8px 24px;
+  border-bottom: 1px solid var(--ui-border);
+}
+.flow-counts li {
+  display: grid;
+  gap: 8px;
+}
+.flow-counts strong {
+  font-size: 1.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.flow-counts span {
+  color: var(--ui-text-muted);
+  font-size: 0.875rem;
+}
+.chart-wrap {
+  overflow: auto;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  padding: 16px;
+}
+.chart-wrap svg {
+  width: 100%;
+  min-width: 580px;
+  color: var(--ui-text-muted);
+}
+.chart-wrap text {
+  fill: currentColor;
+  font-size: 12px;
+}
+.filter-notice {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+@media (max-width: 1100px) {
+  .intake-layout {
+    gap: 24px;
+    grid-template-columns: minmax(0, 1fr) minmax(230px, 0.7fr);
+  }
+}
+@media (max-width: 760px) {
+  .intake-layout {
+    grid-template-columns: 1fr;
+  }
+  .preview {
+    position: static;
+    padding: 20px;
+  }
+  .taskboard {
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+  .task-column.empty {
+    display: none;
+  }
+  .taskboard.show-empty .task-column.empty {
+    display: block;
+  }
+  .flow-counts {
+    gap: 20px 28px;
+  }
+  .flow-counts strong {
+    font-size: 1.5rem;
+  }
+  .pagination .actions {
+    width: 100%;
+  }
+  .pagination .actions > * {
+    flex: 1;
+  }
+  .worker-card {
+    padding: 20px;
+  }
+  .table-scroll th,
+  .table-scroll td {
+    padding: 12px;
+  }
+  .page-section {
+    gap: 24px;
+  }
+  .section-heading {
+    align-items: start;
+  }
+}

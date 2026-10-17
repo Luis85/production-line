@@ -1,3 +1,4 @@
+import { testErrorCode } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
@@ -99,7 +100,7 @@ test('Python archive safety regressions run independently of Node tar libraries'
 
 test('systemd parses generated service hardening and lifecycle directives', { skip: process.platform !== 'linux' }, async t => {
   const available = spawnSync('systemd-analyze', ['--version'], { encoding: 'utf8' });
-  if (available.error?.code === 'ENOENT') return t.skip('systemd-analyze is not installed');
+  if (available.error && testErrorCode(available.error) === 'ENOENT') return t.skip('systemd-analyze is not installed');
   const directory = await mkdtemp(join(tmpdir(), 'werk-systemd-'));
   try {
     // The actual versioned executable is installed only on a VM; replace solely

@@ -1,3 +1,4 @@
+import { testErrorCode, testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -24,8 +25,9 @@ test('managed registry validates immutable ownership and rejects malformed deplo
   assert.deepEqual(result, managed()); assert.ok(Object.isFrozen(result.factories));
   assert.deepEqual(managedRegistryEnvironment(JSON.stringify(managed())), managed());
   for (const value of [null, [], {}, { factories: ['root'], lines: [], extra: true }, { factories: ['root', 'root'], lines: [] }, { factories: [1], lines: [] }, { factories: [' root'], lines: [] }]) {
-    assert.throws(() => managedRegistry(value), error => error.code === 'invalid_input' && /managed registry/.test(error.message));
-    await assert.rejects(startFactoryServer({ ...config, db: ':memory:', managedRegistry: value }), error => error.code === 'invalid_input');
+    assert.throws(() => managedRegistry(value), error => testErrorCode(error) === 'invalid_input' && /managed registry/.test(testErrorMessage(error)));
+    // @ts-expect-error Deliberately validate malformed deployment configuration at the runtime boundary.
+    await assert.rejects(startFactoryServer({ ...config, db: ':memory:', managedRegistry: value }), error => testErrorCode(error) === 'invalid_input');
   }
   assert.throws(() => managedRegistryEnvironment('{'), /WERK_FACTORY_MANAGED_REGISTRY/);
 });
@@ -49,7 +51,9 @@ test('managed resources reject HTTP edits and deletion before durable replay whi
   ownership.factories.length = 0; ownership.lines.length = 0;
   assert.deepEqual((await call('/v1/factories')).body.managedRegistry, managed());
   for (const [path, name, key] of [['/v1/factories/root', 'Root', 'old-factory-update'], ['/v1/lines/alpha', 'Alpha', 'old-line-update']]) {
-    for (const [method, body, receipt] of [['PATCH', { name }, key], ['PATCH', { name: 'Would break restart' }, 'new-edit'], ['DELETE', undefined, key.replace('update', 'delete')], ['DELETE', undefined, 'new-delete']]) {
+    /** @type {[string, { name: string } | undefined, string][]} */
+    const mutations = [['PATCH', { name }, key], ['PATCH', { name: 'Would break restart' }, 'new-edit'], ['DELETE', undefined, key.replace('update', 'delete')], ['DELETE', undefined, 'new-delete']];
+    for (const [method, body, receipt] of mutations) {
       const result = await call(path, method, body, receipt); assert.equal(result.status, 409); assert.match(result.body.error, /managed by the saved system YAML/);
     }
   }

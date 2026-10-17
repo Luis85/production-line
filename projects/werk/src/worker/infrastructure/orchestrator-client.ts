@@ -86,7 +86,7 @@ export class HttpWorkerGateway implements WorkerGateway {
     };
   }
 
-  connect(identity: WorkerIdentity): WorkerClient {
+  connect(identity: Pick<WorkerIdentity, 'token'>): WorkerClient {
     const call = (path: string, method = "POST", body?: unknown) =>
       this.send(path, identity.token, method, body);
     const leaseBody = (task: Pick<Task, "id" | "lease" | "attempt">) => ({

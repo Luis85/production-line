@@ -13,6 +13,7 @@ const consumptionEditor = createConsumptionEditor({
 import { computed } from 'vue';
 import UButton from '@nuxt/ui/components/Button.vue';
 import UInput from '@nuxt/ui/components/Input.vue';
+import SettingsSaveFeedback from '../../../shared/webview/components/SettingsSaveFeedback.vue';
 import USelect from '@nuxt/ui/components/Select.vue';
 import UBadge from '@nuxt/ui/components/Badge.vue';
 import { state } from '../store';
@@ -85,11 +86,7 @@ const hasMeasurements = computed(() => !!report.value?.accountingAvailable);
         <p v-if="stale" class="consumption-warning" role="status">Saved limits changed while you were editing. Your draft is kept. Discard edits and reload the current limits before saving.</p>
       </form>
       <p v-else class="page-note">Saved consumption settings are not available. Refresh to try again.</p>
-      <p v-if="draft.error" role="alert" class="error-text">{{ draft.error }}</p>
-      <div v-if="draft.uncertain" class="consumption-warning" role="status">
-        <p>The save acknowledgement is uncertain. Your submitted limits are kept. Check the saved limits or retry the same save.</p>
-        <div class="consumption-actions"><UButton type="button" color="neutral" variant="outline" :disabled="draft.checking || !state.unlocked" :loading="draft.busy" @click="consumptionEditor.retry">Retry same save</UButton><UButton type="button" color="neutral" variant="ghost" :disabled="draft.busy || draft.checking || !state.unlocked" @click="consumptionEditor.reload">Discard edits and reload</UButton></div>
-      </div>
+      <SettingsSaveFeedback :state="draft" :unlocked="state.unlocked" :show-refresh="false" uncertain-message="The save acknowledgement is uncertain. Your submitted limits are kept. Check the saved limits or retry the same save." @retry="consumptionEditor.retry" @reload="consumptionEditor.reload" />
     </details>
     <p v-if="!props.readonly && draft.notice" role="status">{{ draft.notice }}</p>
     <UButton v-if="!report || state.consumptionError || !props.readonly && (!draft.baseline || draft.uncertain)" type="button" color="neutral" variant="outline" :loading="draft.checking" :disabled="draft.busy || !state.unlocked" @click="consumptionEditor.check">Refresh consumption</UButton>

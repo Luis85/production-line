@@ -175,7 +175,7 @@ test('an original assignment waiting for another attempt keeps its active taskSt
   const remote = session('remote-a', { kind: 'orchestrator', messages: 2, taskState: 'queued', status: 'completed' });
   const input = { sessions: sessions([remote]), history: history(row('a')) };
   assert.equal(buildTaskOverview(input).items[0].status, 'queued');
-  remote.taskState = 'running';
+  Object.assign(remote, { taskState: 'running' });
   assert.equal(buildTaskOverview(input).items[0].status, 'unconfirmed');
   input.sessions.execution.currentSessionId = 'remote-a';
   assert.equal(buildTaskOverview(input).items[0].status, 'running');

@@ -47,7 +47,7 @@ export async function setupSystem(value, { stateDir } = {}) {
     return { configured: true, created, stateDir, definition };
   } finally { await unlink(lock); }
 }
-export async function readFactoryCredentials(stateDir) {
+async function readFactoryCredentials(stateDir) {
   await existingDirectory(join(stateDir, 'factory'));
   const value = await readPrivate(join(stateDir, 'factory', 'credentials.json'));
   if (!value || Object.keys(value).length !== 1 || typeof value.WERK_FACTORY_ADMIN_TOKEN !== 'string' || !/^[a-f0-9]{64}$/.test(value.WERK_FACTORY_ADMIN_TOKEN)) throw inputError('Invalid Factory credentials. Restore factory/credentials.json from backup.');

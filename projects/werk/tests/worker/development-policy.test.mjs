@@ -21,6 +21,7 @@ function fixture() {
   const grants = policy(), paths = ['src/main.ts', 'tests/main.test.mjs'];
   const scope = freezeDevelopmentScope(baseCommit, paths, grants);
   const candidate = { patch: 'diff --git a/src/main.ts b/src/main.ts\n', digest, changedPaths: ['src/main.ts'] };
+  /** @type {import('../../src/worker/application/development.js').DevelopmentEvidence} */
   const evidence = { schemaVersion: 1, candidateDigest: digest, changedPaths: [...candidate.changedPaths], checks: scope.checks.map(check => ({ presetId: check.id, presetFingerprint: check.fingerprint, candidateDigest: digest, status: 'passed', exitCode: 0, stdout: 'Fixture check passed.\n', stderr: '', startedAt, finishedAt })), updatedAt: finishedAt };
   return { grants, paths, scope, candidate, evidence };
 }
@@ -134,6 +135,7 @@ test('persisted development state accepts incomplete and failed receipts without
   const { scope, candidate, evidence } = fixture();
   assert.doesNotThrow(() => validateDevelopmentState(scope));
   assert.doesNotThrow(() => validateDevelopmentState(scope, evidence));
+  /** @type {import('../../src/worker/application/development.js').DevelopmentEvidence} */
   const empty = { schemaVersion: 1, candidateDigest: null, changedPaths: [], checks: [], updatedAt: finishedAt };
   assert.doesNotThrow(() => validateDevelopmentState(scope, empty));
   assert.equal(developmentVerified(scope, candidate, empty), false);

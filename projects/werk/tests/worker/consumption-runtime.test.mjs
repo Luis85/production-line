@@ -10,7 +10,10 @@ import { prepareModelRequest, executeModel } from '../../src/worker/dist/worker/
 import { modelFor } from '../../src/worker/dist/worker/infrastructure/providers.js';
 import { providerUsage } from '../../src/worker/dist/worker/infrastructure/provider-usage.js';
 import { SerialExecutor } from '../../src/worker/dist/worker/application/serial-executor.js';
+/** @type {import('../../src/worker/application/conversation-contracts.js').ChatMessage[]} */
 const messages = [{ id: 'u', role: 'user', text: 'Fixture input.', state: 'complete', at: '2026-10-16T00:00:00Z' }];
+/** @param {import('../../src/worker/application/provider-contract.js').ProviderId} id
+ * @returns {import('../../src/worker/application/provider-contract.js').ProviderConnection} */
 const connection = id => ({ id, model: 'fixture', apiKey: 'fixture-only', executable: '' });
 const signal = () => AbortSignal.timeout(5000);
 const rawUsage = { input_tokens: 30, output_tokens: 20, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
@@ -19,13 +22,16 @@ const answer = id => id === 'openai-api'
   : { stop_reason: 'end_turn', usage: rawUsage, content: [{ type: 'text', text: 'Completed answer.' }] };
 async function fixture(t, overrides = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'werk-consumption-runtime-'));
+  /** @type {import('../../src/worker/application/consumption.js').ConsumptionPolicy} */
   const policy = { enabled: true, period: 'daily', allowance: 100, workerPercent: 50, perRunReservation: 40, ...overrides };
   let now = new Date('2026-10-16T12:00:00Z');
   const journal = new WorkerConsumptionJournal(directory), runtime = new WorkerConsumption(journal, () => policy, () => now);
   await runtime.init(); t.after(async () => { runtime.close(); await rm(directory, { recursive: true, force: true }); });
   return { runtime, journal, policy, advance: () => { now = new Date('2026-10-17T12:00:00Z'); } };
 }
-for (const id of ['openai-api', 'anthropic-api']) {
+/** @type {import('../../src/worker/application/provider-contract.js').ProviderId[]} */
+const providers = ['openai-api', 'anthropic-api'];
+for (const id of providers) {
   test(id + ' accepts a paid final answer at the limit and fences subsequent invocations', async t => {
     const f = await fixture(t); let calls = 0;
     const model = consumptionModel(modelFor(connection(id), '/unused', async () => { calls++; return Response.json(answer(id)); }), f.runtime);
@@ -102,14 +108,17 @@ test('pre-aborted and invalid model requests never reserve consumption or dispat
   const f = await fixture(t); let calls = 0;
   const model = consumptionModel({ async reply() { calls++; return 'Fixture.'; } }, f.runtime), controller = new AbortController(); controller.abort();
   await assert.rejects(model.reply(messages, controller.signal));
+  // @ts-expect-error Deliberately exercise runtime rejection of an unsupported schema.
   await assert.rejects(executeModel(model, { schemaVersion: 99 }, signal()));
   assert.equal(calls, 0); assert.equal(f.runtime.status().activeInvocations, 0); assert.equal(f.runtime.status().uncertainInvocations, 0);
 });
 
 test('late provider usage cannot rewrite a settled consumption invocation', async t => {
-  const f = await fixture(t); let late;
-  const model = consumptionModel({ async reply(_messages, _signal, observe) { late = observe; observe(providerUsage('openai', { usage: { input_tokens: 3, output_tokens: 2 } })); return 'Fixture.'; } }, f.runtime);
-  await model.reply(messages, signal()); late(providerUsage('openai', { usage: { input_tokens: 1000, output_tokens: 1000 } }));
+  const f = await fixture(t);
+  /** @type {{observe?: (usage: import('../../src/worker/application/run-evidence.js').ProviderUsage) => void}} */
+  const late = {};
+  const model = consumptionModel({ async reply(_messages, _signal, observe) { late.observe = observe; observe(providerUsage('openai', { usage: { input_tokens: 3, output_tokens: 2 } })); return 'Fixture.'; } }, f.runtime);
+  await model.reply(messages, signal()); assert.equal(typeof late.observe, 'function'); late.observe(providerUsage('openai', { usage: { input_tokens: 1000, output_tokens: 1000 } }));
   assert.equal(f.runtime.status().measuredTokens, 5); assert.equal(f.runtime.status().blocked, false);
 });
 
@@ -134,7 +143,11 @@ for (const disable of [false, true]) test('API continuation observes a consumpti
     return { content: [{ type: 'text', text: 'Fixture result.' }] };
   }, async close() {} }) }), f.runtime);
   const execution = executeModel(model, prepareModelRequest(model, messages), signal());
-  if (disable) assert.equal((await execution).text, 'Completed answer.');
+  if (disable) {
+    const completed = await execution;
+    assert.equal(completed.type, 'completed');
+    assert.equal(completed.text, 'Completed answer.');
+  }
   else await assert.rejects(execution, { code: 'consumption_limit' });
   assert.equal(requests, disable ? 2 : 1); assert.equal(f.runtime.status().measuredTokens, disable ? 100 : 50); assert.equal(f.runtime.status().uncertainInvocations, 0);
 });

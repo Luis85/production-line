@@ -29,7 +29,7 @@ export interface WorkerClient {
 
 export interface WorkerGateway {
   register(profiles: Profile[], policy: WorkerPolicy): Promise<Pick<WorkerIdentity, 'id' | 'token' | 'project'>>;
-  connect(identity: WorkerIdentity): WorkerClient;
+  connect(identity: Pick<WorkerIdentity, 'token'>): WorkerClient;
 }
 
 export interface SnapshotStatus {
@@ -64,7 +64,7 @@ export interface AttemptRequestGates {
 }
 export interface AttemptDependencies {
   gates?: AttemptRequestGates;
-  client: WorkerClient;
+  client: Pick<WorkerClient, 'heartbeat' | 'verifyContext' | 'publishSnapshot' | 'complete' | 'abandon' | 'hold' | 'resolveHold'>;
   journal: AttemptJournal;
   adapter: Adapter;
   identity: Pick<WorkerIdentity, 'id' | 'project'>;

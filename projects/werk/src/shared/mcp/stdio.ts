@@ -10,7 +10,7 @@ type RequestId = string | number | null;
 const plainObject = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 
 /** MCP stdio transport: one UTF-8 JSON-RPC message per newline; stdout is protocol-only. */
-export async function serveStdio(catalog: ToolCatalog, role: Role, input: Readable = process.stdin, output: Writable = process.stdout): Promise<void> {
+export async function serveStdio(catalog: Pick<ToolCatalog, "definitions" | "has" | "call">, role: Role, input: Readable = process.stdin, output: Writable = process.stdout): Promise<void> {
   let initialized = false, ready = false;
   let outputFailure: Error | undefined;
   const outputFailed = (cause: Error) => { outputFailure = cause; input.destroy(); };

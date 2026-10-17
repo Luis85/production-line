@@ -1,3 +1,4 @@
+import { testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -44,7 +45,7 @@ test('SIGTERM bounds an incomplete status request, releases the worker lock and 
   });
   function launch() {
     const child = spawn(process.execPath, [fileURLToPath(new URL('../../src/worker/dist/worker/cli.js', import.meta.url)), 'run', '--state-dir', stateDir, '--status-port', '0', '--poll-ms', '100'], {
-      env: { ...process.env, WERK_URL: `http://127.0.0.1:${app.server.address().port}`, WERK_ENROLLMENT_TOKEN: enrollmentToken }, stdio: ['ignore', 'ignore', 'pipe']
+      env: { ...process.env, WERK_URL: `http://127.0.0.1:${testListeningAddress(app.server).port}`, WERK_ENROLLMENT_TOKEN: enrollmentToken }, stdio: ['ignore', 'ignore', 'pipe']
     });
     const worker = { child, port: undefined, closed: once(child, 'close') }; let pending = '';
     child.stderr.setEncoding('utf8'); child.stderr.on('data', chunk => {

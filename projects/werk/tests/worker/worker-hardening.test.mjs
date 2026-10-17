@@ -1,3 +1,4 @@
+import { testErrorCode } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm, mkdir, writeFile, readFile, symlink, readdir, rename } from 'node:fs/promises';
@@ -10,7 +11,9 @@ import { loadOrRegisterIdentity } from '../../src/worker/dist/worker/infrastruct
 import { executeAttempt } from '../../src/worker/dist/worker/application/execute-attempt.js';
 import { ReportingError } from '../../src/worker/dist/worker/application/errors.js';
 
+/** @type {import('../../src/shared/domain.js').Profile} */
 const profile = { id: 'claude-1', provider: 'claude', mode: 'mock', maxParallel: 1 };
+/** @returns {import('../../src/shared/domain.js').Task} */
 const task = () => ({ id: 'task-1', project: 'demo', title: 'Test', criteria: ['Done'], wikilinks: [], provider: 'claude', priority: 1, status: 'running', attempt: 1, workerId: 'worker-1', lease: 'lease-1', expiresAt: Date.now() + 60000, profile: profile.id, createdAt: Date.now() });
 const state = () => ({ lastContact: null, heartbeatErrors: 0, lastError: null, lastSnapshot: null, completedSimulations: 0 });
 const digest = 'a'.repeat(64);
@@ -85,21 +88,23 @@ test('state reads bound bytes and reject symlinks and nonregular files', async t
 
 test('invalid enrollment cannot poison persisted identity and malformed state fails clearly', async t => {
   const f = await fixture(t), path = join(f.journal.stateDir, 'identity.json');
-  const gateway = { async register() { return { id: '../escape', project: 'demo', token: 'secret' }; } };
-  const load = () => loadOrRegisterIdentity(f.journal.stateDir, 'http://localhost', [profile], { configHash: digest }, gateway, new AbortController().signal);
+  const gateway = { connect() { assert.fail('Malformed enrollment must not connect'); }, async register() { return { id: '../escape', project: 'demo', token: 'secret' }; } };
+  const load = () => loadOrRegisterIdentity(f.journal.stateDir, 'http://localhost', [profile], { configHash: digest, maxParallel: 1, order: 'fifo', maxAttempts: 1 }, gateway, new AbortController().signal);
   await assert.rejects(load(), /Invalid persisted worker identity/);
-  await assert.rejects(readFile(path), error => error.code === 'ENOENT');
+  await assert.rejects(readFile(path), error => testErrorCode(error) === 'ENOENT');
   await writeFile(path, 'null');
   await assert.rejects(load(), /Invalid persisted worker identity/);
 });
 
 test('lease loss fences completion retries while preserving terminal evidence', { timeout: 5000 }, async t => {
   const f = await fixture(t), attempt = task(), status = state();
-  let completions = 0, executed = 0, lost;
-  const leaseLost = new Promise(resolve => { lost = resolve; });
+  let completions = 0, executed = 0;
+  const { promise: leaseLost, resolve: lost } = Promise.withResolvers();
   const client = {
+    async currentAssignments() { assert.fail('Attempt execution must not reload assignments'); },
+    async claim() { assert.fail('Attempt execution must not claim another task'); },
     async heartbeat(value) {
-      if (completions) { lost(); throw new ReportingError('Lease ownership lost', false); }
+      if (completions) { lost(undefined); throw new ReportingError('Lease ownership lost', false); }
       return { ...value, expiresAt: Date.now() + 300 };
     },
     async publishSnapshot() {},
@@ -108,7 +113,7 @@ test('lease loss fences completion retries while preserving terminal evidence', 
   };
   await assert.rejects(executeAttempt(attempt, new AbortController().signal, {
     client, journal: f.journal, identity: { id: 'worker-1', project: 'demo' }, profiles: [profile], state: status,
-    adapter: { mode: 'mock', async run() { executed++; return { kind: 'simulated' }; } },
+    adapter: { mode: 'mock', async run() { executed++; return { kind: 'simulated', summary: 'Simulated fixture result' }; } },
     async saveState() {}, timeoutMs: 1000
   }));
   assert.equal(completions, 1); assert.equal(executed, 1); assert.equal(status.completedSimulations, 0);

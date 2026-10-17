@@ -1,3 +1,4 @@
+import { snapshotFixture } from './contract-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { executeAttempt } from '../../src/worker/dist/worker/application/execute-attempt.js';
@@ -5,16 +6,20 @@ import { ReportingError } from '../../src/worker/dist/worker/application/errors.
 import { HttpWorkerGateway } from '../../src/worker/dist/worker/infrastructure/orchestrator-client.js';
 import { ApiError } from '../../src/worker/dist/shared/http/errors.js';
 
+/** @returns {import('../../src/shared/domain.ts').Task} */
 const task = () => ({ id:'task-1', project:'demo', title:'Feature', criteria:['Done'], wikilinks:[], provider:'claude', priority:1, status:'running', attempt:1, workerId:'worker-1', lease:'lease-1', expiresAt:11000, profile:'claude-1', createdAt:0 });
 const identity = { id:'worker-1', project:'demo', token:'private-token', url:'http://example.invalid', configHash:'default' };
 
+/** @param {Partial<import('../../src/worker/application/ports.ts').AttemptDependencies>} [overrides] */
 function fixture(overrides = {}) {
   const events = [], entries = new Map(), delivered = new Set();
   const state = { lastContact:null, heartbeatErrors:0, lastError:null, lastSnapshot:null, completedSimulations:0 };
+  /** @type {import('../../src/worker/application/ports.ts').AttemptJournal} */
   const journal = {
     async read(pair, phase) { return entries.get(`${pair}-${phase}`) ?? null; },
     capture(task, workerId, profile, state, phase, before, outcome = 'pending', error = null) {
-      return { id:`${task.lease}-${phase}`, pairId:task.lease, phase, workerId, taskId:task.id, project:task.project, attempt:task.attempt, profileId:profile.id, provider:profile.provider, mode:'mock', provenance:{contextManifestHash:null, featureId:null, sourceCommit:null, iterationId:null}, execution:{outcome,error} };
+      const snapshot = snapshotFixture();
+      return snapshotFixture({ id:`${task.lease}-${phase}`, pairId:task.lease, phase, workerId, taskId:task.id, project:task.project, attempt:task.attempt, profileId:profile.id, provider:profile.provider, execution:{...snapshot.execution,outcome,error} });
     },
     async persist(snapshot) { events.push(`persist:${snapshot.phase}`); entries.set(snapshot.id, snapshot); return snapshot; },
     async flush(send) { for(const [id,snapshot] of entries)if(!delivered.has(id)){await send(snapshot);delivered.add(id);} }
@@ -25,7 +30,9 @@ function fixture(overrides = {}) {
     async publishSnapshot(snapshot) { events.push(`publish:${snapshot.phase}`); },
     async complete() { events.push('complete'); }, async abandon() { events.push('abandon'); }
   };
+  /** @type {import('../../src/shared/domain.ts').Adapter} */
   const adapter = { mode:'mock', async run(assigned, signal) { signal.throwIfAborted();events.push('run');return {kind:'simulated',summary:assigned.title}; } };
+  /** @type {import('../../src/worker/application/ports.ts').AttemptDependencies} */
   const dependencies = { client,journal,adapter,identity,profiles:[{id:'claude-1',provider:'claude',mode:'mock'}],state,async saveState(){events.push('save');},timeoutMs:1000,now:()=>1000,...overrides };
   return { dependencies,events,entries,state,client,adapter };
 }
@@ -104,9 +111,10 @@ test('HTTP lease renewal preserves the exact optional repository selector',async
 });
 
 test('HTTP worker acknowledgements validate snapshot identity/digest and terminal lease ownership',async()=>{
+  /** @type {unknown} */
   let response={ok:true};
   const client=new HttpWorkerGateway(identity.url,'',async()=>response).connect(identity);
-  const snapshot={id:'lease-1-before',pairId:'lease-1',phase:'before'};
+  const snapshot=snapshotFixture();
   await assert.rejects(client.publishSnapshot(snapshot),/snapshot acknowledgement/);
   response={id:snapshot.id,sha256:'0'.repeat(64)};
   await assert.rejects(client.publishSnapshot(snapshot),/digest mismatch/);

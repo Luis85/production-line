@@ -1,3 +1,4 @@
+import { testErrorMessage, testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, open, readFile, writeFile, rm, cp, lstat, rename, symlink } from 'node:fs/promises';
@@ -21,7 +22,7 @@ const definition = () => ({ schemaVersion: 1, id: 'system-test', environment: 'n
   productionLines: [{ id: 'alpha', name: 'Alpha', project: 'alpha', orchestrator: { port: 37101 }, workers: { count: 1, statusPort: 37102 } },
     { id: 'beta', name: 'Beta', project: 'beta', factoryId: 'group', orchestrator: { port: 37103 }, workers: { count: 1, statusPort: 37104 } }] });
 async function directory(t) { const root = await mkdtemp(join(tmpdir(), 'werk-system-')); t.after(() => rm(root, { recursive: true, force: true })); return root; }
-async function uniquePorts(count) { const servers = [], ports = []; try { for (let n = 0; n < count; n++) { const server = createServer(); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); servers.push(server); ports.push(server.address().port); } return ports; } finally { await Promise.all(servers.map(server => new Promise(resolve => server.close(resolve)))); } }
+async function uniquePorts(count) { const servers = [], ports = []; try { for (let n = 0; n < count; n++) { const server = createServer(); await new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(undefined))); servers.push(server); ports.push(testListeningAddress(server).port); } return ports; } finally { await Promise.all(servers.map(server => new Promise(resolve => server.close(resolve)))); } }
 async function availableDefinition() { const ports = await uniquePorts(5), value = definition(); value.factory.port = ports[0]; value.productionLines.forEach((line, index) => { line.orchestrator.port = ports[1 + index * 2]; line.workers.statusPort = ports[2 + index * 2]; }); return value; }
 function observeSystemChild(child) {
   let output = '', errors = '', exited = false, closed = false, spawnFailed = false, exitCode = null, exitSignal = null;
@@ -74,6 +75,7 @@ async function startupDiagnostics(stateDir) {
     finally { await handle?.close(); }
   })));
 }
+/** @param {ReturnType<typeof observeSystemChild>} running @param {string} label @param {{timeout?: number, signal?: AbortSignal, now?: () => number, pause?: (ms: number, signal?: AbortSignal) => Promise<unknown>, diagnostics?: () => Promise<unknown>}} [options] */
 async function waitForSystemReady(running, label, { timeout = startupTimeout, signal, now = Date.now, pause = (ms, abort) => sleep(ms, undefined, { signal: abort }), diagnostics = async () => ({}) } = {}) {
   const deadline = now() + timeout;
   async function fail(reason) {
@@ -110,7 +112,7 @@ test('system setup normalizes hierarchy, resumes partial provisioning and never 
   await mkdir(join(partial, 'factory'), { mode: 0o700 });
   const credentials = { WERK_FACTORY_ADMIN_TOKEN: 'a'.repeat(64) }; await createPrivate(join(partial, 'factory/credentials.json'), credentials);
   await setupSystem(saved, { stateDir: partial });
-  assert.deepEqual(JSON.parse(await readFile(join(partial, 'factory/credentials.json'))), credentials);
+  assert.deepEqual(JSON.parse(await readFile(join(partial, 'factory/credentials.json'), 'utf8')), credentials);
 });
 
 test('system validates before touching state and refuses orphan credentials, concurrent setup and Docker execution', async t => {
@@ -192,7 +194,7 @@ test('failure in a later line cleans already-started lines and preserves evidenc
   const worker = join(stateDir, 'lines/beta/workers/worker-1'); await mkdir(worker, { recursive: true, mode: 0o700 }); await createPrivate(join(worker, 'identity.json'), { invalid: 'preserve' });
   const failed = await launch(root, ['start', '--file', file, '--state-dir', stateDir, '--json']).done;
   assert.equal(failed.code, 1, failed.output); assert.equal(JSON.parse((await launch(root, ['status', '--state-dir', stateDir, '--json']).done).output).state, 'stopped');
-  assert.deepEqual(JSON.parse(await readFile(join(worker, 'identity.json'))), { invalid: 'preserve' });
+  assert.deepEqual(JSON.parse(await readFile(join(worker, 'identity.json'), 'utf8')), { invalid: 'preserve' });
   for (const line of value.productionLines) {
     await assert.rejects(lstat(join(stateDir, 'lines', line.id, 'runtime.lock')), { code: 'ENOENT' });
     await assert.rejects(fetch(`http://127.0.0.1:${line.orchestrator.port}/healthz`, { signal: AbortSignal.timeout(1000) }));
@@ -239,16 +241,16 @@ test('bootstrap validates all authenticated line capabilities before any Factory
     response.end(JSON.stringify({ schemaVersion: 1, project: 'alpha', execution: 'mock', context: 'unbound', intake: ['structured_task', 'requirement_ref'], providers: [], profiles: [], profilesTruncated: false,
       capacity: { kind: 'observed', observedAt: new Date().toISOString(), workers: { total: 0, online: 0, offline: 0, slotsTotal: 0, slotsBusy: 0, slotsAvailable: 0 } } }));
   });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  await new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(undefined)));
   t.after(() => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }));
-  const url = `http://127.0.0.1:${server.address().port}`;
+  const url = `http://127.0.0.1:${testListeningAddress(server).port}`;
   await assert.rejects(bootstrapSystem(value, { adminToken, credentials }, { factoryUrl: url, internalUrls: [url, url] }), /different project/);
   assert.deepEqual(received, ['Bearer ' + credentials.WERK_LINE_SYSTEM_1_TOKEN, 'Bearer ' + credentials.WERK_LINE_SYSTEM_2_TOKEN]);
   assert.equal(mutationRequests, 0);
 });
 
 
-function fakeSystemChild() { const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); return child; }
+function fakeSystemChild() { return Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter() }); }
 
 test('system readiness observer accepts a live ready event without waiting for process closure', async () => {
   const child = fakeSystemChild(), running = observeSystemChild(child); let time = 0, polls = 0;
@@ -266,9 +268,9 @@ test('system readiness observer fails promptly for spawn failure, signal exit an
     if (scenario === 'spawn') child.emit('error', Error('fixture-private-path-and-secret'));
     else { if (scenario === 'ready-then-exit') child.stdout.emit('data', '{"ok":true,"event":"ready"}\n'); child.emit('exit', scenario === 'signal' ? null : 1, scenario === 'signal' ? 'SIGTERM' : null); }
     await assert.rejects(waitForSystemReady(running, 'fixture readiness', { pause: async () => { polls++; } }), error => {
-      assert.match(error.message, /Exited before readiness/); assert.doesNotMatch(error.message, /fixture-private-path-and-secret/);
-      if (scenario === 'spawn') assert.match(error.message, /"spawnFailed":true/);
-      if (scenario === 'signal') assert.match(error.message, /"signal":"SIGTERM"/);
+      assert.match(testErrorMessage(error), /Exited before readiness/); assert.doesNotMatch(testErrorMessage(error), /fixture-private-path-and-secret/);
+      if (scenario === 'spawn') assert.match(testErrorMessage(error), /"spawnFailed":true/);
+      if (scenario === 'signal') assert.match(testErrorMessage(error), /"signal":"SIGTERM"/);
       return true;
     });
     assert.equal(polls, 0); assert.equal(running.closed, false);
@@ -285,8 +287,8 @@ test('system readiness timeout includes bounded phase evidence without raw secre
   await mkdir(join(stateDir, 'logs')); await writeFile(join(stateDir, 'logs/runtime.jsonl'), (event + '\n').repeat(1000));
   let time = 0, polls = 0;
   await assert.rejects(waitForSystemReady(running, 'fixture readiness', { timeout: 100, now: () => time, pause: async ms => { polls++; time += ms; }, diagnostics: () => startupDiagnostics(stateDir) }), error => {
-    assert.match(error.message, /Timed out waiting for readiness/); assert.match(error.message, /RUNTIME_FAILED/); assert.match(error.message, /"httpStatus":503/); assert.match(error.message, /"beta":\{"unavailable":true\}/);
-    assert.doesNotMatch(error.message, new RegExp(`${secret}|${privatePath}`)); assert.ok(error.message.length < 12000);
+    assert.match(testErrorMessage(error), /Timed out waiting for readiness/); assert.match(testErrorMessage(error), /RUNTIME_FAILED/); assert.match(testErrorMessage(error), /"httpStatus":503/); assert.match(testErrorMessage(error), /"beta":\{"unavailable":true\}/);
+    assert.doesNotMatch(testErrorMessage(error), new RegExp(`${secret}|${privatePath}`)); assert.ok(testErrorMessage(error).length < 12000);
     return true;
   });
   assert.equal(polls, 2); child.emit('close', 0, null); await running.done;

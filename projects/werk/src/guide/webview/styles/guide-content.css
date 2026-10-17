@@ -1,0 +1,132 @@
+.tree {
+  border: 1px solid var(--line);
+  padding: 24px;
+  margin: 24px 0;
+  border-radius: 12px;
+  background: var(--surface);
+}
+.tree ul {
+  list-style: none;
+  padding-left: 24px;
+  margin: 12px 0 0;
+  border-left: 1px solid var(--line);
+}
+.tree li {
+  margin: 12px 0;
+}
+.tree button {
+  text-align: left;
+}
+.tree small {
+  display: block;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.flow {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+.flow span {
+  color: var(--muted);
+}
+.explain {
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+  min-height: 170px;
+}
+.explain h3 {
+  margin-top: 0;
+}
+.explain p:last-child {
+  margin-bottom: 0;
+}
+.comparison {
+  overflow: auto;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  text-align: left;
+}
+th,
+td {
+  padding: 16px 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+th {
+  font-size: 14px;
+  color: var(--muted);
+}
+td:first-child {
+  font-weight: 600;
+  min-width: 145px;
+}
+td {
+  min-width: 170px;
+}
+.steps {
+  padding-left: 24px;
+}
+.steps li {
+  padding: 0 0 20px 8px;
+}
+.steps strong {
+  display: block;
+}
+pre {
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: auto;
+  font-size: 14px;
+  line-height: 1.65;
+  max-width: 100%;
+  tab-size: 2;
+}
+code {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.9em;
+  overflow-wrap: anywhere;
+}
+pre code {
+  font-size: inherit;
+  overflow-wrap: normal;
+}
+.switch {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 24px 0 16px;
+}
+.hint {
+  font-size: 14px;
+}
+details {
+  border-bottom: 1px solid var(--line);
+  padding: 12px 0;
+}
+summary {
+  cursor: pointer;
+  min-height: 44px;
+  padding: 8px 0;
+  font-weight: 600;
+}
+details p {
+  margin: 12px 0 16px;
+}
+footer {
+  max-width: 1280px;
+  margin: auto;
+  padding: 24px 32px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 14px;
+}
+[hidden] {
+  display: none !important;
+}

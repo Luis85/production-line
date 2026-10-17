@@ -15,6 +15,7 @@ const command = promisify(execFile);
 async function git(directory, ...args) {
   return (await command("git", ["-c", "core.hooksPath=/dev/null", "-C", directory, ...args])).stdout.trim();
 }
+/** @type {import('../../src/worker/application/model-contract.js').ModelResult} */
 const completed = {
   type: "completed",
   text: JSON.stringify({
@@ -46,6 +47,7 @@ async function fixture(t, options = {}) {
     repositories: { pollMs: 30000, items: repositories },
   });
   const prepared = [], requests = [];
+  /** @type {import('../../src/worker/infrastructure/workspace-services.js').WorkspaceProviderFactory} */
   const factory = connection => ({
     configuration: { id: connection.id, model: connection.model, instruction: "No external calls" },
     capabilities: modelCapabilities,
@@ -69,9 +71,9 @@ async function fixture(t, options = {}) {
   };
   let sessions, board;
   async function open() {
-    sessions = new WorkerSessions(state, settings, factory);
+    sessions = WorkerSessions(state, settings, factory);
     await sessions.init();
-    board = new LocalTaskboard(state, settings, sessions, factory, port);
+    board = LocalTaskboard(state, settings, sessions, factory, port);
     await board.init();
   }
   await open();
@@ -254,7 +256,9 @@ test("queue rejection does not create a worktree or poison retry of a durable fe
 });
 
 test("pending preparation reserves capacity and releases it after a failed admission", async t => {
-  let started, rejectPreparation;
+  /** @type {(reason?: unknown) => void} */
+  let rejectPreparation;
+  let started;
   const entered = new Promise(resolve => { started = resolve; });
   const f = await fixture(t, {
     prepare: () => new Promise((resolve, reject) => {
@@ -268,6 +272,7 @@ test("pending preparation reserves capacity and releases it after a failed admis
   await entered;
   assert.equal(f.board.view().tasks.length, 0);
   assert.equal(f.board.active, 1, "The Workspace chat gate must see the reserved queue slot.");
+  assert.ok(rejectPreparation);
   rejectPreparation(Error("Fixture preparation failure"));
   await rejected;
   assert.equal(f.board.active, 0);

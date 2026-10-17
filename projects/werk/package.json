@@ -1,6 +1,6 @@
 {
   "name": "software-fabrik",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -18,7 +18,7 @@
     "dev:fleet": "node scripts/fleet.mjs",
     "typecheck": "tsc --noEmit && vue-tsc --noEmit -p tsconfig.webviews.json",
     "dev:factory": "node scripts/factory-fleet.mjs",
-    "check": "npm run typecheck && npm test",
+    "check": "npm run check:fast && npm test",
     "audit:dependencies": "npm audit --audit-level=low",
     "release:package": "node scripts/release/package.mjs",
     "release:build": "npm run changelog:check && npm run build && npm run storybook:ci && npm run release:package && npm run release:storybook",
@@ -29,7 +29,16 @@
     "storybook:ci": "npm run storybook:build && npm run storybook:capture",
     "release:storybook": "node scripts/release/storybook-package.mjs",
     "changelog:check": "node scripts/release/changelog.mjs check",
-    "changelog:notes": "node scripts/release/changelog.mjs notes"
+    "changelog:notes": "node scripts/release/changelog.mjs notes",
+    "mutation": "node scripts/mutation/run.mjs",
+    "mutation:release": "node scripts/mutation/run.mjs --advisory",
+    "mutation:contracts": "node scripts/mutation/build.mjs && node --test \"scripts/mutation/suites/*.test.mjs\" \".mutation-build/tests/*.test.mjs\"",
+    "lint:oxlint": "oxlint --deny-warnings src scripts storybook .storybook tests werk.mjs stryker.config.mjs",
+    "analyze:fallow": "node scripts/quality/fallow.mjs",
+    "check:architecture": "node --test tests/architecture/architecture-boundaries.test.mjs tests/architecture/dependency-graph.test.mjs",
+    "check:fast": "npm run check:loc && npm run lint:oxlint && npm run analyze:fallow && npm run check:architecture && npm run typecheck && npm run typecheck:tests",
+    "check:loc": "node scripts/quality/loc.mjs",
+    "typecheck:tests": "node scripts/quality/typecheck-tests.mjs"
   },
   "devDependencies": {
     "@iconify-json/lucide": "1.2.143",
@@ -49,7 +58,13 @@
     "@storybook/addon-docs": "10.6.2",
     "storybook": "10.6.2",
     "playwright": "1.64.1",
-    "esbuild": "0.28.2"
+    "esbuild": "0.28.2",
+    "@stryker-mutator/core": "10.0.0",
+    "@stryker-mutator/tap-runner": "10.0.0",
+    "oxlint": "1.88.0",
+    "fallow": "3.33.1",
+    "@vue/compiler-sfc": "3.5.44",
+    "@vue/server-renderer": "3.5.44"
   },
   "dependencies": {
     "undici": "8.11.2",
@@ -57,6 +72,9 @@
     "marked": "17.0.6"
   },
   "overrides": {
-    "esbuild": "0.28.2"
+    "esbuild": "0.28.2",
+    "typed-rest-client": {
+      "qs": "6.16.1"
+    }
   }
 }

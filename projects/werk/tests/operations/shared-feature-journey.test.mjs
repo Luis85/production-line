@@ -1,3 +1,4 @@
+import { taskboardRuntime } from "../worker/runtime-fixtures.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
@@ -43,7 +44,9 @@ test('installed worker publishes one frozen shared feature from two clones and p
   }
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk shared journey ')));
   const remote = join(directory, 'origin.git'), author = join(directory, 'author'), checkout = join(directory, 'worker');
-  let workspace, journal, server, url, token;
+  /** @type {import('../../src/worker/dist/worker/status/workspace.js').WorkerWorkspace} */
+  let workspace;
+  let journal, server, url, token;
   async function stop() {
     const currentServer = server, currentWorkspace = workspace, currentJournal = journal;
     server = undefined; workspace = undefined; journal = undefined;
@@ -99,7 +102,7 @@ test('installed worker publishes one frozen shared feature from two clones and p
     journal = new SnapshotJournal(state, 'a'.repeat(64), 'b'.repeat(64)); await journal.init();
     workspace = new WorkerWorkspace({ stateDir: state, projectDir: checkout, features: { directory: join(checkout, 'features'), provider: 'openai-api', pollMs: 1000 }, pollMs: 1000, timeoutMs: 60000 }, journal, () => status);
     // The actual installed API adapter receives an in-memory HTTP fixture. It cannot make external model requests.
-    workspace.board.model = (connection, directory, _transport, options) => modelFor(connection, directory, fixtureTransport, options);
+    taskboardRuntime(workspace.board).model = (connection, directory, _transport, options) => modelFor(connection, directory, fixtureTransport, options);
     await workspace.init();
     server = await statusServer(() => status, '127.0.0.1', 0, undefined, workspace);
     url = `http://127.0.0.1:${server.address().port}`;
@@ -141,6 +144,7 @@ test('installed worker publishes one frozen shared feature from two clones and p
   advance('claim and admit frozen request');
   let intake = await api('/api/shared-intake', { action: 'sync' });
   const claimed = intake.requests.find(row => row.id === featureId); assert.ok(claimed, JSON.stringify(intake));
+  assert.ok(workspace);
   const task = workspace.board.detail(claimed.taskId);
   assert.equal(task.status, 'queued'); assert.equal(task.baseCommit, sourceCommit); assert.equal(task.repositoryId, 'shared');
   assert.equal(task.files[0].content, 'committed source\n'); assert.equal(task.criteria.length, 2);

@@ -46,7 +46,7 @@ export function modelFor(saved: ProviderConnection, directory: string, transport
   return model;
 }
 /** Keep Claude's MCP client wait aligned with the invocation budget; the worker still enforces every deadline. */
-export const claudeToolEnvironment = (bridge?: CliToolBridge): ProviderToolEnvironment => bridge ? { MCP_TOOL_TIMEOUT: String(bridge.toolTimeoutMs) } : {};
+export const claudeToolEnvironment = (bridge?: Pick<CliToolBridge, 'toolTimeoutMs'>): ProviderToolEnvironment => bridge ? { MCP_TOOL_TIMEOUT: String(bridge.toolTimeoutMs) } : {};
 /** Native tools stay disabled. Explicit MCP grants use separate hook, memory and configuration controls. */
 export function claudeArguments(model: string, promptFile: string, bridge?: CliToolBridge) {
   return ['--print', '--output-format', 'json', ...(!bridge ? ['--safe-mode'] : ['--settings', JSON.stringify({ disableAllHooks: true, autoMemoryEnabled: false, enabledPlugins: {} })]), '--restricted', '--tools', '', '--strict-mcp-config', '--mcp-config', bridge?.configFile ?? '{"mcpServers":{}}', ...(bridge ? ['--allowedTools', ...bridge.toolNames.map(name => 'mcp__werk__' + name)] : []), '--setting-sources', '', '--no-session-persistence', '--disable-slash-commands', ...(model ? ['--model', model] : []), '--system-prompt-file', promptFile];

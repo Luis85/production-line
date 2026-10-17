@@ -16,7 +16,7 @@ function source(contents) {
 
 test('bounds the encoded manifest, including JSON expansion of otherwise valid UTF-8 bytes', async () => {
     const contents = new Map([['docs/Feature.md', ready(['[[N0]]', '[[N1]]', '[[N2]]', '[[N3]]'])],
-        ...Array.from({ length: 4 }, (_, index) => [`docs/N${index}.md`, '\u0000'.repeat(500000)])]);
+        ...Array.from({ length: 4 }, (_, index) => /** @type {[string,string]} */ ([`docs/N${index}.md`, '\u0000'.repeat(500000)]))]);
     assert.ok([...contents.values()].reduce((bytes, value) => bytes + Buffer.byteLength(value), 0) < CONTEXT_LIMITS.totalBytes);
     await assert.rejects(resolveContext(source(contents), request), { code: 'too_large' });
 });
@@ -45,13 +45,16 @@ test('already cancelled resolution fails with an operational error without readi
 test('cancellation during a pending source read prevents subsequent reads and manifest publication', async () => {
     const controller = new AbortController();
     const context = source(new Map([['docs/Feature.md', ready(['[[Detail]]'])], ['docs/Detail.md', '# detail']]));
-    let release, started;
+    /** @type {(value?: unknown) => void} */
+    let release;
+    /** @type {(value?: unknown) => void} */
+    let started;
     const began = new Promise(resolve => { started = resolve; });
     const gate = new Promise(resolve => { release = resolve; });
     let reads = 0;
     context.read = async () => { reads++; started(); await gate; return Buffer.from(ready(['[[Detail]]'])); };
     const result = resolveContext(context, request, controller.signal);
-    await began; controller.abort(); release();
+    await began; controller.abort(); assert.ok(release); release();
     await assert.rejects(result, { code: 'unavailable' });
     assert.equal(reads, 1);
 });

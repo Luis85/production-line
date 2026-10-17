@@ -1,3 +1,4 @@
+import { testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
@@ -13,8 +14,8 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function ports() {
   const servers = [];
   try {
-    for (let n = 0; n < 3; n++) { const server = createServer(); servers.push(server); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); }
-    return servers.map(server => server.address().port);
+    for (let n = 0; n < 3; n++) { const server = createServer(); servers.push(server); await new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(undefined))); }
+    return servers.map(server => testListeningAddress(server).port);
   } finally { await Promise.all(servers.map(server => new Promise(resolve => server.close(resolve)))); }
 }
 

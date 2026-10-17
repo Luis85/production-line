@@ -25,7 +25,11 @@ test('configuration and direct runner reject multiple execution slots before own
 test('remote execution shares the session gate, retains waiting leases while paused, and records task evidence', { timeout: 30000 }, async t => {
   const directory = await mkdtemp(join(tmpdir(), 'werk-serial-runner-')), stop = new AbortController();
   const config = await configuration({ profiles: 'codex', 'poll-ms': '100', 'mock-ms': '1', 'retain-acknowledged-pairs': '0' });
-  let workspace, releaseChat, run, completed = false, executions = 0, renewals = 0, startupElapsed = 0;
+  /** @type {WorkerWorkspace | undefined} */
+  let workspace;
+  /** @type {(() => void) | undefined} */
+  let releaseChat;
+  let run, completed = false, executions = 0, renewals = 0, startupElapsed = 0;
   const now = () => Date.now() + startupElapsed;
   const originalInit = WorkerWorkspace.prototype.init;
   WorkerWorkspace.prototype.init = async function () {
@@ -35,7 +39,8 @@ test('remote execution shares the session gate, retains waiting leases while pau
     workspace = this; releaseChat = await this.executor.acquire('default', stop.signal);
   };
   t.after(async () => { stop.abort(); releaseChat?.(); await run; WorkerWorkspace.prototype.init = originalInit; await rm(directory, { recursive: true, force: true }); });
-  const task = { id: 'serial-task', project: 'alpha', title: 'Keep the actual request', criteria: ['Record the outcome'], wikilinks: [], provider: 'codex', priority: 1, status: 'running', attempt: 1, workerId: 'worker-one', lease: 'serial-lease', createdAt: now(), profile: config.profiles[0].id };
+  /** @type {import('../../src/shared/domain.js').Task} */
+  const task = { id: 'serial-task', project: 'alpha', title: 'Keep the actual request', criteria: ['Record the outcome'], wikilinks: [], provider: 'codex', priority: 1, status: 'running', attempt: 1, workerId: 'worker-one', lease: 'serial-lease', expiresAt: 0, createdAt: now(), profile: config.profiles[0].id };
   let claimed = false;
   const client = {
     async currentAssignments() { return claimed && !completed ? [task] : []; },
@@ -48,9 +53,11 @@ test('remote execution shares the session gate, retains waiting leases while pau
     async publishSnapshot() {}, async complete() { completed = true; }, async abandon() { completed = true; },
   };
   const gateway = { async register(profiles, policy) { assert.equal(policy.maxParallel, 1); return { id: 'worker-one', token: 'fixture-token', project: 'alpha' }; }, connect() { return client; } };
+  /** @type {import('../../src/shared/contracts.js').Adapter} */
   const adapter = { mode: 'mock', async run() { executions++; assert.equal(workspace.executor.current, 'remote-serial-task'); return { kind: 'simulated', summary: 'Actual simulation' }; } };
   run = runWorker({ ...config, stateDir: directory, url: 'http://orchestrator.invalid', enrollmentToken: 'fixture-enrollment', statusHost: '127.0.0.1', statusPort: 0 }, stop.signal, { gateway, adapter, now });
   await until(() => workspace && claimed); await until(() => renewals >= 3); assert.equal(executions, 0, 'another task owns the shared execution slot');
+  assert.ok(workspace); assert.equal(typeof releaseChat, 'function');
   await workspace.settings.update({ board: { paused: true } }); releaseChat(); releaseChat = undefined;
   const before = renewals; await until(() => renewals > before); assert.equal(executions, 0, 'paused remote task retains its lease without starting');
   await workspace.settings.update({ board: { paused: false } });
@@ -68,11 +75,14 @@ test('remote execution shares the session gate, retains waiting leases while pau
 test('failed initial lease renewal cancels the prepared session when the assignment disappears', { timeout: 20000 }, async t => {
   const directory = await mkdtemp(join(tmpdir(), 'werk-rejected-assignment-')), stop = new AbortController();
   const config = await configuration({ profiles: 'codex', 'poll-ms': '100' });
-  let workspace, run, claimed = false, polls = 0, executions = 0, heartbeats = 0;
+  /** @type {WorkerWorkspace | undefined} */
+  let workspace;
+  let run, claimed = false, polls = 0, executions = 0, heartbeats = 0;
   const originalInit = WorkerWorkspace.prototype.init;
   WorkerWorkspace.prototype.init = async function () { await originalInit.call(this); workspace = this; };
   t.after(async () => { stop.abort(); await run; WorkerWorkspace.prototype.init = originalInit; await rm(directory, { recursive: true, force: true }); });
-  const task = { id: 'withdrawn-task', project: 'alpha', title: 'Withdrawn before execution', criteria: ['Never execute'], wikilinks: [], provider: 'codex', priority: 1, status: 'running', attempt: 1, workerId: 'worker-one', lease: 'withdrawn-lease', createdAt: Date.now(), profile: config.profiles[0].id };
+  /** @type {import('../../src/shared/domain.js').Task} */
+  const task = { id: 'withdrawn-task', project: 'alpha', title: 'Withdrawn before execution', criteria: ['Never execute'], wikilinks: [], provider: 'codex', priority: 1, status: 'running', attempt: 1, workerId: 'worker-one', lease: 'withdrawn-lease', expiresAt: 0, createdAt: Date.now(), profile: config.profiles[0].id };
   const client = {
     async currentAssignments() { polls++; return []; },
     async claim() { if (claimed) return null; claimed = true; return { ...task, expiresAt: Date.now() + 60000 }; },
@@ -81,11 +91,13 @@ test('failed initial lease renewal cancels the prepared session when the assignm
     async complete() { throw Error('No execution should complete'); }, async abandon() {},
   };
   const gateway = { async register() { return { id: 'worker-one', token: 'fixture-token', project: 'alpha' }; }, connect() { return client; } };
+  /** @type {import('../../src/shared/contracts.js').Adapter} */
   const adapter = { mode: 'mock', async run() { executions++; return { kind: 'simulated', summary: 'Unexpected' }; } };
   run = runWorker({ ...config, stateDir: directory, url: 'http://orchestrator.invalid', enrollmentToken: 'fixture-enrollment', statusHost: '127.0.0.1', statusPort: 0 }, stop.signal, { gateway, adapter });
   await until(() => workspace?.sessions.view().records.find(record => record.id === 'remote-withdrawn-task')?.status === 'cancelled');
   const acceptedAtPoll = polls; await until(() => polls > acceptedAtPoll);
   assert.equal(heartbeats, 1); assert.equal(executions, 0);
+  assert.ok(workspace);
   assert.equal(workspace.executor.current, null);
   assert.equal(workspace.sessions.view().records.find(record => record.id === 'remote-withdrawn-task').status, 'cancelled');
   const saved = JSON.parse(await readFile(join(directory, 'sessions.json'), 'utf8'));
@@ -102,12 +114,14 @@ test('runner mirrors orchestrator assignments into the feature folder without lo
   const stop = new AbortController(); let run, claimed = false, completed = false, executions = 0;
   t.after(async () => { stop.abort(); await run; await rm(root, { recursive: true, force: true }); });
   const config = await configuration({ profiles: 'codex', 'poll-ms': '100' }, { features: { directory: featureDir, provider: 'openai-api', pollMs: 250 } });
+  /** @type {import('../../src/shared/domain.js').Task} */
   const task = { id: 'folder-assignment', project: 'alpha', title: 'Orchestrator feature', criteria: ['Keep one authoritative assignment'], wikilinks: [], provider: 'codex', priority: 1, status: 'running', attempt: 1, workerId: 'worker-one', lease: 'private-lease-fixture', expiresAt: Date.now() + 60000, createdAt: Date.now(), profile: config.profiles[0].id };
   const client = { async currentAssignments() { return claimed && !completed ? [task] : []; }, async claim() { if (claimed) return null; claimed = true; return task; }, async heartbeat() { task.expiresAt = Date.now() + 60000; return task; }, async publishSnapshot() {}, async complete() { completed = true; }, async abandon() { completed = true; } };
   const gateway = { async register() { return { id: 'worker-one', token: 'fixture-token', project: 'alpha' }; }, connect() { return client; } };
+  /** @type {import('../../src/shared/contracts.js').Adapter} */
   const adapter = { mode: 'mock', async run() { executions++; return { kind: 'simulated', summary: 'Remote fixture evidence' }; } };
   run = runWorker({ ...config, stateDir, url: 'http://orchestrator.invalid', enrollmentToken: 'fixture-enrollment', statusHost: '127.0.0.1', statusPort: 0 }, stop.signal, { gateway, adapter });
-  const path = join(featureDir, 'remote-folder-assignment.md'); let body;
+  const path = join(featureDir, 'remote-folder-assignment.md'); let body = '';
   await until(async () => { body = await readFile(path, 'utf8').catch(() => ''); return body.includes('status: completed'); });
   assert.equal(executions, 1); assert.match(body, /source: orchestrator/); assert.match(body, /Keep one authoritative assignment/); assert.ok(!body.includes(task.lease));
   const index = JSON.parse(await readFile(join(stateDir, 'feature-index.json'), 'utf8')); assert.equal(index.records.length, 1); assert.equal(index.records[0].taskId, task.id);

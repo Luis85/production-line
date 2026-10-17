@@ -17,7 +17,7 @@ async function reserveFixturePorts(count) {
       // used by Linux/macOS/Windows CI. Reserve the whole batch before setup.
       const port = randomInt(12000, 29000), server = createServer();
       try {
-        await new Promise((resolve, reject) => { server.once('error', reject); server.listen({ host: '127.0.0.1', port, exclusive: true }, resolve); });
+        await new Promise((resolve, reject) => { server.once('error', reject); server.listen({ host: '127.0.0.1', port, exclusive: true }, () => resolve(undefined)); });
         listeners.push(server); ports.push(port);
       } catch (error) { if (!['EADDRINUSE', 'EACCES'].includes(error.code)) throw error; }
     }
@@ -83,10 +83,10 @@ test('backup refuses symlinks, overlapping locations and existing destination', 
   assert.equal(await readFile(join(root, 'existing/sentinel'), 'utf8'), 'keep');
 }));
 test('disk pressure diagnostics are actionable without revealing credential content', () => fixture(async ({ state }) => {
-  const check = await diskCheck(state, async () => ({ bavail: 1n, bsize: 4096n, blocks: 100n }));
+  const check = await diskCheck(state, async () => ({ bavail: 1n, bsize: 4096n, blocks: 100n, type: 0n, bfree: 1n, files: 100n, ffree: 1n }));
   assert.equal(check.ok, false); assert.match(check.message, /Do not delete databases/);
   const output = []; assert.equal(await main(['diagnose', '--state-dir', state, '--json'], { stdout: line => output.push(line) }), 0);
-  const credentials = JSON.parse(await readFile(join(state, 'credentials.json')));
+  const credentials = JSON.parse(await readFile(join(state, 'credentials.json'), 'utf8'));
   assert.equal(output.join('').includes(credentials.WERK_ADMIN_TOKEN), false);
 }));
 
@@ -129,7 +129,7 @@ test('canonical ancestor aliases retain containment checks and support platform 
 
 test('backup still refuses a configured port owned by another listener and preserves state', () => fixture(async ({ root, state, ports }) => {
   const listener = createServer();
-  await new Promise((resolve, reject) => { listener.once('error', reject); listener.listen(ports[0], '127.0.0.1', resolve); });
+  await new Promise((resolve, reject) => { listener.once('error', reject); listener.listen(ports[0], '127.0.0.1', () => resolve(undefined)); });
   const before = await readFile(join(state, 'credentials.json'));
   try {
     await assert.rejects(backupState(state, join(root, 'refused')), /Port [0-9]+ is unavailable/);

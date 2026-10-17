@@ -77,6 +77,7 @@ async function fixture(t, features = false) {
       git(repository, "remote", "set-url", "origin", "ssh://example.invalid/project.git");
     },
     start() {
+      /** @type {NodeJS.ProcessEnv} */
       const env = { ...process.env, WERK_URL: "", WERK_ENROLLMENT_TOKEN: "" };
       delete env.GIT_SSH_COMMAND;
       delete env.GIT_SSH;

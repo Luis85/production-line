@@ -1,3 +1,4 @@
+import { testErrorCode, testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, rm, stat, symlink, lstat } from 'node:fs/promises';
@@ -27,11 +28,12 @@ test('omitted local access configuration creates one private token and preserves
 test('invalid explicit access tokens reject before creating or replacing token state and hide supplied values', async t => {
   const f = await fixture(t), stored = 'a'.repeat(64);
   for (const invalid of ['', 'PRIVATE_INVALID_TOKEN', 'A'.repeat(64), 'a'.repeat(63), stored + '\n', 42]) {
-    await assert.rejects(loadWebviewToken(f.directory, invalid), error => error.code === 'invalid_input' && !error.message.includes('PRIVATE_INVALID_TOKEN'));
+    // @ts-expect-error Deliberately non-string token verifies runtime validation.
+    await assert.rejects(loadWebviewToken(f.directory, invalid), error => testErrorCode(error) === 'invalid_input' && !testErrorMessage(error).includes('PRIVATE_INVALID_TOKEN'));
     await assert.rejects(lstat(f.path), { code: 'ENOENT' });
   }
   await writeFile(f.path, stored + '\n');
-  await assert.rejects(loadWebviewToken(f.directory, 'PRIVATE_INVALID_TOKEN'), error => error.code === 'invalid_input');
+  await assert.rejects(loadWebviewToken(f.directory, 'PRIVATE_INVALID_TOKEN'), error => testErrorCode(error) === 'invalid_input');
   assert.equal(await readFile(f.path, 'utf8'), stored + '\n');
 });
 

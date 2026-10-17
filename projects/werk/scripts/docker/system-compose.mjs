@@ -5,6 +5,7 @@ const literal = value => String(value).replaceAll('$', () => '$$');
 export function systemProject(definition, identity) {
   return 'werk-system-' + createHash('sha256').update(definition.id + '\0' + identity).digest('hex').slice(0, 16);
 }
+/** @param {ReturnType<typeof import('../system/definition.mjs').validateDefinition>} definition @param {{hostState: string, image: string, uid?: string, gid?: string, volume?: string}} options */
 export function composeSystem(definition, { hostState, image, uid = '1000', gid = '1000', volume }) {
   if (definition.environment !== 'docker') throw Error('Docker launcher requires environment docker');
   const mount = (relative, target, readOnly = false) => volume

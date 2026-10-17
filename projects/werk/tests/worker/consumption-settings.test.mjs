@@ -1,3 +1,5 @@
+import { workerStatus } from '../helpers/worker-status.mjs';
+import { testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import { cleanup } from './fixture-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -9,6 +11,7 @@ import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.j
 import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
 import { statusServer } from '../../src/worker/dist/worker/status/server.js';
 const policy = { enabled: true, period: 'daily', allowance: 1000, workerPercent: 50, perRunReservation: 100 };
+/** @type {import('../../src/worker/application/run-evidence.js').ProviderUsage} */
 const usage = { inputTokens: 350, outputTokens: 150, cacheReadTokens: 100, cacheWriteTokens: null, providerReportedCostUsd: null, source: 'provider_reported', reason: null };
 async function directory(t) { const path = await mkdtemp(join(tmpdir(), 'werk-consumption-settings-')); cleanup(t, () => rm(path, { recursive: true, force: true })); return path; }
 
@@ -42,11 +45,11 @@ test('consumption policy saves atomically, persists and rejects invalid or concu
 
 test('authenticated budget API retains queued work, resumes after a policy change and preserves spend across restart', async t => {
   const root = await directory(t), journal = new SnapshotJournal(root, 'a'.repeat(64), 'b'.repeat(64)); await journal.init();
-  const current = { activeTasks: [], queuedTasks: [] }, config = { stateDir: root, projectDir: root, pollMs: 1000, timeoutMs: 60000 };
+  const current = workerStatus({ activeTasks: [], queuedTasks: [] }), config = { stateDir: root, projectDir: root, pollMs: 1000, timeoutMs: 60000 };
   const workspace = new WorkerWorkspace(config, journal, () => current); await workspace.init();
   const server = await statusServer(() => current, '127.0.0.1', 0, undefined, workspace);
   cleanup(t, async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await workspace.close(); journal.close(); });
-  const base = 'http://127.0.0.1:' + server.address().port, token = (await readFile(join(root, 'webview-token'), 'utf8')).trim();
+  const base = 'http://127.0.0.1:' + testListeningAddress(server).port, token = (await readFile(join(root, 'webview-token'), 'utf8')).trim();
   const headers = { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' };
   const post = body => fetch(base + '/api/settings', { method: 'POST', headers, body: JSON.stringify(body) });
   const denied = await fetch(base + '/api/consumption'); assert.equal(denied.status, 401); await denied.arrayBuffer();

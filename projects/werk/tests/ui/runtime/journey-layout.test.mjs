@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { frontend } from "../helpers/frontend-loader.mjs";
-import { line, task, deferred } from "../helpers/runtime-harness.mjs";
+import { line, deferred } from "../helpers/runtime-harness.mjs";
 const { deriveMetrics } = await frontend("src/orchestrator/webview/metrics.ts");
 const row = (taskId, seq, phase = "before", durationMs = null) => ({
   seq,

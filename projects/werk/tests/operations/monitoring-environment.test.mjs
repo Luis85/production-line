@@ -1,10 +1,11 @@
+import { testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runtimeEnvironment } from '../../scripts/runtime/supervisor.mjs';
 test('native child environment forwards bounded alert settings without forwarding arbitrary Werk secrets', () => {
   const source = { PATH: '/bin', WERK_ALERT_QUEUE_AGE_SECONDS: '42', WERK_ALERT_OUTBOX_PENDING: '100', WERK_ADMIN_TOKEN: 'secret', WERK_ALERT_SECRET: 'secret', NODE_OPTIONS: '--inspect' };
   assert.deepEqual(runtimeEnvironment(source), { PATH: '/bin', WERK_ALERT_QUEUE_AGE_SECONDS: '42', WERK_ALERT_OUTBOX_PENDING: '100' });
-  for (const value of ['0', '-1', '1.5', 'SECRET_CONFIG', '8640001', '01']) assert.throws(() => runtimeEnvironment({ WERK_ALERT_QUEUE_AGE_SECONDS: value }), error => !error.message.includes('SECRET_CONFIG'));
+  for (const value of ['0', '-1', '1.5', 'SECRET_CONFIG', '8640001', '01']) assert.throws(() => runtimeEnvironment({ WERK_ALERT_QUEUE_AGE_SECONDS: value }), error => !testErrorMessage(error).includes('SECRET_CONFIG'));
 });
 
 test('worker Git context survives both supervisor hops without provider secrets or Git command injection', () => {

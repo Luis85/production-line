@@ -2,6 +2,7 @@ import type { DatabaseSync, SQLOutputValue } from 'node:sqlite';
 import { identifier, object } from '../../shared/contracts.js';
 import type { Task } from '../../shared/contracts.js';
 import { DomainError } from '../../shared/errors.js';
+import { publicWorkerPolicy } from '../../shared/protocol.js';
 import type { PageQuery, PaginationMetadata, TaskEvent, WorkerSummary } from '../../shared/protocol.js';
 
 type Row = Record<string, SQLOutputValue>;
@@ -80,7 +81,7 @@ export function workerPage(db: DatabaseSync, query: PageQuery, now: number, ttl:
     .iterate(watermark, cursor?.position ?? Number.MAX_SAFE_INTEGER, limit + 1);
   const { items, ...metadata } = collectPage<WorkerSummary>(rows, limit, row => ({
     id: String(row.id), project: String(row.project), profiles: JSON.parse(String(row.profiles)),
-    seen: Number(row.seen), config: JSON.parse(String(row.config)), online: now - Number(row.seen) < ttl,
+    seen: Number(row.seen), config: publicWorkerPolicy(JSON.parse(String(row.config))), online: now - Number(row.seen) < ttl,
   }), row => ({ version: 1, kind: 'workers', watermark, position: Number(row.position) }));
   return { workers: items, ...metadata };
 }

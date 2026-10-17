@@ -1,3 +1,5 @@
+import { testErrorOutput } from '../helpers/process-errors.mjs';
+import { testErrorCode, testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -12,9 +14,9 @@ test('worker interaction CLI transports exact targets and numeric guards with me
   const directory=await mkdtemp(join(tmpdir(),'werk-interaction-cli-wire-')),tokenPath=join(directory,'token');
   await writeFile(tokenPath,'labelled-local-transport-fixture-token',{mode:0o600});
   const calls=[];const server=createServer(async(req,res)=>{let raw='';for await(const chunk of req)raw+=chunk;calls.push({path:req.url,method:req.method,key:req.headers['idempotency-key'],body:raw?JSON.parse(raw):undefined});res.setHeader('content-type','application/json');res.end(JSON.stringify(req.url==='/api/capabilities'?{schemaVersion:1,continuation:'worker_context_replay',nativeResume:false}:{schemaVersion:1,sessionId:'session-a',revision:2,phase:'waiting_input',pending:{id:'pending-a',kind:'question',message:'Choose a layout.'},latestTurn:{id:'turn-a'},turns:[],totalTurns:1}));});
-  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',() => resolve(undefined)));
   t.after(async()=>{await new Promise(resolve=>server.close(resolve));await rm(directory,{recursive:true,force:true});});
-  const base=`http://127.0.0.1:${server.address().port}`;
+  const base=`http://127.0.0.1:${testListeningAddress(server).port}`;
   const command=async(...args)=>exec(process.execPath,['--input-type=module','-e',`import { main } from ${JSON.stringify(entry)}; await main('worker',process.argv.slice(1));`,...args,'--url',base,'--token-file',tokenPath,'--state-dir',join(directory,'state')],{timeout:15000});
   assert.equal(JSON.parse((await command('capabilities')).stdout).nativeResume,false);assert.equal(calls[0].path,'/api/capabilities');
   await command('interaction','get','--id','session-a');assert.deepEqual(calls.at(-1).body,{action:'get',sessionId:'session-a'});
@@ -24,6 +26,6 @@ test('worker interaction CLI transports exact targets and numeric guards with me
   await command('task','resume','--id','session-a','--turn-id','turn-a','--if-match','2','--key','resume-op-a','--file',file);
   assert.equal(calls.at(-1).path,'/api/interactions');assert.deepEqual(calls.at(-1).body,{action:'resume',sessionId:'session-a',turnId:'turn-a',expectedRevision:2,operationId:'resume-op-a',message:'Continue safely.'});
   const count=calls.length;
-  await assert.rejects(command('interaction','answer','--id','session-a','--question-id','pending-a','--if-match','not-a-number','--key','bad-op','--message','Text'),error=>error.code===2&&/numeric interaction revision/.test(error.stderr)&&error.stdout==='');
+  await assert.rejects(command('interaction','answer','--id','session-a','--question-id','pending-a','--if-match','not-a-number','--key','bad-op','--message','Text'),error=>testErrorCode(error)===2&&/numeric interaction revision/.test(testErrorOutput(error, 'stderr'))&&testErrorOutput(error, 'stdout')==='');
   assert.equal(calls.length,count);
 });

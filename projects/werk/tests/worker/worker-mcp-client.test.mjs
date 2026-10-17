@@ -1,3 +1,5 @@
+import { testErrorField } from '../helpers/typed-boundaries.mjs';
+import { testErrorMessage, testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -11,6 +13,7 @@ import { launchProcess, terminateProcess } from '../../src/worker/dist/shared/pr
 
 const tool = { name: 'echo', description: 'Read a fixture value.', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false } };
 const initialize = { protocolVersion: '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'fixture', version: '1' } };
+/** @type {Extract<import('../../src/worker/infrastructure/tool-mcp.js').McpTransportConfiguration, {transport: 'http'}>} */
 const config = { transport: 'http', url: 'https://fixture.invalid/mcp', headers: { Authorization: 'Bearer secret-value' } };
 const rejectsWith = (operation, reason) => assert.rejects(operation, error => error instanceof McpClientError && error.reason === reason);
 const json = (id, result, headers = {}) => new Response(JSON.stringify({ jsonrpc: '2.0', id, result }), { headers: { 'content-type': 'application/json', ...headers } });
@@ -37,6 +40,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
  if(m.method==='tools/list')return reply({tools:[${JSON.stringify(tool)}]});
  if(m.method==='tools/call')return reply({content:[{type:'text',text:JSON.stringify({text:m.params.arguments.text,secret:process.env.FIXTURE_TOKEN||null,worker:process.env.WERK_ADMIN_TOKEN||null,home:process.env.HOME||null,cwd:process.cwd()})}],isError:false});
 });`;
+/** @type {Extract<import('../../src/worker/infrastructure/tool-mcp.js').McpTransportConfiguration, {transport: 'stdio'}>} */
 const stdio = { transport: 'stdio', executable: process.execPath, args: ['-e', stdioScript], env: { FIXTURE_TOKEN: 'private-mcp-token' } };
 
 test('stdio initializes, discovers, calls only a grant and uses a contained minimal environment', { timeout: 30000 }, async t => {
@@ -60,7 +64,7 @@ test('stdio detects malformed frames, excessive stderr, and spawn failures witho
   await rejectsWith(discoverMcpTools({ ...stdio, args: ['-e', "process.stdout.write('not-json\\n');setInterval(()=>{},1000)"] }), 'protocol');
   await rejectsWith(discoverMcpTools({ ...stdio, args: ['-e', "process.stderr.write('x'.repeat(1100000));setInterval(()=>{},1000)"] }), 'output_limit');
   await assert.rejects(discoverMcpTools({ ...stdio, executable: join(tmpdir(), 'missing-mcp-executable') }), error => {
-    assert.equal(error.reason, 'unavailable'); assert.ok(!error.message.includes('private-mcp-token')); return true;
+    assert.equal(testErrorField(error, 'reason'), 'unavailable'); assert.ok(!testErrorMessage(error).includes('private-mcp-token')); return true;
   });
 });
 
@@ -166,7 +170,7 @@ test('HTTP cancellation/deadlines and errors never expose credentials or replay 
     await rejectsWith(running, reason); assert.equal(calls, 1);
   }
   const fixture = transport(message => message.method === 'tools/list' ? json(message.id, { tools: [tool] }) : new Response(JSON.stringify({ jsonrpc: '2.0', id: message.id, error: { code: -32603, message: 'secret-value' } }), { headers: { 'content-type': 'application/json' } }));
-  await assert.rejects(callMcpTool(config, 'echo', {}, [tool], { dependencies: fixture }), error => { assert.equal(error.reason, 'unavailable'); assert.ok(!error.message.includes('secret-value')); return true; });
+  await assert.rejects(callMcpTool(config, 'echo', {}, [tool], { dependencies: fixture }), error => { assert.equal(testErrorField(error, 'reason'), 'unavailable'); assert.ok(!testErrorMessage(error).includes('secret-value')); return true; });
   assert.equal(fixture.calls.filter(call => call.message?.method === 'tools/call').length, 1);
 });
 
@@ -176,9 +180,10 @@ test('operator configuration refuses remote plaintext, URL credentials and injec
   for (const name of ['NODE_OPTIONS', 'LD_PRELOAD', 'WERK_ADMIN_TOKEN', 'PATH']) await rejectsWith(discoverMcpTools({ ...stdio, env: { [name]: 'value' } }, { dependencies }), 'configuration');
   await rejectsWith(discoverMcpTools(config, { dependencies, signal: AbortSignal.abort() }), 'cancelled');
   assert.equal(calls, 0);
-  assert.deepEqual(mcpTransportConfiguration({ transport: 'stdio', command: '/operator/server', args: ['serve'], secretEnv: 'GITHUB_TOKEN', secret: 'private' }), { transport: 'stdio', executable: '/operator/server', args: ['serve'], env: { GITHUB_TOKEN: 'private' } });
-  assert.deepEqual(mcpTransportConfiguration({ transport: 'stdio', command: '/operator/server', args: [], secretEnv: '', secret: '' }).env, {});
-  assert.deepEqual(mcpTransportConfiguration({ transport: 'stdio', command: '/operator/server', args: [], secretEnv: '', secret: 'private' }).env, {}, 'a secret is never sent to an implicit default variable');
+  const identity = { id: 'fixture', name: 'Fixture', enabled: true, url: '', allowedTools: [], discoveredTools: [] };
+  assert.deepEqual(mcpTransportConfiguration({ ...identity, transport: 'stdio', command: '/operator/server', args: ['serve'], secretEnv: 'GITHUB_TOKEN', secret: 'private' }), { transport: 'stdio', executable: '/operator/server', args: ['serve'], env: { GITHUB_TOKEN: 'private' } });
+  assert.deepEqual(mcpTransportConfiguration({ ...identity, transport: 'stdio', command: '/operator/server', args: [], secretEnv: '', secret: '' }), { transport: 'stdio', executable: '/operator/server', args: [], env: {} });
+  assert.deepEqual(mcpTransportConfiguration({ ...identity, transport: 'stdio', command: '/operator/server', args: [], secretEnv: '', secret: 'private' }), { transport: 'stdio', executable: '/operator/server', args: [], env: {} }, 'a secret is never sent to an implicit default variable');
 });
 
 test('real loopback Streamable HTTP handshake and redirect refusal', { timeout: 10000 }, async t => {
@@ -196,7 +201,7 @@ test('real loopback Streamable HTTP handshake and redirect refusal', { timeout: 
   });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); });
-  const url = `http://127.0.0.1:${server.address().port}`;
+  const url = `http://127.0.0.1:${testListeningAddress(server).port}`;
   assert.deepEqual(await discoverMcpTools({ ...config, url: url + '/mcp' }), [tool]);
   await rejectsWith(discoverMcpTools({ ...config, url: url + '/redirect' }), 'unavailable');
   assert.equal(redirects, 1); assert.equal(calls, 3);

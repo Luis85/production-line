@@ -41,7 +41,7 @@ test('concurrent submission is suppressed and the sent command is immutable', as
 for (const status of [400, 409, 500]) test(`admission failure ${status} retains HTTP status without inventing a selected request`, async t => {
   const f = await fixture(t);
   globalThis.fetch = async () => Response.json({ error: 'Admission could not be confirmed' }, { status });
-  await assert.rejects(f.createFeatureRequest(command()), error => error.status === status);
+  await assert.rejects(f.createFeatureRequest(command()), error => error instanceof Error && 'status' in error && error.status === status);
   assert.equal(f.state.sessions.selected, 'previous'); assert.equal(f.state.draft, 'An unrelated follow-up'); assert.equal(f.state.workspaceBusy, false);
 });
 test('unreadable success cannot be mistaken for an admitted request', async t => {

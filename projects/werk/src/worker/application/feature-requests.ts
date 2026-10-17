@@ -1,7 +1,8 @@
+import { SerializedOperations } from '../../shared/serialized-operations.js';
 import type { WorkerRequest, RequestPhase } from './request-gates.js';
 import type { InteractionView } from './interactions.js';
 import type { RunSnapshot, ProviderUsage } from './run-evidence.js';
-import { manageFeature, type FeatureDocumentPort } from './feature-management.js';
+import { manageFeature, type FeatureDocumentPort, type FeatureActionResult } from './feature-management.js';
 import { DomainError } from '../../shared/errors.js';
 import { randomUUID, createHash } from 'node:crypto';
 
@@ -51,16 +52,15 @@ export class FeatureRequests {
   private index: FeatureIndex = { version: 1, owner: '', records: [] };
   private observed = new Map<string, string>();
   private errors: { file: string; message: string }[] = [];
-  private work = Promise.resolve(); private scanning?: Promise<void>; private stopped = false;
+  private readonly work = new SerializedOperations(); private scanning?: Promise<void>; private stopped = false;
   private initialized = false; private lastScan = 0; private lastSaved = ''; private fault: string | null = null;
   private folder: FeatureFolderPort; private queue: FeatureQueuePort; private pollMs: number; private canAdmit: () => boolean;
   constructor(folder: FeatureFolderPort, queue: FeatureQueuePort, pollMs = 1000, canAdmit = () => true) { this.folder = folder; this.queue = queue; this.pollMs = pollMs; this.canAdmit = canAdmit; }
   async init() { this.index = await this.folder.load(); this.lastSaved = JSON.stringify(this.index); await this.folder.open(this.index.owner); this.initialized = true; }
   view() { return { enabled: true, directory: this.folder.directory, pollMs: this.pollMs, error: this.fault, errors: structuredClone(this.errors), records: this.index.records.map(({ input: _input, ...record }) => ({ ...record })) }; }
   async list() { await this.tick(true); return { ...this.view(), files: (await this.folder.scan()).map(({ input, ...file }) => ({ ...file, title: input?.title, mode: input?.mode, provider: input?.provider, archived: this.index.records.find(item => item.name === file.name)?.archived ?? false })) }; }
-  async action(input: unknown) {
-    let result: unknown;
-    await this.exclusive(async () => {
+  async action(input: unknown): Promise<FeatureActionResult> {
+    return this.exclusive(async () => {
       if (this.stopped) throw new DomainError('unavailable', 'Worker is stopping.');
       const body = input as { name: string; action: string };
       const readOnly = ['get', 'validate', 'result'].includes(body?.action);
@@ -75,14 +75,14 @@ export class FeatureRequests {
         const record = this.index.records.find(item => item.name === body.name);
         if (record?.submitted) { await this.synchronizeExecution(record); await this.persist(); }
       }
-      result = await manageFeature(input, { documents: this.folder.documents, index: this.index, queue: this.queue, persist: () => this.persist() });
+      let result = await manageFeature(input, { documents: this.folder.documents, index: this.index, queue: this.queue, persist: () => this.persist() });
       if (!readOnly) await this.reconcile(false);
       if (body.action !== 'delete' && !['get', 'validate', 'result'].includes(body.action)) result = { ...await this.folder.documents.read(body.name), record: this.index.records.find(item => item.name === body.name) ?? null };
+      return result;
     });
-    return result;
   }
-  private exclusive(action: () => Promise<void>) {
-    const operation = this.work.catch(() => {}).then(action); this.work = operation; return operation;
+  private exclusive<T>(action: () => Promise<T>) {
+    return this.work.run(action);
   }
   private async persist() { const serialized = JSON.stringify(this.index); if (serialized !== this.lastSaved) { await this.folder.save(this.index); this.lastSaved = serialized; } }
   private change(record: FeatureRecord, status: string, error?: string) {
@@ -199,6 +199,6 @@ export class FeatureRequests {
       await this.folder.createRemote(record, task.title, `# ${task.title}\n\n## Acceptance criteria\n\n${task.criteria.map(value => '- ' + value).join('\n')}\n${task.requirementRef ? '\n## Requirement\n\n' + task.requirementRef + '\n' : ''}\nThis request is assigned by the orchestrator. Its lease and routing remain orchestrator-owned.\n`);
     });
   }
-  async stopIntake() { this.stopped = true; await this.work.catch(() => {}); }
+  async stopIntake() { this.stopped = true; await this.work.drain(); }
   async close() { await this.stopIntake(); if (!this.initialized) return; try { await this.reconcile(false); } finally { this.initialized = false; await this.folder.close(); } }
 }

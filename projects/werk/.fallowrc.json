@@ -1,0 +1,118 @@
+{
+  "minimumVersion": "3.33.1",
+  "entry": [
+    "werk.mjs",
+    "src/{worker,factory,orchestrator}/cli.ts",
+    "src/worker/authoring/cli.ts",
+    "src/**/webview/main.ts",
+    "src/worker/webview/status/main.ts",
+    "src/orchestrator/webview/concept/main.ts",
+    "scripts/docker/assemble-runtime.mjs",
+    "scripts/docker/operator.mjs",
+    "scripts/docker/service.mjs",
+    "scripts/docker/system-service.mjs",
+    "scripts/docker/system.mjs",
+    "scripts/init-env.mjs",
+    "scripts/init-factory-env.mjs",
+    "scripts/release/check-docker-git.mjs",
+    "scripts/release/cloud-init-guest.mjs",
+    "scripts/release/cloud-init-smoke.mjs",
+    "scripts/release/docker-smoke.mjs",
+    "scripts/release/docker-system-smoke.mjs",
+    "scripts/release/install-smoke.mjs",
+    "scripts/release/project-worker-native-smoke.mjs",
+    "scripts/release/project-worker-smoke.mjs",
+    "scripts/release/smoke.mjs",
+    "scripts/release/system-smoke.mjs",
+    "scripts/runtime/child.mjs",
+    "scripts/runtime/portable/npm-entry.mjs",
+    "scripts/system/child.mjs",
+    "tests/ui/browser/repository-intake.mjs",
+    "tests/ui/browser/visual-navigation.mjs",
+    "tests/worker/webview-smoke.mjs",
+    "tests/**/*.test.{mjs,cjs}"
+  ],
+  "ignorePatterns": [
+    "bin/apps/**",
+    "storybook-static/**",
+    ".mutation-build/**",
+    ".stryker-tmp/**",
+    "reports/**",
+    "release/**",
+    "work/**",
+    "docs/reports/werk-unified-views.html",
+    "docs/reports/worker-view-atlas.html",
+    "src/{factory,orchestrator,worker}/.build-*/**"
+  ],
+  "boundaries": {
+    "zones": [
+      {
+        "name": "factory",
+        "patterns": [
+          "src/factory/**"
+        ]
+      },
+      {
+        "name": "orchestrator",
+        "patterns": [
+          "src/orchestrator/**"
+        ]
+      },
+      {
+        "name": "worker",
+        "patterns": [
+          "src/worker/**"
+        ]
+      },
+      {
+        "name": "shared",
+        "patterns": [
+          "src/shared/**"
+        ]
+      }
+    ],
+    "rules": [
+      {
+        "from": "factory",
+        "allow": [
+          "factory",
+          "shared"
+        ]
+      },
+      {
+        "from": "orchestrator",
+        "allow": [
+          "orchestrator",
+          "shared"
+        ]
+      },
+      {
+        "from": "worker",
+        "allow": [
+          "worker",
+          "shared"
+        ]
+      },
+      {
+        "from": "shared",
+        "allow": [
+          "shared"
+        ]
+      }
+    ]
+  },
+  "$schema": "./node_modules/fallow/schema.json",
+  "cache": {
+    "dir": ".fallow/cache",
+    "maxSizeMb": 64
+  },
+  "failOnParseError": true,
+  "ignoreUnresolvedImports": [
+    "../../src/{factory,orchestrator,worker}/dist/**",
+    "../../../src/{factory,orchestrator,worker}/dist/**",
+    "../../../.mutation-build/**"
+  ],
+  "rules": {
+    "policy-violation": "off"
+  }
+}

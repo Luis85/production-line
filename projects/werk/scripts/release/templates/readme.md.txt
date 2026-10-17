@@ -107,12 +107,13 @@ For model questions, escalation and stopped requests, use the
 [answer and resume guide](docs/how-to/answer-and-resume-worker.md).
 The [interaction contract](docs/reference/model-interaction.md) describes durable
 checkpoints, provider capabilities and replayable lifecycle events.
-Configure built-in tools and MCP connections in **Dashboard → Tool access**;
+Configure built-in tools and MCP connections in **Settings → Tools & MCP**;
 see [manage model tools](docs/how-to/manage-model-tools.md).
 
-For illustrated component stories, complete system journeys and desktop/mobile
-screenshots, download the matching `werk-storybook-<version>.zip` and
-`STORYBOOK-SHA256SUMS` from the same GitHub release. After verification and
-extraction, open `storymap/index.html`. The
+For the system handbook, frontend reference and illustrated journeys, download
+the matching `werk-storybook-<version>.zip` and `STORYBOOK-SHA256SUMS` from the
+same GitHub release. After verification and extraction, open `handbook/index.html`
+for setup, team workflows and operation, or `storymap/index.html` for the component
+API and desktop/mobile screenshot evidence. The
 [Storybook release contract](docs/reference/releases.md#illustrated-storybook-and-storymaps)
 explains provenance, simulation fixtures and interactive browsing.

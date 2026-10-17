@@ -1,3 +1,4 @@
+import { testErrorCode, testListeningAddress } from '../../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -19,7 +20,7 @@ test('one production line retains independent repository selectors through HTTP 
   let app = await startServer(options);
   t.after(async () => { await app?.close(); await rm(directory, { recursive: true, force: true }); });
   const request = async (path, body, token = admin, key) => {
-    const response = await fetch(`http://127.0.0.1:${app.server.address().port}${path}`, { method: body === undefined ? 'GET' : 'POST', headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(key ? { 'Idempotency-Key': key } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    const response = await fetch(`http://127.0.0.1:${testListeningAddress(app.server).port}${path}`, { method: body === undefined ? 'GET' : 'POST', headers: { Authorization: `Bearer ${token}`, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(key ? { 'Idempotency-Key': key } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
     return { status: response.status, body: await response.json() };
   };
   const created = [];
@@ -66,7 +67,7 @@ test('bound requirement intake preserves repository selection without retargetin
     const task = await app.createTask(bound, 'bound');
     assert.equal(task.repository, 'backend'); assert.equal(task.context.commit, manifest.commit); assert.equal(store.context(task.id).repository, '/configured/context-repository');
     assert.deepEqual(await app.createTask(bound, 'bound'), task); assert.equal(resolutions, 1);
-    await assert.rejects(app.createTask({ ...bound, repository: 'frontend' }, 'bound'), error => error.code === 'conflict');
+    await assert.rejects(app.createTask({ ...bound, repository: 'frontend' }, 'bound'), error => testErrorCode(error) === 'conflict');
     const second = await app.createTask({ ...bound, repository: 'frontend' }, 'second'); assert.equal(second.repository, 'frontend'); assert.equal(second.context.sha256, task.context.sha256);
   } finally { store.close(); }
 });

@@ -1,3 +1,4 @@
+import { testErrorCode } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -10,7 +11,7 @@ async function fixture(t, text) {
   const directory = await mkdtemp(join(tmpdir(), 'werk-review-integrity-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   await mkdir(join(directory, 'review', 'lease'), { recursive: true });
-  const review = { artifactPath: 'review/lease/change.patch', patchBytes: Buffer.byteLength(text), patchSha256: createHash('sha256').update(text).digest('hex') };
+  const review = { baseCommit: 'a'.repeat(40), artifactPath: 'review/lease/change.patch', patchBytes: Buffer.byteLength(text), patchSha256: createHash('sha256').update(text).digest('hex') };
   const file = join(directory, review.artifactPath);
   await writeFile(file, text);
   return { directory, review, file };
@@ -24,7 +25,7 @@ test('review integrity rejects malformed UTF-8 that would otherwise decode to th
     const altered = Buffer.concat([Buffer.from('diff --git a/file b/file\n+'), invalid, Buffer.from('\n')]);
     assert.equal(altered.toString('utf8'), original);
     await writeFile(f.file, altered);
-    await assert.rejects(verifyReviewArtifact(f.directory, 'lease', f.review), error => error.code === 'ERR_ENCODING_INVALID_ENCODED_DATA');
+    await assert.rejects(verifyReviewArtifact(f.directory, 'lease', f.review), error => testErrorCode(error) === 'ERR_ENCODING_INVALID_ENCODED_DATA');
   }
 });
 

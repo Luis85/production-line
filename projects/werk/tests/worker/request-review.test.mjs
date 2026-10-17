@@ -1,3 +1,4 @@
+import { testErrorCode } from '../helpers/typed-boundaries.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -5,243 +6,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   RequestReviewManager,
-  parseAdvisoryReview,
 } from "../../src/worker/dist/worker/application/request-review.js";
 import { SerialExecutor } from "../../src/worker/dist/worker/application/serial-executor.js";
-import { unknownUsage } from "../../src/worker/dist/worker/application/run-evidence.js";
 import { WorkerRequestJournal } from "../../src/worker/dist/worker/infrastructure/journal/requests.js";
 import { defaultGatePolicy } from "../../src/worker/dist/worker/application/request-gates.js";
 import { WorkerRunJournal } from "../../src/worker/dist/worker/infrastructure/journal/local-runs.js";
-const usage = {
-  ...unknownUsage(),
-  inputTokens: 12,
-  outputTokens: 4,
-  source: "provider_reported",
-  reason: null,
-};
-const input = {
-  kind: "patch",
-  title: "Improve clarity",
-  message: "Original request",
-  criteria: ["Keep the layout"],
-  files: [{ path: "approved.txt", bytes: 4 }],
-  context: { approved: ["approved.txt"], sourceText: "data only" },
-};
-const valid = JSON.stringify({
-  schemaVersion: 1,
-  findings: [{ kind: "gap", message: "Specify the target.", blocking: true }],
-  candidate: { message: "Revised request text" },
-});
-const wait = async (check) => {
-  for (let n = 0; n < 200; n++) {
-    if (check()) return;
-    await new Promise((resolve) => setTimeout(resolve, 2));
-  }
-  throw Error("Fixture did not settle.");
-};
-function fixture({
-  kind = "review",
-  model,
-  startFailure = false,
-  completeFailure = false,
-  finishFailure = false,
-  runtimeMs = 1000,
-} = {}) {
-  const intent = {
-    id: "intent-1",
-    requestId: "request-1",
-    kind,
-    stage: "ready",
-    evaluationId: "eval-1",
-    inputHash: "input-1",
-    policyDigest: "policy-1",
-    status: "queued",
-    provider: {
-      id: "fixture",
-      model: "original-model",
-      instruction: "original-instruction",
-    },
-    runId: null,
-    dispatch: null,
-    result: null,
-    usage: null,
-    errorCode: null,
-    createdAt: "2026-10-14T00:00:00.000Z",
-    finishedAt: null,
-  };
-  const request = {
-    id: "request-1",
-    owner: { sessionId: "session-1", rootTurnId: "turn-1", taskId: "task-1" },
-    input: structuredClone(input),
-    inputRevision: 1,
-    inputHash: "input-1",
-    policyDigest: "policy-1",
-    phase: "needs_rework",
-    evaluations: [{ id: "eval-1", stage: "ready", passed: false, rules: [] }],
-    findings: [],
-    reviews: [intent],
-  };
-  const events = [],
-    records = [];
-  let calls = 0;
-  const gates = {
-    get() {
-      return structuredClone(request);
-    },
-    queuedReviews() {
-      return request.reviews
-        .filter((r) => r.status === "queued")
-        .map((r) => structuredClone(r));
-    },
-    startReview(_request, id, runId, dispatch) {
-      events.push("prepared");
-      if (startFailure) throw Error("write failed");
-      Object.assign(intent, {
-        status: "running",
-        runId,
-        dispatch: structuredClone(dispatch),
-      });
-      return structuredClone(intent);
-    },
-    observeReviewUsage(_request, id, value) {
-      intent.usage = structuredClone(value);
-    },
-    completeReview(_request, id, result, value) {
-      events.push("completed");
-      Object.assign(intent, {
-        status: "completed",
-        result: structuredClone(result),
-        usage: structuredClone(value),
-      });
-      if (completeFailure) throw Error("late projection failed");
-      return structuredClone(request);
-    },
-    failReview(_request, id, code, value) {
-      events.push("failed");
-      Object.assign(intent, {
-        status: code === "interrupted" ? "interrupted" : "failed",
-        errorCode: code,
-        usage: structuredClone(value),
-      });
-      return structuredClone(request);
-    },
-  };
-  const runs = {
-    async begin(metadata) {
-      records.push({ ...metadata, id: "run-1", outcome: "queued" });
-      events.push("begin");
-      return records[0];
-    },
-    async start() {
-      records[0].outcome = "running";
-      events.push("started");
-    },
-    observeUsage(_id, value) {
-      records[0].usage = structuredClone(value);
-    },
-    async finish(_id, outcome, value) {
-      records[0].outcome = outcome;
-      records[0].usage = structuredClone(value);
-      events.push("finished");
-      if (finishFailure) throw Error("ledger write failed");
-      return records[0];
-    },
-  };
-  const executor = new SerialExecutor();
-  const configured =
-    model === null
-      ? undefined
-      : {
-          reply: async () => {
-            throw Error("legacy reply must not run");
-          },
-          configuration: {
-            id: "fixture",
-            model: "changed-model",
-            instruction: "changed-instruction",
-          },
-          async execute(dispatch, signal, onUsage) {
-            calls++;
-            events.push("invoked");
-            assert.equal(intent.status, "running");
-            assert.deepEqual(intent.dispatch, dispatch);
-            return model
-              ? model(dispatch, signal, onUsage)
-              : { type: "completed", text: valid };
-          },
-        };
-  const manager = new RequestReviewManager({
-    gates,
-    runs,
-    executor,
-    model: () => configured,
-    maxRuntimeMs: () => runtimeMs,
-  });
-  return {
-    manager,
-    gates,
-    runs,
-    executor,
-    request,
-    intent,
-    events,
-    records,
-    get calls() {
-      return calls;
-    },
-  };
-}
-test("strict advisory schema forbids authority, approved-file changes and unbounded output", () => {
-  const parsed = parseAdvisoryReview(valid, input, "ready");
-  assert.equal(parsed.findings[0].blocking, true);
-  assert.equal(parsed.candidate.message, "Revised request text");
-  for (const key of ["kind", "title", "criteria", "files", "context"])
-    assert.deepEqual(parsed.candidate[key], input[key]);
-  assert.equal(input.message, "Original request");
-  const candidates = [
-    { schemaVersion: 1, findings: [], facts: { "tests.passed": true } },
-    { schemaVersion: 1, findings: [], attestation: true },
-    { schemaVersion: 1, findings: [], policy: {} },
-    {
-      schemaVersion: 1,
-      findings: [],
-      candidate: { message: "Changed", files: [] },
-    },
-    {
-      schemaVersion: 1,
-      findings: [{ kind: "gap", message: "", blocking: true }],
-    },
-    {
-      schemaVersion: 1,
-      findings: [{ kind: "gap", message: "Fine", blocking: "false" }],
-    },
-    {
-      schemaVersion: 1,
-      findings: Array.from({ length: 33 }, () => ({
-        kind: "gap",
-        message: "Fine",
-        blocking: false,
-      })),
-    },
-    {
-      schemaVersion: 1,
-      findings: [{ kind: "gap", message: "x".repeat(4001), blocking: true }],
-    },
-  ];
-  for (const candidate of candidates)
-    assert.throws(
-      () => parseAdvisoryReview(JSON.stringify(candidate), input, "ready"),
-      (error) => error.code === "protocol",
-    );
-  assert.throws(
-    () => parseAdvisoryReview("Arbitrary prose", input, "ready"),
-    (error) => error.code === "protocol",
-  );
-  assert.throws(
-    () => parseAdvisoryReview("x".repeat(262145), input, "ready"),
-    (error) => error.code === "protocol",
-  );
-});
+import { usage, input, valid, wait, fixture } from './request-review-fixtures.mjs';
+
 test("review persists exact dispatch before invoking a frozen provider and never mutates accepted input", async () => {
   const f = fixture();
   f.manager.tick();
@@ -322,6 +93,7 @@ test("shutdown interrupts an advisory attempt while retaining reported consumpti
         signal.addEventListener("abort", resolve, { once: true }),
       );
       signal.throwIfAborted();
+      throw Error("The abort-only fixture must never complete successfully.");
     },
   });
   f.manager.tick();
@@ -391,6 +163,7 @@ test("run purpose and request identity roundtrip durably while legacy records st
   let journal = new WorkerRunJournal(directory);
   try {
     await journal.init();
+    /** @type {import('../../src/worker/application/run-evidence.js').RunMetadata} */
     const metadata = {
       sessionId: "session-1",
       taskId: "task-1",
@@ -411,12 +184,13 @@ test("run purpose and request identity roundtrip durably while legacy records st
     });
     await journal.finish(legacy.id, "failed");
     await assert.rejects(
+      // @ts-expect-error Deliberately invalid purpose exercises runtime validation.
       journal.begin({ ...metadata, purpose: "operator_approval" }),
-      (error) => error.code === "invalid_input",
+      (error) => testErrorCode(error) === "invalid_input",
     );
     await assert.rejects(
       journal.begin({ ...metadata, requestId: "../outside" }),
-      (error) => error.code === "invalid_input",
+      (error) => testErrorCode(error) === "invalid_input",
     );
     journal.close();
     journal = new WorkerRunJournal(directory);
@@ -487,7 +261,7 @@ test("real request journal checkpoints advisory context and keeps candidate acce
           operationId: "stale-accept",
           candidateId: reviewed.candidates[0].id,
         }),
-      (error) => error.code === "conflict",
+      (error) => testErrorCode(error) === "conflict",
     );
     const accepted = gates.command({
       action: "accept_candidate",
@@ -515,6 +289,7 @@ test("purpose-filtered pages and analysis separate primary, advisory and explici
     journal = new WorkerRunJournal(directory);
   try {
     await journal.init();
+    /** @type {import('../../src/worker/application/run-evidence.js').RunMetadata} */
     const metadata = {
       sessionId: "session-1",
       taskId: "task-1",
@@ -524,13 +299,15 @@ test("purpose-filtered pages and analysis separate primary, advisory and explici
       model: "m",
     };
     const ids = [];
-    for (const [purpose, tokens] of [
+    /** @type {[import('../../src/worker/application/run-evidence.js').RunMetadata['purpose'], number][]} */
+    const usages = [
       [undefined, 1],
       ["execution", 2],
       ["gate_review", 10],
       ["rework", 20],
       ["gate_review", 30],
-    ]) {
+    ];
+    for (const [purpose, tokens] of usages) {
       const row = await journal.begin({
         ...metadata,
         ...(purpose ? { purpose } : {}),
@@ -570,15 +347,17 @@ test("purpose-filtered pages and analysis separate primary, advisory and explici
     assert.equal(journal.analyze().total, 5);
     assert.throws(
       () => journal.list({ purpose: "execution", cursor: first.nextCursor }),
-      (error) => error.code === "invalid_input",
+      (error) => testErrorCode(error) === "invalid_input",
     );
     assert.throws(
+      // @ts-expect-error Deliberately invalid query purpose must be rejected.
       () => journal.list({ purpose: "unknown" }),
-      (error) => error.code === "invalid_input",
+      (error) => testErrorCode(error) === "invalid_input",
     );
     assert.throws(
+      // @ts-expect-error Deliberately invalid query purpose must be rejected.
       () => journal.analyze({ purpose: "unknown" }),
-      (error) => error.code === "invalid_input",
+      (error) => testErrorCode(error) === "invalid_input",
     );
   } finally {
     journal.close();
@@ -594,6 +373,7 @@ test("session-specific drain respects another session and releases the matching 
         signal.addEventListener("abort", resolve, { once: true }),
       );
       signal.throwIfAborted();
+      throw Error("The abort-only fixture must never complete successfully.");
     },
   });
   f.manager.tick();
@@ -617,6 +397,7 @@ test("injected advisory deadline is distinct from operator interruption and reta
         signal.addEventListener("abort", resolve, { once: true }),
       );
       signal.throwIfAborted();
+      throw Error("The abort-only fixture must never complete successfully.");
     },
   });
   f.manager.tick();

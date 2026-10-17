@@ -1,3 +1,4 @@
+import { requiredValue } from '../ui/helpers/required-value.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { reactive, nextTick } from 'vue';
@@ -7,7 +8,7 @@ const connection = () => ({ id: 'docs', name: 'Documentation', transport: 'http'
 const view = (revision = 0) => ({ schemaVersion: 1, revision, builtins: { files: false, commands: [], webOrigins: [] }, mcp: [connection()], canEdit: true, saveBlockedReason: null });
 function editor(t) {
   const state = reactive({ unlocked: true, epoch: 0, view: view() });
-  let write = async command => { state.view = { ...view(state.view.revision + 1), builtins: command.builtins, mcp: command.mcp.map(({ secret, clearSecret, ...item }) => ({ ...item, hasSecret: !!secret || !clearSecret, discoveredTools: connection().discoveredTools })) }; return state.view; }, discover = async () => state.view, refresh = async () => {};
+  let write = async command => { state.view = { ...view(state.view.revision + 1), builtins: command.builtins, mcp: command.mcp.map(({ secret, clearSecret, ...item }) => ({ ...item, hasSecret: !!secret || !clearSecret, discoveredTools: connection().discoveredTools })) }; return state.view; }, discover = async (_command) => state.view, refresh = async () => {};
   const e = createToolAccessEditor({ view: () => state.view, unlocked: () => state.unlocked, epoch: () => state.epoch, write: async command => { const result = await write(command); if (result && state.unlocked) state.view = result; return result; }, discover: command => discover(command), refresh: () => refresh() });
   t.after(e.dispose);
   return { ...e, state, onWrite: fn => { write = fn; }, onDiscover: fn => { discover = fn; }, onRefresh: fn => { refresh = fn; } };
@@ -23,16 +24,16 @@ test('background updates preserve unsaved grants and force explicit conflict rec
   e.draft.files = true; e.onWrite(async () => { throw Object.assign(Error('Access changed'), { status: 409 }); }); e.onRefresh(async () => { e.state.view = view(2); }); await e.save(); assert.equal(e.draft.uncertain, null); assert.equal(e.draft.files, true); assert.equal(e.stale.value, true);
 });
 test('secret inputs preserve, replace and remove without trusting a changed server destination', async t => {
-  const e = editor(t); let submitted; e.onWrite(async command => { submitted = command; return undefined; });
-  e.draft.mcp[0].enabled = true; e.draft.mcp[0].allowedTools = ['search']; await e.save(); assert.equal('secret' in submitted.mcp[0], false); assert.equal('clearSecret' in submitted.mcp[0], false);
-  e.resolveUncertain(); e.draft.mcp[0].secret = 'replacement-fixture'; await e.save(); assert.equal(submitted.mcp[0].secret, 'replacement-fixture');
-  e.resolveUncertain(); e.draft.mcp[0].clearSecret = true; await e.save(); assert.equal(submitted.mcp[0].clearSecret, true);
-  e.resolveUncertain(); e.draft.mcp[0].url = 'https://other.example.com/mcp'; e.draft.mcp[0].allowedTools = ['search']; assert.equal(e.destinationChanged(e.draft.mcp[0]), true); await e.save(); assert.deepEqual(submitted.mcp[0].allowedTools, []);
+  const e = editor(t); let submitted = /** @type {{ value?: import('../../src/worker/application/tool-policy.js').ToolAccessUpdate }} */ ({}); e.onWrite(async command => { submitted.value = command; return undefined; });
+  e.draft.mcp[0].enabled = true; e.draft.mcp[0].allowedTools = ['search']; await e.save(); assert.equal('secret' in requiredValue(submitted.value).mcp[0], false); assert.equal('clearSecret' in requiredValue(submitted.value).mcp[0], false);
+  e.resolveUncertain(); e.draft.mcp[0].secret = 'replacement-fixture'; await e.save(); assert.equal(requiredValue(submitted.value).mcp[0].secret, 'replacement-fixture');
+  e.resolveUncertain(); e.draft.mcp[0].clearSecret = true; await e.save(); assert.equal(requiredValue(submitted.value).mcp[0].clearSecret, true);
+  e.resolveUncertain(); e.draft.mcp[0].url = 'https://other.example.com/mcp'; e.draft.mcp[0].allowedTools = ['search']; assert.equal(e.destinationChanged(e.draft.mcp[0]), true); await e.save(); assert.deepEqual(requiredValue(submitted.value).mcp[0].allowedTools, []);
 });
 test('local MCP connections may omit the secret variable unless a secret is entered', async t => {
   const e = editor(t); e.addMcp(); const item = e.draft.mcp[1]; Object.assign(item, { name: 'Local', command: '/usr/bin/mcp-server', secretEnv: '' });
   assert.equal(e.validation.value, '');
-  let submitted; e.onWrite(async command => { submitted = command; return undefined; }); await e.save(); assert.equal(submitted.mcp[1].secretEnv, ''); assert.equal('secret' in submitted.mcp[1], false);
+  let submitted = /** @type {{ value?: import('../../src/worker/application/tool-policy.js').ToolAccessUpdate }} */ ({}); e.onWrite(async command => { submitted.value = command; return undefined; }); await e.save(); assert.equal(requiredValue(submitted.value).mcp[1].secretEnv, ''); assert.equal('secret' in requiredValue(submitted.value).mcp[1], false);
   e.resolveUncertain(); e.draft.mcp.push({ ...item, id: 'local-secret', secret: 'fixture-secret' }); assert.match(e.validation.value, /Name the environment variable/);
   e.draft.mcp[e.draft.mcp.length - 1].secretEnv = 'lower'; assert.match(e.validation.value, /uppercase/);
   e.draft.mcp[e.draft.mcp.length - 1].secretEnv = 'LOCAL_TOKEN'; assert.equal(e.validation.value, '');
@@ -65,12 +66,12 @@ test('equivalent HTTP MCP addresses retain explicit grants and saved-secret pres
   e.reload();
   e.draft.mcp[0].url = 'https://TOOLS.example.com:443';
   assert.equal(e.destinationChanged(e.draft.mcp[0]), false);
-  let submitted;
-  e.onWrite(async command => { submitted = command; return undefined; });
+  let submitted = /** @type {{ value?: import('../../src/worker/application/tool-policy.js').ToolAccessUpdate }} */ ({});
+  e.onWrite(async command => { submitted.value = command; return undefined; });
   await e.save();
-  assert.deepEqual(submitted.mcp[0].allowedTools, ['search']);
-  assert.equal('secret' in submitted.mcp[0], false);
-  assert.equal('clearSecret' in submitted.mcp[0], false);
+  assert.deepEqual(requiredValue(submitted.value).mcp[0].allowedTools, ['search']);
+  assert.equal('secret' in requiredValue(submitted.value).mcp[0], false);
+  assert.equal('clearSecret' in requiredValue(submitted.value).mcp[0], false);
 });
 
 test('CLI tools are edited as one rule per line and saved as an argument policy', async t => {
@@ -84,10 +85,10 @@ test('CLI tools are edited as one rule per line and saved as an argument policy'
   assert.equal(e.draft.cliTools[0].executable, '/opt/node/bin/node', 'new CLI tools start with the worker Node.js');
   assert.equal(e.draft.cliTools[0].enabled, false, 'new CLI tools start disabled');
   Object.assign(e.draft.cliTools[0], { name: 'Harness', arguments: '["bin/harness.mjs"]', commands: 'help\nbacklog set requires --dry-run', refusedOptions: '--root, --config', enabled: true });
-  let submitted; e.onWrite(async command => { submitted = command; return undefined; }); await e.save();
-  assert.deepEqual(submitted.builtins.cliTools, [{ id: 'cli-1', name: 'Harness', description: '', enabled: true, executable: '/opt/node/bin/node', args: ['bin/harness.mjs'], commands: [{ command: 'help', requireOneOf: [], refusedOptions: [] }, { command: 'backlog set', requireOneOf: ['--dry-run'], refusedOptions: [] }], refusedOptions: ['--root', '--config'], maxArgs: 24, maxArgLength: 500, outputKiB: 32, truncationHint: 'Narrow the command, for example with a filter, limit or summary option.', timeoutMs: null }]);
+  let submitted = /** @type {{ value?: import('../../src/worker/application/tool-policy.js').ToolAccessUpdate }} */ ({}); e.onWrite(async command => { submitted.value = command; return undefined; }); await e.save();
+  assert.deepEqual(requiredValue(submitted.value).builtins.cliTools, [{ id: 'cli-1', name: 'Harness', description: '', enabled: true, executable: '/opt/node/bin/node', args: ['bin/harness.mjs'], commands: [{ command: 'help', requireOneOf: [], refusedOptions: [] }, { command: 'backlog set', requireOneOf: ['--dry-run'], refusedOptions: [] }], refusedOptions: ['--root', '--config'], maxArgs: 24, maxArgLength: 500, outputKiB: 32, truncationHint: 'Narrow the command, for example with a filter, limit or summary option.', timeoutMs: null }]);
   e.resolveUncertain(); e.addCliTool();
-  for (const [change, pattern] of [[{ executable: 'C:\\tools\\run.cmd' }, /\.bat or \.cmd/], [{ executable: 'node' }, /absolute executable/], [{ commands: '' }, /at least one command/], [{ commands: 'help\nhelp' }, /once/], [{ commands: 'a b c' }, /one or two words/], [{ refusedOptions: 'root' }, /option names/], [{ outputKiB: 65 }, /output limit/], [{ maxArgs: 0 }, /maximum arguments/]]) {
+  for (const [change, pattern] of /** @type {const} */ ([[{ executable: 'C:\\tools\\run.cmd' }, /\.bat or \.cmd/], [{ executable: 'node' }, /absolute executable/], [{ commands: '' }, /at least one command/], [{ commands: 'help\nhelp' }, /once/], [{ commands: 'a b c' }, /one or two words/], [{ refusedOptions: 'root' }, /option names/], [{ outputKiB: 65 }, /output limit/], [{ maxArgs: 0 }, /maximum arguments/]])) {
     Object.assign(e.draft.cliTools[0], { name: 'Other', executable: '/opt/node/bin/node', commands: 'help', refusedOptions: '', outputKiB: 32, maxArgs: 24, id: 'cli-2' }, change);
     assert.match(e.validation.value, pattern, JSON.stringify(change));
   }
@@ -134,10 +135,10 @@ test('required feature checks are explicit, survive guarded saves, and remain di
   const e = editor(t); e.state.view.builtins.commands = [{ id: 'tests', name: 'Tests', executable: '/usr/bin/node', args: ['--test'], enabled: true }]; e.reload();
   assert.equal(e.draft.commands[0].verification, false, 'legacy command has no required-check authority');
   e.draft.commands[0].verification = true;
-  let submitted; e.onWrite(async command => { submitted = command; return { ...view(1), builtins: command.builtins }; }); await e.save();
-  assert.equal(submitted.builtins.commands[0].verification, true); assert.equal(e.draft.commands[0].verification, true);
+  let submitted = /** @type {{ value?: import('../../src/worker/application/tool-policy.js').ToolAccessUpdate }} */ ({}); e.onWrite(async command => { submitted.value = command; return { ...view(1), builtins: command.builtins }; }); await e.save();
+  assert.equal(requiredValue(submitted.value).builtins.commands[0].verification, true); assert.equal(e.draft.commands[0].verification, true);
   e.draft.commands[0].enabled = false; await e.save();
-  assert.equal(submitted.builtins.commands[0].verification, true); assert.equal(submitted.builtins.commands[0].enabled, false);
+  assert.equal(requiredValue(submitted.value).builtins.commands[0].verification, true); assert.equal(requiredValue(submitted.value).builtins.commands[0].enabled, false);
   e.addCommand(); assert.equal(e.draft.commands.at(-1).verification, false);
 });
 test('a required-check edit cannot overwrite a concurrent saved verification plan', async t => {
@@ -155,10 +156,10 @@ test('timeouts inherit by default and explicit overrides preserve millisecond pr
   e.addCliTool(); Object.assign(e.draft.cliTools[0], { name: 'CLI', enabled: true });
   assert.equal(e.draft.commands[0].timeoutSeconds, ''); assert.equal(e.draft.cliTools[0].timeoutSeconds, ''); assert.equal(e.draft.mcp[0].timeoutSeconds, '');
   e.draft.commands[0].timeoutSeconds = '600'; e.draft.cliTools[0].timeoutSeconds = '1.501'; e.draft.mcp[0].timeoutSeconds = '45.125';
-  let submitted; e.onWrite(async command => { submitted = command; return undefined; }); await e.save();
-  assert.equal(Object.hasOwn(submitted, 'limits'), false, 'Tool access has no competing invocation window.');
-  assert.equal(submitted.builtins.commands[0].timeoutMs, 600000); assert.equal(submitted.builtins.commands[0].verification, true);
-  assert.equal(submitted.builtins.cliTools[0].timeoutMs, 1501); assert.equal(submitted.mcp[0].timeoutMs, 45125);
+  let submitted = /** @type {{ value?: import('../../src/worker/application/tool-policy.js').ToolAccessUpdate }} */ ({}); e.onWrite(async command => { submitted.value = command; return undefined; }); await e.save();
+  assert.equal(Object.hasOwn(requiredValue(submitted.value), 'limits'), false, 'Tool access has no competing invocation window.');
+  assert.equal(requiredValue(submitted.value).builtins.commands[0].timeoutMs, 600000); assert.equal(requiredValue(submitted.value).builtins.commands[0].verification, true);
+  assert.equal(requiredValue(submitted.value).builtins.cliTools[0].timeoutMs, 1501); assert.equal(requiredValue(submitted.value).mcp[0].timeoutMs, 45125);
 });
 
 test('clearing a saved timeout sends explicit null for every grant and lost acknowledgement retries that exact reset', async t => {
@@ -194,7 +195,7 @@ test('unchanged fractional overrides round-trip exactly and numeric input equiva
   e.draft.commands[0].timeoutSeconds = '1.501'; assert.equal(e.dirty.value, false);
   e.draft.commands[0].timeoutSeconds = 'invalid'; assert.equal(e.dirty.value, true); assert.equal(e.canSave.value, false);
   e.draft.commands[0].timeoutSeconds = '1.501'; e.draft.files = true;
-  let submitted; e.onWrite(async command => { submitted = command; return undefined; }); await e.save(); assert.equal(submitted.builtins.commands[0].timeoutMs, 1501);
+  let submitted = /** @type {{ value?: import('../../src/worker/application/tool-policy.js').ToolAccessUpdate }} */ ({}); e.onWrite(async command => { submitted.value = command; return undefined; }); await e.save(); assert.equal(requiredValue(submitted.value).builtins.commands[0].timeoutMs, 1501);
 });
 
 test('concurrent timeout policy refresh keeps the draft and refuses stale saves until explicit reload', async t => {

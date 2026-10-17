@@ -1,3 +1,4 @@
+import { testErrorMessage } from '../../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile, chmod, symlink, mkdir } from 'node:fs/promises';
@@ -13,6 +14,7 @@ import { ingressProfile } from '../../../scripts/security/ingress.mjs';
 import { configureAccessFile } from '../../../scripts/docker/access.mjs';
 import { safeServiceLog } from '../../../scripts/runtime/service-logs.mjs';
 const admin='a'.repeat(64), enrollment='b'.repeat(64), viewer='c'.repeat(64), operator='d'.repeat(64);
+/** @type {import('../../../src/shared/http/access.ts').AccessDocument} */
 const access={schemaVersion:1,principals:[{id:'observer',role:'viewer',token:viewer},{id:'maintainer',role:'operator',token:operator}]};
 async function api(app,path,token,method='GET',body){return fetch(`http://127.0.0.1:${app.server.address().port}`+path,{method,headers:{Authorization:'Bearer '+token,...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{})});}
 test('named access validates bounded private configuration without echoing credentials',async()=>{
@@ -20,7 +22,7 @@ test('named access validates bounded private configuration without echoing crede
  assert.throws(()=>accessAuthorization(admin,access)(enrollment),/Valid access token/);
  assert.throws(()=>accessAuthorization(viewer,access),/Invalid private/);
  assert.throws(()=>accessAuthorization(admin,access,[viewer]),/Invalid private/);
- for(const value of [{...access,extra:true},{schemaVersion:1,principals:[...access.principals,access.principals[0]]},{schemaVersion:1,principals:[{id:'legacy-admin',role:'viewer',token:viewer}]}]) assert.throws(()=>validateAccess(value),error=>!error.message.includes(viewer)&&/Invalid private/.test(error.message));
+ for(const value of [{...access,extra:true},{schemaVersion:1,principals:[...access.principals,access.principals[0]]},{schemaVersion:1,principals:[{id:'legacy-admin',role:'viewer',token:viewer}]}]) assert.throws(()=>validateAccess(value),error=>!testErrorMessage(error).includes(viewer)&&/Invalid private/.test(testErrorMessage(error)));
  const root=await mkdtemp(join(tmpdir(),'werk-access-files-'));
  try{const path=join(root,'access.json');assert.deepEqual(await loadAccessFile(path,true),{schemaVersion:1,principals:[]});await assert.rejects(loadAccessFile(path));await createPrivate(path,access);assert.equal((await loadAccessFile(path)).principals.length,2);
   if(process.platform!=='win32'){await chmod(path,0o644);await assert.rejects(loadAccessFile(path),/Invalid private/);await chmod(path,0o600);await symlink(path,join(root,'link'));await assert.rejects(loadAccessFile(join(root,'link'),true),/Invalid private/)}

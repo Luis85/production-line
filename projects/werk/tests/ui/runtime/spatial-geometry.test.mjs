@@ -1,13 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildScene } from "../../../src/shared/webview/spatial-geometry.js";
+/** @type {import("../../../src/shared/webview/types.ts").SpatialNode[]} */
 const nodes = [
-  { id: "factory", model: "factory", x: 0, z: 0 },
-  { id: "line", model: "line", x: 1, z: 0 },
-  { id: "orchestrator", model: "orchestrator", x: 2, z: 0 },
-  { id: "workers", model: "workers", x: 3, z: 0 },
-  { id: "subfactory", model: "factory", x: 0, z: 1.5 },
-  { id: "evidence", model: "evidence", x: 2, z: 1.5 },
+  { id: "factory", label: "Factory", kind: "factory", model: "factory", x: 0, z: 0 },
+  { id: "line", label: "Line", kind: "line", model: "line", x: 1, z: 0 },
+  { id: "orchestrator", label: "Orchestrator", kind: "orchestrator", model: "orchestrator", x: 2, z: 0 },
+  { id: "workers", label: "Workers", kind: "workers", model: "workers", x: 3, z: 0 },
+  { id: "subfactory", label: "Factory", kind: "factory", model: "factory", x: 0, z: 1.5 },
+  { id: "evidence", label: "Evidence", kind: "evidence", model: "evidence", x: 2, z: 1.5 },
 ];
 const overlap = (a, b) =>
   a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
@@ -48,9 +49,12 @@ test("rotated component faces stay planar and labels never cover models or each 
       }
 });
 test("dense Factory layouts keep readable labels in a scrollable scene", () => {
+  /** @type {import("../../../src/shared/webview/types.ts").SpatialNode[]} */
   const dense = Array.from({ length: 12 }, (_, i) =>
     [0, 1, 2, 3].map((x) => ({
       id: `${i}:${x}`,
+      label: `Component ${i}:${x}`,
+      kind: "component",
       model: x === 2 ? "orchestrator" : "workers",
       x,
       z: i * 1.4,

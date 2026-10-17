@@ -24,11 +24,11 @@ test("fixture cleanup drains dependent resources before closing journals and rem
 });
 
 test("fixture cleanup still releases other resources when one close fails and reports every error", async () => {
-  let hook,
-    released = false;
+  const hooks = [];
+  let released = false;
   const context = {
     after: (value) => {
-      hook = value;
+      hooks.push(value);
     },
   };
   const first = Error("First close failed"),
@@ -43,7 +43,7 @@ test("fixture cleanup still releases other resources when one close fails and re
     throw first;
   });
   await assert.rejects(
-    hook(),
+    hooks[0](),
     (error) =>
       error instanceof AggregateError &&
       assert.deepEqual(error.errors, [first, second]) === undefined,

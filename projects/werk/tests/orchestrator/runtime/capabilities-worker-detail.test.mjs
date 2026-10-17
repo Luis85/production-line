@@ -1,3 +1,4 @@
+import { testListeningAddress } from '../../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { startServer } from '../../../src/orchestrator/dist/orchestrator/server.js';
@@ -8,7 +9,7 @@ const profile = (id = 'default', provider = 'claude', maxParallel = 1) => ({ id,
 async function fixture(t, project = 'alpha') {
   const app = await startServer({ db: ':memory:', host: '127.0.0.1', port: 0, adminToken: admin, enrollmentToken: enrollment, project });
   t.after(() => app.close());
-  const url = 'http://127.0.0.1:' + app.server.address().port;
+  const url = 'http://127.0.0.1:' + testListeningAddress(app.server).port;
   const request = async (path, token = admin, body) => {
     const response = await fetch(url + path, { method: body ? 'POST' : 'GET', headers: { ...(token ? { Authorization: 'Bearer ' + token } : {}), 'Content-Type': 'application/json', 'Idempotency-Key': 'http-test-' + crypto.randomUUID() }, body: body ? JSON.stringify(body) : undefined });
     return { status: response.status, value: await response.json() };

@@ -1,3 +1,4 @@
+import { testErrorCode, testErrorMessage, testListeningAddress } from '../../helpers/typed-boundaries.mjs';
 import { startServer } from '../../../src/orchestrator/dist/orchestrator/server.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -22,9 +23,9 @@ async function fixture(t) {
     else value = { messages: [], available: true, busy: false };
     res.end(JSON.stringify(mutate(req.url, value)));
   });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  await new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(undefined)));
   t.after(() => { server.closeAllConnections(); return new Promise(resolve => server.close(resolve)); });
-  return { requests, mutate: callback => { mutate = callback; }, call: input => interactWithWorker({ workerUrl: 'http://127.0.0.1:' + server.address().port, workerToken: credential, ...input }, id => { if (id !== 'registered') throw new DomainError('not_found', 'Worker not registered in this line'); }), foreign: () => { worker = 'foreign'; }, reject: () => { reject = true; }, credential };
+  return { requests, mutate: callback => { mutate = callback; }, call: input => interactWithWorker({ workerUrl: 'http://127.0.0.1:' + testListeningAddress(server).port, workerToken: credential, ...input }, id => { if (id !== 'registered') throw new DomainError('not_found', 'Worker not registered in this line'); }), foreign: () => { worker = 'foreign'; }, reject: () => { reject = true; }, credential };
 }
 
 test('New task uses the selected provider and returns the worker atomic task/session view', async t => {
@@ -42,19 +43,19 @@ test('New task uses the selected provider and returns the worker atomic task/ses
 
 test('New task holds worker and selected-session boundaries before creating anything', async t => {
   const f = await fixture(t);
-  await assert.rejects(f.call({ action: 'new', sessionId: 'stale' }), error => error.code === 'conflict');
+  await assert.rejects(f.call({ action: 'new', sessionId: 'stale' }), error => testErrorCode(error) === 'conflict');
   assert.equal(f.requests.some(item => item.method === 'POST'), false);
   f.requests.length = 0; f.foreign();
-  await assert.rejects(f.call({ action: 'new', sessionId: 'original' }), error => error.code === 'not_found');
+  await assert.rejects(f.call({ action: 'new', sessionId: 'original' }), error => testErrorCode(error) === 'not_found');
   assert.deepEqual(f.requests.map(item => item.path), ['/status']);
   f.requests.length = 0;
-  await assert.rejects(f.call({ action: ['new'], sessionId: 'original' }), error => error.code === 'invalid_input');
+  await assert.rejects(f.call({ action: ['new'], sessionId: 'original' }), error => testErrorCode(error) === 'invalid_input');
   assert.equal(f.requests.length, 0);
 });
 
 test('upstream rejection hides private response bodies and creates no retry mutation', async t => {
   const f = await fixture(t); f.reject();
-  await assert.rejects(f.call({ action: 'new', sessionId: 'original' }), error => error.code === 'unavailable' && !error.message.includes(f.credential));
+  await assert.rejects(f.call({ action: 'new', sessionId: 'original' }), error => testErrorCode(error) === 'unavailable' && !testErrorMessage(error).includes(f.credential));
   assert.equal(f.requests.length, 1);
 });
 
@@ -68,14 +69,14 @@ for (const [label, path, replacement] of [
 ]) test('malformed remote ' + label + ' fails safely without a retry or later mutation', async t => {
   const f = await fixture(t);
   f.mutate((requestPath, value) => requestPath === path ? replacement : value);
-  await assert.rejects(f.call({ action: 'new', sessionId: 'original' }), error => error.code === 'unavailable' && !error.message.includes('PRIVATE_REMOTE_DETAIL'));
+  await assert.rejects(f.call({ action: 'new', sessionId: 'original' }), error => testErrorCode(error) === 'unavailable' && !testErrorMessage(error).includes('PRIVATE_REMOTE_DETAIL'));
   assert.equal(f.requests.filter(item => item.method === 'POST').length, path === '/api/sessions' ? 1 : 0);
   assert.equal(f.requests.at(-1).path, path);
 });
 
 test('invalid action input is rejected before contacting the worker', async t => {
   const f = await fixture(t);
-  await assert.rejects(f.call({ action: 'send', sessionId: 'original', message: [] }), error => error.code === 'invalid_input');
+  await assert.rejects(f.call({ action: 'send', sessionId: 'original', message: [] }), error => testErrorCode(error) === 'invalid_input');
   assert.equal(f.requests.length, 0);
 });
 
@@ -90,28 +91,32 @@ test('worker metadata extensions remain available in validated interaction respo
 test('interaction abort cancels an upstream status read before checking worker identity', { timeout: 5000 }, async t => {
   const entered = Promise.withResolvers(), paths = [], controller = new AbortController(); let checked = false;
   const server = createServer((request, _response) => { paths.push(request.url); entered.resolve(); });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  await new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(undefined)));
   t.after(() => { server.closeAllConnections(); return new Promise(resolve => server.close(resolve)); });
-  const pending = interactWithWorker({ workerUrl: 'http://127.0.0.1:' + server.address().port, workerToken: 'private-abort-fixture', action: 'read' }, () => { checked = true; }, controller.signal);
-  const rejected = assert.rejects(pending, error => error.code === 'unavailable' && !error.message.includes('private-abort-fixture'));
+  const pending = interactWithWorker({ workerUrl: 'http://127.0.0.1:' + testListeningAddress(server).port, workerToken: 'private-abort-fixture', action: 'read' }, () => { checked = true; }, controller.signal);
+  const rejected = assert.rejects(pending, error => testErrorCode(error) === 'unavailable' && !testErrorMessage(error).includes('private-abort-fixture'));
   await entered.promise; controller.abort(); await rejected;
   assert.equal(checked, false); assert.deepEqual(paths, ['/status']);
 });
 
 test('orchestrator shutdown cancels pending worker status before releasing SQLite', { timeout: 5000 }, async t => {
-  const entered = Promise.withResolvers(), upstreamClosed = Promise.withResolvers(); let response, reads = 0;
+  const entered = Promise.withResolvers(), upstreamClosed = Promise.withResolvers();
+  /** @type {import('node:http').ServerResponse | undefined} */
+  let response;
+  let reads = 0;
   const remote = createServer((_request, res) => { response = res; res.once('close', upstreamClosed.resolve); entered.resolve(); });
-  await new Promise(resolve => remote.listen(0, '127.0.0.1', resolve));
+  await new Promise(resolve => remote.listen(0, '127.0.0.1', () => resolve(undefined)));
   t.after(() => { remote.closeAllConnections(); return new Promise(resolve => remote.close(resolve)); });
   const app = await startServer({ db: ':memory:', host: '127.0.0.1', port: 0, project: 'shutdown', adminToken: 'a'.repeat(32), enrollmentToken: 'e'.repeat(32), shutdownTimeoutMs: 10 });
   t.after(() => app.close());
   const detail = app.store.workerDetail.bind(app.store);
   app.store.workerDetail = (...args) => { reads++; assert.equal(app.store.db.isOpen, true); return detail(...args); };
-  const request = fetch('http://127.0.0.1:' + app.server.address().port + '/v1/interaction', { method: 'POST', headers: { authorization: 'Bearer ' + 'a'.repeat(32), 'content-type': 'application/json' }, body: JSON.stringify({ workerUrl: 'http://127.0.0.1:' + remote.address().port, workerToken: 'private-shutdown-fixture', action: 'read' }) }).then(async response => { await response.text(); }, () => {});
+  const request = fetch('http://127.0.0.1:' + testListeningAddress(app.server).port + '/v1/interaction', { method: 'POST', headers: { authorization: 'Bearer ' + 'a'.repeat(32), 'content-type': 'application/json' }, body: JSON.stringify({ workerUrl: 'http://127.0.0.1:' + testListeningAddress(remote).port, workerToken: 'private-shutdown-fixture', action: 'read' }) }).then(async response => { await response.text(); }, () => {});
   await entered.promise;
   await app.close();
   assert.equal(app.store.db.isOpen, false);
   await upstreamClosed.promise;
+  assert.ok(response, 'Upstream response started before shutdown');
   response.end(JSON.stringify({ workerId: 'late-worker' }));
   await request;
   await new Promise(resolve => setImmediate(resolve));

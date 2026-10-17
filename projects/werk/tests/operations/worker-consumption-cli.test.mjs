@@ -1,3 +1,5 @@
+import { testErrorOutput } from '../helpers/process-errors.mjs';
+import { testErrorCode, testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -28,9 +30,9 @@ test('consumption commands expose the token policy and preserve authenticated AP
     res.statusCode = rejection ? 400 : 200;
     res.end(JSON.stringify(rejection ? { error: 'Reservation exceeds the worker allowance.' } : req.method === 'GET' ? status : { consumption: status.policy }));
   });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  await new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(undefined)));
   t.after(async () => { await new Promise(resolve => server.close(resolve)); await rm(directory, { recursive: true, force: true }); });
-  const base = 'http://127.0.0.1:' + server.address().port;
+  const base = 'http://127.0.0.1:' + testListeningAddress(server).port;
   const command = (...args) => exec(process.execPath, ['--input-type=module', '-e', 'import { main } from ' + JSON.stringify(entry) + "; await main('worker', process.argv.slice(1));", ...args, '--url', base, '--token-file', tokenPath, '--state-dir', join(directory, 'state')], { timeout: 15000 });
   assert.deepEqual(JSON.parse((await command('consumption', 'status')).stdout), status);
   assert.deepEqual(calls.at(-1), { path: '/api/consumption', method: 'GET', authorization: 'Bearer ' + token, body: undefined });
@@ -39,10 +41,10 @@ test('consumption commands expose the token policy and preserve authenticated AP
   assert.deepEqual(JSON.parse((await command('consumption', 'configure', '--file', policyFile)).stdout), { consumption: status.policy });
   assert.deepEqual(calls.at(-1), { path: '/api/settings', method: 'POST', authorization: 'Bearer ' + token, body });
   rejection = true;
-  await assert.rejects(command('consumption', 'configure', '--file', policyFile), error => error.code === 2 && /Reservation exceeds/.test(error.stderr) && !error.stderr.includes(token) && error.stdout === '');
+  await assert.rejects(command('consumption', 'configure', '--file', policyFile), error => testErrorCode(error) === 2 && /Reservation exceeds/.test(testErrorOutput(error, 'stderr')) && !testErrorOutput(error, 'stderr').includes(token) && testErrorOutput(error, 'stdout') === '');
   const count = calls.length;
-  await assert.rejects(command('consumption', 'configure'), error => error.code === 2 && /--file required/.test(error.stderr));
+  await assert.rejects(command('consumption', 'configure'), error => testErrorCode(error) === 2 && /--file required/.test(testErrorOutput(error, 'stderr')));
   await writeFile(policyFile, '{malformed');
-  await assert.rejects(command('consumption', 'configure', '--file', policyFile), error => error.code === 2 && error.stdout === '');
+  await assert.rejects(command('consumption', 'configure', '--file', policyFile), error => testErrorCode(error) === 2 && testErrorOutput(error, 'stdout') === '');
   assert.equal(calls.length, count, 'Invalid CLI input must not reach the API.');
 });

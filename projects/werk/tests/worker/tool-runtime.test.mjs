@@ -10,7 +10,7 @@ import { defaultToolPolicy } from '../../src/worker/dist/worker/application/tool
 const signal = () => new AbortController().signal;
 const decoded = result => { assert.equal(result.isError, undefined, JSON.stringify(result)); return JSON.parse(result.content[0].text); };
 const denied = async operation => { const result = await operation; assert.equal(result.isError, true); return result.content[0].text; };
-async function fixture(t, mutate = () => {}) {
+async function fixture(t, mutate = (_policy) => {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-tools-')));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const worktree = join(directory, 'worktree'); await mkdir(worktree);
@@ -30,7 +30,7 @@ test('tools default to none; file grants need an injected task worktree and mani
   assert.deepEqual(chat.manifest.tools, []);
   const scoped = createToolRuntime({ policy, currentRevision: () => 0, directory, worktree: directory });
   assert.equal(scoped.manifest.tools.length, 3);
-  assert.throws(() => scoped.manifest.tools.push({}), TypeError);
+  assert.throws(() => scoped.manifest.tools.push({ name: 'fixture', description: 'Frozen manifest', inputSchema: {} }), TypeError);
   await Promise.all([chat.close(), scoped.close()]);
 });
 

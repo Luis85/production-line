@@ -1,3 +1,4 @@
+import { completedText } from './model-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { access, mkdtemp, rm } from 'node:fs/promises';
@@ -11,7 +12,9 @@ import { defaultToolPolicy } from '../../src/worker/dist/worker/application/tool
 import { prepareModelRequest, requireModelRequest, executeModel } from '../../src/worker/dist/worker/application/model-contract.js';
 
 const signal = () => new AbortController().signal;
+/** @type {import('../../src/worker/application/conversation-contracts.js').ChatMessage[]} */
 const messages = [{ id: 'u', role: 'user', text: 'Run the granted check.', state: 'complete', at: '2026-10-16T00:00:00Z' }];
+/** @type {import('../../src/worker/application/provider-contract.js').ProviderConnection} */
 const connection = { id: 'openai-api', apiKey: 'fixture-only', executable: '', model: 'fixture' };
 const answer = () => Response.json({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: 'Complete.' }] }] });
 const tools = [{ name: 'werk_command_run', description: 'Run a granted preset.', inputSchema: { type: 'object' } }];
@@ -21,24 +24,25 @@ test('manifest preparation and dispatch use frozen budgets through composition a
   const directory = await mkdtemp(join(tmpdir(), 'werk-manifest-budget-')); t.after(() => rm(directory, { recursive: true, force: true }));
   const state = join(directory, 'not-created-by-metadata'), policy = defaultToolPolicy();
   policy.builtins.commands = [{ id: 'check', name: 'Check', executable: process.execPath, args: ['-e', 'throw Error("Must not execute during metadata inspection")'], enabled: true, timeoutMs: 2500 }];
-  const settings = { value: { execution: { maxToolCalls: 40, maxRuntimeMs: 900000, commandTimeoutMs: 1500 }, repositories: { items: [] } }, toolPolicy: () => policy };
+  const settings = { value: { execution: { maxToolCalls: 40, maxRuntimeMs: 900000, commandTimeoutMs: 1500 }, repositories: { pollMs: 30000, items: [] } }, toolPolicy: () => policy };
   let requests = 0;
   const factory = workspaceModelFactory(state, settings, (saved, path, _transport, options) => modelFor(saved, path, async () => { requests++; return answer(); }, options));
   const model = factory(connection, { sessionId: 'chat' });
-  const wrapped = consumptionModel(model, { status() { throw Error('Metadata inspection must not reserve consumption'); } });
+  const unexpectedAccounting = () => { throw Error('Metadata inspection must not reserve consumption'); };
+  const wrapped = consumptionModel(model, { status: unexpectedAccounting, begin: unexpectedAccounting, observe: unexpectedAccounting, finish: unexpectedAccounting, release: unexpectedAccounting });
   const request = prepareModelRequest(wrapped, messages, 'chat', 4321);
   assert.equal(request.policy.maxToolCalls, 40); assert.equal(request.policy.commandTimeoutMs, 1500);
   assert.deepEqual(request.toolManifest.limits, { maxCalls: 40, windowMs: 4321, callTimeoutMs: { werk_command_run: 1500 }, presetTimeoutMs: { check: 1500 } });
   assert.ok(Object.isFrozen(request.toolManifest.limits.presetTimeoutMs));
   await assert.rejects(access(state), { code: 'ENOENT' });
   settings.value.execution = { maxToolCalls: 1, maxRuntimeMs: 1000, commandTimeoutMs: 1000 };
-  assert.equal((await executeModel(model, request, signal())).text, 'Complete.');
+  assert.equal(completedText((await executeModel(model, request, signal()))), 'Complete.');
   assert.equal(requests, 1, 'changing live execution settings cannot widen or invalidate this accepted snapshot');
   await assert.rejects(access(state), { code: 'ENOENT' });
 });
 
 test('manifest validation bounds only named tools and preserves legacy metadata absence', () => {
-  const runtime = { manifest: { revision: 1, tools, limits }, async call() {}, async close() {} };
+  const runtime = { manifest: { revision: 1, tools, limits }, async call() { throw Error('Metadata inspection must not call tools'); }, async close() {} };
   const model = modelFor(connection, '/unused', undefined, { tools: () => runtime });
   const request = prepareModelRequest(model, messages);
   const changed = change => { const copy = structuredClone(request); change(copy.toolManifest); return copy; };
@@ -62,7 +66,7 @@ test('legacy dispatches may omit limits but cannot change grant revisions or exa
   let current = { revision: 1, tools, limits }, requests = 0, closed = 0;
   const model = modelFor(connection, '/unused', async () => { requests++; return answer(); }, { tools: () => ({ manifest: structuredClone(current), async call() { throw Error('Not called'); }, async close() { closed++; } }) });
   const request = structuredClone(prepareModelRequest(model, messages)); delete request.toolManifest.limits;
-  assert.equal((await executeModel(model, request, signal())).text, 'Complete.');
+  assert.equal(completedText((await executeModel(model, request, signal()))), 'Complete.');
   for (const change of [
     value => { value.revision++; },
     value => { value.tools[0].description = 'Changed definition'; },

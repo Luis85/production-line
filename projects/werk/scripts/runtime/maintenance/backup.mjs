@@ -56,6 +56,7 @@ export async function restoreState(directory, destination) {
   const result = await restoreSnapshot(directory, destination, stateTopology);
   return { ...result, next: 'Keep the original stopped. Start this restored state with its matching release, then run doctor and verify task history and worker identities.' };
 }
+/** @param {string} stateDir @param {(path: string, options: {bigint: true}) => Promise<Pick<import('node:fs').BigIntStatsFs, 'bavail' | 'bsize' | 'blocks'>>} [filesystem] */
 export async function diskCheck(stateDir, filesystem = statfs) {
   const info = await filesystem(stateDir, { bigint: true }), availableBytes = info.bavail * info.bsize, capacityBytes = info.blocks * info.bsize;
   const low = availableBytes < 256n * 1024n * 1024n || (capacityBytes > 0n && availableBytes * 100n < capacityBytes * 5n);

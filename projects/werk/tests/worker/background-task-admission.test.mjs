@@ -1,3 +1,6 @@
+import { taskboardRuntime } from './runtime-fixtures.mjs';
+import { workerStatus } from '../helpers/worker-status.mjs';
+import { testErrorCode, testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
@@ -45,6 +48,7 @@ async function waitForGate(gate, signal) {
   try { return await Promise.race([gate.promise, interrupted.promise]); }
   finally { signal.removeEventListener('abort', abort); }
 }
+/** @type {import('../../src/worker/application/model-contract.js').ModelResult} */
 const completed = { type: 'completed', text: JSON.stringify({ summary: 'Fixture proposal; no checks run.', files: [{ path: 'approved.txt', content: 'Proposed fixture output\n' }] }) };
 const input = (extra = {}) => ({ title: 'Prepare a durable request', instruction: 'Change only the approved file.', repository: 'fixture', paths: ['approved.txt'], provider: 'openai-api', background: true, ...extra });
 const reservation = (id, extra = {}) => ({ id, hash: 'a'.repeat(64), ...extra });
@@ -56,6 +60,7 @@ async function boardFixture(t, options = {}) {
   const settings = new WorkerSettings(state); await settings.init();
   await settings.update({ provider: { id: 'openai-api', apiKey: 'fixture-only', model: 'fixture' }, board: { paused: true }, repositories: { pollMs: 30000, items: [{ id: 'fixture', path: project, remote: 'origin', watch: false }] } });
   const prepared = [], requests = [], releases = [];
+  /** @type {import('../../src/worker/infrastructure/workspace-services.js').WorkspaceProviderFactory} */
   const factory = connection => ({ configuration: { id: connection.id, model: connection.model, instruction: 'Deterministic test model' }, capabilities: modelCapabilities, async execute(request) { requests.push(request); return completed; }, async reply() { throw Error('Typed model required'); } });
   let board, sessions;
   const port = {
@@ -71,8 +76,8 @@ async function boardFixture(t, options = {}) {
     },
   };
   async function open() {
-    sessions = new WorkerSessions(state, settings, factory); await sessions.init();
-    board = new LocalTaskboard(state, settings, sessions, factory, port); await board.init();
+    sessions = WorkerSessions(state, settings, factory); await sessions.init();
+    board = LocalTaskboard(state, settings, sessions, factory, port); await board.init();
   }
   async function close() { await board.close(); await sessions.close(); }
   await open();
@@ -88,7 +93,7 @@ async function workspaceFixture(t, withGit = false) {
   const releases = [];
   async function open() {
     journal = new SnapshotJournal(state, 'a'.repeat(64), 'b'.repeat(64)); await journal.init();
-    workspace = new WorkerWorkspace({ stateDir: state, projectDir: project, pollMs: 1000, timeoutMs: 60000 }, journal, () => ({ activeTasks: [], queuedTasks: [] }));
+    workspace = new WorkerWorkspace({ stateDir: state, projectDir: project, pollMs: 1000, timeoutMs: 60000 }, journal, workerStatus);
     await workspace.init();
     await workspace.updateSettings({ board: { paused: true }, provider: { id: 'openai-api', apiKey: 'fixture-only', model: 'fixture' }, ...(withGit ? { repositories: { pollMs: 30000, items: [{ id: 'fixture', path: project, remote: 'origin', branch: 'main', watch: false }] } } : {}) });
   }
@@ -99,9 +104,9 @@ async function workspaceFixture(t, withGit = false) {
 }
 
 test('unified background admission returns its request identity before snapshots and later exposes one Markdown-backed conversation', { timeout: 120000 }, async t => {
-  const f = await workspaceFixture(t), gate = deferred(), entered = deferred(), original = f.workspace.board.files;
+  const f = await workspaceFixture(t), gate = deferred(), entered = deferred(), original = taskboardRuntime(f.workspace.board).files;
   f.releases.push(() => gate.resolve());
-  f.workspace.board.files = { ...original, async snapshot(...args) { entered.resolve(); await gate.promise; return original.snapshot(...args); } };
+  taskboardRuntime(f.workspace.board).files = { ...original, async snapshot(...args) { entered.resolve(); await gate.promise; return original.snapshot(...args); } };
   const request = command('unified-background', f.project);
   const [accepted, replay] = await Promise.all([f.workspace.task(request), f.workspace.task(request)]);
   assert.equal(accepted.preparation.id, request.id); assert.equal(replay.preparation.id, request.id);
@@ -112,7 +117,7 @@ test('unified background admission returns its request identity before snapshots
   assert.equal(f.workspace.sessions.runs.list().total, 0);
   assert.equal(f.workspace.featureTracking.status().records.length, 0);
   for (const changed of [{ ...request, message: 'Different input' }, { ...request, files: undefined, background: undefined }, { ...request, id: 'local-' + request.id, files: undefined, background: undefined }])
-    await assert.rejects(f.workspace.task(changed), error => error.code === 'conflict');
+    await assert.rejects(f.workspace.task(changed), error => testErrorCode(error) === 'conflict');
   gate.resolve();
   await until(() => f.workspace.board.view().tasks.some(row => row.id === request.id) && f.workspace.board.view().preparations.length === 0, 'The unified request never completed admission.');
   const detail = await f.workspace.task({ action: 'get', id: 'local-' + request.id }), duplicate = await f.workspace.task(request);
@@ -135,7 +140,7 @@ test('durable background reservations deduplicate input and context, retain fail
   assert.equal(first.preparationId, submission.id); assert.equal(replay.preparationId, submission.id);
   await entered.promise;
   for (const changed of [{ ...submission, hash: 'b'.repeat(64) }, { ...submission, criteria: ['Changed acceptance criterion.'] }])
-    await assert.rejects(f.board.create(input(), changed), error => error.code === 'conflict');
+    await assert.rejects(f.board.create(input(), changed), error => testErrorCode(error) === 'conflict');
   assert.equal(f.prepared.length, 1); assert.equal(f.board.active, 1);
   gate.resolve();
   await until(() => f.board.preparation(submission.id)?.state === 'failed', 'The failed checkout was not reported.');
@@ -165,7 +170,7 @@ test('waiting, worktree and admission phases reserve one slot even after the tas
   f.releases.push(() => worktreeGate.resolve(), () => snapshotGate.resolve(), () => stateGate.resolve());
   await f.settings.update({ board: { queueCapacity: 3 } });
   const first = reservation('capacity-first'), second = reservation('capacity-second'), third = reservation('capacity-third');
-  const files = f.board.files; f.board.files = { ...files, async snapshot(...args) { if (args[0].path === f.prepared[0]?.path) { snapshotEntered.resolve(); await snapshotGate.promise; } return files.snapshot(...args); } };
+  const files = taskboardRuntime(f.board).files; taskboardRuntime(f.board).files = { ...files, async snapshot(...args) { if (args[0].path === f.prepared[0]?.path) { snapshotEntered.resolve(); await snapshotGate.promise; } return files.snapshot(...args); } };
   const setTaskState = f.sessions.setTaskState.bind(f.sessions);
   f.sessions.setTaskState = async (id, state) => { if (id === 'local-' + first.id && state === 'queued') { stateEntered.resolve(); await stateGate.promise; } return setTaskState(id, state); };
   await f.board.create(input(), first); await worktreeEntered.promise;
@@ -222,8 +227,8 @@ test('shutdown aborts preparation and drains its cleanup; restart does not repla
 });
 
 test('an explicit background retry reuses a pristine worktree after interrupted snapshots and restart', { timeout: 120000 }, async t => {
-  const f = await workspaceFixture(t, true), request = command('recover-background', 'fixture'), files = f.workspace.board.files;
-  f.workspace.board.files = { ...files, async snapshot() { throw new DomainError('unavailable', 'Fixture snapshot was interrupted.'); } };
+  const f = await workspaceFixture(t, true), request = command('recover-background', 'fixture'), files = taskboardRuntime(f.workspace.board).files;
+  taskboardRuntime(f.workspace.board).files = { ...files, async snapshot() { throw new DomainError('unavailable', 'Fixture snapshot was interrupted.'); } };
   const accepted = await f.workspace.task(request); assert.equal(accepted.preparation.id, request.id);
   await until(() => f.workspace.board.preparation(request.id)?.state === 'failed', 'The interrupted snapshot did not leave a visible failure.');
   assert.equal(f.workspace.board.view().tasks.length, 0); assert.equal(f.workspace.sessions.runs.list().total, 0);
@@ -242,10 +247,10 @@ test('an explicit background retry reuses a pristine worktree after interrupted 
 });
 
 test('a waiting background request keeps its accepted definition after that definition is updated and its reference moves', { timeout: 120000 }, async t => {
-  const f = await workspaceFixture(t), gate = deferred(), entered = deferred(), files = f.workspace.board.files;
+  const f = await workspaceFixture(t), gate = deferred(), entered = deferred(), files = taskboardRuntime(f.workspace.board).files;
   f.releases.push(() => gate.resolve());
   let firstSnapshot = true;
-  f.workspace.board.files = { ...files, async snapshot(...args) { if (firstSnapshot) { firstSnapshot = false; entered.resolve(); await gate.promise; } return files.snapshot(...args); } };
+  taskboardRuntime(f.workspace.board).files = { ...files, async snapshot(...args) { if (firstSnapshot) { firstSnapshot = false; entered.resolve(); await gate.promise; } return files.snapshot(...args); } };
   const yaml = instruction => 'agents:\n  root:\n    model: openai/fixture-model\n    instruction: ' + instruction + '\n';
   const { definitions: [original] } = await f.workspace.definitions.action({ action: 'import', name: 'Accepted reviewer', ref: 'team-reviewer', yaml: yaml('Keep the originally accepted instructions.') });
   await f.workspace.task(command('definition-blocker', f.project)); await entered.promise;
@@ -281,7 +286,7 @@ test('a full queue rejects retry without erasing the failed preparation or its a
   await f.board.create(input(), blocker); await entered.promise;
   await assert.rejects(f.board.create(input(), failed), /queue is full/);
   assert.deepEqual(f.board.preparation(failed.id), retained, 'A rejected retry must keep the visible reason and retry identity.');
-  await assert.rejects(f.board.create(input(), { ...failed, hash: 'b'.repeat(64) }), error => error.code === 'conflict' && /different input/.test(error.message));
+  await assert.rejects(f.board.create(input(), { ...failed, hash: 'b'.repeat(64) }), error => testErrorCode(error) === 'conflict' && /different input/.test(testErrorMessage(error)));
   assert.equal(f.prepared.length, 2); assert.equal(f.board.active, 1); assert.equal(f.board.view().tasks.length, 0);
   await f.board.action({ id: blocker.id, action: 'cancel' });
   await until(() => f.board.active === 0, 'The capacity blocker did not release its reservation.');
@@ -289,17 +294,17 @@ test('a full queue rejects retry without erasing the failed preparation or its a
 });
 
 test('a file request cannot claim the raw identity of another preparing or admitted file request as its session', { timeout: 120000 }, async t => {
-  const f = await workspaceFixture(t), gate = deferred(), entered = deferred(), files = f.workspace.board.files;
+  const f = await workspaceFixture(t), gate = deferred(), entered = deferred(), files = taskboardRuntime(f.workspace.board).files;
   f.releases.push(() => gate.resolve());
-  f.workspace.board.files = { ...files, async snapshot(...args) { entered.resolve(); await gate.promise; return files.snapshot(...args); } };
+  taskboardRuntime(f.workspace.board).files = { ...files, async snapshot(...args) { entered.resolve(); await gate.promise; return files.snapshot(...args); } };
   const original = command('local-alias-request', f.project), overlapping = command('alias-request', f.project);
   const accepted = await f.workspace.task(original); await entered.promise;
-  await assert.rejects(f.workspace.task(overlapping), error => error.code === 'conflict');
+  await assert.rejects(f.workspace.task(overlapping), error => testErrorCode(error) === 'conflict');
   const pendingReplay = await f.workspace.task(original); assert.equal(pendingReplay.preparation.id, accepted.preparation.id);
   assert.equal(f.workspace.board.view().preparations.length, 1); assert.equal(f.workspace.board.active, 1);
   gate.resolve();
   await until(() => f.workspace.board.view().tasks.length === 1 && f.workspace.board.view().preparations.length === 0, 'The original aliased request did not finish admission.');
-  await assert.rejects(f.workspace.task(overlapping), error => error.code === 'conflict');
+  await assert.rejects(f.workspace.task(overlapping), error => testErrorCode(error) === 'conflict');
   const replay = await f.workspace.task(original); assert.equal(replay.session.id, 'local-' + original.id);
   assert.equal(f.workspace.board.view().tasks.length, 1); assert.equal(f.workspace.sessions.runs.list().total, 1);
   assert.equal(f.workspace.featureTracking.status().records.length, 1);

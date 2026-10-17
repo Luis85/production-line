@@ -7,7 +7,7 @@ import { observeHttp } from '../../../src/orchestrator/dist/shared/http/observab
 async function listen(handler, requests) {
   const server = createServer(observeHttp('orchestrator', requests.wrap(handler), () => {}));
   trackHttpRequests(server, requests);
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  await new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(undefined)));
   return server;
 }
 const url = server => `http://127.0.0.1:${server.address().port}`;

@@ -30,7 +30,8 @@ test('provider-specific capacity excludes offline workers and clamps reserved sl
  }finally{store.close();}
 });
 for(const mutation of ['pause','destination','move'])test('in-flight Factory observation respects a newer '+mutation+' decision',async t=>{
- let release;const sent=[];const {intake,repository,registry}=fixture(t,{read:record=>new Promise(resolve=>{release=()=>resolve(observe(record));})},{async send(record){sent.push(record.id);return'remote';},close(){}});
+ /** @type {() => void} */
+ let release=()=>assert.fail('Observation was not started');const sent=[];const {intake,repository,registry}=fixture(t,{read:record=>new Promise(resolve=>{release=()=>resolve(observe(record));})},{async send(record){sent.push(record.id);return'remote';},close(){}});
  const task=intake.create({factoryId:'root',lineId:'alpha',task:input},'key');const pending=intake.tick();
  if(mutation==='pause')intake.configure('root',{mode:'auto',lineId:null,paused:true});else if(mutation==='destination')intake.route(task.id,{lineId:'beta'});else{registry.createFactory({id:'elsewhere',name:'Elsewhere',parentId:null});registry.updateLine('alpha',{...line(),factoryId:'elsewhere'});}
  release();await pending;assert.deepEqual(sent,[]);assert.equal(repository.get(task.id).destination,null);
@@ -52,6 +53,6 @@ test('Factory HTTP protects intake ownership, routing writes and worker interact
 });
 test('orchestrator interaction uses a registered worker and keeps its token out of responses',async t=>{
  const lineServer=await startServer({db:':memory:',host:'127.0.0.1',port:0,project:'demo',adminToken:'a'.repeat(32),enrollmentToken:'e'.repeat(32)});t.after(()=>lineServer.close());const worker=register(lineServer.store);let receivedToken;
- const fake=createServer((req,res)=>{receivedToken=req.headers.authorization;res.setHeader('content-type','application/json');res.end(JSON.stringify(req.url==='/status'?{workerId:worker.id}:{sessions:{selected:'default',records:[{id:'default',title:'Fixture session'}]},chat:{available:true,busy:false,messages:[]}}));});await new Promise(resolve=>fake.listen(0,'127.0.0.1',resolve));t.after(()=>new Promise(resolve=>fake.close(resolve)));
+ const fake=createServer((req,res)=>{receivedToken=req.headers.authorization;res.setHeader('content-type','application/json');res.end(JSON.stringify(req.url==='/status'?{workerId:worker.id}:{sessions:{selected:'default',records:[{id:'default',title:'Fixture session'}]},chat:{available:true,busy:false,messages:[]}}));});await new Promise(resolve=>fake.listen(0,'127.0.0.1',()=>resolve(undefined)));t.after(()=>new Promise(resolve=>fake.close(resolve)));
  const response=await fetch(address(lineServer.server)+'/v1/interaction',{method:'POST',headers:{authorization:'Bearer '+'a'.repeat(32),'content-type':'application/json'},body:JSON.stringify({workerUrl:address(fake),workerToken:'worker-secret',action:'read'})});assert.equal(response.status,200);const body=await response.text();assert.doesNotMatch(body,/worker-secret/);assert.equal(receivedToken,'Bearer worker-secret');assert.match(body,/Fixture session/);
 });

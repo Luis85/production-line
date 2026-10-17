@@ -141,7 +141,7 @@ export const ReviewFilePatch: Story = {
 };
 export const TaskHistory: Story = {
   name: '10 · Find saved work',
-  parameters: { storymap: storymap('Task history distinguishes conversations, approved-file tasks and original orchestrator attempts, with filters for type and lifecycle.', ['components/WorkerShell', 'pages/HistoryPage', 'components/Taskboard'], '/history', 10) },
+  parameters: { storymap: storymap('Task history distinguishes conversations, approved-file tasks and original orchestrator attempts, with filters for type and lifecycle.', ['components/WorkerShell', 'pages/HistoryPage', 'components/Taskboard', 'components/TaskConversationHistory'], '/history', 10) },
   render: renderPage(HistoryPage), play: settled,
 };
 export const ExecutionEvidence: Story = {
@@ -184,7 +184,7 @@ export const AgentDefinitions: Story = {
 };
 export const RequestReview: Story = {
   name: '16 · Review readiness, findings and rework',
-  parameters: { storymap: storymap('Request lifecycle is separate from a model result. Open findings, readiness evidence, rework ownership and acceptance remain visible for human steering.', ['components/RequestGatePanel', 'components/MessageContent'], '/taskboard') },
+  parameters: { storymap: storymap('Request lifecycle is separate from a model result. Open findings, readiness evidence, rework ownership and acceptance remain visible for human steering.', ['components/RequestGatePanel', 'components/RequestGateEvidence', 'components/MessageContent'], '/taskboard') },
   render: renderComponent(RequestGatePanel, 'populated', { requestId: 'request-review' }),
   play: async ({ canvasElement }) => { await element(canvasElement, '#request-gate-title'); await ready(canvasElement); },
 };

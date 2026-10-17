@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { projectLocalTaskSummary, projectLocalTaskDetail } from '../../src/worker/dist/worker/application/local-task-view.js';
-import { LocalTaskboard } from '../../src/worker/dist/worker/application/local-tasks.js';
+import { trackingWorkspace, trackingRequest } from './tracking-fixtures.mjs';
+import { taskboardRuntime } from './runtime-fixtures.mjs';
 import { defaultGatePolicy } from '../../src/worker/dist/worker/application/request-gates.js';
 
 const sha256 = value => createHash('sha256').update(value).digest('hex');
@@ -14,8 +15,11 @@ const publicFields = [
   'changedFileCount', 'runId', 'currentTurnId', 'submissionHash', 'submissionContextHash',
   'gatePolicy', 'criteria', 'definition', 'admissionFailure', 'developmentEvidence',
 ];
+/** Preserve unknown future fields while contextually checking every known private task field.
+ * @template {import('../../src/worker/application/local-task-contracts.js').LocalTask} T @param {T} task @returns {T} */
+const privateTask = task => task;
 function fixture() {
-  const task = {
+  const task = privateTask({
     id: 'view-fixture', title: 'Review the actual candidate', sessionId: 'local-view-fixture',
     provider: 'openai-api', model: 'fixture-model', repository: '/project', repositoryId: 'project',
     worktree: '/project-worktree', worktreeKey: 'fixture-worktree',
@@ -37,10 +41,12 @@ function fixture() {
     developmentEvidence: { schemaVersion: 1, candidateDigest: 'f'.repeat(64), changedPaths: ['src/existing.ts', 'src/new.ts'], futureEvidenceSecret: 'PRIVATE-EVIDENCE-SENTINEL', checks: [{ presetId: 'check', presetFingerprint: 'e'.repeat(64), candidateDigest: 'f'.repeat(64), status: 'failed', exitCode: 1, stdout: 'The assertion ran against the candidate.\n', stderr: 'Expected the approved value.\n', startedAt: at, finishedAt: at, truncated: false, futureReceiptSecret: 'PRIVATE-RECEIPT-SENTINEL' }], updatedAt: at },
     developmentCompletion: { turnId: 'turn-fixture', runId: 'run-fixture', candidateDigest: 'f'.repeat(64), patchSha256: '1'.repeat(64), evidenceDigest: '2'.repeat(64), verified: false },
     futurePrivateContext: { credential: 'PRIVATE-TOP-LEVEL-SENTINEL' },
-  };
+  });
+  /** @type {import('../../src/worker/application/interactions.js').InteractionTurnSummary} */
   const turn = { id: 'turn-fixture', runId: 'run-fixture', kind: 'message', status: 'completed', createdAt: at, finishedAt: at, priorTurnId: null };
+  /** @type {import('../../src/worker/application/interactions.js').InteractionView} */
   const interaction = { schemaVersion: 1, sessionId: task.sessionId, revision: 5, phase: 'completed', pending: null, latestTurn: turn, turns: [turn], totalTurns: 1 };
-  return { task, interaction, request: { phase: 'needs_rework', revision: 7 } };
+  return { task, interaction, request: trackingRequest({ phase: 'needs_rework', revision: 7 }) };
 }
 function expectedCommon(task, interaction) {
   return structuredClone({
@@ -94,7 +100,9 @@ test('detail retains approved contents, patch and raw verification output withou
   assertPrivateAuthorityAbsent(detail);
 });
 
-for (const [name, project] of [['summary', projectLocalTaskSummary], ['detail', projectLocalTaskDetail]]) {
+/** @type {[string, typeof projectLocalTaskSummary | typeof projectLocalTaskDetail][]} */
+const projections = [['summary', projectLocalTaskSummary], ['detail', projectLocalTaskDetail]];
+for (const [name, project] of projections) {
   test(`${name} is detached from task and interaction state in both directions`, () => {
     const { task, interaction, request } = fixture();
     const originalTask = structuredClone(task), originalInteraction = structuredClone(interaction);
@@ -137,19 +145,14 @@ test('legacy and unfinished tasks preserve nulls and omit absent optional author
   }
 });
 
-test('real taskboard list and detail boundaries redact private authority while trusted execution retains it', () => {
+test('real taskboard list and detail boundaries redact private authority while trusted execution retains it', async t => {
   const { task, interaction, request } = fixture();
-  const settings = { value: { board: { paused: true, maxParallel: 1, queueCapacity: 4, orchestratorQueue: 1, order: 'fifo' } } };
-  const sessions = {
-    interactions: { view: sessionId => { assert.equal(sessionId, task.sessionId); return interaction; } },
-    requests: { get: id => { assert.equal(id, task.requestId); return request; } },
-  };
-  const board = new LocalTaskboard(settings, sessions, {
-    model: () => { throw Error('A view must not invoke a provider.'); },
-    storage: {}, files: {},
-  });
-  // Seed the persisted aggregate directly: the boundary under test is projection, not admission.
-  board.tasks = [task];
+  const { workspace } = await trackingWorkspace(t);
+  const { board, sessions } = workspace;
+  sessions.interactions.view = sessionId => { assert.equal(sessionId, task.sessionId); return interaction; };
+  sessions.requests.get = id => { assert.equal(id, task.requestId); return request; };
+  // Seed the real persisted aggregate: projection, not admission, is under test.
+  taskboardRuntime(board).tasks = [task];
   const summary = board.view().tasks[0], detail = board.detail(task.id), execution = board.executionDetail(task.id);
   assert.deepEqual(summary, projectLocalTaskSummary(task, interaction, request));
   assert.deepEqual(detail, projectLocalTaskDetail(task, interaction));
@@ -157,7 +160,7 @@ test('real taskboard list and detail boundaries redact private authority while t
   assert.deepEqual(execution.developmentCompletion, task.developmentCompletion);
   assert.equal(execution.implementation.checks[0].executable, '/PRIVATE-CHECKER');
   assert.deepEqual(execution.implementation.checks[0].args, ['PRIVATE-CHECKER-ARG']);
-  assert.equal(execution.futurePrivateContext.credential, 'PRIVATE-TOP-LEVEL-SENTINEL');
+  assert.deepEqual(Reflect.get(execution, 'futurePrivateContext'), { credential: 'PRIVATE-TOP-LEVEL-SENTINEL' });
   execution.implementation.checks[0].args.push('changed');
   detail.files[0].content = 'changed'; summary.developmentEvidence.checks.length = 0;
   assert.deepEqual(board.executionDetail(task.id).implementation.checks[0].args, ['PRIVATE-CHECKER-ARG']);

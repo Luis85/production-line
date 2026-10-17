@@ -4,6 +4,7 @@ import type { Meta, StoryObj } from '@storybook/vue3-vite';
 import { nextTick, ref } from 'vue';
 import UButton from '@nuxt/ui/components/Button.vue';
 import UInput from '@nuxt/ui/components/Input.vue';
+import SettingsSaveFeedback from '../src/shared/webview/components/SettingsSaveFeedback.vue';
 import AccessPanel from '../src/shared/webview/components/AccessPanel.vue';
 import AsyncState from '../src/shared/webview/components/AsyncState.vue';
 import ConnectionStatus from '../src/shared/webview/components/ConnectionStatus.vue';
@@ -166,5 +167,27 @@ export const FormattedReply: Story = {
     await findElement(document.body, '.message-content table');
     await findElement(document.body, '.message-content pre[tabindex="0"]');
     if (document.querySelector('.message-content img, .message-content script')) throw Error('Model replies must not execute HTML or fetch images.');
+  },
+};
+
+export const SettingsUnavailable: Story = {
+  parameters: shared('Preserve an unavailable settings observation and offer an explicit refresh.', 'SettingsSaveFeedback'),
+  render: () => ({ components: { SettingsSaveFeedback }, setup: () => ({ state: { busy: false, checking: false, error: 'Saved settings could not be loaded.', uncertain: null } }), template: '<main style="padding:32px"><h1>Settings are unavailable</h1><SettingsSaveFeedback :state="state" unlocked unavailable /></main>' }),
+};
+export const SettingsRecovery: Story = {
+  parameters: shared('Keep the submitted command after an uncertain acknowledgement; retry and reload remain explicit choices.', 'SettingsSaveFeedback'),
+  render: () => ({ components: { SettingsSaveFeedback }, setup: () => ({ action: ref('No recovery action selected'), state: { busy: false, checking: false, error: '', uncertain: { mutationId: 'fixture-save' } } }), template: '<main style="padding:32px"><h1>Review a settings save</h1><SettingsSaveFeedback :state="state" unlocked @retry="action=\'Retry requested for the same command\'" @reload="action=\'Reload requested\'" @refresh="action=\'Refresh requested\'"/><p role="status" data-recovery-result>{{action}}</p></main>' }),
+  play: async ({ canvasElement }) => {
+    await clickButton(canvasElement, 'Retry same save');
+    const result = await findElement<HTMLElement>(canvasElement, '[data-recovery-result]');
+    if (!result.textContent?.includes('same command')) throw Error('Shared recovery did not emit retry');
+  },
+};
+export const SettingsLockedRecovery: Story = {
+  parameters: shared('A locked workspace retains uncertain-save guidance and disables every recovery action.', 'SettingsSaveFeedback'),
+  render: () => ({ components: { SettingsSaveFeedback }, setup: () => ({ state: { busy: false, checking: false, error: '', uncertain: { mutationId: 'fixture-save' } } }), template: '<main style="padding:32px"><h1>Unlock to recover settings</h1><SettingsSaveFeedback :state="state" :unlocked="false" /></main>' }),
+  play: async ({ canvasElement }) => {
+    const controls = [...canvasElement.querySelectorAll<HTMLButtonElement>('button')];
+    if (controls.length !== 3 || controls.some(control => !control.disabled)) throw Error('Locked recovery controls must stay disabled');
   },
 };

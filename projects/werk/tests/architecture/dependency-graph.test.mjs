@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { boundaryViolations, references } from './dependency-graph.mjs';
 
 const sourceRoot = resolve('fixture/src');
-const options = { sourceRoot, aliases: { '#factory': join(sourceRoot, 'factory') }, pureShared: ['domain.ts', 'contracts.ts'], applicationRoots: [join(sourceRoot, 'worker/application')] };
+const options = { sourceRoot, aliases: { '#factory': join(sourceRoot, 'factory') }, pureShared: ['domain.ts', 'contracts.ts'], applicationRoots: [join(sourceRoot, 'worker/application'), join(sourceRoot, 'factory/application'), join(sourceRoot, 'orchestrator/application.ts'), join(sourceRoot, 'orchestrator/intake/iteration.ts')] };
 function check(code, file = 'worker/cli.ts', extra = {}) {
   const source = { 'shared/domain.ts': '', 'shared/contracts.ts': "export type {Task} from './domain.js';", ...extra, [file]: code };
   const graph = new Map(Object.entries(source).map(([name, content]) => { const path = join(sourceRoot, name); return [path, references(path, content)]; }));
@@ -48,4 +48,14 @@ test('Vue ordinary and setup scripts both enforce boundaries, with type-only edg
   const edges = references('Fixture.vue', code);
   assert.deepEqual(edges.map(edge => edge.typeOnly), [false, true]);
   assert.equal(check(code, 'worker/Fixture.vue').filter(failure => failure.rule === 'sibling-package').length, 2);
+});
+
+test('Factory and root orchestrator application files reject adapters without restricting composition', () => {
+  for (const [file, code] of [
+    ['factory/application/service.ts', "import '../infrastructure/registry.js';"],
+    ['orchestrator/application.ts', "import './persistence/store.js';"],
+    ['orchestrator/intake/iteration.ts', "import '../context/git-source.js';"],
+  ]) assert.ok(check(code, file).some(failure => failure.rule === 'application-adapter'), file);
+  assert.deepEqual(check("import './persistence/store.js';", 'orchestrator/server.ts'), []);
+  assert.deepEqual(check("import './infrastructure/registry.js';", 'factory/server.ts'), []);
 });

@@ -126,7 +126,7 @@ if (args[0] === 'xml') {
 else if (args[0] === 'flood') process.stdout.write('"'.repeat(200000));
 else if (args[0] !== 'fail') console.log('\uFEFF\x1b[32m' + JSON.stringify({ args, cwd: process.cwd(), secret: process.env.WERK_TEST_SECRET ?? null, color: process.env.NO_COLOR ?? null }) + '\x1b[0m\r');
 `;
-async function runtimeFixture(t, mutate = () => {}) {
+async function runtimeFixture(t, mutate = (_policy) => {}) {
   const root = await directory(t), worktree = join(root, 'worktree');
   await mkdir(join(worktree, 'bin'), { recursive: true });
   await writeFile(join(worktree, 'bin', 'harness.mjs'), script);

@@ -1,3 +1,4 @@
+import { testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, rm, stat } from 'node:fs/promises';
@@ -12,6 +13,7 @@ import { statusServer } from '../../src/worker/dist/worker/status/server.js';
 import { configuration } from '../../src/worker/dist/worker/config.js';
 const memoryStore = () => ({ value: { messages: [] }, async read() { return structuredClone(this.value); }, async write(value) { this.value = structuredClone(value); } });
 async function waitFor(predicate) { for(let i=0;i<200;i++){if(predicate())return;await new Promise(resolve=>setTimeout(resolve,10));}throw Error('Timed out'); }
+/** @returns {import("../../src/worker/status/monitoring.js").Status} */
 const status = () => ({workerId:'worker-one',project:'alpha',mode:'mock',state:'idle',taskId:null,attempt:null,profile:null,completedSimulations:1,lastContact:new Date().toISOString(),lastError:null,updatedAt:new Date().toISOString(),profiles:[{id:'codex-1',provider:'codex',mode:'mock'}],heartbeatErrors:0,maxParallel:1,activeTasks:[],configurationHash:'a'.repeat(64),lastSnapshot:null,outbox:{pending:0,oldestAgeSeconds:0}});
 
 test('conversation passes prior successful turns to the model and persists across restart', async t => {
@@ -48,8 +50,8 @@ test('interrupted replies recover honestly; provider errors and timeouts never e
 });
 test('failed acceptance never invokes a model; shutdown during acceptance cannot start a model', async()=>{
   let calls=0;const failing=memoryStore();failing.write=async()=>{throw Error('disk full');};const chat=new WorkerConversation(failing,{async reply(){calls++;return 'reply';}});await chat.init();await assert.rejects(chat.start('Hello'),/disk full/);assert.equal(calls,0);assert.equal(chat.snapshot().messages.length,0);
-  let release;const blocked=memoryStore();const write=blocked.write.bind(blocked);let first=true;blocked.write=async value=>{if(first){first=false;await new Promise(resolve=>{release=resolve;});}await write(value);};
-  const closing=new WorkerConversation(blocked,{async reply(_,signal){signal.throwIfAborted();calls++;return 'reply';}});await closing.init();const accepted=closing.start('Hello'),stop=closing.close();release();await accepted;await stop;assert.equal(calls,0);assert.equal(closing.snapshot().busy,false);
+  const { promise: held, resolve: release } = Promise.withResolvers();const blocked=memoryStore();const write=blocked.write.bind(blocked);let first=true;blocked.write=async value=>{if(first){first=false;await held;}await write(value);};
+  const closing=new WorkerConversation(blocked,{async reply(_,signal){signal.throwIfAborted();calls++;return 'reply';}});await closing.init();const accepted=closing.start('Hello'),stop=closing.close();release(undefined);await accepted;await stop;assert.equal(calls,0);assert.equal(closing.snapshot().busy,false);
 });
 test('history and private environment use worker-scoped auth, preserve snapshots, and serve built Vue routes', async t => {
   const directory=await mkdtemp(join(tmpdir(),'werk-webview-'));
@@ -69,13 +71,21 @@ test('history and private environment use worker-scoped auth, preserve snapshots
     if (errors.length) throw new AggregateError(errors, 'Webview fixture cleanup failed');
   });
   const current=status();journal=new SnapshotJournal(directory,'a'.repeat(64),'b'.repeat(64));await journal.init();
-  const task={id:'task-one',project:'alpha',attempt:1,lease:'lease-one',profile:'codex-1'};
-  const before=journal.capture(task,current.workerId,current.profiles[0],current,'before');await journal.persist(before);await journal.persist(journal.capture(task,current.workerId,current.profiles[0],current,'after',before,'simulated'));
+  /** @type {import('../../src/shared/domain.js').Task} */
+  const task = {
+    id: 'task-one', project: 'alpha', title: 'Improve worker navigation',
+    criteria: ['Retain task evidence'], wikilinks: [], provider: 'codex', priority: 1,
+    status: 'running', workerId: current.workerId, createdAt: Date.now(), expiresAt: Date.now() + 60000,
+    attempt: 1, lease: 'lease-one', profile: 'codex-1',
+  };
+  /** @type {import('../../src/shared/domain.js').Profile} */
+  const profile = { id: 'codex-1', provider: 'codex', mode: 'mock' };
+  const before=journal.capture(task,current.workerId,profile,current,'before');await journal.persist(before);await journal.persist(journal.capture(task,current.workerId,profile,current,'after',before,'simulated'));
   const cfg={stateDir:directory,url:'http://localhost:3000',pollMs:1000,timeoutMs:60000};
   workspace=new WorkerWorkspace(cfg,journal,()=>current);await workspace.init();await workspace.updateSettings({provider:{id:'codex-cli',executable:''}});await workspace.rememberTask({...task,title:'Improve worker navigation'});
   const token=(await readFile(join(directory,'webview-token'),'utf8')).trim();restarted=new WorkerWorkspace(cfg,journal,()=>current);await restarted.init();assert.equal((await readFile(join(directory,'webview-token'),'utf8')).trim(),token);
   server=await statusServer(()=>current,'127.0.0.1',0,undefined,workspace);
-  const base=`http://127.0.0.1:${server.address().port}`,headers={Authorization:`Bearer ${token}`};
+  const base=`http://127.0.0.1:${testListeningAddress(server).port}`,headers={Authorization:`Bearer ${token}`};
   assert.equal((await fetch(base+'/api/history')).status,401);assert.equal((await fetch(base+'/api/environment',{headers:{Authorization:'Bearer wrong'}})).status,401);
   const environment=await(await fetch(base+'/api/environment',{headers})).json();assert.equal(environment.stateDirectory,directory);assert.doesNotMatch(JSON.stringify(environment),/secret|hidden|webview-token/);assert.equal(environment.chat.configured,false);
   const history=await(await fetch(base+'/api/history',{headers})).json();assert.equal(history.rows.length,1);assert.equal(history.rows[0].outcome,'simulated');assert.equal(history.rows[0].title,'Improve worker navigation');assert.equal(history.rows[0].completePair,true);assert.equal((await restarted.history()).rows[0].taskId,'task-one');assert.equal((await restarted.history()).rows[0].title,'Improve worker navigation');
@@ -100,7 +110,7 @@ test('Codex chat uses bounded stdin conversation and read-only noninteractive CL
   const directory=await mkdtemp(join(tmpdir(),'werk-chat-cli-'));t.after(()=>rm(directory,{recursive:true,force:true}));
   const executable=join(directory,'model-fixture');
   const fixture=`#!/usr/bin/env node\nlet input='';for await(const chunk of process.stdin)input+=chunk;const args=process.argv.slice(2);if(!args.includes('--ignore-user-config')||!args.includes('read-only')||!args.includes('shell_tool')||!args.includes('--ephemeral')||!input.includes('A question'))process.exit(2);console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:'Fixture reply, not a live model'}}));`;
-  await writeFile(executable,fixture,{mode:0o700});const model=new CodexConversationModel(executable,directory);const output=await model.reply([{role:'user',text:'A question'}],AbortSignal.timeout(5000));assert.equal(output,'Fixture reply, not a live model');
+  await writeFile(executable,fixture,{mode:0o700});const model=new CodexConversationModel(executable,directory);const output=await model.reply([{id:'question-one',role:'user',text:'A question',at:new Date().toISOString(),state:'complete'}],AbortSignal.timeout(5000));assert.equal(output,'Fixture reply, not a live model');
 });
 
 test('system chat configuration reaches the worker without enabling task execution or allowing Docker chat', async () => {

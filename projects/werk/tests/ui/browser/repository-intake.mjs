@@ -8,8 +8,8 @@ const out=process.env.WERK_VISUAL_EVIDENCE_DIR||`/tmp/werk-intake-browser-${Date
 const factory=process.env.WERK_VISUAL_FACTORY_URL||'http://127.0.0.1:3100';
 const line=process.env.WERK_VISUAL_LINE_URL||'http://127.0.0.1:3001';
 const lineId=process.env.WERK_VISUAL_LINE_ID||'alpha';
-const factoryToken=JSON.parse(await readFile(root+'/factory/credentials.json')).WERK_FACTORY_ADMIN_TOKEN;
-const lineToken=JSON.parse(await readFile(root+'/lines/'+lineId+'/credentials.json')).WERK_ADMIN_TOKEN;
+const factoryToken=JSON.parse(await readFile(root+'/factory/credentials.json', 'utf8')).WERK_FACTORY_ADMIN_TOKEN;
+const lineToken=JSON.parse(await readFile(root+'/lines/'+lineId+'/credentials.json', 'utf8')).WERK_ADMIN_TOKEN;
 const overview=await fetch(line+'/v1/overview',{headers:{Authorization:`Bearer ${lineToken}`}});
 assert.equal(overview.status,200,'The isolated line must accept its credentials');
 const project=(await overview.json()).project;
@@ -29,7 +29,8 @@ async function select(page,name,option){await click(page,page.getByRole('combobo
 async function login(page,url,label,token){await page.goto(url);await snapshot(page);await page.getByLabel(label,{exact:true}).fill(token);await click(page,page.getByRole('button',{name:'Verbinden',exact:true}));}
 async function nav(page,name){await click(page,page.getByRole('navigation',{name:'Ansichten dieser Linie'}).getByRole('link',{name,exact:true}));}
 try{
- for(const [device,width] of [['desktop',1440],['mobile',390]]){
+ const viewports = /** @type {const} */ ([['desktop',1440],['mobile',390]]);
+ for(const [device,width] of viewports){
   const page=await browser.newPage({viewport:{width,height:1000},hasTouch:width<500,isMobile:width<500,reducedMotion:'reduce'});
   page.on('pageerror',e=>errors.push(e.message));
   await login(page,factory,'Zugangstoken der Fabrikverwaltung',factoryToken);

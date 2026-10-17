@@ -1,0 +1,215 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-10-17T12:00:19.138Z",
+  "packageVersion": "0.11.0",
+  "commit": "2572a8863b2b8c4cf1f1d32332e114a2ac4151f0",
+  "workingTreeDirty": true,
+  "nodeVersion": "v24.19.0",
+  "platform": "linux-x64",
+  "strykerVersion": "10.0.0",
+  "scope": {
+    "id": "shared-boundaries-v1",
+    "targets": [
+      "src/shared/serialized-operations.ts",
+      "src/shared/request-gate.ts",
+      "src/shared/http/response-body.ts",
+      "src/shared/webview/bounded-polling.ts"
+    ],
+    "testFiles": [
+      "scripts/mutation/suites/*.test.mjs",
+      ".mutation-build/tests/*.test.mjs"
+    ],
+    "reusedTests": [
+      "tests/shared/serialized-operations.test.mjs"
+    ],
+    "timeoutMs": 480000
+  },
+  "sources": {
+    "digest": "3afe48e05c0e3145bf93212278b72a2eed2b4140d6247fa9be2e45470fcf3264",
+    "files": {
+      "src/shared/http/response-body.ts": "95a702a3591b539a129b18583ab67d153333246c0f1f716a31580ccdca916c25",
+      "src/shared/request-gate.ts": "e068e96af488d65ff1e85206f0390c93abe8199fd39af1521321fb174a0009c6",
+      "src/shared/serialized-operations.ts": "f6e8b8eb54f113e9890da69e1f187eebc52467f636d9b117b6b0b69bd760751e",
+      "src/shared/webview/bounded-polling.ts": "7ba75a812d0c44cfebcdc64eaaf2ca26d51e0e9ee1fd2ace1f4a1c500b01c71e"
+    }
+  },
+  "tests": {
+    "digest": "5ce92f66eabd13a21cc55e81e9a5031222eee677aa02434d3fe93864f3538415",
+    "files": {
+      "scripts/mutation/suites/bounded-polling.test.mjs": "2852f8c07ff92b5b60e2f98105cd5e6e800b8d5b9afed27f6d3c35bc40b52df3",
+      "scripts/mutation/suites/request-gate.test.mjs": "a4e6988793f83e5836285988b359d30c0b5ce6b34db57d86429d3be47546fd82",
+      "scripts/mutation/suites/response-body.test.mjs": "a10a924840a981be16a99dd5337fd0a792d414cfba660d95ad47d75e91bcf05c",
+      "tests/shared/serialized-operations.test.mjs": "034a5fd726ce143cf576c128aab83facb17398add39cf81c3e267cd4496e2bd5"
+    }
+  },
+  "configuration": {
+    "digest": "d7c3fac67e1c7c5dfce79630ba414fc7127f376eb98761f8aaef57f7b756faf2",
+    "files": {
+      "scripts/mutation/build.mjs": "df1d730debf4a575d82262647fa39bb6f949d2f605af8b64285f7c5d6491f64c",
+      "scripts/mutation/scope.mjs": "2f476d9ea7f2b484f01ba986d726122e2676209581e29de73e3dee39e2bfa2d1",
+      "stryker.config.mjs": "68db6fc3d7f7eba59ba2349a64933e2870280c20387a3e95a94cf76faac1ca2a"
+    }
+  },
+  "reportDigest": "eda0107ca228008f86e3aa88a35c6fb043fdd5c0bd1a44091414aefe1768ffae",
+  "status": "completed",
+  "advisory": true,
+  "score": 94.89,
+  "baselineDelta": null,
+  "totalMutants": 176,
+  "counts": {
+    "Killed": 151,
+    "Survived": 9,
+    "NoCoverage": 0,
+    "Timeout": 16,
+    "CompileError": 0,
+    "RuntimeError": 0,
+    "Ignored": 0,
+    "Pending": 0
+  },
+  "files": [
+    {
+      "path": "src/shared/serialized-operations.ts",
+      "total": 2,
+      "counts": {
+        "Killed": 1,
+        "Survived": 0,
+        "NoCoverage": 0,
+        "Timeout": 1,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 100
+    },
+    {
+      "path": "src/shared/request-gate.ts",
+      "total": 93,
+      "counts": {
+        "Killed": 85,
+        "Survived": 8,
+        "NoCoverage": 0,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 91.4
+    },
+    {
+      "path": "src/shared/http/response-body.ts",
+      "total": 35,
+      "counts": {
+        "Killed": 29,
+        "Survived": 0,
+        "NoCoverage": 0,
+        "Timeout": 6,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 100
+    },
+    {
+      "path": "src/shared/webview/bounded-polling.ts",
+      "total": 46,
+      "counts": {
+        "Killed": 36,
+        "Survived": 1,
+        "NoCoverage": 0,
+        "Timeout": 9,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 97.83
+    }
+  ],
+  "findings": [
+    {
+      "file": "src/shared/request-gate.ts",
+      "id": "36",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 19,
+      "replacement": "\"\""
+    },
+    {
+      "file": "src/shared/request-gate.ts",
+      "id": "59",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 33,
+      "replacement": "false"
+    },
+    {
+      "file": "src/shared/request-gate.ts",
+      "id": "66",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 35,
+      "replacement": "false"
+    },
+    {
+      "file": "src/shared/request-gate.ts",
+      "id": "74",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 38,
+      "replacement": "\"\""
+    },
+    {
+      "file": "src/shared/request-gate.ts",
+      "id": "82",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 41,
+      "replacement": "\"\""
+    },
+    {
+      "file": "src/shared/request-gate.ts",
+      "id": "100",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 47,
+      "replacement": "false"
+    },
+    {
+      "file": "src/shared/request-gate.ts",
+      "id": "109",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 49,
+      "replacement": "\"\""
+    },
+    {
+      "file": "src/shared/request-gate.ts",
+      "id": "131",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 56,
+      "replacement": "\"\""
+    },
+    {
+      "file": "src/shared/webview/bounded-polling.ts",
+      "id": "172",
+      "status": "Survived",
+      "mutator": "UpdateOperator",
+      "line": 26,
+      "replacement": "generation--"
+    }
+  ],
+  "execution": {
+    "exitCode": 0,
+    "signal": null,
+    "timedOut": false,
+    "durationMs": 25901
+  },
+  "warnings": [
+    "9 surviving and 0 uncovered mutants in this limited scope.",
+    "No recorded baseline is available for comparison."
+  ]
+}

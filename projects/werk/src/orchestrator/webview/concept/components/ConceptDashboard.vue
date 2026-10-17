@@ -11,7 +11,8 @@ const tasks = computed(() =>
   ),
 );
 const series = computed(() => {
-  state.value;
+  // Track the reactive snapshot before reading the engine projection.
+  void state.value;
   return engine.snapshotSeries();
 });
 const events = computed(() =>

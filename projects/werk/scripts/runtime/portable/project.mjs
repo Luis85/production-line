@@ -1,4 +1,4 @@
-import { cp, mkdir, open, lstat, readFile, realpath, readdir } from 'node:fs/promises';
+import { cp, open, lstat, readFile, realpath, readdir } from 'node:fs/promises';
 import { resolve, relative, join, isAbsolute, sep } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { seedWorkerPackage } from './npm-package.mjs';

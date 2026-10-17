@@ -1,3 +1,4 @@
+import type { ConversationModel } from '../application/conversation.js';
 import type { WorkerCapacityContext } from '../application/worker-capacity.js';
 import type { ConsumptionRuntime } from '../application/consumption.js';
 import { consumptionModel } from '../application/consumption-model.js';
@@ -18,8 +19,11 @@ import { executeModel, legacyModelReply, modelCapabilities, type StructuredModel
 import { DEFAULT_MAX_RUNTIME_MS, DEFAULT_MAX_TOOL_CALLS, DEFAULT_COMMAND_TIMEOUT_MS } from '../application/execution-policy.js';
 import { definitionStorage, sessionCatalogStorage, localTaskStorage, approvedTaskFiles } from './journal/workspace-files.js';
 
+type ModelSettings = Pick<WorkerSettingsPort, 'toolPolicy'> & { readonly value: Pick<WorkerSettingsPort['value'], 'execution' | 'repositories'> };
+export type WorkspaceProviderFactory = (...args: Parameters<typeof modelFor>) => (ConversationModel & Partial<StructuredModel>) | undefined;
+
 /** Concrete provider/tool construction stays at the worker edge. Each call observes current grants. */
-export function workspaceModelFactory(directory: string, settings: WorkerSettingsPort, model: typeof modelFor = modelFor, consumption?: ConsumptionRuntime): ModelFactory {
+export function workspaceModelFactory(directory: string, settings: ModelSettings, model: WorkspaceProviderFactory = modelFor, consumption?: ConsumptionRuntime): ModelFactory {
   return (connection, scope) => {
     const executionDirectory = !scope?.sessionId || scope.sessionId === 'default' ? directory : join(directory, 'sessions', scope.sessionId);
     const instance = model(connection, executionDirectory, undefined, scope ? {
@@ -44,7 +48,7 @@ export function workspaceModelFactory(directory: string, settings: WorkerSetting
   };
 }
 export function createWorkerDefinitions(directory: string) { return new WorkerDefinitions(definitionStorage(directory)); }
-export function createWorkerSessions(directory: string, settings: WorkerSettingsPort, model: typeof modelFor = modelFor, requests?: RequestJournal, activeOutsideChat: () => number = () => 0, consumption?: ConsumptionRuntime, capacity?: Pick<WorkerCapacityContext, 'remote'>) {
+export function createWorkerSessions(directory: string, settings: WorkerSettingsPort, model: WorkspaceProviderFactory = modelFor, requests?: RequestJournal, activeOutsideChat: () => number = () => 0, consumption?: ConsumptionRuntime, capacity?: Pick<WorkerCapacityContext, 'remote'>) {
   return new WorkerSessions(settings, {
     model: workspaceModelFactory(directory, settings, model, consumption), storage: sessionCatalogStorage(directory),
     consumptionBlocked: consumption ? () => consumption.status().blocked : undefined,
@@ -53,7 +57,7 @@ export function createWorkerSessions(directory: string, settings: WorkerSettings
     definitions: createWorkerDefinitions(directory), activeOutsideChat,
   });
 }
-export function createLocalTaskboard(directory: string, settings: WorkerSettingsPort, sessions: WorkerSessions, modelOrWorkspaces: typeof modelFor | LocalTaskWorkspaces = modelFor, workspaces?: LocalTaskWorkspaces, consumption?: ConsumptionRuntime) {
+export function createLocalTaskboard(directory: string, settings: WorkerSettingsPort, sessions: WorkerSessions, modelOrWorkspaces: WorkspaceProviderFactory | LocalTaskWorkspaces = modelFor, workspaces?: LocalTaskWorkspaces, consumption?: ConsumptionRuntime) {
   const model = typeof modelOrWorkspaces === 'function' ? modelOrWorkspaces : modelFor;
   return new LocalTaskboard(settings, sessions, {
     model: workspaceModelFactory(directory, settings, model, consumption), storage: localTaskStorage(directory), files: approvedTaskFiles, development: createDevelopmentRuntime,

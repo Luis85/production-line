@@ -1,3 +1,4 @@
+import { testErrorField, testErrorCode, testErrorMessage, testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
@@ -9,7 +10,7 @@ import { taskInput, profiles, workerPolicy } from '../../src/orchestrator/dist/s
 import { validateSnapshot } from '../../src/orchestrator/dist/shared/snapshots.js';
 import { httpStatus } from '../../src/orchestrator/dist/shared/http/errors.js';
 import { args, integer, input, request, readJson } from '../../src/orchestrator/dist/shared/io.js';
-const invalid = fn => assert.throws(fn, error => error.code === 'invalid_input');
+const invalid = fn => assert.throws(fn, error => testErrorCode(error) === 'invalid_input');
 const task = () => ({project:'demo',title:'Feature',criteria:['Acceptance'],source:{featureId:'f-1',iterationId:'iteration-1',branch:'iteration/1',commit:'a'.repeat(40),path:'docs/features/feature.md',iterationPrUrl:'https://git.example/repo/pull/1',specSha256:'b'.repeat(64)}});
 function snapshot() {
   return {
@@ -28,7 +29,9 @@ test('task source rejects unknown, traversing, malformed and ambiguous values',(
   assert.equal(taskInput({...task(),source:{...task().source,commit:'c'.repeat(64)}}).source.commit.length,64);
   for(const source of [null,[],{...task().source,extra:true},{...task().source,commit:'a'.repeat(41)},{...task().source,path:'../secrets'},{...task().source,path:'/tmp/file'},{...task().source,path:'docs\\feature.md'},{...task().source,branch:'../main'},{...task().source,branch:'refs/heads/.bad'},{...task().source,iterationPrUrl:'https://'},{...task().source,iterationPrUrl:'https://user:password@git.example/pr/1'}])invalid(()=>taskInput({...task(),source}));
   for(const value of [null,[],42])invalid(()=>taskInput(value));
-  for(const [field,value] of [['wikilinks',null],['provider',null],['provider',{toString:()=> 'auto'}],['priority',null],['priority',NaN]])invalid(()=>taskInput({...task(),[field]:value}));
+  /** @type {[string, unknown][]} */
+  const invalidFields = [['wikilinks',null],['provider',null],['provider',{toString:()=> 'auto'}],['priority',null],['priority',NaN]];
+  for(const [field,value] of invalidFields)invalid(()=>taskInput({...task(),[field]:value}));
 });
 test('worker policies and profiles reject malformed nested objects and ignored options',()=>{
   assert.equal(workerPolicy().maxAttempts,3);
@@ -42,7 +45,7 @@ test('snapshot contract validates every required group and rejects corrupt measu
   for(const field of ['configuration','runtime','execution','resources','health','usage','quality','provenance']){
     for(const value of (field==='configuration'?[null,[]]:[null,[],{}]))invalid(()=>validateSnapshot({...snapshot(),[field]:value}));
   }
-  for(const number of [NaN,Infinity,-1,'100',null,undefined,0.5]){const s=snapshot();s.resources.rssBytes=number;invalid(()=>validateSnapshot(s));}
+  for(const number of [NaN,Infinity,-1,'100',null,undefined,0.5]){const s=snapshot();invalid(()=>validateSnapshot({...s, resources: {...s.resources, rssBytes: number}}));}
   for(const modify of [s=>s.unknown=true,s=>s.runtime.secret='token',s=>s.resources.scope='task',s=>s.execution.timingSource='wall-clock',s=>s.provider='cursor',s=>s.taskId='../escape',s=>s.workerId=' worker ',s=>s.capturedAt='2026-02-30T12:00:00.000Z',s=>s.attempt=0,s=>s.provenance.artifactPath='../before.json',s=>s.health.recoveredAfterCrash='false',s=>s.health.heartbeatErrors=0.5]){const s=snapshot();modify(s);invalid(()=>validateSnapshot(s));}
 });
 test('mock snapshots cannot invent cost, usage or quality and preserve interrupted timing',()=>{
@@ -69,7 +72,7 @@ test('CLI input rejects inaccessible, malformed and oversized files with input e
     await assert.rejects(input(dir),e=>httpStatus(e)===400);
     await writeFile(join(dir,'bad.json'),'{');await assert.rejects(input(join(dir,'bad.json')),e=>httpStatus(e)===400);
     await writeFile(join(dir,'big.json'),'x'.repeat(65537));await assert.rejects(input(join(dir,'big.json')),e=>httpStatus(e)===413);
-    await writeFile(join(dir,'ok.json'),' {"title":"Feature"} ');assert.equal((await input(join(dir,'ok.json'))).title,'Feature');
+    await writeFile(join(dir,'ok.json'),' {"title":"Feature"} ');assert.deepEqual(await input(join(dir,'ok.json')), { title: 'Feature' });
   } finally {await rm(dir,{recursive:true,force:true});}
 });
 test('HTTP input requires exact JSON media type; client normalizes malformed error responses',async()=>{
@@ -78,12 +81,12 @@ test('HTTP input requires exact JSON media type; client normalizes malformed err
     if(req.url==='/null'){res.writeHead(400);res.end('null');return;}
     if(req.url==='/redirect'){res.writeHead(302,{location:'/null'});res.end();return;}
     res.writeHead(500);res.end('<html>Error</html>');
-  });server.listen(0,'127.0.0.1');await once(server,'listening');const base='http://127.0.0.1:'+server.address().port;
+  });server.listen(0,'127.0.0.1');await once(server,'listening');const base='http://127.0.0.1:'+testListeningAddress(server).port;
   try {
     await assert.rejects(request('file:///tmp','/',''),e=>httpStatus(e)===400);
     await assert.rejects(request(base,'//other.example',''),e=>httpStatus(e)===400);
-    await assert.rejects(request(base,'/null',''),e=>httpStatus(e)===400&&e.message==='HTTP 400');
-    await assert.rejects(request(base,'/bad',''),e=>e.status===500&&e.message.includes('invalid JSON'));
+    await assert.rejects(request(base,'/null',''),e=>httpStatus(e)===400&&testErrorMessage(e)==='HTTP 400');
+    await assert.rejects(request(base,'/bad',''),e=>testErrorField(e, 'status')===500&&testErrorMessage(e).includes('invalid JSON'));
     await assert.rejects(request(base,'/redirect',''));
     assert.equal((await fetch(base+'/input',{method:'POST',headers:{'content-type':'application/json-malformed'},body:'{}'})).status,415);
     assert.equal((await fetch(base+'/input',{method:'POST',headers:{'content-type':'application/json'},body:'null'})).status,400);

@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 
 /** Render an already validated, secret-free plan. Never create files or probe services. */
+/** @param {ReturnType<typeof import('./definition.mjs').planDefinition>} plan @param {{stateDir?: string, file?: string}} [options] */
 export function formatPlan(plan, { stateDir, file = 'system.yaml' } = {}) {
   const clean = value => String(value).replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ');
   const lines = [
