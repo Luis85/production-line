@@ -3,7 +3,7 @@ import { inputError } from "../config.mjs";
 // Git fetch, claim and publication can outlast the default 10 s API wait on slow remotes.
 const GIT_REQUEST_TIMEOUT_MS = 120000;
 export function workerCommands(catalog) {
-  catalog["feature setup"] = { local: true, required: [], options: ["project-dir", "features-dir", "if-match"], mutating: true, description: "Install a standalone feature authoring kit without starting or installing a worker; preserve existing project files. The authoring script is refreshed only while it matches the content recorded in .werk/authoring/manifest.json; --if-match REVISION replaces an unrecorded script with that revision." };
+  catalog["feature setup"] = { local: true, required: [], options: ["project-dir", "features-dir", "provider", "if-match"], mutating: true, description: "Install a standalone feature authoring kit without starting or installing a worker; preserve existing project files. The authoring script is refreshed only while it matches the content recorded in .werk/authoring/manifest.json; --if-match REVISION replaces an unrecorded script with that revision." };
   for (const action of ["create", "validate", "ready"]) catalog["feature author " + action] = {
     local: true, required: action === "create" ? ["name", "title"] : ["file", ...(action === "ready" ? ["if-match"] : [])],
     options: ["project-dir"], mutating: action !== "validate",
@@ -119,6 +119,12 @@ export function workerCommands(catalog) {
     ...action("/api/shared-intake", "sync", [], false),
     timeoutMs: GIT_REQUEST_TIMEOUT_MS,
     description: "Fetch the shared branch now and reconcile ready requests, claims and publications.",
+  };
+  catalog["shared setup"] = {
+    method: "POST", path: "/api/shared-intake", body: true, timeoutMs: GIT_REQUEST_TIMEOUT_MS,
+    description: "Connect a notes-only team through existing guarded APIs: pause, verify the local provider, accept only the explicitly selected repository, apply explicit tool grants, configure and synchronize committed Git intake, then optionally resume. --dry-run reads and previews without writes or provider processes. Failure retains completed changes and leaves starts paused.",
+    input: "Use expectedRevision from shared status and exactly one repositoryId or discoveryId from repository status. provider selects codex-cli or claude-cli; optional executable/model update it. toolAccess is optional and uses the tool-access set format; omitted grants are unchanged. resume must be explicit.",
+    example: { expectedRevision: 0, repositoryId: "ASSIGNMENT_ID", provider: { id: "claude-cli" }, intake: { remote: "origin", branch: "main", workflowPath: ".werk/feature-workflow.json", pollMs: 5000 }, resume: true },
   };
   catalog["shared configure"] = {
     ...action("/api/shared-intake", "configure", [], true),

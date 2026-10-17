@@ -1,5 +1,7 @@
 import type { SharedBlob, SharedFeatureRecord } from '../../application/shared-feature-state.js';
 import type { SharedFeatureView } from '../../application/shared-intake-contract.js';
+import { sharedHash } from '../../application/shared-feature-notes.js';
+import { sharedProgressSection } from './shared-progress.js';
 import { parseFeature, renderFeature } from './document.js';
 
 export function sharedSource(blob: SharedBlob) {
@@ -17,9 +19,14 @@ export function sharedSource(blob: SharedBlob) {
     const c = value as { passed?: unknown; issues?: unknown };
     return typeof c.passed === 'boolean' && Array.isArray(c.issues) && c.issues.length <= 64 && c.issues.every(i => typeof i === 'string' && i.length <= 2000) ? { passed: c.passed, issues: c.issues as string[] } : null;
   };
-  const shared: SharedFeatureView = { id, name: blob.name, title, status, owner: s.owner, isLocal: false, sourceCommit: s.sourceCommit, updatedAt: string(s.updatedAt, 50) ?? '', ready: checks(s.ready), done: checks(s.done), featureBranch: string(s.featureBranch), reviewNote: string(s.reviewNote), publication: 'synced', error: string(s.error), taskId: string(s.taskId, 100) };
+  const shared: SharedFeatureView = { id, name: blob.name, title, status, owner: s.owner, isLocal: false, sourceCommit: s.sourceCommit, updatedAt: string(s.updatedAt, 50) ?? '', ready: checks(s.ready), done: checks(s.done), featureBranch: string(s.featureBranch), reviewNote: string(s.reviewNote), taskNote: string(s.taskNote), publication: 'synced', error: string(s.error), taskId: string(s.taskId, 100) };
   return { id, title, status, shared };
 }
 export function renderSharedSource(record: SharedFeatureRecord) {
-  return renderFeature(parseFeature(record.sourceMarkdown), record.id, record.status, { shared: { schemaVersion: 1, owner: record.owner, sourceCommit: record.sourceCommit, sourceHash: record.inputHash, taskId: record.taskId, updatedAt: record.updatedAt, ready: record.ready, done: record.done, featureBranch: record.featureBranch, featureCommit: record.featureCommit ?? null, reviewNote: record.reviewNote, policyDigest: record.workflow.policyDigest, readyCheck: record.workflow.files.readyCheck, doneCheck: record.workflow.files.doneCheck, error: record.error } });
+  const parsed = parseFeature(record.sourceMarkdown);
+  const progress = { schemaVersion: 1, summary: record.progress ?? `Worker status: ${record.status.replaceAll('_', ' ')}.`, sourceBodyHash: sharedHash(parsed.body), task: record.taskNote ?? null, review: record.reviewNote };
+  parsed.document.set('werkOwner', record.owner);
+  parsed.document.set('werkTask', record.taskNote ? `[[${record.taskNote.replace(/\.md$/, '')}]]` : null);
+  parsed.document.set('werkPullRequest', record.reviewNote ? `[[${record.reviewNote.replace(/\.md$/, '')}]]` : null);
+  return renderFeature(parsed, record.id, record.status, { shared: { schemaVersion: 1, owner: record.owner, sourceCommit: record.sourceCommit, sourceHash: record.inputHash, taskId: record.taskId, updatedAt: record.updatedAt, ready: record.ready, done: record.done, featureBranch: record.featureBranch, featureCommit: record.featureCommit ?? null, reviewNote: record.reviewNote, taskNote: record.taskNote ?? null, progress, policyDigest: record.workflow.policyDigest, readyCheck: record.workflow.files.readyCheck, doneCheck: record.workflow.files.doneCheck, error: record.error } }) + sharedProgressSection(progress);
 }

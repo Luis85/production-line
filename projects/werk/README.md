@@ -1,8 +1,18 @@
 # Werk
 
-Werk models a Factory with logical subfactories and independent production lines. Each line has its own orchestrator, workers and task history. Run the hierarchy from one YAML definition, or start a single line for a smaller deployment.
+Werk lets a worker on your machine implement feature requests from a shared Git
+repository. Teammates use a project template and **Create Feature Request** skill
+in their own environment. Markdown carries the request, progress, questions and
+review handoff; the worker webview is optional. Configured providers, approved
+files, tool grants and required checks define what the worker can execute. A
+person reviews the result before merging.
 
-**Simulation is the default.** Workers record mock attempts and evidence, ending tasks as `simulated`. Trusted operators can opt into [native Linux Codex execution](docs/how-to/run-codex-task.md), which produces a local patch and a `review` task. Human review and merge remain explicit operator actions. Shared feature intake can publish configured feature branches and Obsidian review notes automatically. Orchestrator execution in the supplied Docker and managed VM profiles remains simulated. Standalone worker Chat and approved-file tasks can use configured API providers, including in Docker.
+Werk also models a Factory with logical subfactories and independent production
+lines. **The default Factory/orchestrator assignment flow is simulated.** Trusted
+operators can opt into [native Linux Codex execution](docs/how-to/run-codex-task.md).
+This is separate from standalone workers using configured Claude/Codex CLI or API
+providers. Orchestrator execution in supplied Docker and managed VM profiles
+remains simulated; standalone Docker workers can use configured API providers.
 
 ## Download and start
 
@@ -50,8 +60,10 @@ The [portable apps reference](docs/reference/portable-apps.md) covers AI-agent t
 submission, multiple workers, Factory intake, routing and copying/upgrading apps.
 Source contributors generate these folders with `npm run build`.
 
-For the complete download → project setup → feature execution → metrics journey,
-follow the [worker lifecycle tutorial](docs/tutorials/worker-feature-lifecycle.md).
+For the shared Markdown journey, follow [project worker setup](docs/how-to/project-worker.md)
+and [connect the shared queue](docs/how-to/shared-feature-intake.md). The separate
+[local proposal tutorial](docs/tutorials/worker-feature-lifecycle.md) teaches local
+intake and execution metrics without shared Git publication.
 
 ## Project-local worker and Markdown queue
 
@@ -62,24 +74,32 @@ node /path/to/werk-release/bin/apps/worker/cli.mjs init
 node bin/apps/worker/cli.mjs run
 ```
 
-Setup installs the app, a configurable watched feature folder, a draft request
-template and Docker Compose configuration. Copy the template, fill in the request
-and set `status: ready`; frontmatter tracks the worker queue and links to results.
-Orchestrator assignments appear in the same folder. See [project worker setup](docs/how-to/project-worker.md)
-for Docker startup and [the request contract](docs/reference/feature-requests.md).
+Setup installs the app, private environment/state, a configurable request folder,
+a draft template, offline authoring skills, an Obsidian Base and Docker Compose
+configuration. Sign in to your chosen local model CLI or configure an API provider.
+Then connect the project repository and intake branch using the
+[browser-free shared setup](docs/how-to/shared-feature-intake.md#connect-the-worker).
+The installed team template requires that connection; saving it locally does not
+start shared work.
 
 ## Shared feature requests for a distributed team
 
-Commit the project authoring kit, editable template, Obsidian Base, and
-`fr-ready-check.json` / `fr-done-check.json` to the team repository. Teammates use
-the **Create Feature Request** skill to draft and validate requests locally; they
-do not need a worker connection or installation.
+Commit the authoring kit, template, Base, and `fr-ready-check.json` /
+`fr-done-check.json`. Teammates draft and validate requests locally, mark them
+ready, then commit and push to the watched branch. They need neither a worker
+connection nor its provider credentials.
 
-In **Settings → Shared request intake**, connect the worker to an assigned repository
-and intake branch. The worker claims committed ready requests, executes in pinned
-worktrees, checks completion, and pushes a feature branch with an Obsidian review
-note. The developer checkout stays untouched; a person reviews before merging.
-See [shared intake setup](docs/how-to/shared-feature-intake.md) and
+The worker claims ready requests from the remote Git branch, executes in isolated
+worktrees and publishes progress into the original request. Pull updates to follow
+its `werkTask` and `werkPullRequest` links in Markdown or Obsidian. To answer an
+actionable **Task**, fill its **Answer**, set `status: ready`, then commit and push;
+the owning worker validates the response and continues automatically. A blocked
+Task describes the operator action needed without granting authority itself.
+
+Completion publishes a feature branch and a **PullRequest** Markdown note with
+review evidence. This note is a review handoff, not a Git-hosting pull request or
+merge approval. The developer checkout stays untouched. See
+[shared intake setup](docs/how-to/shared-feature-intake.md) and
 [offline authoring](docs/how-to/team-feature-authoring.md).
 
 Portable workers include an npm-compatible `package.json` with their available
@@ -191,7 +211,7 @@ Existing developer launchers remain available: `npm run dev:fleet` for one line,
 | --- | --- | --- |
 | Factory | Hierarchy, line registry and read-only portfolio summaries | `src/factory/dist` |
 | Orchestrator | Intake, task state, leases, context and evidence API | `src/orchestrator/dist` |
-| Worker | Simulated or explicitly enabled native Codex execution, durable journal and local status | `src/worker/dist` |
+| Worker | Standalone provider execution, shared Markdown lifecycle, isolated worktrees and evidence; simulated or opt-in native orchestrator assignments | `src/worker/dist` |
 
 Shared contracts remain in `src/shared`. Source and tests are grouped by concern. Runtime application data belongs in a private state directory, not the source tree or release archive.
 

@@ -7,6 +7,16 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+### Added
+
+- Teams can answer worker questions and resume stopped attempts through guarded Task Markdown notes. Shared Git intake consumes committed and pushed replies, acknowledges them without replaying execution, and links progress and PullRequest review notes from the original feature request.
+- Configurable public Task folders and actionable intake diagnostics make readiness and configuration blockers visible without opening the webview. Obsidian Bases include requests, human Tasks and review notes.
+- The portable worker provides `shared setup --file` with a read-only preview, explicit repository selection, local CLI provider checks and optional reviewed tool grants for headless team setup.
+
+### Fixed
+
+- Project initialization explains the shared Git connection required by its generated feature template and seeds the chosen provider in new templates while preserving existing team customizations.
+
 ## [0.11.0] - 2026-10-17
 
 ### Added

@@ -63,7 +63,7 @@ test('installed worker publishes one frozen shared feature from two clones and p
   });
   await mkdir(remote); await git(remote, 'init', '--bare', '--initial-branch=main');
   await git(directory, 'clone', remote, author); await configureGit(author);
-  await cli(installer, author, 'feature', 'setup');
+  await cli(installer, author, 'feature', 'setup', '--provider', 'openai-api');
   await assert.rejects(access(join(author, 'bin/apps/worker')), { code: 'ENOENT' });
   await writeFile(join(author, '.gitattributes'), '* text eol=lf\n');
   await writeFile(join(author, 'approved.txt'), 'committed source\n');
@@ -129,7 +129,7 @@ test('installed worker publishes one frozen shared feature from two clones and p
   const created = await cli(authoring, author, 'create', '--name', 'shared-change.md', '--title', 'Review a shared change');
   featureId = created.id; requestPath = created.path;
   let draft = await readFile(join(author, requestPath), 'utf8');
-  draft = draft.replace('paths: []', 'paths: [approved.txt]\nprovider: openai-api')
+  draft = draft.replace('paths: []', 'paths: [approved.txt]')
     .replace('<!-- Explain the problem, who experiences it, and the observable outcome. -->', 'Make the approved text explain the shared change.')
     .replace('<!-- Describe constraints, relevant behavior, and what is outside this request. -->', 'Preserve all developer checkout edits and unrelated files.')
     .replace('<!-- Add one or more concrete, verifiable checklist items. -->', '- [ ] The approved file contains the proposed shared change.\n- [ ] No unrelated file changes are proposed.')

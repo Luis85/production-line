@@ -20,6 +20,7 @@ export interface SharedFeatureView {
   done: { passed: boolean; issues: string[] } | null;
   featureBranch: string | null;
   reviewNote: string | null;
+  taskNote?: string | null;
   publication: 'pending' | 'synced' | 'error';
   error: string | null;
   taskId: string | null;
@@ -37,6 +38,7 @@ export interface SharedIntakeView {
   workflow: null | {
     requestsDirectory: string;
     reviewDirectory: string;
+    tasksDirectory?: string;
     template: string;
     base: string;
     readyCheck: string;

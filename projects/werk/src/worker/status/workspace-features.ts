@@ -1,4 +1,6 @@
 import type { WorkspaceContext } from './workspace-context.js';
+import type { InteractionCommand } from '../application/interactions.js';
+import { interaction } from './workspace-interactions.js';
 import { publicTaskConversation } from '../application/public-task-transcript.js';
 import { type FeatureTrackingInput } from '../application/feature-tracking.js';
 import type { SharedExecution, SharedFeatureRecord } from '../application/shared-feature-state.js';
@@ -63,10 +65,28 @@ export async function featureCommand(workspace: WorkspaceContext, input: unknown
 export function inspectSharedFeature(workspace: WorkspaceContext, id: string): SharedExecution | undefined{
   try {
     const task = workspace.board.executionDetail(id);
-    return { status: task.status, summary: task.summary, patch: task.patch,
+    return { status: task.status, summary: task.summary, patch: task.patch, interaction: task.interaction,
       ...(task.implementation ? { implementation: developmentScopeView(task.implementation), developmentEvidence: task.developmentEvidence, developmentVerified: developmentCompletionValid(task) } : {}),
       request: task.requestId ? workspace.sessions.requests.get(task.requestId) : null, currentTurnId: task.currentTurnId, runId: task.runId, error: task.error };
   } catch { return undefined; }
+}
+
+/** Markdown replies use the same authority and durable operation ledger as UI replies. */
+export async function continueFeatureInteraction(workspace: WorkspaceContext, sessionId: string, command: InteractionCommand) {
+  if (command.sessionId !== sessionId) throw new DomainError('invalid_input', 'This Task note belongs to another worker interaction.');
+  const acknowledged = workspace.sessions.interactions.operation(sessionId, command.operationId);
+  if (acknowledged) {
+    return workspace.sessions.interactions.accept({
+      sessionId, operationId: command.operationId, kind: command.action,
+      expectedRevision: command.expectedRevision, pendingId: command.pendingId, priorTurnId: command.turnId,
+      input: (command.action === 'answer' ? command.answer : command.message) ?? '',
+    }).view;
+  }
+  if (!workspace.acceptingTasks || workspace.configurationUpdating || workspace.repositoriesUpdating || workspace.executionProfiles?.pending()) throw new DomainError('unavailable', 'Task response is saved. It will resume after the worker is available.');
+  if (workspace.settings.value.board.paused) throw new DomainError('unavailable', 'Task response is saved. Resume the worker queue to continue.');
+  if (workspace.consumption.status().blocked) throw new DomainError('unavailable', 'Task response is saved. The worker consumption limit currently prevents execution.');
+  if (workspace.sessions.chatActive + workspace.board.active >= workspace.settings.value.board.queueCapacity) throw new DomainError('unavailable', 'Task response is saved. It will resume when queue capacity is available.');
+  return interaction(workspace, command);
 }
 
 export async function submitSharedFeature(workspace: WorkspaceContext, record: SharedFeatureRecord){

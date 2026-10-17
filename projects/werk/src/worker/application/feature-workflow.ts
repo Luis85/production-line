@@ -7,6 +7,8 @@ export const featureWorkflowConfigPath = '.werk/feature-workflow.json';
 export interface FeatureWorkflowConfiguration {
   schemaVersion: 1; id: string; requestsDirectory: string; reviewDirectory: string;
   template: string; base: string; readyCheck: string; doneCheck: string;
+  /** Older frozen workflows keep Task notes beneath their review directory. */
+  tasksDirectory?: string;
 }
 export interface FeatureCheck {
   schemaVersion: 1; id: string; version: number; stage: GateStage;
@@ -39,20 +41,26 @@ export function featureWorkflowPath(value: unknown, label = 'Workflow path'): st
 }
 const inside = (path: string, directory: string) => path.toLowerCase() === directory.toLowerCase() || path.toLowerCase().startsWith(directory.toLowerCase() + '/');
 export function defaultFeatureWorkflow(): FeatureWorkflowConfiguration {
-  return { schemaVersion: 1, id: 'feature-requests', requestsDirectory: 'features', reviewDirectory: 'feature-reviews', template: 'features/_templates/feature-request.md', base: 'Feature Requests.base', readyCheck: 'fr-ready-check.json', doneCheck: 'fr-done-check.json' };
+  return { schemaVersion: 1, id: 'feature-requests', requestsDirectory: 'features', reviewDirectory: 'feature-reviews', tasksDirectory: 'feature-tasks', template: 'features/_templates/feature-request.md', base: 'Feature Requests.base', readyCheck: 'fr-ready-check.json', doneCheck: 'fr-done-check.json' };
+}
+export function featureTaskDirectory(config: FeatureWorkflowConfiguration): string {
+  return config.tasksDirectory ?? config.reviewDirectory + '/_tasks';
 }
 export function validateFeatureWorkflow(value: unknown): FeatureWorkflowConfiguration {
-  const raw = exact(value, ['schemaVersion', 'id', 'requestsDirectory', 'reviewDirectory', 'template', 'base', 'readyCheck', 'doneCheck'], 'feature workflow');
+  const raw = exact(value, ['schemaVersion', 'id', 'requestsDirectory', 'reviewDirectory', 'tasksDirectory', 'template', 'base', 'readyCheck', 'doneCheck'], 'feature workflow');
   if (raw.schemaVersion !== 1 || typeof raw.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(raw.id)) invalid('Feature workflow requires schemaVersion 1 and a stable lowercase ID.');
   const result = { schemaVersion: 1, id: raw.id } as FeatureWorkflowConfiguration;
   for (const key of ['requestsDirectory', 'reviewDirectory', 'template', 'base', 'readyCheck', 'doneCheck'] as const) result[key] = featureWorkflowPath(raw[key], key);
+  if (raw.tasksDirectory !== undefined) result.tasksDirectory = featureWorkflowPath(raw.tasksDirectory, 'tasksDirectory');
+  const tasks = featureTaskDirectory(result);
+  if (inside(tasks, result.requestsDirectory) || inside(result.requestsDirectory, tasks) || inside(result.reviewDirectory, tasks) || inside(tasks, result.reviewDirectory + '/_operations')) invalid('Task notes must be separate from requests, review roots and publication receipts. A review subfolder is allowed.');
   if (inside(result.requestsDirectory, result.reviewDirectory) || inside(result.reviewDirectory, result.requestsDirectory)) invalid('Request and review directories must be separate, non-overlapping folders.');
-  if ([result.requestsDirectory, result.reviewDirectory].some(path => path.split('/').includes('.werk'))) invalid('Request and review directories must be outside private .werk storage.');
+  if ([result.requestsDirectory, result.reviewDirectory, tasks].some(path => path.toLowerCase().split('/').includes('.werk'))) invalid('Request and review directories must be outside private .werk storage.');
   if (!result.template.endsWith('.md') || !result.base.endsWith('.base') || !result.readyCheck.endsWith('.json') || !result.doneCheck.endsWith('.json')) invalid('Workflow template, Base and checks require .md, .base and .json extensions.');
   const files = [result.template, result.base, result.readyCheck, result.doneCheck];
-  if ([result.requestsDirectory, result.reviewDirectory, ...files].some(path => ['.agents', '.claude', '.codex', '.werk/authoring', '.werk/worker', '.werk/provider-home', 'bin/apps'].some(reserved => inside(path, reserved) || inside(reserved, path)))) invalid('Workflow paths cannot overlap private runtime, installed applications or agent integration files.');
-  if (new Set(files.map(path => path.toLowerCase())).size !== files.length || files.some(path => path === result.requestsDirectory || path === result.reviewDirectory)) invalid('Workflow files must use distinct paths outside folder roots.');
-  if (files.some(path => inside(path, result.reviewDirectory))) invalid('Workflow configuration files cannot be generated review notes.');
+  if ([result.requestsDirectory, result.reviewDirectory, tasks, ...files].some(path => ['.agents', '.claude', '.codex', '.werk/authoring', '.werk/worker', '.werk/provider-home', 'bin/apps'].some(reserved => inside(path, reserved) || inside(reserved, path)))) invalid('Workflow paths cannot overlap private runtime, installed applications or agent integration files.');
+  if (new Set(files.map(path => path.toLowerCase())).size !== files.length || files.some(path => [result.requestsDirectory, result.reviewDirectory, tasks].some(directory => path.toLowerCase() === directory.toLowerCase()))) invalid('Workflow files must use distinct paths outside folder roots.');
+  if (files.some(path => inside(path, result.reviewDirectory) || inside(path, tasks))) invalid('Workflow configuration files cannot be generated review notes.');
   if (inside(result.template, result.requestsDirectory) && result.template.slice(result.requestsDirectory.length + 1).split('/').length === 1 && !result.template.slice(result.requestsDirectory.length + 1).startsWith('_')) invalid('Place the template in a subfolder or use an underscore-prefixed name to keep it out of intake.');
   return result;
 }

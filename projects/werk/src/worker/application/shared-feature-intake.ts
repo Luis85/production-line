@@ -1,8 +1,9 @@
 import { SerializedOperations } from '../../shared/serialized-operations.js';
 import { DomainError } from '../../shared/errors.js';
-import type { FeatureWorkflowSnapshot } from './feature-workflow.js';
+import { featureTaskDirectory, type FeatureWorkflowSnapshot } from './feature-workflow.js';
+import { publishIntakeDiagnostic } from './intake-diagnostics.js';
 import type { SharedFeatureView, SharedIntakeView, SharedIntakeNote } from './shared-intake-contract.js';
-import { bindingKey, defaultSharedIntakeConfig, sharedTerminal, validateSharedIntakeConfig, type SharedFeatureRecord, type SharedFeatureState, type SharedIntakePorts } from './shared-feature-state.js';
+import { bindingKey, defaultSharedIntakeConfig, sharedTerminal, sharedTaskActive, validateSharedIntakeConfig, type SharedFeatureRecord, type SharedFeatureState, type SharedIntakePorts } from './shared-feature-state.js';
 import { SharedFeatureLifecycle } from './shared-feature-lifecycle.js';
 import { sharedHash } from './shared-feature-notes.js';
 
@@ -24,7 +25,7 @@ export class SharedFeatureIntake {
   constructor(ports: SharedIntakePorts) { this.ports = ports; this.lifecycle = new SharedFeatureLifecycle(ports, () => this.save()); }
   get enabled() { return this.initialized && this.state.config.enabled; }
   get busy() { return !!this.syncing || this.configuring; }
-  requiredRepositoryIds(): string[] { return [...new Set([...(this.enabled ? [this.state.config.repositoryId] : []), ...this.state.records.filter(record => !sharedTerminal(record.status) || record.publication !== 'synced').map(record => record.binding.repositoryId)])]; }
+  requiredRepositoryIds(): string[] { return [...new Set([...(this.enabled ? [this.state.config.repositoryId] : []), ...this.state.records.filter(record => !sharedTerminal(record.status) || sharedTaskActive(record) || record.publication !== 'synced').map(record => record.binding.repositoryId)])]; }
   /** Retain provenance across binding changes without exposing request contents or credentials. */
   sourceForTask(taskId: string): { repositoryId: string; path: string } | undefined {
     const record = this.state.records.find(record => record.taskId === taskId);
@@ -48,13 +49,13 @@ export class SharedFeatureIntake {
       canEdit: !blockedReason && !this.busy, blockedReason: blockedReason ?? (this.busy ? 'Wait for shared synchronization to finish.' : null),
       state: !this.enabled ? 'disabled' : this.syncing ? 'syncing' : this.fault ? 'error' : 'idle', error: this.fault,
       lastSyncedAt: this.syncedAt, sourceCommit: workflow?.commit ?? null,
-      workflow: workflow ? { ...workflow.configuration, readyDigest: workflow.files.readyCheck.sha256, doneDigest: workflow.files.doneCheck.sha256 } : null,
+      workflow: workflow ? { ...workflow.configuration, tasksDirectory: featureTaskDirectory(workflow.configuration), readyDigest: workflow.files.readyCheck.sha256, doneDigest: workflow.files.doneCheck.sha256 } : null,
       requests: [...locals, ...this.discovered.filter(r => !known.has(r.id))],
     };
   }
   private publicRecord(record: SharedFeatureRecord): SharedFeatureView {
-    const { id, name, title, status, owner, sourceCommit, updatedAt, ready, done, featureBranch, reviewNote, publication, error, taskId } = record;
-    return structuredClone({ id, name, title, status, owner, isLocal: true, sourceCommit, updatedAt, ready, done, featureBranch, reviewNote, publication, error, taskId });
+    const { id, name, title, status, owner, sourceCommit, updatedAt, ready, done, featureBranch, reviewNote, taskNote, publication, error, taskId } = record;
+    return structuredClone({ id, name, title, status, owner, isLocal: true, sourceCommit, updatedAt, ready, done, featureBranch, reviewNote, taskNote, publication, error, taskId });
   }
   async configure(value: unknown, expectedRevision: number) {
     const config = validateSharedIntakeConfig(value);
@@ -62,7 +63,7 @@ export class SharedFeatureIntake {
       if (this.stopping.signal.aborted) throw new DomainError('unavailable', 'Worker is stopping.');
       if (this.syncing) throw new DomainError('conflict', 'Wait for shared synchronization to finish.');
       if (expectedRevision !== this.state.revision) throw new DomainError('conflict', 'Shared intake changed. Reload before saving.');
-      if (bindingKey(config) !== bindingKey(this.state.config) && this.state.records.some(record => !sharedTerminal(record.status) || record.publication !== 'synced')) throw new DomainError('conflict', 'Finish the owned requests and publish their notes before changing the shared repository binding. Disable intake to pause it.');
+      if (bindingKey(config) !== bindingKey(this.state.config) && this.state.records.some(record => !sharedTerminal(record.status) || sharedTaskActive(record) || record.publication !== 'synced')) throw new DomainError('conflict', 'Finish the owned requests and publish their notes before changing the shared repository binding. Disable intake to pause it.');
       if (config.enabled) this.ports.repository(config);
       const previous = this.state;
       this.configuring = true;
@@ -82,7 +83,7 @@ export class SharedFeatureIntake {
   private async reconcile() {
     const signal = this.stopping.signal, config = structuredClone(this.state.config);
     for (const record of this.state.records) {
-      if (bindingKey(record.binding) !== bindingKey(config) && sharedTerminal(record.status) && record.publication === 'synced') continue;
+      if (bindingKey(record.binding) !== bindingKey(config) && sharedTerminal(record.status) && !sharedTaskActive(record) && record.publication === 'synced') continue;
       await this.lifecycle.reconcile(record, signal);
     }
     if (!config.enabled) { this.fault = null; return; }
@@ -93,10 +94,19 @@ export class SharedFeatureIntake {
     this.discovered = [];
     const ids = new Map<string, number>();
     const observed = files.map(file => { try { const source = this.ports.source(file); if (source.id) ids.set(source.id, (ids.get(source.id) ?? 0) + 1); return { file, source }; } catch { return { file, source: null }; } });
+    const diagnosticErrors: string[] = [];
+    const diagnostic = async (file: Parameters<typeof publishIntakeDiagnostic>[0]['file'], issues: string[]) => {
+      try { return await publishIntakeDiagnostic({ repository, workflow: snapshot, file, owner: this.state.workerId, issues, signal }); }
+      catch (error) {
+        signal.throwIfAborted();
+        diagnosticErrors.push(file.name + ': ' + (error instanceof Error ? error.message : 'Intake Task could not be published.'));
+        return null;
+      }
+    };
     for (const { file, source } of observed) {
       signal.throwIfAborted();
-      if (!source) { this.discovered.push(this.unclaimed(file.name, '', 'Invalid request', 'invalid', commit, ['The request Markdown or frontmatter is invalid.'])); continue; }
-      if (source.id && ids.get(source.id)! > 1) { this.discovered.push(this.unclaimed(file.name, source.id, source.title, 'invalid', commit, ['Duplicate feature ID. Each request must have a unique stable ID.'])); continue; }
+      if (!source) { const issues = ['The request Markdown or frontmatter is invalid.']; const taskNote = await diagnostic(file, issues); this.discovered.push({ ...this.unclaimed(file.name, '', 'Invalid request', 'invalid', commit, issues), taskNote }); continue; }
+      if (source.id && ids.get(source.id)! > 1) { const issues = ['Duplicate feature ID. Each request must have a unique stable ID.']; const taskNote = await diagnostic(file, issues); this.discovered.push({ ...this.unclaimed(file.name, source.id, source.title, 'invalid', commit, issues), taskNote }); continue; }
       if (source.shared) {
         if (!this.state.records.some(record => record.id === source.id && bindingKey(record.binding) === bindingKey(config))) {
           const own = source.shared.owner === this.state.workerId;
@@ -108,10 +118,11 @@ export class SharedFeatureIntake {
       if (existing) continue;
       if (source.status !== 'ready') { this.discovered.push(this.unclaimed(file.name, source.id ?? '', source.title, source.status, commit)); continue; }
       const ready = this.ports.ready(file.content, snapshot);
-      if (!ready.valid || !ready.input || !ready.inputHash) { this.discovered.push(this.unclaimed(file.name, source.id ?? '', source.title, 'needs_rework', commit, ready.errors.map(e => e.message))); continue; }
-      if (!this.ports.canAdmit()) { this.discovered.push(this.unclaimed(file.name, ready.input.id, ready.input.title, 'ready', commit, [])); continue; }
+      if (!ready.valid || !ready.input || !ready.inputHash) { const issues = ready.errors.map(e => e.message); const taskNote = await diagnostic(file, issues); this.discovered.push({ ...this.unclaimed(file.name, source.id ?? '', source.title, 'needs_rework', commit, issues), taskNote }); continue; }
       const issue = this.ports.admissionIssue?.(ready.input);
-      if (issue) { this.discovered.push({ ...this.unclaimed(file.name, ready.input.id, ready.input.title, 'ready', commit, []), error: issue.slice(0, 500) }); continue; }
+      if (issue) { const taskNote = await diagnostic(file, [issue]); this.discovered.push({ ...this.unclaimed(file.name, ready.input.id, ready.input.title, 'ready', commit, []), error: issue.slice(0, 500), taskNote }); continue; }
+      await diagnostic(file, []);
+      if (!this.ports.canAdmit()) { this.discovered.push(this.unclaimed(file.name, ready.input.id, ready.input.title, 'ready', commit, [])); continue; }
       if (this.state.records.length >= 100) throw new DomainError('conflict', 'Shared intake has reached 100 owned requests. Retain this worker state and configure another worker for further requests.');
       const at = new Date().toISOString();
       const record: SharedFeatureRecord = {
@@ -130,7 +141,7 @@ export class SharedFeatureIntake {
       await this.lifecycle.reconcile(record, signal);
     }
     this.syncedAt = new Date().toISOString();
-    this.fault = null;
+    this.fault = diagnosticErrors.length ? diagnosticErrors.join(' ').slice(0, 500) : null;
   }
   private unclaimed(name: string, id: string, title: string, status: string, commit: string, issues?: string[]): SharedFeatureView {
     return { id: id || 'file-' + sharedHash(name).slice(0, 24), name, title, status, owner: null, isLocal: false, sourceCommit: commit, updatedAt: '', ready: issues ? { passed: issues.length === 0, issues } : null, done: null, featureBranch: null, reviewNote: null, publication: 'synced', error: null, taskId: null };

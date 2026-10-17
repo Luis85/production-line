@@ -1,5 +1,6 @@
 import { approvedPathsCollide } from '../../application/approved-paths.js';
 import { containsSensitivePatchMaterial } from '../../application/review-patch-policy.js';
+import { acceptedSharedBody, sharedSourceProjectionKeys } from './shared-progress.js';
 import { requestName, parseFeature } from './document.js';
 import { canonicalJson } from '../../application/request-gates.js';
 import { branchName, commitId, FeatureGitIo, GitFeatureError, gitPath, hash, textBytes, type GitBlob } from './git-io.js';
@@ -8,7 +9,7 @@ import type { RepositoryRoot } from '../repositories-git.js';
 export { GitFeatureError } from './git-io.js';
 export interface GitFeatureRepositoryOptions {
   repository: string; remote: string; branch: string; requestsDirectory: string; reviewDirectory: string;
-  stateDirectory: string; workerId: string; branchPrefix?: string; protectedPaths?: string[];
+  tasksDirectory?: string; stateDirectory: string; workerId: string; branchPrefix?: string; protectedPaths?: string[];
 }
 export interface GitFeatureFile { name: string; path: string; revision: string; content: string; }
 export interface GitFeatureSnapshot { commit: string; files: GitFeatureFile[]; }
@@ -27,9 +28,10 @@ const operation = (value: string) => {
 };
 const beneath = (path: string, directory: string) => path.startsWith(directory + '/');
 function unchangedRequest(before: string, after: string) {
+  if (before === after) return;
   const old = parseFeature(before), next = parseFeature(after);
-  const immutable = (value: Record<string, unknown>) => Object.fromEntries(Object.entries(value).filter(([key]) => !['id', 'status', 'werk'].includes(key)));
-  if (old.body !== next.body || canonicalJson(immutable(old.data)) !== canonicalJson(immutable(next.data)) || old.data.id !== undefined && old.data.id !== next.data.id)
+  const immutable = (value: Record<string, unknown>) => Object.fromEntries(Object.entries(value).filter(([key]) => !['id', 'status', 'werk', ...sharedSourceProjectionKeys].includes(key)));
+  if (acceptedSharedBody(old) !== acceptedSharedBody(next) || canonicalJson(immutable(old.data)) !== canonicalJson(immutable(next.data)) || old.data.id !== undefined && old.data.id !== next.data.id)
     throw new GitFeatureError('conflict', 'Lifecycle publication may update only the request ID, status and worker metadata; accepted developer content is preserved.');
 }
 
@@ -42,6 +44,9 @@ export class GitFeatureRepository {
   constructor(options: GitFeatureRepositoryOptions) {
     operation(options.workerId); branchName(options.branch); branchName(options.branchPrefix ?? 'werk/features');
     gitPath(options.requestsDirectory); gitPath(options.reviewDirectory);
+    const tasks = options.tasksDirectory ?? options.reviewDirectory + '/_tasks';
+    gitPath(tasks);
+    if (tasks === options.requestsDirectory || beneath(tasks, options.requestsDirectory) || beneath(options.requestsDirectory, tasks) || tasks === options.reviewDirectory || beneath(options.reviewDirectory, tasks) || tasks === options.reviewDirectory + '/_operations' || beneath(tasks, options.reviewDirectory + '/_operations')) throw new GitFeatureError('invalid_input', 'Task notes must stay separate from request intake and publication receipts.');
     if (options.requestsDirectory === options.reviewDirectory || beneath(options.requestsDirectory, options.reviewDirectory) || beneath(options.reviewDirectory, options.requestsDirectory)) throw new GitFeatureError('invalid_input', 'Shared request and review directories must be separate.');
     if (options.protectedPaths && (!Array.isArray(options.protectedPaths) || options.protectedPaths.length > 16)) throw new GitFeatureError('invalid_input', 'Bound the protected workflow paths.');
     for (const path of options.protectedPaths ?? []) gitPath(path);
@@ -92,7 +97,7 @@ export class GitFeatureRepository {
     let bytes = 0;
     for (const [index, change] of changes.entries()) {
       gitPath(change.path); textBytes(change.content, index ? 524288 : 65536); bytes += Buffer.byteLength(change.content);
-      if (index && (!beneath(change.path, this.options.reviewDirectory) || change.path === this.options.reviewDirectory + '/_operations' || beneath(change.path, this.options.reviewDirectory + '/_operations'))) throw new GitFeatureError('invalid_input', 'Lifecycle artifacts must stay in the configured review directory outside operation receipts.');
+      if (index && (!(beneath(change.path, this.options.reviewDirectory) || beneath(change.path, this.options.tasksDirectory ?? this.options.reviewDirectory + '/_tasks')) || change.path === this.options.reviewDirectory + '/_operations' || beneath(change.path, this.options.reviewDirectory + '/_operations'))) throw new GitFeatureError('invalid_input', 'Lifecycle artifacts must stay in the configured review or Task directories outside operation receipts.');
       if (change.expectedRevision !== null && !revision(change.expectedRevision)) throw new GitFeatureError('invalid_input', 'Provide each existing publication file revision, or null for a new file.');
     }
     if (bytes > 2 * 1024 * 1024) throw new GitFeatureError('invalid_input', 'Lifecycle publication exceeds 2 MiB.');
@@ -169,7 +174,7 @@ export class GitFeatureRepository {
       gitPath(path);
       const normalized = path.toLowerCase();
       if (normalized === '.werk' || beneath(normalized, '.werk')) throw new GitFeatureError('invalid_input', 'Feature patches cannot modify worker control storage.');
-      if ([this.options.requestsDirectory, this.options.reviewDirectory].some(directory => normalized === directory.toLowerCase() || beneath(normalized, directory.toLowerCase())) || (this.options.protectedPaths ?? []).some(protectedPath => normalized === protectedPath.toLowerCase())) throw new GitFeatureError('invalid_input', 'Feature patches cannot modify their workflow configuration, request intake or review artifacts.');
+      if ([this.options.requestsDirectory, this.options.reviewDirectory, this.options.tasksDirectory ?? this.options.reviewDirectory + '/_tasks'].some(directory => normalized === directory.toLowerCase() || beneath(normalized, directory.toLowerCase())) || (this.options.protectedPaths ?? []).some(protectedPath => normalized === protectedPath.toLowerCase())) throw new GitFeatureError('invalid_input', 'Feature patches cannot modify their workflow configuration, request intake or review artifacts.');
     }
     if (approvedPathsCollide(input.approvedPaths)) throw new GitFeatureError('invalid_input', 'Approved feature paths must be unique without file or folder aliases.');
     const branch = branchName(`${this.options.branchPrefix ?? 'werk/features'}/${input.featureId}-${hash(input.operationId).slice(0, 12)}`);

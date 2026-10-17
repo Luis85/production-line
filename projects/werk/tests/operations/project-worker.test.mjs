@@ -19,6 +19,10 @@ test('project init installs a self-contained worker, configurable template and D
   assert.equal((await cli(entry, cwd, 'feature', 'folder', 'get')).path, 'requests/features');
   assert.equal((await cli(entry, cwd, 'feature', 'folder', 'plan', '--path', 'new-requests')).changed, true);
   const template = join(initial.featuresDirectory, '_templates/feature-request.md'); assert.equal(front(await readFile(template, 'utf8')).status, 'draft');
+  assert.equal(front(await readFile(template, 'utf8')).provider, 'openai-api');
+  assert.equal(initial.intake.mode, 'shared_git'); assert.equal(initial.intake.connectionRequired, true);
+  assert.match(initial.intake.setup, /shared configure/);
+  assert.match(initial.next, /provider configure/); assert.doesNotMatch(initial.next, /shared setup/);
   await writeFile(template, '# User template\n'); await cli(entry, cwd, 'init'); assert.equal(await readFile(template, 'utf8'), '# User template\n');
   const compose = parse(await readFile(join(cwd, '.werk/compose.worker.yaml'), 'utf8')); assert.match(compose.services.worker.image, /node:24/); assert.equal(compose.services.worker.working_dir, '/project'); assert.equal(compose.services.worker.volumes[0].source, '..'); assert.match(compose.services.worker.ports[0], /4207/);
   assert.match(await readFile(join(cwd, '.werk/.gitignore'), 'utf8'), /worker\//);
@@ -61,6 +65,7 @@ test('installed native worker consumes files, exports review patches and keeps t
 test('generated private question and gate ignores preserve operator rules and remain idempotent on repeat init', async t => {
   const cwd = await project(t);
   const setup = await initializeWorker(resolve('bin/apps/worker'), { 'project-dir': cwd, 'features-dir': 'requests/features' });
+  assert.match(setup.intake.setup, /shared setup/); assert.match(setup.next, /local provider explicitly/);
   const ignorePath = join(setup.featuresDirectory, '.gitignore');
   assert.match(await readFile(ignorePath, 'utf8'), /^_questions\/$/m);
   assert.match(await readFile(ignorePath, 'utf8'), /^_gates\/$/m);

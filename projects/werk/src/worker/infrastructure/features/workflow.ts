@@ -3,7 +3,7 @@ import { DomainError } from '../../../shared/errors.js';
 import { inputGateFacts, evaluateGate, gateDigest } from '../../application/request-gates.js';
 import {
   featureWorkflowConfigPath, validateFeatureWorkflow, validateFeatureCheck, featureWorkflowPolicy,
-  defaultFeatureCheck, featureGateInput, featureContentHash, featureInputHash, featureWorkflowPath,
+  defaultFeatureCheck, featureGateInput, featureContentHash, featureInputHash, featureWorkflowPath, featureTaskDirectory,
   type FeatureCheck, type FeatureReadiness, type FeatureWorkflowSnapshot, type SharedFeatureInput, type FeatureWorkflowConfiguration,
 } from '../../application/feature-workflow.js';
 import { parseFeature, featureInput } from './document.js';
@@ -42,6 +42,7 @@ export function featureRequestSections(body: string): Record<SectionName, string
 export interface FeatureTemplateContract { templateId: string; headings: string[]; fields: string[]; }
 export function validateFeatureTemplate(markdown: string): FeatureTemplateContract {
   const parsed = parseFeature(markdown), data = parsed.data;
+  if (['werkOwner', 'werkTask', 'werkPullRequest'].some(key => Object.hasOwn(data, key))) invalid('Templates must not contain worker-owned progress links.');
   if (data.status !== 'draft' || data.mode !== 'patch' || data.source !== undefined || data.werk !== undefined) invalid('Shared feature templates require draft patch mode without worker-owned metadata.');
   if (typeof data.templateId !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(data.templateId)) invalid('Feature templates require a stable templateId.');
   featureRequestSections(parsed.body);
@@ -55,7 +56,7 @@ function meaningful(value: unknown): boolean {
   if (Array.isArray(value)) return value.length > 0 && value.every(meaningful);
   return false;
 }
-export interface FeatureReadinessScope { configuration: FeatureWorkflowConfiguration; workflowPath?: string; }
+export interface FeatureReadinessScope { configuration: FeatureWorkflowConfiguration; workflowPath?: string; /** Private recovery only: old accepted metadata predates generated progress links. */ allowLegacyProgressMetadata?: boolean; }
 export function validateFeatureReadiness(markdown: string, readyCheck: FeatureCheck, provider = 'codex-cli', template?: string, scope?: FeatureReadinessScope): FeatureReadiness {
   const policy = featureWorkflowPolicy(readyCheck, defaultFeatureCheck('done'));
   const errors: FeatureReadiness['errors'] = [];
@@ -65,6 +66,7 @@ export function validateFeatureReadiness(markdown: string, readyCheck: FeatureCh
     if (typeof parsed.data.id !== 'string') invalid('Shared feature requests require a stable id before submission.');
     if (typeof parsed.data.templateId !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(parsed.data.templateId)) invalid('Shared feature requests require a stable templateId.');
     if (!['draft', 'ready'].includes(String(parsed.data.status))) invalid('New shared feature requests require status: draft or ready.');
+    if (!scope?.allowLegacyProgressMetadata && ['werkOwner', 'werkTask', 'werkPullRequest'].some(key => Object.hasOwn(parsed.data, key))) invalid('New shared requests must not contain worker-owned progress links.');
     if (parsed.data.werk !== undefined || parsed.data.source !== undefined) invalid('New shared feature requests must not contain worker-owned werk or source metadata.');
     if (base.mode !== 'patch' || !base.paths?.length) invalid('Shared feature requests require mode: patch and explicit approved paths.');
     validateApprovedPaths(base.paths);
@@ -72,7 +74,7 @@ export function validateFeatureReadiness(markdown: string, readyCheck: FeatureCh
     if (scope) {
       const config = validateFeatureWorkflow(scope.configuration), protectedFiles = [config.template, config.base, config.readyCheck, config.doneCheck, featureWorkflowPath(scope.workflowPath ?? featureWorkflowConfigPath)];
       const inside = (path: string, root: string) => path === root || path.startsWith(root + '/');
-      if (base.paths.some(path => { const lower = path.toLowerCase(); return [config.requestsDirectory, config.reviewDirectory].some(root => inside(lower, root.toLowerCase())) || protectedFiles.some(file => lower === file.toLowerCase()); })) invalid('Approved paths cannot change workflow configuration, checks, templates, Base files, request queues or generated review notes.');
+      if (base.paths.some(path => { const lower = path.toLowerCase(); return [config.requestsDirectory, config.reviewDirectory, featureTaskDirectory(config)].some(root => inside(lower, root.toLowerCase())) || protectedFiles.some(file => lower === file.toLowerCase()); })) invalid('Approved paths cannot change workflow configuration, checks, templates, Base files, request queues or generated Task and review notes.');
     }
     if (new Set(base.paths.map(path => path.toLowerCase())).size !== base.paths.length) invalid('Approved paths must be distinct, including on case-insensitive filesystems.');
     const sections = featureRequestSections(parsed.body);
@@ -116,6 +118,8 @@ export async function loadFeatureWorkflowSnapshot(options: { commit: string; rea
   function json(content: string, label: string): unknown { try { return JSON.parse(content); } catch { return invalid(`${label} must contain valid JSON.`); } }
   const configurationFile = await read(configPath, 16384), configuration = validateFeatureWorkflow(json(configurationFile.content, 'Feature workflow'));
   if ([configuration.template, configuration.base, configuration.readyCheck, configuration.doneCheck].some(path => path.toLowerCase() === configPath.toLowerCase())) invalid('Workflow configuration cannot also be a template, Base or check file.');
+  const configLower = configPath.toLowerCase();
+  if ([configuration.requestsDirectory, configuration.reviewDirectory, featureTaskDirectory(configuration)].some(directory => configLower === directory.toLowerCase() || configLower.startsWith(directory.toLowerCase() + '/'))) invalid('Workflow configuration must stay outside request, review and Task note folders.');
   const [readyFile, doneFile, templateFile, baseFile] = await Promise.all([
     read(configuration.readyCheck, 65536), read(configuration.doneCheck, 65536), read(configuration.template, 65536), read(configuration.base, 65536),
   ]);

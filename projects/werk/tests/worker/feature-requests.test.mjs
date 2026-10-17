@@ -192,20 +192,20 @@ test('feature retry captures a terminal run that finished since the last watcher
   const parsed=await f.read('a.md');assert.equal(parsed.data.status,'queued');assert.equal(parsed.data.werk.execution,undefined);
 });
 
-test('pending questions project separately without changing accepted request or admitting answers from files', async t => {
+test('pending questions preserve accepted requests and malformed local edits without admitting answers', async t => {
   const f = await fixture(t), body = '# Goal\n\nKeep this accepted body exactly.\n';
   await f.put('question.md', source('', body)); await scan(f.service);
   const record = f.submissions[0], pendingId = 'question-fixture-1';
-  const interaction = { schemaVersion: 1, sessionId: record.sessionId, revision: 4, phase: 'waiting_input', pending: { id: pendingId, turnId: 'turn_fixture_1', kind: 'question', message: 'Which behavior?', choices: [{ id: 'opaque_choice', label: 'Keep existing behavior' }], reason: 'Approval is required.', createdAt: new Date().toISOString() }, latestTurn: null, turns: [], totalTurns: 1 };
+  const interaction = { schemaVersion: 1, sessionId: record.sessionId, revision: 4, phase: 'waiting_input', pending: { id: pendingId, turnId: 'turn_fixture_1', kind: 'question', message: 'Which behavior?', choices: [{ id: 'opaque_choice', label: 'Keep existing behavior' }], reason: 'Approval is required.', createdAt: new Date().toISOString() }, latestTurn: { id: 'turn_fixture_1', runId: null, kind: 'message', status: 'waiting_input', createdAt: new Date().toISOString(), finishedAt: new Date().toISOString(), priorTurnId: null }, turns: [], totalTurns: 1 };
   f.tasks.set(record.taskId, { status: 'waiting_input', interaction }); await f.service.tick(true);
   let parsed = await f.read('question.md');
   assert.equal(parsed.body, body); assert.equal(parsed.data.werk.inputChanged, undefined);
   assert.deepEqual(parsed.data.werk.interaction, { phase: 'waiting_input', revision: 4, pendingId, link: '_questions/' + record.id + '/' + pendingId + '.md' });
   const path = join(f.directory, parsed.data.werk.interaction.link), question = await readFile(path, 'utf8');
-  assert.match(question, /opaque_choice: Keep existing behavior/); assert.match(question, /Approval is required/); assert.match(question, /Editing this file does not answer/);
+  assert.match(question, /Keep existing behavior/); assert.match(question, /opaque_choice/); assert.match(question, /Approval is required/); assert.match(question, /status: ready/);
   await writeFile(path, 'My answer is opaque_choice'); await scan(f.service);
   assert.equal(f.submissions.length, 1); assert.equal((await f.read('question.md')).data.status, 'waiting_input'); assert.equal(interaction.pending.id, pendingId);
-  assert.equal(await readFile(path, 'utf8'), question);
+  assert.equal(await readFile(path, 'utf8'), 'My answer is opaque_choice');
   await f.service.close();
   const recovered = new FeatureRequests(new MarkdownFeatureFolder(f.directory, f.state, 'codex-cli', f.project), f.queue, 0);
   await recovered.init(); await scan(recovered); assert.equal(f.submissions.length, 1); await recovered.close();

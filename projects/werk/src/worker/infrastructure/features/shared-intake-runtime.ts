@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { SharedFeatureIntake } from '../../application/shared-feature-intake.js';
-import { defaultFeatureWorkflow } from '../../application/feature-workflow.js';
+import { defaultFeatureWorkflow, featureTaskDirectory } from '../../application/feature-workflow.js';
 import type { SharedIntakeConfig } from '../../application/shared-intake-contract.js';
 import type { SharedIntakePorts } from '../../application/shared-feature-state.js';
 import type { FeatureWorkflowSnapshot } from '../../application/feature-workflow.js';
@@ -19,26 +19,26 @@ export class SharedIntakeRuntime {
   private stateDirectory: string;
   private resolve: (id: string) => { path: string };
   private allowed: (path: string) => Promise<void>;
-  constructor(options: { stateDirectory: string; resolve: (id: string) => { path: string }; allowed: (path: string) => Promise<void>; submit: SharedIntakePorts['submit']; inspect: SharedIntakePorts['inspect']; canAdmit: SharedIntakePorts['canAdmit']; admissionIssue?: SharedIntakePorts['admissionIssue'] }) {
+  constructor(options: { stateDirectory: string; resolve: (id: string) => { path: string }; allowed: (path: string) => Promise<void>; submit: SharedIntakePorts['submit']; inspect: SharedIntakePorts['inspect']; canAdmit: SharedIntakePorts['canAdmit']; admissionIssue?: SharedIntakePorts['admissionIssue']; continue?: SharedIntakePorts['continue'] }) {
     this.stateDirectory = options.stateDirectory; this.resolve = options.resolve; this.allowed = options.allowed;
     const journal = new SharedFeatureJournal(options.stateDirectory);
     this.intake = new SharedFeatureIntake({
       load: () => journal.load(), save: state => journal.save(state), repository: (binding, workflow) => this.repository(binding, workflow),
       loadWorkflow: (repository, commit, configPath, signal) => loadFeatureWorkflowSnapshot({ commit, configPath, readBlob: (sha, path) => repository.readBlob(sha, path, signal) }),
       ready: (markdown, snapshot) => validateFeatureReadiness(markdown, snapshot.readyCheck, undefined, snapshot.template, { configuration: snapshot.configuration, workflowPath: snapshot.files.configuration.path }),
-      source: sharedSource, renderSource: renderSharedSource, submit: options.submit, inspect: options.inspect, canAdmit: options.canAdmit, admissionIssue: options.admissionIssue,
+      source: sharedSource, renderSource: renderSharedSource, submit: options.submit, inspect: options.inspect, canAdmit: options.canAdmit, admissionIssue: options.admissionIssue, continue: options.continue,
     });
   }
   private repository(binding: SharedIntakeConfig, snapshot?: FeatureWorkflowSnapshot) {
     const assignment = this.resolve(binding.repositoryId), workflow = snapshot?.configuration ?? defaultFeatureWorkflow();
     const protectedPaths = snapshot ? Object.values(snapshot.files).map(file => file.path).sort() : [];
-    const key = sharedHash(JSON.stringify([assignment.path, binding.remote, binding.branch, workflow.requestsDirectory, workflow.reviewDirectory, protectedPaths]));
+    const key = sharedHash(JSON.stringify([assignment.path, binding.remote, binding.branch, workflow.requestsDirectory, workflow.reviewDirectory, featureTaskDirectory(workflow), protectedPaths]));
     let repository = this.adapters.get(key);
     if (!repository) {
       // Configuring an enabled binding builds this adapter, so a deep Windows state path fails here, before any claim.
       try { assertPublicationPath(join(this.stateDirectory, 'shared-git', key), assignment.path); }
       catch (error) { throw error instanceof GitFeatureError ? new DomainError(error.code === 'invalid_input' ? 'invalid_input' : 'conflict', error.message) : error; }
-      repository = new GitFeatureRepository({ repository: assignment.path, remote: binding.remote, branch: binding.branch, requestsDirectory: workflow.requestsDirectory, reviewDirectory: workflow.reviewDirectory, protectedPaths, stateDirectory: join(this.stateDirectory, 'shared-git', key), workerId: this.intake.view().workerId });
+      repository = new GitFeatureRepository({ repository: assignment.path, remote: binding.remote, branch: binding.branch, requestsDirectory: workflow.requestsDirectory, reviewDirectory: workflow.reviewDirectory, tasksDirectory: featureTaskDirectory(workflow), protectedPaths, stateDirectory: join(this.stateDirectory, 'shared-git', key), workerId: this.intake.view().workerId });
       this.adapters.set(key, repository);
     }
     const adapter = repository;
