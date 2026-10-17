@@ -1,3 +1,4 @@
+import { sessionFeatureRequest } from './feature-request-reference.js';
 import { workerCapacitySnapshot, type WorkerCapacityContext } from './worker-capacity.js';
 import type { SessionCatalog } from './session-catalog.js';
 import type { FeatureTrackingRecord, FeatureTrackingStatus } from './feature-tracking.js';
@@ -72,6 +73,7 @@ export function sessionView(context: SessionViewContext): SessionView {
             request.phase === "readiness" ? "needs_rework" : request.phase;
         return {
           ...record,
+          feature: sessionFeatureRequest(record),
           ...(context.featureTracking?.record(record.id) ? { featureRequest: context.featureTracking.record(record.id) } : {}),
           ...(request
             ? {

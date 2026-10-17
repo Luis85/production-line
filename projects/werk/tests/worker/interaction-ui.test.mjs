@@ -12,7 +12,7 @@ async function fixture(t, request) {
   const state = reactive({ unlocked: true, draftEpoch: 0, sessions: { selected: 'task-A' }, lastRead: '', refreshRevision: 0 });
   const changes = [], scope = effectScope(); let operation = 0; t.after(() => scope.stop());
   const ports = { reactive, ref, computed, watch, watchPrivateDrafts: watch, nextTick, workerState: state, state, request, refresh: async () => {}, defineProps: () => ({}), defineEmits: () => (name, value) => changes.push({ name, value }), onMounted() {}, onActivated() {}, onDeactivated() {}, document: { getElementById: () => ({ focus() {} }) }, crypto: { randomUUID: () => 'operation-' + ++operation } };
-  const f = scope.run(() => new Function(...Object.keys(ports), ts.transpile(script, { target: ts.ScriptTarget.ES2022 }) + '\nreturn { view, draft, submit, retryCommand, answerDrafts, operations, retry, load, lastTurn, error, readError, earlierDrafts, loading, reading, busy, mutationBlocked };')(...Object.values(ports)));
+  const f = scope.run(() => new Function(...Object.keys(ports), ts.transpile(script, { target: ts.ScriptTarget.ES2022 }) + '\nreturn { view, draft, submit, retryCommand, answerDrafts, operations, retry, load, lastTurn, error, readError, earlierDrafts, loading, reading, busy, mutationBlocked, resumable, responsePending, phaseLabel, notice, publishedResponses };')(...Object.values(ports)));
   f.view.value = checkpoint(); return { ...f, state, changes };
 }
 test('transport retry reuses the exact answer, checkpoint revision and operation ID', async t => {
@@ -98,4 +98,43 @@ test('refresh revision revalidation is quiet even while the saved checkpoint is 
   assert.equal(reads, 1); assert.equal(f.reading.value, true); assert.equal(f.loading.value, false); assert.equal(f.mutationBlocked.value, false);
   pending.resolve(checkpoint()); await nextTick(); await nextTick();
   assert.equal(f.loading.value, false);
+});
+
+/** @param {unknown} [response] */
+function sharedSession(f, response) {
+  Object.assign(f.state, { sessions: { selected: 'task-A', records: [{ id: 'task-A', taskId: 'shared-task', feature: { key: 'fr-one', source: 'shared_git' } }] },
+    environment: { sharedIntake: { requests: [{ isLocal: true, taskId: 'shared-task', feature: { key: 'fr-one' }, taskResponse: response }] } } });
+}
+test('shared cancelled requests never offer a continuation while failed and interrupted checkpoints do', async t => {
+  const f = await fixture(t, async () => checkpoint()); sharedSession(f);
+  for (const phase of ['cancelled', 'failed', 'interrupted']) {
+    f.view.value = { ...checkpoint(), phase, pending: null };
+    assert.equal(f.resumable.value, phase !== 'cancelled');
+  }
+});
+test('a published shared answer awaiting capacity blocks duplicate submission and displays saved status', async t => {
+  let sends = 0; const f = await fixture(t, async () => { sends++; return checkpoint(); });
+  sharedSession(f, { sessionId: 'task-A', expectedRevision: 1, status: 'ready' }); f.draft.value = 'A second answer';
+  assert.equal(f.responsePending.value, true); assert.match(f.phaseLabel.value, /Answer saved/); await f.submit(); assert.equal(sends, 0);
+});
+test('an older published response cannot block a newer checkpoint', async t => {
+  const f = await fixture(t, async () => checkpoint()); sharedSession(f, { sessionId: 'task-A', expectedRevision: 0, status: 'ready' });
+  assert.equal(f.responsePending.value, false); assert.equal(f.mutationBlocked.value, false);
+});
+test('successful shared publication with unchanged interaction immediately records waiting for worker', async t => {
+  const f = await fixture(t, async () => checkpoint()); sharedSession(f); f.draft.value = 'Three attempts'; await f.submit(); await nextTick();
+  assert.equal(f.operations.size, 0); assert.equal(f.responsePending.value, true); assert.match(f.notice.value, /committed and pushed/);
+  f.state.draftEpoch++; assert.equal(f.publishedResponses.size, 0);
+});
+
+test('a rejected shared response reopens the checkpoint instead of retaining a local saved acknowledgement', async t => {
+  const f = await fixture(t, async () => checkpoint()); sharedSession(f); f.draft.value = 'Three attempts'; await f.submit(); await nextTick();
+  sharedSession(f, { sessionId: 'task-A', expectedRevision: 1, status: 'error', error: 'The response needs correction.' });
+  assert.equal(f.responsePending.value, false); assert.equal(f.mutationBlocked.value, false);
+});
+
+test('a shared checkpoint remains readable while shared intake status has not loaded', async t => {
+  const f = await fixture(t, async () => checkpoint()); sharedSession(f); f.state.environment = {};
+  assert.equal(f.responsePending.value, false); assert.equal(f.mutationBlocked.value, false);
+  assert.match(f.phaseLabel.value, /Waiting/);
 });

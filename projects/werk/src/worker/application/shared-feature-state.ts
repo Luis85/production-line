@@ -1,4 +1,6 @@
 import type { FeatureWorkflowSnapshot, SharedFeatureInput } from './feature-workflow.js';
+import type { InteractionCommand, InteractionView } from './interactions.js';
+import type { TaskNoteIdentity } from './task-notes.js';
 import type { WorkerRequest } from './request-gates.js';
 import type { SharedFeatureView, SharedIntakeConfig } from './shared-intake-contract.js';
 import { DomainError } from '../../shared/errors.js';
@@ -34,6 +36,16 @@ export interface SharedRepositoryPort {
   publishLifecycle(input: LifecycleWrite, signal: AbortSignal): Promise<{ commit: string; head: string }>;
   publishPatch(input: { operationId: string; featureId: string; sourceCommit: string; patch: string; approvedPaths: string[] }, signal: AbortSignal): Promise<{ commit: string; head: string; branch: string }>;
 }
+export interface SharedTaskCheckpoint {
+  identity: TaskNoteIdentity;
+  path: string;
+  markdown: string;
+  revision: string | null;
+  closed?: boolean;
+  /** Retains a webview publication attempt until the same Markdown response is consumed. */
+  uiResponse?: { command: InteractionCommand; markdown: string };
+  response?: { command: InteractionCommand; digest: string; markdown: string; revision: string; status: 'pending' | 'processed' | 'error'; error?: string };
+}
 export interface SharedFeatureRecord extends SharedFeatureView {
   binding: SharedIntakeConfig;
   sourcePath: string;
@@ -50,6 +62,9 @@ export interface SharedFeatureRecord extends SharedFeatureView {
   outputDigest?: string;
   reviewMarkdown?: string;
   publishedReview?: string;
+  task?: SharedTaskCheckpoint;
+  diagnostic?: { path: string; markdown: string; published?: string };
+  progress?: string;
 }
 export interface SharedFeatureState {
   schemaVersion: 1;
@@ -60,6 +75,7 @@ export interface SharedFeatureState {
 }
 export interface SharedExecution {
   status: string;
+  interaction?: InteractionView;
   summary: string | null;
   patch: string | null;
   implementation?: DevelopmentScopeView;
@@ -80,6 +96,7 @@ export interface SharedIntakePorts {
   source(blob: SharedBlob): { id?: string; title: string; status: string; shared?: SharedFeatureView };
   renderSource(record: SharedFeatureRecord): string;
   submit(record: SharedFeatureRecord): Promise<void>;
+  continue?(record: SharedFeatureRecord, command: InteractionCommand): Promise<unknown>;
   inspect(taskId: string): SharedExecution | undefined;
   canAdmit(): boolean;
   /** A reason this worker cannot run the input, such as a missing instruction profile. The request then stays unclaimed for another worker or a later sync. */
@@ -87,3 +104,5 @@ export interface SharedIntakePorts {
 }
 export function bindingKey(config: SharedIntakeConfig) { return JSON.stringify([config.repositoryId, config.remote, config.branch, config.workflowPath]); }
 export const sharedTerminal = (status: string) => ['ready_for_review', 'failed', 'cancelled'].includes(status);
+
+export const sharedTaskActive = (record: SharedFeatureRecord) => !!record.task && !record.task.closed && record.task.response?.status !== 'processed';

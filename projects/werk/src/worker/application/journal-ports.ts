@@ -9,7 +9,8 @@ export interface RequestCatalog { get(id: string): WorkerRequest; list(query?: R
 export interface RemoteRequestGatePort extends RequestGatePort {
   execution(id: string, turnId: string): WorkerRequest['execution'] | undefined;
 }
-export interface RequestJournal extends RemoteRequestGatePort, RequestCatalog, RequestReviewPort {
+export interface FeatureIdentityJournal { bindFeature(sessionId: string, featureId: string): void; }
+export interface RequestJournal extends RemoteRequestGatePort, RequestCatalog, RequestReviewPort, FeatureIdentityJournal {
   init(): Promise<void>;
   close(): void;
   events(id: string, after?: number, limit?: number): { schemaVersion: 1; requestId: string; events: RequestEvent[]; nextAfter: number; hasMore: boolean };

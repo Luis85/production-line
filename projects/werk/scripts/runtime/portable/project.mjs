@@ -69,7 +69,7 @@ export async function initializeWorker(root, options) {
   const port = Number(options.port ?? marker?.port ?? 4100);
   if (marker && marker.port !== port) throw inputError('Existing project port differs. Edit worker-project.json and compose.worker.yaml explicitly, or override the launch port.');
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw inputError('port must be 1–65535.');
-  await planFeatureAuthoring(root, project, { featuresDirectory: inside.split(sep).join('/') });
+  await planFeatureAuthoring(root, project, { featuresDirectory: inside.split(sep).join('/'), provider: normalized.features.provider });
   // Validate every existing destination before installing; repeat setup preserves user edits.
   for (const file of ['worker-project.json', 'worker.json', 'compose.worker.yaml', '.gitignore']) await plainFile(join(project, '.werk', file));
   if (!prior) await rejectLinks(root);
@@ -81,9 +81,9 @@ export async function initializeWorker(root, options) {
   if (!prior) { await realDirectory(join(project, 'bin/apps'), true); await cp(root, app, { recursive: true, errorOnExist: true, force: false, filter: source => !relative(root, source).split(sep).some(name => name === '.werk' || name === '.env' || name.startsWith('.env.') && name !== '.env.example') }); }
   if (!existingConfig) await createPrivate(config, { schemaVersion: 1, features: { directory: inside.split(sep).join('/'), provider: options.provider ?? 'codex-cli', pollMs: 1000 } });
   await seed(join(project, '.werk/worker-project.json'), JSON.stringify({ schemaVersion: 1, port }, null, 2) + '\n');
-  const authoring = await setupFeatureAuthoring(app, project, { featuresDirectory: inside.split(sep).join('/') });
+  const authoring = await setupFeatureAuthoring(app, project, { featuresDirectory: inside.split(sep).join('/'), provider: normalized.features.provider });
   await ignore(join(project, '.werk/.gitignore'), ['worker/', 'provider-home/', 'agent-integrations.json', 'agent-integrations.pending.json', 'agent-integrations.lock']);
-  await ignore(join(featureDirectory, '.gitignore'), ['_worker.lock', '_worker-owner.json', '_worker-status.md', '_results/', '_questions/', '_gates/']);
+  await ignore(join(featureDirectory, '.gitignore'), ['_worker.lock', '_worker-owner.json', '_worker-status.md', '_results/', '_questions/', '_tasks/', '_gates/']);
   const name = 'werk-worker-' + randomBytes(5).toString('hex');
   const compose = `# Project-local worker. Native and Docker runs share state: stop one before starting the other.
 name: ${name}
@@ -125,5 +125,10 @@ services:
     const { seedProjectIntegrations } = await import(new URL('../../../src/worker/dist/worker/infrastructure/project-integrations.js', import.meta.url));
     integrations = await seedProjectIntegrations(project);
   } catch { integrations = { applied: false, unavailable: true, reason: 'Integration setup did not complete. Inspect integrations plan before syncing.' }; }
-  return { authoring, npm, integrations, environment, initialized: true, projectDirectory: project, application: app, stateDirectory: environment.stateDirectory, featuresDirectory: featureDirectory, template: join(featureDirectory, '_templates/feature-request.md'), configuration: config, commands: { run: 'node bin/apps/worker/cli.mjs run', start: 'node bin/apps/worker/cli.mjs start', status: 'node bin/apps/worker/cli.mjs status', docker: 'docker compose --env-file .env -f .werk/compose.worker.yaml up -d', dockerStop: 'docker compose --env-file .env -f .werk/compose.worker.yaml down' }, next: 'Connect a provider in the webview or use settings set --file provider.json and provider check --id PROVIDER. Use feature author create to make a draft from the team template, fill it in, validate it with feature author validate, then queue it with feature author ready and its current revision.' };
+  const localProvider = ['codex-cli', 'claude-cli'].includes(normalized.features.provider);
+  const setup = localProvider ? 'node bin/apps/worker/cli.mjs shared setup --file setup.json --dry-run' : 'node bin/apps/worker/cli.mjs shared configure --file shared-intake.json';
+  const connection = localProvider
+    ? 'Connect with shared setup --file setup.json (preview with --dry-run). Select the repository and local provider explicitly; no webview is required.'
+    : 'Configure the API provider using provider configure with private JSON, then provider check. Pause the queue, explicitly assign or accept the repository, and use shared configure with the revision from shared status. Synchronize with shared sync before resuming; no webview is required.';
+  return { authoring, npm, integrations, environment, initialized: true, projectDirectory: project, application: app, stateDirectory: environment.stateDirectory, featuresDirectory: featureDirectory, template: join(featureDirectory, '_templates/feature-request.md'), configuration: config, commands: { run: 'node bin/apps/worker/cli.mjs run', start: 'node bin/apps/worker/cli.mjs start', status: 'node bin/apps/worker/cli.mjs status', docker: 'docker compose --env-file .env -f .werk/compose.worker.yaml up -d', dockerStop: 'docker compose --env-file .env -f .werk/compose.worker.yaml down' }, intake: { mode: 'shared_git', connectionRequired: true, setup, source: 'Committed and pushed requests; local saves do not dispatch the generated team template.' }, next: 'Commit and push the authoring kit, start the worker, inspect repository status and shared status. ' + connection + ' Create, validate and mark team requests ready with feature author commands, then commit and push them.' };
 }

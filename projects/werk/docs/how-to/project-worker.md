@@ -25,7 +25,8 @@ This copies the self-contained app to `bin/apps/worker` and creates:
 - `.werk/worker.json`: feature-folder and default-provider configuration.
 - `.werk/worker-project.json`: project startup defaults.
 - `.werk/compose.worker.yaml`: a standalone Docker worker.
-- `features/_templates/feature-request.md`: an editable draft template.
+- `features/_templates/feature-request.md`: an editable shared request template with the chosen provider.
+- `.werk/feature-workflow.json`, ready/done check files, an Obsidian Base and an offline Create Feature Request kit.
 - Private `.werk/worker` state and `.werk/provider-home`, with Git ignore entries.
 - Project agent skills for Claude Code and Codex, plus the Codex supporting guide,
   where those files are missing. Existing edits are preserved and reported.
@@ -52,12 +53,14 @@ Start from the project directory:
 node bin/apps/worker/cli.mjs run
 ```
 
-The worker discovers the project configuration, watches the feature folder and
-opens its local listener on port 4100 (or the chosen port). Open the printed URL
-and unlock with `WERK_WORKER_TOKEN` from the project's private `.env`, then
-[connect a provider](use-worker-webview.md#connect-claude-or-codex).
-The printed credential file path is local; its token is not printed or placed in
-the URL. `run` stays in the terminal; Ctrl+C closes the worker.
+The worker discovers the project configuration and opens its local listener on
+port 4100 (or the chosen port). Continue with the CLI-based
+[shared Git setup](shared-feature-intake.md#connect-the-worker) to connect a
+provider and the team queue. The CLI reads its local credential file itself.
+The browser is optional: open the printed URL and unlock with
+`WERK_WORKER_TOKEN` from the private `.env` to use the same worker controls.
+The token is never printed or placed in the URL. `run` stays in the terminal;
+Ctrl+C closes the worker.
 
 Edit the project `.env` to configure `WERK_WORKER_HOST`, `WERK_WORKER_PORT`,
 `WERK_WORKER_STATE_DIR` or `WERK_WORKER_CONFIG`. Explicit CLI launch options win;
@@ -85,11 +88,13 @@ node bin/apps/worker/cli.mjs stop
 
 ## Review the detected project repository
 
-If the project directory is itself a Git checkout, unlock Taskboard and review
-**Use this Git repository?**. Check its full path, branch and remote, then choose
-**Use repository** or **Don’t use**. Detection alone does not authorize fetching,
-pulling or task worktrees. The choice survives restart; a skipped repository can
-be accepted later in **Settings → Repositories**.
+If the project directory is itself a Git checkout, run `repository status` and
+review the discovered path, branch and remote. Supply its returned `discoveryId`
+to the reviewed `shared setup` plan, or use `repository accept --discovery-id ID`
+for a separate assignment. Detection alone does not authorize fetching, pulling
+or task worktrees. The choice survives restart. In the optional webview, the
+same choice is **Use this Git repository?** → **Use repository** or **Don’t use**;
+a skipped repository can be accepted later in **Settings → Repositories**.
 
 Accepting adds a saved assignment. A checkout with a branch and remote starts
 watching; without a remote, or with detached HEAD, watching starts off. Committed
@@ -185,29 +190,47 @@ For a temporary launch override, `run --features-dir PATH` remains available;
 `feature folder get` shows the saved default, while `feature list` shows the active
 watcher's directory.
 
-## Drop your first request
+## Submit your first shared request
 
-The examples below use the default `features` folder. Substitute your saved
-folder when setup used `--features-dir`. Copy
-`features/_templates/feature-request.md` to `features/search.md`. Fill in its
-title, goal and acceptance criteria, then change `status: draft` to `status: ready`.
-The worker detects the stable save and writes the request's ID and queue state
-back into frontmatter. Open `_worker-status.md` to inspect intake errors and the
-queue without opening the webview. Read `werk.result`/`werk.patch` for saved output.
-
-You can also generate a new default template from the terminal:
+Connect [shared Git intake](shared-feature-intake.md) before using the installed
+team template. Review, commit and push the generated authoring kit and workflow
+files. From any clone containing that kit, create a draft:
 
 ```sh
-node bin/apps/worker/cli.mjs feature template > features/search.md
+node .werk/authoring/feature-request.mjs create --name search.md --title "Find matching requests"
 ```
 
-Use a new filename: shell redirection replaces an existing file. For coding work,
-set `mode: patch` and list approved project-relative files in `paths`. The worker
-returns a review patch; inspect it, use `git apply --check`/`git apply` when
-appropriate, and run your tests yourself. Chat mode sends only the request body.
-See the [request fields, statuses and recovery rules](../reference/feature-requests.md).
-For day-to-day operation, including Windows PowerShell 5.1 input files, task
-worktrees and tool limits, follow the [project worker checklist](operate-project-worker.md).
+Fill in Goal, Context, Acceptance criteria and Verification plan, and approve the
+project-relative `paths`. Keep the explicit provider set by setup, or select a
+connection configured on the worker. Using the default request folder:
+
+```sh
+node .werk/authoring/feature-request.mjs validate --file features/search.md
+node .werk/authoring/feature-request.mjs ready --file features/search.md --if-match REVISION
+```
+
+Use the successful validation's revision, then commit and push the ready file to
+the watched branch. A shared request starts only after that push. The worker
+claims it, tracks progress in its original Markdown, and publishes linked Task or
+PullRequest notes. Pull updates to read them. An actionable Task's **Answer** and
+`status: ready` are the editable response; commit and push the response so the
+worker can validate and continue it. Keep the accepted feature body unchanged.
+
+The [team authoring guide](team-feature-authoring.md) covers customization and
+Obsidian views. For implementation, configure tool grants and required checks as
+explained in [Implement and review a feature](implement-feature.md). A model's
+text completion alone does not establish passing project tests.
+
+### Local folder intake without a shared repository
+
+The separate local folder flow accepts requests without `templateId`. Generate
+its draft with `feature template`, then use the local management commands below.
+Its saves are consumed locally and do not require commit/push. The installed team
+template belongs to shared intake and is never silently executed by this watcher.
+See the [local proposal tutorial](../tutorials/worker-feature-lifecycle.md) and
+[request contract](../reference/feature-requests.md) for this alternative.
+For day-to-day operation, including Windows input files and tool limits, use the
+[project worker checklist](operate-project-worker.md).
 
 ## Start with Docker
 
@@ -282,9 +305,11 @@ for the supported modes and acknowledgment required after registration. The orch
 exported file cannot create a second local execution or alter the remote task.
 
 
-## Manage requests from a terminal or AI agent
+## Manage local folder requests from a terminal or AI agent
 
-Start the worker, then prepare a draft outside the watched folder:
+These commands manage the separate local folder flow, which is suspended while
+a shared Git binding is saved. For the team template, use the offline authoring
+commands above. Otherwise start the worker and prepare a draft outside the watched folder:
 
 ```sh
 node bin/apps/worker/cli.mjs feature template > request-draft.md

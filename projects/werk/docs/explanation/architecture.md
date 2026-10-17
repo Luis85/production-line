@@ -16,6 +16,35 @@ requirement IDs. Later work updates that baseline; use the current
 [API reference](../reference/api.md) and [documentation hub](../index.md) for
 implemented contracts and operating procedures.
 
+## Feature Request ownership across intake channels
+
+A Feature Request is the parent of accepted work. Its stable `feature` reference
+links source identity to sessions, execution/gate requests, attempts, Task notes
+and review evidence. These children retain their own IDs and durable state;
+a progress projection is not another request to admit. The existing journals
+remain authoritative for their owned execution facts, without a second catalog
+database or a replacement global lifecycle service.
+
+The shared webview composer and connected CLI are authoring adapters. They load
+the committed project template, expose the same readiness rules, and publish a
+guarded draft or ready note. Offline authoring reaches the same remote branch
+through the teammate's Git client. `SharedFeatureIntake` alone validates and claims
+these requests before passing the accepted Feature Request to the existing
+executor. A bound project refuses legacy direct creation even when new shared
+claims are disabled, so changing interfaces cannot bypass the shared lifecycle.
+
+Likewise, webview answers publish the linked Task response and reuse the Markdown
+response consumer. A reply continues the same Feature Request; additional scope
+requires a successor. Generated folder/shared tracking uses
+`FeatureRequestProgress` and cannot be ingested as a fresh request.
+
+Private unbound interaction, local folder intake and orchestrator assignments
+retain their adapters and execution authority. The common admission contract
+carries Feature Request identity into the existing chat or approved-file executor;
+it does not add another queue, claim owner or permission source. Orchestrator
+leases and shared Git claims remain distinct ownership protocols for their
+respective execution paths. See the [request contract](../reference/feature-requests.md).
+
 ## Portfolio hierarchy above independent lines
 
 `src/factory` is a third standalone application with its own CLI, HTTP webview

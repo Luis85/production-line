@@ -1,3 +1,4 @@
+import { interactionFeatureRequest } from './feature-request-reference.js';
 
 import { freezeDevelopmentScope } from './development.js';
 
@@ -20,6 +21,8 @@ export async function createTask(host: Pick<LocalTaskRuntime, "closed" | "tasks"
             "conflict",
             "Task ID belongs to different input.",
           );
+        if (submission.feature && existing.feature && submission.feature.key !== existing.feature.key)
+          throw new DomainError('conflict', 'Task ID belongs to another feature request.');
         return host.view();
       }
     }
@@ -88,6 +91,7 @@ export async function createTask(host: Pick<LocalTaskRuntime, "closed" | "tasks"
       ...(definition ? { definition } : {}),
       ...(interruptedWorktree ? { admissionFailure: { paths: [...allowedPaths] } } : {}),
       id,
+      feature: submission?.feature ?? interactionFeatureRequest(id),
       title,
       instruction,
       sessionId: "local-" + id,
@@ -137,6 +141,7 @@ export async function createTask(host: Pick<LocalTaskRuntime, "closed" | "tasks"
           task.provider,
           task.submissionHash,
           task.definition,
+          task.feature,
         );
         if (task.admissionFailure) await host.sessions.blockContinuation(task.sessionId, task.error ?? 'This interrupted request has no accepted file snapshots. Inspect its retained worktree and create a new request.');
         host.sessions.protectTask(task.sessionId, true);

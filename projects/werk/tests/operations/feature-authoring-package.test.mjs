@@ -39,7 +39,8 @@ test('packaged authoring kit travels through Git and works in a teammate clone w
   assert.match(skill, /Only when the author intends to queue/);
   const base = parse(await readFile(join(teammate, 'Feature Requests.base'), 'utf8'));
   assert.equal(base.views[0].type, 'table');
-  assert.ok(base.filters.and.includes('file.folder == "requests/team"'));
+  assert.ok(base.views[0].filters.and.includes('file.folder == "requests/team"'));
+  assert.deepEqual(base.views.map(view => view.name), ['Team feature requests', 'Human tasks', 'Pull requests']);
   assert.ok(base.views[0].order.includes('note.status'));
   const template = await readFile(join(teammate, 'requests/team/_templates/feature-request.md'), 'utf8');
   const metadata = parse(/^---\n([\s\S]*?)\n---\n/.exec(template)[1]);

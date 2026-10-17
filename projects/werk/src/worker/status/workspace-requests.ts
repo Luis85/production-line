@@ -1,3 +1,4 @@
+import { isSharedFeatureSession } from './workspace-feature-authoring.js';
 import type { WorkspaceContext } from './workspace-context.js';
 import { requestGateSchema } from '../application/request-gate-schema.js';
 import { requestDispatchStatus } from '../application/request-dispatch.js';
@@ -126,6 +127,8 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
     });
   const requestId = identifier(initial.requestId, "requestId");
   const before = gates.get(requestId);
+  if (isSharedFeatureSession(workspace, before.owner.sessionId) && ['propose', 'accept_candidate', 'rework', 'execute'].includes(action))
+    throw new DomainError('conflict', 'This Feature Request retains its published scope and checks. Use its Task answer or resume control to continue; publish a new Feature Request for a scope change.');
   if (
     before.owner.remote &&
     ["propose", "accept_candidate", "execute"].includes(action)

@@ -1,5 +1,7 @@
+import type { FeatureRequestPublication } from '../../application/feature-authoring-contracts.js';
 import { approvedPathsCollide } from '../../application/approved-paths.js';
 import { containsSensitivePatchMaterial } from '../../application/review-patch-policy.js';
+import { acceptedSharedBody, sharedSourceProjectionKeys } from './shared-progress.js';
 import { requestName, parseFeature } from './document.js';
 import { canonicalJson } from '../../application/request-gates.js';
 import { branchName, commitId, FeatureGitIo, GitFeatureError, gitPath, hash, textBytes, type GitBlob } from './git-io.js';
@@ -8,7 +10,7 @@ import type { RepositoryRoot } from '../repositories-git.js';
 export { GitFeatureError } from './git-io.js';
 export interface GitFeatureRepositoryOptions {
   repository: string; remote: string; branch: string; requestsDirectory: string; reviewDirectory: string;
-  stateDirectory: string; workerId: string; branchPrefix?: string; protectedPaths?: string[];
+  tasksDirectory?: string; stateDirectory: string; workerId: string; branchPrefix?: string; protectedPaths?: string[];
 }
 export interface GitFeatureFile { name: string; path: string; revision: string; content: string; }
 export interface GitFeatureSnapshot { commit: string; files: GitFeatureFile[]; }
@@ -27,9 +29,10 @@ const operation = (value: string) => {
 };
 const beneath = (path: string, directory: string) => path.startsWith(directory + '/');
 function unchangedRequest(before: string, after: string) {
+  if (before === after) return;
   const old = parseFeature(before), next = parseFeature(after);
-  const immutable = (value: Record<string, unknown>) => Object.fromEntries(Object.entries(value).filter(([key]) => !['id', 'status', 'werk'].includes(key)));
-  if (old.body !== next.body || canonicalJson(immutable(old.data)) !== canonicalJson(immutable(next.data)) || old.data.id !== undefined && old.data.id !== next.data.id)
+  const immutable = (value: Record<string, unknown>) => Object.fromEntries(Object.entries(value).filter(([key]) => !['id', 'status', 'werk', ...sharedSourceProjectionKeys].includes(key)));
+  if (acceptedSharedBody(old) !== acceptedSharedBody(next) || canonicalJson(immutable(old.data)) !== canonicalJson(immutable(next.data)) || old.data.id !== undefined && old.data.id !== next.data.id)
     throw new GitFeatureError('conflict', 'Lifecycle publication may update only the request ID, status and worker metadata; accepted developer content is preserved.');
 }
 
@@ -42,6 +45,9 @@ export class GitFeatureRepository {
   constructor(options: GitFeatureRepositoryOptions) {
     operation(options.workerId); branchName(options.branch); branchName(options.branchPrefix ?? 'werk/features');
     gitPath(options.requestsDirectory); gitPath(options.reviewDirectory);
+    const tasks = options.tasksDirectory ?? options.reviewDirectory + '/_tasks';
+    gitPath(tasks);
+    if (tasks === options.requestsDirectory || beneath(tasks, options.requestsDirectory) || beneath(options.requestsDirectory, tasks) || tasks === options.reviewDirectory || beneath(options.reviewDirectory, tasks) || tasks === options.reviewDirectory + '/_operations' || beneath(tasks, options.reviewDirectory + '/_operations')) throw new GitFeatureError('invalid_input', 'Task notes must stay separate from request intake and publication receipts.');
     if (options.requestsDirectory === options.reviewDirectory || beneath(options.requestsDirectory, options.reviewDirectory) || beneath(options.reviewDirectory, options.requestsDirectory)) throw new GitFeatureError('invalid_input', 'Shared request and review directories must be separate.');
     if (options.protectedPaths && (!Array.isArray(options.protectedPaths) || options.protectedPaths.length > 16)) throw new GitFeatureError('invalid_input', 'Bound the protected workflow paths.');
     for (const path of options.protectedPaths ?? []) gitPath(path);
@@ -92,7 +98,7 @@ export class GitFeatureRepository {
     let bytes = 0;
     for (const [index, change] of changes.entries()) {
       gitPath(change.path); textBytes(change.content, index ? 524288 : 65536); bytes += Buffer.byteLength(change.content);
-      if (index && (!beneath(change.path, this.options.reviewDirectory) || change.path === this.options.reviewDirectory + '/_operations' || beneath(change.path, this.options.reviewDirectory + '/_operations'))) throw new GitFeatureError('invalid_input', 'Lifecycle artifacts must stay in the configured review directory outside operation receipts.');
+      if (index && (!(beneath(change.path, this.options.reviewDirectory) || beneath(change.path, this.options.tasksDirectory ?? this.options.reviewDirectory + '/_tasks')) || change.path === this.options.reviewDirectory + '/_operations' || beneath(change.path, this.options.reviewDirectory + '/_operations'))) throw new GitFeatureError('invalid_input', 'Lifecycle artifacts must stay in the configured review or Task directories outside operation receipts.');
       if (change.expectedRevision !== null && !revision(change.expectedRevision)) throw new GitFeatureError('invalid_input', 'Provide each existing publication file revision, or null for a new file.');
     }
     if (bytes > 2 * 1024 * 1024) throw new GitFeatureError('invalid_input', 'Lifecycle publication exceeds 2 MiB.');
@@ -108,30 +114,67 @@ export class GitFeatureRepository {
   }
   publishLifecycle(value: GitLifecyclePublication, signal?: AbortSignal): Promise<GitFeaturePublication> {
     const input = structuredClone(value), changes = this.validateLifecycle(input), bounded = this.signal(signal);
+    return this.publishGuarded(input.operationId, changes, bounded, async (_root, _head, originals) => {
+      unchangedRequest(originals.get(input.request.path)!.content, input.request.content);
+    });
+  }
+  publishRequest(value: FeatureRequestPublication, signal?: AbortSignal): Promise<GitFeaturePublication> {
+    const input = structuredClone(value), bounded = this.signal(signal);
+    operation(input.operationId);
+    const path = gitPath(input.request.path), name = path.slice(this.options.requestsDirectory.length + 1);
+    if (!beneath(path, this.options.requestsDirectory) || !requestName(name) || input.request.expectedRevision !== null && !revision(input.request.expectedRevision)) throw new GitFeatureError('invalid_input', 'Request authoring requires one guarded request in the configured intake directory.');
+    textBytes(input.request.content, 65536);
+    const next = this.authoringRequest(input.request.content);
+    if (!Array.isArray(input.workflowFiles) || !input.workflowFiles.length || input.workflowFiles.length > 8 || new Set(input.workflowFiles.map(file => file.path)).size !== input.workflowFiles.length) throw new GitFeatureError('invalid_input', 'Provide the bounded workflow files used to prepare this request.');
+    for (const file of input.workflowFiles) { gitPath(file.path); if (!revision(file.sha256)) throw new GitFeatureError('invalid_input', 'Workflow files require their exact SHA-256 revisions.'); }
+    if (!revision(input.workflowDigest) || !input.binding || input.binding.remote !== this.options.remote || input.binding.branch !== this.options.branch || typeof input.binding.repositoryId !== 'string' || !input.binding.repositoryId || typeof input.binding.workflowPath !== 'string') throw new GitFeatureError('invalid_input', 'Authoring publication requires its exact prepared workflow and repository binding.');
+    gitPath(input.binding.workflowPath);
+    return this.publishGuarded(input.operationId, [input.request], bounded, async (root, head, originals) => {
+      if (hash(canonicalJson([...input.workflowFiles].sort((a, b) => a.path.localeCompare(b.path)))) !== input.workflowDigest) throw new GitFeatureError('conflict', 'The shared template or checks changed. Prepare the request again before publishing.');
+      if (input.readinessError) throw new GitFeatureError('invalid_input', input.readinessError);
+      for (const file of input.workflowFiles) if ((await this.io.blob(root, head, file.path, bounded))?.revision !== file.sha256) throw new GitFeatureError('conflict', 'The shared workflow changed before publication. Prepare this request again.');
+      const before = originals.get(path);
+      if (before) {
+        const previous = this.authoringRequest(before.content);
+        if (previous.status !== 'draft' || previous.id !== next.id) throw new GitFeatureError('conflict', 'Only the same unclaimed draft can be revised. Ready requests retain their accepted identity and content.');
+      } else await this.assertNoAlias(root.path, head, path, bounded);
+      for (const file of await this.list(head, this.options.requestsDirectory, bounded)) {
+        if (file.path === path) continue;
+        let id: unknown; try { id = parseFeature(file.content).data.id; } catch { continue; }
+        if (id === next.id) throw new GitFeatureError('conflict', 'This feature ID already belongs to another request. Open that request or create a new identity.');
+      }
+    }, { workflowDigest: input.workflowDigest, binding: input.binding });
+  }
+  private authoringRequest(markdown: string) {
+    const { data } = parseFeature(markdown);
+    if (typeof data.id !== 'string' || data.id.startsWith('remote-') || !['draft', 'ready'].includes(String(data.status)) || data.mode !== 'patch' || typeof data.templateId !== 'string' || ['source', 'werk', 'werkOwner', 'werkTask', 'werkPullRequest', 'werkTracking'].some(key => Object.hasOwn(data, key)) || data.type === 'Task' || data.type === 'PullRequest') throw new GitFeatureError('conflict', 'Author only unclaimed draft or ready feature requests with a stable ID and template.');
+    return data;
+  }
+  private publishGuarded(operationId: string, changes: GitFeatureChange[], bounded: AbortSignal, validate: (root: RepositoryRoot, head: string, originals: Map<string, GitBlob | null>) => Promise<void>, intent?: Pick<FeatureRequestPublication, 'workflowDigest' | 'binding'>): Promise<GitFeaturePublication> {
     return this.serialize(async () => {
-      const root = await this.io.root(bounded), digest = hash(canonicalJson({ workerId: this.options.workerId, branch: this.options.branch, changes }));
-      const marker = `${this.options.reviewDirectory}/_operations/${hash(input.operationId)}.json`;
-      const receipt = JSON.stringify({ schemaVersion: 1, workerId: this.options.workerId, operationId: input.operationId, digest }) + '\n';
+      const root = await this.io.root(bounded), digest = hash(canonicalJson({ workerId: this.options.workerId, branch: this.options.branch, changes, ...(intent ? { authoring: intent } : {}) }));
+      const marker = `${this.options.reviewDirectory}/_operations/${hash(operationId)}.json`;
+      const receipt = JSON.stringify({ schemaVersion: 1, workerId: this.options.workerId, operationId, digest }) + '\n';
       for (let attempt = 0; attempt < 3; attempt++) {
         const head = (await this.io.fetch(root, this.options.branch, bounded))!;
-        const previous = await this.receipt(root, head, marker, receipt, input.operationId, bounded);
+        const previous = await this.receipt(root, head, marker, receipt, operationId, bounded);
         if (previous) return previous;
         const originals = new Map<string, GitBlob | null>();
         for (const change of changes) {
           const before = await this.io.blob(root, head, change.path, bounded, 524288); originals.set(change.path, before);
           if ((before?.revision ?? null) !== change.expectedRevision) throw new GitFeatureError('conflict', 'Shared feature content changed before publication. Refresh the remote request and preserve the teammate edit.');
         }
-        unchangedRequest(originals.get(input.request.path)!.content, input.request.content);
+        await validate(root, head, originals);
         const commit = await this.io.worktree(root, head, bounded, async worktree => {
           for (const change of changes) await this.io.write(worktree, change.path, change.content, originals.get(change.path)?.mode ?? '100644', bounded);
           await this.io.write(worktree, marker, receipt, '100644', bounded);
-          return this.io.commit(worktree, head, input.operationId, digest, bounded);
+          return this.io.commit(worktree, head, operationId, digest, bounded);
         });
         // A lost push acknowledgement is resolved by reading the immutable receipt before retrying.
         try { await this.io.push(root, commit, this.options.branch, bounded); }
         catch (error) { if (bounded.aborted) throw error; }
         const confirmedHead = (await this.io.fetch(root, this.options.branch, bounded))!;
-        const confirmed = await this.receipt(root, confirmedHead, marker, receipt, input.operationId, bounded);
+        const confirmed = await this.receipt(root, confirmedHead, marker, receipt, operationId, bounded);
         if (confirmed) return { ...confirmed, replayed: false };
       }
       throw new GitFeatureError('conflict', 'Shared intake advanced repeatedly. Publication remains pending and can be retried.');
@@ -169,7 +212,7 @@ export class GitFeatureRepository {
       gitPath(path);
       const normalized = path.toLowerCase();
       if (normalized === '.werk' || beneath(normalized, '.werk')) throw new GitFeatureError('invalid_input', 'Feature patches cannot modify worker control storage.');
-      if ([this.options.requestsDirectory, this.options.reviewDirectory].some(directory => normalized === directory.toLowerCase() || beneath(normalized, directory.toLowerCase())) || (this.options.protectedPaths ?? []).some(protectedPath => normalized === protectedPath.toLowerCase())) throw new GitFeatureError('invalid_input', 'Feature patches cannot modify their workflow configuration, request intake or review artifacts.');
+      if ([this.options.requestsDirectory, this.options.reviewDirectory, this.options.tasksDirectory ?? this.options.reviewDirectory + '/_tasks'].some(directory => normalized === directory.toLowerCase() || beneath(normalized, directory.toLowerCase())) || (this.options.protectedPaths ?? []).some(protectedPath => normalized === protectedPath.toLowerCase())) throw new GitFeatureError('invalid_input', 'Feature patches cannot modify their workflow configuration, request intake or review artifacts.');
     }
     if (approvedPathsCollide(input.approvedPaths)) throw new GitFeatureError('invalid_input', 'Approved feature paths must be unique without file or folder aliases.');
     const branch = branchName(`${this.options.branchPrefix ?? 'werk/features'}/${input.featureId}-${hash(input.operationId).slice(0, 12)}`);

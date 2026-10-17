@@ -55,6 +55,8 @@ test('unified chat creation is idempotent under concurrency and immediately retu
   assert.deepEqual(results.map(result => result.session.id), ['chat-one', 'chat-one', 'chat-two']);
   assert.equal(results[0].session.featureRequest.path, results[1].session.featureRequest.path);
   assert.equal(results[0].featureTracking.error, null);
+  assert.equal(results[0].session.feature.key, results[1].session.feature.key);
+  assert.equal(f.workspace.sessions.requests.forSession('chat-one').owner.featureId, results[0].session.feature.key);
   assert.equal(f.workspace.sessions.view().records.filter(row => row.id !== 'default').length, 2);
   assert.equal(f.workspace.sessions.runs.list().total, 2);
   assert.equal(f.workspace.featureTracking.status().records.length, 2);
@@ -77,6 +79,8 @@ test('unified file creation replays the exact session and rejects identity or ap
   assert.equal(first.chat.messages[0].text, input.message);
   assert.equal(f.workspace.board.view().tasks.length, 1); assert.equal(f.workspace.sessions.runs.list().total, 1);
   assert.equal(first.session.submissionHash, f.workspace.board.detail('file-one').submissionHash);
+  assert.equal(first.session.feature.key, f.workspace.board.detail('file-one').feature.key);
+  assert.equal(f.workspace.sessions.requests.forSession(first.session.id).owner.featureId, first.session.feature.key);
   for (const changed of [{ ...input, message: 'Other work' }, { ...input, files: { ...input.files, paths: ['other.txt'] } }, command('file-one'), command('local-file-one')])
     await assert.rejects(f.workspace.task(changed), error => testErrorCode(error) === 'conflict');
   await assert.rejects(f.workspace.task(command('invalid', { files: { repository: f.project, paths: ['../escape'] } })), error => testErrorCode(error) === 'invalid_input');

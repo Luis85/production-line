@@ -246,6 +246,17 @@ Windows, a terminal, editor, indexer or antivirus scan holding a file in the app
 folder blocks the rename; the update retries for ten seconds and then fails without
 replacing anything. Use the direct `node bin/apps/worker/cli.mjs update ...`
 commands above on Windows; an npm parent process can keep the app folder open.
+
+If the update fails with
+`Could not move ... Another process holds a file or directory open inside it`,
+something holds a handle inside the app folder, typically a long-running process
+started from the project folder. Windows Restart Manager does not report directory
+handles, so the tools that list locked files can show nothing. Look for
+long-running processes whose working directory is the project: agent MCP servers,
+language servers and file watchers started from the project folder. Stop them and
+run the update again. Nothing was replaced; if the update stopped the app, it
+restarts the previous version and reports whether that worked.
+
 Downloads and extraction use the system temporary directory to keep paths short.
 
 Version 0.8.0 and earlier have no `update` command. Upgrade those once by hand: stop,
@@ -347,20 +358,23 @@ provider sign-in; bearer-based automation continues to read the private token.
 
 ```sh
 node bin/apps/worker/cli.mjs provider check --id codex-cli
-node bin/apps/worker/cli.mjs definition preview --file preview.json
-node bin/apps/worker/cli.mjs definition import --file definition.json
+node bin/apps/worker/cli.mjs definition preview --file .werk/agents/project-reviewer.yaml
+node bin/apps/worker/cli.mjs definition import --file .werk/agents/project-reviewer.yaml --name "Project reviewer"
 node bin/apps/worker/cli.mjs definition list
 node bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-reviewer
-node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file update.json --dry-run
-node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file update.json --if-match REVISION
+node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --dry-run
+node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --if-match REVISION
 node bin/apps/worker/cli.mjs definition delete --id DEFINITION_ID
 ```
 
-Preview input is `{"yaml":"YAML_TEXT"}`; import adds `"name":"Project reviewer"`
-and optionally a stable `"ref":"project-reviewer"`.
-`definition update` replaces the profile behind a reference in place: its ID and
-reference stay, and `update.json` contains `{"yaml":"YAML_TEXT"}` with an optional
-new `"name"`. `--dry-run` writes nothing and returns the current `revision`, the
+A `--file` ending in `.yaml` or `.yml` (any case) is sent as the YAML profile
+itself, so the committed file needs no wrapper; `--file -` and other extensions
+stay JSON. JSON preview input is `{"yaml":"YAML_TEXT"}`; JSON import adds
+`"name":"Project reviewer"` and optionally a stable `"ref":"project-reviewer"`.
+`--name NAME` (import and update) sets the name for YAML and JSON input alike and
+is required when importing a YAML file; give the name either as `--name` or in
+the JSON, not both. `definition update` replaces the profile behind a reference in
+place: its ID and reference stay, and without a name the stored name is kept. `--dry-run` writes nothing and returns the current `revision`, the
 name and digest change, and added, removed and changed agents. Apply with
 `--if-match` set to the `revision` from the dry run or `definition list`; a changed
 profile is refused with exit 2. Existing tasks keep the snapshot they accepted.

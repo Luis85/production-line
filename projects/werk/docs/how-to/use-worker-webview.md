@@ -11,8 +11,9 @@ Open `http://127.0.0.1:4100`. The release includes the built Vue 3 / Nuxt UI
 webview; no npm install or frontend server is needed. State defaults to
 `.werk/worker` in the current project. Use `--state-dir /private/worker` and `--port 4201` for
 another worker. Keep the process running; Ctrl+C stops it gracefully. Each worker
-executes exactly one task at a time, including Chat, explicit file tasks and
-remote assignments. For parallel work, start separate workers; see the
+executes one attempt at a time for its Feature Requests, including conversations,
+approved-file implementations and remote assignments. For parallel work, start
+separate workers; see the
 [native and Docker examples](assemble-independent-components.md#scale-with-separate-workers).
 
 The header separates four needs:
@@ -32,10 +33,13 @@ work or change configuration.
 
 ## Use requests from project files
 
-A worker can also ingest frontmatter-plus-Markdown requests from a watched folder.
-[Project setup](project-worker.md) provides the app, configuration, request template
-and Docker launch. Requests use the same task sessions and serial execution slot;
-frontmatter and adjacent result files expose their lifecycle without the webview.
+The Feature Request is the central workflow entity. The webview and Markdown
+notes are ways to create, inspect and respond to it; sessions, attempts, questions
+and review notes belong to that request. [Project setup](project-worker.md) provides
+the app, configuration, request template and Docker launch. A shared repository
+uses [shared Git intake](shared-feature-intake.md) for requests from either interface.
+Private workers without that binding retain local intake and the same serial
+execution slot.
 
 ## Unlock the webview
 
@@ -140,7 +144,36 @@ or advertised profiles.
 
 ## Create and follow up on a task
 
-Choose **New request** and describe the outcome under **Request instructions**.
+For a connected shared repository, **New request** starts in the chat interaction
+panel and creates the same project Feature Request as the team's authoring skill:
+
+1. Describe the outcome under **Request instructions**. **Request options** lets
+   you choose a model connection, name the request and list approved file paths.
+2. Choose **Prepare request**. This loads the committed project template and
+   places your instructions in the draft; it does not invoke a model or start work.
+3. Complete **Goal**, **Context**, **Acceptance criteria**, **Verification plan**
+   and approved paths. Use **Advanced template editing** for custom template
+   sections, then **Check readiness** against the project's configured rules.
+4. Choose **Save draft to Git** to share unfinished work, or **Mark ready and
+   publish** after readiness passes. Both actions commit and push the note to the
+   displayed shared branch. Only the ready request is eligible for execution.
+5. Open its conversation once this worker owns it. Progress, evidence and Task
+   answers remain attached to that Feature Request. Other teammates can pull and
+   inspect the same note from their clones.
+
+Published drafts can be reopened under **Shared requests**. Unpublished edits stay
+in the current tab until reload or lock. A changed remote request, template or
+binding requires fresh inspection; the worker does not overwrite it silently.
+**Retry same request** retains an unconfirmed publication's exact command and
+identity. Do not start another request to recover that publication.
+
+Shared intake owns execution admission, remote claims and lifecycle publication;
+accepted work uses the existing queue. Disabling **Accept new shared requests** pauses new claims; it does
+not switch this project to direct chat execution. Ready requests wait for intake,
+capacity and consumption limits to permit a start.
+
+For a worker without a shared repository binding, choose **New request** and
+describe the outcome under **Request instructions**.
 **Task options** shows the selected provider and lets you change it, name the task
 or choose an imported definition/agent. Without an explicit name, the first
 message supplies the title. **Create request** creates the task and starts its
@@ -152,9 +185,13 @@ and instructions-only adaptation. If creation cannot be confirmed, **Retry same
 request** resends the exact saved command and identity. Keep that request intact
 until its outcome is known; it cannot create a second admission when replayed.
 
-Select a board card to open **Follow up** for that task. The transcript, saved
-model evidence and composer remain scoped to the selection. Use **New request** for
-unrelated work. Additional tasks wait while the worker is occupied or new starts
+Select a board card to open **Follow up** for that request. The transcript and
+saved model evidence remain scoped to the selection. For a shared request, use
+its answer or resume controls when the worker needs input: submitting publishes
+the linked Task response to Git, and the same Markdown response consumer resumes
+the existing request. Additional scope requires a new Feature Request; accepted
+requirements stay frozen. Private local requests retain a free-form follow-up
+composer. Use **New request** for unrelated work. Additional tasks wait while the worker is occupied or new starts
 are paused. The Running strip identifies the recorded active attempt and its
 model when evidence is available; a configured default is not shown as proof of
 the model used. **Stop task** targets that verified local execution. Upstream
@@ -186,8 +223,8 @@ Ordinary JSON examples remain code blocks; they do not imply a saved patch or
 an active checkpoint.
 Your messages and failure notices remain literal text. Model HTML is never
 executed, and images appear as descriptive links rather than loading automatically.
-You can draft a follow-up while work is queued or running and send it when the
-worker finishes. Use the composer or Ctrl/Command + Enter to submit a message. The stop action
+For private local requests, you can draft a follow-up while work is queued or
+running and send it when the worker finishes. Use the composer or Ctrl/Command + Enter to submit a message. The stop action
 cancels the pending or active reply. Each provider invocation uses the worker’s
 configured execution limit: six hours by default, configurable from one second
 to 24 hours. `WERK_WORKER_MAX_RUNTIME_MS` overrides saved settings. The limit
@@ -206,9 +243,11 @@ follow their separately saved grants.
 
 ## Inspect the feature-request record
 
-Every task has an automatic Markdown progress record, including work created
-without repository-file permission. Follow-ups, answers and retries update the
-same record. The selected task's **Feature request Markdown** section shows the
+Every request has automatic Markdown tracking, including work created without
+repository-file permission. Follow-ups, answers and retries retain its Feature
+Request identity. Where an intake note already exists, generated tracking is a
+FeatureRequestProgress projection of that source request, not another intake item.
+The selected task's **Feature request Markdown** section shows the
 confirmed filename, recorded state and last saved time, with readable content
 and **Download Markdown**. **Refresh request record** retries a read/sync check.
 
@@ -254,6 +293,10 @@ absolute folder outside the checkouts. Worktrees are retained across restart. Se
 for startup seeds, saved-setting precedence, polling and cleanup.
 
 ## Run local coding tasks
+
+The controls below apply to private workers without a shared repository binding.
+For a shared project, approve paths in the Feature Request draft above and publish
+it through the shared queue. Both use the existing approved-file executor.
 
 In **New request**, keep your instructions in the same composer and expand
 **Repository files · optional**. Enable **Allow changes to approved repository

@@ -42,6 +42,7 @@ The default checked-in workflow is:
   "id": "feature-requests",
   "requestsDirectory": "features",
   "reviewDirectory": "feature-reviews",
+  "tasksDirectory": "feature-tasks",
   "template": "features/_templates/feature-request.md",
   "base": "Feature Requests.base",
   "readyCheck": "fr-ready-check.json",
@@ -53,7 +54,11 @@ Paths use safe repository-relative POSIX syntax. Request and review folders must
 be separate and cannot contain one another. Workflow files use distinct paths;
 the template must not appear as a normal root-level intake request. Paths cannot
 escape the repository or overlap private worker storage, installed applications
-or agent integration locations. Files are read as bounded ordinary UTF-8 Git
+or agent integration locations. `tasksDirectory` is optional for backward
+compatibility: omission resolves to `<reviewDirectory>/_tasks`. New workflows use
+`feature-tasks`. Task storage must not overlap requests, contain the review root,
+or overlap publication receipts under `<reviewDirectory>/_operations`; a separate
+review subfolder is allowed. Files are read as bounded ordinary UTF-8 Git
 blobs from an immutable full commit ID; symlinks and submodules are refused.
 
 Workflow configuration is limited to 16 KiB. Each check, template and Base is
@@ -78,7 +83,7 @@ Shared mode accepts approved-file patch requests only. It retains the existing
   credential/secret filenames and private key extensions are rejected. New
   ordinary files are allowed, but a new file cannot differ from a tracked file
   only by letter case or Unicode normalization. Workflow configuration/checks/template/Base files and request/review
-  namespaces cannot be changed by the feature patch.
+  and Task namespaces cannot be changed by the feature patch.
 - Goal, Context, Acceptance criteria and Verification plan headings are required.
   Core text must be substantive after HTML comments and fenced examples are
   excluded. Acceptance criteria contain 1–32 nonempty list items, each at most
@@ -90,7 +95,10 @@ Shared mode accepts approved-file patch requests only. It retains the existing
   for the model. Body plus rendered metadata must fit 8,000 characters. Metadata
   cannot grant tools, change execution policy or establish verification evidence.
 - New requests contain no worker-owned `werk` or `source` metadata. After claim,
-  `status` and `werk.shared` are lifecycle projections owned by the worker.
+  `status`, `werk.shared`, `werkOwner`, `werkTask`, `werkPullRequest` and the
+  generated progress section are worker-owned lifecycle projections. Original
+  accepted author content is retained; the links identify the current Task and
+  review handoff.
 
 Only Markdown files directly inside `requestsDirectory` are scanned;
 underscore-prefixed filenames and nested folders are excluded. Duplicate IDs in
@@ -98,7 +106,9 @@ a scanned queue are reported. Accepted identity is scoped to the repository
 binding and retained privately; renaming or editing a claimed source is not a new
 execution request. Use a new ID for successor work.
 
-An omitted provider selects `codex-cli`. Requests can explicitly select
+An omitted provider selects `codex-cli` for backward compatibility. Newly generated
+templates explicitly record the initialization provider; setup preserves existing
+templates. Requests can select
 `codex-cli`, `claude-cli`, `openai-api` or `anthropic-api`. Credentials, model
 configuration and supported instruction profiles come from the local worker.
 Select a profile in committed requests and templates with `definitionRef`, a
@@ -158,7 +168,8 @@ of the known input and output before publication:
 ```
 
 This optional rule holds the result for the worker's existing guarded attestation
-control. It does not merge the eventual feature branch. The generated defaults
+control. A blocked Task can describe the required action, but its Markdown cannot
+supply the attestation. The control does not merge the eventual feature branch. The generated defaults
 use empty custom arrays and do not require this extra prepublication acceptance.
 
 Mandatory checks are always added. Readiness requires a title, a bounded message,
@@ -176,12 +187,72 @@ validation cannot establish approved-file byte sizes; a rule using
 checkbox nor model prose supplies `tests.passed` or `build.passed`. The current
 shared lane has no independent test/build fact producer, and model tool results
 are not automatically promoted into these facts. Requiring them leaves the result
-held until a supported trusted evidence source exists.
+held until a supported trusted evidence source exists. Configured implementation
+checks record their own worker verification evidence, including
+`output.verificationPassed`; this is separate from those generic facts. Inspect
+the required-check results and retained digests rather than assuming that the
+presence of a patch establishes passing tests.
 
 The worker freezes the normalized policy, template, source commit, accepted input
 and SHA-256 hashes of workflow files before admission. Subsequent defaults do not
 change that generation. Shared requests disable automatic advisory review and
 model rework; changed input or policy needs a successor request.
+
+## Markdown communication contract
+
+| Note | Location | Human edits |
+| --- | --- | --- |
+| Feature request | `requestsDirectory`, original accepted filename | Author draft/ready input before claim; after claim use a successor for changed requirements |
+| Actionable `type: Task` | Configured Task directory | Its single `## Answer` section and `status: ready` |
+| Diagnostic `type: Task`, `status: blocked` | Configured Task directory | Informational; follow the stated authorized operator action |
+| `type: PullRequest` | `reviewDirectory`, immutable publication filename | Review evidence; it is not an execution or merge command |
+
+Shared ingestion reads only remote committed objects. Both a ready request and a
+ready Task response must be committed and pushed to the watched branch. Pulling
+updates the author's local Obsidian view; saving locally is not a remote response.
+
+Actionable Task frontmatter uses `schemaVersion: 1`, `type: Task`, `title`, `status`
+and the immutable fields `id`, `featureId`, `owner`, `sessionId`, `action`,
+`pendingId`, `turnId`, `expectedRevision`. `action` is `answer` or `resume`;
+`pendingId` is null for resume and binds the actual question for answer. The
+worker compares the complete identity with its durable record, then checks the
+current interaction revision and checkpoint. Do not create, copy or retarget a
+Task as a way to dispatch a model.
+
+Editable response statuses are `draft`/`open` while writing and `ready` for
+submission. The worker acknowledges `processed` or reports `error`, optionally
+with `responseDigest` and error metadata. A nonempty Answer is required for both
+actions. Answers retain internal line breaks, trim surrounding whitespace and
+are bounded to 8,000 characters. Choices are guidance and freeform answers are
+allowed. The note is at
+most 64 KiB, frontmatter at most 16 KiB. Exactly one unfenced top-level
+`## Answer` section is required; a heading inside a fenced code example is text.
+Preserve the rest of the generated note when responding.
+
+Answering starts an authorized continuation of the existing request using saved
+context. A resume Task exists only for a supported failed/interrupted latest turn;
+completed, cancelled or active turns are not resumable through notes. Repeated
+polling or a lost acknowledgement reconciles the durable response identity instead
+of authorizing a new answer. `processed` is an accepted response, not proof that
+execution has started or finished.
+
+Diagnostic Tasks do not use this executable response contract. Preclaim readiness
+diagnostics use `kind: intake-diagnostic`, bind the inspected request through
+`sourcePath` and `sourceDigest`, and record `blocked` or `resolved` when a corrected
+ready request or restored configuration clears the blocker. They have no `action`
+field. A removed, renamed or draft request may leave historical diagnostics at
+the previously inspected digest. Modified diagnostic content
+is preserved and can require restoration before an update; it does not prevent
+independent requests from being inspected. They state the blocker and concrete
+next action; they cannot authorize tool grants, policy
+changes, request acceptance or operator attestations. Those operations retain
+the existing authenticated controls. Editing a diagnostic note to `ready` does
+not turn it into an actionable checkpoint.
+
+The Base uses `werkOwner`, `werkTask` and `werkPullRequest` on request rows.
+Structured API metadata remains under `werk.shared.taskNote` and
+`werk.shared.reviewNote`. Historical notes retain their original format; a new
+PullRequest note does not retroactively convert an old `feature-review` record.
 
 ## Ownership, publication and recovery
 
@@ -212,8 +283,10 @@ A passing completion evaluation must match the current request input revision,
 input hash, policy digest, run/turn identifiers and immutable output digest. The
 worker applies only the validated approved-file patch in an isolated publication
 worktree and pushes `werk/features/<feature-id>-<operation-suffix>`. It then
-publishes `<reviewDirectory>/<feature-id>-<publication-digest-prefix>.md` and the source
-lifecycle update. Feature branches are not automatically merged or approved.
+publishes `<reviewDirectory>/<feature-id>-<publication-digest-prefix>.md` with
+`type: PullRequest` and the source lifecycle update. The note is a Markdown review
+handoff, not a Git-hosting pull-request object. Feature branches are not
+automatically merged or approved.
 
 Private state stores the accepted snapshot and pending publication intent.
 Publication identities include the repository binding, source commit, feature ID and output digest.
@@ -241,7 +314,7 @@ configuration `revision`, `workerId`, `config`, `canEdit`, `blockedReason`, `sta
 `error`, `lastSyncedAt`, observed `sourceCommit`, workflow paths/check digests and
 `requests`. State is `disabled`, `idle`, `syncing` or `error`. A request includes
 identity, owner, `isLocal`, status, source commit, update time, ready/done findings,
-feature branch, review-note path, local task ID and publication state
+feature branch, review-note path, Task-note path, local task ID and publication state
 (`pending`, `synced` or `error`). Read timestamps because observations may be stale.
 
 `POST /api/shared-intake` accepts one of these bodies:

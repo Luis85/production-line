@@ -1,3 +1,4 @@
+import { observePublishedFeature } from './shared-intake-observation.mjs';
 import { taskboardRuntime } from "../worker/runtime-fixtures.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -63,7 +64,7 @@ test('installed worker publishes one frozen shared feature from two clones and p
   });
   await mkdir(remote); await git(remote, 'init', '--bare', '--initial-branch=main');
   await git(directory, 'clone', remote, author); await configureGit(author);
-  await cli(installer, author, 'feature', 'setup');
+  await cli(installer, author, 'feature', 'setup', '--provider', 'openai-api');
   await assert.rejects(access(join(author, 'bin/apps/worker')), { code: 'ENOENT' });
   await writeFile(join(author, '.gitattributes'), '* text eol=lf\n');
   await writeFile(join(author, 'approved.txt'), 'committed source\n');
@@ -117,7 +118,7 @@ test('installed worker publishes one frozen shared feature from two clones and p
   await start();
   advance('assign repository and configure shared intake');
   await api('/api/settings', { board: { paused: true }, provider: { id: 'openai-api', apiKey: 'fixture-only-never-sent', model: 'fixture-model' }, repositories: { pollMs: 300000, items: [{ id: 'shared', path: checkout, remote: 'origin', branch: 'main', watch: true }] } });
-  // Explicit synchronization drives this journey; avoid unrelated timer-driven Git work on slower hosts.
+  // Explicit synchronization drives the journey; an already scheduled startup poll may still overlap the push.
   const binding = { enabled: true, repositoryId: 'shared', remote: 'origin', branch: 'main', workflowPath: '.werk/feature-workflow.json', pollMs: 300000 };
   await api('/api/shared-intake', { action: 'configure', expectedRevision: 0, config: binding });
   await git(checkout, 'switch', '-c', 'developer-topic');
@@ -129,7 +130,7 @@ test('installed worker publishes one frozen shared feature from two clones and p
   const created = await cli(authoring, author, 'create', '--name', 'shared-change.md', '--title', 'Review a shared change');
   featureId = created.id; requestPath = created.path;
   let draft = await readFile(join(author, requestPath), 'utf8');
-  draft = draft.replace('paths: []', 'paths: [approved.txt]\nprovider: openai-api')
+  draft = draft.replace('paths: []', 'paths: [approved.txt]')
     .replace('<!-- Explain the problem, who experiences it, and the observable outcome. -->', 'Make the approved text explain the shared change.')
     .replace('<!-- Describe constraints, relevant behavior, and what is outside this request. -->', 'Preserve all developer checkout edits and unrelated files.')
     .replace('<!-- Add one or more concrete, verifiable checklist items. -->', '- [ ] The approved file contains the proposed shared change.\n- [ ] No unrelated file changes are proposed.')
@@ -137,12 +138,15 @@ test('installed worker publishes one frozen shared feature from two clones and p
   await writeFile(join(author, requestPath), draft);
   const validated = await cli(authoring, author, 'validate', '--file', requestPath); assert.equal(validated.valid, true);
   const ready = await cli(authoring, author, 'ready', '--file', requestPath, '--if-match', validated.revision); assert.equal(ready.status, 'ready');
+  const previousCommit = await git(author, 'rev-parse', 'HEAD');
   await git(author, 'add', requestPath); await git(author, 'commit', '-m', 'Author ready shared feature'); await git(author, 'push', 'origin', 'main');
   sourceCommit = await git(author, 'rev-parse', 'HEAD');
   const originalDoneHash = digest(await readFile(join(author, 'fr-done-check.json')));
   await api('/api/settings', { board: { paused: false } });
   advance('claim and admit frozen request');
-  let intake = await api('/api/shared-intake', { action: 'sync' });
+  let intake = await observePublishedFeature(() => api('/api/shared-intake', { action: 'sync' }), {
+    id: featureId, sourceCommit, previousCommit, signal: t.signal, diagnostic: message => t.diagnostic(message),
+  });
   const claimed = intake.requests.find(row => row.id === featureId); assert.ok(claimed, JSON.stringify(intake));
   assert.ok(workspace);
   const task = workspace.board.detail(claimed.taskId);

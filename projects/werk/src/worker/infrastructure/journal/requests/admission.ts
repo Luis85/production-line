@@ -133,3 +133,20 @@ export function requestBindTurn(store: RequestStore, id: string, turnId: string,
     return request;
   });
 }
+
+/** Upgrade metadata in the existing authority; never create an execution or change accepted input. */
+export function requestBindFeature(store: RequestStore, sessionId: string, featureId: string): void {
+  identifier(sessionId, 'session ID'); identifier(featureId, 'feature ID');
+  store.transaction(() => {
+    const rows = store.database().prepare('SELECT id FROM worker_requests WHERE session_id=?').all(sessionId);
+    for (const row of rows) {
+      const request = store.get(String(row.id));
+      if (request.owner.featureId && request.owner.featureId !== featureId)
+        conflict('The accepted execution belongs to another Feature Request.');
+      if (!request.owner.featureId) {
+        request.owner.featureId = featureId;
+        store.save(request, 'feature_identity_bound');
+      }
+    }
+  });
+}

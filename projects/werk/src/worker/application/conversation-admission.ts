@@ -1,3 +1,4 @@
+import { interactionFeatureRequest } from './feature-request-reference.js';
 import type { WorkerRequest } from "./request-gates.js";
 import type { ModelProvider } from "./model-contract.js";
 
@@ -158,6 +159,7 @@ export async function launchConversation(host: ConversationRuntime, text: string
             sessionId: host.sessionId,
             rootTurnId: user[0]?.id ?? answer.id,
             taskId: metadata.taskId,
+            featureId: (host.evidence?.feature?.() ?? interactionFeatureRequest(metadata.taskId)).key,
           },
           input: {
             kind: "chat",

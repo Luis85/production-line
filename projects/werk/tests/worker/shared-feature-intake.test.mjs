@@ -85,7 +85,7 @@ async function fixture(t, options = {}) {
         if (!result) {
           assert.equal(sharedHash(repo.files.get(write.request.path)), write.request.expectedRevision, 'Lifecycle writes use compare-and-swap.');
           const edits = { [write.request.path]: write.request.content };
-          for (const artifact of write.artifacts) { assert.equal(repo.files.get(artifact.path) ?? null, artifact.expectedRevision); edits[artifact.path] = artifact.content; }
+          for (const artifact of write.artifacts) { assert.equal(repo.files.has(artifact.path) ? sharedHash(repo.files.get(artifact.path)) : null, artifact.expectedRevision); edits[artifact.path] = artifact.content; }
           const commit = commitFiles(binding.repositoryId, edits); result = { commit, head: commit }; repo.lifecycle.set(write.operationId, result);
           if (controls.changeAfterClaim) { controls.changeAfterClaim = false; commitFiles(binding.repositoryId, { [write.request.path]: write.request.content + '\nAn external author changed this claimed request.\n' }); }
         }
@@ -369,10 +369,14 @@ test('a worker without the referenced instruction profile leaves the request unc
   const f = await fixture(t, { source: source.replace('mode: patch\n', 'mode: patch\ndefinitionRef: team-reviewer\n') });
   f.controls.admissionIssue = input => input.definitionRef === 'team-reviewer' ? 'No agent definition on this worker uses the reference team-reviewer.' : undefined;
   await f.intake.sync();
-  assert.equal(f.tasks.size, 0); assert.equal(f.lifecycleAttempts.length, 0, 'no remote claim is written');
+  assert.equal(f.tasks.size, 0); assert.equal((await f.state()).records.length, 0, 'diagnostics do not reserve execution');
+  assert.ok(f.lifecycleAttempts.every(write => write.request.content === source.replace('mode: patch\n', 'mode: patch\ndefinitionRef: team-reviewer\n')), 'diagnostic publication leaves the request unchanged');
+  const diagnostic = f.intake.view().requests[0].taskNote;
+  assert.match(f.repositories.get('shared').files.get(diagnostic), /status: blocked/);
   const [view] = f.intake.view().requests; assert.equal(view.owner, null); assert.equal(view.status, 'ready'); assert.match(view.error, /team-reviewer/);
   f.controls.admissionIssue = undefined; await f.intake.sync();
   assert.equal(f.tasks.size, 1); assert.equal((await f.state()).records[0].accepted.definitionRef, 'team-reviewer');
+  assert.match(f.repositories.get('shared').files.get(diagnostic), /status: resolved/);
 });
 
 test('a profile becoming unavailable after claim does not abandon or duplicate an owned request', async t => {
@@ -387,4 +391,59 @@ test('a profile becoming unavailable after claim does not abandon or duplicate a
   assert.equal(retained.owner, accepted.owner); assert.equal(retained.taskId, accepted.taskId);
   assert.equal(retained.accepted.definitionRef, 'team-reviewer'); assert.equal(retained.claimed, true);
   assert.equal(f.tasks.size, 1); assert.equal(f.lifecycleAttempts.length, claims);
+});
+
+test('readiness diagnostics publish without claiming and resolve once the committed request is corrected', async t => {
+  const invalid = source.replace('- Arrow keys move the active selection.', '- TODO');
+  const f = await fixture(t, { source: invalid });
+  await f.intake.sync();
+  const view = f.intake.view().requests[0];
+  assert.equal(view.status, 'needs_rework'); assert.equal(view.owner, null);
+  const diagnostic = view.taskNote, repo = f.repositories.get('shared');
+  assert.match(repo.files.get(diagnostic), /type: Task/);
+  assert.match(repo.files.get(diagnostic), /status: blocked/);
+  assert.equal(repo.files.get(sourcePath), invalid);
+  assert.equal(f.primaryExecutions, 0); assert.equal((await f.state()).records.length, 0);
+  const writes = f.lifecycleAttempts.length;
+  await f.restart(); await f.intake.sync();
+  assert.equal(f.lifecycleAttempts.length, writes, 'unchanged diagnostics do not churn commits');
+  f.commitFiles('shared', { [sourcePath]: source });
+  await f.intake.sync();
+  assert.equal(f.tasks.size, 1); assert.match(repo.files.get(diagnostic), /status: resolved/);
+});
+test('editing a diagnostic never executes input or silently overwrites the teammate change', async t => {
+  const invalid = source.replace('- Arrow keys move the active selection.', '- TODO');
+  const f = await fixture(t, { source: invalid }); await f.intake.sync();
+  const path = f.intake.view().requests[0].taskNote;
+  const edited = f.repositories.get('shared').files.get(path) + '\nHuman investigation notes.\n';
+  f.commitFiles('shared', { [path]: edited }); await f.intake.sync();
+  assert.equal(f.primaryExecutions, 0); assert.equal(f.tasks.size, 0);
+  assert.equal(f.repositories.get('shared').files.get(path), edited);
+  assert.match(f.intake.view().error, /intake Task was edited/);
+  f.commitFiles('shared', { 'features/other.md': source.replace('shared-navigation', 'other-feature') });
+  await f.intake.sync();
+  assert.equal(f.tasks.size, 1, 'a diagnostic conflict does not starve another request');
+  assert.equal(f.repositories.get('shared').files.get(path), edited);
+});
+
+
+test('webview Task publication survives the actual journal and rejects a changed saved answer', async t => {
+  const f = await fixture(t); await f.intake.sync();
+  const at = '2026-10-17T00:00:00.000Z', record = (await f.state()).records[0];
+  f.controls.inspect = execution => ({ ...execution, status: 'waiting_input', interaction: {
+    schemaVersion: 1, sessionId: 'local-' + record.taskId, revision: 2, phase: 'waiting_input',
+    pending: { id: 'question-one', kind: 'question', message: 'Which timezone?', createdAt: at, turnId: 'turn-one' },
+    latestTurn: { id: 'turn-one', runId: null, kind: 'message', status: 'waiting_input', createdAt: at, finishedAt: at, priorTurnId: null }, turns: [], totalTurns: 1,
+  } });
+  await f.intake.sync();
+  await f.intake.respond(record.taskId, { action: 'answer', sessionId: 'local-' + record.taskId, expectedRevision: 2, pendingId: 'question-one', operationId: 'ui-publication-one', answer: 'Use UTC dates.' });
+  const saved = await f.state();
+  assert.equal(saved.records[0].task.uiResponse.command.answer, 'Use UTC dates.');
+  assert.match(saved.records[0].task.uiResponse.markdown, /status: ready/);
+  await f.restart(); assert.equal(f.intake.view().requests.length, 1);
+  const path = join(f.directory, 'shared-intake.json');
+  const changed = structuredClone(saved); changed.records[0].task.uiResponse.command.answer = 'Use local dates.';
+  await writeFile(path, JSON.stringify(changed));
+  await assert.rejects(new SharedFeatureJournal(f.directory).load(), /UI response reservation/);
+  await writeFile(path, JSON.stringify(saved));
 });

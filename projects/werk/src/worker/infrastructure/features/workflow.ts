@@ -3,7 +3,7 @@ import { DomainError } from '../../../shared/errors.js';
 import { inputGateFacts, evaluateGate, gateDigest } from '../../application/request-gates.js';
 import {
   featureWorkflowConfigPath, validateFeatureWorkflow, validateFeatureCheck, featureWorkflowPolicy,
-  defaultFeatureCheck, featureGateInput, featureContentHash, featureInputHash, featureWorkflowPath,
+  defaultFeatureCheck, featureGateInput, featureContentHash, featureInputHash, featureWorkflowPath, featureTaskDirectory,
   type FeatureCheck, type FeatureReadiness, type FeatureWorkflowSnapshot, type SharedFeatureInput, type FeatureWorkflowConfiguration,
 } from '../../application/feature-workflow.js';
 import { parseFeature, featureInput } from './document.js';
@@ -12,11 +12,11 @@ const sectionNames = ['goal', 'context', 'acceptance criteria', 'verification pl
 type SectionName = typeof sectionNames[number];
 function invalid(message: string): never { throw new DomainError('invalid_input', message); }
 /** A deliberately small, stable Markdown structure, shared by offline authoring and worker admission. */
-function markdownSections(body: string): Map<string, string[]> {
+function markdownSections(body: string, onHeading?: (name: string, line: number) => void): Map<string, string[]> {
   const sections = new Map<string, string[]>();
   let current: string | undefined, fence: { character: string; length: number } | undefined;
-  const visible = body.replace(/<!--[\s\S]*?-->/g, '');
-  for (const line of visible.split(/\r?\n/)) {
+  const visible = body.replace(/<!--[\s\S]*?-->/g, comment => comment.replace(/[^\r\n]/g, ''));
+  for (const [index, line] of visible.split(/\r?\n/).entries()) {
     const marker = /^ {0,3}(`{3,}|~{3,})/.exec(line);
     if (fence) {
       if (marker && marker[1][0] === fence.character && marker[1].length >= fence.length && /^ {0,3}(?:`+|~+)\s*$/.test(line)) fence = undefined;
@@ -26,6 +26,7 @@ function markdownSections(body: string): Map<string, string[]> {
     const heading = /^ {0,3}#{1,6}\s+(.+?)\s*#*\s*$/.exec(line);
     if (heading) {
       const name = heading[1].trim().toLowerCase();
+      onHeading?.(name, index);
       current = name;
       if (sections.has(current)) invalid(`Use exactly one ${current} section.`);
       sections.set(current, []);
@@ -34,14 +35,27 @@ function markdownSections(body: string): Map<string, string[]> {
   if (fence) invalid('Close fenced code blocks before submitting the feature request.');
   return sections;
 }
+/** Authoring uses the readiness parser's visible headings, preserving fenced examples and comments. */
+export function replaceFeatureSection(body: string, section: SectionName, content: string): string {
+  let start = -1, end = -1;
+  markdownSections(body, (name, line) => {
+    if (start >= 0 && end < 0) end = line;
+    if (name === section) start = line;
+  });
+  if (start < 0) invalid(`Feature requests require a ${section} heading.`);
+  const newline = body.includes('\r\n') ? '\r\n' : '\n', lines = body.split(/\r?\n/);
+  lines.splice(start + 1, (end < 0 ? lines.length : end) - start - 1, '', content.trim(), '');
+  return lines.join(newline);
+}
 export function featureRequestSections(body: string): Record<SectionName, string> {
   const sections = markdownSections(body);
   for (const name of sectionNames) if (!sections.has(name)) invalid(`Feature requests require a ${name} heading.`);
   return Object.fromEntries(sectionNames.map(name => [name, sections.get(name)!.join('\n').trim()])) as Record<SectionName, string>;
 }
 export interface FeatureTemplateContract { templateId: string; headings: string[]; fields: string[]; }
-export function validateFeatureTemplate(markdown: string): FeatureTemplateContract {
+export function validateFeatureTemplate(markdown: string, allowLegacyProgressMetadata = false): FeatureTemplateContract {
   const parsed = parseFeature(markdown), data = parsed.data;
+  if (!allowLegacyProgressMetadata && ['werkOwner', 'werkTask', 'werkPullRequest'].some(key => Object.hasOwn(data, key))) invalid('Templates must not contain worker-owned progress links.');
   if (data.status !== 'draft' || data.mode !== 'patch' || data.source !== undefined || data.werk !== undefined) invalid('Shared feature templates require draft patch mode without worker-owned metadata.');
   if (typeof data.templateId !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(data.templateId)) invalid('Feature templates require a stable templateId.');
   featureRequestSections(parsed.body);
@@ -55,7 +69,7 @@ function meaningful(value: unknown): boolean {
   if (Array.isArray(value)) return value.length > 0 && value.every(meaningful);
   return false;
 }
-export interface FeatureReadinessScope { configuration: FeatureWorkflowConfiguration; workflowPath?: string; }
+export interface FeatureReadinessScope { configuration: FeatureWorkflowConfiguration; workflowPath?: string; /** Private recovery only: old accepted metadata predates generated progress links. */ allowLegacyProgressMetadata?: boolean; }
 export function validateFeatureReadiness(markdown: string, readyCheck: FeatureCheck, provider = 'codex-cli', template?: string, scope?: FeatureReadinessScope): FeatureReadiness {
   const policy = featureWorkflowPolicy(readyCheck, defaultFeatureCheck('done'));
   const errors: FeatureReadiness['errors'] = [];
@@ -65,6 +79,7 @@ export function validateFeatureReadiness(markdown: string, readyCheck: FeatureCh
     if (typeof parsed.data.id !== 'string') invalid('Shared feature requests require a stable id before submission.');
     if (typeof parsed.data.templateId !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(parsed.data.templateId)) invalid('Shared feature requests require a stable templateId.');
     if (!['draft', 'ready'].includes(String(parsed.data.status))) invalid('New shared feature requests require status: draft or ready.');
+    if (!scope?.allowLegacyProgressMetadata && ['werkOwner', 'werkTask', 'werkPullRequest'].some(key => Object.hasOwn(parsed.data, key))) invalid('New shared requests must not contain worker-owned progress links.');
     if (parsed.data.werk !== undefined || parsed.data.source !== undefined) invalid('New shared feature requests must not contain worker-owned werk or source metadata.');
     if (base.mode !== 'patch' || !base.paths?.length) invalid('Shared feature requests require mode: patch and explicit approved paths.');
     validateApprovedPaths(base.paths);
@@ -72,12 +87,12 @@ export function validateFeatureReadiness(markdown: string, readyCheck: FeatureCh
     if (scope) {
       const config = validateFeatureWorkflow(scope.configuration), protectedFiles = [config.template, config.base, config.readyCheck, config.doneCheck, featureWorkflowPath(scope.workflowPath ?? featureWorkflowConfigPath)];
       const inside = (path: string, root: string) => path === root || path.startsWith(root + '/');
-      if (base.paths.some(path => { const lower = path.toLowerCase(); return [config.requestsDirectory, config.reviewDirectory].some(root => inside(lower, root.toLowerCase())) || protectedFiles.some(file => lower === file.toLowerCase()); })) invalid('Approved paths cannot change workflow configuration, checks, templates, Base files, request queues or generated review notes.');
+      if (base.paths.some(path => { const lower = path.toLowerCase(); return [config.requestsDirectory, config.reviewDirectory, featureTaskDirectory(config)].some(root => inside(lower, root.toLowerCase())) || protectedFiles.some(file => lower === file.toLowerCase()); })) invalid('Approved paths cannot change workflow configuration, checks, templates, Base files, request queues or generated Task and review notes.');
     }
     if (new Set(base.paths.map(path => path.toLowerCase())).size !== base.paths.length) invalid('Approved paths must be distinct, including on case-insensitive filesystems.');
     const sections = featureRequestSections(parsed.body);
     if (template !== undefined) {
-      const contract = validateFeatureTemplate(template), allSections = markdownSections(parsed.body);
+      const contract = validateFeatureTemplate(template, scope?.allowLegacyProgressMetadata), allSections = markdownSections(parsed.body);
       if (parsed.data.templateId !== contract.templateId) invalid('Feature request templateId does not match the configured template.');
       for (const heading of contract.headings) if (!allSections.has(heading) || !meaningful(allSections.get(heading)!.join('\n'))) invalid(`Fill in the template's ${heading} section.`);
       for (const field of contract.fields) if (!meaningful(parsed.data[field])) invalid(`Fill in the template's ${field} frontmatter field.`);
@@ -116,6 +131,8 @@ export async function loadFeatureWorkflowSnapshot(options: { commit: string; rea
   function json(content: string, label: string): unknown { try { return JSON.parse(content); } catch { return invalid(`${label} must contain valid JSON.`); } }
   const configurationFile = await read(configPath, 16384), configuration = validateFeatureWorkflow(json(configurationFile.content, 'Feature workflow'));
   if ([configuration.template, configuration.base, configuration.readyCheck, configuration.doneCheck].some(path => path.toLowerCase() === configPath.toLowerCase())) invalid('Workflow configuration cannot also be a template, Base or check file.');
+  const configLower = configPath.toLowerCase();
+  if ([configuration.requestsDirectory, configuration.reviewDirectory, featureTaskDirectory(configuration)].some(directory => configLower === directory.toLowerCase() || configLower.startsWith(directory.toLowerCase() + '/'))) invalid('Workflow configuration must stay outside request, review and Task note folders.');
   const [readyFile, doneFile, templateFile, baseFile] = await Promise.all([
     read(configuration.readyCheck, 65536), read(configuration.doneCheck, 65536), read(configuration.template, 65536), read(configuration.base, 65536),
   ]);

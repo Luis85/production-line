@@ -1,3 +1,5 @@
+import { interactionFeatureRequest } from './feature-request-reference.js';
+import { validateFeatureRequestReference } from './feature-request-reference.js';
 
 import { validateDevelopmentState } from './development.js';
 
@@ -33,6 +35,10 @@ export async function init(host: Pick<LocalTaskRuntime, "storage" | "tasks" | "r
       )
         throw Error("Invalid taskboard");
       for (const task of value) {
+        if (task.feature) validateFeatureRequestReference(task.feature);
+        const reference = host.sessions.view().records.find(record => record.id === 'local-' + task.id)?.feature;
+        if (task.feature && reference && task.feature.key !== reference.key) throw Error('Saved task and session belong to different Feature Requests.');
+        task.feature ??= reference ?? interactionFeatureRequest(task.id);
         if (task.implementation) {
           validateDevelopmentState(task.implementation, task.developmentEvidence);
           if (task.implementation.baseCommit !== task.baseCommit || gateDigest(task.implementation.approvedPaths) !== gateDigest(task.files.map((file: TaskFile) => file.path))) throw Error('Saved implementation scope differs from its accepted worktree.');
@@ -52,6 +58,7 @@ export async function init(host: Pick<LocalTaskRuntime, "storage" | "tasks" | "r
           task.provider,
           task.submissionHash,
           task.definition,
+          task.feature,
         );
         if (task.admissionFailure) await host.sessions.blockContinuation(task.sessionId, task.error ?? 'This interrupted request has no accepted file snapshots. Inspect its retained worktree and create a new request.');
         host.sessions.protectTask(task.sessionId, true);
@@ -83,6 +90,7 @@ export async function recoverTask(host: Pick<LocalTaskRuntime, "sessions" | "out
     }
     if (task.requestId) {
       const request = host.sessions.requests.get(task.requestId);
+      if (task.feature && request.owner.featureId && task.feature.key !== request.owner.featureId) throw Error('Saved task and execution belong to different Feature Requests.');
       if (
         !request.execution ||
         request.execution.inputRevision !== request.inputRevision

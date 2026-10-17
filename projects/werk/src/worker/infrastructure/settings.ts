@@ -122,7 +122,7 @@ export class WorkerSettings {
         if (c.enrollmentToken) next.connection.enrollmentToken = text(c.enrollmentToken, 'Enrollment token', 4096);
       }
       if (body.board) next.board = { ...next.board, ...object(body.board, 'Taskboard', ['paused', 'maxParallel', 'queueCapacity', 'orchestratorQueue', 'order']) };
-      if (body.repositories !== undefined) next.repositories = validateRepositoryConfiguration(body.repositories, path => { if (!isAbsolute(path)) throw new DomainError('invalid_input', 'Repository path must be absolute on the worker machine.'); return resolve(path); });
+      if (body.repositories !== undefined) next.repositories = validateRepositoryConfiguration(body.repositories, (path, label) => { if (!isAbsolute(path)) throw new DomainError('invalid_input', `${label} must be absolute on the worker machine.`); return resolve(path); });
       if (body.resources !== undefined) next.resources = { ...next.resources, ...object(body.resources, 'Resources', Object.keys(defaultResourcePolicy())) };
       if (body.execution !== undefined) next.execution = { ...next.execution, ...object(body.execution, 'Execution', ['maxRuntimeMs', 'maxToolCalls', 'commandTimeoutMs']) };
       const validated = this.validate(next); await this.persist(validated); this.value = validated;

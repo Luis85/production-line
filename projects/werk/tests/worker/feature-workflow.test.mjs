@@ -1,7 +1,7 @@
 import { validateApprovedPaths } from '../../src/worker/dist/worker/application/approved-paths.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultFeatureWorkflow, defaultFeatureCheck, validateFeatureWorkflow, validateFeatureCheck, featureWorkflowPolicy, featureGateInput, evaluateFeatureDone, featureContentHash } from '../../src/worker/dist/worker/application/feature-workflow.js';
+import { defaultFeatureWorkflow, defaultFeatureCheck, validateFeatureWorkflow, validateFeatureCheck, featureWorkflowPolicy, featureGateInput, evaluateFeatureDone, featureContentHash, featureTaskDirectory } from '../../src/worker/dist/worker/application/feature-workflow.js';
 import { featureRequestSections, validateFeatureReadiness, validateFeatureTemplate, loadFeatureWorkflowSnapshot } from '../../src/worker/dist/worker/infrastructure/features/workflow.js';
 const commit='a'.repeat(40);
 const template=`---
@@ -168,4 +168,41 @@ test('definitionRef is a typed request field, never author metadata, and cannot 
   assert.match(validateFeatureReadiness(withRef.replace('team-reviewer','Team Reviewer'),ready(),'codex-cli',template).errors[0].message,/definitionRef/);
   const templateWithRef=template.replace('mode: patch\n','mode: patch\ndefinitionRef: team-reviewer\nagent: root\n');
   assert.deepEqual(validateFeatureTemplate(templateWithRef).fields,[],'a template may preset the shared reference without making it a required custom field');
+});
+
+test('Task folders remain public, protected, and compatible with frozen workflows', () => {
+  const current = defaultFeatureWorkflow();
+  assert.equal(featureTaskDirectory(current), 'feature-tasks');
+  const { tasksDirectory: _tasks, ...legacy } = current;
+  assert.deepEqual(validateFeatureWorkflow(legacy), legacy);
+  assert.equal(featureTaskDirectory(legacy), 'feature-reviews/_tasks');
+  assert.equal(featureTaskDirectory(validateFeatureWorkflow({ ...current, tasksDirectory: 'team/decisions' })), 'team/decisions');
+  assert.equal(featureTaskDirectory(validateFeatureWorkflow({ ...current, tasksDirectory: 'feature-reviews/tasks' })), 'feature-reviews/tasks');
+  for (const tasksDirectory of ['features', 'FEATURES/questions', 'feature-reviews', 'feature-reviews/_operations', 'feature-reviews/_operations/tasks', '.werk/tasks', '.WERK/tasks', 'bin/apps/worker/tasks', '.agents/tasks', '../tasks', 'team/CON']) {
+    assert.throws(() => validateFeatureWorkflow({ ...current, tasksDirectory }), undefined, tasksDirectory);
+  }
+  assert.throws(() => validateFeatureWorkflow({ ...current, tasksDirectory: 'feature-reviews/tasks', doneCheck: 'feature-reviews/tasks/done.json' }));
+  assert.throws(() => validateFeatureWorkflow({ ...current, tasksDirectory: 'tasks', template: 'tasks/template.md' }));
+  assert.throws(() => validateFeatureWorkflow({ ...current, tasksDirectory: 'features/questions', requestsDirectory: 'features/questions/requests' }));
+  const changed = request.replace('src/navigation.ts', 'feature-tasks/answer.md');
+  const checked = validateFeatureReadiness(changed, ready(), 'codex-cli', template, { configuration: current });
+  assert.equal(checked.valid, false);
+  assert.match(checked.errors[0].message, /Task and review/);
+});
+test('workflow JSON cannot share its path namespace with generated Task notes', async () => {
+  const configuration = { ...defaultFeatureWorkflow(), tasksDirectory: 'team/tasks' };
+  const f = fixture({ 'team/tasks/workflow.json': JSON.stringify(configuration) });
+  await assert.rejects(loadFeatureWorkflowSnapshot({ commit, readBlob: f.readBlob, configPath: 'team/tasks/workflow.json' }), /outside request, review and Task/);
+});
+
+test('authored requests and templates cannot supply worker-owned progress links', () => {
+  for (const key of ['werkOwner', 'werkTask', 'werkPullRequest']) {
+    const input = request.replace('status: ready', 'status: ready\n' + key + ': forged');
+    assert.match(validateFeatureReadiness(input, ready(), 'codex-cli', template).errors[0].message, /worker-owned progress/);
+    const recovered = validateFeatureReadiness(input, ready(), 'codex-cli', template, { configuration: defaultFeatureWorkflow(), allowLegacyProgressMetadata: true });
+    assert.equal(recovered.valid, true); assert.equal(recovered.input.metadata[key], 'forged');
+    const legacyTemplate = template.replace('status: draft', 'status: draft\n' + key + ': original-team-field');
+    assert.equal(validateFeatureReadiness(input, ready(), 'codex-cli', legacyTemplate, { configuration: defaultFeatureWorkflow(), allowLegacyProgressMetadata: true }).valid, true);
+    assert.throws(() => validateFeatureTemplate(template.replace('status: draft', 'status: draft\n' + key + ': forged')), /worker-owned progress/);
+  }
 });

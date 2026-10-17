@@ -15,10 +15,10 @@ export async function init(workspace: WorkspaceContext){
   await workspace.sharedRuntime.intake.init();
   await workspace.repositories.configure(workspace.settings.value.repositories);
   await workspace.repositories.init();
+  await workspace.features?.init();
   await workspace.sessions.init();
   await workspace.board.init();
   await workspace.taskIndex.init();
-  await workspace.features?.init();
   await workspace.featureTracking.init();
   await workspace.resources.init();
   workspace.resources.start();

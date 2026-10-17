@@ -1,3 +1,6 @@
+import type { FeatureAuthoringCommand, FeatureAuthoringResult } from '../application/feature-authoring-contracts.js';
+import type { FeatureActionResult } from '../application/feature-management.js';
+import { assertDirectFeatureCreation, authorFeature, isSharedFeatureSession } from './workspace-feature-authoring.js';
 import { WorkspaceContext, type WorkspaceConfiguration } from './workspace-context.js';
 import type { ToolAccessView } from '../application/tool-policy.js';
 import { type Task } from "../../shared/contracts.js";
@@ -84,7 +87,23 @@ export class WorkerWorkspace {
   sharedIntakeCommand(input: unknown) { return sharedIntakeCommand(this.context, input); }
   featureView() { return featureView(this.context); }
   featureList() { return featureList(this.context); }
-  featureCommand(input: unknown) { return featureCommand(this.context, input); }
+  featureCommand(input: FeatureAuthoringCommand): Promise<FeatureAuthoringResult>;
+  featureCommand(input: unknown): Promise<FeatureActionResult>;
+  featureCommand(input: unknown) {
+    const action = (input as { action?: unknown } | null)?.action;
+    return action === 'prepare' || action === 'publish' ? authorFeature(this.context, input) : featureCommand(this.context, input);
+  }
+  createTaskboard(input: unknown) {
+    assertDirectFeatureCreation(this.context);
+    return withRepositoryAdmission(this.context, () => this.board.create(input));
+  }
+  sessionCommand(input: unknown) {
+    const body = input as { action?: unknown; id?: unknown } | null;
+    if (body?.action === 'create') assertDirectFeatureCreation(this.context);
+    if (body?.action === 'rename' && typeof body.id === 'string' && isSharedFeatureSession(this.context, body.id))
+      throw new DomainError('conflict', 'This title belongs to the published Feature Request. Its accepted scope and title remain fixed.');
+    return this.sessions.action(input);
+  }
   repositoryStatus() { return repositoryStatus(this.context); }
   repositoryCommand(input: unknown) { return repositoryCommand(this.context, input); }
   toolAccess(): ToolAccessView { return toolAccess(this.context); }

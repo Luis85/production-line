@@ -1,3 +1,4 @@
+import { featureRequestReference } from '../../src/worker/dist/worker/application/feature-request-reference.js';
 import { parseTrackedFeature, featureRecord } from './feature-fixtures.mjs';
 import { cleanup } from './fixture-cleanup.mjs';
 import test from 'node:test';
@@ -192,20 +193,20 @@ test('feature retry captures a terminal run that finished since the last watcher
   const parsed=await f.read('a.md');assert.equal(parsed.data.status,'queued');assert.equal(parsed.data.werk.execution,undefined);
 });
 
-test('pending questions project separately without changing accepted request or admitting answers from files', async t => {
+test('pending questions preserve accepted requests and malformed local edits without admitting answers', async t => {
   const f = await fixture(t), body = '# Goal\n\nKeep this accepted body exactly.\n';
   await f.put('question.md', source('', body)); await scan(f.service);
   const record = f.submissions[0], pendingId = 'question-fixture-1';
-  const interaction = { schemaVersion: 1, sessionId: record.sessionId, revision: 4, phase: 'waiting_input', pending: { id: pendingId, turnId: 'turn_fixture_1', kind: 'question', message: 'Which behavior?', choices: [{ id: 'opaque_choice', label: 'Keep existing behavior' }], reason: 'Approval is required.', createdAt: new Date().toISOString() }, latestTurn: null, turns: [], totalTurns: 1 };
+  const interaction = { schemaVersion: 1, sessionId: record.sessionId, revision: 4, phase: 'waiting_input', pending: { id: pendingId, turnId: 'turn_fixture_1', kind: 'question', message: 'Which behavior?', choices: [{ id: 'opaque_choice', label: 'Keep existing behavior' }], reason: 'Approval is required.', createdAt: new Date().toISOString() }, latestTurn: { id: 'turn_fixture_1', runId: null, kind: 'message', status: 'waiting_input', createdAt: new Date().toISOString(), finishedAt: new Date().toISOString(), priorTurnId: null }, turns: [], totalTurns: 1 };
   f.tasks.set(record.taskId, { status: 'waiting_input', interaction }); await f.service.tick(true);
   let parsed = await f.read('question.md');
   assert.equal(parsed.body, body); assert.equal(parsed.data.werk.inputChanged, undefined);
   assert.deepEqual(parsed.data.werk.interaction, { phase: 'waiting_input', revision: 4, pendingId, link: '_questions/' + record.id + '/' + pendingId + '.md' });
   const path = join(f.directory, parsed.data.werk.interaction.link), question = await readFile(path, 'utf8');
-  assert.match(question, /opaque_choice: Keep existing behavior/); assert.match(question, /Approval is required/); assert.match(question, /Editing this file does not answer/);
+  assert.match(question, /Keep existing behavior/); assert.match(question, /opaque_choice/); assert.match(question, /Approval is required/); assert.match(question, /status: ready/);
   await writeFile(path, 'My answer is opaque_choice'); await scan(f.service);
   assert.equal(f.submissions.length, 1); assert.equal((await f.read('question.md')).data.status, 'waiting_input'); assert.equal(interaction.pending.id, pendingId);
-  assert.equal(await readFile(path, 'utf8'), question);
+  assert.equal(await readFile(path, 'utf8'), 'My answer is opaque_choice');
   await f.service.close();
   const recovered = new FeatureRequests(new MarkdownFeatureFolder(f.directory, f.state, 'codex-cli', f.project), f.queue, 0);
   await recovered.init(); await scan(recovered); assert.equal(f.submissions.length, 1); await recovered.close();
@@ -244,4 +245,46 @@ test('local folder requests submit a stable definitionRef unchanged and reject m
   assert.equal(f.submissions.length, 1); assert.equal(f.submissions[0].input.definitionRef, 'team-reviewer'); assert.equal(f.submissions[0].input.definitionId, undefined);
   for (const extra of ['definitionRef: team-reviewer\ndefinitionId: local-id\n', 'definitionRef: Team Reviewer\n', 'definitionRef: 7\n'])
     assert.throws(() => featureInput(parseFeature(source(extra)), 'codex-cli'), /definitionRef/);
+});
+
+
+test('legacy orchestrator folder projections use the restored session parent and persist it on renewed assignment', async t => {
+  const reference = featureRequestReference({ id: 'upstream-request', source: 'orchestrator', scope: 'https://factory.example' });
+  const task = { id: 'assignment', title: 'Assigned feature', criteria: ['Evidence'], attempt: 1 };
+  const queue = { async submit() { throw Error('Remote projection must not dispatch locally.'); }, inspect() { return undefined; }, reference(id) { return id === 'remote-assignment' ? reference : undefined; } };
+  const f = await fixture(t, queue);
+  await f.service.rememberRemote(task);
+  assert.equal(f.service.view().records[0].feature.key, reference.key);
+  assert.equal(f.service.referenceForSession('remote-assignment').key, reference.key);
+  const legacy = JSON.parse(await readFile(join(f.state, 'feature-index.json'), 'utf8'));
+  assert.equal(legacy.records[0].feature, undefined);
+  await f.service.rememberRemote({ ...task, attempt: 2 }, reference);
+  const saved = JSON.parse(await readFile(join(f.state, 'feature-index.json'), 'utf8'));
+  assert.equal(saved.records[0].feature.key, reference.key);
+  await assert.rejects(f.service.rememberRemote(task, featureRequestReference({ id: 'unrelated-request', source: 'orchestrator', scope: 'https://factory.example' })), /another Feature Request/);
+  assert.equal(f.service.view().records[0].feature.key, reference.key);
+  await f.service.close();
+  const restored = new FeatureRequests(new MarkdownFeatureFolder(f.directory, f.state, 'codex-cli', f.project), queue, 0);
+  await restored.init();
+  try { assert.equal(restored.view().records[0].feature.key, reference.key); } finally { await restored.close(); }
+});
+
+
+test('moving an owned feature folder preserves its persisted parent namespace and pending admission identity', async t => {
+  let blocked = true;
+  const accepted = [];
+  const queue = { async submit(record) { if (blocked) throw Error('Provider unavailable.'); accepted.push(structuredClone(record)); }, inspect() { return undefined; } };
+  const f = await fixture(t, queue); await f.put('move.md', source()); await scan(f.service);
+  const before = f.service.view().records[0]; assert.equal(before.submitted, false); assert.ok(before.feature);
+  await f.service.close();
+  const relocated = join(f.project, 'relocated-features'); await rename(f.directory, relocated);
+  const service = new FeatureRequests(new MarkdownFeatureFolder(relocated, f.state, 'codex-cli', f.project), queue, 0);
+  await service.init();
+  try {
+    assert.equal(service.view().records[0].feature.key, before.feature.key);
+    blocked = false; await scan(service);
+    assert.equal(accepted.length, 1); assert.equal(accepted[0].feature.key, before.feature.key);
+    assert.equal(service.view().records[0].feature.scope, f.directory);
+    assert.equal(service.view().directory, relocated);
+  } finally { await service.close(); }
 });
