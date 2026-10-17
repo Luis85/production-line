@@ -153,3 +153,13 @@ test('unchanged entries are omitted from the patch and changed-file count', () =
   assert.equal(result.changedFileCount, 1);
   assert.doesNotMatch(result.patch, /unchanged/);
 });
+
+test('Unicode model paths match canonical approval and cannot duplicate it in another form', () => {
+  const path = 'docs/Übersicht.md', decomposed = path.normalize('NFD');
+  const snapshots = [{ path, content: 'before\n', existed: true }, { path: 'other.md', content: '', existed: false }];
+  const changed = { path: decomposed, content: 'after\n' };
+  const result = validatePatchReply(snapshots, reply({ summary: 'Updated', files: [changed] }));
+  assert.ok(result.patch.includes(path));
+  assert.ok(!result.patch.includes(decomposed));
+  code(() => validatePatchReply(snapshots, reply({ summary: 'Duplicate', files: [changed, { ...changed, path }] })), 'patch_file_duplicate');
+});

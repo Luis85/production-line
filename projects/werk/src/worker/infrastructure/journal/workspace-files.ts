@@ -32,11 +32,18 @@ export function localTaskStorage(directory: string): LocalTaskStorage {
     async writePatch(id, patch) { await ensureDirectory(join(directory, 'local-review')); await atomicWrite(join(directory, 'local-review', id + '.patch'), patch); },
   };
 }
-/** Linux and Git compare names byte-wise, so a decomposed on-disk spelling would otherwise become a second, NFC-named file. */
-async function assertComposedName(parent: string, name: string) {
+/** Refuse filesystem aliases; accept an existing decomposed spelling only when the filesystem resolves NFC to that same entry. */
+async function assertUnambiguousName(parent: string, name: string, existing: { dev: number; ino: number } | null) {
   const entries = await readdir(parent).catch((error) => { if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return []; throw error; });
-  if (entries.some(entry => entry !== name && entry.normalize('NFC') === name))
-    throw new DomainError('invalid_input', 'An approved path differs from an existing file or folder only by Unicode normalization. Rename it to its composed (NFC) spelling first.');
+  const aliases = entries.filter(entry => entry.normalize('NFC').toLowerCase() === name.toLowerCase());
+  if (!aliases.length || aliases.length === 1 && aliases[0] === name) return;
+  // APFS can expose one NFD directory entry while resolving the requested NFC name to it.
+  // Two directory entries are always ambiguous, even when hardlinks share an inode.
+  if (aliases.length === 1 && aliases[0].normalize('NFC') === name && existing) {
+    const stored = await lstat(join(parent, aliases[0]));
+    if (stored.dev === existing.dev && stored.ino === existing.ino) return;
+  }
+  throw new DomainError('invalid_input', 'An approved path differs from an existing file or folder only by case or Unicode normalization. Use its exact composed (NFC) spelling first.');
 }
 async function worktreeIdentity(path: string): Promise<ToolWorktreeIdentity> {
   const info = await lstat(path);
@@ -64,7 +71,8 @@ export const approvedTaskFiles: ApprovedTaskFiles = {
           if (error.code !== "ENOENT") throw error;
           return null;
         });
-        if (!info) { await assertComposedName(join(snapshotRoot, ...parts.slice(0, i - 1)), parts[i - 1]); break; }
+        await assertUnambiguousName(join(snapshotRoot, ...parts.slice(0, i - 1)), parts[i - 1], info);
+        if (!info) break;
         if (
           info?.isSymbolicLink() ||
           (info && i < parts.length && !info.isDirectory())

@@ -21,11 +21,29 @@ export function safeApprovedPath(path: string): boolean {
   return path.length <= maxApprovedPathLength && allowedCharacters.test(path) && !path.startsWith('-') && !path.split('/').some(unsafeSegment) && !secret(path);
 }
 
+/** Files and their parent folders must retain one spelling across case-insensitive checkouts. */
+export function approvedPathsCollide(paths: readonly string[]): boolean {
+  const key = (path: string) => path.normalize('NFC').toLowerCase();
+  const files = new Set(paths.map(key)), prefixes = new Map<string, string>();
+  if (files.size !== paths.length) return true;
+  for (const path of paths) {
+    const parts = path.split('/');
+    for (let index = 1; index <= parts.length; index++) {
+      const prefix = parts.slice(0, index).join('/'), folded = key(prefix);
+      const previous = prefixes.get(folded);
+      if (previous !== undefined && previous !== prefix || index < parts.length && files.has(folded)) return true;
+      prefixes.set(folded, prefix);
+    }
+  }
+  return false;
+}
+
 /** Static approved-file rules shared by live execution and offline feature admission. Filesystem checks remain execution-owned. Returns NFC-normalized paths. */
 export function validateApprovedPaths(value: unknown, label = 'Approved paths'): string[] {
   if (!Array.isArray(value) || value.length < 1 || value.length > 32 || value.some(path => typeof path !== 'string')) throw new ValidationError(label + ' must contain 1–32 safe relative non-secret file paths');
   const paths = (value as string[]).map(path => path.normalize('NFC'));
   if (paths.some(path => !safeApprovedPath(path))) throw new ValidationError(label + ' must contain 1–32 safe relative non-secret file paths');
   if (new Set(paths).size !== paths.length) throw new ValidationError(label + ' must be unique');
+  if (approvedPathsCollide(paths)) throw new ValidationError(label + ' must be unique without file or folder aliases, including on case-insensitive filesystems');
   return paths;
 }

@@ -210,3 +210,9 @@ test('prose-wrapped legacy proposal formatting requires retained proposal contex
   assert.equal(readableReply(text).kind, 'text');
   assert.equal(readableReply(text, { fileTask: 'implementation' }).kind, 'text');
 });
+
+test('ambiguous proposal replies cannot use the truncated-proposal display fallback', () => {
+  const second = JSON.stringify({ summary: 'A different choice', files: [{ path: 'b.md', content: 'other' }] });
+  for (const text of [observed + second, observed + '{bad}'.repeat(255) + second])
+    assert.equal(readableReply(text, proposal).kind, 'text');
+});

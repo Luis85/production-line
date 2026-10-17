@@ -58,3 +58,18 @@ test('live Codex configuration applies the same approved-path rule', () => {
   value.codex.allowedPaths = [vaultPaths[1], vaultPaths[1].normalize('NFD')];
   assert.throws(() => normalizeExecution(value), error => error.exitCode === 2);
 });
+
+test('approved file and parent names cannot alias across checkout platforms', () => {
+  for (const paths of [
+    ['docs/Ä.md', 'docs/ä.md'],
+    ['Foo/a.md', 'foo/b.md'],
+    ['notes/Ä/a.md', 'notes/ä/b.md'],
+    ['src/file.ts', 'src/file.ts/child.md'],
+  ]) {
+    assert.throws(() => validateApprovedPaths(paths), /unique/, JSON.stringify(paths));
+    assert.throws(() => normalizeExecution({ mode: 'cli', codex: { executable: '/opt/codex', allowedPaths: paths } }), error => error.exitCode === 2);
+  }
+  const paths = ['docs/Ä/a.md', 'docs/Ä/b.md'];
+  assert.deepEqual(validateApprovedPaths(paths), paths);
+  assert.deepEqual(normalizeExecution({ mode: 'cli', codex: { executable: '/opt/codex', allowedPaths: paths } }).codex.allowedPaths, paths);
+});

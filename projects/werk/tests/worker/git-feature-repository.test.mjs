@@ -302,3 +302,10 @@ test('a published file cannot alias a tracked name that differs only by Unicode 
   git(f.repository, 'fetch', 'origin');
   await assert.rejects(f.client().publishPatch({ ...f.publication('publish-alias'), sourceCommit, patch: addedFilePatch(path, 'composed'), approvedPaths: [path] }), error => error.code === 'conflict' && /Unicode normalization/.test(error.message));
 });
+
+test('publication refuses new approved paths with colliding parent spellings', async t => {
+  const f = await fixture(t), approvedPaths = ['Änderungen/a.md', 'änderungen/b.md'];
+  const patch = approvedPaths.map(path => addedFilePatch(path, 'content')).join('');
+  assert.throws(() => f.client().publishPatch({ ...f.publication('publish-parent-alias'), approvedPaths, patch }), error => error.code === 'invalid_input' && /folder aliases/.test(error.message));
+  assert.equal(f.main(), f.sourceCommit);
+});

@@ -1,3 +1,4 @@
+import { approvedPathsCollide } from '../../application/approved-paths.js';
 import { containsSensitivePatchMaterial } from '../../application/review-patch-policy.js';
 import { requestName, parseFeature } from './document.js';
 import { canonicalJson } from '../../application/request-gates.js';
@@ -170,6 +171,7 @@ export class GitFeatureRepository {
       if (normalized === '.werk' || beneath(normalized, '.werk')) throw new GitFeatureError('invalid_input', 'Feature patches cannot modify worker control storage.');
       if ([this.options.requestsDirectory, this.options.reviewDirectory].some(directory => normalized === directory.toLowerCase() || beneath(normalized, directory.toLowerCase())) || (this.options.protectedPaths ?? []).some(protectedPath => normalized === protectedPath.toLowerCase())) throw new GitFeatureError('invalid_input', 'Feature patches cannot modify their workflow configuration, request intake or review artifacts.');
     }
+    if (approvedPathsCollide(input.approvedPaths)) throw new GitFeatureError('invalid_input', 'Approved feature paths must be unique without file or folder aliases.');
     const branch = branchName(`${this.options.branchPrefix ?? 'werk/features'}/${input.featureId}-${hash(input.operationId).slice(0, 12)}`);
     const digest = hash(canonicalJson({ ...input, approvedPaths: [...input.approvedPaths].sort() }));
     return this.serialize(async () => {

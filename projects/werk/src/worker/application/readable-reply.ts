@@ -1,6 +1,6 @@
 import { Lexer, Tokenizer, type Token } from 'marked';
 import { parseModelResult } from './model-contract.js';
-import { parsePatchReply } from './patch-protocol.js';
+import { PatchProtocolError, parsePatchReply } from './patch-protocol.js';
 // Pure transcript formatting shared by the worker runtime and its webview.
 // Model protocol replies stay unchanged in interaction evidence; the conversation shows a readable view.
 
@@ -229,8 +229,9 @@ export function readableReply(text: string, context: ReplyContext = {}): Readabl
   let value: unknown;
   try {
     value = context.fileTask === "proposal" ? parsePatchReply(text) : JSON.parse(unfenced);
-  } catch {
-    const partial = context.fileTask === "proposal" ? truncatedChangeSet(unfenced) : null;
+  } catch (error) {
+    // Ambiguous or over-budget replies must not be reinterpreted as a truncated valid proposal.
+    const partial = context.fileTask === "proposal" && error instanceof PatchProtocolError && error.code === "patch_reply_not_json" ? truncatedChangeSet(unfenced) : null;
     return partial
       ? {
           kind: "patch",
@@ -264,8 +265,8 @@ export function readableReply(text: string, context: ReplyContext = {}): Readabl
         value.summary,
         (value.files as Array<{ path: string; content?: unknown }>).map((file) =>
           typeof file.content === "string"
-            ? { path: file.path, lines: lineList(file.content).length }
-            : { path: file.path },
+            ? { path: file.path.normalize("NFC"), lines: lineList(file.content).length }
+            : { path: file.path.normalize("NFC") },
         ),
         undefined,
         false,
