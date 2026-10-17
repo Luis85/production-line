@@ -44,6 +44,15 @@ export async function sharedMarkdownFixture(t) {
   /** @type {string[]} */
   const sent = [];
   let featureId = '', requestPath = '', sourceCommit = '';
+  let phaseName = 'initialize repositories and authoring kit', phaseStarted = Date.now();
+  let syncCount = 0, restartCount = 0;
+  function phase(next) {
+    t.signal.throwIfAborted();
+    t.diagnostic(phaseName + ' completed in ' + (Date.now() - phaseStarted) + 'ms');
+    phaseName = next; phaseStarted = Date.now();
+  }
+  const aborted = () => t.diagnostic('Aborted during ' + phaseName + ' after ' + (Date.now() - phaseStarted) + 'ms');
+  t.signal.addEventListener('abort', aborted, { once: true });
   async function git(cwd, ...args) {
     return (await execute('git', ['-c', 'core.hooksPath=/dev/null', '-C', cwd, ...args], {
       signal: t.signal, timeout: 30000, maxBuffer: 2097152,
@@ -67,6 +76,8 @@ export async function sharedMarkdownFixture(t) {
     try { await previous?.close(); } finally { previousJournal?.close(); }
   }
   t.after(async () => {
+    t.diagnostic('Final phase: ' + phaseName + ' (' + (Date.now() - phaseStarted) + 'ms); syncs: ' + syncCount + ', restarts: ' + restartCount);
+    t.signal.removeEventListener('abort', aborted);
     try { await stop(); } finally { await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
   });
   /** @type {typeof fetch} */
@@ -100,8 +111,11 @@ export async function sharedMarkdownFixture(t) {
     await workspace.init();
   }
   async function sync() {
-    await current().sharedIntakeCommand({ action: 'sync' });
-    return current().sharedIntakeView();
+    const started = Date.now(), count = ++syncCount;
+    try {
+      await current().sharedIntakeCommand({ action: 'sync' });
+      return current().sharedIntakeView();
+    } finally { t.diagnostic('Shared sync ' + count + ' took ' + (Date.now() - started) + 'ms during ' + phaseName); }
   }
   function feature() {
     const row = current().sharedIntakeView().requests.find(row => row.id === featureId);
@@ -153,6 +167,7 @@ export async function sharedMarkdownFixture(t) {
   await git(author, 'add', '.'); await git(author, 'commit', '-m', 'Configure shared Markdown workflow');
   await git(author, 'push', '-u', 'origin', 'main');
   await git(directory, 'clone', remote, checkout); await configureGit(checkout);
+  phase('initialize workspace and shared binding');
   await start();
   await current().updateSettings({ board: { paused: true },
     provider: { id: 'openai-api', apiKey: 'fixture-only-never-sent', model: 'fixture-model' },
@@ -166,6 +181,7 @@ export async function sharedMarkdownFixture(t) {
   await writeFile(join(checkout, 'approved.txt'), 'developer unstaged change\n');
   await writeFile(join(checkout, 'developer-only.txt'), 'preserve this untracked file\n');
   const originalCheckout = await checkoutEvidence();
+  phase('author and publish a ready request');
   const authoring = join(author, '.werk/authoring/feature-request.mjs');
   const created = await cli(authoring, author, 'create', '--name', 'retry-policy.md', '--title', 'Clarify the retry policy');
   featureId = created.id; requestPath = created.path;
@@ -182,13 +198,18 @@ export async function sharedMarkdownFixture(t) {
   await git(author, 'add', requestPath); await git(author, 'commit', '-m', 'Queue a ready feature'); await git(author, 'push', 'origin', 'main');
   sourceCommit = await git(author, 'rev-parse', 'HEAD');
   await current().updateSettings({ board: { paused: false } });
+  phase('claim the request and publish the model question');
   await sync();
   assert.equal(task().status, 'queued'); assert.equal(task().baseCommit, sourceCommit);
   await current().board.tick(); await settle('waiting_input'); await sync();
   assert.equal(sent.length, 1);
   return {
-    current, sync, feature, task, settle, publish, published, checkoutEvidence, originalCheckout,
+    current, sync, feature, task, settle, publish, published, checkoutEvidence, originalCheckout, phase,
     git, remote, author, checkout, sent, requestPath, sourceCommit,
-    async restart() { await stop(); await start(); },
+    async restart() {
+      const started = Date.now(), count = ++restartCount;
+      try { await stop(); await start(); }
+      finally { t.diagnostic('Workspace restart ' + count + ' took ' + (Date.now() - started) + 'ms during ' + phaseName); }
+    },
   };
 }

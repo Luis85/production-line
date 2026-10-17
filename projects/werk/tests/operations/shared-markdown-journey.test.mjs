@@ -2,10 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { markdownParts, readyAnswer, sharedMarkdownFixture } from './shared-markdown-fixture.mjs';
 
+// Git publication traverses several real worktrees and restarts. Windows process startup
+// costs accumulate across the journey; individual Git/CLI/model deadlines stay unchanged.
+const journeyTimeout = process.platform === 'win32' ? 300000 : 120000;
+
 // No HTTP server or webview: after one-time local configuration, the team's interface is Git Markdown.
-test('a teammate answers a published Task through Git and the restarted worker resumes one feature into a reviewable PullRequest', { timeout: 120000 }, async t => {
+test('a teammate answers a published Task through Git and the restarted worker resumes one feature into a reviewable PullRequest', { timeout: journeyTimeout }, async t => {
   const fixture = await sharedMarkdownFixture(t);
   const { current, sync, feature, task, sent, git, remote, published } = fixture;
+  fixture.phase('verify the published question and preserved checkout');
   const taskId = task().id, sessionId = task().sessionId, pending = task().interaction.pending;
   assert.ok(pending);
   const taskPath = feature().taskNote;
@@ -20,6 +25,7 @@ test('a teammate answers a published Task through Git and the restarted worker r
   assert.match(sourceWhileWaiting, /## Worker progress/); assert.match(sourceWhileWaiting, /werkTask:/);
   assert.ok(sourceWhileWaiting.includes(taskPath.replace(/\.md$/, '')));
   assert.deepEqual(await fixture.checkoutEvidence(), fixture.originalCheckout);
+  fixture.phase('reconcile the waiting question across repeated sync and restart');
   const waitingRefs = await git(remote, 'show-ref');
   await sync(); await sync(); await fixture.restart(); await sync();
   assert.equal(sent.length, 1); assert.equal(task().id, taskId); assert.equal(task().sessionId, sessionId);
@@ -27,6 +33,7 @@ test('a teammate answers a published Task through Git and the restarted worker r
   assert.equal(await git(remote, 'show-ref'), waitingRefs, 'Waiting and restart do not republish an unchanged checkpoint.');
   assert.deepEqual(await fixture.checkoutEvidence(), fixture.originalCheckout);
 
+  fixture.phase('publish the team answer and complete the same task');
   const reply = readyAnswer(question, 'retry_once');
   await fixture.publish(taskPath, reply, 'Team chooses a retry policy');
   await sync(); await current().board.tick(); await fixture.settle('review'); await sync();
@@ -38,6 +45,7 @@ test('a teammate answers a published Task through Git and the restarted worker r
   assert.equal(task().interaction.pending, null);
   assert.equal(markdownParts(await published(taskPath)).data.status, 'processed');
 
+  fixture.phase('verify the PullRequest and feature branch');
   const completed = feature();
   assert.equal(completed.status, 'ready_for_review', JSON.stringify(completed));
   assert.equal(completed.publication, 'synced'); assert.equal(completed.done?.passed, true);
@@ -56,21 +64,25 @@ test('a teammate answers a published Task through Git and the restarted worker r
   assert.match(doneSource, /Document a retry policy chosen by the team/);
   assert.deepEqual(await fixture.checkoutEvidence(), fixture.originalCheckout);
 
+  fixture.phase('reconcile completed work across restart');
   const completedRefs = await git(remote, 'show-ref');
   await sync(); await fixture.restart(); await current().board.tick(); await sync();
   assert.equal(sent.length, 2); assert.equal(current().board.view().tasks.length, 1);
   assert.equal(await git(remote, 'show-ref'), completedRefs);
+  fixture.phase('replay the consumed answer across restart');
   // A teammate accidentally reopens the already-consumed file; its durable operation must not execute twice.
   await fixture.publish(taskPath, reply, 'Replay an already consumed answer');
   await sync(); await fixture.restart(); await sync(); await current().board.tick();
   assert.equal(sent.length, 2); assert.equal(task().id, taskId); assert.equal(task().sessionId, sessionId);
   assert.equal(feature().status, 'ready_for_review');
   assert.deepEqual(await fixture.checkoutEvidence(), fixture.originalCheckout);
+  fixture.phase('completed');
 });
 
-test('tampered checkpoint identity and stale revision cannot authorize a shared Markdown reply, including after restart', { timeout: 120000 }, async t => {
+test('tampered checkpoint identity and stale revision cannot authorize a shared Markdown reply, including after restart', { timeout: journeyTimeout }, async t => {
   const fixture = await sharedMarkdownFixture(t);
   const { current, sync, feature, task, sent, published } = fixture;
+  fixture.phase('read the question checkpoint');
   const taskPath = feature().taskNote;
   assert.ok(taskPath);
   const question = await published(taskPath), identity = markdownParts(question).data;
@@ -81,6 +93,7 @@ test('tampered checkpoint identity and stale revision cannot authorize a shared 
     { name: 'a stale interaction revision', fields: { expectedRevision: Number(identity.expectedRevision) - 1 } },
   ];
   for (const attempt of invalid) {
+    fixture.phase('reject ' + attempt.name + ' across restart');
     await fixture.publish(taskPath, readyAnswer(question, 'retry_once', attempt.fields), 'Reject ' + attempt.name);
     await sync();
     assert.equal(sent.length, 1, attempt.name);
@@ -92,6 +105,7 @@ test('tampered checkpoint identity and stale revision cannot authorize a shared 
     assert.equal(sent.length, 1, 'Restart cannot turn an invalid shared response into authority.');
     assert.equal(task().interaction.pending?.id, pendingId);
   }
+  fixture.phase('repair the note and complete the same task');
   // Repair only the note. No local status/UI interaction should be necessary to recover.
   await fixture.publish(taskPath, readyAnswer(question, 'retry_once'), 'Restore identity and answer the open question');
   await sync(); await current().board.tick(); await fixture.settle('review'); await sync();
@@ -99,4 +113,5 @@ test('tampered checkpoint identity and stale revision cannot authorize a shared 
   assert.equal(current().board.view().tasks.length, 1);
   assert.equal(feature().status, 'ready_for_review'); assert.equal(feature().publication, 'synced');
   assert.deepEqual(await fixture.checkoutEvidence(), fixture.originalCheckout);
+  fixture.phase('completed');
 });
