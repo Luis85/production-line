@@ -4,7 +4,7 @@ import { markdownParts, readyAnswer, sharedMarkdownFixture } from './shared-mark
 
 // Git publication traverses several real worktrees and restarts. Windows process startup
 // costs accumulate across the journey; individual Git/CLI/model deadlines stay unchanged.
-const journeyTimeout = process.platform === 'win32' ? 300000 : 120000;
+const journeyTimeout = process.platform === 'win32' ? 420000 : 120000;
 
 // No HTTP server or webview: after one-time local configuration, the team's interface is Git Markdown.
 test('a teammate answers a published Task through Git and the restarted worker resumes one feature into a reviewable PullRequest', { timeout: journeyTimeout }, async t => {
