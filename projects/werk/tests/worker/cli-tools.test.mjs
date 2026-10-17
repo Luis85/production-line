@@ -212,3 +212,13 @@ test('tool-access CLI commands round-trip the redacted view and guard discovery 
   assert.deepEqual(await workerBody(catalog['tool-access discover'], undefined, { id: 'docs', 'if-match': '7' }), { id: 'docs', expectedRevision: 7 });
   await assert.rejects(workerBody(catalog['tool-access discover'], undefined, { id: 'docs', 'if-match': 'latest' }), /if-match/);
 });
+
+test('tool-access set strips view-only fields even when expectedRevision is added, and guards a revision mismatch', () => {
+  const connection = { id: 'docs', name: 'Docs', transport: 'http', enabled: true, command: '', args: [], url: 'https://mcp.example.test/', secretEnv: '', allowedTools: ['search'] };
+  const view = { schemaVersion: 1, revision: 7, builtins: { files: false, commands: [], cliTools: [], webOrigins: [] }, mcp: [{ ...connection, hasSecret: true, discoveredTools: [{ name: 'search' }] }], canEdit: true, saveBlockedReason: null, workerNode: process.execPath };
+  const expected = { expectedRevision: 7, builtins: view.builtins, mcp: [connection] };
+  assert.deepEqual(toolAccessBody({ ...view, expectedRevision: 7 }), expected, 'an equal revision and expectedRevision is accepted');
+  const { revision, ...withoutRevision } = view;
+  assert.deepEqual(toolAccessBody({ ...withoutRevision, expectedRevision: 7 }), expected, 'expectedRevision alone still drops the view fields');
+  assert.throws(() => toolAccessBody({ ...view, expectedRevision: 9 }), /revision \(7\) and expectedRevision \(9\) differ\. Keep one: the revision you read with tool-access get\./);
+});

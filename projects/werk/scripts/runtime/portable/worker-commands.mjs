@@ -560,25 +560,25 @@ export function workerCommands(catalog) {
   }
   return catalog;
 }
-/** Accept an edited `tool-access get` view: its revision becomes the guard and read-only fields are dropped. */
+/** Accept an edited `tool-access get` view: view-only fields are always dropped and its revision becomes the guard. */
 export function toolAccessBody(body) {
   if (!body || typeof body !== "object" || Array.isArray(body))
     throw inputError("Tool access input must be a JSON object.");
-  let result = body;
-  if (body.expectedRevision === undefined) {
-    if (!Number.isSafeInteger(body.revision))
+  const { revision, schemaVersion, canEdit, saveBlockedReason, workerNode, mcp, ...rest } = body;
+  if (rest.expectedRevision === undefined) {
+    if (!Number.isSafeInteger(revision))
       throw inputError("Include expectedRevision, or send the edited output of tool-access get.");
-    const { revision, schemaVersion, canEdit, saveBlockedReason, workerNode, mcp, ...rest } = body;
-    result = {
-      ...rest,
-      expectedRevision: revision,
-      mcp: Array.isArray(mcp) ? mcp.map((item) => {
-        if (!item || typeof item !== "object") return item;
-        const { hasSecret, discoveredTools, ...connection } = item;
-        return connection;
-      }) : mcp,
-    };
-  }
+    rest.expectedRevision = revision;
+  } else if (revision !== undefined && revision !== rest.expectedRevision)
+    throw inputError(`revision (${revision}) and expectedRevision (${rest.expectedRevision}) differ. Keep one: the revision you read with tool-access get.`);
+  const result = "mcp" in body ? {
+    ...rest,
+    mcp: Array.isArray(mcp) ? mcp.map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return item;
+      const { hasSecret, discoveredTools, ...connection } = item;
+      return connection;
+    }) : mcp,
+  } : rest;
   if (Buffer.byteLength(JSON.stringify(result)) > 65536)
     throw inputError("Tool access update limit: 64 KiB after removing discovery catalogs.");
   return result;

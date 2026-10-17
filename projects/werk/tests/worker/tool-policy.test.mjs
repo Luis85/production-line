@@ -44,6 +44,14 @@ test('tool policy validates concrete command, origin, credential and aggregate g
   assert.throws(() => validateToolPolicy({ ...defaults, builtins: { ...defaults.builtins, files: true }, mcp: [{ ...httpConnection(), secret: '', discoveredTools: definitions, allowedTools: definitions.map(item => item.name) }] }), /at most 64/);
 });
 
+test('field validation names the unexpected keys so an edited tool-access view can be fixed', () => {
+  const defaults = defaultToolPolicy();
+  assert.throws(() => updateToolPolicy(defaults, { ...edit(defaults), revision: 0, schemaVersion: 1 }), /Use the documented tool access update fields\. Unexpected: revision, schemaVersion\./);
+  assert.throws(() => updateToolPolicy(defaults, { ...edit(defaults), mcp: [{ ...httpConnection(), hasSecret: true }] }), /Use the documented MCP connection fields\. Unexpected: hasSecret\./);
+  assert.throws(() => updateToolPolicy(defaults, { ...edit(defaults), a: 1, b: 2, c: 3, d: 4, e: 5, f: 6 }), /Unexpected: a, b, c, d, e, …\./);
+  assert.throws(() => updateToolPolicy(defaults, []), { message: 'Use the documented tool access update fields.' });
+});
+
 test('stdio MCP connections without a credential need no secret environment variable', () => {
   const defaults = defaultToolPolicy();
   const stdio = (extra = {}) => httpConnection({ transport: 'stdio', command: process.execPath, url: '', secretEnv: '', ...extra });
