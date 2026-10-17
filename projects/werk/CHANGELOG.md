@@ -11,6 +11,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Added
 
+- `definition update --ref REF --file PATH` replaces the instruction profile behind a stable reference in place, keeping its id and reference. `--dry-run` previews the name, digest and per-agent changes without writing; applying requires `--if-match` with the current definition `revision`, now listed by `definition list`. Existing tasks keep their accepted profile snapshot.
 - An "Operate a project worker" how-to with a day-to-day checklist and Windows PowerShell 5.1 guidance: BOM-free JSON input files, why piping to `--file -` loses non-ASCII text, task worktree location and manual cleanup, tool limits and the chat workspace, and the answer protocol. It ships in the release documentation.
 - Portable client option `--request-timeout-ms` (1,000–600,000) overrides how long a command waits for the API.
 - `feature setup` keeps the committed `.werk/authoring/feature-request.mjs` current after upgrades.

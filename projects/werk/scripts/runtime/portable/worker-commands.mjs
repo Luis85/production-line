@@ -76,6 +76,11 @@ export function workerCommands(catalog) {
     method: "POST", path: "/api/definitions", required: ["id", "ref"], mutating: true,
     description: "Give an imported definition the stable reference that committed requests select with definitionRef. The reference moves from any other definition; existing tasks keep their saved copy.",
   };
+  catalog["definition update"] = {
+    method: "POST", path: "/api/definitions", body: true, required: ["ref"], options: ["if-match", "dry-run"], mutating: true,
+    example: { name: "Project reviewer", yaml: "agents:\n  root:\n    model: openai/gpt-4.1\n    instruction: Review the task and list the risks first.\n" },
+    description: "Replace the instruction profile behind a stable reference in place; its id and reference stay. --dry-run previews name, content and per-agent changes without writing. Apply with --if-match REVISION from definition list or the dry run. Existing tasks keep their accepted snapshot.",
+  };
   catalog["repository status"] = {
     method: "GET", path: "/api/repositories",
     description: "Inspect assigned repositories and the installation-folder consent request without fetching.",

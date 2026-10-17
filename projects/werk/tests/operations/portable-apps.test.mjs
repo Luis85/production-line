@@ -104,6 +104,16 @@ test('copied apps operate independently with agent tasks, durable state and late
   assert.equal((await ok('worker', 'task list')).records.some(record => record.busy), false, 'restart cancelled all pending model calls');
   assert.equal(retained.session.definition.digest, definition.digest);
   assert.equal((await ok('worker', 'definition list')).definitions[0].digest, definition.digest);
+  const listed = (await ok('worker', 'definition list')).definitions[0], profileUpdate = { yaml: definitionInput.yaml.replace('Review acceptance criteria', 'Review risks and acceptance criteria') };
+  const dryRun = await ok('worker', 'definition update', ['--ref', 'project-reviewer', '--dry-run'], profileUpdate);
+  assert.equal(dryRun.definition.revision, listed.revision); assert.deepEqual(dryRun.changes.agents.changed, [{ name: 'root', fields: ['instruction'] }]);
+  assert.equal((await ok('worker', 'definition list')).definitions[0].digest, definition.digest, 'dry run does not write');
+  assert.equal((await invokeApp('worker', 'definition update', ['--ref', 'project-reviewer'], profileUpdate)).code, 2, '--if-match is required');
+  assert.equal((await invokeApp('worker', 'definition update', ['--ref', 'project-reviewer', '--if-match', 'f'.repeat(64)], profileUpdate)).code, 2);
+  assert.equal((await invokeApp('worker', 'definition update', ['--ref', 'unknown-profile', '--if-match', listed.revision], profileUpdate)).code, 2);
+  const applied = await ok('worker', 'definition update', ['--ref', 'project-reviewer', '--if-match', listed.revision], profileUpdate);
+  assert.equal(applied.definitions[0].id, definition.id); assert.equal(applied.definitions[0].ref, 'project-reviewer'); assert.equal(applied.updated.revision, dryRun.definition.nextRevision);
+  assert.equal((await ok('worker', 'task get', ['--id', 'ci-task-ref'])).session.definition.digest, definition.digest, 'existing task keeps its accepted snapshot');
   // Protocol fixture only: no provider credentials or live LLM calls.
   if (process.platform === 'linux') {
     const executable = join(entries.worker.cwd, 'model-fixture'), audit = join(outer, 'model-events.jsonl');
