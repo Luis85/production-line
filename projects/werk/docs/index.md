@@ -26,6 +26,7 @@ follows [Diátaxis](https://diataxis.fr/).
 
 - [Assemble independent workers, orchestrators and Factories](how-to/assemble-independent-components.md)
 - [Install a project worker and use its feature folder](how-to/project-worker.md)
+- [Operate a project worker](how-to/operate-project-worker.md): checklist, Windows PowerShell 5.1 JSON files, task worktrees, tool limits and answers.
 - [Author feature requests with your team](how-to/team-feature-authoring.md): portable skill, editable template, shared checks and Obsidian queue; no worker connection required.
 - [Run shared Git feature requests](how-to/shared-feature-intake.md): local worker binding, durable claims, published feature branches and review notes.
 - [Integrate with Claude and Codex](how-to/project-agent-integrations.md): reviewed project skills and guarded synchronization.

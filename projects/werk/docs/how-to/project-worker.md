@@ -200,6 +200,8 @@ set `mode: patch` and list approved project-relative files in `paths`. The worke
 returns a review patch; inspect it, use `git apply --check`/`git apply` when
 appropriate, and run your tests yourself. Chat mode sends only the request body.
 See the [request fields, statuses and recovery rules](../reference/feature-requests.md).
+For day-to-day operation, including Windows PowerShell 5.1 input files, task
+worktrees and tool limits, follow the [project worker checklist](operate-project-worker.md).
 
 ## Start with Docker
 

@@ -7,10 +7,11 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
-## [0.10.0] - 2026-10-16
+## [0.10.0] - 2026-10-17
 
 ### Added
 
+- An "Operate a project worker" how-to with a day-to-day checklist and Windows PowerShell 5.1 guidance: BOM-free JSON input files, why piping to `--file -` loses non-ASCII text, task worktree location and manual cleanup, tool limits and the chat workspace, and the answer protocol. It ships in the release documentation.
 - Portable client option `--request-timeout-ms` (1,000–600,000) overrides how long a command waits for the API.
 - `feature setup` keeps the committed `.werk/authoring/feature-request.mjs` current after upgrades.
   - Setup records the installed script's content hash in `.werk/authoring/manifest.json` and replaces the script while it still matches that record.
