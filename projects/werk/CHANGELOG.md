@@ -12,10 +12,19 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 - Teams can answer worker questions and resume stopped attempts through guarded Task Markdown notes. Shared Git intake consumes committed and pushed replies, acknowledges them without replaying execution, and links progress and PullRequest review notes from the original feature request.
 - Configurable public Task folders and actionable intake diagnostics make readiness and configuration blockers visible without opening the webview. Obsidian Bases include requests, human Tasks and review notes.
 - The portable worker provides `shared setup --file` with a read-only preview, explicit repository selection, local CLI provider checks and optional reviewed tool grants for headless team setup.
+- `definition preview|import|update --file` accept `.yaml` and `.yml` profile files directly. A new `--name` option sets the profile name for import and update; importing a YAML file requires `--name`, and a `--name` that conflicts with a JSON `name` is refused.
+- The `tool-access set` catalog example includes a command preset with `"verification": true`, so `schema` shows how to mark a required feature check.
+
+### Changed
+
+- `tool-access set` always drops the view-only fields of an edited `tool-access get` output (`revision`, `schemaVersion`, `canEdit`, `saveBlockedReason`, `workerNode`, and MCP `hasSecret` and `discoveredTools`) and refuses a `revision` that differs from `expectedRevision`. Tool-access validation errors name the unexpected fields (the first five).
+- The update error for a locked app folder now says that another process holds a file or directory open, lists likely causes (editors, indexers, antivirus scans, MCP or language servers started in the project folder) and states that the previous version keeps running.
+- The implementation-mode guide explains that a task worktree has no `node_modules` and must not link the checkout's dependencies, and that existing grants such as `git checkout`, `git clean` or `git stash` operate on the candidate. The portable-apps reference gains troubleshooting for the locked-folder update error.
 
 ### Fixed
 
 - Project initialization explains the shared Git connection required by its generated feature template and seeds the chosen provider in new templates while preserving existing team customizations.
+- An invalid `repositories.worktreeDirectory` reports `Task worktree directory must be absolute on the worker machine.` instead of the repository path message.
 
 ## [0.11.0] - 2026-10-17
 
