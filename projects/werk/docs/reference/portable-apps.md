@@ -347,20 +347,23 @@ provider sign-in; bearer-based automation continues to read the private token.
 
 ```sh
 node bin/apps/worker/cli.mjs provider check --id codex-cli
-node bin/apps/worker/cli.mjs definition preview --file preview.json
-node bin/apps/worker/cli.mjs definition import --file definition.json
+node bin/apps/worker/cli.mjs definition preview --file .werk/agents/project-reviewer.yaml
+node bin/apps/worker/cli.mjs definition import --file .werk/agents/project-reviewer.yaml --name "Project reviewer"
 node bin/apps/worker/cli.mjs definition list
 node bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-reviewer
-node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file update.json --dry-run
-node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file update.json --if-match REVISION
+node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --dry-run
+node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --if-match REVISION
 node bin/apps/worker/cli.mjs definition delete --id DEFINITION_ID
 ```
 
-Preview input is `{"yaml":"YAML_TEXT"}`; import adds `"name":"Project reviewer"`
-and optionally a stable `"ref":"project-reviewer"`.
-`definition update` replaces the profile behind a reference in place: its ID and
-reference stay, and `update.json` contains `{"yaml":"YAML_TEXT"}` with an optional
-new `"name"`. `--dry-run` writes nothing and returns the current `revision`, the
+A `--file` ending in `.yaml` or `.yml` (any case) is sent as the YAML profile
+itself, so the committed file needs no wrapper; `--file -` and other extensions
+stay JSON. JSON preview input is `{"yaml":"YAML_TEXT"}`; JSON import adds
+`"name":"Project reviewer"` and optionally a stable `"ref":"project-reviewer"`.
+`--name NAME` (import and update) sets the name for YAML and JSON input alike and
+is required when importing a YAML file; give the name either as `--name` or in
+the JSON, not both. `definition update` replaces the profile behind a reference in
+place: its ID and reference stay, and without a name the stored name is kept. `--dry-run` writes nothing and returns the current `revision`, the
 name and digest change, and added, removed and changed agents. Apply with
 `--if-match` set to the `revision` from the dry run or `definition list`; a changed
 profile is refused with exit 2. Existing tasks keep the snapshot they accepted.

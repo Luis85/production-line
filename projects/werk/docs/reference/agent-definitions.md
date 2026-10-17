@@ -64,12 +64,15 @@ profile in place, preview the new YAML against the profile and then apply it
 with the current revision:
 
 ```sh
-node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file update.json --dry-run
-node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file update.json --if-match REVISION
+node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --dry-run
+node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --if-match REVISION
 ```
 
-`update.json` contains `{"yaml":"YAML_TEXT"}` and optionally a new `"name"`;
-an omitted name keeps the current one. The update keeps the definition ID,
+A `--file` ending in `.yaml` or `.yml` (any case) is read as the YAML profile
+itself. Any other `--file` path, or `--file -` for stdin, is JSON
+`{"yaml":"YAML_TEXT"}` with an optional `"name"`. `--name NAME` sets the new name
+for YAML and JSON input alike; giving both `--name` and a JSON `"name"` is
+refused. An omitted name keeps the current one. The update keeps the definition ID,
 reference and creation time, and records `updatedAt`. The dry run writes nothing
 and reports the current `revision`, the `nextRevision`, any name change, the old
 and new digest, and which agents are added, removed or changed (by field:
@@ -142,18 +145,19 @@ multi-agent execution are not imported into Werk task sessions.
 The portable worker exposes the same workflow to users, CI and AI agents:
 
 ```sh
-node bin/apps/worker/cli.mjs definition preview --file preview.json
-node bin/apps/worker/cli.mjs definition import --file definition.json
+node bin/apps/worker/cli.mjs definition preview --file .werk/agents/project-reviewer.yaml
+node bin/apps/worker/cli.mjs definition import --file .werk/agents/project-reviewer.yaml --name "Project reviewer"
 node bin/apps/worker/cli.mjs definition list
 node bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-reviewer
-node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file update.json --dry-run
+node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --dry-run
 node bin/apps/worker/cli.mjs task create --file task.json
 node bin/apps/worker/cli.mjs definition delete --id DEFINITION_ID
 ```
 
-`preview.json` contains `{"yaml":"YAML_TEXT"}`. `definition.json` contains
-`{"name":"Project reviewer","ref":"project-reviewer","yaml":"YAML_TEXT"}`; `ref` is
-optional. Select the definition in task input by its reference:
+A `.yaml` or `.yml` file is the profile itself; import requires `--name` with it,
+and `definition ref` assigns the reference afterwards. The JSON form
+`{"name":"Project reviewer","ref":"project-reviewer","yaml":"YAML_TEXT"}` (from another `--file` path or stdin) can also set the optional `ref` in one step; preview
+takes `{"yaml":"YAML_TEXT"}`. Select the definition in task input by its reference:
 
 ```json
 {"id":"review-001","title":"Review the feature","provider":"codex-cli","definitionRef":"project-reviewer","agent":"root","message":"Review these acceptance criteria: ..."}

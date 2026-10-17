@@ -213,12 +213,15 @@ the operator imports it after reviewing the preview. After a reviewed change, th
 operator updates the profile in place on each worker, keeping the reference:
 
 ```sh
-node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file update.json --dry-run
-node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file update.json --if-match REVISION
+node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --dry-run
+node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --if-match REVISION
 ```
 
-`update.json` contains `{"yaml":"YAML_TEXT"}`. Tasks created earlier keep the
-profile they accepted; later tasks use the update.
+A `--file` ending in `.yaml` or `.yml` is sent as the profile itself, so the
+committed file needs no JSON wrapper. Add `--name NAME` to rename the profile;
+without it the stored name stays. A JSON `update.json` with `{"yaml":"YAML_TEXT"}`
+still works. Tasks created earlier keep the profile they accepted; later tasks
+use the update.
 Offline validation checks only the reference's format. A worker without the
 reference leaves the request ready and unclaimed, and shows the reason in its
 shared-intake view, until the operator assigns it. If the profile needs instructions-only
