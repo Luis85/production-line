@@ -309,15 +309,25 @@ approved-file execution contract. Supply an explicit repository and paths:
 {"title":"Explain the acceptance rule","instruction":"Add a comment explaining the rule.","provider":"codex-cli","repository":"/absolute/project","paths":["acceptance.txt"]}
 ```
 
-Add `"background": true` to return immediately: the task appears once its Git
-worktree is ready, and `file-task list` shows it under `preparations` meanwhile,
-or with the reason it failed (dismiss that entry with `file-task delete --id ID`).
-Use it with large repositories, where checkout can outlast the CLI request
-timeout. Inspect `file-task list`, `file-task get --id ID`, or use `file-task action --file`
-for taskboard operations. File tasks capture approved input and produce review
-patches. They do not apply changes or run tests. `session action --file` supports
-rename/archive/delete with the same restrictions as the webview. `settings set`
-configures the local queue, provider connections and optional orchestrator:
+Add `"background": true` to return a preparation receipt immediately. This is
+in-memory progress; a task is durably accepted only after preparation finishes.
+The task appears once its Git worktree is ready, and `file-task list` shows it
+under `preparations` meanwhile, or with its failure reason. Retain the submitted
+input and inspect current state before retrying an ambiguous creation. Stop a
+preparation with `file-task cancel --id ID`; dismiss a failed entry with
+`file-task delete --id ID`. These compatible CLI commands use the legacy
+taskboard API. The unified webview uses `POST /api/tasks` with a caller-retained
+request ID; see [background preparation](feature-requests.md#automatic-task-tracking).
+
+Use background preparation with large repositories, where checkout can outlast
+the CLI request timeout. Inspect `file-task list`, `file-task get --id ID`, or
+use `file-task action --file` for taskboard operations. Eligible new Git-backed
+requests edit approved paths in their retained worktree and run required checks;
+other requests retain the proposal-only workflow. Both produce a review patch
+and leave the developer checkout separate. See [implement a feature](../how-to/implement-feature.md).
+`session action --file` supports rename/archive/delete with the same restrictions
+as the webview. `settings set` configures the local queue, provider connections
+and optional orchestrator:
 
 ```json
 {"connection":{"enabled":true,"url":"http://127.0.0.1:3000","enrollmentToken":"PRIVATE_ENROLLMENT_TOKEN"}}

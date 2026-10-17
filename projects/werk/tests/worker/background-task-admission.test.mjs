@@ -233,3 +233,67 @@ test('an explicit background retry reuses a pristine worktree after interrupted 
   assert.ok(f.workspace.sessions.runs.list().rows.every(run => run.startedAt === null));
   assert.equal(await readFile(join(f.project, 'approved.txt'), 'utf8'), 'Committed fixture input\n');
 });
+
+test('a waiting background request keeps its accepted definition after that definition is updated and its reference moves', { timeout: 120000 }, async t => {
+  const f = await workspaceFixture(t), gate = deferred(), entered = deferred(), files = f.workspace.board.files;
+  f.releases.push(() => gate.resolve());
+  let firstSnapshot = true;
+  f.workspace.board.files = { ...files, async snapshot(...args) { if (firstSnapshot) { firstSnapshot = false; entered.resolve(); await gate.promise; } return files.snapshot(...args); } };
+  const yaml = instruction => 'agents:\n  root:\n    model: openai/fixture-model\n    instruction: ' + instruction + '\n';
+  const { definitions: [original] } = await f.workspace.definitions.action({ action: 'import', name: 'Accepted reviewer', ref: 'team-reviewer', yaml: yaml('Keep the originally accepted instructions.') });
+  await f.workspace.task(command('definition-blocker', f.project)); await entered.promise;
+  const request = command('definition-waiting', f.project, { definitionRef: 'team-reviewer' });
+  const accepted = await f.workspace.task(request); assert.equal(accepted.preparation.id, request.id);
+  assert.equal(f.workspace.board.preparation(request.id).phase, 'waiting');
+  await f.workspace.definitions.action({ action: 'update', ref: 'team-reviewer', revision: original.revision, yaml: yaml('Changed instructions must apply only to future requests.') });
+  const { definitions } = await f.workspace.definitions.action({ action: 'import', name: 'Replacement reviewer', yaml: yaml('A different reviewer is selected for future work.') });
+  await f.workspace.definitions.action({ action: 'ref', id: definitions.find(item => item.id !== original.id).id, ref: 'team-reviewer' });
+  const pendingReplay = await f.workspace.task(request); assert.equal(pendingReplay.preparation.id, request.id);
+  gate.resolve();
+  await until(() => f.workspace.board.view().tasks.length === 2 && f.workspace.board.view().preparations.length === 0, 'The request with a frozen definition did not finish admission.');
+  const result = await f.workspace.task({ action: 'get', id: 'local-' + request.id });
+  assert.equal(result.session.definition.definitionId, original.id); assert.equal(result.session.definition.digest, original.digest);
+  assert.equal(result.session.definition.instruction, 'Keep the originally accepted instructions.');
+  assert.deepEqual(f.workspace.board.detail(request.id).definition, result.session.definition);
+  const replay = await f.workspace.task(request); assert.equal(replay.session.id, result.session.id);
+  assert.equal(f.workspace.sessions.runs.list().total, 2, 'Definition changes and request replay cannot duplicate accepted turns.');
+  assert.ok(f.workspace.sessions.runs.list().rows.every(run => run.startedAt === null));
+});
+
+test('a full queue rejects retry without erasing the failed preparation or its accepted identity', { timeout: 120000 }, async t => {
+  const gate = deferred(), entered = deferred();
+  const f = await boardFixture(t, { async beforePrepare(call) {
+    if (call.index === 0) throw new DomainError('conflict', 'Fixture checkout needs an explicit retry.');
+    entered.resolve(); await waitForGate(gate, call.signal);
+  } });
+  f.releases.push(() => gate.resolve()); await f.settings.update({ board: { queueCapacity: 1 } });
+  const failed = reservation('retry-when-full'), blocker = reservation('retry-capacity-blocker');
+  await f.board.create(input(), failed);
+  await until(() => f.board.preparation(failed.id)?.state === 'failed', 'The initial preparation did not fail.');
+  const retained = f.board.preparation(failed.id);
+  await f.board.create(input(), blocker); await entered.promise;
+  await assert.rejects(f.board.create(input(), failed), /queue is full/);
+  assert.deepEqual(f.board.preparation(failed.id), retained, 'A rejected retry must keep the visible reason and retry identity.');
+  await assert.rejects(f.board.create(input(), { ...failed, hash: 'b'.repeat(64) }), error => error.code === 'conflict' && /different input/.test(error.message));
+  assert.equal(f.prepared.length, 2); assert.equal(f.board.active, 1); assert.equal(f.board.view().tasks.length, 0);
+  await f.board.action({ id: blocker.id, action: 'cancel' });
+  await until(() => f.board.active === 0, 'The capacity blocker did not release its reservation.');
+  assert.deepEqual(f.board.preparation(failed.id), retained); assert.equal(f.requests.length, 0);
+});
+
+test('a file request cannot claim the raw identity of another preparing or admitted file request as its session', { timeout: 120000 }, async t => {
+  const f = await workspaceFixture(t), gate = deferred(), entered = deferred(), files = f.workspace.board.files;
+  f.releases.push(() => gate.resolve());
+  f.workspace.board.files = { ...files, async snapshot(...args) { entered.resolve(); await gate.promise; return files.snapshot(...args); } };
+  const original = command('local-alias-request', f.project), overlapping = command('alias-request', f.project);
+  const accepted = await f.workspace.task(original); await entered.promise;
+  await assert.rejects(f.workspace.task(overlapping), error => error.code === 'conflict');
+  const pendingReplay = await f.workspace.task(original); assert.equal(pendingReplay.preparation.id, accepted.preparation.id);
+  assert.equal(f.workspace.board.view().preparations.length, 1); assert.equal(f.workspace.board.active, 1);
+  gate.resolve();
+  await until(() => f.workspace.board.view().tasks.length === 1 && f.workspace.board.view().preparations.length === 0, 'The original aliased request did not finish admission.');
+  await assert.rejects(f.workspace.task(overlapping), error => error.code === 'conflict');
+  const replay = await f.workspace.task(original); assert.equal(replay.session.id, 'local-' + original.id);
+  assert.equal(f.workspace.board.view().tasks.length, 1); assert.equal(f.workspace.sessions.runs.list().total, 1);
+  assert.equal(f.workspace.featureTracking.status().records.length, 1);
+});

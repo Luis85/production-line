@@ -34,11 +34,39 @@ write. The worker retries synchronization automatically.
 
 The unified webview submits authenticated `POST /api/tasks` with
 `{action: "create", id, title, message, provider}`, optional agent selectors, and
-optional `files: {repository, paths}`. Replaying the same ID and input is
-idempotent; changed input conflicts. The response contains `{session, chat,
-featureTracking}`. Approved-file execution returns its own `local-<id>` session
-identity; use the returned ID for subsequent actions. These are the same retained
-task/patch contracts used by the compatible CLI commands.
+optional `files: {repository, paths}`. Replaying the same ID and input returns
+the pending preparation or admitted task; changed input conflicts. An admitted
+response uses HTTP 200 and contains `{session, chat, featureTracking}`.
+Approved-file execution returns its own `local-<id>` session identity; use the
+returned ID for subsequent actions. These are the same retained task/patch
+contracts used by the compatible CLI commands.
+
+For file requests, add `background: true` to prepare the worktree without holding
+the HTTP request open. The unified composer uses this option. HTTP 202 returns:
+
+```json
+{"preparation":{"id":"request-id","title":"Request title","repository":"app","state":"preparing","phase":"waiting","error":null,"createdAt":"...","finishedAt":null}}
+```
+
+This is in-memory progress, not durable task acceptance. Retain the exact original
+command and its ID until the worker returns the admitted session. Poll
+`GET /api/taskboard` without resubmitting: `preparations` reports `state`
+(`preparing` or `failed`) and `phase` (`waiting`, `worktree` or `admission`).
+Once the preparation disappears and the matching ID appears in `tasks`, fetch
+`POST /api/tasks {action: "get", id: task.sessionId}` for the normal session,
+chat and tracking response. A pending Markdown projection can still be retried
+independently after task acceptance.
+
+A failed preparation stops polling and retains its error. An explicit repeat of
+the same original create command retries that preparation; polling never retries
+it. If restart or disconnection leaves neither preparation nor task visible,
+inspect current state and explicitly retry the same command instead of creating
+a new identity. Progress receipts themselves do not survive restart.
+`POST /api/taskboard/action {action: "cancel", id}` aborts preparation; active
+Git work drains before it reports failure. Deleting a preparation is allowed only
+after it fails. The compatible legacy `POST /api/taskboard` background request
+still returns a taskboard view with `preparationId`; it generates its own ID and
+requires the caller to retain its submitted input.
 
 Recovery of interrupted file preparation reuses only an owned pristine worktree
 bound to the exact durable command. A changed or unverified checkout is preserved:

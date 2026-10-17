@@ -81,11 +81,15 @@ folder outside every checkout. Its parent folder must exist. On Windows, choose
 a short path. Existing worktrees keep their recorded location after this setting
 changes. See [repository configuration](../reference/configuration.md#assigned-git-repositories).
 
-The webview submits repository requests in the background and shows preparation
-progress or its failure reason. For CLI creation on large repositories, include
-`"background": true` in the `file-task create` JSON; inspect the `preparations`
-list in `file-task list` until the task is available. A client timeout does not
-prove creation failed: inspect the current preparation before submitting again.
+The webview's **Create request** submits repository requests in the background
+and retains the same instructions and request identity while showing preparation
+progress. A progress receipt is not confirmation of a saved task; wait for the
+admitted session and its Markdown tracking state. If preparation cannot be
+confirmed, inspect the current state and use **Retry same request** explicitly.
+For compatible CLI creation on large repositories, include `"background": true`
+in the `file-task create` JSON and inspect `preparations` in `file-task list`
+until the task is available. A client timeout does not prove creation failed;
+retain the submitted input and inspect state before submitting again.
 
 Worktrees and interrupted edits survive restart. Deleting a file task removes its
 worktree only when it is clean and the worker can verify its ownership. Retain it

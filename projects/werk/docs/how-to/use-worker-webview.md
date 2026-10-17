@@ -261,11 +261,17 @@ files**, choose an assigned repository and list the relative paths the request
 may use. Provider, task name and agent choices remain in Task options. Submit
 with **Create request**; the same request retains its instructions and tracking.
 
-Submission returns while the worker prepares the Git worktree. The task board
-shows **Preparing its Git worktree…** until the task appears, or explains the
-preparation failure with a **Dismiss** action. Deleting a task also removes its
-clean, verified worktree; clear the confirmation checkbox to retain it. Changed,
-locked or otherwise protected worktrees remain available for inspection.
+**Create request** keeps your original instructions and request identity while
+showing background preparation progress. This progress is not yet confirmation
+that a task or Markdown record was saved. The composer waits for the admitted
+session before showing its task and tracking state. A failed or unconfirmed
+preparation retains your instructions and offers **Retry same request**; status
+polling never submits the request again. The task board also shows preparation
+progress and lets you dismiss a failed entry.
+
+Deleting an admitted task removes its worktree when it is clean and its ownership
+is verified; clear the confirmation checkbox to retain it. Changed, locked or
+otherwise protected worktrees remain available for inspection.
 
 The worker captures approved files from a pinned worktree when accepting the
 request. When no repositories are assigned, the absolute-directory input remains

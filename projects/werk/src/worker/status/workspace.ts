@@ -678,7 +678,16 @@ export class WorkerWorkspace {
         if (body.action === "create") {
           const files = body.files === undefined ? undefined : object(body.files, 'Approved task files', ['repository', 'paths']);
           const approved = files ? { repository: text(files.repository, 'repository', 4096), paths: validateApprovedPaths(files.paths) } : undefined;
-          if (!approved && this.board.preparation(id)) throw new DomainError("conflict", "Task id already belongs to an approved-file preparation.");
+          // File request IDs and their generated session IDs share the task namespace.
+          const aliasesPendingPreparation = (!approved && this.board.preparation(id)) ||
+            (id.startsWith("local-") && this.board.preparation(id.slice(6)));
+          const aliasesFileRequest = approved && (
+            this.board.preparation("local-" + id) ||
+            this.board.view().tasks.some(task => task.id === "local-" + id) ||
+            this.sessions.view().records.some(session => session.kind === "local" && session.id === "local-local-" + id)
+          );
+          if (aliasesPendingPreparation || aliasesFileRequest)
+            throw new DomainError("conflict", "Task id already belongs to another approved-file request.");
           if (approved && !/^[a-z0-9-]{1,90}$/.test(id)) throw new DomainError('invalid_input', 'File task IDs use 1–90 lowercase letters, digits or hyphens.');
           const selection = definitionSelection(body);
           const title = text(body.title, "title", 120),
@@ -686,7 +695,7 @@ export class WorkerWorkspace {
           const existing = this.sessions
             .view()
             .records.find((item) => item.id === (approved ? "local-" + id : id));
-          const savedDefinition = existing?.definition;
+          const savedDefinition = existing?.definition ?? (approved ? this.board.preparationDefinition(id) : undefined);
           const definition =
             savedDefinition &&
             (selection.definitionRef !== undefined

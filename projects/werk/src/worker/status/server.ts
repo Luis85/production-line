@@ -236,8 +236,10 @@ export async function statusServer(
             );
           if (req.method === "POST" && req.url === "/api/runs")
             return json(res, 200, workspace.runEvidence(await readJson(req)));
-          if (req.method === "POST" && req.url === "/api/tasks")
-            return json(res, 200, await workspace.task(await readJson(req)));
+          if (req.method === "POST" && req.url === "/api/tasks") {
+            const result = await workspace.task(await readJson(req));
+            return json(res, "preparation" in result ? 202 : 200, result);
+          }
           if (req.url === '/api/execution-profiles' && workspace.executionProfiles) {
             if (req.method === 'GET') return json(res, 200, workspace.executionProfiles.view());
             if (req.method === 'POST') return json(res, 200, await workspace.executionProfiles.update(await readJson(req)));
