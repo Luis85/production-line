@@ -9,6 +9,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';
 import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
 import { WorkerSettings } from '../../src/worker/dist/worker/infrastructure/settings.js';
+import { repositoryWorktreeArgument, worktreeName } from '../../src/worker/dist/worker/infrastructure/repositories-git.js';
 import { modelCapabilities } from '../../src/worker/dist/worker/application/model-contract.js';
 import { DomainError } from '../../src/worker/dist/shared/errors.js';
 import { LocalTaskboard, WorkerSessions } from './application-fixtures.mjs';
@@ -59,11 +60,13 @@ async function boardFixture(t, options = {}) {
   let board, sessions;
   const port = {
     async prepareWorktree(selector, key, signal) {
-      const call = { selector, key, signal, index: prepared.length }; prepared.push(call);
+      const path = join(project, '.werk', 'worktrees', worktreeName('fixture', key));
+      const call = { selector, key, path, signal, index: prepared.length }; prepared.push(call);
       if (options.beforePrepare) await options.beforePrepare(call);
       signal.throwIfAborted();
-      const baseCommit = await git(project, 'rev-parse', 'HEAD'), path = join(project, '.werk', 'worktrees', key);
-      await git(project, 'worktree', 'add', '--detach', path, baseCommit);
+      const baseCommit = await git(project, 'rev-parse', 'HEAD');
+      try { await git(project, 'worktree', 'add', '--detach', '--', repositoryWorktreeArgument(project, path), baseCommit); }
+      catch (error) { call.error = error.stderr || error.message; throw error; }
       return { repositoryId: 'fixture', repository: project, path, baseCommit, reused: false };
     },
   };
@@ -141,7 +144,11 @@ test('durable background reservations deduplicate input and context, retain fail
   for (let attempt = 0; attempt < 3; attempt++) { f.board.view(); await f.board.tick(); }
   assert.equal(f.prepared.length, 1, 'Reading status and ticking cannot retry a failed admission.');
   const retried = await f.board.create(input(), submission); assert.equal(retried.preparationId, submission.id);
-  await until(() => f.board.view().tasks.some(row => row.id === submission.id) && !f.board.preparation(submission.id), 'The explicit retry was not admitted.');
+  await until(() => {
+    const preparation = f.board.preparation(submission.id);
+    assert.notEqual(preparation?.state, 'failed', f.prepared.at(-1)?.error || preparation?.error || 'The explicit retry failed.');
+    return f.board.view().tasks.some(row => row.id === submission.id) && !preparation;
+  }, 'The explicit retry was not admitted.');
   const task = f.board.detail(submission.id);
   assert.equal(f.prepared.length, 2); assert.equal(f.prepared[0].key, f.prepared[1].key);
   assert.equal(task.worktreeKey, f.prepared[1].key); assert.match(task.worktreeKey, new RegExp('^' + submission.id + '-' + submission.hash + '-'));
@@ -158,7 +165,7 @@ test('waiting, worktree and admission phases reserve one slot even after the tas
   f.releases.push(() => worktreeGate.resolve(), () => snapshotGate.resolve(), () => stateGate.resolve());
   await f.settings.update({ board: { queueCapacity: 3 } });
   const first = reservation('capacity-first'), second = reservation('capacity-second'), third = reservation('capacity-third');
-  const files = f.board.files; f.board.files = { ...files, async snapshot(...args) { if (args[0].path.includes(first.id)) { snapshotEntered.resolve(); await snapshotGate.promise; } return files.snapshot(...args); } };
+  const files = f.board.files; f.board.files = { ...files, async snapshot(...args) { if (args[0].path === f.prepared[0]?.path) { snapshotEntered.resolve(); await snapshotGate.promise; } return files.snapshot(...args); } };
   const setTaskState = f.sessions.setTaskState.bind(f.sessions);
   f.sessions.setTaskState = async (id, state) => { if (id === 'local-' + first.id && state === 'queued') { stateEntered.resolve(); await stateGate.promise; } return setTaskState(id, state); };
   await f.board.create(input(), first); await worktreeEntered.promise;
