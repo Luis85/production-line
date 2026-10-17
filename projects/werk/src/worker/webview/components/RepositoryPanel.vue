@@ -6,26 +6,27 @@ import { state, date, workspaceAction } from '../store';
 import RepositoryDiscovery from './RepositoryDiscovery.vue';
 
 interface RepositoryDraft { id: string; path: string; remote: string; branch: string; watch: boolean; }
-const entries = ref<RepositoryDraft[]>([]), seconds = ref(30), baseline = ref('');
+const entries = ref<RepositoryDraft[]>([]), seconds = ref(30), worktreeDirectory = ref(''), baseline = ref('');
 const busy = ref(false), syncing = ref(''), error = ref(''), notice = ref(''), stale = ref(false);
-const serialized = () => JSON.stringify({ seconds: seconds.value, entries: entries.value });
+const serialized = () => JSON.stringify({ seconds: seconds.value, worktreeDirectory: worktreeDirectory.value, entries: entries.value });
 const dirty = computed(() => baseline.value !== serialized());
 const assigned = computed(() => state.settings?.repositories?.items ?? []);
 const observed = computed(() => state.environment?.repositories?.items ?? []);
-const queued = computed(() => !!state.sessions?.execution.currentSessionId || !!state.sessions?.execution.queued || !!state.status?.activeTasks.length || !!state.status?.queuedTasks?.length);
+const queued = computed(() => !!state.sessions?.execution.currentSessionId || !!state.sessions?.execution.queued || !!state.status?.activeTasks.length || !!state.status?.queuedTasks?.length || !!state.board?.preparations?.some(item => item.state === 'preparing'));
 const editingLocked = computed(() => busy.value || !state.unlocked);
 function reload() {
   seconds.value = (state.settings?.repositories?.pollMs ?? 30000) / 1000;
+  worktreeDirectory.value = state.settings?.repositories?.worktreeDirectory ?? '';
   entries.value = assigned.value.map(item => ({ ...item, branch: item.branch ?? '' }));
   baseline.value = serialized(); stale.value = false; error.value = ''; notice.value = '';
 }
 watch(() => JSON.stringify(state.settings?.repositories), (value, previous) => {
-  if (!state.unlocked) { entries.value = []; baseline.value = serialized(); return; }
+  if (!state.unlocked) { entries.value = []; worktreeDirectory.value = ''; baseline.value = serialized(); return; }
   if (value === previous) return;
   if (!baseline.value || !dirty.value) reload();
   else stale.value = true;
 }, { immediate: true });
-watch(() => state.unlocked, unlocked => { if (!unlocked) { entries.value = []; seconds.value = 30; baseline.value = serialized(); stale.value = false; error.value = ''; notice.value = ''; } });
+watch(() => state.unlocked, unlocked => { if (!unlocked) { entries.value = []; seconds.value = 30; worktreeDirectory.value = ''; baseline.value = serialized(); stale.value = false; error.value = ''; notice.value = ''; } });
 async function add() {
   entries.value.push({ id: '', path: '', remote: 'origin', branch: '', watch: true });
   await nextTick(); document.getElementById(`repository-id-${entries.value.length - 1}`)?.focus();
@@ -34,7 +35,7 @@ async function save() {
   if (editingLocked.value || queued.value || stale.value) return;
   busy.value = true; error.value = ''; notice.value = '';
   const epoch = state.draftEpoch;
-  const repositories = { pollMs: Number(seconds.value) * 1000, items: entries.value.map(item => ({ id: item.id.trim(), path: item.path.trim(), remote: item.remote.trim(), watch: item.watch, ...(item.branch.trim() ? { branch: item.branch.trim() } : {}) })) };
+  const repositories = { pollMs: Number(seconds.value) * 1000, ...(worktreeDirectory.value.trim() ? { worktreeDirectory: worktreeDirectory.value.trim() } : {}), items: entries.value.map(item => ({ id: item.id.trim(), path: item.path.trim(), remote: item.remote.trim(), watch: item.watch, ...(item.branch.trim() ? { branch: item.branch.trim() } : {}) })) };
   try {
     const result = await workspaceAction('/api/settings', { repositories });
     if (!state.unlocked || state.draftEpoch !== epoch) return;
@@ -79,6 +80,9 @@ const statusLabel = (value?: string) => ({ pending: 'Waiting for first check', s
           <p class="page-note">A repository ID identifies this project in tasks. Use the configured remote name, such as origin; leave the branch blank to follow the checkout’s current branch.</p>
           <label for="repository-poll-seconds">Check watched repositories every · seconds</label>
           <UInput id="repository-poll-seconds" v-model="seconds" type="number" min="1" max="3600" step="1" required class="w-full" />
+          <label for="repository-worktree-directory">Task worktree folder · optional</label>
+          <UInput id="repository-worktree-directory" v-model="worktreeDirectory" maxlength="1024" placeholder="Inside each checkout: .werk/worktrees" class="w-full" />
+          <p class="page-note">An absolute folder outside every checkout keeps project tools from scanning task copies. Use a short path on Windows. Existing task worktrees stay where they are.</p>
           <fieldset v-for="(item, index) in entries" :key="index" class="repository-fields">
             <legend>Repository {{ index + 1 }}</legend>
             <label :for="`repository-id-${index}`">Repository ID</label><UInput :id="`repository-id-${index}`" v-model="item.id" pattern="[A-Za-z0-9_\-]+" maxlength="100" required placeholder="web-app" class="w-full" />

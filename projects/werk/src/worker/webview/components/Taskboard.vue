@@ -12,19 +12,19 @@ import UButton from "@nuxt/ui/components/Button.vue";
 import UInput from "@nuxt/ui/components/Input.vue";
 import USelect from "@nuxt/ui/components/Select.vue";
 import RequestGatePanel from "./RequestGatePanel.vue";
+import CandidateEvidence from "./CandidateEvidence.vue";
 import TaskKanban from "../../../shared/webview/components/TaskKanban.vue";
 import { state, workspaceAction, request, date } from "../store";
-import type { LocalTask } from "../../application/local-tasks";
+import type { LocalTaskDetailView } from "../../application/workspace-view";
 const route = useRoute(),
   router = useRouter();
-const capacity = ref(16),
-  remoteQueue = ref(0),
-  order = ref("fifo"),
-  busy = ref(false),
+const busy = ref(false),
   archived = ref(false),
-  detail = ref<LocalTask | null>(null),
+  detail = ref<LocalTaskDetailView | null>(null),
   removing = ref(false),
   active = ref(false);
+// Explicit cleanup must succeed before deleting a task; keeping its worktree is a separate choice.
+const removeWorktree = ref(true), worktreeNotice = ref("");
 const search = ref(""),
   status = ref("all"),
   selectedId = ref(""),
@@ -152,17 +152,6 @@ function clearFilters() {
   status.value = "all";
   archived.value = true;
 }
-watch(
-  () => !!state.settings,
-  (value) => {
-    if (value && state.settings) {
-      capacity.value = state.settings.board.queueCapacity;
-      remoteQueue.value = state.settings.board.orchestratorQueue;
-      order.value = state.settings.board.order;
-    }
-  },
-  { immediate: true },
-);
 async function readDetail(id: string, focus = false) {
   const revision = ++detailRevision;
   detailLoading.value = true;
@@ -216,6 +205,7 @@ watch(
       detailLoading.value = false;
       detailError.value = "";
       actionError.value = "";
+      removing.value = false; removeWorktree.value = true; worktreeNotice.value = "";
     }
   },
   { flush: "sync" },
@@ -228,19 +218,35 @@ onDeactivated(() => {
       "Evidence loading was paused when you left History. Retry to load this task.";
   detailLoading.value = false;
 });
-async function action(body: { id: string; action: string; priority?: number }) {
-  if (busy.value) return;
+const preparations = computed(() => state.board?.preparations ?? []);
+function beginRemoval() { removeWorktree.value = true; removing.value = true; actionError.value = ""; }
+async function dismissPreparation(id: string) {
+  if (busy.value || !state.unlocked) return;
+  const epoch = state.draftEpoch;
+  busy.value = true; actionError.value = "";
+  try {
+    const result = await workspaceAction("/api/taskboard/action", { id, action: "delete" });
+    if (epoch === state.draftEpoch && state.unlocked && !result) actionError.value = state.actionError || "The failed preparation could not be dismissed. Try again.";
+  }
+  finally { busy.value = false; }
+}
+async function action(body: { id: string; action: string; priority?: number; removeWorktree?: boolean }) {
+  if (busy.value || !state.unlocked) return;
+  const epoch = state.draftEpoch, revision = detailRevision;
+  const failedAdmission = state.board?.tasks.find(item => item.id === body.id)?.admissionFailure || (detail.value?.id === body.id && detail.value.admissionFailure);
+  if (body.action === "retry" && failedAdmission) return;
   busy.value = true;
   actionError.value = "";
   try {
     const result = await workspaceAction("/api/taskboard/action", body);
-    if (!state.unlocked || selectedId.value !== body.id) return;
+    if (!state.unlocked || epoch !== state.draftEpoch || revision !== detailRevision || selectedId.value !== body.id) return;
     if (!result) {
       actionError.value =
         state.actionError || "The task could not be updated. Try again.";
       return;
     }
     removing.value = false;
+    worktreeNotice.value = result.worktree?.outcome === "kept" ? `The task was deleted; its Git worktree was kept. ${result.worktree.reason}` : "";
     if (body.action === "delete") await closeDetail();
     else await readDetail(body.id);
   } finally {
@@ -251,6 +257,7 @@ async function inspect(id: string, event?: MouseEvent) {
   inspectTrigger = (event?.currentTarget ??
     document.activeElement) as HTMLElement;
   selectedId.value = id;
+  removeWorktree.value = true; worktreeNotice.value = "";
   detail.value = null;
   removing.value = false;
   actionError.value = "";
@@ -272,20 +279,6 @@ async function openConversation() {
     else
       actionError.value =
         state.actionError || "The conversation could not be opened. Try again.";
-  } finally {
-    busy.value = false;
-  }
-}
-async function save() {
-  busy.value = true;
-  try {
-    await workspaceAction("/api/settings", {
-      board: {
-        queueCapacity: capacity.value,
-        orchestratorQueue: remoteQueue.value,
-        order: order.value,
-      },
-    });
   } finally {
     busy.value = false;
   }
@@ -312,8 +305,8 @@ function download() {
       <div>
         <h2 id="taskboard-title" tabindex="-1">File tasks</h2>
         <p class="page-note">
-          Patch-producing tasks from Prepare a file task in Task interaction. Each owns a separate
-          session and runs in this worker’s shared queue.
+          Requests with permission to change approved repository files. Each request keeps a Markdown
+          record of its progress and results.
         </p>
       </div>
       <UButton
@@ -336,6 +329,19 @@ function download() {
       A task result could not be saved. Check free disk space and
       state-directory permissions before restarting.
     </p>
+    <p v-if="worktreeNotice" role="status" class="notice">{{ worktreeNotice }}</p>
+    <ul v-if="preparations.length" class="file-task-preparations" aria-label="File tasks being prepared">
+      <li v-for="item in preparations" :key="item.id">
+        <strong>{{ item.title }}</strong>
+        <span v-if="item.state === 'preparing'" role="status" class="muted">
+          {{ item.phase === "waiting" ? "Waiting for an earlier task to be admitted…" : item.phase === "worktree" ? "Preparing its Git worktree…" : "Saving approved file snapshots…" }}
+        </span>
+        <template v-else>
+          <span role="alert" class="error-text">Not created: {{ item.error }}</span>
+          <UButton color="neutral" variant="ghost" size="xs" :disabled="busy" @click="dismissPreparation(item.id)">Dismiss</UButton>
+        </template>
+      </li>
+    </ul>
     <div v-if="state.settings?.board.paused" class="notice">
       Queue paused. The running task can finish; queued chat, file tasks and
       orchestrator assignments wait.
@@ -367,8 +373,8 @@ function download() {
     </p>
     <div v-if="!allTasks.length" class="compact-empty">
       <p>
-        No file tasks yet. Choose Prepare a file task in Task interaction to receive a patch for
-        review.
+        No file changes requested yet. Choose New request on the taskboard, then open Repository files
+        to allow changes and receive a patch for review.
       </p>
       <UButton to="/taskboard" color="neutral" variant="outline">Open taskboard</UButton>
     </div>
@@ -430,15 +436,20 @@ function download() {
         </p>
         <p>{{ detail.instruction }}</p>
         <RequestGatePanel
-          v-if="detail.requestId"
+          v-if="detail.requestId && !detail.admissionFailure"
           :request-id="detail.requestId"
           :session-id="detail.sessionId"
         />
         <p v-if="detail.error" class="error-text">{{ detail.error }}</p>
+        <div v-if="detail.admissionFailure" class="notice" role="status">
+          <p>This request stopped before approved file snapshots were saved. Inspect the preserved worktree, then use New request on the taskboard to continue.</p>
+          <p v-if="detail.worktree" class="break-anywhere">Preserved worktree: <code>{{ detail.worktree }}</code></p>
+        </div>
         <p v-if="detail.summary">{{ detail.summary }}</p>
+        <CandidateEvidence v-if="!detail.admissionFailure" :key="detail.id" :task="detail" />
         <p class="break-anywhere">{{ detail.repository }}</p>
         <ul>
-          <li v-for="file in detail.files" :key="file.path">{{ file.path }}</li>
+          <li v-for="file in detail.files" :key="file.path" class="break-anywhere">{{ file.path }}</li>
         </ul>
         <div class="actions">
           <UButton
@@ -476,7 +487,7 @@ function download() {
             {{ detail.priority === 2 ? "Normal priority" : "Raise priority" }}
           </UButton>
           <UButton
-            v-if="['failed', 'cancelled'].includes(detail.status)"
+            v-if="!detail.admissionFailure && ['failed', 'cancelled'].includes(detail.status)"
             :disabled="busy"
             @click="action({ id: detail.id, action: 'retry' })"
           >
@@ -503,17 +514,21 @@ function download() {
             >
               {{ detail.archived ? "Restore" : "Archive" }}
             </UButton>
-            <UButton color="error" variant="ghost" @click="removing = !removing"
+            <UButton color="error" variant="ghost" @click="removing ? removing = false : beginRemoval()"
               >Delete</UButton
             >
           </template>
         </div>
         <div v-if="removing" class="confirm-row">
           <p>Delete the saved task and its board evidence?</p>
+          <label v-if="detail.worktree" class="check-label">
+            <input v-model="removeWorktree" type="checkbox" />
+            Also remove its Git worktree. Deletion stops if it has changes or cannot be safely removed.
+          </label>
           <UButton
             color="error"
             :disabled="busy"
-            @click="action({ id: detail.id, action: 'delete' })"
+            @click="action({ id: detail.id, action: 'delete', ...(detail.worktree ? { removeWorktree } : {}) })"
           >
             Confirm deletion
           </UButton>
@@ -527,7 +542,7 @@ function download() {
           </UButton>
         </div>
         <p v-if="detail.patch" class="page-note">
-          Inspect this patch before applying it. Tests have not run. In your
+          Inspect this patch before applying it. <template v-if="!detail.implementation">This proposal has not been automatically applied or verified.</template> In your
           repository, use
           <code>git apply --check path/to/download.patch</code>
           before applying with
@@ -540,58 +555,7 @@ function download() {
         </details>
       </template>
     </section>
-    <details class="monitor-section">
-      <summary>Configure worker queue</summary>
-      <form class="settings-form" @submit.prevent="save">
-        <div class="settings-grid">
-          <div>
-            <label for="local-capacity"
-              >Chat + file-task capacity · queued + running</label
-            >
-            <UInput
-              id="local-capacity"
-              v-model.number="capacity"
-              type="number"
-              min="1"
-              max="64"
-              required
-              class="w-full"
-            />
-          </div>
-          <div>
-            <label for="remote-queue">Extra orchestrator queue places</label>
-            <UInput
-              id="remote-queue"
-              v-model.number="remoteQueue"
-              type="number"
-              min="0"
-              max="64"
-              required
-              class="w-full"
-            />
-          </div>
-          <div>
-            <label for="queue-order">File-task start order</label>
-            <USelect
-              id="queue-order"
-              v-model="order"
-              :items="[
-                { label: 'First in, first out', value: 'fifo' },
-                { label: 'High priority first', value: 'priority' },
-              ]"
-              class="w-full"
-            />
-          </div>
-        </div>
-        <p class="page-note">
-          This worker executes one task at a time across chat, file tasks and
-          orchestrator assignments. Add more workers to run tasks in parallel.
-          Extra queue places hold orchestrator assignments while their leases
-          are renewed; lowering capacity keeps accepted work.
-        </p>
-        <UButton type="submit" :loading="busy">Save queue settings</UButton>
-      </form>
-    </details>
+    <p class="page-note">Queue capacity and task duration are managed in <RouterLink to="/settings#queue">Settings</RouterLink>.</p>
     <section v-if="state.status?.queuedTasks?.length" class="monitor-section">
       <h3>Waiting from the orchestrator</h3>
       <ul class="profile-list">

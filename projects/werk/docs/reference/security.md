@@ -57,11 +57,36 @@ review real outputs before publication or merge.
 ## Local model tool grants
 
 Local model tools are disabled by default. An authenticated worker operator can
-grant read-only task-worktree access, fixed command presets, web origins and
-individual MCP tools through Dashboard. Tool results are sent to the selected
+grant task-worktree file access, fixed command presets, CLI tools, web origins
+and individual MCP tools through **Settings → Tools & MCP** or the authenticated
+`tool-access` commands. Tool results are sent to the selected
 model provider. Commands and MCP servers run with their configured account or
 remote-service authority; a Git worktree does not contain their side effects.
+File inspection remains read-only. New implementation requests additionally require
+explicit approved paths and enabled required verification presets; their candidate
+tools can change only those paths in the owned worktree. Current grants, original
+Git ownership, expected content hashes and persisted check evidence are revalidated.
+The review artifact comes from actual candidate contents; a later edit invalidates
+verification. Neither a model summary nor an MCP annotation establishes a passing check.
+CLI tools accept model arguments only after an allowlist of one- or two-word
+commands, standalone required flags, refused options and path checks; they run
+without a shell, in the task worktree, with bounded time and output. The policy
+rejects model-supplied response files and ambiguous required-flag forms, but cannot
+prove the meaning of an unknown CLI grammar or detect option abbreviations,
+configuration files or symlinks a CLI reads itself.
+Optional command/CLI deadlines can shorten the frozen global command ceiling
+(up to one hour); MCP connections have separate deadlines up to 15 minutes for
+stdio or five minutes for HTTP. Raising a timeout extends how long granted work
+can run, not what it can access. The accepted total invocation deadline,
+per-call policy checks, cancellation and process-tree cleanup still apply.
+Manifest limit metadata is evidence and cannot override the accepted budget.
 Private MCP credentials stay in worker state, outside the public tool manifest.
+In Chat, which has no task worktree, command presets and stdio MCP servers start
+in an empty private workspace. An operator can opt one grant in to an assigned
+repository's live checkout. That checkout is not isolated: the grant's commands
+or tools can change the operator's working tree. The option is off by default,
+set per grant, never taken from model input, rechecked against current
+assignments before every call and never applied to task invocations.
 Tool output and repository content cannot authorize changes to grants. See
 [manage model tools](../how-to/manage-model-tools.md) for saving, revocation and
 the separate authority of orchestrator execution.

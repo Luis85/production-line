@@ -4,11 +4,11 @@ import RequestGatePanel from '../components/RequestGatePanel.vue';
 import InteractionPanel from '../components/InteractionPanel.vue';
 import type { InteractionView } from '../../application/interactions';
 import SessionPanel from '../components/SessionPanel.vue';
-import RunTask from '../components/RunTask.vue';
 import NewTask from '../components/NewTask.vue';
 import SettingsPanel from '../components/SettingsPanel.vue';
 import DefinitionPanel from '../components/DefinitionPanel.vue';
 import MessageContent from '../components/MessageContent.vue';
+import AssistantMessage from '../components/AssistantMessage.vue';
 import { computed, nextTick, ref, watch } from 'vue';
 import UButton from '@nuxt/ui/components/Button.vue';
 import UTextarea from '@nuxt/ui/components/Textarea.vue';
@@ -36,6 +36,7 @@ watch(() => state.sessions?.selected, () => { creating.value = false; });
 const interaction = ref<InteractionView | null>(null), interactionBusy = ref(false);
 const checkpointBlocked = computed(() => !!interaction.value?.pending || !!interaction.value?.latestTurn && ['failed', 'cancelled', 'interrupted'].includes(interaction.value.phase));
 const current = computed(() => state.sessions?.records.find(item => item.id === state.sessions?.selected));
+const fileTask = computed(() => state.board?.tasks.find(item => item.sessionId === current.value?.id));
 const snapshot = computed(() => current.value?.definition);
 const available = computed(() => state.unlocked && state.chat?.available && !state.workspaceBusy && !interactionBusy.value && !checkpointBlocked.value && !current.value?.busy);
 const firstMessage = computed(() => !state.chat?.messages.length);
@@ -151,7 +152,7 @@ function keydown(event: KeyboardEvent) { if (event.key === 'Enter' && (event.ctr
           <UAlert
             v-if="state.settings?.board.paused"
             title="Worker queue is paused"
-            description="You can queue work now. Open Dashboard and resume the queue when you want this worker to start waiting tasks."
+            description="You can queue work now. Open Taskboard and resume the queue when you want this worker to start waiting tasks."
             color="warning"
             variant="soft"
             class="notice"
@@ -205,15 +206,20 @@ function keydown(event: KeyboardEvent) { if (event.key === 'Enter' && (event.ctr
                 {{
                   phase === "queued"
                     ? state.settings?.board.paused
-                      ? "Queued · this worker’s queue is paused. Resume the queue in Dashboard to start waiting tasks."
+                      ? "Queued · this worker’s queue is paused. Resume the queue in Taskboard to start waiting tasks."
                       : "Queued · waiting for this worker’s next execution slot"
                     : "Working on this task…"
                 }}
               </p>
+              <AssistantMessage
+                v-else-if="message.role === 'assistant' && message.state === 'complete'"
+                :file-task="fileTask ? fileTask.implementation ? 'implementation' : 'proposal' : undefined"
+                :text="message.text"
+              />
               <MessageContent
                 v-else
                 :text="message.text"
-                :markdown="message.role === 'assistant' && message.state === 'complete'"
+                :markdown="false"
                 :class="{ 'error-text': message.state === 'error' }"
               />
             </article>
@@ -300,7 +306,6 @@ function keydown(event: KeyboardEvent) { if (event.key === 'Enter' && (event.ctr
               >Plan an implementation</UButton
             >
           </div>
-          <RunTask />
         </template>
       </div>
     </div>

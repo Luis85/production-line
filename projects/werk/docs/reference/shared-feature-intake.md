@@ -69,11 +69,15 @@ Shared mode accepts approved-file patch requests only. It retains the existing
 - `schemaVersion: 1`, a stable lowercase `id`, matching `templateId`, nonempty
   bounded title, explicit `status: ready` and `mode: patch` are required for intake.
   Offline validation also accepts `draft` without submitting it.
-- `paths` supplies 1–32 unique approved relative files. Names are bounded to 240
-  characters and follow the execution lane's portable non-secret path rules.
-  Dot-prefixed path components, traversal, credential/secret filenames and private
-  key extensions are rejected before a remote claim. New ordinary files are
-  allowed. Workflow configuration/checks/template/Base files and request/review
+- `paths` supplies 1–32 unique approved relative files. They follow the
+  [approved file path rule](feature-requests.md#approved-file-paths), which is
+  checked before a remote claim. Names may use Unicode letters, such as umlauts,
+  and common punctuation. Paths are compared in NFC form. A path is bounded to
+  240 characters, and each segment to 255 UTF-8 bytes. Dot-prefixed path
+  components, traversal, Windows-reserved characters and device names,
+  credential/secret filenames and private key extensions are rejected. New
+  ordinary files are allowed, but a new file cannot differ from a tracked file
+  only by letter case or Unicode normalization. Workflow configuration/checks/template/Base files and request/review
   namespaces cannot be changed by the feature patch.
 - Goal, Context, Acceptance criteria and Verification plan headings are required.
   Core text must be substantive after HTML comments and fenced examples are

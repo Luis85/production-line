@@ -2,15 +2,16 @@
 
 ## THESIS
 
-Operate mode. One independently runnable worker, three primary pages: Taskboard
-(default at `/taskboard`), History and Dashboard. The selected third mockup
-establishes an attention-first taskboard with a task interaction panel on the
-right. Vue with Nuxt UI remains the implementation foundation. One worker
+Operate mode. One independently runnable worker, four primary pages: Taskboard
+(default at `/taskboard`), Metrics (`/dashboard`), History and Settings (`/settings`).
+An attention-first taskboard keeps task instructions and responses on the right.
+Vue with Nuxt UI remains the implementation foundation. One worker
 executes exactly one task at a time; additional workers provide parallelism.
 
 The legacy `/chat` route redirects to `/taskboard` while preserving its query.
-Dashboard includes Monitoring & Status and setup; `/monitoring-status` continues
-to redirect to `/dashboard`. History remains the evidence and management surface.
+Metrics presents observations; Settings owns configuration. `/monitoring-status`
+continues to open Metrics. Earlier Dashboard setup anchors open the corresponding
+Settings sections. History remains the evidence and management surface.
 
 ## OWN-WORLD
 
@@ -21,7 +22,7 @@ not imply a fleet or several simultaneously running models.
 
 ## STORY
 
-A horizontal WorkerShell keeps identity, Taskboard / History / Dashboard
+A horizontal WorkerShell keeps identity, Taskboard / Metrics / History / Settings
 navigation, update state, Tour and Lock visible. After unlock, Taskboard answers
 three questions: what needs the operator, what is running, and what is waiting.
 A Running now strip follows the current shared executor owner. Below it, a wider
@@ -31,35 +32,37 @@ it. Completed and Drafts use disclosures beneath the active work.
 
 One card represents one retained task across its session, local file task and
 project-request projections. Preserve original task/session/request identifiers
-and the source labels Chat, File task, Assigned and Project request. Project
+and the source labels Local request, Assigned and Project request. Chat and file
+execution remain distinct backend modes within Local request. Project
 companion files do not transfer authority over remote assignments to the local
 worker. Stale running records that disagree with the shared execution slot need
 refresh, not a second running card. Simulations remain labelled Simulated; model
 completion is separate from review, acceptance, patch application or merge.
 
 Selecting a task pins its identity above the right-hand interaction panel.
-New task adds work; Follow up continues that selected task. This panel is for
+New request adds work; Follow up continues that selected task. This panel is for
 task instructions, responses and checkpoint answers. Configuration, provider
-login and worker administration belong in Dashboard. Empty states link to setup
+login and worker administration belong in Settings. Empty states link to setup
 when needed without turning task interaction into a settings form.
 
-New task selects a provider and, optionally, an imported Docker Agent definition
-and named agent. One UI submission coordinates creating a dedicated worker-owned
-session and sending the first message to its returned session ID. These are
-separate server requests, not a transactional backend operation. If creation
-succeeds but the first-message result is unconfirmed, preserve the created task
-and instructions and direct the operator to inspect the conversation before
-retrying. An uncertain creation must not trigger an automatic duplicate create.
-Follow-ups retain the selected session. Unsent drafts survive normal refresh,
-navigation and access expiry in the current tab; reload persistence is not
-promised, and explicit Lock clears them.
+New request starts with Request instructions. Task options disclose the provider,
+optional name and imported Docker Agent definition/agent. Repository files ·
+optional grants bounded access to approved inputs within this same composer.
+Create request always creates durable task tracking; the file permission is not
+a switch for Markdown persistence. One idempotent create command owns the initial
+instructions and permissions. If its acknowledgement is uncertain, keep that
+exact command and expose Retry same request; never silently create another task.
+Follow-ups retain the selected session and generated feature-request record.
+Unsent drafts survive refresh, navigation and access expiry in this tab; explicit
+Lock clears them and reload persistence is not promised.
 
-The file-task editor remains available for approved local inputs and produces
-a review patch in its own session. Remote assignments also retain dedicated
-sessions. History lists every task type, archived records, project requests,
-file-task management and retained execution evidence. Its existing review and
-inspection actions remain the route to evidence rather than a new board-specific
-record store.
+Feature request Markdown shows the confirmed file, saved time and readable
+progress. A pending or failed sync remains visible and retryable without implying
+that accepted work was rejected. Source intake notes remain authoritative;
+generated records never submit work or approve completion when edited. Keep
+execution outcome, readiness/completion gates and patch review distinct.
+History retains task management, source requests, patches and execution evidence.
+Backend task kinds remain provenance, not separate primary creation journeys.
 
 ## MONITORING AND STEERING
 
@@ -68,7 +71,11 @@ Label an invocation snapshot as recorded and a file-task or definition snapshot
 as configured. Do not substitute current connection settings for an older run,
 or treat the model from a completed attempt as the model of a new active turn.
 If a provider uses an unspecified default, the actual model remains unknown.
-Missing usage, cost, progress and provider telemetry remain unavailable.
+Missing usage, cost, progress and provider telemetry remain unavailable. Metrics
+labels measurement age and scope: Node process CPU/RSS exclude provider children;
+machine-wide memory/load include other host activity. Run evidence covers local
+invocations, while original remote assignments retain their separate snapshot
+contract. Token allowance is configured worker policy, not subscription balance.
 
 Saved interaction events, checkpoints, transcripts and run evidence explain what
 has happened. Structured questions and escalations release the execution slot;
@@ -84,24 +91,32 @@ Keep three controls distinct:
 - Pause updates pauses this browser's automatic reads and changes no worker work.
 
 A follow-up may be drafted while its task runs; sending waits until that task
-finishes. New tasks may queue behind it. Queue capacity is not execution capacity.
+finishes. New requests may queue behind it. Capacity shows the single execution slot,
+local admission occupancy including preparation reservations, and the separate
+remote lease buffer. Unadmitted ready notes do not count as occupied places.
+Fresh pause and consumption blockers explain why work waits; stale observations
+never claim the worker is ready. No queue estimate implies an execution ETA.
 Standalone is a healthy worker state. Scale parallel work with separate native
 or Docker workers, never a per-worker concurrency control.
 
 ## SETUP AND DEFINITIONS
 
-Dashboard owns provider connections, saved connection checks, Docker Agent
-definitions, enrollment and diagnostics. CLI sign-in instructions name the worker
-machine and process owner. Configuration does not establish successful login,
+Settings owns Providers & accounts, Queue & duration, Consumption, Tools & MCP,
+Repositories, Shared request intake, Execution profiles, Agent definitions,
+Project integration and Orchestrator. Editors save separately and keep drafts
+while navigating in the current tab. Queue/duration/consumption policy saves
+compare the saved baseline; conflicts preserve the draft for reconciliation.
+Metrics keeps operational diagnostics and links to the relevant editor. CLI
+sign-in instructions name the worker machine and process owner. Configuration does not establish successful login,
 subscription quota, model access or measured cost.
 
 Agent YAML upload or paste leads to a preview of instructions, model and
 unsupported features before import. Import does not execute Docker, tools,
-hooks or delegated teams. New task requires explicit instructions-only acceptance
+hooks or delegated teams. New request requires explicit instructions-only acceptance
 when unsupported features are omitted and surfaces provider mismatch before
 creation. Each task retains its fixed definition snapshot, so later imports or
-removal cannot silently change it. The file-task editor has its own definition
-and agent selection.
+removal cannot silently change it. The same selection applies when the operator
+allows changes to approved repository files.
 
 ## FIRST VIEWPORT
 
@@ -117,7 +132,7 @@ After unlock, the board and right-hand interaction panel establish the worker's
 current work immediately. Empty attention and queue areas explain their state;
 no placeholder task, model name or fabricated progress is presented as real.
 The selected task remains clear while the operator drafts instructions or reads
-output. A persistent Tour explains the three pages and their controls without
+output. A persistent Tour explains the four pages and their controls without
 configuring providers, enrolling the worker or submitting work.
 
 ## FORM
@@ -160,13 +175,13 @@ state; it does not introduce a second task queue or execution authority.
 ## Repository consent and profile editing
 
 A detected installation repository appears in a nonmodal prompt above the
-taskboard and in Dashboard’s repository section. Show its full wrapping path,
+taskboard and in Settings → Repositories. Show its full wrapping path,
 branch and remote name without remote credentials. Use repository and Don’t use
 are explicit choices; the latter persists and leaves a reconsideration action
-in Dashboard. Pending actions, failures and acknowledged choices have visible
+in Settings. Pending actions, failures and acknowledged choices have visible
 feedback without stealing focus during polling.
 
-Execution profiles have a focused Dashboard editor with labelled ID/provider
+Execution profiles have a focused Settings editor with labelled ID/provider
 fields, add/remove controls and a visible execution-mode boundary. Keep drafts
 while live observations refresh, report stale saves before overwriting changes,
 and distinguish saved pending synchronization from active profiles. Explain

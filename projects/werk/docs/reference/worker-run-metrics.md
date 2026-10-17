@@ -114,7 +114,7 @@ For an exact completed dataset, stop new submissions and let active work finish
 before starting the export.
 
 The webview exposes Project requests and Execution evidence inside History, with
-Dashboard links. Filters affect both the displayed list and its analysis.
+Metrics links. Filters affect both the displayed list and its analysis.
 Measurements, missing coverage and recovered interruptions remain visibly
 separate. The [worker lifecycle tutorial](../tutorials/worker-feature-lifecycle.md)
 walks through this from a downloaded package.

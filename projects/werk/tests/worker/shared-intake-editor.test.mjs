@@ -95,3 +95,42 @@ test('clearing cannot bypass enabled intake, unfinished publication, pause/drain
   for (const extra of cases) { const h = harness(); h.setSaved({ ...h.saved(), config: { ...h.saved().config, repositoryId: 'project' }, ...extra }); await h.editor.load(); assert.equal(h.editor.canClear.value, false); h.editor.clearConnection(); assert.equal(h.editor.draft.config.repositoryId, 'project'); assert.deepEqual(h.writes, []); h.editor.dispose(); }
   const h = harness(); h.setSaved({ ...h.saved(), config: { ...h.saved().config, repositoryId: 'project' } }); await h.editor.load(); h.editor.draft.config.branch = 'draft'; assert.equal(h.editor.canClear.value, false); h.setSaved({ ...h.saved(), revision: 1 }); await h.editor.load(); assert.equal(h.editor.canClear.value, false); h.editor.reloadSaved(); assert.equal(h.editor.canClear.value, true); h.access.unlocked = false; assert.equal(h.editor.canClear.value, false); h.editor.dispose();
 });
+
+test('shared-intake background refresh keeps controls available and drafts intact, while first load stays visible', async t => {
+  const h = harness(); t.after(h.editor.dispose);
+  let reads = 0, pending = deferred(); h.io.read = () => { reads++; return pending.promise; };
+  const initial = h.editor.load({ background: true });
+  assert.equal(h.editor.draft.loading, true); assert.equal(h.editor.busy.value, true);
+  pending.resolve({ ...base(), config: { ...defaultSharedIntakeConfig(), enabled: true, repositoryId: 'project' }, state: 'idle' }); await initial;
+  h.editor.draft.config.branch = 'unsaved-branch';
+  pending = deferred(); const polling = h.editor.load({ background: true }), duplicate = h.editor.load({ background: true });
+  assert.equal(reads, 2); assert.equal(h.editor.draft.loading, false); assert.equal(h.editor.busy.value, false);
+  assert.equal(h.editor.canSave.value, true); assert.equal(h.editor.canSync.value, true); assert.equal(h.editor.draft.config.branch, 'unsaved-branch');
+  pending.resolve({ ...h.editor.view.value, revision: 2, config: { ...h.editor.view.value.config, branch: 'changed-elsewhere' } }); await Promise.all([polling, duplicate]);
+  assert.equal(h.editor.draft.config.branch, 'unsaved-branch'); assert.equal(h.editor.stale.value, true); assert.equal(h.editor.canSave.value, false);
+});
+test('manual shared-intake refresh shows loading and joins a pending background read without duplicating it', async t => {
+  const h = harness(); t.after(h.editor.dispose); await h.editor.load(); h.enable();
+  const pending = deferred(); let reads = 0; h.io.read = () => { reads++; return pending.promise; };
+  const polling = h.editor.load({ background: true }); assert.equal(h.editor.draft.loading, false); assert.equal(h.editor.canSave.value, true);
+  const manual = h.editor.load(); assert.equal(reads, 1); assert.equal(h.editor.draft.loading, true); assert.equal(h.editor.busy.value, true); assert.equal(h.editor.canSave.value, false);
+  pending.resolve(clone(h.saved())); await Promise.all([polling, manual]);
+  assert.equal(h.editor.draft.loading, false); assert.equal(h.editor.canSave.value, true); assert.equal(h.editor.draft.config.repositoryId, 'project');
+});
+test('a late background read cannot replace a shared-intake save acknowledgement', async t => {
+  const h = harness(); t.after(h.editor.dispose); await h.editor.load(); h.enable();
+  const old = clone(h.saved()), pending = deferred(); h.io.read = () => pending.promise;
+  const polling = h.editor.load({ background: true }); await h.editor.save();
+  assert.equal(h.writes.length, 1); assert.equal(h.editor.view.value.revision, 1); assert.equal(h.editor.dirty.value, false);
+  pending.resolve(old); await polling;
+  assert.equal(h.editor.view.value.revision, 1); assert.equal(h.editor.draft.config.enabled, true); assert.match(h.editor.draft.notice, /connection saved/);
+});
+test('a late background read cannot replace manual sync results or its retained draft', async t => {
+  const h = harness(); t.after(h.editor.dispose);
+  h.setSaved({ ...base(), config: { ...defaultSharedIntakeConfig(), enabled: true, repositoryId: 'project' }, state: 'idle' }); await h.editor.load();
+  const old = clone(h.saved()), pending = deferred(); h.io.read = () => pending.promise;
+  const polling = h.editor.load({ background: true }); h.editor.draft.config.branch = 'unsaved-branch';
+  h.io.write = async () => ({ ...old, sourceCommit: 'new-commit', lastSyncedAt: '2026-10-16T10:00:00Z' }); await h.editor.sync();
+  pending.resolve(old); await polling;
+  assert.equal(h.editor.view.value.sourceCommit, 'new-commit'); assert.equal(h.editor.draft.config.branch, 'unsaved-branch'); assert.match(h.editor.draft.notice, /check finished/);
+});

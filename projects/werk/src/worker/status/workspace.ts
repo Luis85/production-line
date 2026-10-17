@@ -1,3 +1,7 @@
+import { publicTaskConversation } from '../application/public-task-transcript.js';
+import { FeatureTracking, type FeatureTrackingInput } from '../application/feature-tracking.js';
+import { MarkdownFeatureTracking } from '../infrastructure/features/tracking.js';
+import { validateApprovedPaths } from '../application/approved-paths.js';
 import { WorkerConsumption } from '../application/consumption.js';
 import { consumptionModel } from '../application/consumption-model.js';
 import { WorkerConsumptionJournal } from '../infrastructure/journal/consumption.js';
@@ -7,15 +11,18 @@ import { ProviderStatusChecks } from '../infrastructure/provider-status.js';
 import { createWorkerSessions, createLocalTaskboard } from '../infrastructure/workspace-services.js';
 import { ProviderAccountChecks } from '../infrastructure/provider-account.js';
 import { SharedIntakeRuntime } from '../infrastructure/features/shared-intake-runtime.js';
-import type { SharedFeatureRecord } from '../application/shared-feature-state.js';
+import type { SharedExecution, SharedFeatureRecord } from '../application/shared-feature-state.js';
 import type { ToolAccessView } from '../application/tool-policy.js';
+import { BuiltinToolError, chatToolDirectory } from '../infrastructure/builtin-tools.js';
 import { discoverMcpTools, mcpTransportConfiguration, McpClientError } from '../infrastructure/tool-mcp.js';
 import type { ExecutionProfilesControl } from '../application/execution-profiles.js';
 import { RepositoryDiscovery } from '../infrastructure/repository-discovery.js';
 import type { RepositoryConfiguration } from '../application/repositories.js';
-import { RepositoryManager, prepareRepositoryWorktree } from '../infrastructure/repositories.js';
+import { RepositoryManager, prepareRepositoryWorktree, RepositoryGitError, WorktreeProblem, WORKTREE_CHECKOUT_TIMEOUT_MS } from '../infrastructure/repositories.js';
+import { removeRepositoryWorktree, repositoryRoot, worktreeName } from '../infrastructure/repositories-git.js';
 import { requestGateSchema } from '../application/request-gate-schema.js';
 import { requestDispatchStatus } from '../application/request-dispatch.js';
+import { developmentCompletionValid, developmentScopeView } from '../application/development.js';
 import { RequestReviewManager } from "../application/request-review.js";
 import {
   defaultGatePolicy,
@@ -91,10 +98,17 @@ export function chatConfiguration(value: unknown): string | undefined {
     );
   return raw.codexExecutable;
 }
+/** Worktree policy and Git failures carry fixed, path-free messages; show them instead of a generic 500. */
+function worktreeFailure(error: unknown) {
+  if (error instanceof WorktreeProblem) return new DomainError("conflict", error.message);
+  if (error instanceof RepositoryGitError) return new DomainError(error.reason === "failed" ? "conflict" : "unavailable", error.message);
+  return error;
+}
 export class WorkerWorkspace {
   readonly executionProfiles?: ExecutionProfilesControl;
   private taskIndex: TaskIndex;
   readonly features?: FeatureRequests;
+  readonly featureTracking: FeatureTracking;
   readonly sharedRuntime: SharedIntakeRuntime;
   private providerAccounts = new ProviderAccountChecks();
   private providerStatuses = new ProviderStatusChecks();
@@ -122,10 +136,65 @@ export class WorkerWorkspace {
   get executor() {
     return this.sessions.executor;
   }
+  /** Keep Markdown projections current before acknowledging task commands, including partial failures. */
+  async withFeatureTracking<T>(action: () => Promise<T>): Promise<T> {
+    try { return await action(); } finally { await this.featureTracking.sync(); }
+  }
+  taskDetail(id: string) {
+    const detail = this.sessions.detail(id);
+    const task = detail.session.kind === 'local' ? this.board.view().tasks.find(item => item.sessionId === id) : undefined;
+    const local = task && this.board.executionDetail(task.id);
+    return { ...detail, chat: publicTaskConversation(detail.chat, local ? { instruction: local.instruction, paths: local.admissionFailure?.paths ?? local.files.map(file => file.path) } : undefined) };
+  }
+  chatSnapshot(id = this.sessions.current.id) { return this.taskDetail(id).chat; }
+  async cancelChat() {
+    const id = this.sessions.current.id;
+    await this.withFeatureTracking(() => this.chat.cancel());
+    return this.chatSnapshot(id);
+  }
+  async chatSession() {
+    await this.featureTracking.sync();
+    return { sessions: this.sessions.view(), chat: this.chatSnapshot() };
+  }
+  async featureTrackingCommand(input: unknown) {
+    const body = object(input, 'Feature tracking command', ['action', 'sessionId']);
+    if (body.action !== 'get') throw new DomainError('invalid_input', 'Use get with a task session ID.');
+    const id = identifier(body.sessionId, 'sessionId');
+    this.sessions.detail(id);
+    await this.featureTracking.sync();
+    return this.featureTracking.get(id);
+  }
+  private featureTrackingSnapshot(): FeatureTrackingInput[] {
+    const sources = new Map(this.features?.view().records.map(record => [record.sessionId, join(this.config.features!.directory, record.name)]) ?? []);
+    const tasks = new Map(this.board.view().tasks.map(task => [task.sessionId, task.id]));
+    return this.sessions.details().map(({ session, chat }) => {
+      const interaction = session.interaction;
+      const taskId = tasks.get(session.id), local = taskId ? this.board.executionDetail(taskId) : undefined;
+      const sharedSource = taskId ? this.sharedRuntime.intake.sourceForTask(taskId) : undefined;
+      const sourceRepository = sharedSource && this.settings.value.repositories.items.find(item => item.id === sharedSource.repositoryId);
+      const sourcePath = sharedSource ? sourceRepository ? join(sourceRepository.path, sharedSource.path) : sharedSource.path : sources.get(session.id);
+      const runs = this.sessions.runs.list({ sessionId: session.id, limit: 100 }).rows;
+      return { session, messages: publicTaskConversation(chat, local ? { instruction: local.instruction, paths: local.admissionFailure?.paths ?? local.files.map(file => file.path) } : undefined).messages, request: this.sessions.requests.forSession(session.id),
+        turns: interaction.turns.map(turn => this.sessions.interactions.turn(session.id, turn.id)), runs,
+        ...(local ? { local: { instruction: local.instruction, summary: local.summary, error: local.error, hasPatch: !!local.patch, repository: local.repository, paths: local.files.map(file => file.path), ...(local.implementation ? { implementation: developmentScopeView(local.implementation), developmentEvidence: local.developmentEvidence } : {}) } } : {}),
+        ...(sourcePath ? { sourcePath } : {}),
+      };
+    });
+  }
+  taskboardDetail(id: string) {
+    return this.board.detail(id);
+  }
   async taskboardAction(input: unknown) {
     if ((input as Record<string, unknown> | null)?.action === 'retry')
       return this.withRepositoryAdmission(() => this.board.action(input));
     return this.board.action(input);
+  }
+  private assertTaskCanContinue(sessionId: string) {
+    const reason = this.sessions.view().records.find(session => session.id === sessionId)?.continuationBlockedReason;
+    if (reason) throw new DomainError('conflict', reason);
+    const task = this.board.view().tasks.find(task => task.sessionId === sessionId);
+    if (task?.admissionFailure)
+      throw new DomainError('conflict', task.error ?? 'This interrupted request has no accepted file snapshots. Inspect its retained worktree and create a new request.');
   }
   async startChat(message: unknown) {
     if (this.configurationUpdating || this.executionProfiles?.pending())
@@ -137,7 +206,10 @@ export class WorkerWorkspace {
       this.settings.value.board.queueCapacity
     )
       throw new DomainError("conflict", "Worker task queue is full.");
-    return this.sessions.start(message);
+    const id = this.sessions.current.id;
+    this.assertTaskCanContinue(id);
+    await this.withFeatureTracking(() => this.sessions.start(message, id));
+    return this.chatSnapshot(id);
   }
   capabilities() {
     return {
@@ -156,7 +228,7 @@ export class WorkerWorkspace {
       },
       events: { transport: "polling", streaming: false },
       capabilities: modelCapabilities,
-      toolAccess: { supported: true, management: "worker_global_revision", default: "none", scope: "local_model_invocations", repositoryFiles: "task_worktree_read_only", revocation: "pause_and_drain_before_save" },
+      toolAccess: { supported: true, management: "worker_global_revision", default: "none", scope: "local_model_invocations", repositoryFiles: "task_worktree_read_only", implementation: { supported: true, activation: "new_git_request_with_approved_paths_and_required_checks", writes: "approved_paths_in_owned_worktree", review: "actual_patch_and_matching_required_checks", humanMergeRequired: true }, cliTools: "argument_policy_in_task_worktree", executionLimits: "operator_configured_per_grant", revocation: "pause_and_drain_before_save" },
       consumption: { supported: true, unit: 'tokens', periods: ['daily', 'monthly'], clock: 'UTC', scope: 'this_worker_model_invocations', enforcement: 'admission', personalUsageObserved: false },
       resources: {
         supported: true,
@@ -264,6 +336,7 @@ export class WorkerWorkspace {
         "conflict",
         "Remote assignments require an explicit upstream successor with a fresh lease and pinned context.",
       );
+    if (['propose', 'accept_candidate', 'execute'].includes(action)) this.assertTaskCanContinue(before.owner.sessionId);
     const result = gates.command(initial as unknown as RequestCommand);
     if (!result.duplicate && action === "cancel")
       this.reviews.cancel(requestId);
@@ -464,6 +537,7 @@ export class WorkerWorkspace {
       identifier(body.turnId, "turnId");
       if (body.message !== undefined) text(body.message, "Continuation", 8000);
     }
+    this.assertTaskCanContinue(sessionId);
     const command = body as unknown as InteractionCommand;
     const interactions = this.sessions.interactions;
     const view = interactions.view(sessionId);
@@ -550,7 +624,11 @@ export class WorkerWorkspace {
           "definitionRef",
           "agent",
           "useInstructionsOnly",
+          "files",
+          "background",
         ]);
+        if (body.background !== undefined && (typeof body.background !== "boolean" || body.action !== "create" || body.background && body.files === undefined))
+          throw new DomainError("invalid_input", "background is a true/false option when creating a task with approved files.");
         if (
           !["create", "get", "send", "cancel", "retry"].includes(
             String(body.action),
@@ -562,7 +640,7 @@ export class WorkerWorkspace {
           );
         if (
           body.action !== "create" &&
-          (body.definitionId !== undefined ||
+          (body.files !== undefined || body.definitionId !== undefined ||
             body.definitionRef !== undefined ||
             body.agent !== undefined ||
             body.useInstructionsOnly !== undefined)
@@ -579,6 +657,7 @@ export class WorkerWorkspace {
         if (body.action === "cancel") return this.sessions.cancelTask(id);
         if (this.configurationUpdating || this.executionProfiles?.pending())
           throw new DomainError("conflict", "Finish the execution profile change before starting new work.");
+        if (body.action !== 'create') this.assertTaskCanContinue(id);
         let requestMessage = body.message;
         if (body.action === "retry") {
           const detail = this.sessions.detail(id);
@@ -597,13 +676,26 @@ export class WorkerWorkspace {
         }
         const message = text(requestMessage, "message", 8000);
         if (body.action === "create") {
+          const files = body.files === undefined ? undefined : object(body.files, 'Approved task files', ['repository', 'paths']);
+          const approved = files ? { repository: text(files.repository, 'repository', 4096), paths: validateApprovedPaths(files.paths) } : undefined;
+          // File request IDs and their generated session IDs share the task namespace.
+          const aliasesPendingPreparation = (!approved && this.board.preparation(id)) ||
+            (id.startsWith("local-") && this.board.preparation(id.slice(6)));
+          const aliasesFileRequest = approved && (
+            this.board.preparation("local-" + id) ||
+            this.board.view().tasks.some(task => task.id === "local-" + id) ||
+            this.sessions.view().records.some(session => session.kind === "local" && session.id === "local-local-" + id)
+          );
+          if (aliasesPendingPreparation || aliasesFileRequest)
+            throw new DomainError("conflict", "Task id already belongs to another approved-file request.");
+          if (approved && !/^[a-z0-9-]{1,90}$/.test(id)) throw new DomainError('invalid_input', 'File task IDs use 1–90 lowercase letters, digits or hyphens.');
           const selection = definitionSelection(body);
           const title = text(body.title, "title", 120),
             provider = this.settings.provider(String(body.provider));
           const existing = this.sessions
             .view()
-            .records.find((item) => item.id === id);
-          const savedDefinition = existing?.definition;
+            .records.find((item) => item.id === (approved ? "local-" + id : id));
+          const savedDefinition = existing?.definition ?? (approved ? this.board.preparationDefinition(id) : undefined);
           const definition =
             savedDefinition &&
             (selection.definitionRef !== undefined
@@ -620,10 +712,24 @@ export class WorkerWorkspace {
                 title,
                 provider: provider.id,
                 message,
+                ...(approved ? { files: approved } : {}),
                 ...(definition ? { definition } : {}),
               }),
             )
             .digest("hex");
+          const fileTask = this.board.view().tasks.find(task => task.id === id);
+          if (approved) {
+            if (this.sessions.view().records.some(session => session.id === id) || existing && (existing.kind !== 'local' || !fileTask && existing.submissionHash !== submissionHash))
+              throw new DomainError('conflict', 'Task id already belongs to different input.');
+            await this.withRepositoryAdmission(() => this.board.create({ title, instruction: message, provider: provider.id, ...approved,
+              ...(body.background === true ? { background: true } : {}),
+              definitionId: body.definitionId, definitionRef: body.definitionRef, agent: body.agent, useInstructionsOnly: body.useInstructionsOnly,
+            }, { id, hash: submissionHash }));
+            const preparation = this.board.preparation(id);
+            if (preparation) return { preparation };
+            return this.sessions.detail(this.board.executionDetail(id).sessionId);
+          }
+          if (fileTask || this.sessions.view().records.some(session => session.id === 'local-' + id && session.kind === 'local')) throw new DomainError('conflict', 'Task id already belongs to different input.');
           if (existing) {
             const detail = this.sessions.detail(id);
             if (
@@ -662,7 +768,11 @@ export class WorkerWorkspace {
       () => {},
       () => {},
     );
-    return operation;
+    const detail = await this.withFeatureTracking(() => operation);
+    // Preparation progress is not durable admission; only a real session acknowledges the request.
+    if ("preparation" in detail) return detail;
+    const { directory, lastSyncedAt, error } = this.featureTracking.status();
+    return { ...this.taskDetail(detail.session.id), featureTracking: { directory, lastSyncedAt, error } };
   }
   private token = "";
   private historyCache?: {
@@ -725,14 +835,23 @@ export class WorkerWorkspace {
     this.repositoryDiscovery = new RepositoryDiscovery(config.stateDir, config.integrationProjectDir ?? config.projectDir ?? process.cwd(), this.repositoryStop.signal, config.codex?.repository);
     this.sessions = createWorkerSessions(
       config.stateDir, this.settings, modelFor, undefined, () => this.board.active, this.consumption,
+      { remote: () => { const status = this.get(); return { waiting: status.queuedTasks?.length ?? null, running: status.activeTasks.length }; } },
     );
     this.board = createLocalTaskboard(
       config.stateDir,
       this.settings,
       this.sessions,
-      { prepareWorktree: (selector, key, signal, commit) => this.prepareTaskWorkspace(selector, key, signal, commit) },
+      {
+        prepareWorktree: (selector, key, signal, commit) => this.prepareTaskWorkspace(selector, key, signal, commit),
+        verifyWorktree: (selector, key, signal, commit) => this.prepareTaskWorkspace(selector, key, signal, commit, true),
+        removeWorktree: (selector, key, signal, expected) => this.removeTaskWorkspace(selector, key, signal, expected),
+      },
       undefined, this.consumption,
     );
+    this.featureTracking = new FeatureTracking(new MarkdownFeatureTracking(
+      config.features ? join(config.features.directory, '_tasks') : join(config.stateDir, 'feature-requests'), config.stateDir,
+    ), () => this.featureTrackingSnapshot());
+    this.sessions.featureTracking = this.featureTracking;
     this.reviews = new RequestReviewManager({
       gates: this.sessions.requests,
       executor: this.executor,
@@ -784,12 +903,7 @@ export class WorkerWorkspace {
         try { definitionConnection(this.settings.provider(input.provider), this.definitions.select({ definitionId: input.definitionId, definitionRef: input.definitionRef, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly })); return undefined; }
         catch (error) { return error instanceof Error ? error.message : 'The selected agent definition is unavailable.'; }
       },
-      inspect: id => {
-        try {
-          const task = this.board.detail(id);
-          return { status: task.status, summary: task.summary, patch: task.patch, request: task.requestId ? this.sessions.requests.get(task.requestId) : null, currentTurnId: task.currentTurnId, runId: task.runId, error: task.error };
-        } catch { return undefined; }
-      },
+      inspect: id => this.inspectSharedFeature(id),
     });
     if (config.features)
       this.features = new FeatureRequests(
@@ -824,6 +938,7 @@ export class WorkerWorkspace {
     await this.board.init();
     await this.taskIndex.init();
     await this.features?.init();
+    await this.featureTracking.init();
     await this.resources.init();
     this.resources.start();
     this.repositories.start();
@@ -864,10 +979,19 @@ export class WorkerWorkspace {
     if (this.sharedRuntime.intake.binding?.repositoryId && !['get', 'result', 'validate'].includes(String((input as { action?: unknown })?.action))) throw new DomainError('conflict', 'Shared Git intake owns new feature requests. Create and validate the request in the repository, then commit and push it.');
     return this.features.action(input);
   }
+  private inspectSharedFeature(id: string): SharedExecution | undefined {
+    try {
+      const task = this.board.executionDetail(id);
+      return { status: task.status, summary: task.summary, patch: task.patch,
+        ...(task.implementation ? { implementation: developmentScopeView(task.implementation), developmentEvidence: task.developmentEvidence, developmentVerified: developmentCompletionValid(task) } : {}),
+        request: task.requestId ? this.sessions.requests.get(task.requestId) : null, currentTurnId: task.currentTurnId, runId: task.runId, error: task.error };
+    } catch { return undefined; }
+  }
   private async submitSharedFeature(record: SharedFeatureRecord) {
     const input = record.accepted;
     const assignment = this.repositories.resolve(record.binding.repositoryId);
     await this.withRepositoryAdmission(() => this.board.create({ title: input.title, instruction: input.message, provider: input.provider, repository: assignment.path, paths: input.paths, priority: input.priority, definitionId: input.definitionId, definitionRef: input.definitionRef, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly }, { id: record.taskId!, hash: record.inputHash, policy: record.workflow.policy, criteria: input.criteria, repositoryId: record.binding.repositoryId, baseCommit: record.sourceCommit }));
+    await this.featureTracking.sync();
   }
   repositoryStatus() {
     return { schemaVersion: 1, pollMs: this.settings.value.repositories.pollMs, items: this.repositories.view(), discovery: this.repositoryDiscovery.view() };
@@ -922,7 +1046,7 @@ export class WorkerWorkspace {
   }
   toolAccess(): ToolAccessView {
     const saveBlockedReason = this.toolAccessBlockedReason();
-    return { ...this.settings.toolAccess(), canEdit: !saveBlockedReason, saveBlockedReason };
+    return { ...this.settings.toolAccess(), canEdit: !saveBlockedReason, saveBlockedReason, workerNode: process.execPath };
   }
   private toolAccessBlockedReason(): string | null {
     if (!this.acceptingTasks) return 'Worker is stopping.';
@@ -948,8 +1072,15 @@ export class WorkerWorkspace {
       const connection = policy.mcp.find(item => item.id === id);
       if (!connection) throw new DomainError('not_found', 'MCP connection not found.');
       let definitions;
-      try { definitions = await discoverMcpTools(mcpTransportConfiguration(connection), { signal: this.repositoryStop.signal }); }
+      try {
+        // Discovery and chat calls use the same checked directory, including the private default workspace.
+        const directory = connection.transport === 'stdio'
+          ? await chatToolDirectory({ directory: this.config.stateDir, repositories: () => this.settings.value.repositories.items })(connection)
+          : undefined;
+        definitions = await discoverMcpTools(mcpTransportConfiguration(connection), { signal: this.repositoryStop.signal, directory });
+      }
       catch (error) {
+        if (error instanceof BuiltinToolError) throw new DomainError('invalid_input', error.message);
         // MCP errors contain only worker-owned messages, never server diagnostics or credentials.
         if (error instanceof McpClientError) throw new DomainError(
           ['configuration', 'output_limit'].includes(error.reason) ? 'invalid_input' : 'unavailable', error.message,
@@ -976,14 +1107,14 @@ export class WorkerWorkspace {
       this.repositoryPreparations--;
     }
   }
-  private async prepareTaskWorkspace(selector: string, key: string, signal: AbortSignal, commit?: string) {
+  private async prepareTaskWorkspace(selector: string, key: string, signal: AbortSignal, commit?: string, verify = false) {
     if (!this.acceptingTasks || this.repositoriesUpdating || this.configurationUpdating || this.executionProfiles?.pending())
       throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
     signal = AbortSignal.any([signal, this.repositoryStop.signal]);
     this.repositoryPreparations++;
     try {
       if (this.settings.value.repositories.items.length)
-        return await this.repositories.prepareWorktree(selector, key, signal, commit);
+        return await (verify ? this.repositories.verifyWorktree(selector, key, signal, commit) : this.repositories.prepareWorktree(selector, key, signal, commit));
       // Legacy approved-file tasks may still use an ordinary, non-Git project folder.
       if (!isAbsolute(selector)) throw new DomainError("invalid_input", "Choose an assigned repository or an absolute project folder.");
       const repository = await realpath(selector);
@@ -992,8 +1123,74 @@ export class WorkerWorkspace {
         if (error.code === "ENOENT") return null;
         throw error;
       });
-      return metadata ? await prepareRepositoryWorktree(repository, key, signal, commit) : { repository, path: repository };
-    } finally { this.repositoryPreparations--; }
+      return metadata ? await prepareRepositoryWorktree(repository, key, signal, commit, { checkoutTimeoutMs: WORKTREE_CHECKOUT_TIMEOUT_MS, ...(verify ? { reuseOnly: true } : {}) }) : { repository, path: repository };
+    } catch (error) { throw worktreeFailure(error); }
+    finally { this.repositoryPreparations--; }
+  }
+  private async removeTaskWorkspace(selector: string, key: string, signal: AbortSignal, expected: { path: string; baseCommit: string; discardChanges: boolean }) {
+    if (!this.acceptingTasks || this.repositoriesUpdating || this.configurationUpdating)
+      throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
+    signal = AbortSignal.any([signal, this.repositoryStop.signal]);
+    const options = { expect: { taskKey: key, path: expected.path, baseCommit: expected.baseCommit }, discardChanges: expected.discardChanges, checkoutTimeoutMs: WORKTREE_CHECKOUT_TIMEOUT_MS };
+    this.repositoryPreparations++;
+    try {
+      if (this.settings.value.repositories.items.length)
+        return await this.repositories.removeWorktree(selector, { taskKey: key }, signal, options);
+      const root = await repositoryRoot(selector, signal);
+      await this.repositoryDiscovery.assertAllowed(root.path);
+      return await removeRepositoryWorktree(root, worktreeName("local", key), signal, 30000, options);
+    } catch (error) { throw worktreeFailure(error); }
+    finally { this.repositoryPreparations--; }
+  }
+  /** Owned task worktrees of assigned repositories, with the file task that still uses each. */
+  async worktrees() {
+    const repositories = await this.repositories.worktrees(AbortSignal.any([AbortSignal.timeout(120000), this.repositoryStop.signal]));
+    const users = new Map(this.board.view().tasks.filter(task => task.worktree).map(task => [task.worktree!, task.id]));
+    return {
+      worktreeDirectory: this.settings.value.repositories.worktreeDirectory ?? null,
+      repositories: repositories.map(item => ({ ...item, worktrees: item.worktrees.map(worktree => ({ ...worktree, taskId: worktree.path ? users.get(worktree.path) ?? null : null })) })),
+    };
+  }
+  /**
+   * Remove retained worktrees that no file task uses. Clean ones only, unless the
+   * operator confirms discarding changes; a dry run reports without removing.
+   */
+  async pruneWorktrees(input: unknown) {
+    const body = object(input, "Worktree prune", ["action", "id", "repositoryId", "dryRun", "discardChanges"]);
+    if (body.action !== "prune") throw new DomainError("invalid_input", "Worktree action: prune");
+    if (body.id !== undefined && (typeof body.id !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(body.id))) throw new DomainError("invalid_input", "Use a worktree name from worktrees list.");
+    if (body.repositoryId !== undefined) identifier(body.repositoryId, "Repository id");
+    for (const flag of ["dryRun", "discardChanges"]) if (body[flag] !== undefined && typeof body[flag] !== "boolean") throw new DomainError("invalid_input", `${flag} must be true or false.`);
+    const dryRun = body.dryRun === true;
+    if (!this.acceptingTasks || this.repositoriesUpdating || this.configurationUpdating || this.executionProfiles?.pending())
+      throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
+    // Running work and admissions may be creating or using a worktree that no task records yet.
+    if (!dryRun && (this.repositoryPreparations || this.sessions.busy || this.board.active || this.sharedRuntime.intake.busy || this.get().activeTasks.length || this.get().queuedTasks?.length))
+      throw new DomainError("conflict", "Finish or cancel queued and running tasks before pruning task worktrees; a dry run is available now.");
+    // Reserve synchronously before listing: all admission and configuration paths use this gate.
+    if (!dryRun) this.configurationUpdating = true;
+    this.repositoryPreparations++;
+    try {
+      const listing = await this.worktrees(), results: Array<Record<string, unknown>> = [];
+      for (const repository of listing.repositories) {
+        if (body.repositoryId !== undefined && repository.repositoryId !== body.repositoryId) continue;
+        for (const worktree of repository.worktrees) {
+          if (body.id !== undefined && worktree.name !== body.id) continue;
+          const entry = { repositoryId: repository.repositoryId, name: worktree.name, path: worktree.path ?? null, taskKey: worktree.taskKey ?? null };
+          const taskId = worktree.taskId ?? this.board.view().tasks.find(task => task.worktree === worktree.path)?.id;
+          if (taskId) { if (body.id !== undefined) results.push({ ...entry, outcome: "kept", reason: "A file task uses this worktree. Delete the task to remove it." }); continue; }
+          if (worktree.state === "invalid") { results.push({ ...entry, outcome: "kept", reason: "Its ownership record is invalid. Review it manually." }); continue; }
+          try {
+            results.push({ ...entry, ...await this.repositories.removeWorktree(repository.repositoryId, { name: worktree.name }, AbortSignal.any([AbortSignal.timeout(WORKTREE_CHECKOUT_TIMEOUT_MS), this.repositoryStop.signal]), { dryRun, discardChanges: body.discardChanges === true }) });
+          } catch (error) {
+            const failure = worktreeFailure(error);
+            results.push({ ...entry, outcome: "kept", reason: failure instanceof DomainError ? failure.message : "The worktree could not be removed." });
+          }
+        }
+      }
+      if (body.id !== undefined && !results.length) throw new DomainError("not_found", "No retained task worktree has this name.");
+      return { dryRun, results, errors: listing.repositories.filter(item => item.error).map(item => ({ repositoryId: item.repositoryId, error: item.error })) };
+    } finally { this.repositoryPreparations--; if (!dryRun) this.configurationUpdating = false; }
   }
   async updateSettings(body: unknown) {
     const input = body as Record<string, unknown>;
@@ -1078,6 +1275,7 @@ export class WorkerWorkspace {
     this.evidenceClosing ??= settleCleanup(
       () => this.features?.close(),
       () => this.resources.close(),
+      () => this.featureTracking.close(),
       [() => this.sessions.runs.close(), () => this.sessions.interactions.close(), () => this.sessions.requests.close(), () => this.consumption.close()],
     );
     return this.evidenceClosing;
@@ -1092,12 +1290,13 @@ export class WorkerWorkspace {
       task.title,
       task.provider === "claude" ? "claude-cli" : "codex-cli",
     );
+    await this.featureTracking.sync();
     this.historyCache = undefined;
   }
   private async submitFeature(record: FeatureRecord) {
     const input = record.input!;
     if (input.mode === "patch") {
-      await this.board.create(
+      await this.withRepositoryAdmission(() => this.board.create(
         {
           title: input.title,
           instruction: input.message,
@@ -1111,7 +1310,7 @@ export class WorkerWorkspace {
           useInstructionsOnly: input.useInstructionsOnly,
         },
         { id: record.taskId, hash: record.inputHash },
-      );
+      ));
     } else
       await this.task({
         action: "create",
@@ -1124,6 +1323,7 @@ export class WorkerWorkspace {
         agent: input.agent,
         useInstructionsOnly: input.useInstructionsOnly,
       });
+    await this.featureTracking.sync();
   }
   private executionEvidence(sessionId: string, runId?: string) {
     const run = runId
@@ -1144,7 +1344,7 @@ export class WorkerWorkspace {
   private inspectFeature(record: FeatureRecord) {
     try {
       if (record.input?.mode === "patch") {
-        const task = this.board.detail(record.taskId);
+        const task = this.board.executionDetail(record.taskId);
         return {
           request: task.requestId
             ? this.sessions.requests.get(task.requestId)
@@ -1252,6 +1452,7 @@ export class WorkerWorkspace {
       repositories: this.repositoryStatus(),
       features: this.featureView(),
       sharedIntake: this.sharedIntakeView(),
+      featureTracking: this.featureTracking.status(),
       stateDirectory: resolve(this.config.stateDir),
       projectDirectory: this.config.projectDir
         ? resolve(this.config.projectDir)

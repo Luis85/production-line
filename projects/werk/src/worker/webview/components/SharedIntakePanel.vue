@@ -23,7 +23,7 @@ const publication = (item: SharedFeatureView) => item.publication === 'synced' ?
 const gate = (value: SharedFeatureView['ready']) => value === null ? 'Not checked' : value.passed ? 'Passed' : 'Needs attention';
 async function inspect(id: string, event: MouseEvent) { trigger = event.currentTarget as HTMLElement; selectedId.value = id; editor.closeNote(); await nextTick(); document.getElementById('shared-request-detail-title')?.focus(); }
 async function closeDetail() { selectedId.value = ''; editor.closeNote(); await nextTick(); if (trigger?.isConnected) trigger.focus(); }
-async function refresh() { if (active && state.unlocked) await editor.load(); }
+async function refresh() { if (active && state.unlocked) await editor.load({ background: true }); }
 onMounted(() => { void refresh(); });
 onActivated(() => { active = true; void refresh(); });
 onDeactivated(() => { active = false; });
@@ -35,7 +35,7 @@ watch(() => selected.value?.reviewNote, (next, previous) => { if (next !== previ
 </script>
 <template>
   <section class="shared-intake-panel" aria-labelledby="shared-intake-title" :aria-busy="draft.loading && !view">
-    <div class="section-heading"><div><h2 id="shared-intake-title">Connect shared requests</h2><p class="page-note">Read requests from a shared Git repository. Owning workers automatically publish lifecycle and review notes; a person reviews feature branches before merge.</p></div><UButton color="neutral" variant="outline" :loading="draft.loading" :disabled="busy || !state.unlocked" @click="editor.load">Refresh shared intake</UButton></div>
+    <div class="section-heading"><div><h2 id="shared-intake-title">Connect shared requests</h2><p class="page-note">Read requests from a shared Git repository. Owning workers automatically publish lifecycle and review notes; a person reviews feature branches before merge.</p></div><UButton color="neutral" variant="outline" :loading="draft.loading" :disabled="busy || !state.unlocked" @click="editor.load()">Refresh shared intake</UButton></div>
     <p v-if="draft.loading && !view" role="status">Reading the saved shared intake connection…</p>
     <p v-if="draft.error" role="alert" class="error-text">{{ draft.error }}</p>
     <p v-if="draft.notice" role="status" class="page-note">{{ draft.notice }}</p>

@@ -24,11 +24,14 @@ test("a saved command with failed owner admission returns a receipt on retry and
       provider: { id: "fixture", model: "pinned", instruction: "" },
     });
     const ready = gates.get(request.id);
-    const workspace = {
+    const session = { id: "session-1" };
+    const workspace = Object.assign(Object.create(WorkerWorkspace.prototype), {
       acceptingTasks: true,
+      board: { view: () => ({ tasks: [] }) },
       reviews: { tick() {}, cancel() {} },
       sessions: {
         requests: gates,
+        view: () => ({ records: [session] }),
         async executeRequest(id) {
           if (failed) {
             failed = false;
@@ -44,7 +47,7 @@ test("a saved command with failed owner admission returns a receipt on retry and
           return current;
         },
       },
-    };
+    });
     const execute = (body) =>
       WorkerWorkspace.prototype.requestCommand.call(workspace, body);
     const original = {
@@ -53,6 +56,11 @@ test("a saved command with failed owner admission returns a receipt on retry and
       expectedRevision: ready.revision,
       operationId: "original-execute",
     };
+    session.continuationBlockedReason = "Interrupted admission has no accepted snapshots.";
+    await assert.rejects(execute(original), error => error.code === "conflict" && error.message === session.continuationBlockedReason);
+    assert.equal(gates.get(request.id).revision, ready.revision, "The real continuation guard rejects before saving a request command.");
+    assert.equal(admissions, 0);
+    delete session.continuationBlockedReason;
     await assert.rejects(
       execute(original),
       (error) =>

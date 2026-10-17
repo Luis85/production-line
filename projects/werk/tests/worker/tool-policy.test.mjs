@@ -40,6 +40,26 @@ test('tool policy validates concrete command, origin, credential and aggregate g
   assert.throws(() => validateToolPolicy({ ...defaults, builtins: { ...defaults.builtins, files: true }, mcp: [{ ...httpConnection(), secret: '', discoveredTools: definitions, allowedTools: definitions.map(item => item.name) }] }), /at most 64/);
 });
 
+test('stdio MCP connections without a credential need no secret environment variable', () => {
+  const defaults = defaultToolPolicy();
+  const stdio = (extra = {}) => httpConnection({ transport: 'stdio', command: process.execPath, url: '', secretEnv: '', ...extra });
+  const open = updateToolPolicy(defaults, { ...edit(defaults), mcp: [stdio()] });
+  assert.equal(open.mcp[0].secretEnv, ''); assert.equal(open.mcp[0].secret, '');
+  assert.equal(updateToolPolicy(defaults, { ...edit(defaults), mcp: [{ ...stdio(), secretEnv: undefined }] }).mcp[0].secretEnv, 'MCP_AUTH_TOKEN', 'an omitted variable keeps the documented default');
+  assert.throws(() => updateToolPolicy(open, { ...edit(open), mcp: [{ ...edit(open).mcp[0], secret: 'fixture-secret' }] }), /Name the environment variable/);
+  assert.throws(() => validateToolPolicy({ ...open, mcp: [{ ...open.mcp[0], secret: 'fixture-secret' }] }), /Name the environment variable/, 'a saved secret without a destination is refused');
+  for (const secretEnv of ['NODE_OPTIONS', 'lowercase', ' ']) assert.throws(() => updateToolPolicy(defaults, { ...edit(defaults), mcp: [stdio({ secretEnv })] }), /dedicated MCP credential/);
+  let policy = updateToolPolicy(defaults, { ...edit(defaults), mcp: [stdio({ secretEnv: 'FIXTURE_TOKEN', secret: 'fixture-stored-secret' })] });
+  policy = discoveredToolPolicy(policy, 'fixture', policy.revision, [definition]);
+  let input = edit(policy); input.mcp[0].allowedTools = [definition.name]; policy = updateToolPolicy(policy, input);
+  input = edit(policy); input.mcp[0].secretEnv = '';
+  const cleared = updateToolPolicy(policy, input);
+  assert.equal(cleared.mcp[0].secretEnv, ''); assert.equal(cleared.mcp[0].secret, '', 'clearing the variable never keeps the stored secret');
+  assert.deepEqual(cleared.mcp[0].allowedTools, []); assert.deepEqual(cleared.mcp[0].discoveredTools, []);
+  input = edit(policy); input.mcp[0].secretEnv = 'OTHER_TOKEN';
+  assert.equal(updateToolPolicy(policy, input).mcp[0].secret, '', 'a stored secret never moves to a different variable');
+});
+
 test('private tool policy migrates default-none, preserves and rotates secrets, and resets authority on destination changes', async t => {
   const path = await directory(t); let settings = new WorkerSettings(path); await settings.init(); assert.deepEqual(settings.toolPolicy(), defaultToolPolicy());
   await settings.updateToolAccess({ ...edit(settings.toolPolicy()), mcp: [httpConnection({ secret: 'fixture-private-secret' })] });
@@ -140,4 +160,50 @@ test('MCP discovery API returns actionable sanitized failures without saving a f
     assert.equal(f.worker.settings.toolPolicy().revision, revision); assert.deepEqual(f.worker.settings.toolPolicy().mcp[0].discoveredTools, []);
     assert.equal(f.worker.toolAccess().canEdit, true, 'discovery failure releases the configuration lock');
   }
+});
+
+test('tool API saves CLI tools only while paused and idle, explains invalid policies and offers the worker Node.js', async t => {
+  const f = await workspace(t);
+  const cliTool = { id: 'harness', name: 'Project harness', enabled: true, executable: process.execPath, args: ['bin/harness.mjs'], commands: [{ command: 'check' }, { command: 'backlog set', requireOneOf: ['--dry-run'] }], refusedOptions: ['--root'] };
+  const request = () => ({ ...edit(f.worker.settings.toolPolicy()), builtins: { ...defaultToolPolicy().builtins, cliTools: [cliTool] } });
+  assert.equal((await f.api('/api/tool-access', request())).status, 409, 'running workers cannot gain CLI tools');
+  await f.worker.updateSettings({ board: { paused: true } });
+  const invalid = await f.api('/api/tool-access', { ...request(), builtins: { ...defaultToolPolicy().builtins, cliTools: [{ ...cliTool, commands: [{ command: 'backlog set', requireOneOf: ['--root'] }] }] } });
+  assert.equal(invalid.status, 400); assert.match(invalid.value.error, /requires a flag that is also refused/);
+  const saved = await f.api('/api/tool-access', request());
+  assert.equal(saved.status, 200); assert.equal(saved.value.workerNode, process.execPath);
+  assert.deepEqual(saved.value.builtins.cliTools[0].commands[1], { command: 'backlog set', requireOneOf: ['--dry-run'], refusedOptions: [] });
+  assert.equal(saved.value.builtins.cliTools[0].maxArgs, 24);
+  assert.equal(f.worker.capabilities().toolAccess.cliTools, 'argument_policy_in_task_worktree');
+});
+
+
+test('required feature checks are explicit, validated and survive a saved policy round trip', () => {
+  const defaults = defaultToolPolicy();
+  const preset = { id: 'tests', name: 'Project tests', executable: process.execPath, args: ['--test'], enabled: true };
+  const update = verification => updateToolPolicy(defaults, { ...edit(defaults), builtins: { ...defaults.builtins, files: true, commands: [{ ...preset, ...verification }] } });
+  assert.deepEqual(update({}).builtins.commands[0], preset);
+  assert.deepEqual(update({ verification: false }).builtins.commands[0], preset);
+  const required = update({ verification: true });
+  assert.deepEqual(validateToolPolicy(JSON.parse(JSON.stringify(required))).builtins.commands[0], { ...preset, verification: true });
+  for (const verification of ['true', 1, null, {}, []]) assert.throws(() => update({ verification }), /Required feature check/);
+  const definitions = Array.from({ length: 58 }, (_, i) => ({ ...definition, name: 'reserved_' + i }));
+  assert.throws(() => validateToolPolicy({ ...required, mcp: [{ ...httpConnection(), secret: '', discoveredTools: definitions, allowedTools: definitions.map(item => item.name) }] }), /at most 64/, 'reserve the three candidate tools alongside file and command tools');
+});
+
+
+test('tool API keeps invocation budgets separate and saves, preserves or clears per-grant deadlines', async t => {
+  const f = await workspace(t); await f.worker.updateSettings({ board: { paused: true } });
+  const before = structuredClone(f.worker.settings.value.execution);
+  const command = { id: 'unit-tests', name: 'Unit tests', executable: process.execPath, args: ['--version'], enabled: true, verification: true, timeoutMs: 600000 };
+  const request = timeoutMs => ({ ...edit(f.worker.settings.toolPolicy()), builtins: { ...defaultToolPolicy().builtins, commands: [{ ...command, timeoutMs }] } });
+  const rejected = await f.api('/api/tool-access', request(3600001));
+  assert.equal(rejected.status, 400); assert.match(rejected.value.error, /timeout.*1000 to 3600000/);
+  const saved = await f.api('/api/tool-access', request(600000));
+  assert.equal(saved.status, 200); assert.equal(saved.value.builtins.commands[0].timeoutMs, 600000); assert.equal(saved.value.builtins.commands[0].verification, true);
+  assert.equal(saved.value.limits, undefined); assert.deepEqual(f.worker.settings.value.execution, before);
+  const oldClient = request(undefined); delete oldClient.builtins.commands[0].timeoutMs;
+  assert.equal((await f.api('/api/tool-access', oldClient)).value.builtins.commands[0].timeoutMs, 600000);
+  const cleared = await f.api('/api/tool-access', request(null)); assert.equal(cleared.status, 200); assert.equal('timeoutMs' in cleared.value.builtins.commands[0], false);
+  assert.equal(f.worker.capabilities().toolAccess.executionLimits, 'operator_configured_per_grant');
 });

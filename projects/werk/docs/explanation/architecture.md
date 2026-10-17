@@ -95,15 +95,17 @@ retain their destination. Repository import is the primary team workflow and
 manual submissions are an explicit alternative.
 
 `src/worker` owns polling, the execution adapter boundary, local journals,
-configuration, snapshots and an authenticated Vue workspace with Taskboard, History
-and Dashboard. Local chat, file tasks and parent assignments
+configuration, snapshots and an authenticated Vue workspace with Taskboard, Metrics,
+History and Settings. Local chat, file tasks and parent assignments
 share one execution slot. Basic status, health and metrics remain public read-only
 endpoints. Assigned repositories provide retained per-task worktrees. The native
 Linux Codex assignment adapter executes in one of these worktrees and manages
 provider cancellation and descendant cleanup. Its exact file allowlist and
 host-account trust boundary are described in the
-[live workflow](../how-to/run-codex-task.md). Local approved-file tasks instead
-capture bounded immutable inputs and validate the returned patch. Shared Git
+[live workflow](../how-to/run-codex-task.md). Local approved-file tasks freeze explicit paths and immutable inputs. New eligible
+requests materialize edits in an owned Git worktree, run the saved required checks
+and derive the review patch from the actual candidate. Existing tasks retain their
+proposal contract. See [feature implementation](../how-to/implement-feature.md). Shared Git
 intake claims ready work remotely, freezes policy/source, and publishes the
 validated result plus a review note. Its outbox and recovery semantics are
 specified in [shared intake](../reference/shared-feature-intake.md). Concurrent
@@ -198,6 +200,21 @@ does **not** runtime-validate an arbitrary server response against that DTO.
 The worker HTTP adapter separately checks registration/assignment shapes and
 verifies that heartbeat responses still identify the same attempt. Other
 boundary checks remain necessary when adding external services or plugins.
+
+## Worker policy and presentation reuse
+
+Candidate receipt classification is a Node-free application policy consumed by
+completion checks, Markdown evidence and the browser. Private completion proof
+still binds the accepted turn, run, patch and candidate; displaying a passed check
+cannot authorize publication. Explicit task summary/detail DTOs and allowlist
+projectors separate public responses from the private execution aggregate.
+
+The application also owns common sensitive-patch and MCP endpoint policy. The
+contained tool-process helper owns only launch mechanics and the minimal tool
+environment; each caller keeps its deadlines, output bounds, errors and durable
+checkpoint ordering. Provider account environments and MCP configuration remain
+separate. See the [worker architecture review](../reports/worker-architecture-review.md)
+for review decisions, qualification and remaining orchestration debt.
 
 ## Ownership across the client/server boundary
 

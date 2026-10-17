@@ -657,7 +657,9 @@ export class WorkerRequestJournal implements RequestGatePort {
     if (
       previous &&
       gateDigest(previous.facts) === gateDigest(facts) &&
-      previous.outputDigest === outputDigest
+      previous.outputDigest === outputDigest &&
+      previous.passed === verdict.passed &&
+      gateDigest(previous.rules) === gateDigest(verdict.rules)
     ) {
       if (
         stage === "ready" &&
@@ -707,7 +709,9 @@ export class WorkerRequestJournal implements RequestGatePort {
       request.findings.push({
         id: randomUUID(),
         kind: rule.result === "unknown" ? "gap" : "issue",
-        message: `${rule.ruleId}: ${rule.fact} ${rule.result === "unknown" ? "is not observed" : "does not satisfy the configured rule"}.`,
+        message: rule.ruleId === "worker-required-verification"
+          ? "Required feature checks have not all passed for the captured worktree candidate. Repair and verify the retained changes before review."
+          : `${rule.ruleId}: ${rule.fact} ${rule.result === "unknown" ? "is not observed" : "does not satisfy the configured rule"}.`,
         blocking: true,
         source: "deterministic",
         evaluationId: evaluation.id,

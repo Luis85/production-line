@@ -1,6 +1,10 @@
+import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
-import { lstat, mkdir, open, realpath } from 'node:fs/promises';
-import { join, relative, resolve } from 'node:path';
+import { lstat, mkdir, open, realpath, rename, unlink } from 'node:fs/promises';
+import { dirname, join, relative, resolve } from 'node:path';
+
+/** Revision of an authoring file as read: SHA-256 of its UTF-8 text. */
+export const authoringRevision = (text: string) => createHash('sha256').update(text).digest('hex');
 
 /** Authoring never follows repository links, including a symlinked parent directory. */
 export async function authoringPath(root: string, path: string, createParents = false): Promise<string> {
@@ -47,6 +51,23 @@ export async function seedAuthoringFile(root: string, path: string, content: str
   try { await handle.writeFile(content, 'utf8'); await handle.sync(); }
   finally { await handle.close(); }
   return 'created';
+}
+
+/** Atomically replaces an existing file only while it still has the revision the caller inspected. */
+export async function replaceAuthoringFile(root: string, path: string, content: string, expectedRevision: string): Promise<'updated'> {
+  const target = await authoringPath(root, path);
+  const temporary = join(dirname(target), '._authoring-' + randomUUID() + '.tmp');
+  // Preserve ordinary permission bits, including executable scripts, without copying set-ID bits.
+  const mode = (await lstat(target)).mode & 0o777;
+  const handle = await open(temporary, 'wx', 0o600);
+  try {
+    try { await handle.writeFile(content, 'utf8'); await handle.chmod(mode); await handle.sync(); }
+    finally { await handle.close(); }
+    const observed = await readAuthoringFile(root, path, 2097152);
+    if (observed === undefined || authoringRevision(observed) !== expectedRevision) throw Error('An authoring file changed during setup. Inspect it before retrying.');
+    await rename(temporary, target);
+  } finally { await unlink(temporary).catch(() => {}); }
+  return 'updated';
 }
 
 export async function authoringRoot(directory: string): Promise<string> {

@@ -15,14 +15,14 @@ quota remains available for personal use.
 
 ## Configure in the webview
 
-Open **Dashboard → Consumption limits**, then **Configure consumption limits**.
+Open **Settings → Consumption**.
 Enable **Limit this worker’s consumption**, choose the daily or monthly UTC
 period, and enter the total allowance and worker percentage. Expand
 **Model call reservation** to adjust the amount held before each invocation.
 Select **Save consumption limits**.
 
-The summary shows reported usage, outstanding reservations, remaining worker
-allowance and the period reset time. If another operator changes the policy,
+Metrics and the settings summary show reported usage, outstanding reservations,
+remaining worker allowance and the period reset time. If another operator changes the policy,
 your draft remains visible; select **Discard edits and reload** before reconciling
 it with the current settings. Saving a policy does not reset recorded usage.
 

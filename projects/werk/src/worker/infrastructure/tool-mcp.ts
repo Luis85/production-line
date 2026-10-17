@@ -1,3 +1,4 @@
+import { toolTimeLimits } from '../application/tool-limits.js';
 import type { ToolDefinition, ToolMcpConnection } from '../application/tool-policy.js';
 import { openMcpHttp, validateMcpEndpoint } from './tool-mcp-http.js';
 import { openMcpStdio } from './tool-mcp-stdio.js';
@@ -9,7 +10,7 @@ export interface McpToolResult { content: { type: 'text'; text: string }[]; isEr
 
 export function mcpTransportConfiguration(connection: ToolMcpConnection): McpTransportConfiguration {
   return connection.transport === 'stdio'
-    ? { transport: 'stdio', executable: connection.command, args: [...connection.args], env: connection.secret ? { [connection.secretEnv || 'MCP_AUTH_TOKEN']: connection.secret } : {} }
+    ? { transport: 'stdio', executable: connection.command, args: [...connection.args], env: connection.secret && connection.secretEnv ? { [connection.secretEnv]: connection.secret } : {} }
     : { transport: 'http', url: connection.url, headers: connection.secret ? { Authorization: `Bearer ${connection.secret}` } : {} };
 }
 function validateConfiguration(config: McpTransportConfiguration): void {
@@ -55,7 +56,7 @@ async function listTools(session: McpSession): Promise<ToolDefinition[]> {
 async function withSession<T>(config: McpTransportConfiguration, options: McpClientOptions, defaultTimeout: number, operation: (session: McpSession) => Promise<T>): Promise<T> {
   validateConfiguration(config);
   const timeout = options.timeoutMs ?? defaultTimeout;
-  if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 120000) throw new McpClientError('configuration');
+  if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > (config.transport === 'http' ? toolTimeLimits.httpMcpMaxMs : toolTimeLimits.mcpMaxMs)) throw new McpClientError('configuration');
   const controller = new AbortController();
   const cancel = () => controller.abort(new McpClientError('cancelled'));
   options.signal?.addEventListener('abort', cancel, { once: true });
@@ -116,7 +117,7 @@ export async function callMcpTool(config: McpTransportConfiguration, name: strin
   if (!plainObject(args)) throw new McpClientError('protocol');
   try { if (Buffer.byteLength(JSON.stringify(args)) > MCP_REQUEST_LIMIT - 1024) throw new McpClientError('output_limit'); }
   catch (error) { throw error instanceof McpClientError ? error : new McpClientError('protocol'); }
-  return withSession(config, options, 30000, async session => {
+  return withSession(config, options, toolTimeLimits.mcpDefaultMs, async session => {
     const actual = (await listTools(session)).find(tool => tool.name === name);
     if (!actual || canonical(actual.inputSchema) !== canonical(granted.inputSchema)) throw new McpClientError('changed');
     return toolResult(await session.request('tools/call', { name, arguments: args }), config);

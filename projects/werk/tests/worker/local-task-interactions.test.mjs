@@ -70,7 +70,7 @@ test('continuation retains the original provider profile and approved snapshots 
     if (++calls === 1) { assert.equal(request.policy.maxRuntimeMs, 6 * 60 * 60 * 1000); return question; }
     assert.equal(request.provider.model, 'original-model'); assert.equal(request.provider.instruction, 'Original provider instruction');
     assert.match(inputOf(request), /before\\n/); assert.doesNotMatch(inputOf(request), /outside-edit/);
-    assert.deepEqual(request.policy, { tools: 'none', filesystem: 'read_only', continuation: 'worker_context_replay', maxRuntimeMs: 2 * 60 * 60 * 1000 });
+    assert.deepEqual(request.policy, { tools: 'none', filesystem: 'read_only', continuation: 'worker_context_replay', maxRuntimeMs: 2 * 60 * 60 * 1000, maxToolCalls: 128, commandTimeoutMs: 300000 });
     return completed;
   });
   const id = await f.create(); await f.settle(id, 'waiting_input');
@@ -129,6 +129,34 @@ test('validated file result recovers after patch projection failure without anot
   assert.match(await readFile(join(f.directory, 'local-review', id + '.patch'), 'utf8'), /\+after/);
 });
 
+test('patch protocol failures record a specific reason in the task and interaction events', async t => {
+  const f = await fixture(t, async () => ({ type: 'completed', text: JSON.stringify({ summary: 's'.repeat(2001), files: [{ path: 'checkout.txt', content: 'after\n' }] }) }));
+  const id = await f.create(); await f.settle(id, 'failed');
+  assert.match(f.board.detail(id).error, /^The model reply did not follow the patch format: The summary has 2001 characters; the limit is 2000\. Resume/);
+  const sessionId = f.board.detail(id).sessionId, turn = f.sessions.interactions.turn(sessionId, f.sessions.interactions.view(sessionId).latestTurn.id);
+  assert.equal(f.sessions.interactions.events(sessionId).events.find(event => event.type === 'failed').errorCode, 'patch_summary_invalid');
+  assert.equal(turn.errorCode, 'patch_summary_invalid');
+  assert.match(turn.dispatch.messages[0].text, /the summary is at most 2000 characters/);
+});
+
+test('a patch object wrapped in prose becomes a minimal review patch', async t => {
+  const reply = 'Updated the file as requested:\n```json\n' + JSON.stringify({ summary: 'Changed checkout; tests not run.', files: [{ path: 'checkout.txt', content: 'after\n' }] }) + '\n```\nThanks!';
+  let calls = 0;
+  const f = await fixture(t, async () => { calls++; return { type: 'completed', text: reply }; });
+  const id = await f.create(); await f.settle(id, 'review');
+  const sessionId = f.board.detail(id).sessionId, turnId = f.sessions.interactions.view(sessionId).latestTurn.id;
+  assert.equal(f.sessions.interactions.turn(sessionId, turnId).result.text, reply);
+  const transcript = f.sessions.detail(sessionId).chat.messages.at(-1).text;
+  assert.match(transcript, /^Changed checkout; tests not run\./);
+  assert.match(transcript, /1 line added, 1 removed/);
+  assert.doesNotMatch(transcript, /Thanks!|"files"|\+after/);
+  await f.restart();
+  assert.equal(calls, 1);
+  assert.equal(f.board.detail(id).status, 'review');
+  assert.equal(f.sessions.detail(sessionId).chat.messages.at(-1).text, transcript);
+  assert.equal(f.board.detail(id).patch, 'diff --git "a/checkout.txt" "b/checkout.txt"\n--- "a/checkout.txt"\n+++ "b/checkout.txt"\n@@ -1 +1 @@\n-before\n+after\n');
+});
+
 test('out-of-scope patch output never becomes a durable completed file result', async t => {
   const f = await fixture(t, async () => ({ type: 'completed', text: JSON.stringify({ summary: 'Invalid fixture', files: [{ path: '../outside', content: 'bad' }] }) }));
   const id = await f.create(); await f.settle(id, 'failed');
@@ -158,4 +186,20 @@ test('file tasks publish normalized cumulative usage events once without private
   assert.equal(usage.length, 1); assert.equal(usage[0].usage.inputTokens, 15);
   assert.doesNotMatch(JSON.stringify(events), /PRIVATE-|checkout\.txt|Choose the retry policy/);
   assert.equal(events.at(-1).type, 'input_requested');
+});
+
+test('validated file result is recorded as a readable transcript message while the raw change set stays evidence', async t => {
+  const summary = 'Added toLanguage().\n\nTests belong in ../tests/unit/**/*.spec.ts; tsconfig excludes src/**/*.spec.ts.';
+  const content = 'before\nafter\nPRIVATE-FILE-BODY\n';
+  const reply = JSON.stringify({ summary, files: [{ path: 'checkout.txt', content }] });
+  const f = await fixture(t, async () => ({ type: 'completed', text: reply }));
+  const id = await f.create(); await f.settle(id, 'review');
+  const sessionId = f.board.detail(id).sessionId, turnId = f.sessions.interactions.view(sessionId).latestTurn.id;
+  const message = f.sessions.detail(sessionId).chat.messages.at(-1);
+  assert.equal(message.role, 'assistant'); assert.equal(message.state, 'complete');
+  assert.match(message.text, /^Added toLanguage\(\)\.\n\nTests belong in `\.\.\/tests\/unit\/\*\*\/\*\.spec\.ts`; tsconfig excludes `src\/\*\*\/\*\.spec\.ts`\./);
+  assert.match(message.text, /- `checkout\.txt` · 2 lines added, 0 removed/);
+  assert.doesNotMatch(message.text, /PRIVATE-FILE-BODY|"files"|\\n/);
+  assert.equal(f.sessions.interactions.turn(sessionId, turnId).result.text, reply);
+  assert.equal(f.board.detail(id).summary, summary);
 });

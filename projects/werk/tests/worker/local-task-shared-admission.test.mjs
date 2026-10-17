@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { promisify } from 'node:util';
 import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -40,7 +41,9 @@ async function fixture(t, options = {}) {
   });
   const port = options.noPort ? undefined : { async prepareWorktree(selector, taskKey, signal, pinned) {
     preparations.push({ selector, taskKey, pinned }); signal.throwIfAborted();
-    const path = join(repository, '.werk', 'worktrees', taskKey), base = pinned ?? headCommit;
+    // Match the adapter's bounded basename while retaining the complete ownership key above.
+    const name = 'shared-' + createHash('sha256').update(taskKey).digest('hex').slice(0, 32);
+    const path = join(repository, '.werk', 'worktrees', name), base = pinned ?? headCommit;
     await git(repository, 'worktree', 'add', '--detach', path, base);
     return { repositoryId: 'shared', repository, path, baseCommit: options.wrongCommit ? headCommit : base };
   } };

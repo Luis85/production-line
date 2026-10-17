@@ -38,11 +38,12 @@ export function integer(value: string, name: string, min: number, max: number): 
         throw new ValidationError(`${name}: integer ${min}–${max}`);
     return n;
 }
-export async function input(path: string): Promise<unknown> {
+export async function input(path: string, limit = INPUT_LIMIT): Promise<unknown> {
+    const limitMessage = `Input limit: ${limit / 1024} KiB`;
     const chunks: Buffer[] = [];
     let size = 0;
-    const append = (chunk: Buffer) => { size += chunk.length; if (size > INPUT_LIMIT)
-        throw new DomainError('too_large', 'Input limit: 64 KiB'); chunks.push(chunk); };
+    const append = (chunk: Buffer) => { size += chunk.length; if (size > limit)
+        throw new DomainError('too_large', limitMessage); chunks.push(chunk); };
     if (path === '-') {
         for await (const chunk of process.stdin)
             append(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
@@ -54,8 +55,8 @@ export async function input(path: string): Promise<unknown> {
             const info = await handle.stat();
             if (!info.isFile())
                 throw new ValidationError('Input path must be a regular file');
-            if (info.size > INPUT_LIMIT)
-                throw new DomainError('too_large', 'Input limit: 64 KiB');
+            if (info.size > limit)
+                throw new DomainError('too_large', limitMessage);
             for (;;) {
                 const buffer = Buffer.alloc(8192);
                 const { bytesRead } = await handle.read(buffer);
@@ -74,7 +75,8 @@ export async function input(path: string): Promise<unknown> {
         }
     }
     try {
-        return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        // Windows PowerShell 5.1 prefixes piped stdin, and many editors prefix saved files, with a UTF-8 BOM.
+        return JSON.parse(Buffer.concat(chunks).toString('utf8').replace(/^\uFEFF/, ''));
     }
     catch {
         throw new ValidationError('Invalid JSON input');

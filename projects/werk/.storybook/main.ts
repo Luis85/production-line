@@ -16,7 +16,7 @@ const config: StorybookConfig = {
     config.plugins ??= [];
     config.plugins.push(sourceInstrumentation(root), vue(), ui({ dts: false, autoImport: false, components: false, colorMode: false,
       ui: { colors: { primary: 'emerald', neutral: 'slate' } },
-      icon: { clientBundle: { scan: true, icons: ['lucide:shield-check'], sizeLimitKb: 1024 } },
+      icon: { clientBundle: { scan: { globInclude: ['**/*.{vue,jsx,tsx,md,mdc,mdx,yml,yaml,ts}'] }, icons: ['lucide:shield-check'], sizeLimitKb: 1024 } },
     }));
     config.build = { ...config.build, target: 'es2022', chunkSizeWarningLimit: 1500 };
     return config;

@@ -11,7 +11,7 @@ frontend dependency installation at startup.
 | --- | --- | --- |
 | Factory | `src/factory/webview/main.ts` | `/`, `/factories/:id` |
 | Orchestrator | `src/orchestrator/webview/main.ts` | `/`, `/intake`; hash navigation preserves task handoffs |
-| Worker workspace | `src/worker/webview/main.ts` | `/chat`, `/history`, `/dashboard` |
+| Worker workspace | `src/worker/webview/main.ts` | `/taskboard`, `/dashboard` (Metrics), `/history`, `/settings`; `/chat` redirects |
 | Public guide | `src/guide/webview/main.ts` | `/guide` on Factory/orchestrator and standalone release HTML |
 | Concept simulation | `src/orchestrator/webview/concept/main.ts` | `/concept`; illustrative local state, no live task execution |
 | Worker diagnostics | `src/worker/webview/status/main.ts` | Status-only server and offline HTML status export |
@@ -21,6 +21,20 @@ component must not import another application's internals. The Factory and
 orchestrator retain memory-only bearer credentials. The worker retains its own
 existing worker-access lifecycle. Sharing a layout does not merge authorization,
 state ownership or API contracts.
+
+Worker Settings uses stable section components with `KeepAlive` to preserve
+unsubmitted drafts while navigating. Taskboard and its intake controls share the
+pure `worker-capacity.ts` presenter. Its snapshot arrives with the existing session
+poll: execution occupancy, actual local admission usage and remote accepted
+assignments remain separate. Failed or old observations retain their last values
+without claiming current availability. No extra capacity polling endpoint is
+needed; settings mutation guards stay on the server.
+
+Queue, duration and consumption forms reuse the guarded settings controller for
+draft preservation, acknowledgement recovery and conflict detection. Their domain
+validation and payloads remain separate. Candidate evidence uses the same pure
+receipt classification as application and Markdown projections; frontend task
+detail is an explicit public DTO rather than a private persistence aggregate.
 
 ## Reusable components
 

@@ -173,3 +173,82 @@ test('automation creates tasks by definition reference and replays them after th
   await assert.rejects(workspace.task({ action: 'send', id: 'ref-task', message: 'Followup', definitionRef: 'shared-profile' }), /fixed when a task is created/);
   await workspace.task({ action: 'cancel', id: 'ref-task' });
 });
+
+test('definition update previews changes, requires the current revision and keeps the id and reference', async t => {
+  const path = await directory(t), definitions = new WorkerDefinitions(path); await definitions.init();
+  const { definitions: [entry] } = await definitions.action({ action: 'import', name: 'Reviewer', ref: 'team-reviewer', yaml: source });
+  assert.match(entry.revision, /^[a-f0-9]{64}$/);
+  const yaml = source.replace('Give a concise answer.', 'Give a thorough answer.').replace(/  writer:\n[\s\S]*$/, '  tester:\n    model: openai/gpt-test\n    instruction: Write tests first.\n');
+  const file = join(path, 'agent-definitions.json'), before = await readFile(file, 'utf8');
+  const preview = await definitions.action({ action: 'update', ref: 'team-reviewer', yaml, name: 'Reviewer v2', dryRun: true });
+  assert.equal(preview.dryRun, true); assert.equal(preview.definition.id, entry.id); assert.equal(preview.definition.revision, entry.revision);
+  assert.deepEqual(preview.changes.name, { from: 'Reviewer', to: 'Reviewer v2' }); assert.equal(preview.changes.unchanged, false);
+  assert.deepEqual(preview.changes.agents, { added: ['tester'], removed: ['writer'], changed: [{ name: 'root', fields: ['instruction'] }] });
+  assert.equal(await readFile(file, 'utf8'), before, 'a dry run never writes');
+  assert.match(definitions.select({ definitionRef: 'team-reviewer' }).instruction, /concise/);
+  await assert.rejects(definitions.action({ action: 'update', ref: 'team-reviewer', yaml }), /current definition revision/);
+  await assert.rejects(definitions.action({ action: 'update', ref: 'team-reviewer', yaml, revision: 'a'.repeat(64) }), error => error.code === 'conflict');
+  await assert.rejects(definitions.action({ action: 'update', ref: 'missing-profile', yaml, revision: entry.revision }), error => error.code === 'not_found' && /missing-profile/.test(error.message));
+  await assert.rejects(definitions.action({ action: 'update', ref: 'missing-profile', yaml, dryRun: true }), error => error.code === 'not_found');
+  await assert.rejects(definitions.action({ action: 'update', ref: 'team-reviewer', yaml: 'agents: {root: {instruction: "${KEY}"}}', revision: entry.revision }), /templates/);
+  await assert.rejects(definitions.action({ action: 'import', name: 'X', yaml, dryRun: true }), /dryRun/);
+  const result = await definitions.action({ action: 'update', ref: 'team-reviewer', yaml, name: 'Reviewer v2', revision: entry.revision });
+  const [updated] = result.definitions;
+  assert.equal(result.definitions.length, 1); assert.equal(updated.id, entry.id); assert.equal(updated.ref, 'team-reviewer'); assert.equal(updated.createdAt, entry.createdAt);
+  assert.equal(updated.name, 'Reviewer v2'); assert.notEqual(updated.digest, entry.digest); assert.ok(Date.parse(updated.updatedAt));
+  assert.equal(result.updated.revision, updated.revision); assert.equal(preview.definition.nextRevision, updated.revision);
+  assert.match(definitions.select({ definitionRef: 'team-reviewer' }).instruction, /thorough/);
+  await assert.rejects(definitions.action({ action: 'update', ref: 'team-reviewer', yaml: source, revision: entry.revision }), error => error.code === 'conflict', 'a stale revision cannot overwrite the update');
+  const renamed = await definitions.action({ action: 'update', ref: 'team-reviewer', yaml, revision: updated.revision });
+  assert.equal(renamed.updated.changes.unchanged, true); assert.equal(renamed.definitions[0].name, 'Reviewer v2', 'an omitted name keeps the current name');
+  const recovered = new WorkerDefinitions(path); await recovered.init();
+  assert.equal(recovered.view().definitions[0].revision, updated.revision); assert.equal(recovered.select({ definitionRef: 'team-reviewer', agent: 'tester' }).definitionId, entry.id);
+});
+
+test('existing tasks keep their accepted profile snapshot after an in-place definition update', async t => {
+  const path = await directory(t);
+  const workspace = new WorkerWorkspace({ stateDir: path, pollMs: 1000, timeoutMs: 1000 }, {}, () => ({ activeTasks: [], queuedTasks: [] }));
+  await workspace.init(); cleanup(t, () => workspace.close());
+  await workspace.updateSettings({ provider: { id: 'openai-api', apiKey: 'fixture-only', model: 'fixture-model' }, board: { paused: true } });
+  const { definitions: [entry] } = await workspace.definitions.action({ action: 'import', name: 'Profile', ref: 'shared-profile', yaml: source });
+  const command = { action: 'create', id: 'snapshot-task', title: 'Review', provider: 'openai-api', message: 'Review this', definitionRef: 'shared-profile', agent: 'root' };
+  const first = await workspace.task(command);
+  await workspace.definitions.action({ action: 'update', ref: 'shared-profile', yaml: source.replace('Give a concise answer.', 'Give a thorough answer.'), revision: entry.revision });
+  const replay = await workspace.task(command);
+  assert.equal(replay.session.id, first.session.id); assert.equal(replay.session.definition.digest, entry.digest); assert.match(replay.session.definition.instruction, /concise/);
+  const later = await workspace.task({ ...command, id: 'snapshot-task-2' });
+  assert.equal(later.session.definition.definitionId, entry.id); assert.notEqual(later.session.definition.digest, entry.digest); assert.match(later.session.definition.instruction, /thorough/);
+  for (const id of ['snapshot-task', 'snapshot-task-2']) await workspace.task({ action: 'cancel', id });
+});
+
+
+test('definition update revisions bind the reviewed identity and reference even when content matches', async t => {
+  for (const scenario of ['moved reference', 'reimported profile', 'renamed reference']) await t.test(scenario, async t => {
+    const definitions = new WorkerDefinitions(await directory(t)); await definitions.init();
+    const { definitions: [original] } = await definitions.action({ action: 'import', name: 'Reviewer', ref: 'team-reviewer', yaml: source });
+    const yaml = source.replace('Give a concise answer.', 'Give a thorough answer.');
+    const preview = await definitions.action({ action: 'update', ref: 'team-reviewer', yaml, dryRun: true });
+    let ref = 'team-reviewer';
+    if (scenario === 'moved reference') {
+      const { definitions: [, replacement] } = await definitions.action({ action: 'import', name: 'Reviewer', yaml: source });
+      await definitions.action({ action: 'ref', id: replacement.id, ref });
+    } else if (scenario === 'reimported profile') {
+      await definitions.action({ action: 'delete', id: original.id });
+      await definitions.action({ action: 'import', name: 'Reviewer', ref, yaml: source });
+    } else {
+      ref = 'other-reviewer';
+      await definitions.action({ action: 'ref', id: original.id, ref });
+    }
+    const before = definitions.view(), current = before.definitions.find(item => item.ref === ref);
+    assert.equal(current.name, original.name); assert.equal(current.digest, original.digest);
+    assert.notEqual(current.revision, preview.definition.revision, 'a target identity or reference change invalidates the reviewed revision');
+    await assert.rejects(definitions.action({ action: 'update', ref, yaml, revision: preview.definition.revision }), error => error.code === 'conflict');
+    assert.deepEqual(definitions.view(), before, 'a stale update cannot mutate either profile');
+    const reviewed = await definitions.action({ action: 'update', ref, yaml, dryRun: true });
+    const saved = await definitions.action({ action: 'update', ref, yaml, revision: reviewed.definition.revision });
+    assert.equal(saved.updated.id, current.id); assert.equal(saved.updated.ref, ref);
+    assert.equal(saved.updated.revision, reviewed.definition.nextRevision);
+    assert.match(definitions.select({ definitionRef: ref }).instruction, /thorough/);
+    if (scenario === 'moved reference') assert.match(definitions.select({ definitionId: original.id }).instruction, /concise/);
+  });
+});

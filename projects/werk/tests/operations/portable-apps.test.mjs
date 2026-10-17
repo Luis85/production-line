@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { stateDirectory } from '../../scripts/runtime/portable/lifecycle.mjs';
+import { ownWorkspace } from '../helpers/workspace-processes.mjs';
 const project = fileURLToPath(new URL('../../', import.meta.url));
 function invoke(file, cwd, args, body, environment = {}) {
   return new Promise((resolve, reject) => {
@@ -25,7 +26,7 @@ async function until(operation, predicate, timeout = 18000) {
   throw Error('Expected state did not arrive');
 }
 test('state separation resolves directory aliases and absent descendants', async t => {
-  const root = await mkdtemp(join(tmpdir(), 'werk-path-alias-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'werk-path-alias-')));
   t.after(() => rm(root, { recursive: true, force: true }));
   const app = join(root, 'app'), alias = join(root, 'alias'); await mkdir(app);
   try { await symlink(app, alias, process.platform === 'win32' ? 'junction' : 'dir'); }
@@ -42,6 +43,9 @@ test('copied apps operate independently with agent tasks, durable state and late
     const cwd = join(outer, kind + ' project'), app = join(cwd, 'bin/apps', kind);
     await mkdir(cwd, { recursive: true }); await writeFile(join(cwd, 'package.json'), '{"type":"commonjs"}');
     await cp(join(project, 'bin/apps', kind), app, { recursive: true });
+    // Lifecycle commands must resolve their transport entirely inside this copied app.
+    for (const path of ['scripts/runtime/shared-http.mjs', `src/${kind}/dist/shared/http/transport.js`, `src/${kind}/dist/node_modules/undici/package.json`])
+      assert.equal((await stat(join(app, path))).isFile(), true, `${kind}: ${path}`);
     entries[kind] = { cwd, app, cli: join(app, 'cli.mjs') };
   }
   const invokeApp = async (kind, command, options = [], body, environment) => {
@@ -49,10 +53,9 @@ test('copied apps operate independently with agent tasks, durable state and late
     return result;
   };
   const ok = async (...args) => { const result = await invokeApp(...args); assert.equal(result.code, 0, result.stderr); assert.ok(result.data); return result.data; };
-  t.after(async () => {
+  await ownWorkspace(t, outer, async () => {
     for (const kind of ['worker', 'factory', 'orchestrator']) await invokeApp(kind, 'stop').catch(() => {});
     await invokeApp('worker', 'stop', ['--state-dir', '.werk/second']).catch(() => {});
-    await rm(outer, { recursive: true, force: true });
   });
   for (const kind of Object.keys(entries)) {
     const schema = await ok(kind, 'schema'); assert.equal(schema.application, kind); assert.ok(schema.commands.monitoring);
@@ -104,6 +107,16 @@ test('copied apps operate independently with agent tasks, durable state and late
   assert.equal((await ok('worker', 'task list')).records.some(record => record.busy), false, 'restart cancelled all pending model calls');
   assert.equal(retained.session.definition.digest, definition.digest);
   assert.equal((await ok('worker', 'definition list')).definitions[0].digest, definition.digest);
+  const listed = (await ok('worker', 'definition list')).definitions[0], profileUpdate = { yaml: definitionInput.yaml.replace('Review acceptance criteria', 'Review risks and acceptance criteria') };
+  const dryRun = await ok('worker', 'definition update', ['--ref', 'project-reviewer', '--dry-run'], profileUpdate);
+  assert.equal(dryRun.definition.revision, listed.revision); assert.deepEqual(dryRun.changes.agents.changed, [{ name: 'root', fields: ['instruction'] }]);
+  assert.equal((await ok('worker', 'definition list')).definitions[0].digest, definition.digest, 'dry run does not write');
+  assert.equal((await invokeApp('worker', 'definition update', ['--ref', 'project-reviewer'], profileUpdate)).code, 2, '--if-match is required');
+  assert.equal((await invokeApp('worker', 'definition update', ['--ref', 'project-reviewer', '--if-match', 'f'.repeat(64)], profileUpdate)).code, 2);
+  assert.equal((await invokeApp('worker', 'definition update', ['--ref', 'unknown-profile', '--if-match', listed.revision], profileUpdate)).code, 2);
+  const applied = await ok('worker', 'definition update', ['--ref', 'project-reviewer', '--if-match', listed.revision], profileUpdate);
+  assert.equal(applied.definitions[0].id, definition.id); assert.equal(applied.definitions[0].ref, 'project-reviewer'); assert.equal(applied.updated.revision, dryRun.definition.nextRevision);
+  assert.equal((await ok('worker', 'task get', ['--id', 'ci-task-ref'])).session.definition.digest, definition.digest, 'existing task keeps its accepted snapshot');
   // Protocol fixture only: no provider credentials or live LLM calls.
   if (process.platform === 'linux') {
     const executable = join(entries.worker.cwd, 'model-fixture'), audit = join(outer, 'model-events.jsonl');

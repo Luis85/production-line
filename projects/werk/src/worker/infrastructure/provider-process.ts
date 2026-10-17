@@ -1,4 +1,5 @@
 import { ProviderModelError } from '../application/model-contract.js';
+import { MAX_MAX_RUNTIME_MS } from '../application/execution-policy.js';
 import { ProcessRunError, runProcess, type RunResult } from '../../shared/process/launcher.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -13,13 +14,21 @@ export function providerEnvironment(provider = 'codex'): NodeJS.ProcessEnv {
     if (process.platform === 'win32') for (const key of windowsEnvironment) if (process.env[key]) env[key] = process.env[key];
     // Preserve managed-runtime policy/auth routing; never copy these values to task evidence.
     for (const key of Object.keys(process.env)) if (provider === 'codex' && key.startsWith('CODEX_') && process.env[key]) env[key] = process.env[key];
-    return { ...env, ...(provider === 'claude' ? { CLAUDE_CODE_DISABLE_CLAUDE_MDS: '1' } : {}), GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0' };
+    return { ...env, ...(provider === 'claude' ? { CLAUDE_CODE_DISABLE_CLAUDE_MDS: '1', CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS: '0' } : {}), GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0' };
 }
+/** Only the worker-derived MCP wait may augment the provider environment. */
+export interface ProviderToolEnvironment { MCP_TOOL_TIMEOUT?: string; }
 /** Contained, bounded provider invocation; the shared launcher stops its whole process tree on cancellation. */
-export async function providerCommand(executable: string, args: string[], cwd: string, signal: AbortSignal, input?: string, capture = true, provider = 'codex', observeOutput?: (output: Buffer) => void): Promise<Buffer> {
+export async function providerCommand(executable: string, args: string[], cwd: string, signal: AbortSignal, input?: string, capture = true, provider = 'codex', observeOutput?: (output: Buffer) => void, environment: ProviderToolEnvironment = {}): Promise<Buffer> {
     signal.throwIfAborted();
+    const env = providerEnvironment(provider);
+    if (provider === 'claude' && environment.MCP_TOOL_TIMEOUT !== undefined) {
+        const timeout = Number(environment.MCP_TOOL_TIMEOUT);
+        if (!/^\d+$/.test(environment.MCP_TOOL_TIMEOUT) || !Number.isSafeInteger(timeout) || timeout < 1000 || timeout > MAX_MAX_RUNTIME_MS) throw new ProviderModelError('tool_access');
+        env.MCP_TOOL_TIMEOUT = String(timeout);
+    }
     let result: RunResult, failed = false;
-    try { result = await runProcess(executable, args, { cwd, env: providerEnvironment(provider), mode: 'contained', signal, input, maxOutputBytes: 4 * 1024 * 1024, captureStdout: capture }); }
+    try { result = await runProcess(executable, args, { cwd, env, mode: 'contained', signal, input, maxOutputBytes: 4 * 1024 * 1024, captureStdout: capture }); }
     catch (error) { if (!(error instanceof ProcessRunError)) throw error; result = error.result; failed = true; }
     // Numeric telemetry may exist even when execution fails; diagnostics never leave this callback.
     try { observeOutput?.(result.stdout); } catch { /* Telemetry must not mask process cleanup or outcome. */ }

@@ -16,7 +16,8 @@ node /path/to/werk/bin/apps/worker/cli.mjs feature setup --project-dir /path/to/
 Use `--features-dir requests/features` to choose a different queue. Setup also
 runs during [project worker initialization](project-worker.md). When a worker
 configuration already exists, standalone setup adopts its feature directory.
-Repeating setup preserves existing files and team customization. A configured
+Repeating setup preserves existing files and team customization; only an
+unmodified authoring script is refreshed (see below). A configured
 folder mismatch or malformed check file is reported before setup writes files.
 An older template is preserved with a warning explaining the required update.
 
@@ -27,6 +28,7 @@ Commit these generated files with the project:
 | `.werk/feature-workflow.json` | Paths and stable identity for the shared workflow |
 | `.werk/authoring/feature-request.mjs` | Self-contained authoring CLI |
 | `.werk/authoring/.gitignore` | Excludes the temporary authoring write lock |
+| `.werk/authoring/manifest.json` | Content hash of the authoring script that Werk installed |
 | `fr-ready-check.json`, `fr-done-check.json` | Team readiness and completion rules |
 | `features/_templates/feature-request.md` | Editable request template |
 | `Feature Requests.base` | Obsidian table of requests in the configured queue |
@@ -37,6 +39,39 @@ Queue and template locations follow your selected folder. The Base uses Obsidian
 built-in table view; no special backlog plugin is needed. Open the project as an
 Obsidian vault to see the table. It reflects files in the local checkout, so pull
 shared Git updates to see teammates' requests and worker notes.
+
+### Refresh the authoring script after an upgrade
+
+After updating the worker app, run `feature setup` again so the committed
+`.werk/authoring/feature-request.mjs` matches the new worker. An outdated script
+can reject fields that the new worker accepts, such as `definitionRef`.
+
+Setup records the content hash of the script it installs in
+`.werk/authoring/manifest.json`. Line endings are ignored, so a Windows checkout
+with CRLF still matches. While the committed script still matches that record,
+setup replaces it with the bundled script and reports both files as `updated`.
+Review and commit both files so teammates receive them with their next pull.
+
+Setup preserves the script and returns the warning `authoring_script_outdated` with
+the file's current `revision` when it cannot prove the script is unmodified. This
+happens when the team changed the script, or when the project was set up before
+Werk 0.10.0 and has no manifest. Compare the two files:
+
+```sh
+git diff --no-index .werk/authoring/feature-request.mjs bin/apps/worker/src/worker/dist/worker/authoring/feature-request.mjs
+```
+
+If the bundled script should replace the committed one, name the revision you
+inspected. Setup refuses the replacement if the file changed since then:
+
+```sh
+node bin/apps/worker/cli.mjs feature setup --if-match REVISION
+```
+
+The replacement also records the new script in the manifest, so later upgrades
+refresh it automatically. Run `node .werk/authoring/feature-request.mjs validate --file`
+on an existing request, then commit the script and manifest. To keep a customized
+script, leave it as it is; setup never records a customized script as managed.
 
 ## Create and finish a draft
 
@@ -54,7 +89,18 @@ characters. Shared implementation requests use `mode: patch`; replace the empty
 
 For example, replace `paths: []` with `paths: [src/search.ts]`, describe the user
 problem, add an observable checklist item, and explain how a reviewer will verify
-it. Comment-only placeholders do not count as answers. Ask your coding assistant
+it. Approved paths may use umlauts, `ß`, commas, parentheses, `&`, apostrophes,
+dashes and arrows. Use a block list for names with such characters, because in
+`[a, b]` a comma separates two paths:
+
+```yaml
+paths:
+  - docs/requirements/LACF-REQ-033 Warenein- und -ausgang einschließlich Zoll abwickeln.md
+  - "docs/Kunden's Änderungen (Größe).md"
+```
+
+See [approved file paths](../reference/feature-requests.md#approved-file-paths)
+for the complete rule. Comment-only placeholders do not count as answers. Ask your coding assistant
 to use **Create Feature Request** if you want help identifying gaps. The skill
 instructs it to clarify missing decisions with you instead of inventing them.
 
@@ -131,7 +177,16 @@ node bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-rev
 
 Keep the profile YAML in the repository if the team reviews it, for example under
 `.werk/agents/project-reviewer.yaml`. Workers do not load it from the repository;
-the operator imports it after reviewing the preview, and again after a change.
+the operator imports it after reviewing the preview. After a reviewed change, the
+operator updates the profile in place on each worker, keeping the reference:
+
+```sh
+node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file update.json --dry-run
+node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file update.json --if-match REVISION
+```
+
+`update.json` contains `{"yaml":"YAML_TEXT"}`. Tasks created earlier keep the
+profile they accepted; later tasks use the update.
 Offline validation checks only the reference's format. A worker without the
 reference leaves the request ready and unclaimed, and shows the reason in its
 shared-intake view, until the operator assigns it. If the profile needs instructions-only

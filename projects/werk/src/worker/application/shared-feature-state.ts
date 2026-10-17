@@ -2,12 +2,18 @@ import type { FeatureWorkflowSnapshot, SharedFeatureInput } from './feature-work
 import type { WorkerRequest } from './request-gates.js';
 import type { SharedFeatureView, SharedIntakeConfig } from './shared-intake-contract.js';
 import { DomainError } from '../../shared/errors.js';
+import type { DevelopmentEvidence, DevelopmentScopeView } from './development.js';
 
 export const defaultSharedIntakeConfig = (): SharedIntakeConfig => ({ enabled: false, repositoryId: '', remote: 'origin', branch: 'main', workflowPath: '.werk/feature-workflow.json', pollMs: 5000 });
 export function validateSharedIntakeConfig(value: unknown): SharedIntakeConfig {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new DomainError('invalid_input', 'Shared intake requires a configuration object.');
   const d = value as Record<string, unknown>;
-  if (Object.keys(d).some(k => !['enabled', 'repositoryId', 'remote', 'branch', 'workflowPath', 'pollMs'].includes(k)) || typeof d.enabled !== 'boolean') throw new DomainError('invalid_input', 'Invalid shared intake configuration.');
+  const fields = ['enabled', 'repositoryId', 'remote', 'branch', 'workflowPath', 'pollMs'];
+  if (Object.keys(d).some(k => !fields.includes(k))) throw new DomainError('invalid_input', `Shared intake configuration accepts only ${fields.join(', ')}.`);
+  // Saving replaces the whole binding; a partial object would silently reset omitted fields.
+  const missing = fields.filter(k => !Object.hasOwn(d, k));
+  if (missing.length) throw new DomainError('invalid_input', `Shared intake configuration is incomplete; missing ${missing.join(', ')}. Send the complete config from shared status with your changes.`);
+  if (typeof d.enabled !== 'boolean') throw new DomainError('invalid_input', 'Shared intake enabled must be true or false.');
   if (typeof d.repositoryId !== 'string' || !/^[a-zA-Z0-9_-]{0,100}$/.test(d.repositoryId) || (d.enabled && !d.repositoryId)) throw new DomainError('invalid_input', 'Choose an assigned repository.');
   if (typeof d.remote !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$/.test(d.remote)) throw new DomainError('invalid_input', 'Choose a configured Git remote name.');
   if (typeof d.branch !== 'string' || d.branch.length > 200 || !/^[a-zA-Z0-9][a-zA-Z0-9_./-]*$/.test(d.branch) || d.branch.includes('..') || d.branch.includes('//') || d.branch.split('/').some(p => !p || p.startsWith('.') || p.endsWith('.') || p.endsWith('.lock'))) throw new DomainError('invalid_input', 'Use a valid Git intake branch name.');
@@ -56,6 +62,10 @@ export interface SharedExecution {
   status: string;
   summary: string | null;
   patch: string | null;
+  implementation?: DevelopmentScopeView;
+  developmentEvidence?: DevelopmentEvidence;
+  /** Private coordinator confirmation that patch, receipts and current attempt match. */
+  developmentVerified?: boolean;
   request: WorkerRequest | null;
   currentTurnId?: string;
   runId?: string;

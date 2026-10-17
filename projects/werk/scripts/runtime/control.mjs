@@ -1,3 +1,4 @@
+import { withOwnedResponse } from './shared-http.mjs';
 import { timingSafeEqual } from 'node:crypto';
 import { createServer } from 'node:http';
 import { readPrivate, inputError } from './config.mjs';
@@ -13,17 +14,18 @@ export function validMetadata(value) {
 export async function metadata(stateDir) { return validMetadata(await readPrivate(join(stateDir, 'supervisor.json'))); }
 export async function controlRequest(record, action = 'status') {
   validMetadata(record);
-  const response = await fetch(`http://127.0.0.1:${record.controlPort}/${action}`, { method: action === 'stop' ? 'POST' : 'GET',
-    headers: { Authorization: 'Bearer ' + record.controlToken, 'X-Werk-Run': record.runId }, redirect: 'error', signal: AbortSignal.timeout(1200) });
-  const reader = response.body?.getReader(); let bytes = 0, body = '';
-  try {
-    if (reader) for (;;) { const { done, value } = await reader.read(); if (done) break; bytes += value.byteLength; if (bytes > 16384) { await reader.cancel(); throw Error('Invalid supervisor response.'); } body += Buffer.from(value).toString('utf8'); }
-  } finally { reader?.releaseLock(); }
-  const result = JSON.parse(body);
-  if (!response.ok || result.runId !== record.runId || !['starting', 'running', 'stopping'].includes(result.state)) throw Error('Supervisor identity could not be verified.');
-  if (!['mock', 'cli', 'mixed'].includes(result.mode)) throw Error('Invalid supervisor execution mode.');
-  // Only explicitly supported public fields leave this trust boundary.
-  return { state: result.state, runId: result.runId, project: result.project, mode: result.mode, url: result.url, workers: result.workers };
+  return withOwnedResponse(`http://127.0.0.1:${record.controlPort}/${action}`, { method: action === 'stop' ? 'POST' : 'GET',
+    headers: { Authorization: 'Bearer ' + record.controlToken, 'X-Werk-Run': record.runId }, redirect: 'error' }, 1200, async response => {
+    const reader = response.body?.getReader(); let bytes = 0, body = '';
+    try {
+      if (reader) for (;;) { const { done, value } = await reader.read(); if (done) break; bytes += value.byteLength; if (bytes > 16384) { await reader.cancel(); throw Error('Invalid supervisor response.'); } body += Buffer.from(value).toString('utf8'); }
+    } finally { reader?.releaseLock(); }
+    const result = JSON.parse(body);
+    if (!response.ok || result.runId !== record.runId || !['starting', 'running', 'stopping'].includes(result.state)) throw Error('Supervisor identity could not be verified.');
+    if (!['mock', 'cli', 'mixed'].includes(result.mode)) throw Error('Invalid supervisor execution mode.');
+    // Only explicitly supported public fields leave this trust boundary.
+    return { state: result.state, runId: result.runId, project: result.project, mode: result.mode, url: result.url, workers: result.workers };
+  }, false);
 }
 export async function createControl({ runId, controlToken, snapshot, stop }) {
   const server = createServer((request, response) => {

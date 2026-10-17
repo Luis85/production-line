@@ -18,10 +18,10 @@ async function choose(action: 'accept' | 'decline') {
     <p class="discovery-context">{{ candidate.decision === 'declined' ? 'You chose not to use this checkout. You can change that choice here.' : 'The worker found a repository in its project folder.' }}</p>
     <p class="discovery-path"><code>{{ candidate.path }}</code></p>
     <p class="discovery-meta">{{ candidate.currentBranch ? 'Branch: ' + candidate.currentBranch : 'Detached checkout' }} · {{ candidate.remote ? 'Remote: ' + candidate.remote : 'No remote configured' }}</p>
-    <p class="discovery-permission">{{ candidate.watch ? 'Using it enables watching and safe fast-forward pulls. File tasks use separate Git worktrees.' : !candidate.currentBranch ? 'File tasks can use this detached checkout in separate Git worktrees. Watching stays off until you select a branch and enable it in Dashboard.' : 'Use it for file tasks in separate Git worktrees. Watching stays off until you configure a remote and enable it in Dashboard.' }}</p>
+    <p class="discovery-permission">{{ candidate.watch ? 'Using it enables watching and safe fast-forward pulls. File tasks use separate Git worktrees.' : !candidate.currentBranch ? 'File tasks can use this detached checkout in separate Git worktrees. Watching stays off until you select a branch and enable it in Settings.' : 'Use it for file tasks in separate Git worktrees. Watching stays off until you configure a remote and enable it in Settings.' }}</p>
     <div class="discovery-actions"><UButton type="button" :loading="busy" :disabled="busy || queued" @click="choose('accept')">Use repository</UButton><UButton v-if="candidate.decision === 'pending'" type="button" color="neutral" variant="outline" :disabled="busy" @click="choose('decline')">Don’t use</UButton></div>
     <p v-if="queued" class="discovery-hint">Finish or stop queued and running tasks before adding this repository.</p>
-    <p v-else-if="candidate.decision === 'pending'" class="discovery-hint">Your choice is saved. You can change it later in Dashboard → Git repositories.</p>
+    <p v-else-if="candidate.decision === 'pending'" class="discovery-hint">Your choice is saved. You can change it later in Settings → Repositories.</p>
     <p v-if="error" class="error-text" role="alert">{{ error }}</p>
   </section>
   <p v-if="notice" ref="confirmation" class="discovery-notice" role="status" tabindex="-1">{{ notice }}</p>

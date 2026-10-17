@@ -33,6 +33,9 @@ export const gateFacts = {
   "output.protocolValid": "boolean",
   "output.patchPresent": "boolean",
   "output.changedFileCount": "number",
+  "output.verificationPassed": "boolean",
+  "output.requiredCheckCount": "number",
+  "output.candidateDigest": "string",
   "execution.recoverySafe": "boolean",
   "execution.outcome": "string",
   "pending.count": "number",
@@ -553,5 +556,15 @@ export function evaluateGate(
       result: matches === null ? "unknown" : matches ? "pass" : "fail",
     } as GateRuleResult;
   });
+  // Candidate verification is execution authority, not an optional custom policy rule.
+  // Absence preserves legacy proposal/chat behavior; only the coordinator emits false.
+  if (stage === "done" && facts["output.verificationPassed"] === false)
+    rules.push({
+      ruleId: "worker-required-verification",
+      fact: "output.verificationPassed",
+      expected: true,
+      observed: false,
+      result: "fail",
+    });
   return { passed: rules.every((rule) => rule.result === "pass"), rules };
 }

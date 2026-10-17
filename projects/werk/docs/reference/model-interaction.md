@@ -3,7 +3,11 @@
 The local worker owns prompt state and continuation. The adapter translates a
 versioned request to a supported provider and returns a typed result. This contract
 covers local Chat, approved-file tasks and their feature requests. Original remote
-orchestrator executions retain their lease and execution authority.
+orchestrator executions retain their lease and execution authority. The unified
+webview composer exposes optional approved-file permission without changing these
+execution contracts. Every task also has a generated Markdown progress record;
+follow-ups and checkpoints update it without replacing authoritative source notes
+or the private journal. See [automatic task tracking](feature-requests.md#automatic-task-tracking).
 
 ## Capabilities and dispatch
 
@@ -12,8 +16,11 @@ contract. The current adapters expose structured questions through Werk protocol
 version 1 and report usage when the provider supplies it. They declare
 `continuation: worker_context_replay`, `nativeResume: false`, `streaming: false`
 and default to `tools: none`. An invocation with an operator-granted catalog
-records `tools: granted` and its public tool manifest. These describe the wrapper,
-not everything the provider brand or its other SDKs can do.
+records `tools: granted` and its public tool manifest. Optional `limits` metadata
+records the accepted call count, total invocation duration (`windowMs`) and
+resolved tool/preset deadlines. This is execution evidence, not a separate
+tool-policy window. These capabilities describe the wrapper, not everything the
+provider brand or its other SDKs can do.
 
 `ModelRequest` contains its schema/protocol version, chat or patch operation,
 provider ID, model, effective instruction, messages, capability/policy snapshot,
@@ -26,14 +33,36 @@ It is not a wire capture.
 
 A continuation uses the saved prompt configuration. Current credentials can be
 resolved privately to contact the same provider; editing settings must not silently
-rewrite an accepted instruction or model identity. Patch continuation preserves
-the approved file snapshots and produces a patch for review, without applying it
-to the project. Continuations use current tool grants; old dispatch evidence
-cannot restore revoked access. Automated request reviewers remain tool-free.
+rewrite an accepted instruction or model identity. A new follow-up, answer or
+resume attempt captures current execution limits when its dispatch is prepared.
+Execution of an already prepared dispatch keeps that dispatch's frozen budget. Patch continuation preserves
+the approved file snapshots. Existing proposal tasks return patch JSON without applying it.
+New eligible repository requests additionally freeze an implementation scope and required
+verification plan: the model edits only approved paths in the isolated worktree,
+runs the required checks and returns a readable summary. The worker captures the
+actual candidate patch and verifies matching check receipts before review. The
+developer checkout is not edited. Continuations use current tool grants; old dispatch evidence
+cannot restore revoked access. New limit metadata must match the resolved
+catalog and accepted execution budget. Legacy dispatches without this metadata
+remain supported only when their policy revision and exact definitions still
+match; absence cannot restore a larger budget. Automated request reviewers
+remain tool-free.
 See [manage model tools](../how-to/manage-model-tools.md) for scope, MCP connections
 and revocation.
 
 ## Typed results
+
+New implementation dispatches carry `policy.development: true`; only the private
+accepted task scope authorizes candidate tools. `maxToolCalls` and `commandTimeoutMs`
+freeze with the total invocation duration and propagate through API loops and CLI
+bridges. Defaults remain 128 calls, a 300-second command ceiling and six hours
+total. Optional command/CLI/check timeouts can shorten that ceiling; MCP calls
+default to 30 seconds with separate per-connection limits. Remaining invocation
+time and cancellation cap every call. Required-check fingerprints bind explicit
+timeout overrides. The CLI bridge derives provider MCP waits from the trusted
+accepted duration, not mutable manifest metadata. Provider-native editing and
+shell tools remain disabled. See
+[implement a feature](../how-to/implement-feature.md) for configuration.
 
 A model invocation returns completed content or a blocking input request. Legacy
 plain-text answers and the existing patch JSON remain supported; the worker does
@@ -64,6 +93,57 @@ validation. A malformed envelope is not accepted as a patch. Provider refusal,
 incomplete output, authentication, quota/rate limit and protocol failures remain
 separate safe error categories where the adapter can identify them. No raw error
 body or credential is needed in the public status.
+
+## Approved-file proposal replies
+
+This format applies to snapshot-based proposals. Verified candidate implementations
+use the candidate tools and return a plain-text summary after required checks pass.
+
+A proposal asks for one JSON object and states these limits in its prompt:
+
+```json
+{"summary": "What changed and which checks ran", "files": [{"path": "approved/path.md", "content": "complete new file text"}]}
+```
+
+| Rule | Limit |
+| --- | --- |
+| Whole reply | At most 64,000 characters |
+| `summary` | Text, at most 2,000 characters |
+| `files` | 1 up to the number of approved paths; each approved path at most once |
+| `content` | The complete new file text, at most 64,000 characters, no NUL character |
+| Review patch | At most 131,072 characters, with no private key or access-token pattern |
+
+The worker reads a bare object or an object in a Markdown fence. Prose before or
+after it is tolerated when the reply contains exactly one object with `summary`
+or `files`; two different such objects are refused as ambiguous. Extraction also refuses replies
+that exceed its 256-candidate search bound instead of accepting an unexamined tail. Every rule above
+is still checked before the reply becomes reviewable.
+
+The review patch is a Git unified diff with three lines of context per hunk.
+Unchanged files are omitted, paths are always quoted so non-ASCII names apply with
+`git apply`, and a missing final newline is marked as Git does. A file with more
+than 2,000 changed lines is shown as a full replacement.
+
+A reply that breaks a rule fails the attempt without a durable completed result.
+The task error starts with `The model reply did not follow the patch format:` and
+names the rule and the measured value, never reply or file content. The interaction
+turn and its `failed` event carry a matching error code:
+
+| Code | Cause |
+| --- | --- |
+| `patch_reply_too_large` | The reply exceeds 64,000 characters |
+| `patch_reply_not_json` | No JSON patch object was found |
+| `patch_reply_ambiguous` | More than one different patch object was found, or bounded extraction could not examine the whole reply |
+| `patch_summary_invalid` | `summary` is missing, not text or too long |
+| `patch_files_invalid` | `files` is missing, empty, too long or has a non-object entry |
+| `patch_file_unapproved` | An entry names a path outside the approved list (shown quoted and shortened) |
+| `patch_file_duplicate` | An approved path is listed twice |
+| `patch_file_content_invalid` | `content` is not text, too long or contains NUL |
+| `patch_unchanged` | Every listed file equals its snapshot |
+| `patch_too_large` | The generated review patch exceeds 131,072 characters |
+| `patch_sensitive_material` | The patch looks like it contains a private key or token |
+
+Resume the task from saved context to let the model correct its reply.
 
 ## State and ownership
 
@@ -131,11 +211,13 @@ Each event contains `schemaVersion`, stable `id`, monotonic `sequence`,
 `sessionId`, interaction `revision`, `turnId`, `runId`, `type`, `at` and
 `phase`. `turnId` and `runId` can be null before that identity exists; event and
 session IDs are always present. A `usage_observed` event requires normalized
-numeric `usage`. Input events require `pendingId` and `requestKind`; failed and
-interrupted events require a safe `errorCode`. Event types are:
+numeric `usage`. A `tool_budget_exhausted` event requires `toolBudget`. Input
+events require `pendingId` and `requestKind`; failed and interrupted events
+require a safe `errorCode`. Event types are:
 
 - `accepted`, `prepared`, `started`: durable command, dispatch and execution boundaries.
 - `usage_observed`: the latest cumulative usage for this invocation, not an additive delta.
+- `tool_budget_exhausted`: the invocation's shared tool budget ran out, at most once per turn. See [tool budget](#tool-budget).
 - `input_requested`, `escalated`: a persisted blocking decision; fetch the current view for its content and answer guard.
 - `completed`, `failed`, `cancelled`, `interrupted`: the invocation's terminal state.
 - `pending_cancelled`: the pending decision was cancelled; the earlier invocation/result stays in history.
@@ -160,7 +242,13 @@ approval payloads or gains tools from a progress event.
 ## Recovery and consumption
 
 The worker records a validated model result before updating its transcript,
-taskboard and request projections. After restart it can reconcile a known saved
+taskboard and request projections. For a proposal-only file task, the interaction
+turn keeps the provider's change set unchanged; the transcript receives a readable
+summary with changed paths and line counts instead of protocol JSON. Large edits
+use labelled approximate counts. Candidate implementations retain their plain-text
+completion summary and captured verification evidence. Protocol continuation
+replays the unchanged interaction result, not its display text. After restart it
+can reconcile a known saved
 result without making another model call. If the provider may have received the
 request but no result was durably saved, the worker marks the turn interrupted.
 A deliberate resume starts another invocation and may consume additional tokens.
@@ -203,6 +291,51 @@ function calls and results, while CLI adapters receive a private MCP bridge.
 Provider-native tools remain disabled. Tool calls and output are bounded; a
 revoked policy or ungranted tool fails closed. Tool output is untrusted data and
 cannot authorize additional tools.
+
+### Tool budget
+
+All tool calls of one invocation share its captured execution budget: 128 calls
+and six hours by default, configurable up to 512 calls and 24 hours. The runtime
+window is an additional bound starting with the first tool call; the overall
+invocation deadline starts earlier and remains authoritative. It never grants
+more time. The model receives budget information in tool results:
+
+- **Low budget note.** Once a quarter or less of the calls or of the window
+  remains (32 of 128 calls with the default call allowance), every tool result ends with an
+  extra text item, for example
+  `Tool budget: 32 of 128 calls and 120 s of the 21600 s tool window remain.`
+  The result of the last allowed call says that no further calls will run.
+  The note is a separate content item, so JSON tool output stays parseable and
+  the 128 KiB limit still applies to the tool's own output. Earlier results are
+  unchanged. Remaining time is rounded down to whole seconds.
+- **Exhaustion.** A call beyond the limit, or after the window ended, runs
+  nothing and returns a normal tool error (`isError: true`), for example
+  `Tool budget exhausted (128 calls / 21600 s window): the 128-call limit of this invocation is reached. No further tool calls will run in this invocation. Finish with the information you have, or ask the operator with a werkInteraction question.`
+  A call still running when the window ends is stopped and returns the same kind
+  of error, stating that its result is unavailable.
+- **Provider loops.** Claude Code and Codex receive the error as an MCP tool
+  result. API adapters return it as a function or tool result and allow one more
+  model response to finish. A model that requests tools again after it received
+  the refusal is stopped with `protocol`.
+
+Cancellation, revoked grants and a replaced worktree still fail closed with a
+`tool_access` or `cancelled` error; only the tool budget is reported this way.
+The overall invocation deadline can cancel the provider before a budget refusal
+or final answer is delivered. It is never extended for a finishing response.
+
+When a budget runs out, the turn records `toolBudget` and the event journal adds
+one `tool_budget_exhausted` event:
+
+```json
+{ "reason": "calls", "maxCalls": 128, "windowMs": 21600000, "callsUsed": 128, "refusedCalls": 1 }
+```
+
+`reason` is `calls` or `window`. `callsUsed` counts calls admitted to execution;
+`refusedCalls` counts calls that returned the budget error, including a call
+stopped by the window. The record contains counts and durations only: no tool
+names, arguments, results or paths. Using exactly the whole budget without a
+further call is not exhaustion. Turns saved by earlier workers have no
+`toolBudget`. The worker task view shows it with the latest turn's consumption.
 Claude Code restriction flags require version 2.1.248 or newer. The saved
 connection check reports a known older version with upgrade guidance; an unknown
 version remains unverified. Execution never drops required flags. Provider

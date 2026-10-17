@@ -76,8 +76,8 @@ async function pause() {
         <UButton v-if="state.settings && !state.settings.board.paused" type="button" color="neutral" variant="outline" icon="i-lucide-pause" :loading="pausing" :disabled="draft.busy || !state.unlocked" @click="pause">Pause new starts</UButton>
         <p v-if="state.settings?.board.paused" class="page-note">Queued work stays paused. Open Taskboard to finish or stop it, then return to save.</p>
       </div>
-      <p v-else-if="!view.pending && state.settings?.board.paused" class="page-note">New starts are paused. Save your profiles, then resume from Work in progress when you are ready.</p>
-      <p class="page-note">{{ view.mode === 'mock' ? 'This worker simulates assigned work. Editing profiles does not enable live execution.' : 'This worker supports one Codex CLI execution profile.' }} Provider sign-in and model settings are managed separately in <RouterLink to="/dashboard#provider-connections">Provider connections</RouterLink>.</p>
+      <p v-else-if="!view.pending && state.settings?.board.paused" class="page-note">New starts are paused. Save your profiles, then resume new starts on Taskboard when you are ready.</p>
+      <p class="page-note">{{ view.mode === 'mock' ? 'This worker simulates assigned work. Editing profiles does not enable live execution.' : 'This worker supports one Codex CLI execution profile.' }} Provider sign-in and model settings are managed separately in <RouterLink to="/settings#provider-connections">Provider connections</RouterLink>.</p>
     </template>
     <p v-else class="page-note">Execution profiles are not available yet. Refresh to load this worker’s saved profiles.</p>
     <p v-if="draft.error" role="alert" class="error-text">{{ draft.error }}</p>

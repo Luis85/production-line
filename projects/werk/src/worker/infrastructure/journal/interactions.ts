@@ -5,6 +5,8 @@ import { openPrivateJournal } from './database.js';
 import type { InteractionAdmission, InteractionEvent, InteractionEventPage, InteractionEventType, InteractionPhase, InteractionStore, InteractionTurn, InteractionTurnSummary, InteractionView, PendingInteraction } from '../../application/interactions.js';
 import type { ModelRequest, ModelResult } from '../../application/model-contract.js';
 import type { ProviderUsage } from '../../application/run-evidence.js';
+import type { ToolBudgetEvidence } from '../../application/tool-runtime.js';
+import { MAX_TOOL_CALLS, MAX_MAX_RUNTIME_MS } from '../../application/execution-policy.js';
 
 const identifier = (value: unknown) => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(value);
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -201,7 +203,7 @@ export class WorkerInteractionJournal implements InteractionStore {
     });
   }
 
-  private event(turn: InteractionTurn, type: InteractionEventType, usage?: ProviderUsage) {
+  private event(turn: InteractionTurn, type: InteractionEventType, usage?: ProviderUsage, toolBudget?: ToolBudgetEvidence) {
     const db = this.database();
     const state = db.prepare('SELECT revision,phase,pending FROM interaction_sessions WHERE id=?').get(turn.sessionId)!;
     const base = { schemaVersion: 1 as const, id: randomUUID(), sequence: 0, sessionId: turn.sessionId, revision: Number(state.revision), turnId: turn.id, runId: turn.runId, at: new Date().toISOString(), phase: state.phase as InteractionPhase };
@@ -209,6 +211,9 @@ export class WorkerInteractionJournal implements InteractionStore {
     if (type === 'usage_observed') {
       if (!usage) throw Error('A usage event requires normalized measurements.');
       value = { ...base, type, usage };
+    } else if (type === 'tool_budget_exhausted') {
+      if (!toolBudget) throw Error('A tool budget event requires its counts.');
+      value = { ...base, type, toolBudget };
     } else if (type === 'input_requested' || type === 'escalated') {
       const pending: PendingInteraction = JSON.parse(String(state.pending));
       value = { ...base, type, pendingId: pending.id, requestKind: pending.kind };
@@ -240,6 +245,19 @@ export class WorkerInteractionJournal implements InteractionStore {
       if (digest(turn.usage) === digest(safe)) return;
       turn.usage = safe; this.save(turn);
       this.state(sessionId, 'running'); this.event(turn, 'usage_observed', safe);
+    });
+  }
+
+  observeToolBudget(sessionId: string, turnId: string, evidence: ToolBudgetEvidence) {
+    const count = (value: unknown, maximum: number) => Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= maximum;
+    if (!evidence || !['calls', 'window'].includes(evidence.reason) || !count(evidence.maxCalls, MAX_TOOL_CALLS) || evidence.maxCalls < 1 || !count(evidence.windowMs, MAX_MAX_RUNTIME_MS) || evidence.windowMs < 1 || !count(evidence.callsUsed, evidence.maxCalls) || !count(evidence.refusedCalls, 100000) || evidence.refusedCalls < 1 || evidence.reason === 'calls' && evidence.callsUsed !== evidence.maxCalls) return;
+    // Counts only: no tool names, arguments, results or paths reach durable evidence.
+    const safe: ToolBudgetEvidence = { reason: evidence.reason, maxCalls: evidence.maxCalls, windowMs: evidence.windowMs, callsUsed: evidence.callsUsed, refusedCalls: evidence.refusedCalls };
+    this.transaction(() => {
+      const turn = this.turn(sessionId, turnId);
+      if (turn.status !== 'running' || turn.toolBudget) return;
+      turn.toolBudget = safe; this.save(turn);
+      this.state(sessionId, 'running'); this.event(turn, 'tool_budget_exhausted', undefined, safe);
     });
   }
 

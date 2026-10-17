@@ -1,3 +1,5 @@
+import type { FeatureTrackingRecord, FeatureTrackingStatus } from './feature-tracking.js';
+import { workerCapacitySnapshot, type WorkerCapacityContext } from './worker-capacity.js';
 import type { SessionView } from './workspace-view.js';
 import type { RequestJournal, InteractionJournal, RunJournal } from "./journal-ports.js";
 import type { ModelFactory, ProviderId } from "./provider-contract.js";
@@ -28,6 +30,8 @@ export type TaskState =
 export interface SessionRecord {
   definition?: DefinitionSnapshot;
   submissionHash?: string;
+  /** A failed admission without accepted snapshots can never become a continuation. */
+  continuationBlockedReason?: string;
   taskState?: TaskState;
   taskId: string;
   kind: "chat" | "local" | "orchestrator";
@@ -39,6 +43,7 @@ export interface SessionRecord {
 }
 /** Worker-owned transcripts are provider-independent; native CLI session IDs never cross providers. */
 export class WorkerSessions {
+  featureTracking?: { status(): FeatureTrackingStatus; record(sessionId: string): FeatureTrackingRecord | undefined };
   readonly requests: RequestJournal;
   requestPolicy?: () => GatePolicy | undefined;
   onRequestChanged?: (requestId: string) => void;
@@ -70,6 +75,7 @@ export class WorkerSessions {
   private changing = false;
   private changingProviders = false;
   private activeOutsideChat: () => number;
+  private capacityContext?: WorkerCapacityContext;
   constructor(settings: WorkerSettingsPort, dependencies: {
     model: ModelFactory;
     storage: SessionCatalogStorage;
@@ -79,8 +85,10 @@ export class WorkerSessions {
     definitions: WorkerDefinitions;
     activeOutsideChat?: () => number;
     consumptionBlocked?: () => boolean;
+    capacity?: WorkerCapacityContext;
   }) {
     this.activeOutsideChat = dependencies.activeOutsideChat ?? (() => 0);
+    this.capacityContext = dependencies.capacity;
     this.requests = dependencies.requests;
     this.interactions = dependencies.interactions;
     this.runs = dependencies.runs;
@@ -110,6 +118,7 @@ export class WorkerSessions {
         identifier(record.id, "session");
         text(record.title, "Session title", 120);
         this.settings.provider(record.provider);
+        if (record.continuationBlockedReason !== undefined) text(record.continuationBlockedReason, 'Continuation block reason', 1000);
         if (record.definition) {
           validateSnapshot(record.definition);
           definitionConnection(
@@ -180,6 +189,7 @@ export class WorkerSessions {
         requestPolicy: () => this.requestPolicy?.(),
         notifyRequest: (id) => this.notifyRequest(id),
         admit: () => {
+          this.assertCanContinue(record.id);
           if (
             this.chatActive + this.activeOutsideChat() >=
             this.settings.value.board.queueCapacity
@@ -239,7 +249,14 @@ export class WorkerSessions {
     );
   }
   view(): SessionView {
+    const tracking = this.featureTracking?.status();
     return {
+      ...(tracking ? { featureTracking: { directory: tracking.directory, lastSyncedAt: tracking.lastSyncedAt, error: tracking.error } } : {}),
+      ...(this.capacityContext ? { capacity: workerCapacitySnapshot({
+        capturedAt: new Date().toISOString(), currentSessionId: this.executor.current,
+        localUsed: this.chatActive + this.activeOutsideChat(), settings: this.settings.value.board,
+        remote: this.capacityContext.remote(), consumption: this.capacityContext.consumption(),
+      }) } : {}),
       selected: this.selected,
       execution: {
         currentSessionId: this.executor.current,
@@ -283,6 +300,7 @@ export class WorkerSessions {
             request.phase === "readiness" ? "needs_rework" : request.phase;
         return {
           ...record,
+          ...(this.featureTracking?.record(record.id) ? { featureRequest: this.featureTracking.record(record.id) } : {}),
           ...(request
             ? {
                 requestId: request.id,
@@ -299,6 +317,9 @@ export class WorkerSessions {
         };
       }),
     };
+  }
+  details() {
+    return this.view().records.map(session => ({ session, chat: this.instances.get(session.id)!.snapshot() }));
   }
   detail(id: string) {
     const record = this.records.find((item) => item.id === id);
@@ -334,6 +355,7 @@ export class WorkerSessions {
   }
   async interact(command: InteractionCommand) {
     this.assertProvidersStable();
+    this.assertCanContinue(command.sessionId);
     const detail = this.detail(command.sessionId);
     if (
       detail.session.kind !== "chat" &&
@@ -347,6 +369,7 @@ export class WorkerSessions {
   }
   async start(message: unknown, id = this.selected) {
     this.assertProvidersStable();
+    this.assertCanContinue(id);
     this.detail(id);
     const record = this.records.find((item) => item.id === id)!,
       chat = this.instances.get(id)!;
@@ -438,6 +461,18 @@ export class WorkerSessions {
     await conversation.recordTask(input, output, failed);
   }
 
+  private assertCanContinue(id: string) {
+    const record = this.records.find(record => record.id === id);
+    if (record?.continuationBlockedReason) throw new DomainError('conflict', record.continuationBlockedReason);
+  }
+  async blockContinuation(id: string, reason: string) {
+    const record = this.records.find(record => record.id === id);
+    if (!record) throw new DomainError('not_found', 'Task session not found');
+    record.continuationBlockedReason = text(reason, 'Continuation block reason', 1000);
+    record.taskState = 'failed';
+    // Retain the block in memory on write failure; every retry persists it again.
+    await this.persist();
+  }
   async setTaskState(id: string, state: TaskState) {
     if (state === "queued" || state === "running") this.assertProvidersStable();
     const record = this.records.find((item) => item.id === id);

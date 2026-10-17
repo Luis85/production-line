@@ -177,6 +177,8 @@ test('operator configuration refuses remote plaintext, URL credentials and injec
   await rejectsWith(discoverMcpTools(config, { dependencies, signal: AbortSignal.abort() }), 'cancelled');
   assert.equal(calls, 0);
   assert.deepEqual(mcpTransportConfiguration({ transport: 'stdio', command: '/operator/server', args: ['serve'], secretEnv: 'GITHUB_TOKEN', secret: 'private' }), { transport: 'stdio', executable: '/operator/server', args: ['serve'], env: { GITHUB_TOKEN: 'private' } });
+  assert.deepEqual(mcpTransportConfiguration({ transport: 'stdio', command: '/operator/server', args: [], secretEnv: '', secret: '' }).env, {});
+  assert.deepEqual(mcpTransportConfiguration({ transport: 'stdio', command: '/operator/server', args: [], secretEnv: '', secret: 'private' }).env, {}, 'a secret is never sent to an implicit default variable');
 });
 
 test('real loopback Streamable HTTP handshake and redirect refusal', { timeout: 10000 }, async t => {

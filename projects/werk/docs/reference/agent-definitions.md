@@ -60,9 +60,32 @@ node bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-rev
 
 Assigning a reference that another definition holds moves it; importing a
 definition with a reference that is already taken is refused. To update a shared
-profile, import the new YAML without a reference, preview it, move the reference
-to the new definition, then delete the old definition when it is no longer
-needed. Moving or removing a reference affects only tasks created afterwards.
+profile in place, preview the new YAML against the profile and then apply it
+with the current revision:
+
+```sh
+node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file update.json --dry-run
+node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file update.json --if-match REVISION
+```
+
+`update.json` contains `{"yaml":"YAML_TEXT"}` and optionally a new `"name"`;
+an omitted name keeps the current one. The update keeps the definition ID,
+reference and creation time, and records `updatedAt`. The dry run writes nothing
+and reports the current `revision`, the `nextRevision`, any name change, the old
+and new digest, and which agents are added, removed or changed (by field:
+`description`, `instruction`, `model`, `provider`, `unsupported`). `revision` is
+also listed per definition by `definition list`; it binds the definition ID,
+shared reference, name and YAML content. Moving the reference invalidates a
+previously reviewed revision even when another definition has the same name and
+content. A stale revision is refused with `conflict` so a concurrent edit or
+reference reassignment cannot redirect the update, and an unknown reference
+returns `not_found`. Removing an agent makes
+requests that select it fail until they choose another agent.
+
+Updating, moving or removing a reference affects only tasks created afterwards;
+existing tasks keep their accepted snapshot, including its digest. To keep the
+previous profile available as well, import the new YAML as a separate definition
+and move the reference with `definition ref` instead.
 
 Task creation resolves `definitionRef` once, and the task keeps the same immutable
 snapshot as an ID selection. The snapshot records the resolved `definitionId`, the
@@ -123,6 +146,7 @@ node bin/apps/worker/cli.mjs definition preview --file preview.json
 node bin/apps/worker/cli.mjs definition import --file definition.json
 node bin/apps/worker/cli.mjs definition list
 node bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-reviewer
+node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file update.json --dry-run
 node bin/apps/worker/cli.mjs task create --file task.json
 node bin/apps/worker/cli.mjs definition delete --id DEFINITION_ID
 ```
@@ -142,7 +166,8 @@ Where required, add `"useInstructionsOnly":true` after reviewing preview diagnos
 The CLI derives action names from its commands. Direct HTTP callers use
 `GET /api/definitions` or `POST /api/definitions` with `action` set to
 `preview`, `import`, `ref` (with `id` and `ref`; an empty `ref` removes the
-reference) or `delete`. Task/session creation and file-task creation accept
+reference), `update` (with `ref`, `yaml`, optional `name`, and `revision`, or
+`"dryRun":true` for a preview) or `delete`. Task/session creation and file-task creation accept
 `definitionRef` or `definitionId`, plus `agent` and `useInstructionsOnly`. Local
 folder and shared Git feature requests accept the same frontmatter fields. Authenticated browser sessions
 and bearer-authenticated automation use the same validation and task queue.

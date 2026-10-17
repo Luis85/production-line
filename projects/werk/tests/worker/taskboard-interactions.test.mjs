@@ -11,7 +11,7 @@ async function fixture(t, name, ports = {}) {
   // The component script then runs against the explicit behavioral ports below.
   const parsed = ts.createSourceFile('fixture.ts', scriptSource, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
   const script = ts.createPrinter().printFile(ts.factory.updateSourceFile(parsed, parsed.statements.filter(statement => !ts.isImportDeclaration(statement))));
-  const state = reactive({ unlocked: true, workspaceBusy: false, actionError: '', settings: null, board: { tasks: [{ id: 'a', title: 'Alpha', provider: 'codex-cli', status: 'review', archived: false }, { id: 'b', title: 'Beta', provider: 'claude-cli', status: 'failed', archived: false }] }, sessions: { records: [] } });
+  const state = reactive({ unlocked: true, draftEpoch: 0, workspaceBusy: false, actionError: '', settings: null, board: { tasks: [{ id: 'a', title: 'Alpha', provider: 'codex-cli', status: 'review', archived: false }, { id: 'b', title: 'Beta', provider: 'claude-cli', status: 'failed', archived: false }] }, sessions: { records: [] } });
   const route = reactive({ path: '/history', query: {} }), calls = [], navigations = [], focused = [];
   const request = ports.request ?? (async (path, method, body) => ({ ...state.board.tasks.find(task => task.id === body.id), sessionId: `local-${body.id}` }));
   const workspaceAction = async (path, body) => { calls.push({ path, body }); return ports.action ? ports.action(path, body) : {}; };
@@ -19,7 +19,7 @@ async function fixture(t, name, ports = {}) {
   const document = { getElementById: id => ({ focus: () => focused.push(id), scrollIntoView() {} }) };
   let deactivate, activate;
   const bindings = { reactive, ref, computed, watch, nextTick, onActivated: callback => { activate = callback; }, onDeactivated: callback => { deactivate = callback; }, useRoute: () => route, useRouter: () => router, state, workspaceAction, request, document, taskStatus: value => value };
-  const exposed = name.startsWith('components') ? 'inspect, closeDetail, readDetail, detail, selectedId, detailLoading, detailError, actionError, action, openConversation, search, status, archived, visible' : 'chatArchive, taskKind, chatTasks, openChat, chatStatus, clearChatFilters';
+  const exposed = name.startsWith('components') ? 'inspect, closeDetail, readDetail, detail, selectedId, detailLoading, detailError, actionError, action, beginRemoval, removeWorktree, removing, worktreeNotice, openConversation, search, status, archived, visible' : 'chatArchive, taskKind, chatTasks, openChat, chatStatus, clearChatFilters';
   const js = ts.transpile(script, { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS });
   const scope = effectScope(); t.after(() => scope.stop());
   const result = scope.run(() => new Function(...Object.keys(bindings), `${js}\nreturn { ${exposed} };`)(...Object.values(bindings)));
@@ -99,4 +99,40 @@ test('failed-conversation links focus results on navigation and activation witho
   assert.deepEqual(f.focused, []);
   f.route.path = '/history'; f.route.query.taskState = 'all'; await nextTick(); await nextTick();
   assert.deepEqual(f.focused, []);
+});
+
+
+test('failed admission evidence stays inspectable but never retries its unaccepted file snapshot', async t => {
+  const f = await fixture(t, 'components/Taskboard.vue');
+  const task = f.state.board.tasks[1];
+  Object.assign(task, { admissionFailure: { paths: ['src/main.ts'] }, error: 'Inspect the preserved worktree, then create a new request.', worktree: '/worktrees/retained', files: [] });
+  await f.inspect('b', event);
+  assert.equal(f.detail.value.worktree, '/worktrees/retained');
+  await f.action({ id: 'b', action: 'retry' });
+  assert.equal(f.calls.length, 0);
+  // The detail receipt also guards a retry if a later summary no longer contains it.
+  f.state.board.tasks = f.state.board.tasks.filter(item => item.id !== 'b');
+  await f.action({ id: 'b', action: 'retry' });
+  assert.equal(f.calls.length, 0);
+  await f.openConversation();
+  assert.equal(f.calls[0].body.id, 'local-b');
+  assert.deepEqual(f.navigations, [{ path: '/taskboard', query: { session: 'local-b' } }]);
+});
+
+
+test('each delete confirmation restores required cleanup and a refusal keeps the task open', async t => {
+  const f = await fixture(t, 'components/Taskboard.vue', { action: async () => { f.state.actionError = 'Worktree contains uncommitted changes. Keep its worktree to delete only the task.'; return undefined; } });
+  await f.inspect('a', event); f.beginRemoval(); assert.equal(f.removeWorktree.value, true);
+  f.removeWorktree.value = false; f.removing.value = false; f.beginRemoval(); assert.equal(f.removeWorktree.value, true);
+  await f.action({ id: 'a', action: 'delete', removeWorktree: true });
+  assert.equal(f.removing.value, true); assert.equal(f.detail.value.id, 'a'); assert.match(f.actionError.value, /uncommitted changes/);
+  f.removeWorktree.value = false; await f.inspect('b', event); f.beginRemoval(); assert.equal(f.removeWorktree.value, true);
+});
+test('lock and reopen cannot apply a late delete result to a new confirmation of the same task', async t => {
+  const pending = deferred(), f = await fixture(t, 'components/Taskboard.vue', { action: () => pending.promise });
+  await f.inspect('a', event); f.beginRemoval(); const deleting = f.action({ id: 'a', action: 'delete', removeWorktree: false });
+  f.state.unlocked = false; f.state.draftEpoch++; assert.equal(f.removing.value, false); assert.equal(f.worktreeNotice.value, '');
+  f.state.unlocked = true; await f.inspect('a', event); f.beginRemoval();
+  pending.resolve({ worktree: { outcome: 'kept', reason: 'old private result' } }); await deleting;
+  assert.equal(f.detail.value.id, 'a'); assert.equal(f.removing.value, true); assert.equal(f.worktreeNotice.value, '');
 });

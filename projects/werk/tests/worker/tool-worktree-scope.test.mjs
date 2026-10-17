@@ -11,7 +11,7 @@ import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/jou
 import { modelCapabilities } from '../../src/worker/dist/worker/application/model-contract.js';
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function settle(worker, id, state) { await worker.board.tick(); for (let i = 0; i < 600; i++) { if (worker.board.detail(id).status === state && !worker.sessions.busy) return; await delay(5); } throw Error('File task did not settle: ' + worker.board.detail(id).status); }
-async function fixture(t) {
+async function fixture(t, builtins = { files: true, commands: [], webOrigins: [] }) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'werk-tool-worktree-'))), state = join(root, 'state'), repository = join(root, 'repository');
   await mkdir(state); await mkdir(repository); cleanup(t, () => rm(root, { recursive: true, force: true }));
   const git = (...args) => execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', ...args], { cwd: repository, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
@@ -25,7 +25,7 @@ async function fixture(t) {
   const open = async () => { worker = new WorkerWorkspace({ stateDir: state, projectDir: root, pollMs: 1000, timeoutMs: 60000 }, journal, () => ({ activeTasks: [], queuedTasks: [] })); worker.board.model = workspaceModelFactory(state, worker.settings, factory); await worker.init(); };
   await open(); cleanup(t, () => worker.close());
   await worker.updateSettings({ provider: { id: 'openai-api', apiKey: 'fixture-never-sent', model: 'fixture-model' }, board: { paused: true }, repositories: { items: [{ id: 'project', path: repository, remote: 'origin', watch: false }] } });
-  await worker.updateToolAccess({ expectedRevision: 0, builtins: { files: true, commands: [], webOrigins: [] }, mcp: [] });
+  await worker.updateToolAccess({ expectedRevision: 0, builtins, mcp: [] });
   await worker.board.create({ title: 'Scoped tool task', instruction: 'Inspect the approved file', repository: 'project', paths: ['approved.txt'], provider: 'openai-api' });
   const task = worker.board.detail(worker.board.view().tasks[0].id); assert.equal(task.status, 'queued'); assert.ok(task.worktreeIdentity);
   return { root, state, repository, task, get worker() { return worker; }, get executions() { return executions; }, async restart() { await worker.close(); await open(); } };
@@ -56,4 +56,23 @@ test('replacement after queue admission is rejected before model execution', asy
   const f = await fixture(t); await replaceWorktree(f, 'directory');
   await f.worker.updateSettings({ board: { paused: false } }); await settle(f.worker, f.task.id, 'failed');
   assert.equal(f.executions, 0); assert.equal(f.worker.board.detail(f.task.id).files[0].content, 'accepted committed snapshot\n');
+});
+
+for (const scenario of ['replacement', 'legacy identity missing']) test(`CLI-only grants verify retained worktrees before dispatch: ${scenario}`, async t => {
+  const f = await fixture(t, { files: false, commands: [], webOrigins: [], cliTools: [{ id: 'project', name: 'Project CLI', description: '', enabled: true, executable: process.execPath, args: [], commands: [{ command: '--version' }], refusedOptions: [] }] });
+  if (scenario === 'replacement') await replaceWorktree(f, 'directory');
+  else {
+    await f.worker.close();
+    const path = join(f.state, 'taskboard.json');
+    const saved = JSON.parse(await readFile(path, 'utf8'));
+    delete saved.find(task => task.id === f.task.id).worktreeIdentity;
+    await writeFile(path, JSON.stringify(saved));
+  }
+  await f.restart();
+  await f.worker.updateSettings({ board: { paused: false } });
+  if (scenario === 'legacy identity missing') assert.equal(f.worker.board.detail(f.task.id).worktreeIdentity, undefined);
+  await assert.rejects(f.worker.board.action({ id: f.task.id, action: 'retry' }), /retained task worktree could not be verified/);
+  assert.equal(f.executions, 0, 'A CLI-only grant must not bypass retained worktree verification');
+  const task = f.worker.board.detail(f.task.id);
+  assert.equal(task.files[0].content, 'accepted committed snapshot\n');
 });

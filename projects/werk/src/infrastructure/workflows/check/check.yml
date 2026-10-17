@@ -18,7 +18,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    # Native Windows containment and Git checks need more time than POSIX fixtures.
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 30 || 15 }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:

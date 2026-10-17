@@ -6,6 +6,7 @@ import { privateJson } from '../../src/orchestrator/dist/shared/http/bounded-cli
 import { HttpLineReader } from '../../src/factory/dist/factory/infrastructure/poller.js';
 import { HttpLineDelivery } from '../../src/factory/dist/factory/infrastructure/delivery.js';
 import { apiReply } from '../../src/worker/dist/worker/infrastructure/provider-api.js';
+import { prepareModelRequest } from '../../src/worker/dist/worker/application/model-contract.js';
 
 function stream(chunks, close = true) {
   let cancelled = 0;
@@ -75,7 +76,7 @@ test('shared, private and Factory response adapters retain their separate byte l
 
 test('provider API preserves response limits, HTTP classification and cancellation without remote diagnostics', async () => {
   const connection = { id: 'openai-api', apiKey: 'private' };
-  const request = { messages: [], provider: { model: 'fixture' }, protocolInstructions: '' };
+  const request = prepareModelRequest({ configuration: { id: 'openai-api', model: 'fixture', instruction: '' }, async reply() { return ''; } }, []);
   const controller = new AbortController(), large = oversized(1048577);
   await assert.rejects(apiReply(connection, request, controller.signal, async () => new Response(large.body)), error => error.code === 'protocol');
   assert.equal(large.cancelled(), 1); assert.equal(large.body.locked, false);

@@ -5,6 +5,94 @@ view. Each request is one UTF-8 `.md` file with YAML frontmatter and a Markdown
 body. The worker's existing serial executor owns the work; watching a folder does
 not add a parallel model process. See [project setup](../how-to/project-worker.md).
 
+## Automatic task tracking
+
+Every worker task receives an Obsidian-compatible Markdown feature-request progress
+record automatically. Repository-file permissions and watched-folder intake are
+separate choices; neither is required to retain this record. Follow-ups, answers,
+continuations and retries use the same session record rather than creating a new
+feature request for each model call.
+
+| Worker configuration | Generated record location |
+| --- | --- |
+| Configured `features.directory` | `<features.directory>/_tasks/fr-<stable-session-hash>.md` |
+| No configured feature folder | `<stateDir>/feature-requests/fr-<stable-session-hash>.md` |
+
+The filename uses a stable 24-character session hash. Generated frontmatter marks
+`type: feature-request` and `source: worker-tracking`; a source path is retained
+when available. These files are progress projections, separate from the original
+local/shared intake note or orchestrator assignment. They are not watched intake:
+editing them does not submit work, answer a checkpoint or approve completion.
+
+Records separate task status, request phase, gate evaluations, pending input,
+recorded outcomes and attempts. A completed model turn is not proof of passed project tests,
+applied changes or human acceptance; simulations stay explicit. The webview shows
+the confirmed filename and saved time only when synchronization succeeds. Pending
+or failed synchronization remains visible and retryable; accepted work stays in
+the durable worker journals and must not be duplicated to recover a Markdown
+write. The worker retries synchronization automatically.
+
+The unified webview submits authenticated `POST /api/tasks` with
+`{action: "create", id, title, message, provider}`, optional agent selectors, and
+optional `files: {repository, paths}`. Replaying the same ID and input returns
+the pending preparation or admitted task; changed input conflicts. An admitted
+response uses HTTP 200 and contains `{session, chat, featureTracking}`.
+Approved-file execution returns its own `local-<id>` session identity; use the
+returned ID for subsequent actions. These are the same retained task/patch
+contracts used by the compatible CLI commands.
+
+For file requests, add `background: true` to prepare the worktree without holding
+the HTTP request open. The unified composer uses this option. HTTP 202 returns:
+
+```json
+{"preparation":{"id":"request-id","title":"Request title","repository":"app","state":"preparing","phase":"waiting","error":null,"createdAt":"...","finishedAt":null}}
+```
+
+This is in-memory progress, not durable task acceptance. Retain the exact original
+command and its ID until the worker returns the admitted session. Poll
+`GET /api/taskboard` without resubmitting: `preparations` reports `state`
+(`preparing` or `failed`) and `phase` (`waiting`, `worktree` or `admission`).
+Once the preparation disappears and the matching ID appears in `tasks`, fetch
+`POST /api/tasks {action: "get", id: task.sessionId}` for the normal session,
+chat and tracking response. A pending Markdown projection can still be retried
+independently after task acceptance.
+
+A failed preparation stops polling and retains its error. An explicit repeat of
+the same original create command retries that preparation; polling never retries
+it. If restart or disconnection leaves neither preparation nor task visible,
+inspect current state and explicitly retry the same command instead of creating
+a new identity. Progress receipts themselves do not survive restart.
+`POST /api/taskboard/action {action: "cancel", id}` aborts preparation; active
+Git work drains before it reports failure. Deleting a preparation is allowed only
+after it fails. The compatible legacy `POST /api/taskboard` background request
+still returns a taskboard view with `preparationId`; it generates its own ID and
+requires the caller to retain its submitted input.
+
+Recovery of interrupted file preparation reuses only an owned pristine worktree
+bound to the exact durable command. A changed or unverified checkout is preserved:
+creation returns the retained failed session and its tracking state, while the
+file task records `admissionFailure.paths`, an empty `files` array, its error and
+worktree path. No snapshots or new execution are accepted. Replaying creation
+returns that failed identity; execution retry, resume and follow-up commands
+conflict. Inspect the preserved checkout, then create a new request to approve
+current repository files. The failed record survives restart.
+
+The authenticated `GET /api/feature-tracking` endpoint synchronizes and returns
+`{directory, lastSyncedAt, error, records}`. `POST /api/feature-tracking` with
+`{action: "get", sessionId}` returns that retained session's saved record plus
+`markdown`. Record metadata includes `sessionId`, `taskId`, `filename`, `path`,
+`revision`, `updatedAt` and `status`. The existing session view carries the same
+confirmed metadata as `records[].featureRequest`, with the synchronization
+summary in `featureTracking`. A previous successful record can remain visible
+alongside a later sync error; its timestamp is the saved observation, not proof
+that current progress has been written.
+
+Generated notes retain bounded activity/outcome excerpts and attempt references;
+full execution evidence stays in the worker. They omit approved file contents,
+private model dispatch/context and raw patches. Synchronizing these local files
+does not itself commit or push them; shared intake keeps its own lifecycle and
+review-note publication contract.
+
 ## Template and configuration
 
 `worker init` installs `features/_templates/feature-request.md`. Customize it;
@@ -41,7 +129,8 @@ The installed `.werk/worker.json` configures the watcher:
 ```
 
 `features.directory` enables intake; without it or `--features-dir`, existing
-workers do not scan or create a feature folder. Relative paths resolve against
+workers do not scan or create an intake feature folder. Automatic task tracking
+still uses the worker state directory. Relative paths resolve against
 `--project-dir` when supplied, otherwise the working directory. The portable
 worker launched from an initialized project discovers `.werk/worker.json`.
 `feature folder get` reports the saved path; `feature folder plan --path requests`
@@ -81,6 +170,58 @@ The worker snapshots only those files from the project working directory. It
 produces a patch for review; it does **not** apply changes or run project tests.
 Chat does not discover project files. Both modes use configured providers and may
 consume subscription/API usage when admitted; importing a draft does not prompt.
+
+### Approved file paths
+
+File tasks, local feature folders, shared Git intake, offline authoring and the
+live Codex `allowedPaths` setting use the same rule for approved paths.
+
+- Paths are relative and use `/` as the separator.
+- Names may use letters, digits and combining marks in any script, such as
+  `ä ö ü Ä Ö Ü ß é 日本`.
+- Names may also use spaces and these characters: `_ . - , ( ) & ' ’ + – — →`.
+- The worker stores and compares paths in Unicode NFC form. A decomposed spelling,
+  such as one typed on macOS, is converted to NFC, and two spellings of one name
+  count as a duplicate.
+- A path is at most 240 characters. Each segment is at most 255 UTF-8 bytes.
+
+The worker rejects these paths:
+
+- `.` or `..` segments, empty segments, and absolute paths.
+- Paths that start with `-`.
+- Dot-prefixed files or folders, such as `.env` or `.werk/…`.
+- Segments that end in a dot or a space, because Windows silently removes them.
+- Windows device names such as `CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9` and
+  `LPT1`–`LPT9`, with any extension, such as `nul.md`.
+- Control and invisible formatting characters.
+- Windows-reserved characters: `< > : " | ? *` and `\`.
+- Shell, glob and wiki-link characters such as `$`, `` ` ``, `~`, `[`, `]` and `#`.
+- Credential or secret file names (`credentials`, `secrets`, `id_rsa`,
+  `id_ed25519`) and private-key extensions (`.pem`, `.key`, `.p12`, `.pfx`). These
+  checks also cover look-alike spellings, such as full-width letters.
+
+Example of an accepted path:
+`docs/requirements/FA-9_Material-Logistics/LACF-REQ-033 Warenein- und -ausgang einschließlich Zoll abwickeln.md`.
+
+YAML gives some characters special meaning, so write paths that contain them as
+a block list:
+
+```yaml
+paths:
+  - docs/requirements/LACF-REQ-101 Angebote prüfen, freigeben & versenden.md
+  - "docs/Kunden's Änderungen (Größe).md"
+```
+
+In flow style, `paths: [a, b.md]`, a comma separates two paths. Quote a name that
+contains a comma, or one that starts with `&`, `'` or `"`.
+
+A file task refuses a path when an existing file or folder has the same name in a
+different Unicode normalization. Rename that file to its composed (NFC) spelling
+first. Otherwise the patch would create a second file that looks identical.
+Shared publication refuses a new file that differs from a tracked file only by
+letter case or Unicode normalization.
+
+Patches quote every path in Git's C-style form, which `git apply` accepts.
 
 ## Lifecycle and recovery
 

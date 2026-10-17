@@ -1,3 +1,4 @@
+import { containsSensitivePatchMaterial } from '../application/review-patch-policy.js';
 import type { ConsumptionRuntime } from '../application/consumption.js';
 import { withConsumption } from '../application/consumption-model.js';
 import { codexUsage } from './provider-usage.js';
@@ -19,8 +20,8 @@ export function codexConfiguration(value: unknown): CodexConfiguration {
     const config = value as Record<string, unknown>;
     if (Object.keys(config).some(key => !['executable', 'repository', 'allowedPaths'].includes(key)) ||
         typeof config.executable !== 'string' || !isAbsolute(config.executable) || (config.repository !== undefined && (typeof config.repository !== 'string' || !isAbsolute(config.repository)))) throw Error('Codex executable and optional legacy repository must be absolute operator-configured paths');
-    validateApprovedPaths(config.allowedPaths, 'Codex allowedPaths');
-    return { executable: config.executable, ...(typeof config.repository === 'string' ? { repository: config.repository } : {}), allowedPaths: config.allowedPaths as string[] };
+    const allowedPaths = validateApprovedPaths(config.allowedPaths, 'Codex allowedPaths');
+    return { executable: config.executable, ...(typeof config.repository === 'string' ? { repository: config.repository } : {}), allowedPaths };
 }
 
 /** Narrow native-Linux adapter. A successful command produces a local patch requiring human review. */
@@ -126,7 +127,7 @@ export class CodexAdapter implements Adapter {
             }
             await trustedGit(['add', '--', ...this.config.allowedPaths.filter(path => changed.some(entry => entry.slice(3) === path))]);
             const patch = await trustedGit(['diff', '--cached', '--no-ext-diff', '--no-textconv', '--no-renames', '--full-index', '--binary', baseCommit, '--']);
-            if (!patch.length || patch.length > 1048576 || patch.includes(Buffer.from('GIT binary patch')) || /-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----|\b(?:sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,})\b/.test(patch.toString('utf8'))) throw Error('Patch exceeds limits or contains unsupported sensitive material');
+            if (!patch.length || patch.length > 1048576 || patch.includes(Buffer.from('GIT binary patch')) || containsSensitivePatchMaterial(patch.toString('utf8'))) throw Error('Patch exceeds limits or contains unsupported sensitive material');
             try { new TextDecoder('utf-8', { fatal: true }).decode(patch); } catch { throw Error('Patch must be UTF-8 text'); }
             bounded.throwIfAborted();
             await ensureDirectory(reviewDir);

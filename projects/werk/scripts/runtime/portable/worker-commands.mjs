@@ -1,7 +1,9 @@
 import { open } from "node:fs/promises";
 import { inputError } from "../config.mjs";
+// Git fetch, claim and publication can outlast the default 10 s API wait on slow remotes.
+const GIT_REQUEST_TIMEOUT_MS = 120000;
 export function workerCommands(catalog) {
-  catalog["feature setup"] = { local: true, required: [], options: ["project-dir", "features-dir"], mutating: true, description: "Install a standalone feature authoring kit without starting or installing a worker; preserve existing project files." };
+  catalog["feature setup"] = { local: true, required: [], options: ["project-dir", "features-dir", "if-match"], mutating: true, description: "Install a standalone feature authoring kit without starting or installing a worker; preserve existing project files. The authoring script is refreshed only while it matches the content recorded in .werk/authoring/manifest.json; --if-match REVISION replaces an unrecorded script with that revision." };
   for (const action of ["create", "validate", "ready"]) catalog["feature author " + action] = {
     local: true, required: action === "create" ? ["name", "title"] : ["file", ...(action === "ready" ? ["if-match"] : [])],
     options: ["project-dir"], mutating: action !== "validate",
@@ -74,12 +76,18 @@ export function workerCommands(catalog) {
     method: "POST", path: "/api/definitions", required: ["id", "ref"], mutating: true,
     description: "Give an imported definition the stable reference that committed requests select with definitionRef. The reference moves from any other definition; existing tasks keep their saved copy.",
   };
+  catalog["definition update"] = {
+    method: "POST", path: "/api/definitions", body: true, required: ["ref"], options: ["if-match", "dry-run"], mutating: true,
+    example: { name: "Project reviewer", yaml: "agents:\n  root:\n    model: openai/gpt-4.1\n    instruction: Review the task and list the risks first.\n" },
+    description: "Replace the instruction profile behind a stable reference in place; its id and reference stay. --dry-run previews name, content and per-agent changes without writing. Apply with --if-match REVISION from definition list or the dry run. Existing tasks keep their accepted snapshot.",
+  };
   catalog["repository status"] = {
     method: "GET", path: "/api/repositories",
     description: "Inspect assigned repositories and the installation-folder consent request without fetching.",
   };
   catalog["repository sync"] = {
     ...action("/api/repositories", "sync", [], false, ["id"]),
+    timeoutMs: GIT_REQUEST_TIMEOUT_MS,
     description: "Fetch assigned repositories and fast-forward clean checkouts; --id selects one assignment.",
   };
   for (const name of ["accept", "decline"])
@@ -87,18 +95,51 @@ export function workerCommands(catalog) {
       ...action("/api/repositories", name, ["discovery-id"], false, [], { "discovery-id": "discoveryId" }),
       description: "Record the explicit choice for the exact detected installation repository. Read repository status for its discovery id first.",
     };
+  catalog["worktrees list"] = {
+    timeoutMs: GIT_REQUEST_TIMEOUT_MS,
+    method: "GET", path: "/api/worktrees",
+    description: "List task worktrees this worker created in assigned repositories, with location, state (present|missing|incomplete|locked|unregistered|invalid) and the file task still using each. Reads ownership records only.",
+  };
+  catalog["worktrees prune"] = {
+    timeoutMs: GIT_REQUEST_TIMEOUT_MS,
+    ...action("/api/worktrees", "prune", [], false, ["id", "repository", "discard-changes", "dry-run"]),
+    flags: {
+      id: "Worktree name from worktrees list; default every worktree no file task uses",
+      repository: "Assignment ID to limit pruning to",
+      "discard-changes": "true also removes worktrees with uncommitted/untracked files or an interrupted checkout; default false",
+      "dry-run": "Report what would be removed without changing anything",
+    },
+    description: "Remove retained task worktrees that no file task uses through git worktree remove. Clean only unless --discard-changes true; never removes worktrees with commits, locks, links or junctions. Requires no queued or running work; --dry-run works anytime.",
+  };
   catalog["shared status"] = {
     method: "GET", path: "/api/shared-intake",
     description: "Inspect shared Git intake: binding, current revision, workflow snapshot and request lifecycle, without fetching.",
   };
   catalog["shared sync"] = {
     ...action("/api/shared-intake", "sync", [], false),
+    timeoutMs: GIT_REQUEST_TIMEOUT_MS,
     description: "Fetch the shared branch now and reconcile ready requests, claims and publications.",
   };
   catalog["shared configure"] = {
     ...action("/api/shared-intake", "configure", [], true),
+    timeoutMs: GIT_REQUEST_TIMEOUT_MS,
+    input: "The complete binding is required: enabled, repositoryId, remote, branch, workflowPath and pollMs. Start from the config returned by shared status.",
     example: { expectedRevision: 0, config: { enabled: true, repositoryId: "ASSIGNMENT_ID", remote: "origin", branch: "main", workflowPath: ".werk/feature-workflow.json", pollMs: 60000 } },
     description: "Save the shared intake binding from JSON file/stdin while new starts are paused and idle. Use expectedRevision from shared status; switching branches requires finished, published requests.",
+  };
+  catalog["tool-access get"] = {
+    method: "GET", path: "/api/tool-access",
+    description: "Inspect model tool grants: file access, command presets, CLI tools, web origins and MCP connections with their revision. Secrets are redacted.",
+  };
+  catalog["tool-access set"] = {
+    method: "POST", path: "/api/tool-access", body: true, inputLimit: 1048576,
+    input: "JSON file/stdin up to 1 MiB, including discovered MCP catalogs. After removing read-only fields, the update must fit the 64 KiB API limit.",
+    example: { expectedRevision: 0, builtins: { files: true, commands: [], cliTools: [{ id: "harness", name: "Project harness", description: "Reads the backlog and runs project checks.", enabled: true, executable: "/absolute/path/to/node", args: ["bin/harness.mjs"], commands: [{ command: "help" }, { command: "backlog context" }, { command: "backlog set", requireOneOf: ["--dry-run"] }], refusedOptions: ["--root", "--config", "--out"] }], webOrigins: [] }, mcp: [] },
+    description: "Replace all model tool grants from JSON file/stdin while new starts are paused and idle. Edit the output of tool-access get and send it back, or supply expectedRevision with builtins and mcp. Omitted MCP connections are removed.",
+  };
+  catalog["tool-access discover"] = {
+    method: "POST", path: "/api/tool-access/discover", required: ["id", "if-match"],
+    description: "Read the tool catalog of a saved MCP connection while paused and idle. Discovery grants nothing; --if-match is the current tool-access revision.",
   };
   catalog["profile list"] = {
     method: "GET", path: "/api/execution-profiles",
@@ -434,9 +475,14 @@ export function workerCommands(catalog) {
       name,
       ["id", ...(name === "priority" ? ["priority"] : [])],
       false,
-      [],
-      { priority: "priority" },
+      name === "delete" ? ["remove-worktree", "discard-changes"] : [],
+      name === "delete" ? { "remove-worktree": "removeWorktree", "discard-changes": "discardChanges" } : { priority: "priority" },
     );
+  catalog["file-task delete"].flags = {
+    id: "File task ID",
+    "remove-worktree": "Omitted: remove its Git worktree when clean, otherwise keep it and report why; true: deletion fails unless removed; false: keep it",
+    "discard-changes": "true also removes uncommitted/untracked files in the worktree; default false",
+  };
   catalog["queue get"] = {
     method: "GET",
     path: "/api/sessions",
@@ -503,12 +549,41 @@ export function workerCommands(catalog) {
           item.action,
         ) &&
         !name.endsWith(" get");
-      item.destructive = item.action === "delete";
+      item.destructive = item.action === "delete" || item.action === "prune";
     }
   }
   return catalog;
 }
+/** Accept an edited `tool-access get` view: its revision becomes the guard and read-only fields are dropped. */
+export function toolAccessBody(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body))
+    throw inputError("Tool access input must be a JSON object.");
+  let result = body;
+  if (body.expectedRevision === undefined) {
+    if (!Number.isSafeInteger(body.revision))
+      throw inputError("Include expectedRevision, or send the edited output of tool-access get.");
+    const { revision, schemaVersion, canEdit, saveBlockedReason, workerNode, mcp, ...rest } = body;
+    result = {
+      ...rest,
+      expectedRevision: revision,
+      mcp: Array.isArray(mcp) ? mcp.map((item) => {
+        if (!item || typeof item !== "object") return item;
+        const { hasSecret, discoveredTools, ...connection } = item;
+        return connection;
+      }) : mcp,
+    };
+  }
+  if (Buffer.byteLength(JSON.stringify(result)) > 65536)
+    throw inputError("Tool access update limit: 64 KiB after removing discovery catalogs.");
+  return result;
+}
 export async function workerBody(command, body, options) {
+  if (command.path === "/api/tool-access" && command.method === "POST") return toolAccessBody(body);
+  if (command.path === "/api/tool-access/discover") {
+    if (!/^\d+$/.test(options["if-match"] ?? "") || !Number.isSafeInteger(Number(options["if-match"])))
+      throw inputError("--if-match must be the current tool-access revision.");
+    return { id: options.id, expectedRevision: Number(options["if-match"]) };
+  }
   if (command.path === "/api/requests") {
     if (
       body !== undefined &&
@@ -570,6 +645,19 @@ export async function workerBody(command, body, options) {
   if (command.path === "/api/interactions")
     return interactionBody(command, body, options);
   if (command.path === "/api/runs") return workerRunBody(command, options);
+  if (command.path === "/api/worktrees" && command.action === "prune") {
+    const result = { action: "prune" };
+    if (options.id !== undefined) {
+      if (!/^[A-Za-z0-9_-]{1,64}$/.test(options.id)) throw inputError("Invalid --id; use a worktree name from worktrees list.");
+      result.id = options.id;
+    }
+    if (options.repository !== undefined) result.repositoryId = options.repository;
+    if (options["discard-changes"] !== undefined) {
+      if (!["true", "false"].includes(options["discard-changes"])) throw inputError("--discard-changes must be true or false.");
+      result.discardChanges = options["discard-changes"] === "true";
+    }
+    return result;
+  }
   if (command.fixedBody) return command.fixedBody;
   if (command.wait === "file-task") return { id: options.id };
   if (!command.action) return body;
@@ -586,7 +674,12 @@ export async function workerBody(command, body, options) {
     ...(options.id ? { id: options.id } : {}),
   };
   for (const [option, field] of Object.entries(command.fields ?? {}))
-    if (options[option] !== undefined) result[field] = options[option];
+    if (options[option] !== undefined) {
+      if (["remove-worktree", "discard-changes"].includes(option)) {
+        if (!["true", "false"].includes(options[option])) throw inputError("--" + option + " must be true or false.");
+        result[field] = options[option] === "true";
+      } else result[field] = options[option];
+    }
   if (options.markdown) result.markdown = await readMarkdown(options.markdown);
   return result;
 }

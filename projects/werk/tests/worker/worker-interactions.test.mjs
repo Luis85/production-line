@@ -171,7 +171,7 @@ test('interaction HTTP endpoints enforce access, bounded event reads, revision f
   const post = (body, authorized = true) => fetch(base + '/api/interactions', { method: 'POST', headers: authorized ? headers : { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   assert.equal((await post({ action: 'get', sessionId: 'default' }, false)).status, 401);
   assert.equal((await fetch(base + '/api/capabilities')).status, 401);
-  const capability = await (await fetch(base + '/api/capabilities', { headers })).json(); assert.equal(capability.events.transport, 'polling'); assert.equal(capability.capabilities.nativeResume, false);
+  const capability = await (await fetch(base + '/api/capabilities', { headers })).json(); assert.equal(capability.events.transport, 'polling'); assert.equal(capability.capabilities.nativeResume, false); assert.equal(capability.toolAccess.implementation.supported, true); assert.equal(capability.toolAccess.implementation.writes, 'approved_paths_in_owned_worktree'); assert.equal(capability.toolAccess.implementation.humanMergeRequired, true);
   await workspace.sessions.start('PRIVATE-HTTP-PROMPT'); await until(() => !workspace.sessions.busy);
   const view = await (await post({ action: 'get', sessionId: 'default' })).json(); assert.equal(view.phase, 'waiting_input');
   const turn = await (await post({ action: 'turn', sessionId: 'default', turnId: view.latestTurn.id })).json(); assert.match(JSON.stringify(turn.dispatch), /PRIVATE-HTTP-PROMPT/);

@@ -62,11 +62,9 @@ test('clean standalone build removes stale output and compiles nested shared mod
     await mkdir(join(root,'src/worker/authoring'));
     await writeFile(join(root,'src/worker/authoring/cli.ts'),'import { parse } from "yaml"; import { value } from "../../shared/nested/value.js"; console.log(parse("value: " + value).value);\n');
     await writeFile(join(root,'src/worker/dist/stale.js'),'old build');
-    // The worker webview shares pure consumption policy with the application.
-    await mkdir(join(root,'src/worker/application'),{recursive:true});
-    for (const file of ['consumption.ts','run-evidence.ts']) await cp(new URL('../../src/worker/application/' + file,import.meta.url),join(root,'src/worker/application',file));
-    await cp(new URL('../../src/shared/errors.ts',import.meta.url),join(root,'src/shared/errors.ts'));
-    await cp(new URL('../../src/shared/webview',import.meta.url),join(root,'src/shared/webview'),{recursive:true});
+    // Copy shared source layers so the real webview's transitive helper imports stay complete.
+    await cp(new URL('../../src/worker/application',import.meta.url),join(root,'src/worker/application'),{recursive:true});
+    await cp(new URL('../../src/shared',import.meta.url),join(root,'src/shared'),{recursive:true});
     await cp(new URL('../../src/worker/webview',import.meta.url),join(root,'src/worker/webview'),{recursive:true,filter:path=>!path.includes('.nuxt-ui')});
     await symlink(fileURLToPath(new URL('../../node_modules',import.meta.url)),join(root,'node_modules'),process.platform==='win32'?'junction':'dir');
     await exec(process.execPath,[join(root,'scripts/build.mjs'),'worker','--dist-only']);
@@ -75,6 +73,10 @@ test('clean standalone build removes stale output and compiles nested shared mod
     const authoring=join(root,'authoring-only.mjs');await cp(join(target,'worker/authoring/feature-request.mjs'),authoring);
     await rm(join(root,'src'),{recursive:true});
     await rm(join(root,'node_modules'),{recursive:true,force:true});
+    // The relocated runtime formatter must resolve its own packaged Markdown parser.
+    const formatter=join(target,'formatter-check.mjs');
+    await writeFile(formatter,'import { readableMarkdown } from "./worker/application/readable-reply.js"; console.log(readableMarkdown("src/app/main.ts"));\n');
+    const formatted=await exec(process.execPath,[formatter],{cwd:tmpdir()});assert.equal(formatted.stdout.trim(),'`src/app/main.ts`');
     await rm(join(target,'node_modules'),{recursive:true,force:true});
     const standalone=await exec(process.execPath,[authoring],{cwd:tmpdir()});assert.equal(standalone.stdout.trim(),'portable');
     const result=await exec(process.execPath,[join(target,'worker/cli.js')],{cwd:tmpdir()});assert.equal(result.stdout.trim(),'portable');

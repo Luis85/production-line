@@ -1,3 +1,5 @@
+import { approvedPathsCollide } from '../../application/approved-paths.js';
+import { containsSensitivePatchMaterial } from '../../application/review-patch-policy.js';
 import { requestName, parseFeature } from './document.js';
 import { canonicalJson } from '../../application/request-gates.js';
 import { branchName, commitId, FeatureGitIo, GitFeatureError, gitPath, hash, textBytes, type GitBlob } from './git-io.js';
@@ -149,17 +151,27 @@ export class GitFeatureRepository {
     }
     throw new GitFeatureError('conflict', 'The feature branch already belongs to different work. Existing commits were preserved.');
   }
+  /** A new file must not alias a tracked name that differs only by case or Unicode normalization. */
+  private async assertNoAlias(worktree: string, commit: string, path: string, signal: AbortSignal) {
+    const parts = path.split('/'), key = (name: string) => name.normalize('NFC').toLowerCase();
+    for (let i = 0; i < parts.length; i++) {
+      const parent = parts.slice(0, i).join('/');
+      const names = (await this.io.output(worktree, ['ls-tree', '-z', '--name-only', commit, ...(parent ? ['--', parent + '/'] : [])], signal)).split('\0').filter(Boolean).map(entry => entry.slice(parent ? parent.length + 1 : 0));
+      if (names.some(name => name !== parts[i] && key(name) === key(parts[i]!))) throw new GitFeatureError('conflict', 'Feature patch adds a path that differs from an existing file or folder only by case or Unicode normalization.');
+    }
+  }
   publishPatch(value: GitPatchPublication, signal?: AbortSignal): Promise<GitFeatureBranchPublication> {
     const input = structuredClone(value), bounded = this.signal(signal); operation(input.operationId);
     if (!/^[a-z0-9][a-z0-9-]{0,79}$/.test(input.featureId) || !commitId(input.sourceCommit) || !Array.isArray(input.approvedPaths) || !input.approvedPaths.length || input.approvedPaths.length > 32 || new Set(input.approvedPaths).size !== input.approvedPaths.length) throw new GitFeatureError('invalid_input', 'Feature publication requires a stable feature ID, source commit and explicit approved paths.');
     textBytes(input.patch, 131072);
-    if (!input.patch.trim() || /-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----|\b(?:sk-[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,})\b/.test(input.patch)) throw new GitFeatureError('invalid_input', 'Feature patch is empty or contains sensitive material.');
+    if (!input.patch.trim() || containsSensitivePatchMaterial(input.patch)) throw new GitFeatureError('invalid_input', 'Feature patch is empty or contains sensitive material.');
     for (const path of input.approvedPaths) {
       gitPath(path);
       const normalized = path.toLowerCase();
       if (normalized === '.werk' || beneath(normalized, '.werk')) throw new GitFeatureError('invalid_input', 'Feature patches cannot modify worker control storage.');
       if ([this.options.requestsDirectory, this.options.reviewDirectory].some(directory => normalized === directory.toLowerCase() || beneath(normalized, directory.toLowerCase())) || (this.options.protectedPaths ?? []).some(protectedPath => normalized === protectedPath.toLowerCase())) throw new GitFeatureError('invalid_input', 'Feature patches cannot modify their workflow configuration, request intake or review artifacts.');
     }
+    if (approvedPathsCollide(input.approvedPaths)) throw new GitFeatureError('invalid_input', 'Approved feature paths must be unique without file or folder aliases.');
     const branch = branchName(`${this.options.branchPrefix ?? 'werk/features'}/${input.featureId}-${hash(input.operationId).slice(0, 12)}`);
     const digest = hash(canonicalJson({ ...input, approvedPaths: [...input.approvedPaths].sort() }));
     return this.serialize(async () => {
@@ -170,8 +182,12 @@ export class GitFeatureRepository {
         const raw = (await this.io.output(worktree, ['diff', '--cached', '--raw', '-z', '--no-renames'], bounded)).split('\0').filter(Boolean);
         if (!raw.length || raw.length % 2 || raw.length > 64) throw new GitFeatureError('conflict', 'Feature patch must contain a bounded set of approved file changes.');
         for (let i = 0; i < raw.length; i += 2) {
-          const match = /^:(000000|100644|100755) (100644|100755) [a-f0-9]+ [a-f0-9]+ ([AM])$/.exec(raw[i]!);
-          if (!match || match[1] !== '000000' && match[1] !== match[2] || !input.approvedPaths.includes(raw[i + 1]!)) throw new GitFeatureError('conflict', 'Feature patch changed an unapproved path, file mode or file type.');
+          const match = /^:(000000|100644|100755) (000000|100644|100755) [a-f0-9]+ [a-f0-9]+ ([AMD])$/.exec(raw[i]!);
+          const regularChange = match && (match[3] === 'A' ? match[1] === '000000' && match[2] !== '000000'
+            : match[3] === 'D' ? match[1] !== '000000' && match[2] === '000000'
+              : match[1] !== '000000' && match[1] === match[2]);
+          if (!regularChange || !input.approvedPaths.includes(raw[i + 1]!)) throw new GitFeatureError('conflict', 'Feature patch changed an unapproved path, file mode or file type.');
+          if (match![3] === 'A') await this.assertNoAlias(worktree, input.sourceCommit, raw[i + 1]!, bounded);
         }
         const tree = (await this.io.output(worktree, ['write-tree'], bounded)).trim();
         return { tree, commit: prior ? null : await this.io.commit(worktree, input.sourceCommit, input.operationId, digest, bounded) };

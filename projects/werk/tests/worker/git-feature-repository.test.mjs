@@ -120,6 +120,24 @@ test('a validated patch publishes a separate feature branch and never includes i
   git(f.repository, 'worktree', 'remove', '--force', task);
 });
 
+test('explicit approved regular-file deletion publishes once without deleting source or teammate files', async t => {
+  const f = await fixture(t), adapter = f.client();
+  const deletion = 'diff --git a/file.txt b/file.txt\ndeleted file mode 100644\n--- a/file.txt\n+++ /dev/null\n@@ -1 +0,0 @@\n-initial\n';
+  const input = { ...f.publication('delete-approved-file'), patch: deletion };
+  await assert.rejects(adapter.publishPatch({ ...input, approvedPaths: ['other.txt'] }), /unapproved path/);
+  assert.equal(git(f.remote, 'for-each-ref', '--format=%(refname)', 'refs/heads/werk'), '');
+  const main = await f.teammate('file.txt', 'newer teammate content\n');
+  const result = await adapter.publishPatch(input);
+  assert.equal(git(f.remote, 'ls-tree', '--name-only', result.commit, '--', 'file.txt'), '');
+  assert.equal(git(f.remote, 'diff', '--name-status', f.sourceCommit, result.commit), 'D\tfile.txt');
+  assert.equal(git(f.remote, 'rev-parse', result.commit + '^'), f.sourceCommit);
+  assert.equal(f.main(), main); assert.equal(git(f.remote, 'show', 'main:file.txt'), 'newer teammate content');
+  assert.equal(await readFile(join(f.repository, 'file.txt'), 'utf8'), 'initial\n');
+  const replay = await f.client().publishPatch(input);
+  assert.equal(replay.replayed, true); assert.equal(replay.commit, result.commit);
+  assert.equal(git(f.remote, 'rev-parse', result.branch), result.commit);
+});
+
 test('feature publication confirms a lost acknowledgement and preserves an existing conflicting branch', async t => {
   const f = await fixture(t), adapter = f.client(), push = adapter.io.push.bind(adapter.io);
   adapter.io.push = async (...args) => { await push(...args); throw Error('Lost acknowledgement'); };
@@ -268,4 +286,26 @@ test('Windows shared publication rejects an excessive metadata path before reser
   await assert.rejects(adapter.publishLifecycle(f.lifecycle('excessive-path')), /shorter worker state directory/);
   assert.equal(checkoutAttempted, false); assert.equal(f.main(), f.sourceCommit);
   await assert.rejects(readdir(join(stateDirectory, 'worktrees')), { code: 'ENOENT' });
+});
+
+const addedFilePatch = (path, line) => `diff --git ${JSON.stringify('a/' + path)} ${JSON.stringify('b/' + path)}\nnew file mode 100644\n--- /dev/null\n+++ ${JSON.stringify('b/' + path)}\n@@ -0,0 +1,1 @@\n+${line}\n`;
+test('a quoted Unicode vault path publishes under its exact NFC name', async t => {
+  const f = await fixture(t), path = "docs/Kunden's Änderungen (Größe) & Fristen – Prüfung → Freigabe.md";
+  const result = await f.client().publishPatch({ ...f.publication('publish-unicode'), patch: addedFilePatch(path, 'Prüfung'), approvedPaths: [path] });
+  const listed = execFileSync('git', ['ls-tree', '-r', '-z', '--name-only', result.commit, '--', 'docs/'], { cwd: f.remote, encoding: 'utf8' }).split('\0').filter(Boolean);
+  assert.deepEqual(listed, [path]);
+  assert.equal(git(f.remote, 'show', `${result.commit}:${path}`), 'Prüfung');
+});
+test('a published file cannot alias a tracked name that differs only by Unicode normalization', { skip: process.platform === 'darwin' && 'APFS resolves both normalization forms to the same file' }, async t => {
+  const f = await fixture(t), path = 'docs/Übersicht.md';
+  const sourceCommit = await f.teammate(path.normalize('NFD'), 'decomposed\n');
+  git(f.repository, 'fetch', 'origin');
+  await assert.rejects(f.client().publishPatch({ ...f.publication('publish-alias'), sourceCommit, patch: addedFilePatch(path, 'composed'), approvedPaths: [path] }), error => error.code === 'conflict' && /Unicode normalization/.test(error.message));
+});
+
+test('publication refuses new approved paths with colliding parent spellings', async t => {
+  const f = await fixture(t), approvedPaths = ['Änderungen/a.md', 'änderungen/b.md'];
+  const patch = approvedPaths.map(path => addedFilePatch(path, 'content')).join('');
+  assert.throws(() => f.client().publishPatch({ ...f.publication('publish-parent-alias'), approvedPaths, patch }), error => error.code === 'invalid_input' && /folder aliases/.test(error.message));
+  assert.equal(f.main(), f.sourceCommit);
 });

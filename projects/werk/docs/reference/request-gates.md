@@ -37,6 +37,7 @@ command for command flags. The release also ships the [JSON schema](../../schema
 | `input.kind`, `input.titleLength`, `input.messageLength` | Accepted input shape |
 | `input.criteriaCount`, `input.approvedFileCount`, `input.approvedBytes`, `input.pathsValid` | Retained criteria and approved snapshots; unknown bytes remain unknown |
 | `output.nonEmpty`, `output.protocolValid`, `output.patchPresent`, `output.changedFileCount` | Worker-observed result/artifact properties |
+| `output.verificationPassed`, `output.requiredCheckCount`, `output.candidateDigest` | Current candidate and frozen required-command receipts observed by the worker; unknown for proposal-only tasks |
 | `execution.recoverySafe`, `execution.outcome` | Recorded execution checkpoint |
 | `pending.count`, `findings.blockingCount` | Current unresolved input and blockers |
 | `operator.accepted` | Explicit acceptance bound to this input and output digest |
@@ -111,3 +112,5 @@ gate nor changes accepted input. Original accepted Markdown body/hash stay retai
 Remote requests retain orchestrator input and lease ownership. Local rework cannot
 replace their accepted input. Use an upstream successor with the owning attempt,
 evaluation and operation key; see the [rework guide](../how-to/rework-worker-requests.md).
+
+For new implementation requests, the worker derives candidate verification from actual worktree contents and required command results. Changing files invalidates prior checks. These output facts participate in the saved result digest; model prose cannot supply them. Add `output.verificationPassed == true` to a project completion policy when proposal-only results must remain held. Generic required commands do not automatically establish `tests.passed` or `build.passed`.

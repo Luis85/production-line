@@ -78,23 +78,30 @@ Taskboard before using it. Review `repository status`, then explicitly choose
 The saved choice survives restart; acceptance adds an assignment. No remote or
 detached HEAD leaves watching off. Discovery never selects an unrelated ancestor.
 
-Use Dashboard's **Git repositories** section or
+Use **Settings → Repositories** or
 `settings set --file repositories.json` with a top-level
 `repositories` object: `{pollMs: 30000, items: [{id, path, remote, branch?, watch}]}`.
 Assign existing local Git checkouts; the worker watches/fetches each enabled
 repository and only fast-forwards clean bases. Coding tasks use retained worktrees
-under each checkout's `.werk/worktrees`. Drain tasks before changing assignments.
+under each checkout's `.werk/worktrees`, or under the optional absolute
+`repositories.worktreeDirectory` outside every checkout so project tools do not
+scan task copies. Drain tasks before changing assignments.
 Worker JSON passed through `--config` can seed assignments; saved private settings
 take precedence after the first start. Git must be installed on the worker host.
 
 Use `repository status` to inspect assignments and `repository sync --id app`
-to check/pull one assignment; omit `--id` for all. The same private endpoint is
+to check/pull one assignment; omit `--id` for all. `worktrees list` shows the task
+worktrees this worker created, their state and the file task still using each.
+`worktrees prune --dry-run` previews and `worktrees prune [--id NAME]` removes
+clean ones no file task uses; add `--discard-changes true` to also remove changed
+or interrupted ones. Worktrees with commits, locks, symbolic links or junctions
+are always kept for manual review. The same private endpoint is
 available with `api --path /api/repositories`. Local file tasks select the assignment ID
 in their existing `repository` field. Assigning repositories does not change
 mock execution or give provider Chat arbitrary filesystem tools. See the
 [configuration contract](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/configuration.md#assigned-git-repositories).
 
-Execution profiles are editable in **Dashboard → Execution profiles** or through
+Execution profiles are editable in **Settings → Execution profiles** or through
 `profile list` / `profile set --file profiles.json`. Keep the current mode and
 one shared execution slot. Pause and drain work first; registered workers persist
 changes until their orchestrator acknowledges them. See the
@@ -113,7 +120,12 @@ variable, bounds, precedence and inspection commands, plus request-gate recovery
 semantics. `WERK_WORKER_MAX_RUNTIME_MS` controls each local model invocation,
 not the lifetime of a session or a CLI polling deadline. The default is six hours,
 with a validated one-second to 24-hour range; a process-environment override wins
-over saved private settings and must be removed/restarted before execution edits.
+over saved private settings and must be removed/restarted before duration edits.
+Tool budgets remain editable: `execution.maxToolCalls` defaults to 128 (1–512),
+and `execution.commandTimeoutMs` to 300000 (1000–3600000). The total duration
+still bounds each command. Settings → Queue & duration exposes these controls;
+API/CLI saves can include the complete `expectedToolBudget` pair to reject stale
+changes. Each invocation retains the budgets captured when it was prepared.
 Inspect `settings get` for `executionSource` and `resource status` for admission
 conditions. Resource snapshots measure the worker Node process, not provider
 subprocess totals or subscription balances. Fleet `workers.execution.timeoutMs`
@@ -199,7 +211,13 @@ Progress records go to stderr.
 
 The state directory is never modified, and project files, `.env`, feature folders
 and agent integrations are not written. Review `integrations plan` after updating
-for new templates. `bin/apps/.<app>-update/` and `<state>.updates/` contain a
+for new templates. For a worker, also run `feature setup`. It refreshes an
+unmodified `.werk/authoring/feature-request.mjs` recorded in
+`.werk/authoring/manifest.json`. It reports `authoring_script_outdated` with a
+`revision` for a changed or unrecorded script, which `feature setup --if-match REVISION`
+replaces; see
+[Refresh the authoring script after an upgrade](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/team-feature-authoring.md#refresh-the-authoring-script-after-an-upgrade).
+`bin/apps/.<app>-update/` and `<state>.updates/` contain a
 `.gitignore` that excludes them from Git; backups contain credentials, so keep
 them private. Retained folders and backups are not deleted automatically; remove
 old ones after the new version is confirmed. Files you added inside the app folder
@@ -277,18 +295,39 @@ not mean completion: inspect `session.status`, `chat.busy` and message outcomes.
 All chat, file work and remote assignments execute serially. Queue places add waiting
 capacity; multiple isolated worker instances provide parallel execution.
 
-For local files use `file-task create --file file-task.json` with an explicit
-repository and approved paths:
+Every task also receives an automatically synchronized Markdown feature-request
+record. Follow-ups, checkpoints and retries retain that session's record. Source
+intake files and private execution journals remain authoritative; a pending/failed
+Markdown sync does not reject an already accepted task. See
+[automatic task tracking](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/feature-requests.md#automatic-task-tracking).
+
+The webview uses one request composer with optional repository-file permission.
+The compatible CLI keeps `file-task create --file file-task.json` for the bounded
+approved-file execution contract. Supply an explicit repository and paths:
 
 ```json
 {"title":"Explain the acceptance rule","instruction":"Add a comment explaining the rule.","provider":"codex-cli","repository":"/absolute/project","paths":["acceptance.txt"]}
 ```
 
-Inspect `file-task list`, `file-task get --id ID`, or use `file-task action --file`
-for taskboard operations. File tasks capture approved input and produce review
-patches. They do not apply changes or run tests. `session action --file` supports
-rename/archive/delete with the same restrictions as the webview. `settings set`
-configures the local queue, provider connections and optional orchestrator:
+Add `"background": true` to return a preparation receipt immediately. This is
+in-memory progress; a task is durably accepted only after preparation finishes.
+The task appears once its Git worktree is ready, and `file-task list` shows it
+under `preparations` meanwhile, or with its failure reason. Retain the submitted
+input and inspect current state before retrying an ambiguous creation. Stop a
+preparation with `file-task cancel --id ID`; dismiss a failed entry with
+`file-task delete --id ID`. These compatible CLI commands use the legacy
+taskboard API. The unified webview uses `POST /api/tasks` with a caller-retained
+request ID; see [background preparation](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/feature-requests.md#automatic-task-tracking).
+
+Use background preparation with large repositories, where checkout can outlast
+the CLI request timeout. Inspect `file-task list`, `file-task get --id ID`, or
+use `file-task action --file` for taskboard operations. Eligible new Git-backed
+requests edit approved paths in their retained worktree and run required checks;
+other requests retain the proposal-only workflow. Both produce a review patch
+and leave the developer checkout separate. See [implement a feature](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/implement-feature.md).
+`session action --file` supports rename/archive/delete with the same restrictions
+as the webview. `settings set` configures the local queue, provider connections
+and optional orchestrator:
 
 ```json
 {"connection":{"enabled":true,"url":"http://127.0.0.1:3000","enrollmentToken":"PRIVATE_ENROLLMENT_TOKEN"}}
@@ -312,11 +351,19 @@ node bin/apps/worker/cli.mjs definition preview --file preview.json
 node bin/apps/worker/cli.mjs definition import --file definition.json
 node bin/apps/worker/cli.mjs definition list
 node bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-reviewer
+node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file update.json --dry-run
+node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file update.json --if-match REVISION
 node bin/apps/worker/cli.mjs definition delete --id DEFINITION_ID
 ```
 
 Preview input is `{"yaml":"YAML_TEXT"}`; import adds `"name":"Project reviewer"`
 and optionally a stable `"ref":"project-reviewer"`.
+`definition update` replaces the profile behind a reference in place: its ID and
+reference stay, and `update.json` contains `{"yaml":"YAML_TEXT"}` with an optional
+new `"name"`. `--dry-run` writes nothing and returns the current `revision`, the
+name and digest change, and added, removed and changed agents. Apply with
+`--if-match` set to the `revision` from the dry run or `definition list`; a changed
+profile is refused with exit 2. Existing tasks keep the snapshot they accepted.
 The returned definition ID can be added to `task create` or `file-task create`
 input as `"definitionId":"DEFINITION_ID","agent":"root"`. Shared or committed
 input should use `"definitionRef":"project-reviewer"` instead, which resolves on
@@ -422,6 +469,9 @@ explicit IDs and do not change the webview selection, except `session select`.
 | `session select` | `--id SESSION_ID`; explicitly changes the selected webview session. |
 | `file-task create` | `--file PATH\|-`; approved-file input contract shown by `schema`. |
 | `file-task get\|cancel\|retry\|archive\|restore\|delete` | `--id TASK_ID`; retry uses captured input/files; archive/restore are explicit, repeatable states. |
+| `file-task delete` | Also removes the task's Git worktree when clean, otherwise keeps it and reports why. `--remove-worktree false` keeps it; `true` fails unless removed. `--discard-changes true` removes uncommitted/untracked files too. |
+| `worktrees list` | Task worktrees of assigned repositories: name, location, state and the file task using each. |
+| `worktrees prune` | Optional `--id NAME`, `--repository ID`, `--discard-changes true`, `--dry-run`; removes worktrees no file task uses. Requires no queued or running work, except with `--dry-run`. |
 | `file-task priority` | `--id TASK_ID --priority 1\|2`; queued tasks only. |
 | `task wait`, `file-task wait` | `--id ID [--timeout-ms N]`; stopped/action-required polling, default 60 seconds, maximum 24 hours. Inspect status to distinguish success, failure, cancellation or pending input; timeout exits 1 without cancelling. |
 | `queue get`, `queue settings` | Executor/session state or redacted configuration. |
@@ -468,6 +518,38 @@ This is one worker's configured token budget; personal use outside Werk and
 provider subscription balances are not measured. See
 [consumption configuration and recovery](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/worker-consumption-limits.md)
 for the webview, accounting fields and failure behavior.
+
+## Worker model tool access
+
+| Command | Contract |
+| --- | --- |
+| `tool-access get` | Authenticated `GET /api/tool-access`; current grants, revision, edit state and the worker's Node.js executable. MCP secrets are redacted. |
+| `tool-access set --file PATH\|-` | `POST /api/tool-access`; replace all grants while new starts are paused and the worker is idle. Accepts the edited `tool-access get` output (its `revision` becomes the guard) or `expectedRevision`, `builtins` and `mcp`. Omitted MCP connections and CLI tools are removed. |
+| `tool-access discover --id ID --if-match REVISION` | `POST /api/tool-access/discover`; read a saved MCP connection's catalog without granting tools. |
+
+`tool-access set` accepts exported JSON up to 1 MiB from a file or stdin. It removes
+known read-only fields (including discovered catalogs) before sending the write,
+which must still fit the API's 64 KiB limit. Other JSON commands remain limited
+to 64 KiB.
+
+An enabled fixed command preset with `verification: true` is a required feature
+check. Together with file access and an approved Git worktree, it enables candidate
+editing and checked implementation for new requests. The final patch reflects
+actual retained-worktree changes; old proposal tasks remain proposals. See
+[implement a feature](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/implement-feature.md).
+
+CLI tools require an approved task worktree and a saved operator grant. They let
+the model pass its own arguments to a project command, such as a Node script in
+`bin/`, within allowed commands, required flags and refused options. Configure
+them in **Settings → Tools & MCP** or with these commands. Discovery applies to
+MCP connections; it does not grant a CLI or MCP tool.
+
+Before rolling back to 0.9.0, use the current version to remove all CLI tool
+entries, clear verification marks and save tool access. Reset tool budgets to
+128 calls and 300000 milliseconds and save settings. Disabling entries alone
+does not remove the newer policy fields. Restore the pre-upgrade state backup
+when retained tasks are incompatible. See
+[give the model a project CLI](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/manage-model-tools.md#give-the-model-a-project-cli).
 
 ## Worker attempt evidence and export
 

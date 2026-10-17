@@ -7,6 +7,81 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-17
+
+### Added
+
+- File requests accept `"background": true`: the request returns immediately and the board lists the admission under `preparations` with its phase, or the specific reason it failed, until the task appears. The unified **New request** composer shows preparation progress while retaining the request draft and identity until its Markdown record is saved.
+- Deleting a file task removes its Git worktree when it is clean and verifiably owned (identity pin, ownership marker, registration, base commit). `removeWorktree` and `discardChanges` options, also as `file-task delete --remove-worktree|--discard-changes`; changed worktrees are kept with a reason unless discarding is confirmed.
+- `worktrees list` and `worktrees prune [--id] [--repository] [--discard-changes true] [--dry-run]` worker commands and `/api/worktrees` list and remove task worktrees that no file task uses, such as leftovers of interrupted admissions.
+- Optional `repositories.worktreeDirectory` (**Settings → Repositories → Task worktree folder**) places new task worktrees outside the checkouts, so project tools do not scan them. Existing worktrees are still found at their recorded location.
+- Opt-in chat working directory for command presets and stdio MCP connections. Chat has no task worktree, so these tools start in the worker's empty private chat workspace by default. Choose **Working directory in chat → Live checkout of repository** in **Settings → Tools & MCP** (`"chatDirectory": "repository:<id>"`) to start that grant's chat calls, and MCP discovery, in an assigned repository's live checkout. Saving and every call check the assignment; removing or moving the repository refuses the call before any process starts. Task invocations keep their pinned task worktree.
+- `definition update --ref REF --file PATH` replaces the instruction profile behind a stable reference in place, keeping its id and reference. `--dry-run` previews the name, digest and per-agent changes without writing; applying requires `--if-match` with the current definition `revision`, now listed by `definition list`. Existing tasks keep their accepted profile snapshot.
+- An "Operate a project worker" how-to with a day-to-day checklist and Windows PowerShell 5.1 guidance: BOM-free JSON input files, why piping to `--file -` loses non-ASCII text, worktree storage and safe cleanup, configurable tool limits, chat working directories and the answer protocol. It ships in the release documentation.
+- Portable client option `--request-timeout-ms` (1,000–600,000) overrides how long a command waits for the API.
+- `feature setup` keeps the committed `.werk/authoring/feature-request.mjs` current after upgrades.
+  - Setup records the installed script's content hash in `.werk/authoring/manifest.json` and replaces the script while it still matches that record.
+  - A customized or unrecorded script is preserved, and setup reports `authoring_script_outdated` with its `revision`.
+  - `feature setup --if-match REVISION` replaces exactly that revision.
+- `state_write_error` service events name the failing writer in `site` and include an allowlisted system error code such as `EPERM` or `EBUSY`.
+- New repository requests can implement features in their isolated worktree: explicitly approved file edits, required verification commands, repair loops and review patches generated from the actual candidate. Check receipts are tied to the candidate and appear in the webview and Markdown records; legacy requests retain proposal behavior.
+- Configurable tool-call and command-duration budgets accompany the task duration, including API loops and the CLI MCP bridge. Optional per-command, CLI-tool and MCP deadlines are managed in **Settings → Tools & MCP**; a shared resolver enforces them within the accepted attempt budget and records effective limits in the model dispatch.
+- Project CLI tool grants let the model pass arguments to an approved executable in its task worktree, within allowed commands, required flags, refused options and argument/output limits. Tools start disabled and run without a shell. Configure them in **Settings → Tools & MCP** or with `tool-access get|set`; `tool-access discover` reads saved MCP tool catalogs without granting access.
+- Every worker task has a Markdown feature-request record with its instructions, progress, questions and results. Follow-ups update the same record, with saved state and recoverable synchronization errors visible in the webview.
+- A dedicated worker Settings page with focused navigation for providers and accounts, queue capacity, task duration, consumption, tool and MCP access, repositories, shared intake, execution profiles, agent definitions, project integration and optional orchestrator enrollment.
+- A shared capacity readout on the taskboard: one execution slot, actual accepted chat/file work and available places, separate remote assignments, and explicit pause or consumption blockers.
+
+### Changed
+
+- Task worktrees use Git's parallel checkout with at most eight workers and a serial fallback for long Windows Git administration paths.
+- Worktree admission has one total budget: 120 seconds for foreground requests or ten minutes for background preparation. Checkout may use up to five minutes within the remaining budget; ordinary Git metadata operations retain shorter deadlines.
+- Admission verifies the new worktree for tool use without fetching the repository a second time.
+- Worktree preparation failures report their reason (for example a Windows path limit) with HTTP 409/503 instead of a generic 500.
+- Model tool results report when a quarter or less of the accepted call or time allowance remains, using the configured limits captured for that invocation. Defaults remain 128 calls and a six-hour invocation.
+- In chat, tool descriptions, command results (`workingDirectory`) and failures of tools that start in the private chat workspace say that it has no project files and how an operator can choose a repository. Task tool descriptions and results are unchanged.
+- File-task review patches contain minimal Git hunks with three context lines instead of replacing every line of a changed file. Quoted paths, missing final newlines and `git apply` compatibility are preserved.
+- Proposal-task prompts state the exact patch reply limits. A single patch object surrounded by prose or a Markdown fence is accepted; two different objects are refused as ambiguous.
+- Worker architecture shares candidate receipt classification, guarded settings state, sensitive-patch and MCP endpoint policies, and contained tool launch mechanics. Explicit public task DTOs and allowlist projections keep private execution data behind the application boundary.
+- `shared sync`, `shared configure`, `repository sync`, `worktrees list` and `worktrees prune` wait up to 120 s instead of 10 s. A client timeout now reports `"code":"timeout"` and says the operation may still be running.
+- `shared configure` names missing configuration fields instead of asking for an assigned repository.
+- Worker navigation now separates Taskboard, Metrics, History and Settings. Existing dashboard setup bookmarks continue to open the corresponding settings section.
+- One request composer handles instructions and optional approved repository files. Provider, model, tool and agent options disclose when needed; retries retain the original request identity. Task and conversation navigation remains accessible on narrow screens.
+- Metrics prioritizes consumption and retained execution measurements, with coverage and scope labels, followed by worker health and host resources.
+
+### Fixed
+
+- Local lifecycle and health checks, plus private component requests, use the packaged HTTP transport with their existing deadlines. This avoids a Node 24/macOS socket error during stop or restart and closes each request’s connection resources.
+- Profile update revisions bind the reviewed definition ID and reference as well as its name and content, preventing a stale preview from updating a different profile after reassignment.
+- Chat tool grants pin the checkout’s filesystem identity and recheck it before each call. Changing an MCP chat directory invalidates its catalog and grants so discovery must be reviewed again.
+- Worktree pruning excludes concurrent admission and configuration changes. Retained worktrees use their recorded location after storage changes, and new external storage is checked against every assigned repository.
+- Fixture cleanup handles exited Linux zombie processes, bounds process inspection and termination, waits for its cleanup guard to exit, and preserves workspaces when process cleanup cannot finish.
+- Shared feature publication no longer deletes files outside its temporary worktree on Windows. Git for Windows' `worktree remove` follows NTFS junctions, so cleanup now removes symbolic links and junctions themselves first. A worktree whose links cannot be removed is kept and locked in Git with a reason for manual review.
+- Task worktree removal never runs Git on a worktree containing symbolic links or junctions: Git for Windows deletes the junction target's files, also in ignored folders and without `--force`.
+- Test fixtures that start portable apps no longer leave detached workers running on Windows after a failed, timed-out or interrupted run. Cleanup stops each app and then terminates any process still running from the fixture's temporary directory. It waits for those processes to exit before removing the directory.
+- Calls refused by the tool budget return a clear error telling the model to finish or ask the operator. API adapters bound the extra refusal and final-answer rounds; CLI bridges return the refusal instead of silently dropping the call. The overall invocation deadline and cancellation remain authoritative and can end the attempt before another response.
+- Budget exhaustion is recorded as a `tool_budget_exhausted` interaction event and a `toolBudget` field on the turn, with counts only, and is shown with the latest turn's consumption.
+- Local stdio MCP connections that need no credential can be saved without a secret environment variable. A secret still requires a dedicated variable name, and clearing or changing the variable removes the saved secret instead of passing it to another variable.
+- Approved file paths accept real-world vault names. Names may use Unicode letters and marks, such as umlauts and `ß`, plus spaces and `, ( ) & ' ’ + – — →`. This applies to file tasks, local and shared feature requests, offline authoring and live Codex `allowedPaths`. Paths are compared and stored in NFC form, so a decomposed duplicate is rejected. A project's committed `.werk/authoring/feature-request.mjs` keeps the old rule until the script is refreshed.
+- The rule now also rejects Windows-reserved characters, device names such as `nul.md`, and segments that end in a dot or space. It also rejects segments over 255 UTF-8 bytes and look-alike secret names.
+- Approved paths reject file and parent-folder case aliases and ambiguous Unicode spellings. Existing decomposed names are accepted only when the filesystem resolves the approved spelling to the same entry; distinct look-alike entries are refused. Shared publication also checks newly added paths against tracked names.
+- A file task whose model reply breaks the patch format now records the specific rule, such as `The summary has 2001 characters; the limit is 2000.`, in the task error, and a matching `patch_*` code on the interaction turn and its `failed` event, instead of the generic "Task could not produce a valid patch".
+- Tool deadline edits retain existing overrides when older clients omit them, support an explicit reset to inheritance, and preserve queued dispatch compatibility. Codex and Claude CLI bridges receive the accepted execution deadline.
+- Completed proposal transcripts show the model summary and changed-file line counts, with a link to the retained patch. Legacy protocol replies render readably when task evidence identifies them; ordinary JSON examples remain code. Paths and globs stay literal, and stored raw replies remain available for inspection and continuation.
+- API provider responses support bounded gzip, deflate and Brotli decoding with consistent protocol errors, cancellation and connection cleanup. CLI request timeouts respect the configured deadline across the native Node and packaged HTTP adapters.
+- Managed authoring-script refresh cleans up after write/fsync failures, preserves ordinary file permissions and applies the same manifest size limit during planning and execution.
+- On Windows, contained processes (command presets, MCP servers and provider CLIs) no longer receive PowerShell progress records (`#< CLIXML … <Objs …>`) from the job supervisor in their stderr. These appeared when the worker passes a minimal environment, because Windows PowerShell then prepares its modules on every launch.
+- Portable CLI JSON input from `--file PATH` or `--file -` accepts a leading UTF-8 byte order mark, as written by Windows PowerShell 5.1 pipes.
+- Shared-intake, provider-account, Taskboard page and webview asset requests no longer log as route `unmatched`. Runtime log capture keeps every normalized worker route.
+- CLI grants reject response-file and extracted-path escapes and ambiguous required flags; CLI-only grants revalidate retained Git worktree ownership. Exported MCP catalogs can round-trip through the tool-access CLI while preserving API size limits and secret handling.
+- Portable startup resolves valid state-directory parent aliases before saving request Markdown, including macOS path aliases. Symlinked state directories and managed note directories remain refused.
+- Interrupted repository preparation can recover through the same request identity when its retained worktree is unchanged. Edited worktrees are preserved with a failed request and explicit recovery guidance.
+- Open request notes retain their rendered contents across unchanged background snapshots.
+- Background polling no longer repeatedly replaces button labels or icons with loading indicators, shifts their width, or temporarily disables valid actions. Deliberate refreshes and saves retain visible feedback.
+- The taskboard no longer reports availability while consumption blocks new starts, or treats executor waiters as the complete worker queue.
+- Queue and duration settings detect competing edits, retain unsaved drafts and protect the queue's independent pause state.
+- Task freshness updates independently of optional history reads. Stale capacity stays explicitly labelled, and late settings responses cannot replace newer acknowledged configuration.
+- Worker resource descriptions distinguish whole-machine measurements from the Node process, and small-screen controls retain clear labels and keyboard access.
+
 ## [0.9.0] - 2026-10-16
 
 ### Added

@@ -30,6 +30,29 @@ for (const id of ['openai-api', 'anthropic-api']) {
     if (id === 'openai-api') { assert.equal(bodies[1].store, false); assert.equal(bodies[1].previous_response_id, undefined); assert.deepEqual(bodies[1].include, ['reasoning.encrypted_content']); }
     assert.equal(measurements.at(-1).inputTokens, 20); assert.equal(measurements.at(-1).outputTokens, 6);
   });
+  test(`${id} uses frozen configured budgets beyond 32 rounds and allows a final answer at the limit`, async () => {
+    const observed = { calls: [], closed: 0 }; let turn = 0, boundaries = 0, saved = { maxToolCalls: 40, commandTimeoutMs: 300000 };
+    const model = modelFor(connection(id), '/unused', async () => {
+      turn++;
+      return Response.json(turn <= 40 ? call(id, id === 'openai-api' ? { call_id: 'configured_' + turn } : { id: 'configured_' + turn }) : answer(id));
+    }, { tools: policy => { if (policy) { assert.equal(policy.maxToolCalls, 40); assert.equal(policy.commandTimeoutMs, 300000); } return runtimeFactory(observed)(); } });
+    Object.defineProperty(model, 'executionPolicy', { get: () => saved });
+    const request = prepareModelRequest(model, messages); saved = { maxToolCalls: 1, commandTimeoutMs: 1000 };
+    const result = await executeModel(model, request, new AbortController().signal, undefined, { beforeCall() { boundaries++; } });
+    assert.equal(result.text, 'Fixture complete.'); assert.equal(observed.calls.length, 40); assert.equal(turn, 41); assert.equal(boundaries, 41); assert.equal(observed.closed, 1);
+    assert.equal(request.policy.maxToolCalls, 40); assert.ok(Object.isFrozen(request.policy));
+  });
+  test(`${id} refuses a tool batch beyond its configured budget before any side effect`, async () => {
+    const observed = { calls: [], closed: 0 };
+    const model = modelFor(connection(id), '/unused', async () => {
+      const response = call(id), key = id === 'openai-api' ? 'output' : 'content';
+      response[key].push({ ...response[key][0], ...(id === 'openai-api' ? { call_id: 'second' } : { id: 'second' }) });
+      return Response.json(response);
+    }, { tools: runtimeFactory(observed) });
+    model.executionPolicy = { maxToolCalls: 1, commandTimeoutMs: 1000 };
+    await assert.rejects(executeModel(model, prepareModelRequest(model, messages), new AbortController().signal), { code: 'tool_access' });
+    assert.equal(observed.calls.length, 0); assert.equal(observed.closed, 1);
+  });
   test(`${id} rejects ungranted and malformed tool requests before execution`, async () => {
     for (const extra of [{ name: 'ungranted' }, id === 'openai-api' ? { arguments: 'not-json' } : { input: [] }, id === 'openai-api' ? { call_id: '' } : { id: '' }]) {
       const observed = { calls: [], closed: 0 };
@@ -47,8 +70,8 @@ for (const id of ['openai-api', 'anthropic-api']) {
   test(`${id} bounds tool loops and closes denied, failed and cancelled runtimes`, async () => {
     let turn = 0; const observed = { calls: [], closed: 0 };
     const model = modelFor(connection(id), '/unused', async () => Response.json(call(id, id === 'openai-api' ? { call_id: 'call_' + ++turn } : { id: 'call_' + ++turn })), { tools: runtimeFactory(observed) });
-    await assert.rejects(executeModel(model, prepareModelRequest(model, messages), new AbortController().signal), { code: 'protocol' });
-    assert.equal(observed.calls.length, 32); assert.equal(turn, 33); assert.equal(observed.closed, 1);
+    await assert.rejects(executeModel(model, prepareModelRequest(model, messages), new AbortController().signal), { code: 'tool_access' });
+    assert.equal(observed.calls.length, 128); assert.equal(turn, 129); assert.equal(observed.closed, 1);
     for (const cancelled of [false, true]) {
       const controller = new AbortController(), denied = { calls: [], closed: 0 };
       const model = modelFor(connection(id), '/unused', async () => Response.json(call(id)), { tools: runtimeFactory(denied, { async call() { if (cancelled) controller.abort(); throw Error('PRIVATE_TOOL_DIAGNOSTIC'); } }) });

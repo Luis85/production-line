@@ -70,7 +70,7 @@ export function featureInput(parsed: FeatureDocument, defaultProvider: string): 
   if (d.agent !== undefined && (typeof d.agent !== 'string' || d.agent.length > 100)) throw Error('Invalid agent name.');
   if (d.useInstructionsOnly !== undefined && typeof d.useInstructionsOnly !== 'boolean') throw Error('useInstructionsOnly must be true or false.');
   if (d.priority !== undefined && d.priority !== 1 && d.priority !== 2) throw Error('priority must be 1 or 2.');
-  return { title: title.trim(), mode: mode as 'chat' | 'patch', provider: String(provider), message: parsed.body.trim(), ...(d.paths ? { paths: d.paths as string[] } : {}), priority: Number(d.priority ?? 1), ...(d.definitionId ? { definitionId: String(d.definitionId) } : {}), ...(d.definitionRef ? { definitionRef: String(d.definitionRef) } : {}), ...(d.agent ? { agent: String(d.agent) } : {}), ...(d.useInstructionsOnly !== undefined ? { useInstructionsOnly: d.useInstructionsOnly } : {}) };
+  return { title: title.trim(), mode: mode as 'chat' | 'patch', provider: String(provider), message: parsed.body.trim(), ...(d.paths ? { paths: (d.paths as string[]).map(path => path.normalize('NFC')) } : {}), priority: Number(d.priority ?? 1), ...(d.definitionId ? { definitionId: String(d.definitionId) } : {}), ...(d.definitionRef ? { definitionRef: String(d.definitionRef) } : {}), ...(d.agent ? { agent: String(d.agent) } : {}), ...(d.useInstructionsOnly !== undefined ? { useInstructionsOnly: d.useInstructionsOnly } : {}) };
 }
 export function renderFeature(parsed: FeatureDocument, id: string, status: string, metadata: Record<string, unknown>) {
   parsed.document.set('id', id); parsed.document.set('status', status); parsed.document.set('werk', metadata);

@@ -8,18 +8,19 @@ import { state, request, workspaceAction } from '../store';
 const props = defineProps<{ compact?: boolean }>();
 const route = useRoute(), router = useRouter();
 type FeatureList = Awaited<ReturnType<FeatureRequests['list']>>;
-const folder = ref<FeatureList | { enabled: false } | null>(null), loading = ref(false), error = ref(''), search = ref('');
+const folder = ref<FeatureList | { enabled: false } | null>(null), loading = ref(false), refreshing = ref(false), error = ref(''), search = ref('');
 const detail = ref<{ name: string; markdown: string; revision: string; record: FeatureRecord | null } | null>(null);
 const active = ref(true);
 let revision = 0, detailRevision = 0, trigger: HTMLElement | null = null;
 const files = computed(() => folder.value && 'files' in folder.value ? folder.value.files.filter(file => [file.name, file.title, file.status].join(' ').toLowerCase().includes(search.value.trim().toLowerCase())) : []);
 const statusLabel = (value?: string) => value === 'waiting_input' ? 'Waiting for your answer' : value === 'escalated' ? 'Decision needed' : value === 'draft' ? 'Draft · not queued' : value === 'waiting' ? 'Waiting for admission' : value === 'ready' ? 'Ready for intake' : value ?? 'Status unavailable';
-async function load() {
-  if (!active.value || !state.unlocked || loading.value) return;
-  const current = ++revision; loading.value = true; error.value = '';
-  try { const result = await request('/api/features'); if (current === revision && state.unlocked) folder.value = result; }
+async function load(background = false) {
+  if (!active.value || !state.unlocked || refreshing.value || background && loading.value) return;
+  const current = ++revision; loading.value = true; refreshing.value = !background;
+  if (!background) error.value = '';
+  try { const result = await request('/api/features'); if (current === revision && state.unlocked) { folder.value = result; error.value = ''; } }
   catch (failure) { if (current === revision && state.unlocked) error.value = (failure as Error).message; }
-  finally { if (current === revision) loading.value = false; }
+  finally { if (current === revision) { loading.value = false; refreshing.value = false; } }
 }
 async function inspect(name: string, event: MouseEvent) {
   const current = ++detailRevision; trigger = event.currentTarget as HTMLElement; error.value = '';
@@ -33,16 +34,16 @@ async function refreshSelected() {
 }
 async function closeDetail() { detailRevision++; detail.value = null; await nextTick(); trigger?.isConnected && trigger.focus(); }
 async function openConversation() { const sessionId = detail.value?.record?.sessionId; if (!sessionId) return; if (await workspaceAction('/api/sessions', { action: 'select', id: sessionId })) await router.push({ path: '/taskboard', query: { session: sessionId } }); else error.value = state.actionError || 'The task conversation could not be opened.'; }
-async function entry() { await load(); if (!props.compact && route.query.view === 'features') { await nextTick(); document.getElementById('project-requests-title')?.focus(); } }
+async function entry() { await load(true); if (!props.compact && route.query.view === 'features') { await nextTick(); document.getElementById('project-requests-title')?.focus(); } }
 onMounted(() => { void entry(); }); onActivated(() => { active.value = true; void entry(); });
-onDeactivated(() => { active.value = false; revision++; detailRevision++; loading.value = false; });
-watch(() => state.refreshRevision, () => { if (active.value && state.unlocked) { if (!loading.value) void load(); void refreshSelected(); } });
+onDeactivated(() => { active.value = false; revision++; detailRevision++; loading.value = false; refreshing.value = false; });
+watch(() => state.refreshRevision, () => { if (active.value && state.unlocked) { if (!loading.value) void load(true); void refreshSelected(); } });
 watch(() => route.query.view, () => { if (route.path === '/history') void entry(); });
-watch(() => state.unlocked, unlocked => { if (unlocked) void entry(); else { revision++; detailRevision++; folder.value = null; detail.value = null; loading.value = false; error.value = ''; } });
+watch(() => state.unlocked, unlocked => { if (unlocked) void entry(); else { revision++; detailRevision++; folder.value = null; detail.value = null; loading.value = false; refreshing.value = false; error.value = ''; } });
 </script>
 <template>
 <section class="monitor-section feature-requests" aria-labelledby="project-requests-title">
-  <div class="section-heading"><div><h2 id="project-requests-title" tabindex="-1">Project requests</h2><p class="page-note">Markdown files in this project’s feature folder.</p></div><UButton v-if="compact" to="/history?view=features" color="neutral" variant="outline">Browse requests</UButton><UButton v-else color="neutral" variant="outline" :loading="loading" @click="load">Refresh requests</UButton></div>
+  <div class="section-heading"><div><h2 id="project-requests-title" tabindex="-1">Project requests</h2><p class="page-note">Markdown files in this project’s feature folder.</p></div><UButton v-if="compact" to="/history?view=features" color="neutral" variant="outline">Browse requests</UButton><UButton v-else color="neutral" variant="outline" :loading="refreshing" @click="load()">Refresh requests</UButton></div>
   <p v-if="error" role="alert" class="error-text">{{ error }} Previously loaded requests may be stale. Refresh to retry.</p><p v-if="loading && !folder" role="status">Reading the feature folder…</p>
   <template v-if="folder?.enabled"><p class="break-anywhere"><strong>Feature folder</strong><br>{{ folder.directory }}</p><p class="page-note">{{ folder.files.length }} request files · {{ folder.records.length }} accepted requests. Drafts do not run. Set a reviewed request to <code>status: ready</code> to admit it to this worker’s shared queue.</p><p v-if="folder.error" role="alert" class="error-text">{{ folder.error }}</p><ul v-if="folder.errors.length" class="feature-errors"><li v-for="issue in folder.errors" :key="issue.file">{{ issue.file }} · {{ issue.message }}</li></ul>
     <template v-if="!compact"><label for="feature-search">Find a project request</label><UInput id="feature-search" v-model="search" placeholder="Filename, title or state" class="w-full" /><p v-if="!files.length" class="board-empty">{{ folder.files.length ? 'No project requests match your search.' : 'Copy the feature-request template into this folder to start a draft.' }}</p><ul class="run-list"><li v-for="file in files" :key="file.name"><div><strong>{{ file.title || file.name }}</strong><span class="muted">{{ file.name }} · {{ file.mode || 'Mode unavailable' }} · {{ file.provider || 'Provider unavailable' }}</span><span>{{ statusLabel(file.status) }}{{ file.archived ? ' · archived' : '' }}</span><p v-if="file.error" class="error-text">{{ file.error }}</p></div><UButton color="neutral" variant="outline" :aria-label="'Inspect request ' + file.name" @click="inspect(file.name, $event)">Inspect request</UButton></li></ul>

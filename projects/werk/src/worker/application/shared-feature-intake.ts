@@ -24,6 +24,11 @@ export class SharedFeatureIntake {
   get enabled() { return this.initialized && this.state.config.enabled; }
   get busy() { return !!this.syncing || this.configuring; }
   requiredRepositoryIds(): string[] { return [...new Set([...(this.enabled ? [this.state.config.repositoryId] : []), ...this.state.records.filter(record => !sharedTerminal(record.status) || record.publication !== 'synced').map(record => record.binding.repositoryId)])]; }
+  /** Retain provenance across binding changes without exposing request contents or credentials. */
+  sourceForTask(taskId: string): { repositoryId: string; path: string } | undefined {
+    const record = this.state.records.find(record => record.taskId === taskId);
+    return record ? { repositoryId: record.binding.repositoryId, path: record.sourcePath } : undefined;
+  }
   get binding() { return this.initialized ? structuredClone(this.state.config) : undefined; }
   async init() { this.state = await this.ports.load(); this.initialized = true; }
   start() { if (!this.timer && !this.stopping.signal.aborted) this.schedule(); }

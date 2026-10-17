@@ -5,11 +5,13 @@ import UButton from '@nuxt/ui/components/Button.vue';
 import UInput from '@nuxt/ui/components/Input.vue';
 import UIcon from '@nuxt/ui/components/Icon.vue';
 import TaskInteraction from '../components/TaskInteraction.vue';
+import WorkerCapacityPanel from '../components/WorkerCapacityPanel.vue';
+import { buildWorkerCapacityView } from '../worker-capacity';
 import RepositoryDiscovery from '../components/RepositoryDiscovery.vue';
 import OverviewTaskCard from '../components/OverviewTaskCard.vue';
 import { buildTaskOverview, type TaskOverviewInput, type TaskOverviewItem } from '../task-overview';
 import type { RunPage, WorkerRun } from '../../application/run-evidence';
-import { state, request, workspaceAction, refresh, date } from '../store';
+import { state, request, workspaceAction, refresh, date, getCapacityFreshness, refreshFromUser } from '../store';
 
 const route = useRoute(), router = useRouter();
 const interaction = ref<InstanceType<typeof TaskInteraction> | null>(null);
@@ -20,6 +22,10 @@ let active = true, evidenceRevision = 0;
 const allTasks = computed(() => buildTaskOverview({ sessions: state.sessions, board: state.board, history: state.history, features: features.value, runs: activeRun.value ? [activeRun.value] : [] }));
 const overview = computed(() => buildTaskOverview({ sessions: state.sessions, board: state.board, history: state.history, features: features.value }, { search: search.value }));
 const running = computed(() => allTasks.value.groups.running[0]);
+const capacity = computed(() => buildWorkerCapacityView(state.sessions?.capacity, getCapacityFreshness()));
+const selectedSession = computed(() => state.sessions?.records.find(item => item.id === state.sessions?.selected));
+const showRemoteCapacity = computed(() => !!state.environment?.orchestratorUrl || (state.sessions?.capacity?.remote.accepted ?? 0) > 0);
+const queueNote = computed(() => capacity.value.stale || capacity.value.state === 'unknown' ? 'Refresh to check current start conditions.' : capacity.value.startBlocked ? 'New starts are on hold. See the worker conditions above.' : 'Waiting work shares one execution slot.');
 const currentSession = computed(() => state.sessions?.records.find(item => item.id === state.sessions?.execution.currentSessionId));
 const originalAssignment = computed(() => currentSession.value?.kind === 'orchestrator' && ['queued', 'running'].includes(currentSession.value.taskState ?? ''));
 const activePurpose = computed(() => activeRun.value?.purpose === 'gate_review' ? 'Advisory review' : activeRun.value?.purpose === 'rework' ? 'Rework proposal' : originalAssignment.value && state.status?.mode === 'mock' ? 'Simulation · no implementation' : 'Task execution');
@@ -30,7 +36,7 @@ const runProvider = computed(() => activeRun.value && activeRun.value.sessionId 
 const runElapsed = computed(() => {
   const started = activeRun.value?.startedAt;
   if (!started || activeRun.value?.sessionId !== currentSession.value?.id) return 'Elapsed unavailable';
-  const elapsed = Math.max(0, Math.floor((Date.parse(state.lastRead || new Date().toISOString()) - Date.parse(started)) / 1000));
+  const elapsed = Math.max(0, Math.floor((Date.parse(state.sessionsReadAt || new Date().toISOString()) - Date.parse(started)) / 1000));
   return Math.floor(elapsed / 60) + 'm ' + elapsed % 60 + 's elapsed';
 });
 const usage = computed(() => {
@@ -108,7 +114,12 @@ async function stopTask() {
   } catch (error) { if (state.unlocked) actionError.value = (error as Error).message; }
   finally { stopping.value = false; }
 }
-async function newTask() { await interaction.value?.openNewTask(); document.getElementById('task-interaction-title')?.scrollIntoView({ block: 'nearest' }); }
+async function newTask() {
+  if (selectionBusy.value) return;
+  await interaction.value?.openNewTask();
+  if (matchMedia('(max-width: 1000px)').matches) document.getElementById('task-interaction-title')?.scrollIntoView({ block: 'start' });
+}
+function backToBoard() { const heading = document.getElementById('taskboard-heading'); heading?.focus({ preventScroll: true }); heading?.scrollIntoView({ block: 'start' }); }
 watch(() => state.refreshRevision, () => { void readEvidence(); });
 watch(() => [route.fullPath, state.unlocked], () => { void openDeepLink(); });
 watch(() => state.sessions?.selected, id => {
@@ -128,25 +139,25 @@ onDeactivated(() => { active = false; evidenceRevision++; });
         <div class="taskboard-heading-tools"><div class="taskboard-view" role="group" aria-label="Taskboard view">
           <button :aria-pressed="view === 'board'" @click="view = 'board'"><UIcon name="i-lucide-columns-2" />Board</button>
           <button :aria-pressed="view === 'list'" @click="view = 'list'"><UIcon name="i-lucide-list" />List</button>
-        </div>
+        </div><UButton class="taskboard-new" icon="i-lucide-plus" :disabled="selectionBusy" @click="newTask">New request</UButton>
       <div class="taskboard-toolbar">
         <UInput v-model="search" aria-label="Search tasks" placeholder="Search tasks…" icon="i-lucide-search" class="taskboard-search" />
         <span>{{ overview.counts.total }} {{ overview.counts.total === 1 ? 'task' : 'tasks' }}<template v-if="search"> matching</template></span>
-        <button class="mobile-interaction-link" @click="newTask">New task<UIcon name="i-lucide-arrow-down" /></button>
       </div></div>
+        <div v-if="selectedSession" class="mobile-task-links"><button type="button" :disabled="selectionBusy" @click="openSession(selectedSession.id)">Continue selected task<UIcon name="i-lucide-arrow-down" /></button><span>{{ selectedSession.title }}</span></div>
       </header>
 
       <RepositoryDiscovery />
-      <section class="active-run" :class="{ occupied: !!currentSession }" aria-labelledby="active-run-heading">
-        <div class="active-run-heading"><span class="activity-dot" :class="{ idle: !currentSession }" /><h2 id="active-run-heading">{{ currentSession ? 'Running now' : !state.sessions ? 'Loading taskboard…' : state.settings?.board.paused ? 'New starts paused' : 'Worker available' }}</h2><span class="serial-note">One task at a time</span></div>
+      <WorkerCapacityPanel :view="capacity" :remaining="state.sessions?.capacity?.local.remaining" :show-remote="showRemoteCapacity" :consumption-blocked="state.sessions?.capacity?.starts.consumption?.blocked" :refreshing="state.refreshingManually" :refresh-disabled="!state.unlocked" @refresh="refreshFromUser" />
+      <section v-if="currentSession" class="active-run occupied" aria-labelledby="active-run-heading">
+        <div class="active-run-heading"><span class="activity-dot" /><h2 id="active-run-heading">{{ capacity.stale ? 'Last reported task' : 'Current task' }}</h2></div>
         <template v-if="currentSession">
           <div class="active-run-content"><div class="active-run-title"><button :disabled="selectionBusy" @click="openSession(currentSession.id)">{{ running?.title ?? currentSession.title }}<UIcon name="i-lucide-arrow-up-right" /></button></div>
           <div class="active-run-meta"><span>{{ activePurpose }}</span><span>{{ runProvider }}</span><span>{{ runModel }}</span><span>{{ runElapsed }}</span></div>
-          <p class="active-run-readout">{{ usage }} · {{ state.error ? 'Status may be stale' : state.paused ? 'Updates paused' : 'Updates every 3s' }}</p>
+          <p class="active-run-readout">{{ usage }} · {{ capacity.stale ? 'Activity needs refresh' : 'Updates every 3s' }}</p>
           <p v-if="originalAssignment" class="active-run-empty">Managed by its owning orchestrator.</p></div>
           <div class="active-run-actions"><UButton v-if="canStop" color="error" variant="outline" icon="i-lucide-square" :loading="stopping" :disabled="selectionBusy" @click="stopTask">Stop task</UButton><UButton v-else-if="!originalAssignment" color="neutral" variant="outline" :disabled="selectionBusy" @click="openSession(currentSession.id, true)">Open task controls</UButton><RouterLink :to="running?.evidenceHref ?? '/history?view=runs'">Inspect attempt</RouterLink></div>
         </template>
-        <p v-else class="active-run-empty">{{ !state.sessions ? 'Reading saved tasks and current activity.' : state.settings?.board.paused ? 'Waiting tasks start when you resume. You can still add new work.' : 'Choose a task to follow up, or add instructions in Task interaction.' }}</p>
       </section>
       <p v-if="actionError" class="board-error" role="alert">{{ actionError }}</p>
       <p v-if="evidenceError" class="board-warning" role="status">{{ evidenceError }}</p>
@@ -156,15 +167,15 @@ onDeactivated(() => { active = false; evidenceRevision++; });
           <header class="overview-group-heading"><h2 :id="'group-' + group.id"><UIcon :name="group.icon" />{{ group.title }}<span class="group-count">{{ group.items.length }}</span></h2></header>
 
           <div class="overview-cards"><OverviewTaskCard v-for="item in group.items" :key="item.id" :item="item" :selected="!!item.sessionId && item.sessionId === state.sessions?.selected" :disabled="selectionBusy" :compact="view === 'list'" @open="openTask" /></div>
-          <div v-if="!group.items.length" class="board-empty"><UIcon :name="group.id === 'attention' ? 'i-lucide-circle-check' : 'i-lucide-inbox'" /><h3>{{ search ? 'No matching tasks' : group.id === 'attention' ? 'Nothing needs your attention' : 'Your queue is clear' }}</h3><p>{{ search ? 'Try another title, task ID or status.' : group.id === 'attention' ? 'Questions, review requests and failed tasks appear here.' : 'Use New task to add work to this queue.' }}</p></div>
-          <div v-if="group.id === 'queued'" class="queue-control"><UButton color="neutral" variant="outline" :icon="state.settings?.board.paused ? 'i-lucide-play' : 'i-lucide-pause'" :loading="queueBusy" :disabled="!state.settings" @click="toggleQueue">{{ state.settings?.board.paused ? 'Resume new starts' : 'Pause new starts' }}</UButton><p>{{ currentSession ? 'The active task can finish.' : state.settings?.board.paused ? 'Waiting tasks stay in the queue.' : 'Waiting work starts automatically.' }}</p></div>
+          <div v-if="!group.items.length" class="board-empty"><UIcon :name="group.id === 'attention' ? 'i-lucide-circle-check' : 'i-lucide-inbox'" /><h3>{{ search ? 'No matching tasks' : group.id === 'attention' ? 'Nothing needs your attention' : 'Your queue is clear' }}</h3><p>{{ search ? 'Try another title, task ID or status.' : group.id === 'attention' ? 'Questions, review requests and failed tasks appear here.' : 'Use New request to add work to this queue.' }}</p></div>
+          <div v-if="group.id === 'queued'" class="queue-control"><UButton color="neutral" variant="outline" :icon="state.settings?.board.paused ? 'i-lucide-play' : 'i-lucide-pause'" :loading="queueBusy" :disabled="!state.settings" @click="toggleQueue">{{ state.settings?.board.paused ? 'Resume new starts' : 'Pause new starts' }}</UButton><p>{{ queueNote }}</p></div>
         </section>
       </div>
       <details v-if="overview.groups.draft.length" class="taskboard-disclosure"><summary><UIcon name="i-lucide-file-pen-line" />Drafts<span class="group-count">{{ overview.groups.draft.length }}</span></summary><div class="disclosure-cards"><OverviewTaskCard v-for="item in overview.groups.draft" :key="item.id" :item="item" :selected="!!item.sessionId && item.sessionId === state.sessions?.selected" :disabled="selectionBusy" :compact="view === 'list'" @open="openTask" /></div></details>
       <details class="taskboard-disclosure"><summary><UIcon name="i-lucide-circle-check" />Completed &amp; stopped<span class="group-count">{{ overview.groups.completed.length }}</span></summary><div class="disclosure-cards"><OverviewTaskCard v-for="item in overview.groups.completed" :key="item.id" :item="item" :selected="!!item.sessionId && item.sessionId === state.sessions?.selected" :disabled="selectionBusy" :compact="view === 'list'" @open="openTask" /><p v-if="!overview.groups.completed.length" class="completed-empty">Completed turns and stopped tasks appear here. Proposed patches stay in Needs you until reviewed.</p></div></details>
-      <div class="taskboard-footnote"><span>{{ state.lastRead ? 'Last refreshed ' + date(state.lastRead) : 'Waiting for worker data' }}</span><RouterLink to="/history">All history<UIcon name="i-lucide-arrow-up-right" /></RouterLink></div>
+      <div class="taskboard-footnote"><span>{{ state.sessionsReadAt ? 'Task activity refreshed ' + date(state.sessionsReadAt) : 'Waiting for worker data' }}</span><RouterLink to="/history">All history<UIcon name="i-lucide-arrow-up-right" /></RouterLink></div>
     </section>
-    <TaskInteraction ref="interaction" @busy="interactionBusy = $event" />
+    <TaskInteraction ref="interaction" @busy="interactionBusy = $event" @board="backToBoard" />
   </div>
 </template>
 <style scoped>
@@ -176,32 +187,33 @@ onDeactivated(() => { active = false; evidenceRevision++; });
 .taskboard-page-heading p { margin-top: 7px; font-size: .875rem; }
 .taskboard-heading-tools { display: flex; align-items: center; gap: 16px; margin-left: auto; }
 .taskboard-view { display: flex; border: 1px solid #31424d; border-radius: 7px; padding: 3px; background: #15232c; }
-.taskboard-view button { display: flex; align-items: center; gap: 7px; padding: 8px 12px; min-height: 40px; font-size: .75rem; border-radius: 5px; color: #adbfca; cursor: pointer; }
+.taskboard-view button { display: flex; align-items: center; gap: 7px; padding: 8px 12px; min-height: 44px; font-size: .8125rem; border-radius: 5px; color: #adbfca; cursor: pointer; }
 .taskboard-view button[aria-pressed='true'] { background: #8be0b8; color: #10271e; box-shadow: 0 1px 2px #0005; }
 .taskboard-toolbar { display: flex; align-items: center; gap: 14px; }
 .taskboard-search { width: 240px; }
-.taskboard-search :deep(input) { min-height: 43px; font-size: .8125rem; background: #15232c; }
+.taskboard-search :deep(input) { min-height: 44px; font-size: .8125rem; background: #15232c; }
 .taskboard-toolbar > span { display: none; color: #a4b7c2; font-size: .75rem; white-space: nowrap; }
-.mobile-interaction-link { display: none; }
+.taskboard-new { min-height: 44px; white-space: nowrap; }
+.mobile-task-links { display: none; }
+.mobile-task-links button { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; color: var(--ui-primary); font-size: .875rem; cursor: pointer; }
+.mobile-task-links button:disabled { opacity: .5; cursor: default; }
+.mobile-task-links span { color: var(--ui-text-muted); font-size: .8125rem; overflow-wrap: anywhere; }
 .active-run { padding: 20px 22px; border: 1px solid #344c4c; border-radius: 8px; background: #192b2d; margin-bottom: 30px; }
-.active-run.occupied { display: grid; grid-template-columns: 145px minmax(0, 1fr) auto; gap: 18px; align-items: center; border-color: #46645c; background: linear-gradient(110deg, #1d3434, #1a2b30); }
+.active-run.occupied { display: grid; grid-template-columns: 145px minmax(0, 1fr) auto; gap: 18px; align-items: center; border-color: #46645c; background: #192b2d; }
 .active-run.occupied .active-run-heading { align-self: stretch; border-right: 1px solid #38504f; padding-right: 12px; }
-.active-run.occupied .serial-note { display: none; }
 .active-run-content { min-width: 0; }
 .active-run-heading { display: flex; gap: 9px; align-items: center; }
 .activity-dot { height: 7px; width: 7px; border-radius: 50%; background: #8be0b8; flex-shrink: 0; }
-.activity-dot.idle { background: #98b3b1; }
 .active-run-heading h2 { font-size: .8125rem; font-weight: 650; color: #b9e7d1; }
-.serial-note { margin-left: auto; font-size: .6875rem; color: #a5c1bb; }
 .active-run-title { margin: 0 0 4px; }
-.active-run-title button { display: inline-flex; text-align: left; align-items: center; gap: 10px; font-size: 1.0625rem; font-weight: 600; color: #edf4f7; cursor: pointer; min-height: 32px; overflow-wrap: anywhere; }
+.active-run-title button { display: inline-flex; text-align: left; align-items: center; gap: 10px; font-size: 1.0625rem; font-weight: 600; color: #edf4f7; cursor: pointer; min-height: 44px; overflow-wrap: anywhere; }
 .active-run-title button :deep(.iconify) { flex-shrink: 0; }
 .active-run-title button:disabled { cursor: default; opacity: .6; }
 .active-run-meta { display: flex; gap: 10px; flex-wrap: wrap; font-size: .75rem; color: #b6cbc7; }
 .active-run-meta span + span::before { content: '·'; padding-right: 10px; color: #7d9c98; }
 .active-run-readout { margin-top: 6px; font-size: .6875rem; color: #a4bbb7; }
 .active-run-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 0; }
-.active-run-actions a { display: inline-flex; align-items: center; min-height: 32px; color: #b8e4cd; font-size: .75rem; }
+.active-run-actions a { display: inline-flex; align-items: center; min-height: 44px; color: #b8e4cd; font-size: .75rem; }
 .active-run-actions :deep(button) { font-size: .8125rem; }
 .active-run-empty { margin: 10px 0 0; color: #b5c8c5; font-size: .8125rem; line-height: 1.7; }
 .taskboard-groups { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 24px; margin-bottom: 26px; }
@@ -234,7 +246,7 @@ onDeactivated(() => { active = false; evidenceRevision++; });
 .board-error, .board-warning { font-size: .8125rem; line-height: 1.7; margin-bottom: 20px; }
 .board-error { color: #ffa6a6; } .board-warning { color: #edc47e; }
 @media (min-width: 1700px) { .taskboard-home { padding: 40px 44px; } .taskboard-workspace { grid-template-columns: minmax(0, 1fr) 440px; } }
-@media (max-width: 1200px) { .taskboard-page-heading { flex-wrap: wrap; } .taskboard-heading-tools { width: 100%; margin-left: 0; } .taskboard-toolbar { flex: 1; } .taskboard-search { width: 100%; } .active-run.occupied { grid-template-columns: minmax(0, 1fr) auto; } .active-run.occupied .active-run-heading { grid-column: 1 / -1; border: 0; } .taskboard-home { padding: 28px 24px; } .taskboard-groups { gap: 16px; grid-template-columns: 1fr; } .serial-note { display: none; } }
-@media (max-width: 1000px) { .taskboard-workspace > :deep(.task-interaction) { border-left: 0; border-top: 1px solid #30434d; padding: 28px 24px; } .taskboard-workspace { grid-template-columns: 1fr; } .taskboard-groups:not(.list-view) { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 24px; } .mobile-interaction-link { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; color: #9de3bf; white-space: nowrap; font-size: .75rem; cursor: pointer; } }
-@media (max-width: 600px) { .taskboard-workspace > :deep(.task-interaction) { padding: 26px 20px; } .taskboard-home { padding: 24px 20px; } .taskboard-page-heading h1 { font-size: 1.75rem; } .taskboard-view button { padding-inline: 9px; } .taskboard-groups:not(.list-view) { grid-template-columns: 1fr; } .taskboard-heading-tools { flex-wrap: wrap; gap: 12px; } .taskboard-toolbar { flex-basis: 100%; flex-wrap: wrap; gap: 10px; } .taskboard-search { flex: 1; width: auto; min-width: 0; } .mobile-interaction-link { margin-left: auto; } .active-run { padding: 18px; } .active-run.occupied { grid-template-columns: 1fr; gap: 10px; } .active-run-actions { flex-direction: row; justify-content: space-between; align-items: center; } }
+@media (max-width: 1200px) { .taskboard-page-heading { flex-wrap: wrap; } .taskboard-heading-tools { width: 100%; margin-left: 0; } .taskboard-toolbar { flex: 1; } .taskboard-search { width: 100%; } .active-run.occupied { grid-template-columns: minmax(0, 1fr) auto; } .active-run.occupied .active-run-heading { grid-column: 1 / -1; border: 0; } .taskboard-home { padding: 28px 24px; } .taskboard-groups { gap: 16px; grid-template-columns: 1fr; }  }
+@media (max-width: 1000px) { .taskboard-workspace > :deep(.task-interaction) { border-left: 0; border-top: 1px solid #30434d; padding: 28px 24px; } .taskboard-workspace { grid-template-columns: 1fr; } .taskboard-groups:not(.list-view) { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 24px; } .mobile-task-links { display: flex; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; width: 100%; } .taskboard-page-heading { margin-bottom: var(--space-4); } }
+@media (max-width: 600px) { .taskboard-workspace > :deep(.task-interaction) { padding: 26px 20px; } .taskboard-home { padding: 24px 20px; } .taskboard-page-heading h1 { font-size: 1.75rem; } .taskboard-view button { padding-inline: 9px; } .taskboard-groups:not(.list-view) { grid-template-columns: 1fr; } .taskboard-heading-tools { flex-wrap: wrap; gap: 12px; } .taskboard-toolbar { flex-basis: 100%; flex-wrap: wrap; gap: 10px; } .taskboard-search { flex: 1; width: auto; min-width: 0; } .taskboard-new { margin-left: auto; } .active-run { padding: 18px; } .active-run.occupied { grid-template-columns: 1fr; gap: 10px; } .active-run-actions { flex-direction: row; justify-content: space-between; align-items: center; } }
 </style>

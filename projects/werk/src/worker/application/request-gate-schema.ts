@@ -89,7 +89,8 @@ export const requestGateSchema = {
             "fact": {
               "enum": [
                 "input.kind",
-                "execution.outcome"
+                "execution.outcome",
+                "output.candidateDigest"
               ]
             },
             "op": {
@@ -126,6 +127,7 @@ export const requestGateSchema = {
                 "input.approvedFileCount",
                 "input.approvedBytes",
                 "output.changedFileCount",
+                "output.requiredCheckCount",
                 "pending.count",
                 "findings.blockingCount"
               ]
@@ -165,6 +167,7 @@ export const requestGateSchema = {
                 "output.nonEmpty",
                 "output.protocolValid",
                 "output.patchPresent",
+                "output.verificationPassed",
                 "operator.accepted",
                 "tests.passed",
                 "build.passed",

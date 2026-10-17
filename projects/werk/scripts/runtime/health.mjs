@@ -1,3 +1,4 @@
+import { withOwnedResponse } from './shared-http.mjs';
 import { access } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
@@ -13,12 +14,13 @@ export async function freePort(port) {
   await new Promise((resolve, reject) => { server.once('error', () => reject(Error(`Port ${port} is unavailable. Stop its owner or choose other ports in config.json.`))); server.listen(port, '127.0.0.1', () => server.close(resolve)); });
 }
 async function json(url, token) {
-  const response = await fetch(url, { headers: token ? { Authorization: 'Bearer ' + token } : {}, redirect: 'error', signal: AbortSignal.timeout(800) });
-  if (!response.ok) throw Error('Service is not ready');
-  const reader = response.body?.getReader(); let size = 0; const chunks = [];
-  try { if (reader) for (;;) { const { done, value } = await reader.read(); if (done) break; size += value.byteLength; if (size > 1048576) { await reader.cancel(); throw Error('Unexpected health response'); } chunks.push(value); } }
-  finally { reader?.releaseLock(); }
-  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  return withOwnedResponse(url, { headers: token ? { Authorization: 'Bearer ' + token } : {}, redirect: 'error' }, 800, async response => {
+    if (!response.ok) throw Error('Service is not ready');
+    const reader = response.body?.getReader(); let size = 0; const chunks = [];
+    try { if (reader) for (;;) { const { done, value } = await reader.read(); if (done) break; size += value.byteLength; if (size > 1048576) { await reader.cancel(); throw Error('Unexpected health response'); } chunks.push(value); } }
+    finally { reader?.releaseLock(); }
+    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  }, false);
 }
 export async function orchestratorReady(config, credentials) {
   const value = await json(`http://127.0.0.1:${config.orchestratorPort}/v1/overview`, credentials.WERK_ADMIN_TOKEN);

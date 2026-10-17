@@ -89,7 +89,7 @@ If the project directory is itself a Git checkout, unlock Taskboard and review
 **Use this Git repository?**. Check its full path, branch and remote, then choose
 **Use repository** or **Don’t use**. Detection alone does not authorize fetching,
 pulling or task worktrees. The choice survives restart; a skipped repository can
-be accepted later in **Dashboard → Git repositories**.
+be accepted later in **Settings → Repositories**.
 
 Accepting adds a saved assignment. A checkout with a branch and remote starts
 watching; without a remote, or with detached HEAD, watching starts off. Committed
@@ -105,7 +105,7 @@ For the equivalent noninteractive commands, see
 
 ## Assign Git repositories
 
-In Dashboard, open **Git repositories → Manage repository assignments** and add
+In **Settings → Repositories**, open **Manage repository assignments** and add
 each existing checkout.
 Give it a stable ID, its path on the worker machine, and its remote/branch policy.
 Enable watching to fetch and safely fast-forward clean checkouts. Drain queued
@@ -117,12 +117,23 @@ Before the first start, you can seed the same assignments in
 See [repository configuration](../reference/configuration.md#assigned-git-repositories)
 for the JSON example, polling limits, status/sync API and retention behavior.
 
-Use **Run task** to select an assigned repository and approve its input files.
-The worker captures committed files in a task worktree beneath that repository's
-`.werk/worktrees` directory and returns a review patch. Feature-folder patch
+In **New request**, expand **Repository files · optional**, enable **Allow changes
+to approved repository files**, and select an assigned repository and paths.
+The same **Create request** action captures committed files in a task worktree
+beneath that repository's `.werk/worktrees` directory and returns a review patch.
+If project tools such as a vault linter scan that folder, set
+`repositories.worktreeDirectory` to a short absolute folder outside the checkout.
+Deleting a file task removes its clean, verified worktree; changed or protected
+worktrees remain available for inspection. `worktrees list` and
+`worktrees prune --dry-run` find retained worktrees. Feature-folder patch
 requests still target this installed project's directory; include it among the
-assignments when using that intake. Ordinary Chat only receives its supplied
-conversation input, and mock execution remains simulated.
+assignments when using that intake. Requests without file approval have no task
+worktree. Optional command and stdio MCP grants can separately select an assigned
+live checkout; see [Chat tool directories](manage-model-tools.md#run-chat-tools-in-a-repository-checkout).
+Mock execution remains simulated. Every task still has
+a generated Markdown progress record, with or without file permission. It lives
+under the configured feature folder's `_tasks/` directory; source intake notes
+remain separate. See [automatic task tracking](../reference/feature-requests.md#automatic-task-tracking).
 
 The default project Docker image includes Git. Custom images must also provide
 Git. Mount every assigned checkout writable. Enter container paths; the generated Compose file
@@ -195,6 +206,8 @@ set `mode: patch` and list approved project-relative files in `paths`. The worke
 returns a review patch; inspect it, use `git apply --check`/`git apply` when
 appropriate, and run your tests yourself. Chat mode sends only the request body.
 See the [request fields, statuses and recovery rules](../reference/feature-requests.md).
+For day-to-day operation, including Windows PowerShell 5.1 input files, task
+worktrees and tool limits, follow the [project worker checklist](operate-project-worker.md).
 
 ## Start with Docker
 
@@ -263,7 +276,7 @@ Code CLI signed in on that machine, or an API provider; Codex CLI remains POSIX-
 Register through the worker's existing connection settings. New assignments are
 written into the same feature folder as frontmatter plus Markdown, with their
 orchestrator task/session IDs and current state. They share the same serial
-execution slot. Edit the offered IDs/providers in **Dashboard → Execution profiles**
+execution slot. Edit the offered IDs/providers in **Settings → Execution profiles**
 while paused and idle; see [profile editing](use-worker-webview.md#edit-execution-profiles)
 for the supported modes and acknowledgment required after registration. The orchestrator keeps routing and lease ownership; editing an
 exported file cannot create a second local execution or alter the remote task.

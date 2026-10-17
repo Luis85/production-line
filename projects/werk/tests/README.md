@@ -24,6 +24,8 @@ For a focused run after `npm run build`, use `node --test "tests/worker/*.test.m
 
 Keep new tests named `*.test.mjs` or `*.test.cjs` so recursive discovery includes them. Preserve real assertions and cleanup when moving tests; do not replace behavioral checks with directory-shape assertions. Mock execution tests do not demonstrate live provider execution.
 
+Portable `start` leaves a detached `_run` process behind after the CLI call returns. A fixture that starts portable apps in a temporary directory registers it with `ownWorkspace(t, directory, stop)` from `helpers/workspace-processes.mjs`. After the test passes, fails or times out, the helper calls `stop`, which should use the app's own `stop` command. It then terminates any process tree whose command line still names that directory (`taskkill /T /F` on Windows), waits until none remain and removes the directory with retries. A detached guard does the same if the test process is killed before its after hooks run. Processes from other directories are never signalled.
+
 
 ## Spatial navigation browser regression
 

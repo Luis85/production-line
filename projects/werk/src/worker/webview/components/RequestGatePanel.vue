@@ -68,6 +68,7 @@ const mutable = computed(
     !!view.value &&
     !busy.value &&
     !loading.value &&
+    !gateState.stale &&
     !operation.value &&
     !activeExecution.value &&
     !pendingModel.value &&
@@ -234,6 +235,7 @@ onBeforeUnmount(() => controller.dispose());
       >
     </div>
     <UAlert v-if="error" color="error" variant="subtle" :description="error" />
+    <p v-if="gateState.stale && view" class="request-gate-note">Request data needs revalidation before another change. Refresh the request to retry.</p>
     <p v-if="notice" role="status">{{ notice }}</p>
     <template v-if="view">
       <div v-if="!props.requestId && rows.length > 1" class="request-selection">
@@ -574,7 +576,7 @@ onBeforeUnmount(() => controller.dispose());
         <UButton
           color="error"
           variant="outline"
-          :disabled="activeExecution || busy || loading || !!operation"
+          :disabled="activeExecution || busy || loading || gateState.stale || !!operation"
           @click="command({ action: 'cancel' })"
           >Cancel request</UButton
         >

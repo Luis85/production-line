@@ -59,7 +59,8 @@ alone cannot recover their files.
 
 Stop the worker and any other process that can write the assigned repositories.
 Keep a separate private filesystem backup of each complete checkout, including
-its `.werk/worktrees`, uncommitted files, and Git metadata. If the checkout uses
+its `.werk/worktrees`, uncommitted files, and Git metadata. With
+`repositories.worktreeDirectory`, also back up that folder. If the checkout uses
 a `.git` file, also preserve the actual common Git directory shown by
 `git rev-parse --path-format=absolute --git-common-dir` from that checkout. It
 contains the linked-worktree registrations and Werk ownership markers. A clone

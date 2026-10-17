@@ -1,9 +1,9 @@
 # Monitor long-running worker sessions
 
-A local model invocation has a six-hour execution budget by default. In Dashboard,
-open Resource monitoring to inspect the worker and adjust the elapsed-time warning
-and maximum execution duration. The warning defaults to one hour; it does not stop
-work. The maximum is a separate deadline, configurable from one second to 24 hours.
+A local model invocation has a six-hour execution budget by default. Inspect its
+measurements in **Metrics**; use **Settings → Queue & duration** to adjust the
+elapsed-time warning and maximum execution duration. The warning defaults to
+one hour; it does not stop work. The maximum is a separate deadline, configurable from one second to 24 hours.
 Provider-side limits can still end an invocation earlier.
 
 The worker captures the execution budget with each dispatched prompt. Changing
@@ -18,7 +18,7 @@ or failed request requires deliberate continuation; see
 Set `WERK_WORKER_MAX_RUNTIME_MS` in the worker process environment before starting
 it. For example, `21600000` means six hours. It must be a decimal integer from
 `1000` to `86400000`; an empty or invalid value fails startup. This override takes
-precedence over the saved execution setting. Dashboard identifies its environment
+precedence over the saved execution setting. Settings identifies its environment
 source and disables editing that limit. Change or remove the variable and restart
 the worker to change it. Resource warning settings remain editable.
 
@@ -28,8 +28,8 @@ does not implicitly forward every host environment variable.
 
 ## Interpret the measurements
 
-The worker samples every ten seconds. Dashboard shows active warnings, measurement
-age and retained alert history; Chat shows compact monitoring and the active task.
+The worker samples every ten seconds. Metrics shows active warnings, measurement
+age and retained alert history; Taskboard shows the active task.
 The measurements describe the **worker Node process**, not the model CLI child,
 remote provider or account. Missing readings remain unavailable. A stale snapshot
 must not be interpreted as a fresh healthy measurement.

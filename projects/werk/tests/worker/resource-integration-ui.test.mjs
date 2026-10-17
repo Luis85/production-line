@@ -10,7 +10,7 @@ async function fixture(t, component, request, workspaceAction = async () => true
  const state = reactive({ unlocked: true, lastRead: '', settings: null });
  const scope = effectScope(); t.after(() => scope.stop());
  const ports = { ref, computed, watch, state, request, defineProps: () => ({}), onMounted() {}, onActivated() {}, onDeactivated() {}, useRouter: () => ({ push: async () => {} }), workspaceAction };
- const fields = component === 'ProjectIntegrationsPanel' ? 'report, reviewed, preview, apply, load, error' : 'report, loadEvents, history, events, historyOpen, warningHours, maximumHours, savePolicy';
+ const fields = component === 'ProjectIntegrationsPanel' ? 'report, reviewed, preview, apply, load, error' : 'report, loadEvents, history, events, historyOpen';
  return { ...scope.run(() => new Function(...Object.keys(ports), ts.transpile(script, { target: ts.ScriptTarget.ES2022 }) + '\nreturn {' + fields + '};')(...Object.values(ports))), state };
 }
 const plan = id => ({ enabled: true, planId: id, canApply: true, files: [{ path: '.codex/werk-worker.md', state: 'missing', action: 'create', content: 'Generated project instructions' }] });
@@ -32,14 +32,4 @@ test('resource history traverses retained events with the returned sequence curs
  const calls = []; const f = await fixture(t, 'ResourceMonitorPanel', async (path, method, body) => { calls.push(body); return calls.length === 1 ? { events: [{ id: 'one' }], nextAfter: 51, hasMore: true, gap: true } : { events: [{ id: 'two' }], nextAfter: 52, hasMore: false, gap: false }; });
  await f.loadEvents(); assert.equal(f.history.value.gap, true); await f.loadEvents(true); assert.equal(calls[1].after, 51); assert.deepEqual(f.events.value.map(event => event.id), ['one', 'two']);
  f.state.unlocked = false; await nextTick(); assert.deepEqual(f.events.value, []); assert.equal(f.history.value, null);
-});
-
-test('environment maximum stays authoritative while the warning can be edited', async t => {
- const writes = []; const f = await fixture(t, 'ResourceMonitorPanel', async () => ({ alerts: [] }), async (path, body) => { writes.push(body); return true; });
- f.state.settings = { executionSource: 'environment', resources: { longRunningMs: 3600000 }, execution: { maxRuntimeMs: 21600000 } }; await nextTick();
- f.warningHours.value = '2'; await f.savePolicy(); assert.deepEqual(writes, [{ resources: { longRunningMs: 7200000 } }]);
-});
-test('duration policy rejects invalid ranges without writing settings', async t => {
- let writes = 0; const f = await fixture(t, 'ResourceMonitorPanel', async () => ({}), async () => { writes++; return true; });
- f.warningHours.value = '0'; f.maximumHours.value = '25'; await f.savePolicy(); assert.equal(writes, 0);
 });

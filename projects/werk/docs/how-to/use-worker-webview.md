@@ -15,14 +15,20 @@ executes exactly one task at a time, including Chat, explicit file tasks and
 remote assignments. For parallel work, start separate workers; see the
 [native and Docker examples](assemble-independent-components.md#scale-with-separate-workers).
 
-The worker opens on **Taskboard**, with **History** and **Dashboard** in the
-header. The board groups work into Needs you, Running, Up next, Drafts and
-Completed. The interaction panel on the right creates tasks or follows up on
-the selected task; on narrow screens it follows the board. Dashboard contains
-Monitoring & Status. Existing `/chat` bookmarks redirect to `/taskboard` while
-preserving task links; `/monitoring-status` redirects to `/dashboard`. Choose **Tour** in the
-header for a replayable introduction. Back, Next and Close let you explore at
-your own pace; the tour does not send messages, run tasks or change settings.
+The header separates four needs:
+
+| Page | Use it to |
+| --- | --- |
+| Taskboard · `/taskboard` | Give instructions, follow current work and answer questions. |
+| Metrics · `/dashboard` | Inspect consumption, execution evidence and worker health. |
+| History · `/history` | Find saved tasks, review patches and inspect execution evidence. |
+| Settings · `/settings` | Configure providers, queues, tools, repositories and intake. |
+
+Taskboard opens after unlock. Its interaction panel sits beside the board on wide
+screens and follows it on narrow screens. Existing `/chat` bookmarks preserve task
+links; `/monitoring-status` opens Metrics. Earlier Dashboard setup anchors redirect
+to Settings. Choose **Tour** for a replayable introduction; it does not submit
+work or change configuration.
 
 ## Use requests from project files
 
@@ -67,7 +73,7 @@ Deleting that file cannot override a configured environment token. See
 
 ## Connect Claude or Codex
 
-Use **Dashboard → Provider connections & orchestrator enrollment → Connections**.
+Use **Settings → Providers & accounts**.
 The task interaction panel links to this editor when a connection needs setup.
 Worker access and model sign-in are separate: unlocking the webview never signs
 you into a provider. Four connections are supported:
@@ -107,7 +113,7 @@ Use a current Codex CLI supporting `exec --json --ignore-user-config`,
 Code must support `--safe-mode`, `--restricted`, `--tools`, `--strict-mcp-config`
 and `--no-session-persistence` (adapter flags checked against 2.1.296).
 CLI Chat starts in a private workspace. All adapters default to tools disabled;
-**Dashboard → Tool access** manages explicit built-in grants and MCP connections.
+**Settings → Tools & MCP** manages explicit built-in grants and MCP connections.
 Granted CLI tools use the worker’s private MCP bridge with native tools disabled
 and a fresh private working directory. Claude’s tool-enabled path omits
 `--safe-mode` because that flag disables MCP; it retains `--restricted`, an empty
@@ -134,16 +140,20 @@ or advertised profiles.
 
 ## Create and follow up on a task
 
-Choose **New task** in the task interaction panel, select a connection and enter
-the outcome under **Task instructions**. **Create task** creates its session and
-queues the first message together. Expand **Agent definition** to choose an
-imported definition/agent or an optional task name. See
+Choose **New request** and describe the outcome under **Request instructions**.
+**Task options** shows the selected provider and lets you change it, name the task
+or choose an imported definition/agent. Without an explicit name, the first
+message supplies the title. **Create request** creates the task and starts its
+automatic Markdown tracking. **Repository files · optional** lets you approve
+bounded file input and patch generation in the same interaction; leaving it off
+does not disable the feature-request record. See
 [agent definition profiles](../reference/agent-definitions.md) for compatibility
-and instructions-only adaptation. If creation succeeds but message delivery
-cannot be confirmed, the task keeps its instructions for review before retrying.
+and instructions-only adaptation. If creation cannot be confirmed, **Retry same
+request** resends the exact saved command and identity. Keep that request intact
+until its outcome is known; it cannot create a second admission when replayed.
 
 Select a board card to open **Follow up** for that task. The transcript, saved
-model evidence and composer remain scoped to the selection. Use **New task** for
+model evidence and composer remain scoped to the selection. Use **New request** for
 unrelated work. Additional tasks wait while the worker is occupied or new starts
 are paused. The Running strip identifies the recorded active attempt and its
 model when evidence is available; a configured default is not shown as proof of
@@ -167,6 +177,13 @@ own disclosures. Completed model replies render Markdown as readable headings,
 paragraphs, nested lists, quotations, links, tables and code blocks. Code blocks
 keep their original text and offer **Copy code**; wide code and tables scroll
 within the reply on smaller screens. Saved replies use the same formatting.
+In completed model replies, file paths and globs such as `src/**/*.spec.ts`
+stay literal instead of turning into bold or italic text. A validated checkpoint
+in a retained file task, or a change set in a retained proposal task, appears as readable text; its stored form stays under **Raw model
+output**. Older stored text may be shortened. This display does not create a
+pending question or certify that the current saved patch matches an older reply.
+Ordinary JSON examples remain code blocks; they do not imply a saved patch or
+an active checkpoint.
 Your messages and failure notices remain literal text. Model HTML is never
 executed, and images appear as descriptive links rather than loading automatically.
 You can draft a follow-up while work is queued or running and send it when the
@@ -177,15 +194,34 @@ to 24 hours. `WERK_WORKER_MAX_RUNTIME_MS` overrides saved settings. The limit
 starts when execution begins; queue waiting is separate. Sessions hold at most 60 messages with
 a 48,000-character input budget; user messages are limited to 8,000 characters
 and replies to 32,000. Up to 100 task sessions are retained. Deleting a task session
-requires confirmation; New task preserves the previous transcript. A failed save
+requires confirmation; New request preserves the previous transcript. A failed save
 is shown as unsaved. Interrupted requests
 are marked explicitly after restart rather than silently replayed.
 
-Only the worker prompts the model. A Chat task does not automatically expose
-dashboard telemetry or repository files. Use the file-task editor below to
-approve file input and generate a patch. Repository file tools additionally
-require an explicit grant and an approved task worktree; commands, web access
-and MCP tools follow their separately saved grants.
+Only the worker prompts the model. Instructions alone do not grant repository
+access. Use the optional repository-file approval below when a request needs
+captured inputs and a review patch. Repository file tools additionally require
+a worker grant and an approved task worktree; commands, web access and MCP tools
+follow their separately saved grants.
+
+## Inspect the feature-request record
+
+Every task has an automatic Markdown progress record, including work created
+without repository-file permission. Follow-ups, answers and retries update the
+same record. The selected task's **Feature request Markdown** section shows the
+confirmed filename, recorded state and last saved time, with readable content
+and **Download Markdown**. **Refresh request record** retries a read/sync check.
+
+For a configured feature folder, records live in its `_tasks/` subfolder.
+Workers without a configured feature folder use `<stateDir>/feature-requests/`. Source requests remain
+separate and authoritative for intake; editing a generated progress record does
+not submit work, answer a question or approve a result. Execution completion,
+request gates and human review remain distinct.
+
+A saving message or synchronization error means the latest progress may not yet
+be reflected in Markdown. Accepted work remains in the durable worker journals;
+do not create a duplicate request to recover a record write. The worker retries
+synchronization. See the [tracking contract](../reference/feature-requests.md#automatic-task-tracking).
 
 ## Assign and watch repositories
 
@@ -196,13 +232,13 @@ a branch and remote exist. Without either, watching stays off and committed file
 tasks can still use worktrees. Finish queued/running work before accepting.
 
 **Don’t use** saves a decline and removes the Taskboard prompt. It does not block
-Chat or unrelated work. Revisit the choice in **Dashboard → Git repositories →
+Chat or unrelated work. Revisit the choice in **Settings → Repositories →
 Use the repository you skipped?**. Until accepted or explicitly assigned, the
 detected checkout is not fetched, pulled or used for task worktrees. The worker
 does not automatically select a parent directory’s repository. Choices survive
 restart; replacing the repository requires a fresh choice.
 
-In Dashboard, open **Git repositories → Manage repository assignments** to assign
+In **Settings → Repositories**, open **Manage repository assignments** to assign
 existing Git checkouts to this worker.
 Choose stable IDs and paths on the worker machine, then configure the remote,
 optional branch and watching. Finish queued/running work before changing the list.
@@ -212,38 +248,68 @@ polling interval. Use **Save assignments** to persist edits. Dirty changes and
 local/divergent commits are preserved.
 
 Each assigned coding task receives a detached worktree beneath the selected repository's
-`.werk/worktrees` directory. Worktrees are retained across restart. See
+`.werk/worktrees` directory, or beneath **Task worktree folder** when set to an
+absolute folder outside the checkouts. Worktrees are retained across restart. See
 [repository configuration](../reference/configuration.md#assigned-git-repositories)
 for startup seeds, saved-setting precedence, polling and cleanup.
 
 ## Run local coding tasks
 
-Choose **New task → Prepare a file task** in the interaction panel. The file editor has its own draft; edit its instructions and choose its provider connection. Give it a title, a
-repository from the assigned list, and an explicit list of relative file paths.
-The worker captures those files from a pinned worktree when accepting the task.
-When no repositories are assigned, the absolute-directory input remains available.
-Git roots use worktrees; the detected project checkout still requires the saved
-consent above. Legacy non-Git directories retain bounded snapshot-only behavior
-without Git provenance.
-Switching task selection does not change this editor’s instructions or provider. Successful submission keeps the separate conversation draft. Access expiry retains the file editor in this tab; explicit Lock clears it.
+In **New request**, keep your instructions in the same composer and expand
+**Repository files · optional**. Enable **Allow changes to approved repository
+files**, choose an assigned repository and list the relative paths the request
+may use. Provider, task name and agent choices remain in Task options. Submit
+with **Create request**; the same request retains its instructions and tracking.
 
-Only those snapshots and your instruction are sent to the chosen provider in
-the new file task's dedicated session. The preceding Chat transcript is not
-included in its task input. File tasks use the same single execution slot as
-Chat and remote assignments.
+**Create request** keeps your original instructions and request identity while
+showing background preparation progress. This progress is not yet confirmation
+that a task or Markdown record was saved. The composer waits for the admitted
+session before showing its task and tracking state. A failed or unconfirmed
+preparation retains your instructions and offers **Retry same request**; status
+polling never submits the request again. The task board also shows preparation
+progress and lets you dismiss a failed entry.
 
-Local tasks are bounded file-change generation: up to 32 approved text files,
-24 KiB per input file and 48,000 input characters in total. New files are
-supported. Secret-like paths, symlinks and path traversal are rejected. The
-provider returns complete changed file contents; the worker validates them and
-creates a unified patch. It never executes model-generated shell commands.
-Your source checkout remains unchanged by the file task, and tests are **not** run
-automatically. The retained worktree contains its captured input; changed file
-contents remain in the review patch. Ordinary provider Chat still has no arbitrary
-filesystem or shell tools.
+Deleting an admitted task removes its worktree when it is clean and its ownership
+is verified; clear the confirmation checkbox to retain it. Changed, locked or
+otherwise protected worktrees remain available for inspection.
+
+The worker captures approved files from a pinned worktree when accepting the
+request. When no repositories are assigned, the absolute-directory input remains
+available. Git roots require the saved consent above. Legacy non-Git directories
+retain bounded snapshots without Git provenance. The preceding conversation is
+not copied into a new request's approved-file input.
+
+After interrupted preparation, **Retry same request** can reuse only a worker-owned,
+unchanged worktree bound to the original request. If that checkout changed or
+cannot be proven unchanged, the worker preserves its files and saves a failed
+task with a Markdown record; no file snapshots were accepted. Inspect the retained
+worktree path, then use **New request** to approve current repository files.
+The failed request cannot resume, retry execution or accept follow-ups. Repeating
+its original creation returns that same failed record without executing it.
+
+The file-change path supports up to 32 approved text files, 24 KiB per input file
+and 48,000 input characters in total. New files are supported; secret-like paths,
+symlinks and path traversal are rejected. For a new Git-backed request with file
+access and at least one enabled **Required feature check** preset, the model can
+edit approved files in the worktree, run checks and repair failures. The worker
+generates the patch from the actual candidate and requires every frozen check to
+pass on that candidate. Inspect **Implementation evidence** in the selected task
+or History.
+
+Other requests retain the proposal-only workflow: validated returned contents
+become a patch without being applied or automatically tested. The composer
+explains available setup; the saved task records its accepted mode. Commands and
+MCP tools retain their separate saved grants. All work shares one execution slot.
+See [implement a feature](implement-feature.md) for setup and review.
 
 In **History → File tasks**, choose **Review patch**, inspect the result and
 choose **Download patch**. **Open conversation** opens its dedicated transcript.
+For proposal completions, the main reply shows the model's summary and changed
+files with added and removed line counts. Large edits use explicitly labelled
+approximate counts. Full file contents remain available in patch review and
+retained raw evidence. Implemented candidates keep their plain-text summary and
+verification evidence. **Review saved patch** under the latest reply opens the
+current retained patch; human review is still required.
 A failed evidence read offers Retry without removing the task list.
 Review it, then check and apply it from the repository:
 
@@ -264,10 +330,10 @@ Search by title, ID or provider, filter task type and state, or choose archived
 tasks to **Restore and open** a conversation. File tasks also appear in Queued,
 Running, and Review & finished columns with their own search and state filter. Inspect file tasks
 to stop, change queued priority, retry failed work, archive or delete. The file
-taskboard retains at most 100 tasks. Configure:
+taskboard retains at most 100 tasks. Open **Settings → Queue & duration** to configure:
 
 - **Local task capacity:** 1–64 accepted local tasks, counting queued and running
-  work. This limits the queue, not execution concurrency.
+  work and temporary preparation/resume reservations. This does not add execution slots.
 - **Extra orchestrator queue places:** 0–64 accepted assignments beyond the one
   worker execution slot; defaults to zero.
 - **Start order:** FIFO or high priority first for queued file tasks.
@@ -280,7 +346,7 @@ The orchestrator remains the authority for assigned tasks. Its task state calls
 leased assignments `running`, while the worker distinguishes queued from
 executing. Both services must support the queue extension to enable extra places.
 
-**Pause queue** in Dashboard or History holds all new execution starts, including Chat, file tasks and
+**Pause new starts** on Taskboard holds new execution starts, including Chat, file tasks and
 already accepted remote assignments. The active task can finish; waiting work
 remains queued until resumed. Pausing display updates in the header is separate:
 it only pauses refresh of the webview. Reducing queue limits does not discard
@@ -288,13 +354,24 @@ accepted work. To execute more tasks in parallel, run more worker instances
 with separate state and ports; there are no independent chat or local-task
 process budgets that bypass the worker's single execution slot.
 
+Taskboard shows local admission usage separately from accepted remote
+assignments. Drafts, finished tasks and ready project notes awaiting admission are not
+occupied places. A full local admission limit holds new submissions; a manual
+pause or token limit can hold execution while additional work still fits in the
+queue. Stale capacity is labelled as last reported, not current availability.
+
+Queue, duration and consumption editors preserve drafts while you navigate
+Settings in this tab. Save each section explicitly. If another operator changes
+its saved policy, reload and reconcile your draft before saving. A successful
+save followed by a failed refresh does not imply that the change was rejected.
+
 Queued file tasks survive restart. Interrupted file execution becomes failed and
 requires an explicit retry. Orchestrator assignments are reconciled from the
 server and existing terminal evidence is not executed again.
 
 ## Connect an orchestrator later
 
-In **Dashboard → Provider connections & orchestrator enrollment**, enter its HTTP(S) origin and enrollment token, then
+In **Settings → Orchestrator**, enter its HTTP(S) origin and enrollment token, then
 choose **Save & connect**. The worker registers automatically and retries when
 unavailable; the webview, sessions and local taskboard remain available. Initial
 CLI enrollment also works with `--url` and `WERK_ENROLLMENT_TOKEN`.
@@ -316,7 +393,7 @@ Factory registration, see [Assemble independent components](assemble-independent
 
 ## Edit execution profiles
 
-Open **Dashboard → Execution profiles**. These are the IDs/providers offered for
+Open **Settings → Execution profiles**. These are the IDs/providers offered for
 orchestrator assignments, separate from provider sign-in, model settings and
 imported agent definitions. A simulated worker supports 1–8 Claude/Codex profiles;
 a worker already configured for native Linux Codex supports one Codex profile.
@@ -329,7 +406,7 @@ Editing keeps the current execution mode and the shared single execution slot.
 3. Choose **Save profiles**. Before first registration, the change takes effect
    immediately. A registered worker shows **Waiting for the orchestrator** until
    the same orchestrator accepts the update; the old profiles remain active.
-4. Once the update is accepted, resume from **Work in progress** when ready.
+4. Once the update is accepted, choose **Resume new starts** on Taskboard when ready.
 
 Offline changes are saved and retried automatically. While pending, new local and
 remote work, queue resume and further profile edits are blocked. Restart preserves
@@ -363,11 +440,12 @@ forwards requests; only the worker prompts an LLM.
 Use the separate **Submit task** tab when work should enter the line's configured
 router. Supply a requirement link or title and acceptance criteria. That router
 chooses an eligible worker independently of the widget's connected worker.
-This differs from New task/Chat, which queues work directly on the connected
-worker, and from **Run task**, which explicitly captures approved files for a
-review patch. All three paths execute serially on whichever worker owns them.
+New task queues work directly on the connected worker. In that worker's own
+interaction panel, optional repository-file approval can produce a review patch
+from captured inputs. Routing and file permissions remain separate decisions;
+all admitted work executes serially on whichever worker owns it.
 
-## Inspect history and Dashboard
+## Inspect History and Metrics
 
 History also exposes **Project requests** from the configured feature folder and
 **Execution evidence** for local Chat/file/feature executions. Inspect the current
@@ -383,16 +461,18 @@ evidence remains explicit. Snapshot history follows retention; the reader
 inspects at most 1,000 directories and discloses when this is only a sample.
 New task titles are kept in a bounded private index.
 
-Dashboard starts with current work and queue controls. **Open running task**
-opens its conversation; **Review patches** and **Failed tasks** open filtered
-History results. Health and host memory/disk remain visible. Open the named
-disclosures for the connection map, orchestrator slots, delivery backlog, profiles,
-worker RSS/heap, load, CPUs, OS, Node version, paths and diagnostics.
-Standalone mode is healthy without an orchestrator. Node RSS excludes provider
-subprocesses; container host readings are not quota guarantees. Usage, cost,
-subscription balance and login status remain unknown unless actually measured.
+Metrics shows the configured token allowance, resource observations, retained
+execution evidence and operational health. Measurement age and missing readings remain
+visible. Settings links open the corresponding editor without mixing forms into
+the measurements. Standalone mode is healthy without an orchestrator.
 
-**Dashboard → Consumption limits** sets this worker's share of a configured
+Worker Node CPU/RSS excludes provider subprocesses; host memory/load includes
+other machine activity and does not prove container quota. Execution evidence
+summarizes local invocations with coverage, while original remote assignments
+retain their separate snapshot history. Reported costs may be estimates;
+subscription balance and model progress are not inferred from these metrics.
+
+**Settings → Consumption** sets this worker's share of a configured
 daily or monthly token allowance. It shows measured usage, reservations,
 remaining tokens and the next UTC reset. Limits start disabled. When enabled,
 insufficient budget holds new model calls while accepted work stays queued;
@@ -411,7 +491,7 @@ No environment-variable values or credentials are shown.
 The taskboard places a pending question or escalation in **Needs you** and opens its answer controls in **Follow up**.
 Read its reason/choices, enter your response and submit through the pending-input
 control. Generic follow-up sending is held until that decision is resolved.
-History and Dashboard identify requests needing input and link back to the selected task on the taskboard.
+Taskboard and History identify requests needing input and link back to the selected task on the taskboard.
 
 Inspect the saved checkpoint before resuming a failed, cancelled or interrupted
 turn. Continuation replays saved context in a fresh invocation and may consume

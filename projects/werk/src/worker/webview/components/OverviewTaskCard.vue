@@ -7,8 +7,8 @@ defineEmits<{ open: [TaskOverviewItem] }>();
 </script>
 <template>
   <article class="overview-card" :class="[{ selected, compact }, 'task-group-' + item.group]" :aria-label="item.title">
-    <div class="overview-card-meta"><span class="task-identity" :title="item.taskId">{{ item.taskId }}</span><span class="task-source">{{ item.sourceLabel }}</span><span v-if="selected" class="task-selected">Selected</span></div>
-    <h3>{{ item.title }}</h3>
+    <div class="overview-card-meta"><span class="task-source">{{ item.sourceLabel }}</span><span v-if="selected" class="task-selected">Selected</span></div>
+    <div class="overview-card-title"><h3>{{ item.title }}</h3><span v-if="item.taskId" class="task-identity" :title="item.taskId" :aria-label="'Task ID: ' + item.taskId">{{ item.taskId }}</span></div>
     <div class="overview-status"><UIcon :name="item.group === 'attention' ? 'i-lucide-circle-alert' : item.group === 'completed' ? 'i-lucide-circle-check' : item.group === 'queued' ? 'i-lucide-clock-3' : 'i-lucide-file-pen-line'" />{{ item.statusLabel }}</div>
     <p class="overview-card-summary">{{ item.summary }}</p>
     <div class="overview-card-footer">
@@ -21,9 +21,9 @@ defineEmits<{ open: [TaskOverviewItem] }>();
 </template>
 <style scoped>
 .overview-card { min-width: 0; padding: 20px; border: 1px solid #30434d; border-radius: 8px; background: #192831; }
-.overview-card.selected { border-color: #8be0b8; box-shadow: 0 0 0 1px #8be0b822; }
+.overview-card.selected { border-color: #8be0b8; background: #1d3037; }
 .overview-card-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: #b5c4cd; font-size: .6875rem; }
-.task-identity { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-identity { display: block; margin: -4px 0 var(--space-3); color: var(--ui-text-muted); font-size: .6875rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-source { padding: 2px 7px; background: #253641; color: #d1dce2; border-radius: 4px; }
 .task-selected { margin-left: auto; color: #8be0b8; }
 h3 { margin: 13px 0 11px; font-size: 1.0625rem; line-height: 1.5; font-weight: 620; color: #edf4f7; overflow-wrap: anywhere; }
@@ -40,6 +40,8 @@ button:disabled { opacity: .5; cursor: default; }
 .compact { display: grid; grid-template-columns: minmax(120px, .8fr) minmax(180px, 1.5fr) minmax(110px, .7fr) minmax(160px, 1fr); gap: 16px; align-items: center; padding: 14px 18px; }
 .compact h3 { margin: 0; font-size: .875rem; }
 .compact .overview-card-summary { display: none; }
+.overview-card-title { min-width: 0; }
+.compact .task-identity { margin: var(--space-1) 0 0; }
 .compact .overview-card-footer { justify-content: flex-end; }
 .compact .patch-review-link { grid-column: 2 / -1; width: fit-content; margin: 0; }
 @media (max-width: 1300px) { .compact { grid-template-columns: minmax(140px, 1fr) minmax(180px, 1.3fr); } .compact .overview-card-footer { justify-content: flex-start; } }

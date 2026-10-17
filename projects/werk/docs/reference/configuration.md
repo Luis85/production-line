@@ -184,16 +184,63 @@ operator contract. See [runtime layout](../explanation/runtime-layout.md).
 local model invocations: integer milliseconds from 1000 to 86400000. Absent, the
 saved private workspace execution setting applies, otherwise the default is six
 hours. Empty/invalid values fail startup. The private settings API exposes
-`executionSource` and rejects execution edits while the override is active; it
-preserves the saved value for later use after removing the override. Other local
+`executionSource` and rejects duration edits while the override is active; it
+preserves the saved duration for later use after removing the override. Tool
+budgets remain editable under that override. Other local
 settings, including resource thresholds and provider configuration, remain in the
 private state directory. Existing saved connection settings can replace startup
 connection defaults; the CLI-over-environment rule above concerns the listed
 operator defaults, not every saved worker setting.
 
-A dispatched invocation freezes its duration policy; edits affect later calls.
+Execution settings also include `maxToolCalls` (default 128, integer 1–512) and
+`commandTimeoutMs` (default 300000, integer 1000–3600000). Policies saved without
+these fields use those defaults. The command ceiling applies to fixed commands,
+CLI tools and required feature checks; an optional per-grant timeout can shorten
+it. The total `maxRuntimeMs` deadline can end any operation sooner. External MCP
+calls default to 30 seconds with optional per-connection timeouts; web fetches
+retain 10 seconds.
+There is no independent two-minute tool window. The UI exposes these fields under
+**Settings → Queue & duration → Tool execution limits**.
+
+Each prepared dispatch freezes its duration and tool budgets, including while
+queued or when execution uses that saved dispatch. A newly prepared follow-up,
+answer or resume attempt captures current execution settings; it does not rewrite
+the earlier dispatch or inherit its budget indefinitely.
 See [long-running worker operations](../how-to/monitor-long-running-worker.md) for
 monitoring scope, warning thresholds, shutdown and recovery.
+
+## Worker queue and guarded settings saves
+
+The private `GET /api/settings` response supplies each editor's saved baseline.
+`POST /api/settings` supports optional comparison fields; the webview sends them
+so a concurrent policy change returns a conflict before anything is written:
+
+| Editor | Baseline field | Compared values |
+| --- | --- | --- |
+| Queue | `expectedBoard` | `queueCapacity`, `orchestratorQueue`, `order` |
+| Queue & duration | `expectedDuration` | `maxRuntimeMs`, `longRunningMs` |
+| Tool execution limits | `expectedToolBudget` | `maxToolCalls`, `commandTimeoutMs` |
+| Consumption | `expectedConsumption` | The complete saved consumption policy |
+
+A guarded queue edit sends only queue limits/order in `board`; pause is an
+independent `{board: {paused: boolean}}` action and cannot be overwritten by that
+editor's stale draft. Duration edits patch `execution.maxRuntimeMs` and/or
+`resources.longRunningMs`, preserving other resource thresholds. Tool-budget
+edits patch `execution.maxToolCalls` and/or `execution.commandTimeoutMs` and use
+the complete `expectedToolBudget` pair. A combined duration/budget save validates
+both baselines before writing any fields. Legacy clients
+may omit these guards. Save acknowledgements and follow-up reads are separate:
+a failed refresh does not undo an acknowledged save.
+
+The session view includes an optional `capacity` snapshot (schema version 1),
+returned through the existing `GET /api/chat/session` poll. It reports one shared
+execution slot, local admission occupancy including preparation/resume
+reservations, and the separate accepted remote-assignment buffer. Unadmitted
+ready notes and retained finished tasks are not local occupancy. Reducing a limit
+preserves accepted work and may leave it above the new limit. The snapshot also
+carries its capture time, manual pause and consumption blocker; these observations
+do not reserve admission or predict completion time. Stale data cannot establish
+current readiness.
 
 ## Editable execution profiles
 
@@ -252,7 +299,7 @@ branch yourself, then enable watching through repository settings. A first commi
 is required before task worktrees can be created.
 
 Both decisions persist privately in `repository-discovery.json`. Decline hides
-the Taskboard prompt; Dashboard lets the operator reconsider. Acceptance requires
+the Taskboard prompt; Settings → Repositories lets the operator reconsider. Acceptance requires
 idle queues and preparations; decline can be recorded while unrelated work runs.
 Existing explicit repository assignments, including a matching configured legacy
 Codex repository, count as authorization. Explicitly assigning a skipped checkout
@@ -308,10 +355,59 @@ Each assigned coding task gets a detached Git worktree under
 edits are excluded. The managed directory is excluded through Git's local exclude
 file. Source checkout files stay separate from task edits; background pulls do
 not change an existing task's base. Worktrees survive worker shutdown and restart.
-Review them before cleanup; use `git worktree list` and Git's normal
-`git worktree remove PATH` for reviewed clean worktrees. Do not delete a worktree
-while a task is using it. Back up repositories and retained worktrees separately
-from private worker state.
+Back up repositories and retained worktrees separately from private worker state.
+
+Set the optional `repositories.worktreeDirectory` to an absolute folder outside
+every checkout to create new task worktrees there instead, for example when
+project tools such as a vault linter scan `.werk/worktrees`:
+
+```json
+{ "repositories": { "pollMs": 30000, "worktreeDirectory": "D:\\werk-worktrees", "items": [ { "id": "app", "path": "D:\\src\\app", "remote": "origin", "watch": true } ] } }
+```
+
+The parent folder must exist; the worker creates the folder itself as an ordinary
+directory and rejects a location inside a checkout or its Git directory. Several
+repositories can share it: names start with the assignment ID. On Windows choose
+a short path; worktree and Git administration path limits are checked before
+checkout. Existing worktrees stay at the location recorded in their ownership
+marker and are still verified there after the setting changes. The default
+(setting omitted or empty) keeps `<repository>/.werk/worktrees/`. `settings set`
+replaces the whole `repositories` object, so include `items` and the directory.
+The setting applies to assigned repositories; unassigned legacy Git folders keep
+the in-checkout location.
+
+Checkout uses Git's parallel checkout (`checkout.workers`, at most 8); on Windows
+it falls back to a serial checkout when the worktree's Git administration path
+exceeds Git's 220-byte `GIT_DIR` limit, so short repository paths check out
+faster. One
+120-second budget covers repository queueing, fetch, checkout and verification of
+a new task worktree; with `"background": true` on file-task creation the request
+returns at once and the budget is 10 minutes. `worktree add` itself may run up to
+5 minutes within that budget, independent of short Git metadata timeouts.
+
+Deleting a file task removes its worktree when it is clean and still verifiably
+owned: the recorded identity (device, inode, creation time), ownership marker,
+registration with the repository, detached HEAD at the recorded base, and no
+operator lock. A worktree with uncommitted or untracked files is kept unless the
+delete sets `discardChanges: true`. One with commits on its detached HEAD, a lock,
+or any symbolic link or junction inside is always kept for manual review: Git for
+Windows deletes through junctions, also in ignored folders and without `--force`.
+`removeWorktree: false` keeps it; `removeWorktree: true` fails the deletion unless
+the worktree was removed. The delete response includes `worktree.outcome`
+(`removed`, `kept` with `reason`, or `not_applicable`).
+
+`GET /api/worktrees` lists ownership records of each assigned repository with
+state `present`, `missing`, `incomplete` (interrupted checkout), `locked`,
+`unregistered` or `invalid`, the location (`repository` or `external`) and the
+`taskId` of a file task still using it. `POST /api/worktrees`
+`{"action":"prune","dryRun":true}` reports what would be removed;
+without `dryRun` it removes, under the same rules, worktrees that no file task
+uses, such as those left by interrupted admissions or retained Codex runs. `id`
+selects one worktree name, `repositoryId` one assignment and `discardChanges`
+also removes changed and interrupted ones. Pruning requires no queued, running or
+admitting work; a dry run is always available. Never delete task worktree folders
+with a recursive file delete; use these commands or `git worktree remove` after
+checking for links.
 
 Local file tasks select an assignment ID in their existing `repository` field;
 an assigned absolute checkout path is also accepted. With assignments configured,
@@ -348,7 +444,7 @@ worktree preparation still validates the selected repository and pinned commit.
 Repository assignment changes require queued and running tasks to be drained.
 Saved private worker settings take precedence over the initial file seed on later
 starts; editing startup JSON does not overwrite saved assignments. Inspect or edit
-them in Dashboard's **Git repositories** section or use `settings get` /
+them in **Settings → Repositories** or use `settings get` /
 `settings set` on the worker CLI.
 
 Authenticated `GET /api/repositories` returns
@@ -376,15 +472,88 @@ and ordinary provider Chat does not gain arbitrary filesystem or shell tools.
 
 ## Local model tool access
 
-The unlocked worker Dashboard manages a separate private `tool-access.json` in
-the worker state directory. Missing configuration means no grants. The document
-records a numeric revision, read-only worktree-file access, fixed command presets,
-web origins, MCP connection details and discovered per-tool grants. Its credentials
+The unlocked **Settings → Tools & MCP** section manages a separate private
+`tool-access.json` in the worker state directory. Missing configuration means no grants. The document
+records a numeric revision, worktree-file access, fixed command presets,
+CLI tools, web origins, MCP connection details and discovered per-tool grants. A stdio
+connection's `secretEnv` names the variable that receives its secret; it may be
+empty only when the connection stores no secret, and an omitted value defaults to
+`MCP_AUTH_TOKEN`. A command
+preset or stdio MCP connection may add `"chatDirectory": "repository:<id>"`, which
+names an assigned repository whose live checkout starts that grant's Chat calls
+and MCP discovery. Omitted, Chat calls start in the private, empty
+`chat-workspace` folder in worker state. Task invocations always use their task
+worktree. Saving requires the repository to be assigned; calls recheck the
+assignment and its resolved directory. Its credentials
 are redacted from authenticated views; they never enter the public status or
 model dispatch manifest. Preserve this file with the rest of stopped worker state.
 
+A fixed command preset may set `verification: true` (omitted/false by default).
+The UI calls this **Required feature check**. Together with file access and an
+approved Git worktree, enabled verification presets define the frozen check plan
+for new implementation requests. Candidate tools edit only approved paths and
+record actual command outcomes; every required check must pass on the final
+candidate. Existing proposal tasks are not converted by changing grants. See
+[implement a feature](../how-to/implement-feature.md).
+
+Per-grant timeouts are optional whole milliseconds. There is no separate
+`limits.windowMs` tool-policy setting:
+
+| Field | Omitted on a new grant | Numeric range |
+| --- | --- | --- |
+| `builtins.commands[].timeoutMs` | Inherit the accepted `execution.commandTimeoutMs` | 1,000–3,600,000 |
+| `builtins.cliTools[].timeoutMs` | Inherit the accepted `execution.commandTimeoutMs` | 1,000–3,600,000 |
+| `mcp[].timeoutMs` | 30,000 | 1,000–900,000 for stdio; 1,000–300,000 for HTTP |
+
+Command/CLI/required-check deadlines are capped by the frozen global command
+ceiling. MCP deadlines are independent of that ceiling. All calls remain bounded
+by cancellation and the remaining total invocation duration.
+
+For updates, an absent `timeoutMs` preserves an existing override for the same
+ID; `null` clears it. Explicit numeric defaults remain saved. This preservation
+also applies when an MCP destination changes, while its secrets and discovered
+grants follow the separate destination identity rule. Changing to HTTP with a
+retained timeout above 300,000 requires a valid replacement or explicit reset.
+A required check's fingerprint includes its timeout override when present;
+changing that override does not silently rewrite an accepted verification plan.
+See [execution limits](../how-to/manage-model-tools.md#execution-limits).
+
+Each entry in `builtins.cliTools` describes one command-line tool the model may
+call with its own arguments in the task worktree:
+
+| Field | Contract |
+| --- | --- |
+| `id` | 1–48 letters, digits, `_` or `-`. The model sees the tool as `werk_cli_<id>`. |
+| `name`, `description` | Display name (≤ 120 characters) and optional model-facing description (≤ 1,000). |
+| `enabled` | `false` keeps the configuration without offering the tool. |
+| `executable` | Absolute path on the worker machine; `.bat` and `.cmd` files are rejected. |
+| `args` | Up to 32 fixed leading arguments, for example `["bin/harness.mjs"]`. Relative paths resolve in the task worktree. |
+| `commands` | 1–64 rules. `command` is one or two literal words. Optional `requireOneOf` lists flags of which one must be present; optional `refusedOptions` adds refusals for that command. |
+| `refusedOptions` | Up to 32 option names refused for every command, such as `--root`. |
+| `maxArgs`, `maxArgLength` | Model argument bounds: default 24 (1–64) and 500 characters (1–2,048). |
+| `outputKiB`, `truncationHint` | Returned output limit, default 32 (1–64), and the hint appended to truncated output. |
+| `timeoutMs` | Optional deadline, 1,000–3,600,000 milliseconds, capped by the accepted global command ceiling. Omitted new values inherit that ceiling. |
+
+Absolute paths, `~`, `file:` URLs, `@file` paths, `..` segments, the `--`
+terminator and control characters in model arguments are always refused, including
+response-file and path values extracted from options. Required flags must be
+standalone and unique; assigned, negated and clustered forms cannot satisfy or
+override a required flag. These checks do not establish the CLI's behavior or
+confine its filesystem access. At most
+eight CLI tools may be configured; each enabled CLI tool counts toward the
+64-tool limit. Documents without `cliTools`, including those written by 0.9.0,
+grant none. An empty list is omitted from the saved document so 0.9.0 can read it.
+Before rolling back to 0.9.0, remove all CLI tool entries, clear verification
+marks and clear every per-grant timeout with `timeoutMs: null`, then save tool
+access while running the current version. Disabling entries, omitting existing
+overrides or explicitly saving numeric defaults leaves configuration the older
+version does not understand. Reset global tool budgets to 128 calls and 300000
+milliseconds and save; those global default budget fields are omitted from saved
+workspace settings for compatibility. If retained task state is incompatible,
+restore the pre-upgrade stopped-state backup.
+
 Tool changes require paused, drained execution and the current policy revision.
-Local Chat and approved-file task invocations resolve current grants; automated
+Local request invocations resolve current grants; automated
 request reviewers stay tool-free. Repository assignment, provider sign-in and
 execution profiles do not implicitly grant tools. See
 [manage model tools](../how-to/manage-model-tools.md).

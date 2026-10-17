@@ -5,6 +5,7 @@ import type { ToolRuntime } from '../application/tool-runtime.js';
 import type { ProviderConnection } from './providers.js';
 import { providerUsage } from './provider-usage.js';
 import { invokeGrantedTool } from './provider-tool-session.js';
+import { DEFAULT_MAX_TOOL_CALLS, MAX_TOOL_CALLS } from '../application/execution-policy.js';
 const record = (value: unknown): value is Record<string, any> => !!value && typeof value === 'object' && !Array.isArray(value);
 function addUsage(previous: ProviderUsage | undefined, next: ProviderUsage): ProviderUsage {
   if (!previous) return next;
@@ -20,11 +21,12 @@ async function readResponse(response: Response, signal: AbortSignal) {
   let bytes: Uint8Array;
   try { bytes = await readResponseBody(response.body, 1048576, { cancel: 'always' }); }
   catch (error) {
+    if (signal.aborted) throw new ProviderModelError('cancelled');
     if (error instanceof ProviderModelError) throw error;
     if (error instanceof ResponseBodyLimitError) throw new ProviderModelError('protocol');
-    throw new ProviderModelError(signal.aborted ? 'cancelled' : 'unavailable');
+    throw new ProviderModelError('unavailable');
   }
-  try { return JSON.parse(Buffer.from(bytes).toString('utf8')); }
+  try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); }
   catch { throw response.ok ? new ProviderModelError('protocol') : classifyProviderStatus(response.status); }
 }
 /** Stateless tool loops: each turn replays this invocation only; server-side conversation storage stays off. */
@@ -34,9 +36,15 @@ export async function apiReply(connection: ProviderConnection, request: ModelReq
   const definitions = runtime?.manifest.tools.map(tool => openai
     ? { type: 'function', name: tool.name, description: tool.description, parameters: tool.inputSchema, strict: false }
     : { name: tool.name, description: tool.description, input_schema: tool.inputSchema });
+  const acceptedMaxCalls = request.policy.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS;
+  const runtimeCaps = [runtime?.limits?.maxCalls, runtime?.budget?.().maxCalls].filter((value): value is number => value !== undefined);
+  // An injected runtime cannot widen the accepted dispatch, even if its budget accounting is otherwise valid.
+  if (runtimeCaps.some(value => !Number.isSafeInteger(value) || value < 1 || value > acceptedMaxCalls)) throw new ProviderModelError('tool_access');
+  const maxCalls = Math.min(acceptedMaxCalls, ...runtimeCaps);
   let calls = 0, usage: ProviderUsage | undefined;
   const seenCallIds = new Set<string>();
-  for (let turn = 0; turn <= 32; turn++) {
+  // One request per granted call, one whose calls the runtime may refuse with its budget message, and the final answer.
+  for (let turn = 0; turn <= maxCalls + 1; turn++) {
     if (signal.aborted) throw new ProviderModelError('cancelled');
     const body = openai
       ? { model: request.provider.model, instructions: request.protocolInstructions, store: false, max_output_tokens: 8192, input: history, ...(definitions ? { tools: definitions, parallel_tool_calls: false, include: ['reasoning.encrypted_content'] } : {}) }
@@ -48,7 +56,12 @@ export async function apiReply(connection: ProviderConnection, request: ModelReq
       response = await transport(openai ? 'https://api.openai.com/v1/responses' : 'https://api.anthropic.com/v1/messages', {
         method: 'POST', signal, redirect: 'error', headers: { 'content-type': 'application/json', ...(openai ? { authorization: `Bearer ${connection.apiKey}` } : { 'x-api-key': connection.apiKey, 'anthropic-version': '2023-06-01' }) }, body: JSON.stringify(body)
       });
-    } catch { throw new ProviderModelError(signal.aborted ? 'cancelled' : 'unavailable'); }
+    } catch (error) {
+      if (signal.aborted) throw new ProviderModelError('cancelled');
+      if (error instanceof ProviderModelError) throw error;
+      if (error instanceof ResponseBodyLimitError) throw new ProviderModelError('protocol');
+      throw new ProviderModelError('unavailable');
+    }
     const value = await readResponse(response, signal);
     usage = addUsage(usage, providerUsage(openai ? 'openai' : 'anthropic', value)); onUsage?.(usage);
     if (!record(value)) throw response.ok ? new ProviderModelError('protocol') : classifyProviderStatus(response.status);
@@ -70,7 +83,10 @@ export async function apiReply(connection: ProviderConnection, request: ModelReq
       if (!openai && value.stop_reason === 'tool_use') throw new ProviderModelError('protocol');
       return parseModelResult(textBlocks.map(item => item.text).join('\n\n'));
     }
-    if (!runtime || !openai && value.stop_reason !== 'tool_use' || calls + toolCalls.length > 32) throw new ProviderModelError('protocol');
+    // Calls beyond the budget reach the runtime, which refuses them without executing anything. A model that
+    // already received that refusal and still requests tools gets no further round.
+    if (!runtime || !openai && value.stop_reason !== 'tool_use' || toolCalls.length > MAX_TOOL_CALLS || calls + toolCalls.length > maxCalls + MAX_TOOL_CALLS || runtime.budget?.().exhausted) throw new ProviderModelError('protocol');
+    if (!runtime.budget && calls + toolCalls.length > maxCalls) throw new ProviderModelError('tool_access');
     const parsed = toolCalls.map(item => {
       const id = openai ? item.call_id : item.id;
       let args: unknown = item.input;

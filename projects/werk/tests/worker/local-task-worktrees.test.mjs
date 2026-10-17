@@ -9,6 +9,7 @@ import { WorkerSettings } from "../../src/worker/dist/worker/infrastructure/sett
 import { WorkerSessions } from './application-fixtures.mjs';
 import { LocalTaskboard } from './application-fixtures.mjs';
 import { modelCapabilities } from "../../src/worker/dist/worker/application/model-contract.js";
+import { DomainError } from "../../src/worker/dist/shared/errors.js";
 
 const command = promisify(execFile);
 async function git(directory, ...args) {
@@ -63,6 +64,8 @@ async function fixture(t, options = {}) {
       await git(assignment.path, "worktree", "add", "--detach", path, baseCommit);
       return { repositoryId: assignment.id, repository: assignment.path, path, baseCommit, reused: false };
     },
+    ...(options.verify ? { verifyWorktree: options.verify } : {}),
+    ...(options.remove ? { removeWorktree: options.remove } : {}),
   };
   let sessions, board;
   async function open() {
@@ -244,7 +247,8 @@ test("queue rejection does not create a worktree or poison retry of a durable fe
   await f.board.action({ id: blocker, action: "cancel" });
   await f.board.create(f.input(), submission);
   assert.equal(f.prepared.length, 2);
-  assert.equal(f.prepared[1].taskKey, submission.id);
+  assert.equal(f.prepared[1].taskKey, f.board.detail(submission.id).worktreeKey);
+  assert.match(f.prepared[1].taskKey, new RegExp(`^${submission.id}-${submission.hash}-`));
   assert.equal(f.board.detail(submission.id).status, "queued");
   assert.equal(f.board.active, 1, "The admission reservation is released once the task is queued.");
 });
@@ -267,4 +271,139 @@ test("pending preparation reserves capacity and releases it after a failed admis
   rejectPreparation(Error("Fixture preparation failure"));
   await rejected;
   assert.equal(f.board.active, 0);
+});
+
+async function until(predicate, message) {
+  for (let attempt = 0; attempt < 400; attempt++) {
+    if (await predicate()) return;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  throw Error(message);
+}
+
+test("background admission answers before preparation, holds capacity and reports the specific failure reason", async t => {
+  let release;
+  const gates = [];
+  const f = await fixture(t, {
+    prepare: ({ assignment, taskKey, signal }) => new Promise((resolve, reject) => {
+      gates.push({ resolve, reject, assignment, taskKey, signal });
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      release?.();
+    }),
+  });
+  await f.settings.update({ board: { queueCapacity: 2, paused: true } });
+  await assert.rejects(f.board.create(f.input({ background: "yes" })), /background must be true or false/);
+  await assert.rejects(f.board.create(f.input({ background: true, paths: ["../outside"] })), /safe relative/);
+  assert.equal(f.prepared.length, 0, "Invalid input is rejected before acceptance.");
+  const started = new Promise(resolve => { release = resolve; });
+  const accepted = await f.board.create(f.input({ background: true, title: "Fails in Git" }));
+  assert.match(accepted.preparationId, /^[0-9a-f-]{36}$/);
+  assert.equal(accepted.tasks.length, 0);
+  assert.deepEqual(accepted.preparations.map(item => [item.id, item.title, item.state]), [[accepted.preparationId, "Fails in Git", "preparing"]]);
+  await started;
+  assert.equal(f.board.view().preparations[0].phase, "worktree");
+  const waiting = await f.board.create(f.input({ background: true, title: "Waits its turn" }));
+  assert.equal(f.board.view().preparations.find(item => item.id === waiting.preparationId).phase, "waiting");
+  assert.equal(f.board.active, 2, "The running admission and the waiting one both hold a queue slot.");
+  await assert.rejects(f.board.create(f.input({ background: true })), /queue is full/);
+  await assert.rejects(f.board.action({ id: accepted.preparationId, action: "delete" }), /still being prepared/);
+  const second = new Promise(resolve => { release = resolve; });
+  gates[0].reject(new DomainError("conflict", "Use a shorter repository path for task worktrees on Windows."));
+  await second;
+  const failed = f.board.view().preparations.find(item => item.id === accepted.preparationId);
+  assert.equal(failed.state, "failed");
+  assert.equal(failed.error, "Use a shorter repository path for task worktrees on Windows.");
+  assert.ok(failed.finishedAt);
+  const { assignment, taskKey } = gates[1];
+  assert.equal(taskKey, waiting.preparationId, "The accepted ID becomes the task and worktree identity.");
+  const baseCommit = await git(assignment.path, "rev-parse", "HEAD"), path = join(assignment.path, ".werk", "worktrees", taskKey);
+  await git(assignment.path, "worktree", "add", "--detach", path, baseCommit);
+  gates[1].resolve({ repositoryId: assignment.id, repository: assignment.path, path, baseCommit, reused: false });
+  await until(() => f.board.view().tasks.some(task => task.id === waiting.preparationId), "Background task was not admitted.");
+  assert.equal(f.board.detail(waiting.preparationId).status, "queued");
+  assert.deepEqual(f.board.view().preparations.map(item => item.id), [accepted.preparationId], "Only the failure remains visible.");
+  assert.equal(f.board.active, 1);
+  await f.board.action({ id: accepted.preparationId, action: "delete" });
+  assert.deepEqual(f.board.view().preparations, []);
+});
+
+test("background admission failure without a domain reason stays generic", async t => {
+  const f = await fixture(t, { prepare: async () => { throw Error("EACCES: private path /home/operator/secret"); } });
+  const accepted = await f.board.create(f.input({ background: true }));
+  await until(() => f.board.view().preparations[0]?.state === "failed", "Preparation did not fail.");
+  assert.doesNotMatch(f.board.view().preparations[0].error, /secret|EACCES/);
+  assert.equal(f.board.view().tasks.length, 0);
+  assert.equal(accepted.preparationId, f.board.view().preparations[0].id);
+  assert.equal(f.board.active, 0);
+});
+
+test("admission verifies the new worktree for tools without a second preparation", async t => {
+  const verified = [];
+  const f = await fixture(t, {
+    verify: async (selector, taskKey, signal, baseCommit) => {
+      verified.push({ selector, taskKey, baseCommit });
+      const assignment = f.repositories.find(item => item.id === selector);
+      return { repositoryId: assignment.id, repository: assignment.path, path: join(assignment.path, ".werk", "worktrees", taskKey), baseCommit, reused: true };
+    },
+  });
+  await f.settings.updateToolAccess({ expectedRevision: 0, builtins: { files: true, commands: [], webOrigins: [] }, mcp: [] });
+  await f.settings.update({ board: { paused: true } });
+  const id = await f.create();
+  assert.equal(f.prepared.length, 1, "Admission prepares (and fetches) once.");
+  assert.equal(verified.length, 1, "Tool scope is re-verified without fetching again.");
+  assert.equal(verified[0].taskKey, id);
+  assert.equal(verified[0].baseCommit, f.board.detail(id).baseCommit);
+  assert.equal(f.board.detail(id).status, "queued");
+});
+
+test("delete removes a clean task worktree by default, keeps it on request, and never hands a replaced one to Git", async t => {
+  const removed = [];
+  let outcome = { outcome: "removed" };
+  const f = await fixture(t, {
+    remove: async (selector, taskKey, signal, expected) => { removed.push({ selector, taskKey, expected }); return outcome; },
+  });
+  await f.settings.update({ board: { paused: true } });
+  const cancelAndDelete = async (id, extra = {}) => {
+    await f.board.action({ id, action: "cancel" });
+    return f.board.action({ id, action: "delete", ...extra });
+  };
+  const first = await f.create(), firstTask = f.board.detail(first);
+  await assert.rejects(f.board.action({ id: first, action: "cancel", removeWorktree: true }), /option of the delete action/);
+  const result = await cancelAndDelete(first);
+  assert.deepEqual(result.worktree, { outcome: "removed" });
+  assert.deepEqual(removed[0], { selector: "alpha", taskKey: first, expected: { path: firstTask.worktree, baseCommit: firstTask.baseCommit, discardChanges: false } });
+  assert.equal(f.board.view().tasks.length, 0);
+
+  const kept = await f.create();
+  const keptResult = await cancelAndDelete(kept, { removeWorktree: false });
+  assert.equal(keptResult.worktree.outcome, "not_applicable");
+  assert.equal(removed.length, 1, "removeWorktree false never calls Git.");
+
+  outcome = { outcome: "kept", reason: "The worktree has uncommitted or untracked changes. Confirm discarding them to remove it." };
+  const dirty = await f.create();
+  await f.board.action({ id: dirty, action: "cancel" });
+  await assert.rejects(f.board.action({ id: dirty, action: "delete", removeWorktree: true }), /uncommitted or untracked changes.*not deleted/);
+  assert.equal(f.board.detail(dirty).status, "cancelled", "Required removal keeps the task when Git keeps the worktree.");
+  const auto = await f.board.action({ id: dirty, action: "delete" });
+  assert.equal(auto.worktree.outcome, "kept");
+  assert.match(auto.worktree.reason, /uncommitted/);
+  assert.equal(removed.at(-1).expected.discardChanges, false);
+  outcome = { outcome: "removed" };
+
+  const replaced = await f.create(), replacedTask = f.board.detail(replaced);
+  await f.board.action({ id: replaced, action: "cancel" });
+  await rm(replacedTask.worktree, { recursive: true, force: true });
+  await mkdir(replacedTask.worktree);
+  const count = removed.length;
+  await assert.rejects(f.board.action({ id: replaced, action: "delete", removeWorktree: true, discardChanges: true }), /changed after it was created/);
+  assert.equal(removed.length, count, "A replaced directory is never passed to Git.");
+  const retained = await f.board.action({ id: replaced, action: "delete" });
+  assert.equal(retained.worktree.outcome, "kept");
+  assert.equal(removed.length, count);
+
+  const missing = await f.create(), missingTask = f.board.detail(missing);
+  await f.board.action({ id: missing, action: "cancel" });
+  await rm(missingTask.worktree, { recursive: true, force: true });
+  assert.equal((await f.board.action({ id: missing, action: "delete", discardChanges: true })).worktree.outcome, "removed");
+  assert.equal(removed.at(-1).expected.discardChanges, true, "A missing directory is only unregistered by the adapter.");
 });

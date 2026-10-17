@@ -15,6 +15,7 @@ export function createSharedIntakeEditor(ports: Ports) {
   const view = ref<SharedIntakeView | null>(null);
   const draft = reactive({ config: defaultSharedIntakeConfig(), revision: -1, baseline: '', loading: false, saving: false, syncing: false, error: '', notice: '', uncertain: null as SharedIntakeUpdate | null, note: null as SharedIntakeNote | null, noteId: '', noteLoading: false, noteError: '' });
   let generation = 0, noteGeneration = 0;
+  let pendingRead: { promise: Promise<void> } | null = null;
   const dirty = computed(() => draft.revision >= 0 && json(draft.config) !== draft.baseline);
   const stale = computed(() => draft.revision >= 0 && !!view.value && draft.revision !== view.value.revision);
   const busy = computed(() => draft.loading || draft.saving || draft.syncing);
@@ -58,18 +59,30 @@ export function createSharedIntakeEditor(ports: Ports) {
       else draft.error = 'The saved connection differs from your draft. Your edits are retained; review the current revision before saving again.';
     } else if (draft.revision < 0 || !dirty.value) accept(next, draft.notice);
   }
-  async function load() {
-    if (!ports.unlocked() || busy.value) return;
-    const current = generation, epoch = ports.epoch(); draft.loading = true;
-    try { const next = await ports.read(); if (current === generation && epoch === ports.epoch() && ports.unlocked()) { draft.error = ''; observe(next); } }
-    catch (error) { if (current === generation && ports.unlocked()) draft.error = (error as Error).message; }
-    finally { if (current === generation) draft.loading = false; }
+  /** Polls keep existing controls steady; an explicit refresh may join the same read. */
+  async function load(options: { background?: boolean } = {}) {
+    if (!ports.unlocked() || draft.saving || draft.syncing) return;
+    if (pendingRead) {
+      if (!options.background) draft.loading = true;
+      return pendingRead.promise;
+    }
+    const current = generation, epoch = ports.epoch();
+    const reading = { promise: Promise.resolve() };
+    pendingRead = reading;
+    draft.loading = !options.background || !view.value;
+    reading.promise = (async () => {
+      try { const next = await ports.read(); if (current === generation && epoch === ports.epoch() && ports.unlocked()) { draft.error = ''; observe(next); } }
+      catch (error) { if (current === generation && epoch === ports.epoch() && ports.unlocked()) draft.error = (error as Error).message; }
+      finally { if (pendingRead === reading) { pendingRead = null; draft.loading = false; } }
+    })();
+    return reading.promise;
   }
+  function invalidateRead() { generation++; pendingRead = null; draft.loading = false; return generation; }
   function reloadSaved() { if (!busy.value && ports.unlocked() && view.value) { accept(view.value); draft.error = ''; } }
   async function save() {
     if (!canSave.value) return;
     const command: SharedIntakeUpdate = { action: 'configure', expectedRevision: draft.revision, config: { ...draft.config, remote: draft.config.remote.trim(), branch: draft.config.branch.trim(), workflowPath: draft.config.workflowPath.trim() } };
-    const current = generation, epoch = ports.epoch(); draft.saving = true; draft.error = ''; draft.notice = ''; draft.uncertain = command;
+    const current = invalidateRead(), epoch = ports.epoch(); draft.saving = true; draft.error = ''; draft.notice = ''; draft.uncertain = command;
     try {
       const next = await ports.write(command);
       if (current === generation && epoch === ports.epoch() && ports.unlocked()) { view.value = next; closeNote(); accept(next, command.config.repositoryId ? 'Shared intake connection saved. Checked-in workflow files remain the source of request rules.' : 'Shared intake connection cleared. Local ready files may enter the queue when new starts resume.'); }
@@ -82,7 +95,7 @@ export function createSharedIntakeEditor(ports: Ports) {
   }
   async function sync() {
     if (!canSync.value) return;
-    const current = generation, epoch = ports.epoch(); draft.syncing = true; draft.error = ''; draft.notice = '';
+    const current = invalidateRead(), epoch = ports.epoch(); draft.syncing = true; draft.error = ''; draft.notice = '';
     try { const next = await ports.write({ action: 'sync' }); if (current === generation && epoch === ports.epoch() && ports.unlocked()) { observe(next); draft.notice = next.state === 'error' ? '' : 'Shared request check finished. Review the publication and check results below.'; } }
     catch (error) { if (current === generation && ports.unlocked()) draft.error = (error as Error).message; }
     finally { if (current === generation) draft.syncing = false; }
@@ -95,7 +108,7 @@ export function createSharedIntakeEditor(ports: Ports) {
     finally { if (current === noteGeneration) draft.noteLoading = false; }
   }
   function closeNote() { noteGeneration++; draft.noteId = ''; draft.note = null; draft.noteLoading = false; draft.noteError = ''; }
-  const stopAccess = watch(ports.unlocked, unlocked => { if (!unlocked) { generation++; draft.loading = false; draft.saving = false; draft.syncing = false; view.value = null; closeNote(); } }, { flush: 'sync' });
-  const stopEpoch = watch(ports.epoch, () => { generation++; view.value = null; closeNote(); Object.assign(draft, { config: defaultSharedIntakeConfig(), revision: -1, baseline: '', loading: false, saving: false, syncing: false, error: '', notice: '', uncertain: null }); }, { flush: 'sync' });
-  return { view, draft, dirty, stale, busy, validation, canSave, canSync, canClear, clearBlockedReason, clearConnection, load, reloadSaved, save, sync, openNote, closeNote, dispose: () => { generation++; noteGeneration++; stopAccess(); stopEpoch(); } };
+  const stopAccess = watch(ports.unlocked, unlocked => { if (!unlocked) { invalidateRead(); draft.saving = false; draft.syncing = false; view.value = null; closeNote(); } }, { flush: 'sync' });
+  const stopEpoch = watch(ports.epoch, () => { invalidateRead(); view.value = null; closeNote(); Object.assign(draft, { config: defaultSharedIntakeConfig(), revision: -1, baseline: '', loading: false, saving: false, syncing: false, error: '', notice: '', uncertain: null }); }, { flush: 'sync' });
+  return { view, draft, dirty, stale, busy, validation, canSave, canSync, canClear, clearBlockedReason, clearConnection, load, reloadSaved, save, sync, openNote, closeNote, dispose: () => { invalidateRead(); noteGeneration++; stopAccess(); stopEpoch(); } };
 }

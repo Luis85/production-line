@@ -1,5 +1,28 @@
 import { posix, isAbsolute, resolve } from 'node:path';
 
+// Mirrors src/worker/application/approved-paths.ts; tests/operations/live-configuration.test.mjs keeps both rules in parity.
+const allowedPathCharacters = /^[\p{L}\p{M}\p{N} _.,/()&'’+\-–—→]+$/u;
+const windowsDevice = /^(?:con|prn|aux|nul|com[1-9¹²³]|lpt[1-9¹²³])$/iu;
+const unsafeSegment = part => !part || part === '.' || part === '..' || part.startsWith('.') || /[ .]$/.test(part) || Buffer.byteLength(part) > 255 || [part, part.normalize('NFKC')].some(name => windowsDevice.test(name.split('.')[0].trimEnd()));
+const secret = path => [path, path.normalize('NFKC')].some(name => /(?:^|\/)(?:credentials?|secrets?|id_rsa|id_ed25519)(?:[./]|$)/iu.test(name) || /\.(?:pem|key|p12|pfx)$/iu.test(name));
+export const safeApprovedPath = path => path.length <= 240 && allowedPathCharacters.test(path) && !path.startsWith('-') && !path.split('/').some(unsafeSegment) && !secret(path);
+/** Files and their parent folders must retain one spelling across case-insensitive checkouts. */
+export function approvedPathsCollide(paths) {
+  const key = (path) => path.normalize('NFC').toLowerCase();
+  const files = new Set(paths.map(key)), prefixes = new Map();
+  if (files.size !== paths.length) return true;
+  for (const path of paths) {
+    const parts = path.split('/');
+    for (let index = 1; index <= parts.length; index++) {
+      const prefix = parts.slice(0, index).join('/'), folded = key(prefix);
+      const previous = prefixes.get(folded);
+      if (previous !== undefined && previous !== prefix || index < parts.length && files.has(folded)) return true;
+      prefixes.set(folded, prefix);
+    }
+  }
+  return false;
+}
+
 const fail = () => { throw Object.assign(Error('Invalid live execution configuration. Use native Linux, exact absolute Codex/repository paths and 1–32 approved non-secret relative text paths.'), { exitCode: 2 }); };
 /** Operator deployment policy only. Tasks cannot select executable, checkout or allowed paths. */
 export function normalizeExecution(value) {
@@ -9,10 +32,12 @@ export function normalizeExecution(value) {
   if (!codex || typeof codex !== 'object' || Array.isArray(codex) || Object.keys(codex).some(key => !['executable', 'repository', 'allowedPaths'].includes(key))) fail();
   for (const key of ['executable', ...(codex.repository === undefined ? [] : ['repository'])]) if (typeof codex[key] !== 'string' || !posix.isAbsolute(codex[key]) || codex[key].length > 4096 || /[\x00-\x1f\x7f]/.test(codex[key])) fail();
   const paths = codex.allowedPaths;
-  if (!Array.isArray(paths) || paths.length < 1 || paths.length > 32 || new Set(paths).size !== paths.length || paths.some(path => typeof path !== 'string' || path.length > 240 || !/^[a-zA-Z0-9_./ -]+$/.test(path) || path.startsWith('-') || path.split('/').some(part => !part || part === '.' || part === '..' || part.startsWith('.')) || /(?:^|\/)(?:credentials?|secrets?|id_rsa|id_ed25519)(?:[./]|$)/i.test(path) || /\.(?:pem|key|p12|pfx)$/i.test(path))) fail();
+  if (!Array.isArray(paths) || paths.length < 1 || paths.length > 32 || paths.some(path => typeof path !== 'string')) fail();
+  const normalized = paths.map(path => path.normalize('NFC'));
+  if (approvedPathsCollide(normalized) || normalized.some(path => !safeApprovedPath(path))) fail();
   const timeoutMs = value.timeoutMs ?? 300000;
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 3600000) fail();
-  return { mode: 'cli', timeoutMs, codex: { executable: codex.executable, ...(codex.repository === undefined ? {} : { repository: codex.repository }), allowedPaths: [...paths] } };
+  return { mode: 'cli', timeoutMs, codex: { executable: codex.executable, ...(codex.repository === undefined ? {} : { repository: codex.repository }), allowedPaths: normalized } };
 }
 export function workerDocument(execution, chat, repositories) {
   const normalized = normalizeExecution(execution);

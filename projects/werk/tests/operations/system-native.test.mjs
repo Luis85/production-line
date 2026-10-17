@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile, rm, cp, lstat, rename, symlink } from 'node:fs/promises';
+import { mkdtemp, mkdir, open, readFile, writeFile, rm, cp, lstat, rename, symlink } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
+import { EventEmitter } from 'node:events';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { createServer } from 'node:net';
 import { createServer as httpServer } from 'node:http';
 import { bootstrapSystem } from '../../scripts/system/bootstrap.mjs';
@@ -21,7 +23,77 @@ const definition = () => ({ schemaVersion: 1, id: 'system-test', environment: 'n
 async function directory(t) { const root = await mkdtemp(join(tmpdir(), 'werk-system-')); t.after(() => rm(root, { recursive: true, force: true })); return root; }
 async function uniquePorts(count) { const servers = [], ports = []; try { for (let n = 0; n < count; n++) { const server = createServer(); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); servers.push(server); ports.push(server.address().port); } return ports; } finally { await Promise.all(servers.map(server => new Promise(resolve => server.close(resolve)))); } }
 async function availableDefinition() { const ports = await uniquePorts(5), value = definition(); value.factory.port = ports[0]; value.productionLines.forEach((line, index) => { line.orchestrator.port = ports[1 + index * 2]; line.workers.statusPort = ports[2 + index * 2]; }); return value; }
-function launch(root, args) { const child = spawn(process.execPath, [join(root, 'werk.mjs'), 'system', ...args], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] }); let output = '', errors = ''; child.stdout.on('data', data => output += data); child.stderr.on('data', data => errors += data); const done = new Promise((resolve, reject) => { child.once('error', reject); child.once('close', code => resolve({ code, output, errors })); }); return { child, done, get output() { return output; } }; }
+function observeSystemChild(child) {
+  let output = '', errors = '', exited = false, closed = false, spawnFailed = false, exitCode = null, exitSignal = null;
+  child.stdout.on('data', data => output += data); child.stderr.on('data', data => errors += data);
+  const done = new Promise(resolve => {
+    child.once('error', () => { spawnFailed = true; resolve({ code: null, output, errors, spawnFailed: true }); });
+    child.once('exit', (code, signal) => { exited = true; exitCode = code; exitSignal = signal; });
+    child.once('close', (code, signal) => { closed = true; exitCode = code; exitSignal = signal; resolve({ code, signal, output, errors }); });
+  });
+  return { child, done, get output() { return output; }, get errors() { return errors; },
+    get exited() { return exited; }, get closed() { return closed; }, get spawnFailed() { return spawnFailed; },
+    get exitCode() { return exitCode; }, get exitSignal() { return exitSignal; } };
+}
+function launch(root, args) { return observeSystemChild(spawn(process.execPath, [join(root, 'werk.mjs'), 'system', ...args], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] })); }
+// Allow Windows process startup under the full concurrent suite to use the
+// runtime's 120-second child readiness budget. Diagnostics distinguish a future
+// slow startup from exit; the earlier timeout alone did not establish its cause.
+const startupTimeout = process.platform === 'win32' ? 120000 : 30000;
+const journeyTimeout = process.platform === 'win32' ? 300000 : 80000;
+function records(text) {
+  return text.slice(-16384).split(/\r?\n/).flatMap(line => { try { const value = JSON.parse(line); return value && typeof value === 'object' && !Array.isArray(value) ? [value] : []; } catch { return []; } });
+}
+// Diagnostics select known labels and numeric observations; raw output, messages,
+// paths, configuration, identities and credential-bearing fields never escape.
+function recentEvents(text) {
+  return records(text).flatMap(value => {
+    if (value.ok === false && ['INVALID_CONFIGURATION', 'RUNTIME_FAILED'].includes(value.error?.code)) return [{ event: 'error', code: value.error.code }];
+    if (!['starting', 'ready', 'stopping', 'stopped', 'child_exited', 'service_log'].includes(value.event)) return [];
+    const entry = { event: value.event };
+    if (['starting', 'running', 'stopping', 'stopped'].includes(value.state)) entry.state = value.state;
+    if (['line', 'factory', 'orchestrator', 'worker'].includes(value.role)) entry.role = value.role;
+    if (['root', 'alpha', 'beta'].includes(value.id)) entry.id = value.id;
+    if (Number.isInteger(value.index) && value.index >= 0 && value.index <= 64) entry.index = value.index;
+    if (Number.isInteger(value.exitCode)) entry.exitCode = value.exitCode;
+    if (value.event === 'service_log' && Number.isInteger(value.entry?.status) && value.entry.status >= 100 && value.entry.status <= 599) entry.httpStatus = value.entry.status;
+    return [entry];
+  }).slice(-8);
+}
+async function startupDiagnostics(stateDir) {
+  return Object.fromEntries(await Promise.all(['system', 'alpha', 'beta'].map(async name => {
+    const path = join(stateDir, ...(name === 'system' ? [] : ['lines', name]), 'logs/runtime.jsonl');
+    let handle;
+    try {
+      handle = await open(path, 'r'); const stat = await handle.stat();
+      if (!stat.isFile() || stat.size > 1048576) return [name, { unavailable: true }];
+      const data = Buffer.alloc(Math.min(stat.size, 16384));
+      const { bytesRead } = await handle.read(data, 0, data.length, stat.size - data.length);
+      return [name, { events: recentEvents(data.subarray(0, bytesRead).toString('utf8')) }];
+    } catch { return [name, { unavailable: true }]; }
+    finally { await handle?.close(); }
+  })));
+}
+async function waitForSystemReady(running, label, { timeout = startupTimeout, signal, now = Date.now, pause = (ms, abort) => sleep(ms, undefined, { signal: abort }), diagnostics = async () => ({}) } = {}) {
+  const deadline = now() + timeout;
+  async function fail(reason) {
+    const detail = { exited: running.exited, closed: running.closed, spawnFailed: running.spawnFailed,
+      exitCode: Number.isInteger(running.exitCode) ? running.exitCode : null,
+      signal: ['SIGTERM', 'SIGKILL', 'SIGINT', 'SIGABRT'].includes(running.exitSignal) ? running.exitSignal : running.exitSignal ? 'other' : null,
+      stdoutBytes: Buffer.byteLength(running.output), stderrBytes: Buffer.byteLength(running.errors),
+      events: recentEvents(running.output), logs: await diagnostics() };
+    throw Error(`${reason}: ${label}; ${JSON.stringify(detail)}`);
+  }
+  for (;;) {
+    signal?.throwIfAborted();
+    // Exit can precede close when descendants still hold a pipe. A buffered ready
+    // event cannot establish readiness after the owned process already exited.
+    if (running.spawnFailed || running.exited || running.closed) await fail('Exited before readiness');
+    if (records(running.output).some(value => value.ok === true && value.event === 'ready')) return;
+    if (now() >= deadline) await fail('Timed out waiting for readiness');
+    await pause(Math.min(60, Math.max(1, deadline - now())), signal);
+  }
+}
 async function until(check, label, timeout = 30000) { const deadline = Date.now() + timeout; while (Date.now() < deadline) { const result = await check(); if (result) return result; await delay(60); } throw Error('Timed out: ' + label); }
 async function api(port, token, path, body, key) { const response = await fetch(`http://127.0.0.1:${port}${path}`, { method: body ? 'POST' : 'GET', headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json', 'Idempotency-Key': key } : {}) }, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(3000) }); return { status: response.status, value: await response.json() }; }
 async function extracted(root) { await cp(join(source, 'werk.mjs'), join(root, 'werk.mjs')); for (const scripts of ['runtime', 'system']) await cp(join(source, 'scripts', scripts), join(root, 'scripts', scripts), { recursive: true }); for (const app of ['orchestrator', 'worker', 'factory']) await cp(join(source, 'src', app, 'dist'), join(root, 'src', app, 'dist'), { recursive: true }); }
@@ -63,13 +135,13 @@ test('system plan is read-only and stop uses saved identity despite edited YAML'
   assert.equal(await main(['stop', '--file', file, '--state-dir', stateDir, '--json'], { stdout() {} }), 0);
 });
 
-test('extracted two-line system registers hierarchy, isolates tasks and credentials, and preserves identities across restart', { timeout: 80000 }, async t => {
+test('extracted two-line system registers hierarchy, isolates tasks and credentials, and preserves identities across restart', { timeout: journeyTimeout }, async t => {
   const root = await mkdtemp(join(tmpdir(), 'werk-system-')), stateDir = join(root, 'state'), file = join(root, 'system.yaml'), value = await availableDefinition(), processes = [];
   await extracted(root); await writeFile(file, JSON.stringify(value));
   await assert.rejects(lstat(join(root, 'node_modules')), { code: 'ENOENT' });
   t.after(async () => { await launch(root, ['stop', '--state-dir', stateDir, '--json']).done; for (const item of processes) if (item.child.exitCode === null) item.child.kill('SIGTERM'); await Promise.all(processes.map(item => item.done)); await rm(root, { recursive: true, force: true }); });
   const first = launch(root, ['up', '--file', file, '--state-dir', stateDir, '--json']); processes.push(first);
-  await until(() => first.output.includes('"event":"ready"'), 'system readiness');
+  await waitForSystemReady(first, 'system readiness', { signal: t.signal, diagnostics: () => startupDiagnostics(stateDir) });
   const loaded = validateDefinition(value), credentials = await factoryCredentials(stateDir, loaded);
   const factories = await api(value.factory.port, credentials.adminToken, '/v1/factories'); assert.equal(factories.status, 200); assert.deepEqual(factories.value.factories.map(item => item.id).sort(), ['group', 'root']);
   assert.deepEqual(factories.value.managedRegistry, { factories: ['root', 'group'], lines: ['alpha', 'beta'] });
@@ -100,7 +172,7 @@ test('extracted two-line system registers hierarchy, isolates tasks and credenti
   const secretFile = join(stateDir, 'factory/credentials.json'), original = await readFile(secretFile); await writeFile(secretFile, 'invalid-secret-marker');
   assert.equal((await launch(root, ['status', '--state-dir', stateDir, '--json']).done).code, 0);
   assert.equal((await launch(root, ['stop', '--state-dir', stateDir, '--json']).done).code, 0); assert.equal((await first.done).code, 0); await writeFile(secretFile, original);
-  const second = launch(root, ['start', '--file', file, '--state-dir', stateDir, '--json']); processes.push(second); await until(() => second.output.includes('"event":"ready"'), 'restart');
+  const second = launch(root, ['start', '--file', file, '--state-dir', stateDir, '--json']); processes.push(second); await waitForSystemReady(second, 'restart', { signal: t.signal, diagnostics: () => startupDiagnostics(stateDir) });
   for (const [index, line] of value.productionLines.entries()) assert.equal(await readFile(join(stateDir, 'lines', line.id, 'workers/worker-1/identity.json'), 'utf8'), identities[index]);
   assert.deepEqual(await factoryCredentials(stateDir, loaded), credentials);
   const restoredFactories = await api(value.factory.port, credentials.adminToken, '/v1/factories');
@@ -173,4 +245,57 @@ test('bootstrap validates all authenticated line capabilities before any Factory
   await assert.rejects(bootstrapSystem(value, { adminToken, credentials }, { factoryUrl: url, internalUrls: [url, url] }), /different project/);
   assert.deepEqual(received, ['Bearer ' + credentials.WERK_LINE_SYSTEM_1_TOKEN, 'Bearer ' + credentials.WERK_LINE_SYSTEM_2_TOKEN]);
   assert.equal(mutationRequests, 0);
+});
+
+
+function fakeSystemChild() { const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); return child; }
+
+test('system readiness observer accepts a live ready event without waiting for process closure', async () => {
+  const child = fakeSystemChild(), running = observeSystemChild(child); let time = 0, polls = 0;
+  child.stdout.emit('data', JSON.stringify({ ok: true, message: 'An example contains \"event\":\"ready\".' }) + '\n');
+  await waitForSystemReady(running, 'fixture readiness', { timeout: 100, now: () => time, pause: async ms => {
+    polls++; time += ms; child.stdout.emit('data', JSON.stringify({ ok: true, event: 'ready' }) + '\n');
+  } });
+  assert.equal(polls, 1); assert.equal(running.closed, false);
+  child.emit('exit', 0, null); child.emit('close', 0, null); assert.equal((await running.done).code, 0);
+});
+
+test('system readiness observer fails promptly for spawn failure, signal exit and exit after buffered readiness', async () => {
+  for (const scenario of ['spawn', 'signal', 'ready-then-exit']) {
+    const child = fakeSystemChild(), running = observeSystemChild(child); let polls = 0;
+    if (scenario === 'spawn') child.emit('error', Error('fixture-private-path-and-secret'));
+    else { if (scenario === 'ready-then-exit') child.stdout.emit('data', '{"ok":true,"event":"ready"}\n'); child.emit('exit', scenario === 'signal' ? null : 1, scenario === 'signal' ? 'SIGTERM' : null); }
+    await assert.rejects(waitForSystemReady(running, 'fixture readiness', { pause: async () => { polls++; } }), error => {
+      assert.match(error.message, /Exited before readiness/); assert.doesNotMatch(error.message, /fixture-private-path-and-secret/);
+      if (scenario === 'spawn') assert.match(error.message, /"spawnFailed":true/);
+      if (scenario === 'signal') assert.match(error.message, /"signal":"SIGTERM"/);
+      return true;
+    });
+    assert.equal(polls, 0); assert.equal(running.closed, false);
+    child.emit('close', 1, null); await running.done;
+  }
+});
+
+test('system readiness timeout includes bounded phase evidence without raw secrets or paths', async t => {
+  const stateDir = await directory(t), child = fakeSystemChild(), running = observeSystemChild(child);
+  const secret = 'fixture-secret-must-not-appear', privatePath = '/private/fixture-path-must-not-appear';
+  const event = JSON.stringify({ event: 'service_log', role: 'worker', id: secret, index: 1, entry: { status: 503, message: secret, path: privatePath, token: secret } });
+  child.stdout.emit('data', (event + '\n').repeat(1000) + JSON.stringify({ ok: false, error: { code: 'RUNTIME_FAILED', message: secret } }) + '\n');
+  child.stderr.emit('data', secret + privatePath);
+  await mkdir(join(stateDir, 'logs')); await writeFile(join(stateDir, 'logs/runtime.jsonl'), (event + '\n').repeat(1000));
+  let time = 0, polls = 0;
+  await assert.rejects(waitForSystemReady(running, 'fixture readiness', { timeout: 100, now: () => time, pause: async ms => { polls++; time += ms; }, diagnostics: () => startupDiagnostics(stateDir) }), error => {
+    assert.match(error.message, /Timed out waiting for readiness/); assert.match(error.message, /RUNTIME_FAILED/); assert.match(error.message, /"httpStatus":503/); assert.match(error.message, /"beta":\{"unavailable":true\}/);
+    assert.doesNotMatch(error.message, new RegExp(`${secret}|${privatePath}`)); assert.ok(error.message.length < 12000);
+    return true;
+  });
+  assert.equal(polls, 2); child.emit('close', 0, null); await running.done;
+});
+
+test('system readiness observer stops its polling timer when the test is cancelled', async () => {
+  const child = fakeSystemChild(), running = observeSystemChild(child), abort = new AbortController(); let diagnosed = false;
+  const pending = waitForSystemReady(running, 'fixture readiness', { timeout: 120000, signal: abort.signal, diagnostics: async () => { diagnosed = true; return {}; } });
+  queueMicrotask(() => abort.abort());
+  await assert.rejects(pending, { name: 'AbortError' }); assert.equal(diagnosed, false);
+  child.emit('close', 0, null); await running.done;
 });

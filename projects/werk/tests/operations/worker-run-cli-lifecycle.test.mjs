@@ -2,16 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { cp, mkdtemp, mkdir, writeFile, rm, realpath } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, writeFile, realpath } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
+import { ownWorkspace } from '../helpers/workspace-processes.mjs';
 const exec=promisify(execFile);
 test('prebuilt copied worker CLI completes a feature retry and inspects/exports every retained attempt without a browser', {timeout:120000,skip:process.platform==='win32'?'Subscription CLI protocol fixture requires Linux/macOS; API/Windows qualification is separate.':false},async t=>{
   const cwd=await realpath(await mkdtemp(join(tmpdir(),'werk-cli-run-lifecycle-'))),app=join(cwd,'bin/apps/worker'),entry=join(app,'cli.mjs'),state=join(cwd,'state');
   await mkdir(join(cwd,'bin/apps'),{recursive:true});await cp(resolve('bin/apps/worker'),app,{recursive:true});await mkdir(join(cwd,'features'));await exec('git',['init','--quiet'],{cwd});
   let running=false;const invoke=async args=>exec(process.execPath,[entry,...args],{cwd,timeout:40000,maxBuffer:8*1024*1024});
   const cli=async(...args)=>JSON.parse((await invoke(args)).stdout);
-  t.after(async()=>{try{if(running)await cli('stop','--state-dir',state);}finally{await rm(cwd,{recursive:true,force:true});}});
+  await ownWorkspace(t,cwd,async()=>{if(running)await cli('stop','--state-dir',state);});
   const fixture=join(cwd,'codex-fixture'),once=join(cwd,'fixture-failed-once');
   await writeFile(fixture,`#!${process.execPath}\nimport { existsSync,writeFileSync } from 'node:fs';\nif(process.argv.slice(2).join(' ')==='login status'){console.log('Logged in using fixture');process.exit(0);}\nlet input='';for await(const part of process.stdin)input+=part;\nif(input.includes('FAIL_ONCE')&&!existsSync(${JSON.stringify(once)})){writeFileSync(${JSON.stringify(once)},'labelled fixture failure');console.log(JSON.stringify({type:'turn.failed'}));}\nelse{console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:'Completed by a labelled local protocol fixture. No model was called.'}}));console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:12,cached_input_tokens:3,output_tokens:7}}));}\n`,{mode:0o700});
   // This copied application has no npm or source checkout; all commands use its own prebuilt runtime.

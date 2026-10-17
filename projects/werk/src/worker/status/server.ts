@@ -183,6 +183,10 @@ export async function statusServer(
             return json(res, 200, workspace.sharedIntakeView());
           if (req.method === "POST" && req.url === "/api/shared-intake")
             return json(res, 200, await workspace.sharedIntakeCommand(await readJson(req)));
+          if (req.method === 'GET' && req.url === '/api/feature-tracking')
+            return json(res, 200, await workspace.featureTracking.sync());
+          if (req.method === 'POST' && req.url === '/api/feature-tracking')
+            return json(res, 200, await workspace.featureTrackingCommand(await readJson(req)));
           if (req.method === "GET" && req.url === "/api/features")
             return json(
               res,
@@ -195,7 +199,7 @@ export async function statusServer(
             return json(
               res,
               200,
-              await workspace.featureCommand(await readJson(req)),
+              await workspace.withFeatureTracking(async () => workspace.featureCommand(await readJson(req))),
             );
           }
           if (req.method === "GET" && req.url === "/api/definitions")
@@ -220,7 +224,7 @@ export async function statusServer(
             return json(
               res,
               200,
-              await workspace.requestCommand(await readJson(req)),
+              await workspace.withFeatureTracking(async () => workspace.requestCommand(await readJson(req))),
             );
           if (req.method === "GET" && req.url === "/api/capabilities")
             return json(res, 200, workspace.capabilities());
@@ -228,12 +232,14 @@ export async function statusServer(
             return json(
               res,
               200,
-              await workspace.interaction(await readJson(req)),
+              await workspace.withFeatureTracking(async () => workspace.interaction(await readJson(req))),
             );
           if (req.method === "POST" && req.url === "/api/runs")
             return json(res, 200, workspace.runEvidence(await readJson(req)));
-          if (req.method === "POST" && req.url === "/api/tasks")
-            return json(res, 200, await workspace.task(await readJson(req)));
+          if (req.method === "POST" && req.url === "/api/tasks") {
+            const result = await workspace.task(await readJson(req));
+            return json(res, "preparation" in result ? 202 : 200, result);
+          }
           if (req.url === '/api/execution-profiles' && workspace.executionProfiles) {
             if (req.method === 'GET') return json(res, 200, workspace.executionProfiles.view());
             if (req.method === 'POST') return json(res, 200, await workspace.executionProfiles.update(await readJson(req)));
@@ -252,7 +258,7 @@ export async function statusServer(
             return json(
               res,
               200,
-              await workspace.sessions.action(await readJson(req)),
+              await workspace.withFeatureTracking(async () => workspace.sessions.action(await readJson(req))).then(() => workspace.sessions.view()),
             );
           if (req.method === "GET" && req.url === "/api/taskboard")
             return json(res, 200, workspace.board.view());
@@ -260,29 +266,30 @@ export async function statusServer(
             return json(
               res,
               202,
-              await workspace.board.create(await readJson(req)),
+              await workspace.withFeatureTracking(async () => { const input = await readJson(req); return workspace.withRepositoryAdmission(() => workspace.board.create(input)); }),
             );
+          if (req.method === "GET" && req.url === "/api/worktrees")
+            return json(res, 200, await workspace.worktrees());
+          if (req.method === "POST" && req.url === "/api/worktrees")
+            return json(res, 200, await workspace.pruneWorktrees(await readJson(req)));
           if (req.method === "POST" && req.url === "/api/taskboard/action")
             return json(
               res,
               200,
-              await workspace.taskboardAction(await readJson(req)),
+              await workspace.withFeatureTracking(async () => workspace.taskboardAction(await readJson(req))),
             );
           if (req.method === "POST" && req.url === "/api/taskboard/detail") {
             const body = await readJson(req);
-            return json(res, 200, workspace.board.detail(String(body.id)));
+            return json(res, 200, workspace.taskboardDetail(String(body.id)));
           }
           if (req.method === "GET" && req.url === "/api/environment")
             return json(res, 200, await workspace.environment());
           if (req.method === "GET" && req.url === "/api/history")
             return json(res, 200, await workspace.history());
           if (req.method === "GET" && req.url === "/api/chat/session")
-            return json(res, 200, {
-              sessions: workspace.sessions.view(),
-              chat: workspace.chat.snapshot(),
-            });
+            return json(res, 200, await workspace.chatSession());
           if (req.method === "GET" && req.url === "/api/chat")
-            return json(res, 200, workspace.chat.snapshot());
+            return json(res, 200, workspace.chatSnapshot());
           if (req.method === "POST" && req.url === "/api/chat") {
             const body = await readJson(req);
             if (
@@ -306,7 +313,7 @@ export async function statusServer(
               res,
               200,
               req.url.endsWith("/cancel")
-                ? await workspace.chat.cancel()
+                ? await workspace.cancelChat()
                 : (() => {
                     throw new ApiError(
                       409,
@@ -329,6 +336,7 @@ export async function statusServer(
             "/chat",
             "/history",
             "/dashboard",
+            "/settings",
             "/monitoring-status",
           ].includes(pagePath)
         )

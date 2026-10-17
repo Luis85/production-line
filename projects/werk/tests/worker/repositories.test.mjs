@@ -243,3 +243,26 @@ test('shared pinned worktrees preserve a developer branch, dirty file and exact 
   assert.equal(await readFile(join(repo.path, 'file.txt'), 'utf8'), 'unstaged developer edit\n');
   assert.deepEqual(await readFile(join(repo.path, '.git', 'index')), indexBefore);
 });
+
+
+test('recovery evidence rejects ignored, untracked and hidden tracked changes without modifying worktrees', async t => {
+  const f = await fixtures(t), manager = f.manager(), repo = f.repositories[0];
+  const worktree = await manager.prepareWorktree(repo.id, 'recovery-evidence', signal());
+  const inspect = () => manager.prepareWorktree(repo.id, 'recovery-evidence', signal());
+  assert.equal((await inspect()).pristine, true);
+  await writeFile(join(worktree.path, 'untracked.txt'), 'keep untracked content\n');
+  assert.equal((await inspect()).pristine, false);
+  await rm(join(worktree.path, 'untracked.txt'));
+  await writeFile(join(worktree.path, 'ignored.txt'), 'keep ignored content\n');
+  git(worktree.path, 'config', 'core.excludesFile', join(f.directory, 'recovery-excludes'));
+  await writeFile(join(f.directory, 'recovery-excludes'), 'ignored.txt\n');
+  assert.equal(git(worktree.path, 'status', '--porcelain'), '');
+  assert.equal((await inspect()).pristine, false);
+  assert.equal(await readFile(join(worktree.path, 'ignored.txt'), 'utf8'), 'keep ignored content\n');
+  await rm(join(worktree.path, 'ignored.txt'));
+  git(worktree.path, 'update-index', '--assume-unchanged', 'file.txt');
+  await writeFile(join(worktree.path, 'file.txt'), 'hidden local edit\n');
+  assert.equal(git(worktree.path, 'status', '--porcelain'), '');
+  assert.equal((await inspect()).pristine, false);
+  assert.equal(await readFile(join(worktree.path, 'file.txt'), 'utf8'), 'hidden local edit\n');
+});

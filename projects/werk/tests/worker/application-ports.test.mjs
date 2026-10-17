@@ -129,9 +129,13 @@ test('session close waits for every conversation before closing all journals aft
 
 test('workspace shutdown preserves staged remote evidence and completes all cleanup after an intake failure', async () => {
   const events = [], failure = Error('intake shutdown failed');
+  let releaseTracking;
+  const trackingFlush = new Promise(resolve => { releaseTracking = resolve; });
   const workspace = Object.create(WorkerWorkspace.prototype);
   Object.assign(workspace, {
     repositoryStop: new AbortController(), taskRequests: Promise.resolve(),
+    featureTracking: { async close() { events.push('tracking'); await trackingFlush; events.push('tracking flushed'); } },
+    consumption: { close() { events.push('consumption'); } },
     features: { async stopIntake() { events.push('intake'); throw failure; }, async close() { events.push('feature evidence'); } },
     sharedRuntime: { async close() { events.push('shared'); } }, providerAccounts: { async close() {} }, providerStatuses: { async close() {} },
     repositories: { async close() {} }, board: { async close() {} }, reviews: { async close() {} }, resources: { async close() { events.push('resources'); } },
@@ -142,6 +146,9 @@ test('workspace shutdown preserves staged remote evidence and completes all clea
   await assert.rejects(draining, error => error === failure);
   assert.deepEqual(events, ['intake', 'shared', 'sessions']);
   const evidence = workspace.closeEvidence(); assert.equal(workspace.closeEvidence(), evidence);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(events, ['intake', 'shared', 'sessions', 'feature evidence', 'resources', 'tracking'], 'Final Markdown flush must retain access to every journal until it settles.');
+  releaseTracking();
   await assert.rejects(evidence, /run close failed/);
-  assert.deepEqual(events, ['intake', 'shared', 'sessions', 'feature evidence', 'resources', 'runs', 'interactions', 'requests']);
+  assert.deepEqual(events, ['intake', 'shared', 'sessions', 'feature evidence', 'resources', 'tracking', 'tracking flushed', 'runs', 'interactions', 'requests', 'consumption']);
 });

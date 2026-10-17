@@ -84,13 +84,16 @@ async function canonicalDestination(path) {
 }
 export async function stateDirectory(kind, root, value) {
   const state = resolve(value ?? `.werk/${kind}`);
+  const selected = await lstat(state).catch(error => { if (error.code !== 'ENOENT') throw error; });
+  if (selected?.isSymbolicLink()) throw inputError('State must be a real private directory, not a symlink.');
   // Resolve existing ancestors before comparing a not-yet-created destination.
   // macOS /var aliases and Windows junctions must not bypass app/state separation.
   const canonicalRoot = await realpath(root), canonicalState = await canonicalDestination(state);
   const fold = path => process.platform === 'win32' ? path.toLowerCase() : path;
   const inside = relative(fold(canonicalRoot), fold(canonicalState));
   if (!inside || (inside !== '..' && !inside.startsWith('..' + sep) && !isAbsolute(inside))) throw inputError('Keep --state-dir outside the copied app folder so upgrades preserve state.');
-  return state;
+  // Normalize caller-owned ancestors once; managed child directories retain strict link checks.
+  return canonicalState;
 }
 export async function run(kind, state, root, options, internal, launch = null) {
   const before = await status(kind, state);

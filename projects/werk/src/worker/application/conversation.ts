@@ -544,6 +544,8 @@ export class WorkerConversation {
               ...this.model,
               configuration: prior.dispatch.provider,
               toolManifest: (this.model as Partial<StructuredModel>).toolManifest,
+              toolManifestFor: (this.model as Partial<StructuredModel>).toolManifestFor?.bind(this.model),
+              executionPolicy: (this.model as Partial<StructuredModel>).executionPolicy,
             } as ConversationModel,
             messages,
             "chat",
@@ -579,6 +581,8 @@ export class WorkerConversation {
                 ...this.model,
                 configuration: ancestor.dispatch.provider,
                 toolManifest: (this.model as Partial<StructuredModel>).toolManifest,
+                toolManifestFor: (this.model as Partial<StructuredModel>).toolManifestFor?.bind(this.model),
+              executionPolicy: (this.model as Partial<StructuredModel>).executionPolicy,
               } as ConversationModel)
             : this.model;
           request = prepareModelRequest(model, messages, "chat", maxRuntimeMs);
@@ -590,6 +594,8 @@ export class WorkerConversation {
                 ...this.model,
                 configuration: gateRequest.provider,
                 toolManifest: (this.model as Partial<StructuredModel>).toolManifest,
+                toolManifestFor: (this.model as Partial<StructuredModel>).toolManifestFor?.bind(this.model),
+              executionPolicy: (this.model as Partial<StructuredModel>).executionPolicy,
               } as ConversationModel)
             : this.model,
           next.messages.filter((item) => item.state === "complete"),
@@ -697,6 +703,17 @@ export class WorkerConversation {
                 evidenceError = true;
               }
             }
+          },
+          {
+            beforeCall() {},
+            observeToolBudget: (evidence) => {
+              if (!turn) return;
+              try {
+                interactions!.observeToolBudget(this.sessionId, turn.id, evidence);
+              } catch {
+                evidenceError = true;
+              }
+            },
           },
         );
         signal.throwIfAborted();
