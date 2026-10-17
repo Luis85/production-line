@@ -108,7 +108,7 @@ test('unified background admission returns its request identity before snapshots
   assert.equal(f.workspace.sessions.view().records.filter(row => row.id !== 'default').length, 0);
   assert.equal(f.workspace.sessions.runs.list().total, 0);
   assert.equal(f.workspace.featureTracking.status().records.length, 0);
-  for (const changed of [{ ...request, message: 'Different input' }, { ...request, files: undefined }, { ...request, id: 'local-' + request.id, files: undefined }])
+  for (const changed of [{ ...request, message: 'Different input' }, { ...request, files: undefined, background: undefined }, { ...request, id: 'local-' + request.id, files: undefined, background: undefined }])
     await assert.rejects(f.workspace.task(changed), error => error.code === 'conflict');
   gate.resolve();
   await until(() => f.workspace.board.view().tasks.some(row => row.id === request.id) && f.workspace.board.view().preparations.length === 0, 'The unified request never completed admission.');

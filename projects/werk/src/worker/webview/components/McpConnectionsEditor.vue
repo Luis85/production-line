@@ -57,7 +57,7 @@ const tools = (id: string) => props.editor.savedConnection(id)?.discoveredTools 
 h3, h4 { margin: 0; color: var(--ui-text-highlighted); font-weight: 650; }
 h3 { font-size: 1rem; } h4 { font-size: .9375rem; overflow-wrap: anywhere; }
 .section-heading { flex-wrap: wrap; gap: 12px; }
-.mcp-connection { margin-top: 20px; padding: 20px; border: 1px solid var(--ui-border); border-radius: 10px; min-width: 0; display: grid; gap: 10px; }
+.mcp-connection { margin-top: 20px; padding: 20px; border: 1px solid var(--ui-border); border-radius: 10px; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
 .connection-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .connection-fields > div { display: grid; gap: 8px; min-width: 0; }
 .timeout-input { max-width: 16rem; }

@@ -215,3 +215,20 @@ test('effective timeout guidance follows saved command and invocation caps witho
   state.invocation = 15000; assert.match(e.timeoutNote(600, 'command'), /Effective cap: 15 s/); assert.match(e.timeoutNote(45, 'mcp'), /Effective cap: 15 s/);
   assert.equal(e.draft.mcp[0].timeoutSeconds, ''); assert.equal(e.dirty.value, false);
 });
+
+
+test('a pristine saved grant with an unavailable repository explains the blocked save and permits explicit correction', async t => {
+  const e = editor(t), writes = [];
+  e.state.view.builtins.commands = [{ id: 'project-check', name: 'Project check', executable: '/usr/bin/node', args: ['--version'], enabled: true, chatDirectory: 'repository:removed-project' }];
+  e.reload();
+  assert.equal(e.dirty.value, false, 'loading an invalid saved grant does not manufacture an edit');
+  assert.match(e.validation.value, /Project check.*repository is no longer assigned.*Choose an assigned repository or the private chat workspace/);
+  assert.equal(e.canSave.value, false);
+  e.onWrite(async command => { writes.push(command); return { ...view(1), builtins: command.builtins }; });
+  await e.save(); assert.equal(writes.length, 0, 'invalid saved authority cannot be resubmitted');
+  e.draft.commands[0].chatDirectory = 'workspace';
+  assert.equal(e.validation.value, ''); assert.equal(e.canSave.value, true);
+  await e.save(); assert.equal(writes.length, 1);
+  assert.equal('chatDirectory' in writes[0].builtins.commands[0], false, 'the operator explicitly restored the private workspace');
+  assert.equal(e.dirty.value, false);
+});

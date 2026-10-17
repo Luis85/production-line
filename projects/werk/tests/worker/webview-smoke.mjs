@@ -134,9 +134,20 @@ async function createTask(title, message) {
   await panel().locator('#new-task-instructions').fill(message);
   const admission = page.waitForResponse(response => response.url().endsWith('/api/tasks') && response.request().method() === 'POST' && response.request().postDataJSON().action === 'create');
   await panel().getByRole('button', { name: 'Create request', exact: true }).click();
-  const response = await admission, accepted = await response.json();
-  assert.ok(response.ok(), accepted.error ?? 'Request admission failed');
+  const response = await admission, receipt = await response.json();
+  assert.ok(response.ok(), receipt.error ?? 'Request admission failed');
+  const command = response.request().postDataJSON();
+  if (receipt.preparation) {
+    assert.equal(response.status(), 202, 'background preparation is not durable acceptance');
+    assert.equal(command.background, true);
+    assert.ok(command.files);
+    assert.equal(receipt.preparation.id, command.id, 'preparation retains the submitted operation identity');
+    assert.equal(receipt.preparation.state, 'preparing');
+  }
   await until(async () => (await page.locator('#chat-task-title').textContent()) === title, 'created ' + title);
+  const accepted = receipt.preparation ? await api('/api/tasks', { action: 'get', id: 'local-' + command.id }) : receipt;
+  assert.ok(accepted.session && accepted.chat, 'saved session and conversation exist after preparation');
+  if (receipt.preparation) assert.equal(accepted.session.id, 'local-' + command.id);
   assert.equal((await api('/api/sessions')).selected, accepted.session.id, 'opens exact admitted session');
   return accepted.session.id;
 }

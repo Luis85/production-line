@@ -50,10 +50,11 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Fixed
 
+- Local lifecycle and health checks, plus private component requests, use the packaged HTTP transport with their existing deadlines. This avoids a Node 24/macOS socket error during stop or restart and closes each request’s connection resources.
 - Profile update revisions bind the reviewed definition ID and reference as well as its name and content, preventing a stale preview from updating a different profile after reassignment.
 - Chat tool grants pin the checkout’s filesystem identity and recheck it before each call. Changing an MCP chat directory invalidates its catalog and grants so discovery must be reviewed again.
 - Worktree pruning excludes concurrent admission and configuration changes. Retained worktrees use their recorded location after storage changes, and new external storage is checked against every assigned repository.
-- Fixture cleanup handles exited Linux zombie processes, bounds process inspection and termination, and preserves workspaces when cleanup cannot finish.
+- Fixture cleanup handles exited Linux zombie processes, bounds process inspection and termination, waits for its cleanup guard to exit, and preserves workspaces when process cleanup cannot finish.
 - Shared feature publication no longer deletes files outside its temporary worktree on Windows. Git for Windows' `worktree remove` follows NTFS junctions, so cleanup now removes symbolic links and junctions themselves first. A worktree whose links cannot be removed is kept and locked in Git with a reason for manual review.
 - Task worktree removal never runs Git on a worktree containing symbolic links or junctions: Git for Windows deletes the junction target's files, also in ignored folders and without `--force`.
 - Test fixtures that start portable apps no longer leave detached workers running on Windows after a failed, timed-out or interrupted run. Cleanup stops each app and then terminates any process still running from the fixture's temporary directory. It waits for those processes to exit before removing the directory.

@@ -70,7 +70,7 @@ async function pause() {
           <div class="tool-save-actions"><UButton type="submit" :loading="draft.busy && !draft.discovering" :disabled="!canSave">Save tool access</UButton><UButton v-if="dirty || stale" type="button" color="neutral" variant="ghost" @click="editor.reload">Discard edits and reload</UButton></div>
         </fieldset>
       </form>
-      <p v-if="validation && dirty" role="status" class="error-text">{{ validation }}</p>
+      <p v-if="validation" role="status" class="error-text">{{ validation }}</p>
       <p v-if="stale" role="status" class="access-notice">Saved access changed while you were editing. Your draft is kept. Discard edits and reload before saving again.</p>
       <div v-if="!view.canEdit" class="tool-guidance"><p>{{ view.saveBlockedReason || 'Pause new starts and finish or stop queued and running work before changing tool access.' }}</p><UButton v-if="state.settings && !state.settings.board.paused" type="button" color="neutral" variant="outline" icon="i-lucide-pause" :loading="pausing" :disabled="locked" @click="pause">Pause new starts</UButton><p v-else class="page-note">Open Taskboard to finish or stop waiting work. Tool changes, including revocation, take effect after the worker is drained and you save.</p></div>
       <p v-else class="page-note">New starts are paused. Save your access changes, then resume when you are ready.</p>
@@ -96,7 +96,7 @@ h2, h3 { margin: 0; color: var(--ui-text-highlighted); } h3 { font-size: 1rem; f
 .file-grant span span { font-weight: 400; color: var(--ui-text-muted); line-height: 1.5; }
 label { font-size: .8125rem; font-weight: 600; color: var(--ui-text-highlighted); }
 .check-label { min-height: 44px; gap: 10px; }
-.command-preset { display: grid; gap: 10px; padding: 20px; border: 1px solid var(--ui-border); border-radius: 10px; min-width: 0; }
+.command-preset { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 20px; border: 1px solid var(--ui-border); border-radius: 10px; min-width: 0; }
 .command-preset strong { overflow-wrap: anywhere; }
 .command-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .command-fields > div { display: grid; gap: 8px; min-width: 0; }

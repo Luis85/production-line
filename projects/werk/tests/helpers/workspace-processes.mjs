@@ -17,6 +17,7 @@ const PROCESS_QUERY_TIMEOUT_MS = 30000;
 const PROCESS_TERMINATION_TIMEOUT_MS = 10000;
 const WORKSPACE_CLEANUP_TIMEOUT_MS = 60000;
 const WATCHDOG_LAUNCH_TIMEOUT_MS = 30000;
+const WATCHDOG_EXIT_TIMEOUT_MS = 10000;
 
 /** A zombie has exited even when a container init has not reaped its PID yet. */
 export function processIsRunning(pid) {
@@ -140,6 +141,13 @@ export async function ownWorkspace(t, directory, stop = async () => {}) {
     const terminated = await terminateProcessesUnder(directory, guard ? [guard] : []);
     if (terminated.length) t.diagnostic(`terminated ${terminated.length} process tree(s) left running in ${directory}`);
     await removeWorkspace(directory);
+    // The guard polls for removal once a second. Teardown owns its exit as well as the
+    // workers, so callers cannot observe a surviving guard after their after hook finishes.
+    const deadline = Date.now() + WATCHDOG_EXIT_TIMEOUT_MS;
+    while (guard && processIsRunning(guard)) {
+      if (Date.now() >= deadline) throw Error(`Workspace cleanup guard ${guard} did not exit after removal of ${directory}`);
+      await delay(Math.min(100, deadline - Date.now()));
+    }
   });
   guard = await startWatchdog(directory);
 }

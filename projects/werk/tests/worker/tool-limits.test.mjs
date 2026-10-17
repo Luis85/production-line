@@ -112,11 +112,22 @@ test('per-grant deadlines stop real commands, CLI tools and MCP startup while la
   const quick = await runtime.call('werk_command_run', { preset: 'quick' }, signal()); assert.equal(quick.isError, undefined); assert.match(quick.content[0].text, /exitCode/);
 });
 
-test('the existing total invocation cap still cancels a longer per-grant command and blocks later calls', { timeout: process.platform === 'win32' ? 120000 : 30000 }, async t => {
+test('the captured runtime window and outer invocation cancellation stop longer per-grant commands', { timeout: process.platform === 'win32' ? 120000 : 30000 }, async t => {
   const policy = policyWith({ commands: [preset({ args: ['-e', 'setInterval(()=>{},1000)'], timeoutMs: 600000 })] });
   const { runtime } = await runtimeFor(t, policy, { maxRuntimeMs: 100 });
-  await assert.rejects(runtime.call('werk_command_run', { preset: 'unit-tests' }, signal()), /cancelled or its invocation ended/);
-  await assert.rejects(runtime.call('werk_command_run', { preset: 'unit-tests' }, signal()), /cancelled or its invocation ended/);
+  const interrupted = await runtime.call('werk_command_run', { preset: 'unit-tests' }, signal());
+  assert.equal(interrupted.isError, true); assert.match(interrupted.content[0].text, /tool window ended while this call was running/);
+  const refused = await runtime.call('werk_command_run', { preset: 'unit-tests' }, signal());
+  assert.equal(refused.isError, true); assert.match(refused.content[0].text, /tool window of this invocation ended after 1 of 128 calls/);
+  assert.deepEqual(runtime.budget().exhausted, { reason: 'window', maxCalls: 128, windowMs: 100, callsUsed: 1, refusedCalls: 2 });
+
+  // The overall invocation signal remains authoritative: it rejects instead of granting a final-answer window.
+  const outer = await runtimeFor(t, policy, { maxRuntimeMs: 30000 });
+  const deadline = AbortSignal.timeout(100);
+  await assert.rejects(outer.runtime.call('werk_command_run', { preset: 'unit-tests' }, deadline), /cancelled or its invocation ended/);
+  await assert.rejects(outer.runtime.call('werk_command_run', { preset: 'unit-tests' }, deadline), /cancelled or its invocation ended/);
+  assert.equal(outer.runtime.budget().exhausted, null, 'explicit cancellation is never misreported as a budget refusal');
+  await outer.runtime.close();
 });
 
 test('required-check fingerprints preserve old authority and bind an explicit deadline into new scopes', () => {

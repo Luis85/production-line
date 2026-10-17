@@ -21,7 +21,7 @@ test('manifest preparation and dispatch use frozen budgets through composition a
   const directory = await mkdtemp(join(tmpdir(), 'werk-manifest-budget-')); t.after(() => rm(directory, { recursive: true, force: true }));
   const state = join(directory, 'not-created-by-metadata'), policy = defaultToolPolicy();
   policy.builtins.commands = [{ id: 'check', name: 'Check', executable: process.execPath, args: ['-e', 'throw Error("Must not execute during metadata inspection")'], enabled: true, timeoutMs: 2500 }];
-  const settings = { value: { execution: { maxToolCalls: 40, maxRuntimeMs: 900000, commandTimeoutMs: 1500 } }, toolPolicy: () => policy };
+  const settings = { value: { execution: { maxToolCalls: 40, maxRuntimeMs: 900000, commandTimeoutMs: 1500 }, repositories: { items: [] } }, toolPolicy: () => policy };
   let requests = 0;
   const factory = workspaceModelFactory(state, settings, (saved, path, _transport, options) => modelFor(saved, path, async () => { requests++; return answer(); }, options));
   const model = factory(connection, { sessionId: 'chat' });

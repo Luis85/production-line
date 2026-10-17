@@ -43,6 +43,9 @@ test('copied apps operate independently with agent tasks, durable state and late
     const cwd = join(outer, kind + ' project'), app = join(cwd, 'bin/apps', kind);
     await mkdir(cwd, { recursive: true }); await writeFile(join(cwd, 'package.json'), '{"type":"commonjs"}');
     await cp(join(project, 'bin/apps', kind), app, { recursive: true });
+    // Lifecycle commands must resolve their transport entirely inside this copied app.
+    for (const path of ['scripts/runtime/shared-http.mjs', `src/${kind}/dist/shared/http/transport.js`, `src/${kind}/dist/node_modules/undici/package.json`])
+      assert.equal((await stat(join(app, path))).isFile(), true, `${kind}: ${path}`);
     entries[kind] = { cwd, app, cli: join(app, 'cli.mjs') };
   }
   const invokeApp = async (kind, command, options = [], body, environment) => {
