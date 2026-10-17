@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { observePublishedFeature } from './shared-intake-observation.mjs';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdtemp, mkdir, readFile, writeFile, realpath, rm } from 'node:fs/promises';
@@ -195,11 +196,12 @@ export async function sharedMarkdownFixture(t) {
   const validated = await cli(authoring, author, 'validate', '--file', requestPath);
   assert.equal(validated.valid, true, JSON.stringify(validated));
   await cli(authoring, author, 'ready', '--file', requestPath, '--if-match', validated.revision);
+  const previousCommit = await git(author, 'rev-parse', 'HEAD');
   await git(author, 'add', requestPath); await git(author, 'commit', '-m', 'Queue a ready feature'); await git(author, 'push', 'origin', 'main');
   sourceCommit = await git(author, 'rev-parse', 'HEAD');
   await current().updateSettings({ board: { paused: false } });
   phase('claim the request and publish the model question');
-  await sync();
+  await observePublishedFeature(sync, { id: featureId, sourceCommit, previousCommit, signal: t.signal, diagnostic: message => t.diagnostic(message) });
   assert.equal(task().status, 'queued'); assert.equal(task().baseCommit, sourceCommit);
   await current().board.tick(); await settle('waiting_input'); await sync();
   assert.equal(sent.length, 1);
