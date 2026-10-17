@@ -62,7 +62,7 @@ test('installed native worker consumes files, exports review patches and keeps t
   await cli(entry, cwd, 'stop'); running = false;
 });
 
-test('generated private question and gate ignores preserve operator rules and remain idempotent on repeat init', async t => {
+test('generated private question, task and gate ignores preserve operator rules and remain idempotent on repeat init', async t => {
   const cwd = await project(t);
   const setup = await initializeWorker(resolve('bin/apps/worker'), { 'project-dir': cwd, 'features-dir': 'requests/features' });
   assert.match(setup.intake.setup, /shared setup/); assert.match(setup.next, /local provider explicitly/);
@@ -73,6 +73,7 @@ test('generated private question and gate ignores preserve operator rules and re
   await initializeWorker(setup.application, { 'project-dir': cwd });
   const first = await readFile(ignorePath, 'utf8');
   assert.match(first, /^custom-private\.txt$/m); assert.match(first, /^_results\/$/m); assert.match(first, /^_questions\/$/m); assert.match(first, /^_gates\/$/m);
+  assert.match(first, /^_tasks\/$/m); assert.equal(first.split('\n').filter(line => line === '_tasks/').length, 1);
   assert.equal(first.split('\n').filter(line => line === '_gates/').length, 1);
   await initializeWorker(setup.application, { 'project-dir': cwd });
   assert.equal(await readFile(ignorePath, 'utf8'), first);
