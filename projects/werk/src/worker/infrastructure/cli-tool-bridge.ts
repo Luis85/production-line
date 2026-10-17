@@ -68,6 +68,7 @@ export async function withCliToolBridge<T>(runtime: ToolRuntime | undefined, sig
       const value = JSON.parse(Buffer.concat(chunks).toString('utf8'));
       let result;
       if (value?.method === 'tools/list') result = { tools: runtime.manifest.tools };
+      // Accounted runtimes return budget refusals; legacy adapters retain the bridge's hard call ceiling.
       else if (value?.method === 'tools/call' && (runtime.budget || ++calls <= maxCalls)) {
         const operation = invokeGrantedTool(runtime, value.params?.name, value.params?.arguments ?? {}, bounded);
         pending.add(operation);

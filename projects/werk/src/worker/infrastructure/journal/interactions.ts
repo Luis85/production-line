@@ -6,6 +6,7 @@ import type { InteractionAdmission, InteractionEvent, InteractionEventPage, Inte
 import type { ModelRequest, ModelResult } from '../../application/model-contract.js';
 import type { ProviderUsage } from '../../application/run-evidence.js';
 import type { ToolBudgetEvidence } from '../../application/tool-runtime.js';
+import { MAX_TOOL_CALLS, MAX_MAX_RUNTIME_MS } from '../../application/execution-policy.js';
 
 const identifier = (value: unknown) => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(value);
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -249,7 +250,7 @@ export class WorkerInteractionJournal implements InteractionStore {
 
   observeToolBudget(sessionId: string, turnId: string, evidence: ToolBudgetEvidence) {
     const count = (value: unknown, maximum: number) => Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= maximum;
-    if (!evidence || !['calls', 'window'].includes(evidence.reason) || !count(evidence.maxCalls, 1000) || !count(evidence.windowMs, 86400000) || !count(evidence.callsUsed, 1000) || !count(evidence.refusedCalls, 100000)) return;
+    if (!evidence || !['calls', 'window'].includes(evidence.reason) || !count(evidence.maxCalls, MAX_TOOL_CALLS) || evidence.maxCalls < 1 || !count(evidence.windowMs, MAX_MAX_RUNTIME_MS) || evidence.windowMs < 1 || !count(evidence.callsUsed, evidence.maxCalls) || !count(evidence.refusedCalls, 100000) || evidence.refusedCalls < 1 || evidence.reason === 'calls' && evidence.callsUsed !== evidence.maxCalls) return;
     // Counts only: no tool names, arguments, results or paths reach durable evidence.
     const safe: ToolBudgetEvidence = { reason: evidence.reason, maxCalls: evidence.maxCalls, windowMs: evidence.windowMs, callsUsed: evidence.callsUsed, refusedCalls: evidence.refusedCalls };
     this.transaction(() => {

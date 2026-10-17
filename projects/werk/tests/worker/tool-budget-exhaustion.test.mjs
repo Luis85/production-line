@@ -47,7 +47,7 @@ test('call exhaustion returns a normal tool error, keeps structured output parse
     assert.deepEqual(JSON.parse(result.content[0].text).entries.map(item => item.name), ['README.md'], 'the tool output item is unchanged');
   }
   assert.deepEqual(results.slice(0, 2).map(result => result.content.length), [1, 1], 'no note while more than a quarter remains');
-  assert.match(results[2].content[1].text, /^Tool budget: 1 of 4 calls and 1(19|20) s of the 120 s tool window remain\.$/);
+  assert.match(results[2].content[1].text, /^Tool budget: 1 of 4 calls and (\d+ s|less than 1 s) of the 120 s tool window remain\.$/);
   assert.match(results[3].content[1].text, /^Tool budget: 0 of 4 calls remain in this invocation\./);
   assert.equal(runtime.budget().exhausted, null, 'using the whole budget is not exhaustion');
   for (let index = 0; index < 2; index++) {
@@ -59,24 +59,16 @@ test('call exhaustion returns a normal tool error, keeps structured output parse
   await assert.rejects(runtime.call('werk_files_missing', {}, signal()), /not granted/, 'ungranted tools still fail closed');
 });
 
-test('window exhaustion notes low time, stops an in-flight call with a clear message and refuses later calls', { timeout: 20000 }, async t => {
+test('window exhaustion stops an in-flight call with a clear message and refuses later calls', { timeout: 20000 }, async t => {
   const { create } = await fixture(t);
-  const low = create({ maxRuntimeMs: 4000 });
-  assert.equal((await low.call('werk_files_list', {}, signal())).content.length, 1);
-  await delay(3000);
-  const noted = await low.call('werk_files_list', {}, signal());
-  assert.match(noted.content[1].text, /^Tool budget: 30 of 32 calls and (less than 1 s|1 s) of the 4 s tool window remain\.$/);
-  await delay(1500);
-  const after = await low.call('werk_files_list', {}, signal());
-  assert.equal(after.isError, true);
-  assert.match(after.content[0].text, /^Tool budget exhausted \(32 calls \/ 4 s window\): the 4 s tool window of this invocation ended after 2 of 32 calls\. No further tool calls will run/);
-  assert.deepEqual(low.budget().exhausted, { reason: 'window', maxCalls: 32, windowMs: 4000, callsUsed: 2, refusedCalls: 1 });
-
   const running = create({ maxRuntimeMs: 300 });
   const stopped = await running.call('werk_command_run', { preset: 'wait' }, signal());
   assert.equal(stopped.isError, true);
   assert.match(stopped.content[0].text, /^Tool budget exhausted \(32 calls \/ 300 ms window\): the 300 ms tool window ended while this call was running, so it was stopped and its result is unavailable\./);
   assert.deepEqual(running.budget().exhausted, { reason: 'window', maxCalls: 32, windowMs: 300, callsUsed: 1, refusedCalls: 1 });
+  const after = await running.call('werk_files_list', {}, signal());
+  assert.equal(after.isError, true); assert.match(after.content[0].text, /tool window of this invocation ended after 1 of 32 calls/);
+  assert.deepEqual(running.budget().exhausted, { reason: 'window', maxCalls: 32, windowMs: 300, callsUsed: 1, refusedCalls: 2 });
   const controller = new AbortController(); controller.abort();
   await assert.rejects(running.call('werk_files_list', {}, controller.signal), /cancelled/, 'cancellation is not reported as a budget refusal');
 });
@@ -130,6 +122,10 @@ test('interaction evidence records budget exhaustion once, with counts only, and
   const settings = new WorkerSettings(directory); await settings.init();
   const evidence = { reason: 'window', maxCalls: 32, windowMs: 120000, callsUsed: 12, refusedCalls: 1 };
   const execute = async (_request, _signal, _onUsage, control) => {
+    for (const invalid of [
+      { ...evidence, maxCalls: 0 }, { ...evidence, maxCalls: 513 }, { ...evidence, windowMs: 0 },
+      { ...evidence, callsUsed: 33 }, { ...evidence, refusedCalls: 0 }, { ...evidence, reason: 'calls', callsUsed: 12 },
+    ]) control.observeToolBudget(invalid);
     control.observeToolBudget({ ...evidence, toolName: 'PRIVATE-TOOL', args: 'PRIVATE-ARGS' });
     control.observeToolBudget({ ...evidence, callsUsed: 13 });
     return { type: 'completed', text: 'Done with partial results.' };
@@ -147,4 +143,45 @@ test('interaction evidence records budget exhaustion once, with counts only, and
   assert.deepEqual(turn.toolBudget, evidence); assert.equal(turn.status, 'completed');
   sessions.interactions.observeToolBudget('default', turn.id, evidence);
   assert.equal(sessions.interactions.events('default').events.length, 5, 'a finished turn accepts no new budget evidence');
+});
+
+
+test('an accounting runtime cannot widen a smaller frozen API request allowance', async t => {
+  const { create } = await fixture(t);
+  for (const source of ['limits', 'accounting']) {
+    let providerCalls = 0, toolCalls = 0;
+    const model = modelFor({ id: 'openai-api', apiKey: 'fixture-only', model: 'fixture', executable: '' }, '/unused', async () => {
+      providerCalls++; return Response.json(toolCall(providerCalls));
+    }, { tools: () => {
+      const runtime = create({ maxCalls: 2 });
+      return { manifest: runtime.manifest, ...(source === 'limits' ? { limits: runtime.limits } : {}), budget: () => runtime.budget(),
+        call(...args) { toolCalls++; return runtime.call(...args); }, close: () => runtime.close() };
+    } });
+    const request = prepareModelRequest({ ...model, executionPolicy: { maxToolCalls: 1 } }, messages);
+    assert.equal(request.policy.maxToolCalls, 1);
+    await assert.rejects(executeModel(model, request, signal()), { code: 'tool_access' });
+    assert.equal(providerCalls, 0, 'the unsafe runtime is rejected before paid provider dispatch');
+    assert.equal(toolCalls, 0, 'no request can widen the frozen allowance');
+  }
+});
+
+
+test('actual tool results warn at the remaining-time threshold independently of call count', async t => {
+  const { create } = await fixture(t);
+  let time = Date.now();
+  const clock = t.mock.method(Date, 'now', () => time);
+  try {
+    const runtime = create({ maxCalls: 32, maxRuntimeMs: 120000 });
+    assert.equal((await runtime.call('werk_files_list', {}, signal())).content.length, 1);
+    time += 89999;
+    assert.equal((await runtime.call('werk_files_list', {}, signal())).content.length, 1, '30,001 ms is above the quarter-window threshold');
+    time += 1;
+    const threshold = await runtime.call('werk_files_list', {}, signal());
+    assert.equal(threshold.isError, undefined);
+    assert.equal(threshold.content[1].text, 'Tool budget: 29 of 32 calls and 30 s of the 120 s tool window remain.');
+    time += 29601;
+    const subsecond = await runtime.call('werk_files_list', {}, signal());
+    assert.equal(subsecond.content[1].text, 'Tool budget: 28 of 32 calls and less than 1 s of the 120 s tool window remain.');
+    assert.equal(runtime.budget().exhausted, null, 'clock projection does not expire the independent real cancellation timer');
+  } finally { clock.mock.restore(); }
 });

@@ -1,5 +1,5 @@
 import { runApprovedToolProcess } from './tool-process.js';
-import { constants, realpathSync, statSync } from 'node:fs';
+import { constants, lstatSync, realpathSync, statSync } from 'node:fs';
 import { lstat, mkdir, open, opendir, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { ProcessRunError } from '../../shared/process/launcher.js';
@@ -46,7 +46,15 @@ export const chatWorkspaceHint = "In chat this grant starts in the worker's empt
  * start; it is checked again before every call, so removing or moving the assignment revokes it.
  */
 export function chatToolDirectory(options: Pick<BuiltinToolOptions, 'directory' | 'worktree' | 'repositories'>) {
-  const pinned = new Map((options.repositories?.() ?? []).map(item => [item.id, item.path]));
+  // Pin filesystem identity as well as the assignment: a replacement directory or symlink is a new grant target.
+  const identity = (path: string) => {
+    try {
+      const info = lstatSync(path), canonical = realpathSync(path);
+      if (!info.isDirectory() || info.isSymbolicLink() || canonical !== resolve(path)) return;
+      return { canonical, dev: info.dev, ino: info.ino, birthtimeMs: info.birthtimeMs };
+    } catch { return; }
+  };
+  const pinned = new Map((options.repositories?.() ?? []).map(item => [item.id, { path: item.path, identity: identity(item.path) }]));
   return async (grant: ToolChatDirectory): Promise<string> => {
     if (options.worktree) return options.worktree;
     const repository = chatRepositoryId(grant);
@@ -57,11 +65,13 @@ export function chatToolDirectory(options: Pick<BuiltinToolOptions, 'directory' 
     }
     const current = (options.repositories?.() ?? []).find(item => item.id === repository);
     if (!current) throw new BuiltinToolError(`Repository "${repository}" is no longer assigned to this worker, so this chat tool was not started. Ask the worker operator to update its chat directory under Tool access.`);
-    if (pinned.get(repository) !== current.path) throw new BuiltinToolError(`The assignment of repository "${repository}" changed during this reply, so this chat tool was not started. Send a new message to use the current assignment.`);
-    let path: string;
-    try { path = await realpath(current.path); if (!(await lstat(path)).isDirectory()) throw Error('Not a directory'); }
-    catch { throw new BuiltinToolError(`The checkout of assigned repository "${repository}" is unavailable, so this chat tool was not started.`); }
-    return path;
+    const initial = pinned.get(repository);
+    if (initial?.path !== current.path) throw new BuiltinToolError(`The assignment of repository "${repository}" changed during this reply, so this chat tool was not started. Send a new message to use the current assignment.`);
+    const actual = identity(current.path);
+    if (!initial.identity || !actual) throw new BuiltinToolError(`The checkout of assigned repository "${repository}" is unavailable or replaced, so this chat tool was not started.`);
+    if (actual.canonical !== initial.identity.canonical || actual.dev !== initial.identity.dev || actual.ino !== initial.identity.ino || actual.birthtimeMs !== initial.identity.birthtimeMs)
+      throw new BuiltinToolError(`The checkout of assigned repository "${repository}" changed during this reply, so this chat tool was not started. Send a new message after the operator reviews the assignment.`);
+    return actual.canonical;
   };
 }
 

@@ -36,7 +36,11 @@ export async function apiReply(connection: ProviderConnection, request: ModelReq
   const definitions = runtime?.manifest.tools.map(tool => openai
     ? { type: 'function', name: tool.name, description: tool.description, parameters: tool.inputSchema, strict: false }
     : { name: tool.name, description: tool.description, input_schema: tool.inputSchema });
-  const maxCalls = Math.min(request.policy.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS, runtime?.limits?.maxCalls ?? runtime?.budget?.().maxCalls ?? request.policy.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS);
+  const acceptedMaxCalls = request.policy.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS;
+  const runtimeCaps = [runtime?.limits?.maxCalls, runtime?.budget?.().maxCalls].filter((value): value is number => value !== undefined);
+  // An injected runtime cannot widen the accepted dispatch, even if its budget accounting is otherwise valid.
+  if (runtimeCaps.some(value => !Number.isSafeInteger(value) || value < 1 || value > acceptedMaxCalls)) throw new ProviderModelError('tool_access');
+  const maxCalls = Math.min(acceptedMaxCalls, ...runtimeCaps);
   let calls = 0, usage: ProviderUsage | undefined;
   const seenCallIds = new Set<string>();
   // One request per granted call, one whose calls the runtime may refuse with its budget message, and the final answer.

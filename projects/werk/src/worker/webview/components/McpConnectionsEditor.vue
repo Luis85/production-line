@@ -36,6 +36,7 @@ const tools = (id: string) => props.editor.savedConnection(id)?.discoveredTools 
       <UInput :id="`mcp-secret-${index}`" v-model="connection.secret" type="password" autocomplete="new-password" :disabled="connection.clearSecret" :placeholder="editor.savedConnection(connection.id)?.hasSecret && !editor.destinationChanged(connection) ? 'Secret saved · leave blank to keep' : 'No secret saved'" class="w-full" />
       <label v-if="editor.savedConnection(connection.id)?.hasSecret" class="check-label"><input v-model="connection.clearSecret" type="checkbox" :disabled="!!connection.secret"> Remove saved secret</label>
       <p v-if="editor.destinationChanged(connection)" class="connection-change" role="status">Changing the server destination clears its saved secret and tool grants. Save, discover tools and review access again. Enter a replacement secret above if needed.</p>
+      <p v-else-if="editor.catalogChanged(connection)" class="connection-change" role="status">Changing the chat directory clears discovered tools and grants. Save, discover again, then grant the tools you need. The saved secret stays with this server.</p>
       <label :for="`mcp-timeout-${index}`">Timeout override · seconds, optional</label><UInput :id="`mcp-timeout-${index}`" v-model.number="connection.timeoutSeconds" type="number" min="1" :max="connection.transport === 'http' ? toolLimitSeconds.httpMcpMax : toolLimitSeconds.mcpMax" step="0.001" placeholder="Default: 30 seconds" class="w-full timeout-input" :aria-describedby="`mcp-timeout-help-${index}`" />
       <p :id="`mcp-timeout-help-${index}`" class="page-note">{{ editor.timeoutNote(connection.timeoutSeconds, 'mcp') }} Maximum override: {{ connection.transport === 'http' ? toolLimitSeconds.httpMcpMax : toolLimitSeconds.mcpMax }} seconds.</p>
       <label class="check-label enable-connection"><input v-model="connection.enabled" type="checkbox"> Enable this connection for granted model tools</label>
@@ -43,7 +44,7 @@ const tools = (id: string) => props.editor.savedConnection(id)?.discoveredTools 
         <UButton type="button" color="neutral" variant="outline" icon="i-lucide-search" :loading="editor.draft.discovering === connection.id" :disabled="!editor.canDiscover.value || !editor.savedConnection(connection.id)" @click="editor.discover(connection.id)">Discover tools</UButton>
         <p class="page-note">{{ editor.dirty.value ? 'Save your changes before discovering tools.' : 'Discovery contacts the saved server. It does not grant newly found tools.' }}</p>
       </div>
-      <template v-if="!editor.destinationChanged(connection)">
+      <template v-if="!editor.catalogChanged(connection)">
         <fieldset v-if="tools(connection.id).length" class="tool-grants"><legend>Tools models may call</legend>
           <label v-for="tool in tools(connection.id)" :key="tool.name" class="tool-grant"><input v-model="connection.allowedTools" type="checkbox" :value="tool.name"><span><strong>{{ tool.name }}</strong><span>{{ tool.description || 'This server provides no description.' }}</span></span></label>
         </fieldset>

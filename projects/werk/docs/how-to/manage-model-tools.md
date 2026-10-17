@@ -265,8 +265,8 @@ dispatch evidence.
 
 To run one grant's Chat calls in a project:
 
-1. Assign the repository in **Dashboard → Repositories**.
-2. Pause and drain the worker, open **Tool access** and, for that command preset
+1. Assign the repository in **Settings → Repositories**.
+2. Pause and drain the worker, open **Settings → Tools & MCP** and, for that command preset
    or stdio MCP connection, set **Working directory in chat** to
    **Live checkout of repository "ID"**. Save.
 3. For an MCP connection, discover its tools again. Discovery starts the server in
@@ -381,7 +381,9 @@ ID; `null` clears it. New grants without a value inherit the command ceiling or
 MCP's 30-second default. An explicit numeric value is saved even when it equals
 a default. A retained timeout above 300 seconds must be cleared or lowered when
 changing an MCP connection from stdio to HTTP. Changing a connection destination
-still clears its credentials and discovered grants as described above.
+still clears its credentials and discovered grants as described above. Changing
+only its chat directory preserves the same server credential, but clears its
+discovered catalog and grants; save, discover again, then review and grant tools.
 
 The CLI providers' private MCP bridge waits for the trusted invocation duration,
 not a hard-coded short tool timer. Codex receives `tool_timeout_sec`; Claude Code
@@ -421,13 +423,15 @@ these fields. Preserve a stopped-state backup before upgrading.
 
 The model is told before and when its tools run out:
 
-- Once 8 or fewer calls, or 30 or fewer seconds of the window, remain, each tool
-  result ends with a note such as
-  `Tool budget: 5 of 32 calls and 38 s of the 120 s tool window remain.`
+- Once a quarter or less of the captured call or duration budget remains, each
+  tool result ends with a note such as
+  `Tool budget: 32 of 128 calls and 120 s of the 21600 s tool window remain.`
 - A call after the budget is used runs nothing and returns a tool error that
   starts with `Tool budget exhausted` and tells the model to finish with what it
   has or ask you a question. A call still running when the window ends is stopped
-  with the same kind of error.
+  with the same kind of error. The overall invocation deadline remains
+  authoritative and may cancel the model before this error or a final response
+  can be delivered; the tool window never extends that deadline.
 
 To check whether a task's results are incomplete because of the budget, open the
 task: **Tool budget exhausted** appears next to the latest turn's consumption with
@@ -435,7 +439,8 @@ the reason, calls used, the window and the number of refused calls. Integrations
 can read the `tool_budget_exhausted` interaction event or the turn's `toolBudget`
 field; see the [tool budget reference](../reference/model-interaction.md#tool-budget).
 If a task regularly hits the budget, split it into smaller tasks or narrow the
-granted tools so the model needs fewer calls.
+granted tools so the model needs fewer calls, or adjust the captured limits for
+new tasks in **Settings → Queue & duration**.
 
 File reads return at most 32 KiB per call and expose an offset for another chunk.
 Web and MCP results are bounded to 64 KiB. CLI tool output is cut at its

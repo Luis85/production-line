@@ -160,9 +160,10 @@ export function updateToolPolicy(previous: ToolPolicy, value: unknown, assignedR
     const saved = previous.mcp.find(item => item.id === entry.id);
     const normalizedDestination = { ...entry, url: entry.transport === 'http' ? url(entry.url, false) : entry.url, secretEnv: entry.secretEnv ?? (entry.transport === 'stdio' ? 'MCP_AUTH_TOKEN' : '') } as unknown as ToolMcpConnection;
     const same = saved && destination(saved) === destination(normalizedDestination);
+    const sameCatalog = same && saved.chatDirectory === entry.chatDirectory;
     const { clearSecret, ...rest } = entry;
     const secret = clearSecret === true ? '' : entry.secret !== undefined && entry.secret !== '' ? entry.secret : same ? saved.secret : '';
-    return connection(withSavedTimeout({ ...rest, secret, allowedTools: same ? entry.allowedTools : [], discoveredTools: same ? saved.discoveredTools : [] }, saved));
+    return connection(withSavedTimeout({ ...rest, secret, allowedTools: sameCatalog ? entry.allowedTools : [], discoveredTools: sameCatalog ? saved.discoveredTools : [] }, saved));
   });
   const next = validateToolPolicy({ schemaVersion: 1, revision: previous.revision + 1, builtins: builtins(input.builtins, previous.builtins), mcp });
   assertChatDirectories(next, assignedRepositoryIds);

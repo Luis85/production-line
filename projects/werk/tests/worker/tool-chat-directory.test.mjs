@@ -1,11 +1,11 @@
 import { cleanup } from './fixture-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { access, mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, realpath, rename, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createToolRuntime, mcpToolName } from '../../src/worker/dist/worker/infrastructure/tool-runtime.js';
-import { defaultToolPolicy, publicToolPolicy, updateToolPolicy, validateToolPolicy } from '../../src/worker/dist/worker/application/tool-policy.js';
+import { defaultToolPolicy, publicToolPolicy, updateToolPolicy, validateToolPolicy, discoveredToolPolicy } from '../../src/worker/dist/worker/application/tool-policy.js';
 import { WorkerSettings } from '../../src/worker/dist/worker/infrastructure/settings.js';
 import { workspaceModelFactory } from './application-fixtures.mjs';
 import { modelCapabilities } from '../../src/worker/dist/worker/application/model-contract.js';
@@ -173,4 +173,45 @@ test('discovering an opted-in stdio MCP connection starts the server in the assi
   const view = await worker.discoverToolAccess({ id: 'local', expectedRevision: worker.settings.toolPolicy().revision });
   assert.equal(view.mcp[0].discoveredTools[0].description, await realpath(f.repository));
   assert.equal(view.mcp[0].chatDirectory, 'repository:project');
+  const privateUpdate = edit(worker.settings.toolPolicy()); delete privateUpdate.mcp[0].chatDirectory;
+  const cleared = await worker.updateToolAccess(privateUpdate);
+  assert.deepEqual(cleared.mcp[0].discoveredTools, []);
+  const privateView = await worker.discoverToolAccess({ id: 'local', expectedRevision: worker.settings.toolPolicy().revision });
+  assert.equal(privateView.mcp[0].discoveredTools[0].description, await realpath(join(f.state, 'chat-workspace')), 'default discovery uses the same private directory as chat calls');
+});
+
+
+test('changing an MCP chat directory clears its catalog and grants while preserving the same server secret and timeout', () => {
+  const initial = defaultToolPolicy();
+  const { discoveredTools, ...connection } = stdio([], { allowedTools: [], secret: 'fixture-secret', timeoutMs: 45000 });
+  let policy = updateToolPolicy(initial, edit(initial, { mcp: [connection] }), ['project']);
+  policy = discoveredToolPolicy(policy, 'local', policy.revision, [definition]);
+  const grant = edit(policy); grant.mcp[0].allowedTools = ['where'];
+  policy = updateToolPolicy(policy, grant, ['project']);
+  assert.deepEqual(policy.mcp[0].allowedTools, ['where']);
+  const moved = edit(policy); moved.mcp[0].chatDirectory = 'repository:project';
+  const changed = updateToolPolicy(policy, moved, ['project']);
+  assert.deepEqual(changed.mcp[0].allowedTools, []); assert.deepEqual(changed.mcp[0].discoveredTools, []);
+  assert.equal(changed.mcp[0].secret, 'fixture-secret'); assert.equal(changed.mcp[0].timeoutMs, 45000);
+  const rediscovered = discoveredToolPolicy(changed, 'local', changed.revision, [definition]);
+  assert.deepEqual(rediscovered.mcp[0].allowedTools, [], 'discovery does not silently restore authority');
+});
+
+test('a replaced directory or symlink at an unchanged repository assignment cannot start chat tools', { timeout: 120000 }, async t => {
+  for (const replacement of ['directory', 'link']) {
+    const f = await fixture(t), marker = join(f.directory, 'unexpected-process.txt');
+    const args = ['-e', 'require("node:fs").writeFileSync(' + JSON.stringify(marker) + ',"started")'];
+    const runtime = f.runtime(policyWith(policy => {
+      policy.builtins.commands = [cwdPreset({ args, chatDirectory: 'repository:project' })];
+      policy.mcp = [stdio(args, { chatDirectory: 'repository:project' })];
+    }));
+    await rename(f.repository, f.repository + '-original');
+    if (replacement === 'directory') await mkdir(f.repository);
+    else await symlink(f.worktree, f.repository, process.platform === 'win32' ? 'junction' : 'dir');
+    for (const name of ['werk_command_run', mcpToolName('local', definition.name)]) {
+      const result = await runtime.call(name, name === 'werk_command_run' ? { preset: 'cwd' } : {}, signal());
+      assert.equal(result.isError, true); assert.match(result.content[0].text, /checkout of assigned repository "project".*(changed|unavailable or replaced)/);
+    }
+    await assert.rejects(access(marker), 'neither preset nor MCP server started in the replacement');
+  }
 });

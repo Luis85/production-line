@@ -294,21 +294,23 @@ cannot authorize additional tools.
 
 ### Tool budget
 
-All tool calls of one invocation share a budget: at most 32 calls, and a tool
-window of 120 seconds that starts with the first call. The model sees the budget
-in its tool results, never as a silently missing tool:
+All tool calls of one invocation share its captured execution budget: 128 calls
+and six hours by default, configurable up to 512 calls and 24 hours. The runtime
+window is an additional bound starting with the first tool call; the overall
+invocation deadline starts earlier and remains authoritative. It never grants
+more time. The model receives budget information in tool results:
 
 - **Low budget note.** Once a quarter or less of the calls or of the window
-  remains (8 of 32 calls, or 30 of 120 seconds), every tool result ends with an
+  remains (32 of 128 calls with the default call allowance), every tool result ends with an
   extra text item, for example
-  `Tool budget: 5 of 32 calls and 38 s of the 120 s tool window remain.`
+  `Tool budget: 32 of 128 calls and 120 s of the 21600 s tool window remain.`
   The result of the last allowed call says that no further calls will run.
   The note is a separate content item, so JSON tool output stays parseable and
   the 128 KiB limit still applies to the tool's own output. Earlier results are
   unchanged. Remaining time is rounded down to whole seconds.
 - **Exhaustion.** A call beyond the limit, or after the window ended, runs
   nothing and returns a normal tool error (`isError: true`), for example
-  `Tool budget exhausted (32 calls / 120 s window): the 32-call limit of this invocation is reached. No further tool calls will run in this invocation. Finish with the information you have, or ask the operator with a werkInteraction question.`
+  `Tool budget exhausted (128 calls / 21600 s window): the 128-call limit of this invocation is reached. No further tool calls will run in this invocation. Finish with the information you have, or ask the operator with a werkInteraction question.`
   A call still running when the window ends is stopped and returns the same kind
   of error, stating that its result is unavailable.
 - **Provider loops.** Claude Code and Codex receive the error as an MCP tool
@@ -317,13 +319,15 @@ in its tool results, never as a silently missing tool:
   the refusal is stopped with `protocol`.
 
 Cancellation, revoked grants and a replaced worktree still fail closed with a
-`tool_access` or `cancelled` error; only the budget is reported this way.
+`tool_access` or `cancelled` error; only the tool budget is reported this way.
+The overall invocation deadline can cancel the provider before a budget refusal
+or final answer is delivered. It is never extended for a finishing response.
 
 When a budget runs out, the turn records `toolBudget` and the event journal adds
 one `tool_budget_exhausted` event:
 
 ```json
-{ "reason": "calls", "maxCalls": 32, "windowMs": 120000, "callsUsed": 32, "refusedCalls": 1 }
+{ "reason": "calls", "maxCalls": 128, "windowMs": 21600000, "callsUsed": 128, "refusedCalls": 1 }
 ```
 
 `reason` is `calls` or `window`. `callsUsed` counts calls admitted to execution;
@@ -331,7 +335,7 @@ one `tool_budget_exhausted` event:
 stopped by the window. The record contains counts and durations only: no tool
 names, arguments, results or paths. Using exactly the whole budget without a
 further call is not exhaustion. Turns saved by earlier workers have no
-`toolBudget`. The Dashboard shows it with the latest turn's consumption.
+`toolBudget`. The worker task view shows it with the latest turn's consumption.
 Claude Code restriction flags require version 2.1.248 or newer. The saved
 connection check reports a known older version with upgrade guidance; an unknown
 version remains unverified. Execution never drops required flags. Provider
