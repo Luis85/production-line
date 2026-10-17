@@ -100,8 +100,10 @@ function connection(value: unknown): ToolMcpConnection {
   const args = strings(input.args, 'MCP arguments', 32, 2048);
   if (transport === 'http' && args.length) invalid('HTTP MCP connections do not take command arguments.');
   const address = transport === 'http' ? url(input.url, false) : string(input.url, 'unused MCP address', 0, true);
-  const secretEnv = transport === 'stdio' ? string(input.secretEnv ?? 'MCP_AUTH_TOKEN', 'secret environment variable', 80) : string(input.secretEnv ?? '', 'unused secret environment variable', 0, true);
+  // A local server without a credential needs no variable; a stored secret always needs its dedicated destination.
+  const secretEnv = transport === 'stdio' ? string(input.secretEnv ?? 'MCP_AUTH_TOKEN', 'secret environment variable', 80, true) : string(input.secretEnv ?? '', 'unused secret environment variable', 0, true);
   if (secretEnv && (!/^[A-Z_][A-Z0-9_]{0,79}$/.test(secretEnv) || /^(?:PATH|HOME|USERPROFILE|SYSTEMROOT|WINDIR|SHELL|ENV|BASH_ENV|COMSPEC|PATHEXT|NODE_OPTIONS|NODE_PATH|PYTHONPATH|PYTHONHOME|RUBYOPT|RUBYLIB|PERL5OPT|PERL5LIB|LD_.*|DYLD_.*|WERK_.*|CODEX_.*|CLAUDE_.*)$/.test(secretEnv))) invalid('Choose a dedicated MCP credential environment variable, not a process or worker configuration variable.');
+  if (transport === 'stdio' && !secretEnv && string(input.secret, 'MCP secret', 4096, true)) invalid('Name the environment variable that receives the MCP secret, or remove the secret.');
   const discoveredTools = validateToolDefinitions(input.discoveredTools);
   const allowedTools = strings(input.allowedTools, 'granted tool names', 64, 128);
   if (new Set(allowedTools).size !== allowedTools.length || allowedTools.some(name => !discoveredTools.some(tool => tool.name === name))) invalid('Grant only tools from the current discovered MCP catalog.');

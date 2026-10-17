@@ -10,7 +10,7 @@ export interface McpToolResult { content: { type: 'text'; text: string }[]; isEr
 
 export function mcpTransportConfiguration(connection: ToolMcpConnection): McpTransportConfiguration {
   return connection.transport === 'stdio'
-    ? { transport: 'stdio', executable: connection.command, args: [...connection.args], env: connection.secret ? { [connection.secretEnv || 'MCP_AUTH_TOKEN']: connection.secret } : {} }
+    ? { transport: 'stdio', executable: connection.command, args: [...connection.args], env: connection.secret && connection.secretEnv ? { [connection.secretEnv]: connection.secret } : {} }
     : { transport: 'http', url: connection.url, headers: connection.secret ? { Authorization: `Bearer ${connection.secret}` } : {} };
 }
 function validateConfiguration(config: McpTransportConfiguration): void {

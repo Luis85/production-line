@@ -40,6 +40,26 @@ test('tool policy validates concrete command, origin, credential and aggregate g
   assert.throws(() => validateToolPolicy({ ...defaults, builtins: { ...defaults.builtins, files: true }, mcp: [{ ...httpConnection(), secret: '', discoveredTools: definitions, allowedTools: definitions.map(item => item.name) }] }), /at most 64/);
 });
 
+test('stdio MCP connections without a credential need no secret environment variable', () => {
+  const defaults = defaultToolPolicy();
+  const stdio = (extra = {}) => httpConnection({ transport: 'stdio', command: process.execPath, url: '', secretEnv: '', ...extra });
+  const open = updateToolPolicy(defaults, { ...edit(defaults), mcp: [stdio()] });
+  assert.equal(open.mcp[0].secretEnv, ''); assert.equal(open.mcp[0].secret, '');
+  assert.equal(updateToolPolicy(defaults, { ...edit(defaults), mcp: [{ ...stdio(), secretEnv: undefined }] }).mcp[0].secretEnv, 'MCP_AUTH_TOKEN', 'an omitted variable keeps the documented default');
+  assert.throws(() => updateToolPolicy(open, { ...edit(open), mcp: [{ ...edit(open).mcp[0], secret: 'fixture-secret' }] }), /Name the environment variable/);
+  assert.throws(() => validateToolPolicy({ ...open, mcp: [{ ...open.mcp[0], secret: 'fixture-secret' }] }), /Name the environment variable/, 'a saved secret without a destination is refused');
+  for (const secretEnv of ['NODE_OPTIONS', 'lowercase', ' ']) assert.throws(() => updateToolPolicy(defaults, { ...edit(defaults), mcp: [stdio({ secretEnv })] }), /dedicated MCP credential/);
+  let policy = updateToolPolicy(defaults, { ...edit(defaults), mcp: [stdio({ secretEnv: 'FIXTURE_TOKEN', secret: 'fixture-stored-secret' })] });
+  policy = discoveredToolPolicy(policy, 'fixture', policy.revision, [definition]);
+  let input = edit(policy); input.mcp[0].allowedTools = [definition.name]; policy = updateToolPolicy(policy, input);
+  input = edit(policy); input.mcp[0].secretEnv = '';
+  const cleared = updateToolPolicy(policy, input);
+  assert.equal(cleared.mcp[0].secretEnv, ''); assert.equal(cleared.mcp[0].secret, '', 'clearing the variable never keeps the stored secret');
+  assert.deepEqual(cleared.mcp[0].allowedTools, []); assert.deepEqual(cleared.mcp[0].discoveredTools, []);
+  input = edit(policy); input.mcp[0].secretEnv = 'OTHER_TOKEN';
+  assert.equal(updateToolPolicy(policy, input).mcp[0].secret, '', 'a stored secret never moves to a different variable');
+});
+
 test('private tool policy migrates default-none, preserves and rotates secrets, and resets authority on destination changes', async t => {
   const path = await directory(t); let settings = new WorkerSettings(path); await settings.init(); assert.deepEqual(settings.toolPolicy(), defaultToolPolicy());
   await settings.updateToolAccess({ ...edit(settings.toolPolicy()), mcp: [httpConnection({ secret: 'fixture-private-secret' })] });

@@ -426,7 +426,10 @@ and ordinary provider Chat does not gain arbitrary filesystem or shell tools.
 The unlocked **Settings → Tools & MCP** section manages a separate private
 `tool-access.json` in the worker state directory. Missing configuration means no grants. The document
 records a numeric revision, worktree-file access, fixed command presets,
-CLI tools, web origins, MCP connection details and discovered per-tool grants. Its credentials
+CLI tools, web origins, MCP connection details and discovered per-tool grants. A stdio
+connection's `secretEnv` names the variable that receives its secret; it may be
+empty only when the connection stores no secret, and an omitted value defaults to
+`MCP_AUTH_TOKEN`. Its credentials
 are redacted from authenticated views; they never enter the public status or
 model dispatch manifest. Preserve this file with the rest of stopped worker state.
 
