@@ -127,8 +127,10 @@ Deleting a file task removes its clean, verified worktree; changed or protected
 worktrees remain available for inspection. `worktrees list` and
 `worktrees prune --dry-run` find retained worktrees. Feature-folder patch
 requests still target this installed project's directory; include it among the
-assignments when using that intake. Ordinary Chat only receives its supplied
-conversation input, and mock execution remains simulated. Every task still has
+assignments when using that intake. Requests without file approval have no task
+worktree. Optional command and stdio MCP grants can separately select an assigned
+live checkout; see [Chat tool directories](manage-model-tools.md#run-chat-tools-in-a-repository-checkout).
+Mock execution remains simulated. Every task still has
 a generated Markdown progress record, with or without file permission. It lives
 under the configured feature folder's `_tasks/` directory; source intake notes
 remain separate. See [automatic task tracking](../reference/feature-requests.md#automatic-task-tracking).

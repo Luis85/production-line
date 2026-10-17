@@ -133,11 +133,13 @@ function startWatchdog(directory) {
  * (Ctrl+C, a killed runner), a detached guard performs the same termination and removal.
  */
 export async function ownWorkspace(t, directory, stop = async () => {}) {
-  const guard = await startWatchdog(directory);
+  let guard;
+  // Own cleanup before launching: a failed launcher may already have spawned its guard.
   t.after(async () => {
     try { await stop(); } catch {}
     const terminated = await terminateProcessesUnder(directory, guard ? [guard] : []);
     if (terminated.length) t.diagnostic(`terminated ${terminated.length} process tree(s) left running in ${directory}`);
     await removeWorkspace(directory);
   });
+  guard = await startWatchdog(directory);
 }

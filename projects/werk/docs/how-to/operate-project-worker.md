@@ -71,30 +71,45 @@ change them. PowerShell 7 has `-Encoding utf8NoBOM` and UTF-8 pipes by default.
 
 ## Task worktrees
 
-A file task for an assigned repository runs in a Git worktree at
-`<repository>/.werk/worktrees/<name>`, checked out at the task's base commit. The
-worker adds `/.werk/worktrees/` to `.git/info/exclude`, so Git ignores it. Tools
-other than Git don't read that file: exclude `.werk/` in vault linters, search
-indexes, file watchers and test runners that scan the whole project folder.
+A request with file approval in an assigned Git repository runs in a worktree
+checked out at its accepted base commit. The default location is
+`<repository>/.werk/worktrees/<name>`. The worker adds `/.werk/worktrees/` to
+Git's local exclude file, which other tools do not read. Exclude `.werk/` in
+vault linters, search indexes, file watchers and test runners that scan the whole
+project, or set **Settings → Repositories → Task worktree folder** to an absolute
+folder outside every checkout. Its parent folder must exist. On Windows, choose
+a short path. Existing worktrees keep their recorded location after this setting
+changes. See [repository configuration](../reference/configuration.md#assigned-git-repositories).
 
-Checking out a large repository takes time, and the task request returns only
-after its worktree exists. On a repository with a large history or many files,
-allow up to a minute for task creation.
+The webview submits repository requests in the background and shows preparation
+progress or its failure reason. For CLI creation on large repositories, include
+`"background": true` in the `file-task create` JSON; inspect the `preparations`
+list in `file-task list` until the task is available. A client timeout does not
+prove creation failed: inspect the current preparation before submitting again.
 
-The worker keeps a task worktree, including interrupted edits, so that tools and
-reviews stay pinned to the same directory. Deleting a task in Werk 0.9.0 does not
-remove its worktree. To clean up after you delete the task:
+Worktrees and interrupted edits survive restart. Deleting a file task removes its
+worktree only when it is clean and the worker can verify its ownership. Retain it
+explicitly with `file-task delete --id TASK_ID --remove-worktree false`. Inspect
+leftovers and preview cleanup before applying it:
 
 ```powershell
-git worktree list
-git worktree remove .werk/worktrees/NAME
+node bin/apps/worker/cli.mjs worktrees list
+node bin/apps/worker/cli.mjs worktrees prune --dry-run
+node bin/apps/worker/cli.mjs worktrees prune --id NAME
 ```
 
-`git worktree remove` refuses a worktree with changes; inspect it before you add
-`--force`. Don't delete the folder with Explorer or `Remove-Item -Recurse`: if a
-tool created a junction or symbolic link inside it, a recursive delete can follow
-the link and delete files outside the worktree. Run `git worktree prune` after a
-folder was removed by other means.
+Pause new starts and drain queued, running and preparing work before pruning;
+the preview is available at any time. Cleanup skips worktrees still used by a
+file task. It preserves changed worktrees by default and reports a reason for
+each retained directory. Only after reviewing their contents, use
+`--discard-changes true` to discard uncommitted/untracked files or an interrupted
+checkout. A detached HEAD with additional commits, an operator lock, or any
+symbolic link or junction inside always requires manual review.
+
+Do not delete worktree folders with Explorer or `Remove-Item -Recurse`: a tool
+may have created a link or junction that reaches outside the worktree. The
+worker's owned-cleanup commands apply the documented identity and link checks.
+Back up repositories and retained worktrees separately from private worker state.
 
 ## Tool limits
 
@@ -113,9 +128,14 @@ follow-up attempts capture current execution limits. See
 [execution limits](manage-model-tools.md#execution-limits) for ranges, overrides
 and compatibility.
 
-Chat sessions have no task worktree. Their command presets and stdio MCP servers
-start in a private, empty `chat-workspace` folder in the worker state directory,
-not in your project. Use a file task when a tool needs the project files.
+Requests without repository-file approval have no task worktree. Their command
+presets and stdio MCP servers normally start in the worker's empty private
+`chat-workspace`. A grant can explicitly select **Working directory in chat →
+Live checkout of repository "ID"** under **Settings → Tools & MCP**. That tool
+then runs in the assigned checkout and can affect uncommitted work; use this only
+for reviewed tools whose host-account authority is appropriate. Repository-file
+requests continue to use their pinned worktree. Built-in file tools remain
+worktree-only. See [Chat tool directories](manage-model-tools.md#run-chat-tools-in-a-repository-checkout).
 
 ## Answer protocol
 

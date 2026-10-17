@@ -65,14 +65,20 @@ test('the guard cleans up when the test process dies before its after hooks run'
   await eventually(async () => access(directory).then(() => false, () => true), 'the guard removed the workspace');
 });
 
-test('owned workspaces fail explicitly when the detached guard cannot start', { timeout: 120000 }, async t => {
+test('owned workspaces fail explicitly and clean up when the detached guard cannot start', { timeout: 120000 }, async t => {
   const directory = await workspace('process launch failure');
-  t.after(() => removeWorkspace(directory));
-  const prior = process.env.NODE_OPTIONS;
-  try {
-    process.env.NODE_OPTIONS = '--invalid-werk-fixture-option';
-    await assert.rejects(ownWorkspace(t, directory), /Could not start workspace cleanup guard/);
-  } finally {
-    if (prior === undefined) delete process.env.NODE_OPTIONS; else process.env.NODE_OPTIONS = prior;
-  }
+  t.after(async () => { await terminateProcessesUnder(directory); await removeWorkspace(directory); });
+  const worker = detachedFrom(directory);
+  await t.test('failed launch fixture', async child => {
+    const prior = process.env.NODE_OPTIONS;
+    try {
+      process.env.NODE_OPTIONS = '--invalid-werk-fixture-option';
+      await assert.rejects(ownWorkspace(child, directory), /Could not start workspace cleanup guard/);
+    } finally {
+      if (prior === undefined) delete process.env.NODE_OPTIONS; else process.env.NODE_OPTIONS = prior;
+    }
+  });
+  assert.equal(alive(worker), false, 'the registered teardown owns processes even after launcher failure');
+  assert.deepEqual(await processesUnder(directory), []);
+  await assert.rejects(access(directory), { code: 'ENOENT' });
 });
