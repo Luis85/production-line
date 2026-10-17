@@ -17,8 +17,8 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Changed
 
-- `tool-access set` always drops the view-only fields of an edited `tool-access get` output (`revision`, `schemaVersion`, `canEdit`, `saveBlockedReason`, `workerNode`, and MCP `hasSecret` and `discoveredTools`) and refuses a `revision` that differs from `expectedRevision`. Tool-access validation errors name the unexpected fields (the first five).
-- The update error for a locked app folder now says that another process holds a file or directory open, lists likely causes (editors, indexers, antivirus scans, MCP or language servers started in the project folder) and states that the previous version keeps running.
+- `tool-access set` always drops the view-only fields of an edited `tool-access get` output (`revision`, `schemaVersion`, `canEdit`, `saveBlockedReason`, `workerNode`, and MCP `hasSecret` and `discoveredTools`) and refuses a `revision` that differs from `expectedRevision`. Tool-access and MCP connection validation errors name the unexpected fields (the first five); CLI tool entries keep their allowed-field message.
+- The update error for a locked app folder now says that another process holds a file or directory open, lists likely causes (editors, indexers, antivirus scans, MCP or language servers started in the project folder) and states that nothing was replaced.
 - The implementation-mode guide explains that a task worktree has no `node_modules` and must not link the checkout's dependencies, and that existing grants such as `git checkout`, `git clean` or `git stash` operate on the candidate. The portable-apps reference gains troubleshooting for the locked-folder update error.
 
 ### Fixed

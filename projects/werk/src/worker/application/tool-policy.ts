@@ -35,7 +35,7 @@ const record = (value: unknown): value is Record<string, unknown> => !!value && 
 function fields(value: unknown, allowed: string[], label: string): Record<string, unknown> {
   if (!record(value)) invalid(`Use the documented ${label} fields.`);
   const unexpected = Object.keys(value).filter(key => !allowed.includes(key));
-  if (unexpected.length) invalid(`Use the documented ${label} fields. Unexpected: ${unexpected.slice(0, 5).join(', ')}${unexpected.length > 5 ? ', …' : ''}.`);
+  if (unexpected.length) invalid(`Use the documented ${label} fields. Unexpected: ${unexpected.slice(0, 5).map(key => key.length > 64 ? `${key.slice(0, 64)}…` : key).join(', ')}${unexpected.length > 5 ? ', …' : ''}.`);
   return value;
 }
 function string(value: unknown, label: string, max: number, empty = false): string {

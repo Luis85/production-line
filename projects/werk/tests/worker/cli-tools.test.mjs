@@ -221,4 +221,7 @@ test('tool-access set strips view-only fields even when expectedRevision is adde
   const { revision, ...withoutRevision } = view;
   assert.deepEqual(toolAccessBody({ ...withoutRevision, expectedRevision: 7 }), expected, 'expectedRevision alone still drops the view fields');
   assert.throws(() => toolAccessBody({ ...view, expectedRevision: 9 }), /revision \(7\) and expectedRevision \(9\) differ\. Keep one: the revision you read with tool-access get\./);
+  assert.throws(() => toolAccessBody({ ...view, expectedRevision: '7' }), /^.*expectedRevision must be the integer revision from tool-access get\.$/);
+  assert.throws(() => toolAccessBody({ ...withoutRevision, expectedRevision: null }), /expectedRevision must be the integer revision/);
+  assert.throws(() => toolAccessBody({ ...view, expectedRevision: 9 }), /revision \(7\) and expectedRevision \(9\) differ/);
 });

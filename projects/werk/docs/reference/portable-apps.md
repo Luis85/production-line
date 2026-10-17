@@ -247,14 +247,16 @@ folder blocks the rename; the update retries for ten seconds and then fails with
 replacing anything. Use the direct `node bin/apps/worker/cli.mjs update ...`
 commands above on Windows; an npm parent process can keep the app folder open.
 
-If the update fails with `Could not move ... Another process holds a file or
-directory open inside it`, something still has a handle in the app folder or the
-project folder that contains it. Windows Restart Manager does not report
-directory handles, so the tools that list locked files can show nothing. Look for
+If the update fails with
+`Could not move ... Another process holds a file or directory open inside it`,
+something holds a handle inside the app folder, typically a long-running process
+started from the project folder. Windows Restart Manager does not report directory
+handles, so the tools that list locked files can show nothing. Look for
 long-running processes whose working directory is the project: agent MCP servers,
 language servers and file watchers started from the project folder. Stop them and
-run the update again. The previous version keeps running and nothing was
-replaced.
+run the update again. Nothing was replaced; if the update stopped the app, it
+restarts the previous version and reports whether that worked.
+
 Downloads and extraction use the system temporary directory to keep paths short.
 
 Version 0.8.0 and earlier have no `update` command. Upgrade those once by hand: stop,

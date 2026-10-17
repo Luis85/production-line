@@ -581,8 +581,10 @@ export function toolAccessBody(body) {
     if (!Number.isSafeInteger(revision))
       throw inputError("Include expectedRevision, or send the edited output of tool-access get.");
     rest.expectedRevision = revision;
-  } else if (revision !== undefined && revision !== rest.expectedRevision)
-    throw inputError(`revision (${revision}) and expectedRevision (${rest.expectedRevision}) differ. Keep one: the revision you read with tool-access get.`);
+  } else if (!Number.isSafeInteger(rest.expectedRevision))
+    throw inputError("expectedRevision must be the integer revision from tool-access get.");
+  else if (revision !== undefined && revision !== rest.expectedRevision)
+    throw inputError(`revision (${JSON.stringify(revision)}) and expectedRevision (${JSON.stringify(rest.expectedRevision)}) differ. Keep one: the revision you read with tool-access get.`);
   const result = "mcp" in body ? {
     ...rest,
     mcp: Array.isArray(mcp) ? mcp.map((item) => {

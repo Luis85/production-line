@@ -36,9 +36,9 @@ changes; the source checkout remains separate and human review is still required
 
 Older requests and new requests without that implementation scope retain the
 proposal workflow. Turning on grants later does not convert them into
-implementation requests. See [implement a feature](implement-feature.md), and
-its warning that existing grants such as `git checkout` or `git clean` operate on
-the candidate and can discard or add changes.
+implementation requests. [Implement a feature](implement-feature.md) warns that
+existing grants such as `git checkout` or `git clean` operate on the candidate and
+can discard or add changes.
 
 The worker verifies the retained worktree’s identity and Git ownership before
 using tools. Replaced or missing worktrees require a fresh task. Tasks created

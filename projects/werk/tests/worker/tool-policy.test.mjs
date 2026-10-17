@@ -49,6 +49,7 @@ test('field validation names the unexpected keys so an edited tool-access view c
   assert.throws(() => updateToolPolicy(defaults, { ...edit(defaults), revision: 0, schemaVersion: 1 }), /Use the documented tool access update fields\. Unexpected: revision, schemaVersion\./);
   assert.throws(() => updateToolPolicy(defaults, { ...edit(defaults), mcp: [{ ...httpConnection(), hasSecret: true }] }), /Use the documented MCP connection fields\. Unexpected: hasSecret\./);
   assert.throws(() => updateToolPolicy(defaults, { ...edit(defaults), a: 1, b: 2, c: 3, d: 4, e: 5, f: 6 }), /Unexpected: a, b, c, d, e, …\./);
+  assert.throws(() => updateToolPolicy(defaults, { ...edit(defaults), ['x'.repeat(200)]: 1 }), { message: `Use the documented tool access update fields. Unexpected: ${'x'.repeat(64)}….` });
   assert.throws(() => updateToolPolicy(defaults, []), { message: 'Use the documented tool access update fields.' });
 });
 
