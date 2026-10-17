@@ -1,3 +1,5 @@
+import { taskboardRuntime } from './runtime-fixtures.mjs';
+import { workerStatus } from '../helpers/worker-status.mjs';
 import { workspaceModelFactory } from './application-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -17,12 +19,15 @@ async function fixture(t, builtins = { files: true, commands: [], webOrigins: []
   const git = (...args) => execFileSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', ...args], { cwd: repository, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   git('init', '-b', 'main'); git('config', 'core.autocrlf', 'false'); await writeFile(join(repository, 'approved.txt'), 'accepted committed snapshot\n'); git('add', '.'); git('commit', '-m', 'Fixture');
   const journal = new SnapshotJournal(state, 'a'.repeat(64), 'b'.repeat(64)); await journal.init(); cleanup(t, () => journal.close());
-  let worker, executions = 0;
+  /** @type {WorkerWorkspace} */
+  let worker;
+  let executions = 0;
+  /** @type {import('../../src/worker/infrastructure/workspace-services.js').WorkspaceProviderFactory} */
   const factory = (connection, directory, transport, options) => ({ configuration: { id: connection.id, model: connection.model, instruction: '' }, capabilities: modelCapabilities, get toolManifest() { return options.tools().manifest; }, async reply() { throw Error('Expected typed invocation'); }, async execute(request, signal) {
     executions++; const runtime = options.tools(); try { const result = await runtime.call('werk_files_read', { path: 'approved.txt' }, signal); assert.match(JSON.stringify(result), /accepted committed snapshot/); } finally { await runtime.close(); }
     return { type: 'needs_input', request: { schemaVersion: 1, kind: 'question', message: 'Which approved change?' } };
   } });
-  const open = async () => { worker = new WorkerWorkspace({ stateDir: state, projectDir: root, pollMs: 1000, timeoutMs: 60000 }, journal, () => ({ activeTasks: [], queuedTasks: [] })); worker.board.model = workspaceModelFactory(state, worker.settings, factory); await worker.init(); };
+  const open = async () => { worker = new WorkerWorkspace({ stateDir: state, projectDir: root, pollMs: 1000, timeoutMs: 60000 }, journal, () => (workerStatus())); taskboardRuntime(worker.board).model = workspaceModelFactory(state, worker.settings, factory); await worker.init(); };
   await open(); cleanup(t, () => worker.close());
   await worker.updateSettings({ provider: { id: 'openai-api', apiKey: 'fixture-never-sent', model: 'fixture-model' }, board: { paused: true }, repositories: { items: [{ id: 'project', path: repository, remote: 'origin', watch: false }] } });
   await worker.updateToolAccess({ expectedRevision: 0, builtins, mcp: [] });

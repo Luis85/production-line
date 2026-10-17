@@ -1,0 +1,59 @@
+{
+  "plugins": [
+    "typescript",
+    "unicorn",
+    "oxc",
+    "vue"
+  ],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "eslint/no-control-regex": "off",
+    "eslint/no-useless-escape": "off",
+    "unicorn/no-useless-spread": "off",
+    "eslint/no-unused-vars": [
+      "error",
+      {
+        "args": "none",
+        "caughtErrors": "none",
+        "ignoreRestSiblings": true
+      }
+    ],
+    "eslint/no-unused-expressions": [
+      "error",
+      {
+        "allowShortCircuit": true,
+        "allowTernary": true
+      }
+    ]
+  },
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "env": {
+    "node": true
+  },
+  "overrides": [
+    {
+      "files": [
+        "src/**/webview/**",
+        "storybook/**",
+        ".storybook/**"
+      ],
+      "env": {
+        "browser": true
+      }
+    }
+  ],
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/node_modules/**",
+    "**/.build-*/**",
+    "**/.nuxt-ui/**",
+    "storybook-static/**",
+    ".stryker-tmp/**",
+    ".mutation-build/**",
+    "reports/**",
+    "release/**",
+    "bin/apps/**"
+  ]
+}

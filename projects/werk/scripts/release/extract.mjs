@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { chmod, lstat, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+
 import { list, extract } from 'tar';
 import { unzipSync } from 'fflate';
 import { verifyRelease, isMainScript } from './verify.mjs';

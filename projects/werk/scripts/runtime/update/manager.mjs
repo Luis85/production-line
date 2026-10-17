@@ -14,7 +14,7 @@ export async function check(store, options = {}) {
   const record = await selection(store), root = await activeRoot(store, record), current = await manifest(root), release = await latest(options);
   return { ok: true, current: current.version, latest: release.version, available: newer(release.version, current.version), automatic: record.automatic, release };
 }
-export async function stopped(store) {
+async function stopped(store) {
   if ((await runtimeStatus(store.stateDir)).state !== 'stopped') throw Error('Stop the system before updating. No running release or state was changed.');
   if (await exists(store.stateDir)) {
     const topology = await stateTopology(store.stateDir);

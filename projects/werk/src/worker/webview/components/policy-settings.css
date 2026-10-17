@@ -1,0 +1,79 @@
+/* Shared form layout for the worker queue and duration editors. Each Vue owner scopes it independently. */
+.policy-settings {
+  min-width: 0;
+}
+
+.policy-settings h2 {
+  margin: 0 0 var(--space-3);
+}
+
+.policy-settings p {
+  max-width: 75ch;
+}
+
+.policy-fields {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: var(--space-6) 0 0;
+}
+
+.policy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6);
+}
+
+.policy-field {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.policy-field label {
+  font-weight: 600;
+}
+
+.policy-field p {
+  margin: 0;
+}
+
+.policy-field :deep(input), .policy-field :deep(button), .policy-actions :deep(button) {
+  min-height: 44px;
+}
+
+.policy-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+.settings-conflict {
+  margin: var(--space-4) 0;
+  padding: var(--space-4);
+  background: var(--ui-bg-elevated);
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+}
+
+.settings-conflict p {
+  margin: 0;
+}
+
+@media (max-width: 700px) {
+  .policy-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .policy-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .policy-actions :deep(button) {
+    justify-content: center;
+  }
+}

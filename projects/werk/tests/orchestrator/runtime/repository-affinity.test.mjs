@@ -1,3 +1,4 @@
+import { testErrorCode } from '../../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -66,7 +67,7 @@ test('worker claim application validates bounded repository announcements before
   const store = fixture(t), registered = worker(store, ['frontend']), app = new OrchestratorApplication(store, 'line');
   const operations = app.worker(registered.token);
   for (const body of [{ repositoryIds: null }, { repositoryIds: ['../bad'] }, { repositoryIds: ['same', 'same'] }, { repositoryIds: Array.from({ length: 65 }, (_, i) => 'repo-' + i) }, { repositoryIds: [], legacyRepository: ['true'] }, { legacyRepository: true }]) {
-    assert.throws(() => operations.claim({ requestId: 'invalid', ...body }), error => error.code === 'invalid_input');
+    assert.throws(() => operations.claim({ requestId: 'invalid', ...body }), error => testErrorCode(error) === 'invalid_input');
     assert.deepEqual(store.worker(registered.token).config.repositoryIds, ['frontend']);
   }
   const item = store.submit(task({ repository: 'backend' }), 'back');

@@ -49,7 +49,9 @@ test('new snapshot evidence uses the built worker version without rewriting hist
   const directory = await mkdtemp(join(tmpdir(), 'werk-version-'));
   const journal = new SnapshotJournal(directory, 'config', 'prompt');
   try {
-    const task = { id: 'task', project: 'demo', title: 'Version', criteria: ['Recorded'], provider: 'auto', status: 'running', attempt: 1, lease: 'lease' };
+    /** @type {import('../../src/shared/domain.ts').Task} */
+    const task = { id: 'task', project: 'demo', title: 'Version', criteria: ['Recorded'], wikilinks: [], provider: 'auto', priority: 1, status: 'running', attempt: 1, lease: 'lease', workerId: 'worker', expiresAt: Date.now() + 60000, createdAt: Date.now(), profile: 'mock' };
+    /** @type {import('../../src/shared/contracts.ts').Profile} */
     const profile = { id: 'mock', provider: 'codex', mode: 'mock' };
     const snapshot = journal.capture(task, 'worker', profile, { lastContact: null, heartbeatErrors: 0 }, 'before');
     assert.equal(snapshot.runtime.workerVersion, expected);

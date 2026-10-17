@@ -1,3 +1,4 @@
+import { testErrorCode } from '../../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
@@ -122,16 +123,19 @@ test('concurrent resolution commits one immutable context using the original req
   const store = new Store(':memory:');
   try {
     const [first, second] = await Promise.all([memoryManifest(), memoryManifest('c'.repeat(40))]);
-    let completeFirst, completeSecond;
+    /** @type {(manifest: import('../../../src/orchestrator/dist/shared/context.js').ContextManifest) => void} */
+    let completeFirst;
+    /** @type {typeof completeFirst} */
+    let completeSecond;
     const app1 = new OrchestratorApplication(store, 'demo', { assertOpen() {}, resolve: () => new Promise(resolve => { completeFirst = resolve; }) });
     const app2 = new OrchestratorApplication(store, 'demo', { assertOpen() {}, resolve: () => new Promise(resolve => { completeSecond = resolve; }) });
     const one = app1.createTask(input, 'same'), two = app2.createTask(input, 'same');
-    completeSecond(second); const winner = await two; completeFirst(first); const replay = await one;
+    assert.ok(completeSecond); assert.ok(completeFirst); completeSecond(second); const winner = await two; completeFirst(first); const replay = await one;
     assert.equal(replay.id, winner.id); assert.equal(replay.context.commit, second.commit);
     assert.deepEqual(store.context(winner.id), second); assert.equal(store.list().length, 1);
     assert.throws(() => store.db.prepare('UPDATE task_contexts SET payload=? WHERE task=?').run('{}', winner.id), /immutable/);
     assert.throws(() => store.db.prepare('DELETE FROM task_contexts WHERE task=?').run(winner.id), /immutable/);
-    await assert.rejects(app1.createTask({ ...input, priority: 2 }, 'same'), error => error.code === 'conflict');
+    await assert.rejects(app1.createTask({ ...input, priority: 2 }, 'same'), error => testErrorCode(error) === 'conflict');
   } finally { store.close(); }
 });
 
@@ -155,7 +159,7 @@ test('schema7 migrates legacy mock tasks without inventing context or changing r
     store.db.exec('DROP TABLE task_contexts; PRAGMA user_version=3'); store.close(); store = new Store(db);
     assert.equal(store.db.prepare('PRAGMA user_version').get().user_version, 7);
     assert.deepEqual(store.submission(input, 'legacy'), legacy); assert.equal(store.worker(auth.token).id, auth.id);
-    assert.equal(store.get(legacy.id).context, undefined); assert.throws(() => store.context(legacy.id), error => error.code === 'not_found');
+    assert.equal(store.get(legacy.id).context, undefined); assert.throws(() => store.context(legacy.id), error => testErrorCode(error) === 'not_found');
     store.db.exec('PRAGMA user_version=8'); store.close(); store = undefined;
     assert.throws(() => new Store(db), /newer than/);
   } finally { store?.close(); }
@@ -177,13 +181,13 @@ test('worker context reads require exact historical assignment authority and do 
     assert.equal((await api.get('/v1/tasks/' + task.id + '/context', auth.token)).status, 401);
     journal = new SnapshotJournal(f.root, 'default', 'prompt');
     const before = journal.capture(assigned, worker.id, worker.profiles[0], { lastContact: null, heartbeatErrors: 0 }, 'before');
-    assert.throws(() => app.store.snapshot(worker, { ...before, provenance: { ...before.provenance, contextManifestHash: null } }), error => error.code === 'invalid_input');
-    assert.throws(() => app.store.snapshot(worker, { ...before, provenance: { ...before.provenance, sourceCommit: 'f'.repeat(40) } }), error => error.code === 'invalid_input');
+    assert.throws(() => app.store.snapshot(worker, { ...before, provenance: { ...before.provenance, contextManifestHash: null } }), error => testErrorCode(error) === 'invalid_input');
+    assert.throws(() => app.store.snapshot(worker, { ...before, provenance: { ...before.provenance, sourceCommit: 'f'.repeat(40) } }), error => testErrorCode(error) === 'invalid_input');
     assert.equal(app.store.snapshot(worker, before).id, before.id);
     app.store.abandon(worker, assigned.id, assigned.lease, assigned.attempt); const current = app.store.claim(other, 'next');
     const count = app.store.events(task.id).length;
     assert.equal((await api.get(path, auth.token)).status, 200); assert.equal(app.store.events(task.id).length, count);
-    assert.throws(() => app.store.heartbeat(worker, task.id, assigned.lease, assigned.attempt), error => error.code === 'conflict');
+    assert.throws(() => app.store.heartbeat(worker, task.id, assigned.lease, assigned.attempt), error => testErrorCode(error) === 'conflict');
     assert.equal(app.store.get(task.id).lease, current.lease);
     app.store.db.prepare('UPDATE workers SET project=? WHERE id=?').run('different', worker.id);
     assert.equal((await api.get(path, auth.token)).status, 403);
@@ -198,10 +202,10 @@ test('resolver admission and total deadline stay bounded even if underlying sour
     const first = app.createTask(input, 'one'), second = app.createTask(input, 'two');
     const settled = Promise.allSettled([first, second]);
     await new Promise(resolve => setImmediate(resolve)); assert.equal(pending.length, 2);
-    await assert.rejects(app.createTask(input, 'third'), error => error.code === 'unavailable');
+    await assert.rejects(app.createTask(input, 'third'), error => testErrorCode(error) === 'unavailable');
     await new Promise(resolve => setTimeout(resolve, 40));
     assert.ok((await settled).every(result => result.status === 'rejected' && result.reason.code === 'unavailable'));
-    await assert.rejects(app.createTask(input, 'still-full'), error => error.code === 'unavailable');
+    await assert.rejects(app.createTask(input, 'still-full'), error => testErrorCode(error) === 'unavailable');
     await intake.close();
     for (const resolve of pending) resolve(manifest);
     await new Promise(resolve => setImmediate(resolve)); assert.equal(store.list().length, 0);
@@ -209,11 +213,13 @@ test('resolver admission and total deadline stay bounded even if underlying sour
 });
 
 test('closing admitted resolution prevents a late result from inserting after shutdown', async () => {
-  const store = new Store(':memory:'); const manifest = await memoryManifest(); let finish;
+  const store = new Store(':memory:'); const manifest = await memoryManifest();
+  /** @type {(manifest: import('../../../src/orchestrator/dist/shared/context.js').ContextManifest) => void} */
+  let finish;
   const intake = new BoundContextIntake('demo', { repo: '/operator/repo', commit: manifest.commit, vaultRoot: 'docs' }, { resolve: () => new Promise(resolve => { finish = resolve; }) });
   const app = new OrchestratorApplication(store, 'demo', intake);
-  const result = app.createTask(input, 'closing'); const rejected = assert.rejects(result, error => error.code === 'unavailable');
+  const result = app.createTask(input, 'closing'); const rejected = assert.rejects(result, error => testErrorCode(error) === 'unavailable');
   await new Promise(resolve => setImmediate(resolve)); await intake.close(); await rejected; store.close();
-  finish(manifest); await new Promise(resolve => setImmediate(resolve));
-  await assert.rejects(app.createTask(input, 'after-close'), error => error.code === 'unavailable');
+  assert.ok(finish); finish(manifest); await new Promise(resolve => setImmediate(resolve));
+  await assert.rejects(app.createTask(input, 'after-close'), error => testErrorCode(error) === 'unavailable');
 });

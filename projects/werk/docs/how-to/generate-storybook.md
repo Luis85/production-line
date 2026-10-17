@@ -1,4 +1,18 @@
-# Generate the UI storybook and storymaps
+# Build the system documentation and frontend reference
+
+The public Storybook starts with **Documentation**, ordered by the reader’s task:
+Start here, Set up your workspace, Work with requests, Operate the system,
+Frontend reference, and Architecture and contracts.
+[Start here](https://github.com/Luis85/production-line/blob/v0.11.0/projects/werk/docs/handbook.md) routes local worker users, distributed teams, system
+operators and frontend contributors to the right setup journey.
+
+The same maintained Markdown under `docs/tutorials`, `docs/how-to`,
+`docs/reference` and `docs/explanation` also builds a searchable, self-contained
+`handbook/` alongside Storybook. Its links between maintained pages work offline
+from the extracted archive; source-only examples and historical evidence link to
+the release commit on GitHub. No remote images, scripts or provider calls load.
+Each page includes release identity, an accessible chapter menu, heading search,
+a table of contents and copyable code examples.
 
 Werk's Storybook renders the same Vue components as its separately shipped
 applications. Its storymap combines a source inventory, component contracts,
@@ -24,7 +38,8 @@ claims a component it never mounted, or leaves a source component uncovered.
 Set `WERK_CHROMIUM` to an existing Chromium executable when necessary.
 
 Serve `storybook-static/` with a local static HTTP server and open `/` for
-interactive stories or `/storymap/` for the illustrated reference. The storymap
+documentation entrypoints and interactive stories, `/handbook/` for the complete
+handbook, or `/storymap/` for the illustrated reference. The storymap
 can also be opened directly as `storymap/index.html`; its screenshots and source
 contracts work without a server. Interactive Storybook modules require HTTP.
 For development, `npm run storybook` starts Storybook on port 6006.
@@ -50,6 +65,13 @@ labelled as simulation.
    The capture waits for Storybook's post-play lifecycle before taking evidence.
 5. Run `npm run typecheck`, `npm run storybook:ci` and the relevant behavioral
    tests. Inspect the resulting screenshots, including narrow screens.
+
+Documentation stories declare `kind: documentation` and an indexed document ID.
+They must render that exact page and cannot claim component coverage. Capture
+checks every maintained handbook page at desktop/mobile widths, validates local
+page/anchor links, and exercises search and keyboard skip navigation. The source
+digest includes the Markdown inputs, so editing a setup guide invalidates prior
+qualification just like editing a component.
 
 Every source component must mount in at least one captured story. The preview
 adds source IDs only in the Storybook build and records actual Vue mounts;
@@ -93,7 +115,8 @@ The interactive index is at the archive root; the screenshot reference is
 ## Host release documentation on GitHub Pages
 
 The release workflow publishes the qualified Storybook to
-[the project site](https://luis85.github.io/production-line/) and the illustrated
+[the project site](https://luis85.github.io/production-line/), its
+[complete handbook](https://luis85.github.io/production-line/handbook/) and the illustrated
 [storymap](https://luis85.github.io/production-line/storymap/). These URLs become
 available after Pages is enabled and the first release with this workflow finishes.
 The hosted site is replaced on every successful release, including prereleases.

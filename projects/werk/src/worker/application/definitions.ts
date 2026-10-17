@@ -1,3 +1,4 @@
+import { SerializedOperations } from '../../shared/serialized-operations.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { parseDocument, isAlias, isCollection, isPair, isScalar, visit } from 'yaml';
 import { DomainError } from '../../shared/errors.js';
@@ -25,6 +26,19 @@ function definitionChanges(before: AgentDefinition, after: Pick<AgentDefinition,
     agents: { added: names(after).filter(name => !names(before).includes(name)), removed: names(before).filter(name => !names(after).includes(name)), changed },
   };
 }
+export type DefinitionChanges = ReturnType<typeof definitionChanges>;
+export interface DefinitionUpdateReceipt { id: string; ref?: string; revision: string; changes: DefinitionChanges; }
+export interface DefinitionPreview { compatibility: 'instruction-profile'; agents: DefinitionAgent[]; }
+export interface DefinitionUpdatePreview extends DefinitionPreview {
+  dryRun: true;
+  definition: { id: string; ref: string; name: string; revision: string; nextRevision: string };
+  changes: DefinitionChanges;
+}
+export interface DefinitionCatalog {
+  compatibility: 'instruction-profile';
+  definitions: (AgentDefinition & { revision: string })[];
+}
+export type DefinitionActionResult = DefinitionPreview | DefinitionUpdatePreview | DefinitionCatalog | (DefinitionCatalog & { updated: DefinitionUpdateReceipt });
 export interface DefinitionSnapshot { definitionId: string; ref?: string; name: string; digest: string; agent: string; instruction: string; model: string; provider: DefinitionAgent['provider']; unsupported: string[]; adapted: boolean; }
 function invalid(message: string): never { throw new DomainError('invalid_input', message); }
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -107,7 +121,7 @@ export function definitionConnection(connection: ProviderConnection, definition?
   return { ...connection, model: definition.model || connection.model, instruction: definition.instruction };
 }
 export class WorkerDefinitions {
-  private storage: DefinitionStorage; private definitions: AgentDefinition[] = []; private writes = Promise.resolve();
+  private storage: DefinitionStorage; private definitions: AgentDefinition[] = []; private readonly writes = new SerializedOperations();
   constructor(storage: DefinitionStorage) { this.storage = storage; }
   async init() {
     const saved = await this.storage.read();
@@ -140,14 +154,14 @@ export class WorkerDefinitions {
     if (agent.requiresAdaptation && input.useInstructionsOnly !== true) invalid('This definition includes unsupported features. Review them and explicitly choose Use instructions only before creating the task.');
     return { definitionId: definition.id, ...(definition.ref ? { ref: definition.ref } : {}), name: definition.name, digest: definition.digest, agent: agent.name, instruction: agent.instruction, model: agent.model, provider: agent.provider, unsupported: [...agent.unsupported], adapted: agent.requiresAdaptation };
   }
-  async action(input: unknown) {
+  async action(input: unknown): Promise<DefinitionActionResult> {
     const body = object(input, 'Agent definition', ['action', 'yaml', 'name', 'id', 'ref', 'revision', 'dryRun']);
     if (body.action === 'preview') return previewDefinition(body.yaml);
     if (body.action === 'update' && body.dryRun === true) return this.update(this.definitions, body).preview;
     if (body.dryRun !== undefined && (body.action !== 'update' || body.dryRun !== false)) invalid('dryRun is supported only by definition update and must be true or false.');
     if (body.revision !== undefined && body.action !== 'update') invalid('A definition revision guards only definition update.');
-    let updated: Record<string, unknown> | undefined;
-    const operation = this.writes.catch(() => {}).then(async () => {
+    let updated: DefinitionUpdateReceipt | undefined;
+    const operation = this.writes.run(async () => {
       let next = structuredClone(this.definitions);
       if (body.action === 'import') {
         if (next.length >= 32) throw new DomainError('conflict', 'Delete an unused definition before importing another (limit 32).');
@@ -178,7 +192,7 @@ export class WorkerDefinitions {
       const saved = JSON.stringify(next); if (Buffer.byteLength(saved) > 2097152) throw new DomainError('conflict', 'Definition storage is full. Delete an unused definition.');
       await this.storage.write(saved); this.definitions = next;
     });
-    this.writes = operation; await operation; return updated ? { ...this.view(), updated } : this.view();
+    await operation; return updated ? { ...this.view(), updated } : this.view();
   }
   /**
    * Replace the content behind a stable reference while keeping its id and reference.
@@ -195,6 +209,6 @@ export class WorkerDefinitions {
     const parsed = previewDefinition(body.yaml);
     const replacement = { name: body.name === undefined ? target.name : text(body.name, 'Definition name', 120), digest: createHash('sha256').update(String(body.yaml)).digest('hex'), agents: parsed.agents, updatedAt: new Date().toISOString() };
     const changes = definitionChanges(target, replacement);
-    return { target, replacement, preview: { compatibility: 'instruction-profile' as const, dryRun: true, definition: { id: target.id, ref, name: replacement.name, revision, nextRevision: definitionRevision({ ...target, ...replacement }) }, changes, agents: parsed.agents } };
+    return { target, replacement, preview: { compatibility: 'instruction-profile' as const, dryRun: true as const, definition: { id: target.id, ref, name: replacement.name, revision, nextRevision: definitionRevision({ ...target, ...replacement }) }, changes, agents: parsed.agents } };
   }
 }

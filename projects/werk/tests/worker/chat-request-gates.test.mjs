@@ -1,3 +1,4 @@
+import { modelCapabilities } from '../../src/worker/dist/worker/application/model-contract.js';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -18,6 +19,7 @@ async function fixture(t, execute) {
     settings = new WorkerSettings(directory);
   await settings.init();
   const model = () => ({
+        capabilities: modelCapabilities,
     configuration: {
       id: "codex-cli",
       model: "fixture-model",
@@ -34,7 +36,7 @@ async function fixture(t, execute) {
     sessions: null,
     restart: async () => {
       await f.sessions?.close();
-      f.sessions = new WorkerSessions(directory, settings, model);
+      f.sessions = WorkerSessions(directory, settings, model);
       await f.sessions.init();
     },
   };

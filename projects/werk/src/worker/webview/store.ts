@@ -1,4 +1,4 @@
-import { boundedSignal, requestJson } from '../../shared/webview/http';
+import { jsonRequestInit, requestJson } from '../../shared/webview/http';
 import type { ConsumptionStatus } from '../application/consumption';
 import type { ConsumptionCommand } from './consumption-editor';
 import type { ToolAccessView, ToolAccessUpdate } from '../application/tool-policy';
@@ -99,7 +99,7 @@ export async function createFeatureRequest(command: FeatureRequestCommand, onPro
 }
 export async function request<T = any>(path: string, method = 'GET', body?: unknown): Promise<T> {
   const access = accessGeneration;
-  return requestJson<T>(path, { method, credentials: 'same-origin', cache: 'no-store', signal: boundedSignal(undefined, 10000), headers: { 'X-Werk-Request': 'webview', ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) }, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) }, {
+  return requestJson<T>(path, jsonRequestInit({ method, body, credentials: 'same-origin', timeoutMs: 10000, headers: { 'X-Werk-Request': 'webview' } }), {
     onResponse: response => { if (response.status === 401 && path !== '/api/access' && access === accessGeneration) { relock(); state.accessMessage = 'Your access expired or the worker restarted. Unlock to return to your task. Your unsent draft is kept in this tab.'; } },
     invalidJson: status => status >= 400 ? `Request failed (${status})` : 'The worker returned unreadable JSON.',
   });

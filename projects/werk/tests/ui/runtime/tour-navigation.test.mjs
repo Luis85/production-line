@@ -98,7 +98,9 @@ test("changing tour context closes the old steps and fences its delayed activati
   const pending = deferred();
   const context = reactive({
     title: "Factory",
-    steps: [{ title: "Old scope", text: "", activate: () => pending.promise }],
+    steps: /** @type {import("../../../src/shared/webview/types.ts").TourStep[]} */ ([
+      { title: "Old scope", text: "", activate: () => pending.promise },
+    ]),
   });
   const tour = createTourController(() => context.steps);
   const stop = watchTourContext(tour, () => [context.title, context.steps]);

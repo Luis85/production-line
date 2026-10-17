@@ -1,3 +1,4 @@
+import { testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -13,7 +14,7 @@ test('system public browser links preserve private API bootstrap and registry dr
   try {
     line=await startServer({db:join(root,'line.sqlite'),host:'127.0.0.1',port:0,project:'demo',adminToken:lineToken,enrollmentToken:'c'.repeat(64)});
     factory=await startFactoryServer({db:join(root,'factory.sqlite'),host:'127.0.0.1',port:0,adminToken,credentials});
-    const linePort=line.server.address().port,factoryPort=factory.server.address().port;
+    const linePort=testListeningAddress(line.server).port,factoryPort=testListeningAddress(factory.server).port;
     const value=validateDefinition({schemaVersion:1,id:'demo',environment:'native',factory:{id:'root',name:'Root',port:factoryPort},productionLines:[{id:'alpha',name:'Alpha',project:'demo',orchestrator:{port:linePort,webviewUrl:'https://unreachable.invalid'},workers:{count:1,statusPort:[62000,62001,62002].find(port=>![linePort,factoryPort].includes(port))}}]});
     await bootstrapSystem(value,{adminToken,credentials});
     const row=factory.registry.lines()[0];assert.equal(row.webviewUrl,'https://unreachable.invalid/');assert.equal(row.orchestratorUrl,`http://127.0.0.1:${linePort}`);

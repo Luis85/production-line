@@ -1,3 +1,4 @@
+import { testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readdir, readFile, writeFile, unlink, rm, symlink } from 'node:fs/promises';
@@ -11,8 +12,10 @@ import { configuration } from '../../src/worker/dist/worker/config.js';
 import { HttpWorkerGateway } from '../../src/worker/dist/worker/infrastructure/orchestrator-client.js';
 import { startServer } from '../../src/orchestrator/dist/orchestrator/server.js';
 
+/** @type {import('../../src/shared/domain.ts').Profile} */
 const profile = { id: 'claude-1', provider: 'claude', mode: 'mock', maxParallel: 1 };
 const state = () => ({ lastContact: null, heartbeatErrors: 0, lastError: null, lastSnapshot: null, completedSimulations: 0 });
+/** @param {string} lease @returns {import('../../src/shared/domain.ts').Task} */
 const task = lease => ({ id: 'task-' + lease, project: 'demo', title: 'Retention', criteria: ['done'], wikilinks: [], provider: 'claude', priority: 1, status: 'running', attempt: 1, workerId: 'worker-1', lease, expiresAt: Date.now() + 60000, profile: profile.id, createdAt: Date.now() });
 const digest = 'a'.repeat(64);
 async function fixture(t, keep = 2, checkout = false) {
@@ -30,11 +33,12 @@ async function pair(journal, lease) {
   return { before, after };
 }
 async function acknowledge(journal, lease) { await pair(journal, lease); await journal.flush(async () => {}); await journal.checkpoint(lease); }
+/** @returns {import('../../src/worker/application/ports.ts').AttemptDependencies & {counts():{runs:number,completions:number}}} */
 function dependencies(journal) {
   let runs = 0, completions = 0;
-  const client = { async heartbeat(value) { return value; }, async publishSnapshot() {}, async complete() { completions++; }, async abandon() {} };
+  const client = { async currentAssignments() { throw Error('No polling in the attempt fixture'); }, async claim() { throw Error('No claiming in the attempt fixture'); }, async heartbeat(value) { return value; }, async publishSnapshot() {}, async complete() { completions++; }, async abandon() {} };
   return { client, journal, identity: { id: 'worker-1', project: 'demo' }, profiles: [profile], state: state(),
-    adapter: { mode: 'mock', async run() { runs++; return { kind: 'simulated' }; } }, async saveState() {}, timeoutMs: 1000,
+    adapter: { mode: 'mock', async run() { runs++; return { kind: 'simulated', summary: 'Retention fixture completed' }; } }, async saveState() {}, timeoutMs: 1000,
     counts: () => ({ runs, completions }) };
 }
 
@@ -143,8 +147,8 @@ test('local collection preserves separately managed repository evidence artifact
   const f = await fixture(t, 0, true); const { before, after } = await pair(f.journal, 'repo');
   await f.journal.flush(async () => {}); await f.journal.checkpoint('repo');
   assert.deepEqual(await f.pairs(), []);
-  assert.equal(JSON.parse(await readFile(join(f.projectDir, before.provenance.artifactPath))).id, before.id);
-  assert.equal(JSON.parse(await readFile(join(f.projectDir, after.provenance.artifactPath))).id, after.id);
+  assert.equal(JSON.parse(await readFile(join(f.projectDir, before.provenance.artifactPath), 'utf8')).id, before.id);
+  assert.equal(JSON.parse(await readFile(join(f.projectDir, after.provenance.artifactPath), 'utf8')).id, after.id);
 });
 
 test('real orchestrator telemetry and completion acknowledgments permit local retention cleanup', async t => {
@@ -153,7 +157,7 @@ test('real orchestrator telemetry and completion acknowledgments permit local re
   t.after(() => app.close());
   f.journal.configHash = config.policy.configHash;
   f.journal.promptHash = config.systemPromptHash;
-  const gateway = new HttpWorkerGateway('http://127.0.0.1:' + app.server.address().port, 'enrollment-for-retention-test');
+  const gateway = new HttpWorkerGateway('http://127.0.0.1:' + testListeningAddress(app.server).port, 'enrollment-for-retention-test');
   const registration = await gateway.register(config.profiles, config.policy), identity = { ...registration, url: '', configHash: config.policy.configHash };
   const client = gateway.connect(identity);
   const submitted = app.store.submit({ project: 'demo', title: 'Retained evidence', criteria: ['Done'] }, 'retention-key');

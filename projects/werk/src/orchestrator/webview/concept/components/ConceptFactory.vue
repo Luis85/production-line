@@ -21,7 +21,8 @@ const factory = computed(
     state.value.factories[0]!,
 );
 const descendants = computed(() => {
-  state.value;
+  // Track the reactive snapshot before reading the engine projection.
+  void state.value;
   return engine.factoryDescendants(factory.value.id);
 });
 const lines = computed(() =>

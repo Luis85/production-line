@@ -17,7 +17,7 @@ function payloads() {
     '/api/definitions': { definitions: [{ id: 'fresh-definition' }] },
   };
 }
-const response = (data, status = 200) => ({ ok: status >= 200 && status < 300, status, async json() { return data; } });
+const response = (data, status = 200) => Response.json(data ?? null, { status });
 test('failed optional history read preserves history while adopting healthy chat and status, then recovers', async t => {
   const { state, refresh } = await store(t), data = payloads();
   state.unlocked = true; state.history = { rows: [{ id: 'previous-history' }] }; state.lastRead = 'previous-read';
@@ -55,9 +55,9 @@ test('expired access prevents late successful refresh responses from restoring p
 });
 
 function deferred() {
-  let resolve;
-  const promise = new Promise(done => { resolve = done; });
-  return { promise, resolve };
+  /** @type {PromiseWithResolvers<Response>} */
+  const pending = Promise.withResolvers();
+  return pending;
 }
 test('accepted file task remains acknowledged when selecting another task during submission', async t => {
   const { state, workspaceAction } = await store(t), data = payloads(), admission = deferred();
@@ -129,7 +129,7 @@ test('non-JSON expired access clears private projections and preserves the unsen
   state.history = { rows: [{ id: 'private-history' }] };
   state.draft = 'Keep this unsent message';
   globalThis.fetch = async () => new Response('Access expired', { status: 401 });
-  await assert.rejects(request('/api/taskboard'), error => error.status === 401);
+  await assert.rejects(request('/api/taskboard'), error => error instanceof Error && 'status' in error && error.status === 401);
   assert.equal(state.unlocked, false);
   for (const key of ['sessions', 'chat', 'settings', 'board', 'history']) assert.equal(state[key], null);
   assert.equal(state.draft, 'Keep this unsent message');
@@ -144,7 +144,7 @@ test('a non-JSON 401 from an older access lifetime leaves the new private sessio
   const obsolete = request('/api/old-read');
   await unlock('new-access');
   oldRead.resolve(new Response('Expired old access', { status: 401 }));
-  await assert.rejects(obsolete, error => error.status === 401);
+  await assert.rejects(obsolete, error => error instanceof Error && 'status' in error && error.status === 401);
   assert.equal(state.unlocked, true);
   assert.equal(state.sessions.selected, 'fresh-session');
   assert.equal(state.chat.messages[0].text, 'Fresh answer');
@@ -169,7 +169,7 @@ test('profile acknowledgement survives unrelated mutations and a held prewrite r
 test('profile conflicts remain explicit and late profile writes cannot restore data after Lock', async t => {
   const { state, executionProfilesAction, lock } = await store(t); state.unlocked = true;
   globalThis.fetch = async () => response({ error: 'Profiles changed' }, 409);
-  await assert.rejects(executionProfilesAction({ expectedConfigurationHash: 'old', profiles: [] }), error => error.status === 409);
+  await assert.rejects(executionProfilesAction({ expectedConfigurationHash: 'old', profiles: [] }), error => error instanceof Error && 'status' in error && error.status === 409);
   const admission = deferred(); globalThis.fetch = async path => path === '/api/execution-profiles' ? admission.promise : response({});
   const saving = executionProfilesAction({ expectedConfigurationHash: 'old', profiles: [] });
   await lock(); admission.resolve(response({ configurationHash: 'late', profiles: [{ id: 'private' }] }));
@@ -193,7 +193,7 @@ test('tool grants acknowledge exact save despite a held older refresh and clear 
 test('tool discovery conflicts remain visible and late discovery cannot repopulate locked state', async t => {
   const { state, toolAccessDiscover, lock } = await store(t); state.unlocked = true;
   globalThis.fetch = async () => response({ error: 'Tool access changed' }, 409);
-  await assert.rejects(toolAccessDiscover({ expectedRevision: 0, id: 'docs' }), error => error.status === 409);
+  await assert.rejects(toolAccessDiscover({ expectedRevision: 0, id: 'docs' }), error => error instanceof Error && 'status' in error && error.status === 409);
   const pending = deferred(); globalThis.fetch = async path => path === '/api/tool-access/discover' ? pending.promise : response({});
   const discovering = toolAccessDiscover({ expectedRevision: 0, id: 'docs' }); await lock(); pending.resolve(response({ revision: 1, mcp: [{ id: 'private' }] }));
   assert.equal(await discovering, undefined); assert.equal(state.toolAccess, null);

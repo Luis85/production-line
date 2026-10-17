@@ -65,7 +65,7 @@ function draw() {
   const context = canvas.value.getContext("2d");
   if (!context) return;
   context.scale(ratio, ratio);
-  if (!props.nodes.length) {
+  if (!('models' in scene)) {
     hits = [];
     context.fillStyle = "#b5c4cd";
     context.font = "16px system-ui";

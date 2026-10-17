@@ -4,10 +4,11 @@ import { resolve, relative, dirname, posix } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { parse } from '@vue/compiler-sfc';
 import ts from 'typescript';
+import { documentationFiles, documentationCatalog } from './documentation.mjs';
 
 const inputs = ['src', '.storybook', 'storybook', 'scripts/storybook', 'package.json', 'package-lock.json'];
 const slash = path => path.replaceAll('\\', '/');
-export async function sourceFiles(root) {
+async function sourceFiles(root) {
   const files = [];
   async function walk(path) {
     const stat = await lstat(resolve(root, path));
@@ -20,7 +21,8 @@ export async function sourceFiles(root) {
     } else if (stat.isFile()) files.push(path);
   }
   for (const input of inputs) await walk(input);
-  return files.sort();
+  for (const path of await documentationFiles(root)) await walk(path);
+  return [...new Set(files)].sort();
 }
 export async function sourceDigest(root) {
   const hash = createHash('sha256');
@@ -126,7 +128,7 @@ export async function sourceInventory(root) {
     packages.push({ name: pkg.name, source: file, directory: slash(relative(root, dirname(resolve(root, file)))) });
   }
   const version = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8')).version;
-  return { schemaVersion: 1, version, commit: sourceCommit(root), sourceDigest: await sourceDigest(root), components, routes, system: { packages, flows: [
+  return { schemaVersion: 1, version, commit: sourceCommit(root), sourceDigest: await sourceDigest(root), components, routes, documents: (await documentationCatalog(root)).map(({ markdown, ...page }) => ({ ...page, path: `handbook/${page.id}.html` })), system: { packages, flows: [
     { from: 'Factory', to: 'Orchestrator', purpose: 'Route an intake request to a production line' },
     { from: 'Orchestrator', to: 'Worker', purpose: 'Dispatch a queued task to a matching worker' },
     { from: 'Worker', to: 'Model provider', purpose: 'Execute the selected model within request controls' },

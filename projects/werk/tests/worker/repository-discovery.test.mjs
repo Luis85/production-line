@@ -1,3 +1,5 @@
+import { workerStatus } from '../helpers/worker-status.mjs';
+import { prepareTaskWorkspace } from '../../src/worker/dist/worker/status/workspace-repositories.js';
 import { cleanup } from './fixture-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -26,12 +28,15 @@ async function fixture(t, initializeGit = true) {
 }
 async function workspace(t, options = {}) {
   const f = await fixture(t, !options.withoutGit), journal = new SnapshotJournal(f.state, 'a'.repeat(64), 'b'.repeat(64)); await journal.init();
-  const current = { activeTasks: [], queuedTasks: [] };
+  const current = workerStatus({ queuedTasks: [] });
   if (options.features) await mkdir(join(f.repository, 'features'));
+  /** @type {ConstructorParameters<typeof WorkerWorkspace>[0]} */
   const config = { stateDir: f.state, projectDir: f.repository, pollMs: 1000, timeoutMs: 60000, ...(options.features ? { features: { directory: join(f.repository, 'features'), provider: 'openai-api', pollMs: 1 } } : {}) };
   const worker = new WorkerWorkspace(config, journal, () => current); await worker.init();
   cleanup(t, async () => { await worker.close(); await journal.close(); });
-  return { ...f, worker, journal, config, current };
+  // @ts-expect-error Exercise extracted repository orchestration with the actual initialized workspace context.
+  const context = worker.context;
+  return { ...f, worker, journal, config, current, context };
 }
 
 test('installation discovery is read-only, ignores ambient Git redirection and never exposes remote credentials', async t => {
@@ -96,14 +101,14 @@ test('a durable decline takes precedence over legacy Codex repository configurat
 
 test('acceptance persists one assignment, enables worktrees and remembers decline without blocking unrelated tasks', async t => {
   const f = await workspace(t), id = f.worker.repositoryStatus().discovery.id;
-  f.current.activeTasks.push({ id: 'unrelated' });
+  f.current.activeTasks.push({ id: 'unrelated', attempt: 1, profile: null });
   await f.worker.repositoryCommand({ action: 'decline', discoveryId: id }); assert.equal(f.worker.repositoryStatus().discovery.decision, 'declined');
   await assert.rejects(f.worker.repositoryCommand({ action: 'accept', discoveryId: id }), /Finish or cancel/);
   f.current.activeTasks.length = 0;
-  await assert.rejects(f.worker.prepareTaskWorkspace(f.repository, 'task-before', new AbortController().signal), /Approve the detected/);
+  await assert.rejects(prepareTaskWorkspace(f.context, f.repository, 'task-before', new AbortController().signal), /Approve the detected/);
   const accepted = await f.worker.repositoryCommand({ action: 'accept', discoveryId: id }); assert.equal(accepted.items.length, 1); assert.equal(accepted.items[0].watch, false); assert.equal(accepted.discovery.decision, 'accepted');
   await f.worker.repositoryCommand({ action: 'accept', discoveryId: id }); assert.equal(f.worker.repositoryStatus().items.length, 1);
-  const task = await f.worker.prepareTaskWorkspace(accepted.items[0].id, 'task-after', new AbortController().signal); assert.ok(task.path.startsWith(join(f.repository, '.werk/worktrees'))); assert.equal(git(task.path, 'rev-parse', '--abbrev-ref', 'HEAD'), 'HEAD');
+  const task = await prepareTaskWorkspace(f.context, accepted.items[0].id, 'task-after', new AbortController().signal); assert.ok(task.path.startsWith(join(f.repository, '.werk/worktrees'))); assert.equal(git(task.path, 'rev-parse', '--abbrev-ref', 'HEAD'), 'HEAD');
   assert.equal(await readFile(join(f.repository, 'hello.txt'), 'utf8'), 'original\n');
   const saved = JSON.parse(await readFile(join(f.state, 'workspace-settings.json'), 'utf8')); assert.equal(saved.repositories.items[0].id, accepted.items[0].id);
 });
@@ -114,9 +119,10 @@ test('failed settings persistence leaves consent pending and concurrent updates 
   await assert.rejects(f.worker.repositoryCommand({ action: 'accept', discoveryId: id }), /disk failure/);
   assert.equal(f.worker.repositoryStatus().discovery.decision, 'pending'); assert.equal(f.worker.settings.value.repositories.items.length, 0); assert.equal(await exists(join(f.state, 'repository-discovery.json')), false);
   f.worker.settings.update = save;
-  const verify = f.worker.repositoryDiscovery.verify.bind(f.worker.repositoryDiscovery); let finish, entered;
-  const started = new Promise(resolve => { entered = resolve; });
-  f.worker.repositoryDiscovery.verify = async value => { entered(); await new Promise(resolve => { finish = resolve; }); return verify(value); };
+  const verify = f.worker.repositoryDiscovery.verify.bind(f.worker.repositoryDiscovery);
+  const {promise:started,resolve:entered}=Promise.withResolvers();
+  const {promise:blocked,resolve:finish}=Promise.withResolvers();
+  f.worker.repositoryDiscovery.verify = async value => { entered(); await blocked; return verify(value); };
   const accepting = f.worker.repositoryCommand({ action: 'accept', discoveryId: id }); await started;
   await assert.rejects(f.worker.updateSettings({ repositories: { items: [] } }), /Finish or cancel/);
   await assert.rejects(f.worker.repositoryCommand({ action: 'accept', discoveryId: id }), /Finish or cancel/);
@@ -127,7 +133,7 @@ test('a repository created after startup still requires approval before legacy t
   const f = await workspace(t); await rename(join(f.repository, '.git'), join(f.directory, 'original.git'));
   await f.worker.repositoryDiscovery.assertAllowed(f.repository); assert.equal(f.worker.repositoryStatus().discovery, null);
   git(f.repository, 'init', '--initial-branch=main'); git(f.repository, 'add', '.'); git(f.repository, 'commit', '-m', 'New repository');
-  await assert.rejects(f.worker.prepareTaskWorkspace(f.repository, 'new-repository', new AbortController().signal), /Approve the detected/);
+  await assert.rejects(prepareTaskWorkspace(f.context, f.repository, 'new-repository', new AbortController().signal), /Approve the detected/);
   assert.equal(f.worker.repositoryStatus().discovery.decision, 'pending'); assert.equal(await exists(join(f.repository, '.werk/worktrees')), false);
 });
 
@@ -144,8 +150,8 @@ test('explicit assignment authorizes an installation repository initialized afte
   const status = f.worker.repositoryStatus();
   assert.equal(status.discovery.decision, 'accepted'); assert.equal(status.discovery.repositoryId, 'project'); assert.equal(status.items[0].state, 'ready');
   assert.equal(await exists(join(f.repository, '.git/FETCH_HEAD')), true);
-  const task = await f.worker.prepareTaskWorkspace('project', 'late-assignment', new AbortController().signal);
-  assert.equal(task.repositoryId, 'project'); assert.ok(task.path.startsWith(join(f.repository, '.werk/worktrees')));
+  const task = await prepareTaskWorkspace(f.context, 'project', 'late-assignment', new AbortController().signal);
+  assert.ok('repositoryId' in task); assert.equal(task.repositoryId, 'project'); assert.ok(task.path.startsWith(join(f.repository, '.werk/worktrees')));
   const restarted = f.discovery(); await restarted.init([assignment]); assert.equal(restarted.view().decision, 'accepted'); await restarted.assertAllowed(f.repository);
 });
 
@@ -159,7 +165,7 @@ test('assignment refresh preserves fresh-consent and decline requirements for a 
   await f.worker.updateSettings({ repositories: { pollMs: 15000, items: [assignment] } });
   const changed = f.worker.repositoryStatus().discovery;
   assert.notEqual(changed.id, original.id); assert.equal(changed.decision, 'pending');
-  await assert.rejects(f.worker.prepareTaskWorkspace(assignment.id, 'unapproved-replacement', new AbortController().signal), /Approve the detected/);
+  await assert.rejects(prepareTaskWorkspace(f.context, assignment.id, 'unapproved-replacement', new AbortController().signal), /Approve the detected/);
   await f.worker.repositoryCommand({ action: 'decline', discoveryId: changed.id });
   await f.worker.updateSettings({ repositories: { pollMs: 20000, items: [assignment] } });
   assert.equal(f.worker.repositoryStatus().discovery.decision, 'declined');

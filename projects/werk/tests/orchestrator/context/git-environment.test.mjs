@@ -1,3 +1,4 @@
+import { testErrorCode } from '../../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
@@ -39,7 +40,7 @@ test('real Git accepts the portable null configuration path and ignores inherite
     await exec('git', ['-C', f.repo, 'check-ref-format', 'refs/heads/iteration/week-1'], { env });
     const result = await exec('git', ['-C', f.repo, 'cat-file', '-t', f.commit], { env });
     assert.equal(result.stdout.trim(), 'commit');
-    await assert.rejects(exec('git', ['-C', f.repo, 'config', '--get', 'werk.injected'], { env }), error => error.code === 1);
+    await assert.rejects(exec('git', ['-C', f.repo, 'config', '--get', 'werk.injected'], { env }), error => testErrorCode(error) === 1);
 });
 
 test('pinned object reads and iteration previews use isolated Git configuration on every platform', async t => {
@@ -51,7 +52,7 @@ test('pinned object reads and iteration previews use isolated Git configuration 
         Object.assign(process.env, overrides);
         const source = await gitContextSource(f.repo, f.commit);
         const file = source.files.find(file => file.path === 'docs/features/Feature.md');
-        assert.ok(file); assert.equal((await source.read(file)).toString('utf8'), f.content);
+        assert.ok(file); assert.equal(Buffer.from(await source.read(file)).toString('utf8'), f.content);
         const preview = await importIteration({ repo: f.repo, branch: 'iteration/week-1', project: 'demo', iteration: 'week-1', 'iteration-pr': 'https://example.invalid/pull/1', 'dry-run': 'true' }, '');
         assert.equal(preview.mode, 'preview'); assert.equal(preview.ready.length, 1); assert.equal(preview.ready[0].source.commit, f.commit);
     } finally {

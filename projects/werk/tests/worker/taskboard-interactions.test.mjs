@@ -5,12 +5,14 @@ import ts from 'typescript';
 import { reactive, ref, computed, watch, nextTick, effectScope } from 'vue';
 
 async function fixture(t, name, ports = {}) {
-  const source = await readFile(new URL(`../../src/worker/webview/${name}`, import.meta.url), 'utf8');
-  const scriptSource = source.match(/<script setup[^>]*>([\s\S]*?)<\/script>/)[1];
-  // Parse imports so formatted multiline and type-only imports are removed alike.
-  // The component script then runs against the explicit behavioral ports below.
-  const parsed = ts.createSourceFile('fixture.ts', scriptSource, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
-  const script = ts.createPrinter().printFile(ts.factory.updateSourceFile(parsed, parsed.statements.filter(statement => !ts.isImportDeclaration(statement))));
+  const modulePath = name.startsWith('components') ? 'components/useTaskboard.ts' : 'components/useTaskConversationHistory.ts';
+  const source = await readFile(new URL(`../../src/worker/webview/${modulePath}`, import.meta.url), 'utf8');
+  // Evaluate the composable body against explicit behavioral ports. Its production
+  // imports are replaced here so races and session expiry remain deterministic.
+  const parsed = ts.createSourceFile('fixture.ts', source, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
+  const composable = parsed.statements.find(statement => ts.isFunctionDeclaration(statement) && statement.name?.text.startsWith('use'));
+  assert.ok(composable && ts.isFunctionDeclaration(composable) && composable.body);
+  const script = ts.createPrinter().printList(ts.ListFormat.MultiLine, ts.factory.createNodeArray(composable.body.statements.filter(statement => !ts.isReturnStatement(statement))), parsed);
   const state = reactive({ unlocked: true, draftEpoch: 0, workspaceBusy: false, actionError: '', settings: null, board: { tasks: [{ id: 'a', title: 'Alpha', provider: 'codex-cli', status: 'review', archived: false }, { id: 'b', title: 'Beta', provider: 'claude-cli', status: 'failed', archived: false }] }, sessions: { records: [] } });
   const route = reactive({ path: '/history', query: {} }), calls = [], navigations = [], focused = [];
   const request = ports.request ?? (async (path, method, body) => ({ ...state.board.tasks.find(task => task.id === body.id), sessionId: `local-${body.id}` }));
@@ -26,7 +28,7 @@ async function fixture(t, name, ports = {}) {
   return { ...result, state, route, calls, navigations, focused, deactivate: () => deactivate?.(), activate: () => activate?.() };
 }
 const event = { currentTarget: { isConnected: true, focus() {} } };
-const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
+const deferred = () => Promise.withResolvers();
 
 test('file evidence keeps the newest selected task when earlier reads arrive late, without refreshing the workspace', async t => {
   const a = deferred(), b = deferred(), reads = [];

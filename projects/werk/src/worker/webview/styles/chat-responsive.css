@@ -1,0 +1,226 @@
+@media (min-width: 1600px) {
+  .chat-workspace {
+    grid-template-columns: 240px minmax(0, 1fr);
+    gap: 36px;
+  }
+}
+@media (max-width: 1200px) {
+  .chat-workspace {
+    grid-template-columns: 190px minmax(0, 1fr);
+    gap: 20px;
+  }
+  .task-title {
+    flex-direction: column;
+    gap: 4px;
+  }
+  .connect-prompt {
+    flex-wrap: wrap;
+  }
+  .connect-prompt > button {
+    margin-left: 34px;
+  }
+  .task-option-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 900px) {
+  .chat-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+  .chat-workspace .session-panel {
+    min-height: 0;
+    padding: 0 0 16px;
+    border: 0;
+    border-bottom: 1px solid var(--ui-border);
+  }
+  .rail-heading {
+    display: none;
+  }
+  .rail-new {
+    width: auto;
+    margin: 0 0 12px;
+  }
+  .saved-task-disclosure > .saved-task-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 0;
+  }
+  .saved-task-summary > span:first-child {
+    min-width: 0;
+  }
+  .saved-task-summary strong {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 55vw;
+    font-size: 0.875rem;
+  }
+  .saved-task-summary .muted {
+    display: block;
+    font-size: 0.75rem;
+    margin-top: 4px;
+  }
+  .saved-task-summary-action {
+    color: var(--ui-primary);
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+  .saved-task-disclosure[open] .saved-task-summary {
+    margin-bottom: 12px;
+  }
+  .saved-task-content .task-rail-list {
+    flex-direction: column;
+    max-height: 320px;
+    overflow-y: auto;
+    margin-top: 12px;
+  }
+  .saved-task-content .task-rail-item {
+    min-width: 0;
+    max-width: none;
+    width: 100%;
+    flex-shrink: 0;
+  }
+  .rail-history {
+    padding: 12px 0;
+  }
+  .task-settings {
+    margin-top: 8px;
+  }
+  .task-settings summary {
+    padding: 8px 0;
+  }
+  .task-settings .settings-form {
+    max-width: 440px;
+  }
+}
+@media (max-width: 760px) {
+  .unlock-page {
+    padding: 28px 24px;
+  }
+  .unlock-brand {
+    margin-bottom: 44px;
+  }
+  .unlock-card {
+    margin: 0 auto;
+  }
+  .unlock-card .access-input {
+    flex-wrap: nowrap;
+  }
+  .unlock-card .access-input .grow {
+    min-width: 0;
+  }
+  .unlock-caption {
+    margin-top: auto;
+    text-align: center;
+  }
+  .chat-page .page-heading {
+    gap: 12px;
+  }
+  .chat-page .page-heading > .actions {
+    gap: 8px;
+    margin-left: -12px;
+  }
+  .chat-main .conversation {
+    min-height: 0;
+  }
+  .chat-setup,
+  .new-task-panel {
+    padding: 16px;
+  }
+  .chat-main .composer-footer {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+  }
+  .chat-main .composer-footer > span {
+    max-width: 155px;
+  }
+  .chat-main .composer-footer > button {
+    margin-left: auto;
+  }
+  .message.user {
+    padding: 16px;
+  }
+  .message-label time {
+    flex-basis: auto;
+    margin-left: auto;
+  }
+  .chat-privacy {
+    margin-top: 16px;
+  }
+  .utility-bar .connection > span.muted {
+    display: none;
+  }
+  .connection {
+    font-size: 0.75rem;
+  }
+  .utility-bar {
+    gap: 8px;
+  }
+  .utility-bar .actions {
+    gap: 0;
+  }
+  .utility-bar .actions > button {
+    padding-inline: 9px;
+  }
+  .chat-workspace {
+    gap: 20px;
+  }
+}
+
+@media (max-width: 760px) {
+  .chat-page .page-heading {
+    margin-bottom: 16px;
+  }
+  .chat-page .page-heading p {
+    display: none;
+  }
+  .chat-workspace .session-panel {
+    padding-bottom: 12px;
+  }
+  .chat-main .task-title {
+    margin-bottom: 8px;
+  }
+  .conversation-meta {
+    margin-bottom: 12px;
+  }
+  .execution-summary {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    align-items: start;
+    padding: 20px 0;
+  }
+  .execution-summary > a,
+  .execution-summary > button {
+    grid-column: 2;
+    justify-self: start;
+    margin-left: 0;
+  }
+  .activity-links {
+    grid-template-columns: 1fr;
+  }
+  .activity-links li + li {
+    border-top: 1px solid var(--ui-border);
+  }
+  .activity-links a {
+    min-height: 56px;
+    padding: 12px 0;
+  }
+  .history-filters.history-task-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .history-task-filters > div:first-child {
+    grid-column: 1 / -1;
+  }
+  .file-task-filters {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-page .section-heading {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+}

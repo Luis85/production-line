@@ -1,3 +1,4 @@
+import { completedText } from './model-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, realpath, rm, writeFile, access } from 'node:fs/promises';
@@ -73,6 +74,7 @@ test('window exhaustion stops an in-flight call with a clear message and refuses
   await assert.rejects(running.call('werk_files_list', {}, controller.signal), /cancelled/, 'cancellation is not reported as a budget refusal');
 });
 
+/** @type {import('../../src/worker/application/conversation-contracts.js').ChatMessage[]} */
 const messages = [{ id: 'u', role: 'user', text: 'Read the fixture repeatedly.', state: 'complete', at: '2026-10-16T00:00:00Z' }];
 const toolCall = id => ({ status: 'completed', usage: { input_tokens: 1, output_tokens: 1 }, output: [{ type: 'function_call', name: 'werk_files_list', call_id: 'call_' + id, arguments: '{}' }] });
 const finalAnswer = { status: 'completed', usage: { input_tokens: 1, output_tokens: 1 }, output: [{ type: 'message', content: [{ type: 'output_text', text: 'Finished with partial results.' }] }] };
@@ -87,7 +89,7 @@ test('API tool loops deliver the refusal, let the model finish, report evidence 
     }, { tools: () => create({ maxCalls: 2 }) });
     const execution = executeModel(model, prepareModelRequest(model, messages), signal(), undefined, { beforeCall() {}, observeToolBudget: value => observed.push(value) });
     if (ignore) await assert.rejects(execution, { code: 'protocol' });
-    else assert.equal((await execution).text, 'Finished with partial results.');
+    else assert.equal(completedText((await execution)), 'Finished with partial results.');
     assert.equal(bodies.length, 4, 'two executed calls, one refused call, then the answer or the stop');
     const refusal = JSON.parse(bodies[3].input.at(-1).output);
     assert.equal(refusal.isError, true); assert.match(refusal.content[0].text, /the 2-call limit of this invocation is reached/);
@@ -104,7 +106,7 @@ test('the CLI bridge returns budget refusals as MCP tool errors instead of dropp
     const input = [1, 2, 3].map(id => JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'werk_files_list', arguments: {} } })).join('\n') + '\n';
     return providerCommand(bridge.command, bridge.args, tmpdir(), AbortSignal.timeout(15000), input, true, 'claude');
   });
-  const responses = output.toString('utf8').trim().split('\n').map(JSON.parse);
+  const responses = output.toString('utf8').trim().split('\n').map(value => JSON.parse(value));
   assert.equal(responses.length, 3);
   assert.equal(responses[0].result.isError, undefined);
   assert.match(responses[0].result.content[1].text, /^Tool budget: 0 of 1 call remain/);
@@ -120,17 +122,20 @@ test('the CLI bridge returns budget refusals as MCP tool errors instead of dropp
 test('interaction evidence records budget exhaustion once, with counts only, and shows it on the turn', async t => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-tool-budget-evidence-')));
   const settings = new WorkerSettings(directory); await settings.init();
+  /** @type {import('../../src/worker/application/tool-runtime.js').ToolBudgetEvidence} */
   const evidence = { reason: 'window', maxCalls: 32, windowMs: 120000, callsUsed: 12, refusedCalls: 1 };
+  /** @type {import('../../src/worker/application/model-contract.js').StructuredModel['execute']} */
   const execute = async (_request, _signal, _onUsage, control) => {
-    for (const invalid of [
+    for (const invalid of /** @type {const} */ ([
       { ...evidence, maxCalls: 0 }, { ...evidence, maxCalls: 513 }, { ...evidence, windowMs: 0 },
       { ...evidence, callsUsed: 33 }, { ...evidence, refusedCalls: 0 }, { ...evidence, reason: 'calls', callsUsed: 12 },
-    ]) control.observeToolBudget(invalid);
+    ])) control.observeToolBudget(invalid);
+    // @ts-expect-error Extra private fields must be stripped from external telemetry.
     control.observeToolBudget({ ...evidence, toolName: 'PRIVATE-TOOL', args: 'PRIVATE-ARGS' });
     control.observeToolBudget({ ...evidence, callsUsed: 13 });
     return { type: 'completed', text: 'Done with partial results.' };
   };
-  const sessions = new WorkerSessions(directory, settings, () => ({ configuration: { id: 'fixture', model: 'model-v1', instruction: '' }, capabilities: modelCapabilities, async reply() { throw Error('Typed model expected'); }, execute }));
+  const sessions = WorkerSessions(directory, settings, () => ({ configuration: { id: 'fixture', model: 'model-v1', instruction: '' }, capabilities: modelCapabilities, async reply() { throw Error('Typed model expected'); }, execute }));
   await sessions.init();
   t.after(async () => { await sessions.close(); await rm(directory, { recursive: true, force: true }); });
   await sessions.start('Use the tools');
@@ -157,7 +162,8 @@ test('an accounting runtime cannot widen a smaller frozen API request allowance'
       return { manifest: runtime.manifest, ...(source === 'limits' ? { limits: runtime.limits } : {}), budget: () => runtime.budget(),
         call(...args) { toolCalls++; return runtime.call(...args); }, close: () => runtime.close() };
     } });
-    const request = prepareModelRequest({ ...model, executionPolicy: { maxToolCalls: 1 } }, messages);
+    const limited = { ...model, executionPolicy: { maxToolCalls: 1 } };
+    const request = prepareModelRequest(limited, messages);
     assert.equal(request.policy.maxToolCalls, 1);
     await assert.rejects(executeModel(model, request, signal()), { code: 'tool_access' });
     assert.equal(providerCalls, 0, 'the unsafe runtime is rejected before paid provider dispatch');

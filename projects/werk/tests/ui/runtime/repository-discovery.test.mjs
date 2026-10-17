@@ -6,6 +6,7 @@ const store = await frontend('src/worker/webview/store.ts');
 const { useRepositoryDiscovery } = await frontend('src/worker/webview/repository-discovery.ts');
 const candidate = { id: 'a'.repeat(64), path: '/projects/web', currentBranch: 'main', remote: 'origin', watch: true, decision: 'pending' };
 const assigned = { id: 'web', path: '/projects/web', remote: 'origin', watch: true, state: 'pending' };
+/** @param {(path: string, body: Record<string, unknown>) => unknown} [handler] */
 function setup(t, handler = async () => undefined) {
   store.state.unlocked = false;
   Object.assign(store.state, { unlocked: true, loading: false, actionError: '', draftEpoch: store.state.draftEpoch + 1, environment: { repositories: { schemaVersion: 1, pollMs: 30000, items: [], discovery: { ...candidate } } }, settings: { repositories: { pollMs: 30000, items: [] }, providers: [] }, status: { activeTasks: [], queuedTasks: [] }, sessions: { selected: '', records: [], execution: { currentSessionId: null, queued: 0 } }, board: { tasks: [] } });

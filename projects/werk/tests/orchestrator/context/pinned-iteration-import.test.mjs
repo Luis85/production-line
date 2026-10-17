@@ -1,3 +1,6 @@
+import { expectPreview, expectImported } from '../iteration-results.mjs';
+import { testErrorStatus } from '../../helpers/process-errors.mjs';
+import { testErrorCode, testErrorMessage, testListeningAddress } from '../../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
@@ -44,7 +47,7 @@ test('explicit pinned CLI import creates immutable context and repeat import is 
 });
 
 test('server rejects forged source, scheduling and readiness metadata before any task is queued', async t => {
-  const f = await fixture(t); const plan = await importIteration({ ...f.options, 'dry-run': 'true' }, ''); const input = plan.ready[0];
+  const f = await fixture(t); const plan = expectPreview(await importIteration({ ...f.options, 'dry-run': 'true' }, '')); const input = plan.ready[0];
   const app = await startServer({ ...config, context: { repo: f.repo, commit: f.commit, vaultRoot: 'docs' } });
   try {
     const changedSource = fields => ({ ...input, source: { ...input.source, ...fields } });
@@ -58,7 +61,7 @@ test('server rejects forged source, scheduling and readiness metadata before any
 });
 
 test('pinned import original request replays after restart, changed binding and repository loss', async t => {
-  const f = await fixture(t); const input = (await importIteration({ ...f.options, 'dry-run': 'true' }, '')).ready[0]; const db = join(f.root, 'line.sqlite');
+  const f = await fixture(t); const input = (expectPreview(await importIteration({ ...f.options, 'dry-run': 'true' }, ''))).ready[0]; const db = join(f.root, 'line.sqlite');
   let app = await startServer({ ...config, db, context: { repo: f.repo, commit: f.commit, vaultRoot: 'docs' } });
   try {
     const first = await (await post(app, input)).json(); await app.close(); await rename(f.repo, f.repo + '-offline');
@@ -73,11 +76,11 @@ test('legacy import remains unbound and pinned mode does not label its existing 
   const f = await fixture(t); const app = await startServer(config);
   try {
     const { context, 'vault-root': root, ...legacy } = f.options;
-    const result = await importIteration({ ...legacy, url: base(app) }, config.adminToken); const task = app.store.get(result.results[0].taskId);
+    const result = expectImported(await importIteration({ ...legacy, url: base(app) }, config.adminToken)); const task = app.store.get(result.results[0].taskId);
     assert.equal(task.context, undefined); assert.equal(task.requirementRef, undefined);
-    const pinned = await importIteration({ ...f.options, url: base(app) }, config.adminToken);
+    const pinned = expectImported(await importIteration({ ...f.options, url: base(app) }, config.adminToken));
     assert.equal(pinned.results[0].status, 'revision_required'); assert.equal(pinned.requiresDecision, true);
-    const input = (await importIteration({ ...f.options, 'dry-run': 'true' }, '')).ready[0];
+    const input = (expectPreview(await importIteration({ ...f.options, 'dry-run': 'true' }, ''))).ready[0];
     assert.equal((await post(app, input)).status, 400); assert.equal(app.store.list().length, 1);
   } finally { await app.close(); }
 });
@@ -85,50 +88,50 @@ test('legacy import remains unbound and pinned mode does not label its existing 
 test('collection bounds feature count and bytes before any submission; submission concurrency remains one', async () => {
   const request = { project: 'demo', iteration: 'week-1', branch: 'iteration/week-1', features: 'docs/features', iterationPrUrl: 'https://git.example/pull/1' };
   let reads = 0;
-  await assert.rejects(collectIteration({ commit: 'a'.repeat(40), files: async () => Array(IMPORT_LIMITS.files + 1).fill('docs/x.md'), read: async () => { reads++; return note(); } }, request), e => e.code === 'too_large'); assert.equal(reads, 0);
-  await assert.rejects(collectIteration({ commit: 'a'.repeat(40), files: async () => ['docs/x.md'], read: async () => 'x'.repeat(IMPORT_LIMITS.fileBytes + 1) }, request), e => e.code === 'too_large');
-  await assert.rejects(collectIteration({ commit: 'a'.repeat(40), files: async () => Array(17).fill('docs/x.md'), read: async () => 'x'.repeat(IMPORT_LIMITS.fileBytes) }, request), e => e.code === 'too_large');
+  await assert.rejects(collectIteration({ commit: 'a'.repeat(40), files: async () => Array(IMPORT_LIMITS.files + 1).fill('docs/x.md'), read: async () => { reads++; return note(); } }, request), e => testErrorCode(e) === 'too_large'); assert.equal(reads, 0);
+  await assert.rejects(collectIteration({ commit: 'a'.repeat(40), files: async () => ['docs/x.md'], read: async () => 'x'.repeat(IMPORT_LIMITS.fileBytes + 1) }, request), e => testErrorCode(e) === 'too_large');
+  await assert.rejects(collectIteration({ commit: 'a'.repeat(40), files: async () => Array(17).fill('docs/x.md'), read: async () => 'x'.repeat(IMPORT_LIMITS.fileBytes) }, request), e => testErrorCode(e) === 'too_large');
   const plan = await collectIteration({ commit: 'a'.repeat(40), files: async () => ['docs/a.md', 'docs/b.md'], read: async path => note({ factory_id: path.includes('/a.') ? 'a' : 'b', factory_context: [] }) }, request);
   let active = 0, peak = 0;
-  await submitIteration(plan, { listTasks: async () => [], createTask: async input => { peak = Math.max(peak, ++active); await new Promise(resolve => setTimeout(resolve, 5)); active--; return { ...input, id: input.source.featureId }; } });
+  await submitIteration(plan, { listTasks: async () => [], createTask: async input => { peak = Math.max(peak, ++active); await new Promise(resolve => setTimeout(resolve, 5)); active--; return { ...input, id: input.source.featureId, status: 'queued', createdAt: 1, attempt: 0, workerId: null, lease: null, expiresAt: null, profile: null }; } });
   assert.equal(peak, 1);
 });
 
 test('importer bounds task inventory before posting and refuses symlink feature content', async t => {
   const f = await fixture(t); let posts = 0, pages = 0;
   const server = createServer((req,res) => { if (req.method === 'POST') posts++; pages++; res.setHeader('Content-Type','application/json'); res.end(JSON.stringify({ tasks: Array.from({length:100},()=>({ id:'x' })), hasMore:true, nextCursor:String(pages) })); });
-  await new Promise(resolve => server.listen(0,'127.0.0.1',resolve));
-  try { await assert.rejects(importIteration({ ...f.options, url: 'http://127.0.0.1:' + server.address().port },config.adminToken), e => e.code === 'too_large'); assert.equal(posts,0); assert.equal(pages,101); }
+  await new Promise(resolve => server.listen(0,'127.0.0.1',() => resolve(undefined)));
+  try { await assert.rejects(importIteration({ ...f.options, url: 'http://127.0.0.1:' + testListeningAddress(server).port },config.adminToken), e => testErrorCode(e) === 'too_large'); assert.equal(posts,0); assert.equal(pages,101); }
   finally { await new Promise(resolve => server.close(resolve)); }
   await symlink('../Detail.md', join(f.repo, 'docs/features/Link.md')); await f.git('add','.'); await f.git('commit','-qm','Unsafe feature'); await f.git('branch','-f','iteration/week-1');
-  await assert.rejects(importIteration({ ...f.options, 'dry-run':'true' },''), e => e.code === 'invalid_input' && /regular files/.test(e.message));
+  await assert.rejects(importIteration({ ...f.options, 'dry-run':'true' },''), e => testErrorCode(e) === 'invalid_input' && /regular files/.test(testErrorMessage(e)));
 });
 
 
 test('pinned endpoint rejects cached unresolved intake while preserving its immutable legacy record', async t => {
-  const f = await fixture(t); const input = (await importIteration({ ...f.options, 'dry-run': 'true' }, '')).ready[0]; const db = join(f.root, 'cached.sqlite');
+  const f = await fixture(t); const input = (expectPreview(await importIteration({ ...f.options, 'dry-run': 'true' }, ''))).ready[0]; const db = join(f.root, 'cached.sqlite');
   let app = await startServer({ ...config, db });
   try {
     const original = app.store.submit(input, 'pin-1'); await app.close();
     app = await startServer({ ...config, db, context: { repo: f.repo, commit: f.commit, vaultRoot: 'docs' } });
     const response = await post(app, input); assert.equal(response.status, 409); await response.text();
     assert.deepEqual(app.store.get(original.id), original); assert.equal(app.store.events(original.id).length, 1);
-    assert.throws(() => app.store.context(original.id), e => e.code === 'not_found');
+    assert.throws(() => app.store.context(original.id), e => testErrorCode(e) === 'not_found');
   } finally { await app.close(); }
 });
 
 test('malformed continuation metadata and invalid CLI path bounds fail before submission', async t => {
   const f = await fixture(t); let page; let posts = 0;
   const server = createServer((req,res) => { if(req.method === 'POST') posts++; res.setHeader('Content-Type','application/json'); res.end(JSON.stringify(page)); });
-  await new Promise(resolve => server.listen(0,'127.0.0.1',resolve));
+  await new Promise(resolve => server.listen(0,'127.0.0.1',() => resolve(undefined)));
   try {
-    const options = { ...f.options, url:'http://127.0.0.1:' + server.address().port };
+    const options = { ...f.options, url:'http://127.0.0.1:' + testListeningAddress(server).port };
     for (const invalid of [{tasks:[],hasMore:false,nextCursor:'stray'}, {tasks:[],nextCursor:'stray'}, {tasks:Array.from({length:101},()=>({id:'x'})),hasMore:false,nextCursor:null}, {tasks:[{id:'x'}],hasMore:true,nextCursor:'bad cursor'}, {tasks:[null],hasMore:false,nextCursor:null}]) {
-      page = invalid; await assert.rejects(importIteration(options,config.adminToken),e => e.status === 502);
+      page = invalid; await assert.rejects(importIteration(options,config.adminToken),e => testErrorStatus(e, 'status') === 502);
     }
     assert.equal(posts,0);
     for (const invalid of [{branch:'x'.repeat(201)}, {branch:'bad\nbranch'}, {features:'x'.repeat(501)}, {'vault-root':'../escape'}, {context:'silent'}, {context:undefined}]) {
-      await assert.rejects(importIteration({...f.options,...invalid,'dry-run':'true'},''),e => e.code === 'invalid_input');
+      await assert.rejects(importIteration({...f.options,...invalid,'dry-run':'true'},''),e => testErrorCode(e) === 'invalid_input');
     }
   } finally { await new Promise(resolve => server.close(resolve)); }
 });
@@ -141,7 +144,7 @@ test('pinned import hashes committed BOM bytes and ignores dirty working-tree me
   await writeFile(join(f.repo, 'docs/features/Feature.md'), note({factory_id:'dirty',title:'Uncommitted'}));
   const app = await startServer({...config,context:{repo:f.repo,commit,vaultRoot:'docs'}});
   try {
-    const result = await importIteration({...f.options,url:base(app)},config.adminToken); const task = app.store.get(result.results[0].taskId);
+    const result = expectImported(await importIteration({...f.options,url:base(app)},config.adminToken)); const task = app.store.get(result.results[0].taskId);
     const manifest = app.store.context(task.id), root = manifest.files.find(file=>file.path===task.source.path);
     assert.equal(root.content.charCodeAt(0),0xFEFF); assert.equal(root.sha256,task.source.specSha256);
     assert.equal(task.context.featureId,'feature-1'); assert.equal(task.title,'Feature'); assert.equal(task.context.commit,commit);

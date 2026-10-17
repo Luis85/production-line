@@ -1,4 +1,5 @@
-import { Agent, EnvHttpProxyAgent, fetch as transportFetch } from 'undici';
+import { fetch as transportFetch } from 'undici';
+import { withOwnedDispatcher } from '../../shared/http/dispatcher.js';
 import { readResponseBody, ResponseBodyLimitError } from '../../shared/http/response-body.js';
 import { ProviderModelError } from '../application/model-contract.js';
 
@@ -16,12 +17,10 @@ function invalidCompression(error: unknown): boolean {
  */
 export const providerTransport: typeof fetch = async (input, init) => {
   const url = typeof input === 'string' || input instanceof URL ? input : input.url;
-  const useEnvironmentProxy = process.env.NODE_USE_ENV_PROXY === '1' || process.execArgv.includes('--use-env-proxy') || /(?:^|\s)--use-env-proxy(?:\s|$)/.test(process.env.NODE_OPTIONS ?? '');
   // Disable independent five-minute header/body caps. The invocation signal owns
   // the total deadline; HTTP/1.1 also avoids a protocol-fallback inference replay.
   const limits = { headersTimeout: 0, bodyTimeout: 0, allowH2: false };
-  const dispatcher = useEnvironmentProxy ? new EnvHttpProxyAgent(limits) : new Agent(limits);
-  try {
+  return withOwnedDispatcher(limits, async dispatcher => {
     const response = await transportFetch(url, {
       dispatcher, method: 'POST', redirect: 'error', headers: init?.headers as Record<string, string>,
       body: init?.body as string, signal: init?.signal ?? undefined,
@@ -40,5 +39,5 @@ export const providerTransport: typeof fetch = async (input, init) => {
     const headers = new Headers([...response.headers]);
     headers.delete('content-encoding'); headers.delete('content-length');
     return new Response(response.body === null ? null : Buffer.from(bytes), { status: response.status, headers });
-  } finally { await dispatcher.destroy(); }
+  });
 };

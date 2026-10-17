@@ -1,3 +1,4 @@
+import { sessionInstances, beforeSessionLoad } from './runtime-fixtures.mjs';
 import { cleanup } from './fixture-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,7 +12,7 @@ const model = () => ({ async reply() { return 'Saved answer'; } });
 async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(), 'werk-session-reliability-'));
   const settings = new WorkerSettings(directory); await settings.init();
-  const sessions = new WorkerSessions(directory, settings, model); await sessions.init();
+  const sessions = WorkerSessions(directory, settings, model); await sessions.init();
   cleanup(t, async () => { await sessions.close(); await rm(directory, { recursive: true, force: true }); });
   return { directory, settings, sessions };
 }
@@ -28,7 +29,7 @@ test('failed session index deletion retains the transcript and selected task', a
   assert.deepEqual(sessions.detail('default'), before);
   await rm(join(directory, 'sessions.json'), { recursive: true });
   await rename(join(directory, 'sessions-backup.json'), join(directory, 'sessions.json'));
-  const recovered = new WorkerSessions(directory, settings, model);
+  const recovered = WorkerSessions(directory, settings, model);
   await recovered.init(); cleanup(t, () => recovered.close());
   assert.deepEqual(recovered.detail('default').chat.messages, before.chat.messages);
 });
@@ -40,16 +41,16 @@ test('deletion releases cached conversations and failed creation leaves no cache
     await sessions.action({ action: 'delete', id });
     assert.throws(() => sessions.detail(id), /not found/);
   }
-  assert.equal(sessions.instances.size, sessions.view().records.length);
+  assert.equal(sessionInstances(sessions).size, sessions.view().records.length);
   await rename(join(directory, 'sessions.json'), join(directory, 'sessions-backup.json'));
   await mkdir(join(directory, 'sessions.json'));
   await assert.rejects(sessions.action({ action: 'create', title: 'Failed task', provider: 'codex-cli' }));
-  assert.equal(sessions.instances.size, sessions.view().records.length);
+  assert.equal(sessionInstances(sessions).size, sessions.view().records.length);
 });
 test('concurrent feature submissions admit one durable task and reject conflicting content', async t => {
   const { directory, settings, sessions } = await fixture(t);
   const repository = join(directory, 'repo'); await mkdir(repository);
-  const board = new LocalTaskboard(directory, settings, sessions, model); await board.init(); cleanup(t, () => board.close());
+  const board = LocalTaskboard(directory, settings, sessions, model); await board.init(); cleanup(t, () => board.close());
   const input = { title: 'Create file', instruction: 'Create approved file', repository, paths: ['hello.txt'] };
   const submission = { id: 'feature-same', hash: 'a'.repeat(64) };
   await Promise.all([board.create(input, submission), board.create(input, submission)]);
@@ -60,35 +61,38 @@ test('concurrent feature submissions admit one durable task and reject conflicti
   ]);
   assert.equal(results.filter(result => result.status === 'fulfilled').length, 1);
   assert.match(results.find(result => result.status === 'rejected').reason.message, /different input/);
-  const recovered = new LocalTaskboard(directory, settings, sessions, model); await recovered.init(); cleanup(t, () => recovered.close());
+  const recovered = LocalTaskboard(directory, settings, sessions, model); await recovered.init(); cleanup(t, () => recovered.close());
   assert.equal(recovered.view().tasks.length, 2);
   assert.equal(new Set(recovered.view().tasks.map(task => task.id)).size, 2);
 });
 
+async function until(done) {
+  for (let attempt = 0; attempt < 400; attempt++) {
+    if (done()) return;
+    await new Promise(resolve => setTimeout(resolve, 5));
+  }
+  throw Error('Conversation did not settle.');
+}
 function deferred() {
-  let resolve;
-  const promise = new Promise(done => { resolve = done; });
-  return { promise, resolve };
+  return Promise.withResolvers();
 }
 test('provider updates reserve admissions during settings persistence and deferred conversation reload', async t => {
   const { sessions } = await fixture(t);
-  const { WorkerWorkspace } = await import('../../src/worker/dist/worker/status/workspace.js');
   const saving = deferred(), loading = deferred(), loadStarted = deferred();
-  const originalLoad = sessions.load.bind(sessions), previousConversation = sessions.chat;
-  sessions.load = async record => { loadStarted.resolve(); await loading.promise; return originalLoad(record); };
-  const workspace = { sessions, board: { active: 0 }, settings: { update: async () => { await saving.promise; return { saved: true }; } } };
-  const updating = WorkerWorkspace.prototype.updateSettings.call(workspace, { provider: { id: 'codex-cli' } });
+  const previousConversation = sessions.chat;
+  beforeSessionLoad(sessions, async () => { loadStarted.resolve(undefined); await loading.promise; });
+  const updating = sessions.updateProviders(async () => { await saving.promise; return { saved: true }; });
   try {
     await assert.rejects(sessions.start('During settings write'), /settings are being saved/);
     await assert.rejects(sessions.ensureTask('blocked-task', 'chat', 'Blocked', 'codex-cli'), /settings are being saved/);
-    saving.resolve(); await loadStarted.promise;
+    saving.resolve(undefined); await loadStarted.promise;
     await assert.rejects(sessions.start('During transcript reload'), /settings are being saved/);
     await assert.rejects(sessions.setTaskState('default', 'queued'), /settings are being saved/);
     assert.deepEqual(sessions.detail('default').chat.messages, []);
-  } finally { saving.resolve(); loading.resolve(); await updating; }
-  assert.equal(previousConversation.closed, true);
+  } finally { saving.resolve(undefined); loading.resolve(undefined); await updating; }
+  await assert.rejects(previousConversation.start('Closed session'), /stopping/);
   await sessions.start('After provider update');
-  await sessions.chat.pending;
+  await until(() => !sessions.busy);
   assert.equal(sessions.detail('default').chat.messages.at(-1).text, 'Saved answer');
   assert.equal(sessions.detail('default').chat.messages.at(-1).state, 'complete');
 });
@@ -96,6 +100,6 @@ test('failed provider save releases admission and leaves the current conversatio
   const { sessions } = await fixture(t), original = sessions.chat;
   await assert.rejects(sessions.updateProviders(async () => { throw Error('Settings write failed'); }), /Settings write failed/);
   assert.equal(sessions.chat, original);
-  await sessions.start('After failed save'); await sessions.chat.pending;
+  await sessions.start('After failed save'); await until(() => !sessions.busy);
   assert.equal(sessions.detail('default').chat.messages.at(-1).state, 'complete');
 });

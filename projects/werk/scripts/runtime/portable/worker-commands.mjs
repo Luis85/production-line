@@ -683,7 +683,7 @@ export async function workerBody(command, body, options) {
   if (options.markdown) result.markdown = await readMarkdown(options.markdown);
   return result;
 }
-export function filterWorkerResult(result, options) {
+function filterWorkerResult(result, options) {
   if (
     options.archived !== undefined &&
     !["true", "false"].includes(options.archived)

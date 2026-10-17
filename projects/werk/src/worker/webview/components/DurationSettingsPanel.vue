@@ -9,6 +9,7 @@ const editor = createDurationSettingsEditor({
 <script setup lang="ts">
 import UButton from '@nuxt/ui/components/Button.vue';
 import UInput from '@nuxt/ui/components/Input.vue';
+import SettingsSaveFeedback from '../../../shared/webview/components/SettingsSaveFeedback.vue';
 import { state } from '../store';
 const { draft, dirty, stale, locked, validation, canSave } = editor;
 </script>
@@ -40,32 +41,13 @@ const { draft, dirty, stale, locked, validation, canSave } = editor;
       <p v-if="stale" role="status" class="settings-conflict">Saved duration settings changed while you were editing. Your draft is kept. Discard edits and reload before saving.</p>
     </form>
     <p v-else class="page-note">Saved duration settings are not available yet. Refresh to try again.</p>
-    <p v-if="draft.error" role="alert" class="error-text">{{ draft.error }}</p>
-    <p v-if="draft.notice" role="status">{{ draft.notice }}</p>
-    <div v-if="draft.uncertain" role="status" class="settings-conflict">
-      <p>The save acknowledgement is uncertain. Your submitted settings are kept.</p>
-      <div class="policy-actions"><UButton type="button" color="neutral" variant="outline" :loading="draft.busy" :disabled="draft.checking || !state.unlocked" @click="editor.retry">Retry same save</UButton><UButton type="button" color="neutral" variant="ghost" :disabled="draft.busy || draft.checking || !state.unlocked" @click="editor.reload">Discard edits and reload</UButton></div>
-    </div>
-    <UButton v-if="!draft.baseline || draft.uncertain" type="button" color="neutral" variant="outline" :loading="draft.checking" :disabled="draft.busy || !state.unlocked" @click="editor.check">Refresh saved settings</UButton>
+    <SettingsSaveFeedback :state="draft" :unlocked="state.unlocked" :notice="draft.notice" :unavailable="!draft.baseline" @retry="editor.retry" @reload="editor.reload" @refresh="editor.check" />
   </section>
 </template>
+<style scoped src="./policy-settings.css"></style>
 <style scoped>
-.policy-settings { min-width: 0; }
-.policy-settings h2 { margin: 0 0 var(--space-3); }
-.policy-settings p { max-width: 75ch; }
-.policy-fields { min-width: 0; border: 0; padding: 0; margin: var(--space-6) 0 0; }
-.policy-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-6); }
-.policy-field { display: grid; align-content: start; gap: var(--space-2); min-width: 0; }
-.policy-field label { font-weight: 600; }
-.policy-field p { margin: 0; }
-.policy-field :deep(input), .policy-field :deep(button), .policy-actions :deep(button) { min-height: 44px; }
 .tool-budget-options { margin-top: var(--space-6); border-top: 1px solid var(--ui-border); }
 .tool-budget-options summary { min-height: 44px; padding-block: var(--space-3); cursor: pointer; font-weight: 600; }
 .tool-budget-options > p { margin-block: var(--space-3); }
 .tool-budget-options .policy-grid { margin-block: var(--space-4); }
-.policy-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); margin-top: var(--space-6); }
-.settings-conflict { margin: var(--space-4) 0; padding: var(--space-4); background: var(--ui-bg-elevated); border: 1px solid var(--ui-border); border-radius: 12px; }
-.settings-conflict p { margin: 0; }
-@media (max-width: 700px) { .policy-grid { grid-template-columns: minmax(0, 1fr); } }
-@media (max-width: 480px) { .policy-actions { flex-direction: column; align-items: stretch; } .policy-actions :deep(button) { justify-content: center; } }
 </style>

@@ -116,7 +116,7 @@ test('Windows status and account checks stay bounded when exited providers leave
   assert.equal(account.signedIn, true); assert.equal(account.email, 'member@example.com');
   assert.equal(account.organization, 'Fixture team'); assert.equal(account.subscription, 'pro');
   assert.doesNotMatch(JSON.stringify(account), /private-fixture-token/);
-  const calls = (await readFile(f.pidFile + '.args', 'utf8')).trim().split('\n').map(JSON.parse);
+  const calls = (await readFile(f.pidFile + '.args', 'utf8')).trim().split('\n').map(value => JSON.parse(value));
   assert.deepEqual(calls, [['--version'], ['auth', 'status'], ['auth', 'status', '--json']]);
   const pids = await f.pids(); assert.equal(pids.length, 3, 'version, auth, and structured account probes all ran');
   await waitFor(() => pids.every(pid => !alive(pid)));
@@ -138,7 +138,7 @@ test('Claude receives its instructions from a private file that is removed after
   await writeFile(executable, '#!' + process.execPath + `\nconst fs=require('node:fs');const a=process.argv.slice(2);const f=a[a.indexOf('--system-prompt-file')+1];fs.writeFileSync(${JSON.stringify(seen)},JSON.stringify({file:f,inline:a.includes('--system-prompt'),mode:fs.statSync(f).mode&0o777,body:fs.readFileSync(f,'utf8')}));process.stdout.write(JSON.stringify({type:'result',is_error:false,result:'done'}));\n`);
   await chmod(executable, 0o700);
   const model = modelFor(connection('claude-cli', { executable, instruction: 'Project rule: '.padEnd(60000, 'x') }), directory);
-  await model.reply([{ role: 'user', text: 'hello' }], new AbortController().signal);
+  await model.reply([{ id: 'input', role: 'user', text: 'hello', state: 'complete', at: '2026-10-16T00:00:00Z' }], new AbortController().signal);
   const observed = JSON.parse(await readFile(seen, 'utf8'));
   assert.equal(observed.inline, false); assert.equal(observed.mode, 0o600);
   assert.match(observed.body, /^Task agent instructions:\nProject rule: x+/);

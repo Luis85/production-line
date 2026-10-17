@@ -10,7 +10,7 @@ import { inputError, createPrivate } from '../config.mjs';
 // imports nothing beyond config.mjs.
 const MAX_FILES = 10000, MAX_BYTES = 8 * 1024 ** 3, MAX_FILE = 2 * 1024 ** 3;
 const hash = value => createHash('sha256').update(value).digest('hex');
-export const isInside = (parent, child) => child === parent || child.startsWith(parent + sep);
+const isInside = (parent, child) => child === parent || child.startsWith(parent + sep);
 export async function privateDir(path) {
   const info = await lstat(path);
   if (!info.isDirectory() || info.isSymbolicLink() || (process.platform !== 'win32' && (info.mode & 0o077))) throw inputError('Maintenance requires a real private directory (0700), without symlinks.');

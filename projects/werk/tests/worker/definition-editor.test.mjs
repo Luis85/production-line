@@ -1,3 +1,4 @@
+import { requiredValue } from '../ui/helpers/required-value.mjs';
 import { normalizeSource } from '../helpers/source-text.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,13 +14,13 @@ async function editor(t, request) {
 }
 for (const field of ['yaml', 'name']) {
   test(`definition import preserves newer ${field} edits while saving the reviewed snapshot`, async t => {
-    let resolve, submitted, calls = 0;
-    const saving = new Promise(done => { resolve = done; });
-    const f = await editor(t, async (path, method, body) => { calls++; submitted = body; return saving; });
+    let submitted = /** @type {{ value?: {yaml: string; name: string} }} */ ({}), calls = 0;
+    const { promise: saving, resolve } = Promise.withResolvers();
+    const f = await editor(t, async (path, method, body) => { calls++; submitted.value = body; return saving; });
     f.yaml.value = 'agents: reviewed'; f.name.value = 'Reviewed name'; await nextTick();
     f.preview.value = [{ name: 'root' }]; f.reviewedYaml.value = f.yaml.value;
     const pending = f.act('import'); f[field].value = 'Newer unsaved edit'; await nextTick(); await f.act('import');
-    assert.equal(calls, 1); assert.equal(submitted.yaml, 'agents: reviewed'); assert.equal(submitted.name, 'Reviewed name');
+    assert.equal(calls, 1); assert.equal(requiredValue(submitted.value).yaml, 'agents: reviewed'); assert.equal(requiredValue(submitted.value).name, 'Reviewed name');
     resolve({}); await pending;
     assert.equal(f[field].value, 'Newer unsaved edit'); assert.match(f.notice.value, /newer definition edits are kept/); assert.equal(f.busy.value, false);
   });

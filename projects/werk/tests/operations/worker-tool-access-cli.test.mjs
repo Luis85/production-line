@@ -1,3 +1,5 @@
+import { workerStatus } from '../helpers/worker-status.mjs';
+import { testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
@@ -19,12 +21,12 @@ async function fixture(t) {
   });
   const state = join(directory, 'state'); await mkdir(state);
   journal = new SnapshotJournal(state, 'a'.repeat(64), 'b'.repeat(64)); await journal.init();
-  const current = { activeTasks: [], queuedTasks: [] };
+  const current = workerStatus({ activeTasks: [], queuedTasks: [] });
   worker = new WorkerWorkspace({ stateDir: state, projectDir: directory, pollMs: 1000, timeoutMs: 60000 }, journal, () => current);
   await worker.init();
   server = await statusServer(() => current, '127.0.0.1', 0, undefined, worker);
   let requests = 0; server.on('request', () => requests++);
-  const base = 'http://127.0.0.1:' + server.address().port, tokenFile = join(state, 'webview-token');
+  const base = 'http://127.0.0.1:' + testListeningAddress(server).port, tokenFile = join(state, 'webview-token');
   const command = (args, stdin) => new Promise((resolve, reject) => {
     const child = execFile(process.execPath, ['--input-type=module', '-e', 'import { main } from ' + JSON.stringify(entry) + "; await main('worker', process.argv.slice(1));", ...args, '--url', base, '--token-file', tokenFile, '--state-dir', state], { timeout: 15000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (error) { error.stdout = stdout; error.stderr = stderr; reject(error); }

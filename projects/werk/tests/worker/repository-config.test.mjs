@@ -1,3 +1,4 @@
+import { testErrorCode } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
@@ -26,10 +27,10 @@ test('repository configuration normalizes multiple assignments without changing 
 
 test('repository policy rejects malformed assignments, ambiguous identities and unsafe Git selectors', () => {
   for (const invalid of [null, [], { other: true }, { pollMs: null }, { pollMs: '1000' }, { pollMs: 999 }, { pollMs: 3600001 }, { pollMs: 1000.5 }, { items: null }, { items: {} }, { items: Array.from({ length: 65 }, (_, n) => ({ id: `repo-${n}`, path: resolve(`/repo-${n}`) })) }]) {
-    assert.throws(() => validateRepositoryConfiguration(invalid), error => error.code === 'invalid_input', JSON.stringify(invalid));
+    assert.throws(() => validateRepositoryConfiguration(invalid), error => testErrorCode(error) === 'invalid_input', JSON.stringify(invalid));
   }
   for (const replacement of [{ id: 'bad/id' }, { path: 'relative' }, { path: '/a\nb' }, { remote: 'https://example.test/repo.git' }, { remote: '--upload-pack=bad' }, { remote: null }, { branch: '-main' }, { branch: 'heads/../main' }, { branch: 'topic.lock' }, { branch: 'main@{1}' }, { branch: 'two words' }, { watch: 'true' }, { watch: null }, { unsupported: true }]) {
-    assert.throws(() => validateRepositoryConfiguration({ items: [{ ...item, ...replacement }] }), error => error.code === 'invalid_input', JSON.stringify(replacement));
+    assert.throws(() => validateRepositoryConfiguration({ items: [{ ...item, ...replacement }] }), error => testErrorCode(error) === 'invalid_input', JSON.stringify(replacement));
   }
   assert.throws(() => validateRepositoryConfiguration({ items: [item, { ...item, path: resolve('/other') }] }), /ids must be unique/);
   assert.throws(() => validateRepositoryConfiguration({ items: [item, { ...item, id: 'other' }] }), /paths must be unique/);

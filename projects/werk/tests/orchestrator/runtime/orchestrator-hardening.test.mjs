@@ -1,3 +1,4 @@
+import { testErrorCode, testListeningAddress } from '../../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -76,7 +77,7 @@ test('independent SQLite processes claim disjoint assignments and retain fencing
     const own = assigned.find(item => item.workerId === worker.id);
     const foreign = assigned.find(item => item.workerId !== worker.id);
     assert.equal(store.claim(worker, 'claim-0').lease, JSON.parse(results[0].stdout)[0].lease);
-    assert.throws(() => store.heartbeat(worker, foreign.id, foreign.lease, foreign.attempt), error => error.code === 'conflict');
+    assert.throws(() => store.heartbeat(worker, foreign.id, foreign.lease, foreign.attempt), error => testErrorCode(error) === 'conflict');
     assert.equal(store.heartbeat(worker, own.id, own.lease, own.attempt).status, 'running');
   } finally { store?.close(); await rm(directory, { recursive: true, force: true }); }
 });
@@ -88,7 +89,7 @@ test('shutdown aborts an unfinished upload at its configured deadline and releas
   let socket;
   try {
     const requestStarted = once(app.server, 'request');
-    socket = connect(app.server.address().port, '127.0.0.1');
+    socket = connect(testListeningAddress(app.server).port, '127.0.0.1');
     socket.on('error', () => {});
     await once(socket, 'connect');
     socket.write(`POST /v1/tasks HTTP/1.1\r\nHost: localhost\r\nAuthorization: Bearer ${config.adminToken}\r\nContent-Type: application/json\r\nContent-Length: 1000\r\n\r\n{`);
@@ -124,6 +125,6 @@ test('shutdown aborts an unfinished upload at its configured deadline and releas
 
 test('shutdown deadlines reject invalid configuration before opening a server', async () => {
   for (const shutdownTimeoutMs of [0, -1, 0.5, 60001, NaN]) {
-    await assert.rejects(startServer({ ...config, shutdownTimeoutMs }), error => error.code === 'invalid_input');
+    await assert.rejects(startServer({ ...config, shutdownTimeoutMs }), error => testErrorCode(error) === 'invalid_input');
   }
 });

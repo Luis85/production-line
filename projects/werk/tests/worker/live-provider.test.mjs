@@ -1,3 +1,4 @@
+import { testErrorCode } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -25,12 +26,14 @@ async function fixture(t, program = "require('node:fs').appendFileSync('README.m
   git('init');git('add','README.md');git('-c','user.name=Werk Test','-c','user.email=werk@example.invalid','commit','-m','fixture');
   await writeFile(executable,`#!${process.execPath}\n${program}\n`); await chmod(executable,0o700);
   const config={executable,repository,allowedPaths:['README.md']};
-  const store=new Store(':memory:',60000),profile={id:'live',provider:'codex',mode:'cli',maxParallel:1};
+  const store=new Store(':memory:',60000);
+  /** @type {import('../../src/shared/contracts.js').Profile} */
+  const profile={id:'live',provider:'codex',mode:'cli',maxParallel:1};
   const registration=store.register('demo',[profile],{maxParallel:1,maxAttempts:1,order:'priority',configHash:'fixture'}),worker=store.worker(registration.token);
   const created=store.submit({project:'demo',title:'Improve README',criteria:['Human review required'],provider:'codex',executionMode:'cli'},'task');
   const task=store.claim(worker,'claim'),journal=new SnapshotJournal(stateDir,'fixture','prompt'); await journal.init();
   t.after(async()=>{journal.close();store.close();await rm(directory,{recursive:true,force:true});});
-  const client={async heartbeat(t){return store.heartbeat(worker,t.id,t.lease,t.attempt);},async publishSnapshot(s){return store.snapshot(worker,s);},async complete(t){store.finish(worker,t.id,t.lease,t.attempt);},async abandon(t){store.abandon(worker,t.id,t.lease,t.attempt);}};
+  const client={async heartbeat(t){return store.heartbeat(worker,t.id,t.lease,t.attempt);},async publishSnapshot(s){store.snapshot(worker,s);},async complete(t){store.finish(worker,t.id,t.lease,t.attempt);},async abandon(t){store.abandon(worker,t.id,t.lease,t.attempt);}};
   const state={lastContact:null,heartbeatErrors:0,lastError:null,lastSnapshot:null,completedSimulations:0,completedReviews:0};
   const adapter=new CodexAdapter(config,stateDir,'Implement the assigned task only.');
   const dependencies={client,journal,adapter,identity:{id:worker.id,project:'demo'},profiles:[profile],state,async saveState(){},timeoutMs:5000};
@@ -96,7 +99,7 @@ test('model-written Git filters cannot execute during trusted patch post-process
   await executeAttempt(f.task,new AbortController().signal,f.dependencies);
   assert.equal(f.store.get(f.task.id).status,'review');
   const retained=JSON.parse(await readFile(join(f.stateDir,'workspaces',f.task.lease,'worktree.json'),'utf8'));
-  await assert.rejects(readFile(join(retained.workspace,'filter-escaped')),error=>error.code==='ENOENT');
+  await assert.rejects(readFile(join(retained.workspace,'filter-escaped')),error=>testErrorCode(error)==='ENOENT');
   assert.ok(!(await readFile(join(f.repository,'.git','config'),'utf8')).includes('evil'));
 });
 
@@ -135,17 +138,17 @@ test('legacy native Codex refuses declined or replaced installation repositories
   const adapter=new CodexAdapter(f.config,f.stateDir,'Explicit consent required.',undefined,path=>discovery.assertAllowed(path));
   assert.equal(discovery.legacyAllowed(),false);
   await assert.rejects(adapter.run(f.task,new AbortController().signal),/Approve the detected/);
-  await assert.rejects(readFile(marker),error=>error.code==='ENOENT');
-  await assert.rejects(readdir(join(f.repository,'.werk/worktrees')),error=>error.code==='ENOENT');
-  await assert.rejects(readdir(join(f.stateDir,'workspaces',f.task.lease)),error=>error.code==='ENOENT');
+  await assert.rejects(readFile(marker),error=>testErrorCode(error)==='ENOENT');
+  await assert.rejects(readdir(join(f.repository,'.werk/worktrees')),error=>testErrorCode(error)==='ENOENT');
+  await assert.rejects(readdir(join(f.stateDir,'workspaces',f.task.lease)),error=>testErrorCode(error)==='ENOENT');
   await discovery.record('accepted');assert.equal(discovery.legacyAllowed(),true);
   await rename(join(f.repository,'.git'),join(f.directory,'previous.git'));
   const git=(...args)=>execFileSync('git',['-c','core.hooksPath=/dev/null',...args],{cwd:f.repository,encoding:'utf8',stdio:'pipe'});
   git('init');git('add','README.md');git('-c','user.name=Werk Test','-c','user.email=werk@example.invalid','commit','-m','Replacement repository');
   await assert.rejects(adapter.run(f.task,new AbortController().signal),/Approve the detected/);
   assert.equal(discovery.legacyAllowed(),false);
-  await assert.rejects(readFile(marker),error=>error.code==='ENOENT');
-  await assert.rejects(readdir(join(f.repository,'.werk/worktrees')),error=>error.code==='ENOENT');
+  await assert.rejects(readFile(marker),error=>testErrorCode(error)==='ENOENT');
+  await assert.rejects(readdir(join(f.repository,'.werk/worktrees')),error=>testErrorCode(error)==='ENOENT');
   await discovery.verify(discovery.view().id);await discovery.record('accepted');
   const result=await adapter.run(f.task,new AbortController().signal);
   assert.equal(result.kind,'change-set');assert.equal(await readFile(marker,'utf8'),'called\n');
@@ -188,7 +191,7 @@ test('native Codex imports a pinned remote-only commit while preserving a dirty 
   const repositories=new RepositoryManager({pollMs:30000,items:[{id:'demo',path:f.repository,remote:'origin',watch:false}]});
   t.after(()=>repositories.close());
   const adapter=new CodexAdapter({...f.config,repository:undefined},f.stateDir,'Assigned work only.',repositories);
-  const result=await adapter.run({...f.task,context:{commit:remoteCommit}},new AbortController().signal);
+  const result=await adapter.run({...f.task,context:{commit:remoteCommit,sha256:'0'.repeat(64),featureId:'remote-context',path:'context.md'}},new AbortController().signal);
   assert.equal(result.review.baseCommit,remoteCommit);
   assert.equal(repositories.view()[0].state,'dirty');
   assert.equal(git(f.repository,'rev-parse','HEAD'),localCommit);
@@ -211,7 +214,7 @@ test('model-written submodule metadata cannot execute during trusted patch post-
   const program=`const fs=require('node:fs');fs.cpSync('.git','sub/.git',{recursive:true});fs.appendFileSync('sub/.git/config',${JSON.stringify('\n[core]\n fsmonitor = '+hook+'\n')});fs.appendFileSync('README.md','Allowed edit.');`;
   await writeFile(f.executable,`#!${process.execPath}\n${program}\n`);
   await assert.rejects(f.adapter.run(f.task,new AbortController().signal),/changes to Git submodules are unsupported/);
-  await assert.rejects(readFile(marker),error=>error.code==='ENOENT');
+  await assert.rejects(readFile(marker),error=>testErrorCode(error)==='ENOENT');
   assert.equal(await readFile(join(f.repository,'README.md'),'utf8'),'# Fixture\n');
 });
 
@@ -224,13 +227,15 @@ test('ignored provider files cannot hide outside-allowlist changes in retained w
   await assert.rejects(f.adapter.run(f.task,new AbortController().signal),/outside the operator allowlist/);
   const retained=JSON.parse(await readFile(join(f.stateDir,'workspaces',f.task.lease,'worktree.json'),'utf8'));
   assert.equal(await readFile(join(retained.workspace,'ignored','private.txt'),'utf8'),'Unapproved artifact.');
-  await assert.rejects(readFile(join(f.stateDir,'review',f.task.lease,'change.patch')),error=>error.code==='ENOENT');
+  await assert.rejects(readFile(join(f.stateDir,'review',f.task.lease,'change.patch')),error=>testErrorCode(error)==='ENOENT');
   assert.equal(await readFile(join(f.repository,'README.md'),'utf8'),'# Fixture\n');
 });
 
 for (const failed of [false, true]) test('native Codex consumption accounts for the actual provider invocation ' + (failed ? 'after failure' : 'before patch review'), linux, async t => {
   const program = "const fs=require('node:fs'),assert=require('node:assert/strict');assert.ok(process.argv.includes('--json'));fs.appendFileSync('README.md','Accounted change.');console.log(JSON.stringify({type:'turn.completed',usage:{input_tokens:30,cached_input_tokens:20,output_tokens:10}}));" + (failed ? 'process.exitCode=7;' : '');
-  const f = await fixture(t, program), policy = { enabled: true, period: 'daily', allowance: 100, workerPercent: 50, perRunReservation: 40 };
+  const f = await fixture(t, program);
+  /** @type {import('../../src/worker/application/consumption.js').ConsumptionPolicy} */
+  const policy = { enabled: true, period: 'daily', allowance: 100, workerPercent: 50, perRunReservation: 40 };
   const consumption = new WorkerConsumption(new WorkerConsumptionJournal(f.stateDir), () => policy); await consumption.init(); t.after(() => consumption.close());
   const adapter = new CodexAdapter(f.config, f.stateDir, 'Fixture task.', undefined, undefined, consumption);
   if (failed) await assert.rejects(adapter.run(f.task, AbortSignal.timeout(5000)));

@@ -1,3 +1,4 @@
+import { testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, rm, readdir, symlink, realpath } from 'node:fs/promises';
@@ -7,14 +8,14 @@ import { createServer } from 'node:net';
 import { createArchives } from '../../scripts/release/archives.mjs';
 import { setup } from '../../scripts/runtime/config.mjs';
 import { latest, newer, digest } from '../../scripts/runtime/update/remote.mjs';
-import { storeFor, selection, save, activeRoot, lock } from '../../scripts/runtime/update/store.mjs';
+import { storeFor, selection, activeRoot, lock } from '../../scripts/runtime/update/store.mjs';
 import { apply, check, recover } from '../../scripts/runtime/update/manager.mjs';
-import { runNative, invocationFor } from '../../scripts/runtime/update/launcher.mjs';
+import { runNative } from '../../scripts/runtime/update/launcher.mjs';
 import { main, parse } from '../../scripts/runtime/update/cli.mjs';
 
 async function port() {
-  const server = createServer(); await new Promise(ok => server.listen(0, '127.0.0.1', ok));
-  const value = server.address().port; await new Promise(ok => server.close(ok)); return value;
+  const server = createServer(); await new Promise(ok => server.listen(0, '127.0.0.1', () => ok(undefined)));
+  const value = testListeningAddress(server).port; await new Promise(ok => server.close(ok)); return value;
 }
 async function fixture(t, { version = '0.2.0', stateFormat = 1, preflightFails = false } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'werk update test '));
@@ -38,7 +39,7 @@ async function fixture(t, { version = '0.2.0', stateFormat = 1, preflightFails =
   const {tarGzip}=await createArchives(payload.map(x=>({...x,path:`werk-${version}/${x.path}`})));
   const sums=`${digest(tarGzip)}  werk-${version}.tar.gz\n${'a'.repeat(64)}  werk-${version}.zip\n${'b'.repeat(64)}  install.mjs\n`;
   const urls=[];
-  const fetcher=async url=>{ urls.push(url); if(url.endsWith('/releases/latest/download/SHA256SUMS'))return new Response(sums); assert.equal(url,`https://github.com/Luis85/production-line/releases/download/v${version}/werk-${version}.tar.gz`);return new Response(tarGzip); };
+  const fetcher=async url=>{ urls.push(url); if(url.endsWith('/releases/latest/download/SHA256SUMS'))return new Response(sums); assert.equal(url,`https://github.com/Luis85/production-line/releases/download/v${version}/werk-${version}.tar.gz`);return new Response(new Uint8Array(tarGzip)); };
   const store=storeFor(base,stateDir), invocation={kind:'line'};
   return {directory,base,stateDir,store,invocation,fetcher,urls,sums,tarGzip};
 }

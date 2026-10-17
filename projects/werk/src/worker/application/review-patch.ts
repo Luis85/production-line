@@ -58,11 +58,11 @@ function middleEdits(before: string[], after: string[]): Edit[] {
     const down = diagonal === -distance || (diagonal !== distance && at(diagonal - 1) < at(diagonal + 1));
     const priorDiagonal = down ? diagonal + 1 : diagonal - 1;
     const priorX = at(priorDiagonal), priorY = priorX - priorDiagonal;
-    while (x > priorX && y > priorY) edits.push({ kind: " ", line: before[--x] }), y--;
+    while (x > priorX && y > priorY) { edits.push({ kind: " ", line: before[--x] }); y--; }
     if (down) edits.push({ kind: "+", line: after[--y] });
     else edits.push({ kind: "-", line: before[--x] });
   }
-  while (x > 0 && y > 0) edits.push({ kind: " ", line: before[--x] }), y--;
+  while (x > 0 && y > 0) { edits.push({ kind: " ", line: before[--x] }); y--; }
   return edits.reverse();
 }
 

@@ -1,3 +1,5 @@
+import { workerStatus } from '../helpers/worker-status.mjs';
+import { testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, realpath, readFile, rm } from 'node:fs/promises';
@@ -11,18 +13,40 @@ import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.j
 import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
 import { statusServer } from '../../src/worker/dist/worker/status/server.js';
 import { modelCapabilities } from '../../src/worker/dist/worker/application/model-contract.js';
+
+/** @param {import('../../src/worker/application/sessions.js').WorkerSessions} sessions
+ * @param {import('../../src/worker/application/provider-contract.js').ModelFactory} factory */
+function injectSessionModel(sessions, factory) {
+  // @ts-expect-error Test-only injection replaces the private provider factory before sessions open.
+  sessions.model = factory;
+}
+/** @param {import('../../src/worker/application/local-tasks.js').LocalTaskboard} board */
+function boardRuntime(board) {
+  // @ts-expect-error Fault-injection tests control the private model runtime; no public escape hatch.
+  return board.runtime;
+}
+/** @param {import('../../src/worker/application/conversation.js').WorkerConversation} conversation */
+function conversationRuntime(conversation) {
+  // @ts-expect-error Simulate provider loss on the already-open conversation without changing its journal.
+  return conversation.runtime;
+}
+
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(check) { for (let n = 0; n < 300; n++) { if (check()) return; await delay(5); } throw Error('Fixture timed out'); }
+/** @type {import('../../src/worker/application/model-contract.js').ModelResult} */
 const question = { type: 'needs_input', request: { schemaVersion: 1, kind: 'question', message: 'Choose the target.', choices: [{ id: 'opaque_a', label: 'Linux desktop' }, { id: 'opaque_b', label: 'Portable browser' }], reason: 'The target changes packaging.' } };
+/** @type {import('../../src/worker/application/run-evidence.js').ProviderUsage} */
 const measured = { ...unknownUsage(), inputTokens: 12, outputTokens: 4, source: 'provider_reported', reason: null };
+/** @param {import('../../src/worker/application/model-contract.js').StructuredModel['execute']} execute */
 function model(execute) { return () => ({ configuration: { id: 'fixture', model: 'model-v1', instruction: 'Frozen instruction' }, capabilities: modelCapabilities, async reply() { throw Error('Typed model expected'); }, execute }); }
 async function fixture(t, execute) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-interactions-')));
   const settings = new WorkerSettings(directory); await settings.init();
-  let sessions = new WorkerSessions(directory, settings, model(execute)); await sessions.init();
+  let sessions = WorkerSessions(directory, settings, model(execute)); await sessions.init();
   t.after(async () => { await sessions.close(); await rm(directory, { recursive: true, force: true }); });
-  return { directory, settings, get sessions() { return sessions; }, async restart(next = execute) { await sessions.close(); sessions = new WorkerSessions(directory, settings, model(next)); await sessions.init(); return sessions; } };
+  return { directory, settings, get sessions() { return sessions; }, async restart(next = execute) { await sessions.close(); sessions = WorkerSessions(directory, settings, model(next)); await sessions.init(); return sessions; } };
 }
+/** @returns {import('../../src/worker/application/interactions.js').InteractionCommand} */
 function answer(view, value = 'opaque_b') { return { action: 'answer', sessionId: view.sessionId, pendingId: view.pending.id, expectedRevision: view.revision, operationId: 'answer-fixture', answer: value }; }
 
 test('question survives restart without execution; answering replays full question and freezes dispatch before invocation', async t => {
@@ -64,6 +88,7 @@ test('known response recovers transcript and numeric outcome without a second mo
   await f.sessions.start('Complete once'); await until(() => !f.sessions.busy);
   assert.equal(f.sessions.chat.snapshot().persistenceError, true);
   const turn = f.sessions.interactions.turn('default', f.sessions.interactions.view('default').latestTurn.id);
+  assert.ok(turn.result.type === 'completed');
   assert.equal(turn.result.text, 'Durable successful response.');
   assert.equal(f.sessions.runs.get(turn.runId).after, null);
   f.sessions.runs.finish = finish; await f.restart();
@@ -162,11 +187,11 @@ test('cancelled escalation can explicitly resume in a new attempt with immutable
 test('interaction HTTP endpoints enforce access, bounded event reads, revision fencing and private-content separation', async t => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-interaction-http-')));
   const journal = new SnapshotJournal(directory, 'a'.repeat(64), 'b'.repeat(64)); await journal.init();
-  const workspace = new WorkerWorkspace({ stateDir: directory, pollMs: 1000, timeoutMs: 60000 }, journal, () => ({ activeTasks: [] }));
-  workspace.sessions.model = model(async () => question); await workspace.init();
-  const server = await statusServer(() => ({ activeTasks: [] }), '127.0.0.1', 0, undefined, workspace);
+  const workspace = new WorkerWorkspace({ stateDir: directory, pollMs: 1000, timeoutMs: 60000 }, journal, workerStatus);
+  injectSessionModel(workspace.sessions, model(async () => question)); await workspace.init();
+  const server = await statusServer(workerStatus, '127.0.0.1', 0, undefined, workspace);
   t.after(async () => { await new Promise(resolve => server.close(resolve)); await workspace.close(); await journal.close(); await rm(directory, { recursive: true, force: true }); });
-  const base = 'http://127.0.0.1:' + server.address().port, token = (await readFile(join(directory, 'webview-token'), 'utf8')).trim();
+  const base = 'http://127.0.0.1:' + testListeningAddress(server).port, token = (await readFile(join(directory, 'webview-token'), 'utf8')).trim();
   const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token };
   const post = (body, authorized = true) => fetch(base + '/api/interactions', { method: 'POST', headers: authorized ? headers : { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   assert.equal((await post({ action: 'get', sessionId: 'default' }, false)).status, 401);
@@ -189,8 +214,8 @@ test('interaction HTTP endpoints enforce access, bounded event reads, revision f
 test('old or delayed pending cancellation cannot cancel a newer patch question', async t => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-patch-cancel-generation-'))), repository = join(directory, 'repo'); await mkdir(repository);
   const journal = new SnapshotJournal(directory, 'a'.repeat(64), 'b'.repeat(64)); await journal.init();
-  const workspace = new WorkerWorkspace({ stateDir: directory, pollMs: 1000, timeoutMs: 60000 }, journal, () => ({ activeTasks: [] }));
-  workspace.sessions.model = model(async () => question); workspace.board.model = model(async () => question); await workspace.init();
+  const workspace = new WorkerWorkspace({ stateDir: directory, pollMs: 1000, timeoutMs: 60000 }, journal, workerStatus);
+  injectSessionModel(workspace.sessions, model(async () => question)); boardRuntime(workspace.board).model = model(async () => question); await workspace.init();
   t.after(async () => { await workspace.close(); await journal.close(); await rm(directory, { recursive: true, force: true }); });
   await workspace.board.create({ title: 'Patch question', instruction: 'Create file', repository, paths: ['a.txt'] }); const task = workspace.board.view().tasks[0];
   const waitQuestion = async () => { await until(() => workspace.board.detail(task.id).status === 'waiting_input' && !workspace.sessions.executor.busy); return workspace.sessions.interactions.view(task.sessionId); };
@@ -202,23 +227,24 @@ test('old or delayed pending cancellation cannot cancel a newer patch question',
   await workspace.board.tick(); const second = await waitQuestion();
   await workspace.interaction(oldCancel);
   assert.equal(workspace.sessions.interactions.view(task.sessionId).pending.id, second.pending.id); assert.equal(workspace.board.detail(task.id).status, 'waiting_input');
-  const action = workspace.board.action.bind(workspace.board); let release, entered;
-  const gated = new Promise(resolve => { entered = resolve; });
-  workspace.board.action = async (...args) => { if (args[1] !== undefined) { entered(); await new Promise(resolve => { release = resolve; }); } return action(...args); };
+  const action = workspace.board.action.bind(workspace.board);
+  const gated = Promise.withResolvers(), release = Promise.withResolvers();
+  workspace.board.action = async (...args) => { if (args[1] !== undefined) { gated.resolve(); await release.promise; } return action(...args); };
   const delayedCancel = workspace.interaction({ action: 'cancel', sessionId: task.sessionId, pendingId: second.pending.id, expectedRevision: second.revision, operationId: 'cancel-second-question' });
-  await gated; current = workspace.sessions.interactions.view(task.sessionId);
+  await gated.promise; current = workspace.sessions.interactions.view(task.sessionId);
   await workspace.interaction({ action: 'resume', sessionId: task.sessionId, turnId: current.latestTurn.id, expectedRevision: current.revision, operationId: 'resume-before-projection' });
-  let providerEntered, completeProvider, providerSignal;
-  const providerStarted = new Promise(resolve => { providerEntered = resolve; });
-  workspace.board.model = model(async (request, signal) => {
-    providerSignal = signal; providerEntered();
-    await new Promise(resolve => { completeProvider = resolve; });
+  /** @type {AbortSignal} */
+  let providerSignal;
+  const providerStarted = Promise.withResolvers(), completeProvider = Promise.withResolvers();
+  boardRuntime(workspace.board).model = model(async (request, signal) => {
+    providerSignal = signal; providerStarted.resolve();
+    await completeProvider.promise;
     return question;
   });
-  await workspace.board.tick(); await providerStarted;
-  release(); await delayedCancel; workspace.board.action = action;
+  await workspace.board.tick(); await providerStarted.promise;
+  release.resolve(); await delayedCancel; workspace.board.action = action;
   try { assert.equal(providerSignal.aborted, false, 'A delayed old projection must not abort the new provider invocation.'); }
-  finally { completeProvider(); }
+  finally { completeProvider.resolve(); }
   const third = await waitQuestion();
   assert.notEqual(third.pending.id, second.pending.id); assert.equal(workspace.board.detail(task.id).status, 'waiting_input');
 });
@@ -229,9 +255,9 @@ test('a local patch review keeps its artifact when a later chat question is answ
   const journal = new SnapshotJournal(directory, 'a'.repeat(64), 'b'.repeat(64)); await journal.init();
   let patchCalls = 0, chatCalls = 0;
   const create = () => {
-    const workspace = new WorkerWorkspace({ stateDir: directory, pollMs: 1000, timeoutMs: 60000 }, journal, () => ({ activeTasks: [] }));
-    workspace.board.model = model(async request => { patchCalls++; assert.equal(request.operation, 'patch'); return patchCalls === 1 ? question : { type: 'completed', text: JSON.stringify({ summary: 'Prepared file', files: [{ path: 'a.txt', content: 'Approved patch\n' }] }) }; });
-    workspace.sessions.model = model(async request => { chatCalls++; assert.equal(request.operation, 'chat'); return chatCalls === 1 ? question : { type: 'completed', text: 'Follow-up explanation.' }; });
+    const workspace = new WorkerWorkspace({ stateDir: directory, pollMs: 1000, timeoutMs: 60000 }, journal, workerStatus);
+    boardRuntime(workspace.board).model = model(async request => { patchCalls++; assert.equal(request.operation, 'patch'); return patchCalls === 1 ? question : { type: 'completed', text: JSON.stringify({ summary: 'Prepared file', files: [{ path: 'a.txt', content: 'Approved patch\n' }] }) }; });
+    injectSessionModel(workspace.sessions, model(async request => { chatCalls++; assert.equal(request.operation, 'chat'); return chatCalls === 1 ? question : { type: 'completed', text: 'Follow-up explanation.' }; }));
     return workspace;
   };
   let workspace = create(); await workspace.init();
@@ -263,13 +289,13 @@ test('failed answer admission projects a resumable failed session without overri
   const f = await fixture(t, async () => ++calls === 1 ? question : { type: 'completed', text: 'Accepted answer recovered.' });
   await f.sessions.start('Choose deployment'); await until(() => !f.sessions.busy);
   const pending = f.sessions.interactions.view('default'), originalTranscript = f.sessions.chat.snapshot().messages;
-  const provider = f.sessions.chat.model; f.sessions.chat.model = undefined;
+  const provider = conversationRuntime(f.sessions.chat).model; conversationRuntime(f.sessions.chat).model = undefined;
   await assert.rejects(f.sessions.interact(answer(pending)), /No model configured/);
   assert.equal(calls, 1);
   assert.deepEqual(f.sessions.chat.snapshot().messages, originalTranscript, 'Admission failed before transcript projection.');
   const stopped = f.sessions.detail('default');
   assert.equal(stopped.session.interaction.phase, 'failed'); assert.equal(stopped.session.status, 'failed'); assert.equal(stopped.session.busy, false);
-  f.sessions.chat.model = provider;
+  conversationRuntime(f.sessions.chat).model = provider;
   await f.sessions.interact({ action: 'resume', sessionId: 'default', turnId: stopped.session.interaction.latestTurn.id, expectedRevision: stopped.session.interaction.revision, operationId: 'resume-admission-failure' });
   await until(() => !f.sessions.busy); assert.equal(calls, 2); assert.equal(f.sessions.detail('default').session.status, 'completed');
   await f.sessions.ensureTask('remote-owner', 'orchestrator', 'Remote lease', 'codex-cli');

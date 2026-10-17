@@ -1,3 +1,4 @@
+import { workerStatus } from '../helpers/worker-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, realpath, rm } from 'node:fs/promises';
@@ -13,14 +14,16 @@ test('a disabled shared binding suppresses legacy folder admission and mutations
   await mkdir(features, { recursive: true }); await mkdir(state);
   await writeFile(join(repository, 'approved.txt'), 'untouched\n');
   const config = { stateDir: state, projectDir: repository, features: { directory: features, provider: 'openai-api', pollMs: 1000 }, pollMs: 1000, timeoutMs: 60000 };
-  let workspace, journal;
+  /** @type {WorkerWorkspace | undefined} */
+  let workspace;
+  let journal;
   async function close() { if (workspace) { await workspace.close(); workspace = undefined; } journal?.close(); }
   async function open() {
     journal = new SnapshotJournal(state, 'a'.repeat(64), 'b'.repeat(64)); await journal.init();
-    workspace = new WorkerWorkspace(config, journal, () => ({ activeTasks: [], queuedTasks: [] })); await workspace.init();
+    workspace = new WorkerWorkspace(config, journal, workerStatus); await workspace.init();
   }
   t.after(async () => { await close(); await rm(directory, { recursive: true, force: true }); });
-  await open(); await workspace.updateSettings({ board: { paused: true }, provider: { id: 'openai-api', apiKey: 'fixture-no-execution', model: 'fixture-model' } });
+  await open(); assert.ok(workspace); await workspace.updateSettings({ board: { paused: true }, provider: { id: 'openai-api', apiKey: 'fixture-no-execution', model: 'fixture-model' } });
   const binding = { enabled: false, repositoryId: 'shared', remote: 'origin', branch: 'main', workflowPath: '.werk/feature-workflow.json', pollMs: 300000 };
   await workspace.sharedIntakeCommand({ action: 'configure', expectedRevision: 0, config: binding });
   const ready = '---\nschemaVersion: 1\ntitle: Legacy folder request\nstatus: ready\nmode: patch\npaths: [approved.txt]\nprovider: openai-api\n---\nMake a bounded change.\n';
@@ -40,7 +43,7 @@ test('a disabled shared binding suppresses legacy folder admission and mutations
     assert.equal(await readFile(join(features, 'ready.md'), 'utf8'), ready);
     assert.equal(await readFile(join(features, 'draft.md'), 'utf8'), draft);
   }
-  await remainsDisabled(); await close(); await open(); await remainsDisabled();
+  await remainsDisabled(); await close(); await open(); assert.ok(workspace); await remainsDisabled();
   const current = workspace.sharedIntakeView(); assert.equal(current.config.enabled, false); assert.equal(current.config.repositoryId, 'shared');
   await workspace.sharedIntakeCommand({ action: 'configure', expectedRevision: current.revision, config: { ...binding, repositoryId: '' } });
   await workspace.features.tick(true); await workspace.features.tick(true);

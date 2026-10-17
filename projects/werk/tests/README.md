@@ -1,6 +1,6 @@
 # Test suites
 
-Run `npm test` from the project root with Node 24. The command builds all three applications, then Node expands quoted recursive globs for every `*.test.mjs` and `*.test.cjs` under this directory. `npm run check` also runs TypeScript checking. There is no separate JavaScript test framework or shell-specific recursive glob setting. On Linux/macOS, the infrastructure suite also runs Python 3 archive/readiness regressions through a Node wrapper; install Python 3 for the complete source check. Linux systemd unit validation runs when systemd-analyze is available. These are maintainer checks, not extra requirements for the native downloaded runtime.
+Run `npm test` from the project root with Node 24. The command builds all three applications, then Node expands quoted recursive globs for every `*.test.mjs` and `*.test.cjs` under this directory. `npm run check` first runs `check:fast`: a 400-code-line source limit and 450-line test/helper limit (blank and comment-only lines excluded), strict Oxlint, fallow-rs dependency and boundary analysis, AST architecture guards, application TypeScript checking and `typecheck:tests`. Every maintained JavaScript, CommonJS and TypeScript test/support file is checked against original source contracts even when its runtime import targets a compiled distribution. Intentional invalid-input tests document narrow expected type errors; an unused expectation fails the check. Run `npm run check:fast` during iteration; it does not build applications or run mutation testing. See the [code-quality contract](../docs/reference/code-quality.md) for the reviewed Fallow baseline and new-finding policy. There is no separate JavaScript test framework or shell-specific recursive glob setting. On Linux/macOS, the infrastructure suite also runs Python 3 archive/readiness regressions through a Node wrapper; install Python 3 for the complete source check. Linux systemd unit validation runs when systemd-analyze is available. These are maintainer checks, not extra requirements for the native downloaded runtime.
 
 | Directory | Concern |
 | --- | --- |
@@ -33,7 +33,8 @@ Portable `start` leaves a detached `_run` process behind after the CLI call retu
 separate from the default Node suite. Start an isolated native demo system from
 `examples/system.yaml` on its default ports (Factory 3100, Alpha 3001), and save
 at least two simulated tasks in Alpha using Intake. Do not use a production state
-directory. Install Playwright Core outside the project or provide its module path:
+directory. The installed Playwright development dependency supplies the browser API.
+Set a module override only when using a separately installed Playwright Core:
 
 ```sh
 WERK_PLAYWRIGHT_MODULE=/absolute/path/to/playwright-core/index.mjs \
@@ -43,7 +44,7 @@ WERK_VISUAL_REPORT=/tmp/werk-visual-report.json \
 node tests/ui/browser/visual-navigation.mjs
 ```
 
-If `playwright-core` is resolvable, its module override can be omitted. The script
+With `npm ci` complete, omit the module override to use the project’s pinned `playwright`. The script
 reads generated credentials into memory, tests mobile touch/keyboard panning,
 route history, focus restoration and a delayed response race, and emits a sanitized
 JSON result. Worker assignments and delayed responses use browser route fixtures;

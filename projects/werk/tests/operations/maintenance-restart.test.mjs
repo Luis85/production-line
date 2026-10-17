@@ -1,3 +1,4 @@
+import { testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -9,8 +10,8 @@ import { spawn } from 'node:child_process';
 import { setup } from '../../scripts/runtime/config.mjs';
 import { stopRuntime } from '../../scripts/runtime/control.mjs';
 import { backupState, restoreState } from '../../scripts/runtime/maintenance/backup.mjs';
-async function port() { const server = createServer(); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); const value = server.address().port; await new Promise(resolve => server.close(resolve)); return value; }
-async function eventually(probe, failure = () => undefined) {
+async function port() { const server = createServer(); await new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(undefined))); const value = testListeningAddress(server).port; await new Promise(resolve => server.close(resolve)); return value; }
+async function eventually(probe, failure = (_includeOutput = false) => undefined) {
   const deadline = Date.now() + 20000; let lastProbeError;
   while (Date.now() < deadline) {
     const stopped = failure(); if (stopped) throw Error(stopped);
@@ -38,7 +39,7 @@ function launch(state) {
     if (pending.length > 65536) pending = '';
   });
   child.stderr.on('data', value => { stderrBytes += value.length; for (const code of ['EADDRINUSE', 'EACCES', 'ENOENT', 'ERR_MODULE_NOT_FOUND']) if (String(value).includes(code)) stderrCodes.add(code); });
-  const closed = new Promise(resolve => { child.once('error', error => { exited = { code: null, signal: null, errorCode: error.code ?? 'SPAWN_FAILED' }; resolve(exited); }); child.once('close', (code, signal) => { exited = { code, signal }; resolve(exited); }); });
+  const closed = new Promise(resolve => { child.once('error', error => { exited = { code: null, signal: null, errorCode: ('code' in error ? error.code : 'SPAWN_FAILED') }; resolve(exited); }); child.once('close', (code, signal) => { exited = { code, signal }; resolve(exited); }); });
   const failure = force => exited || force ? `Launcher diagnostics: ${JSON.stringify({ ...exited, stderrBytes, stderrCodes: [...stderrCodes], events })}` : undefined;
   return { child, closed, ready: () => eventually(() => output.includes('"event":"ready"'), failure) };
 }
@@ -48,7 +49,7 @@ test('replacement-state restore restarts real orchestrator and worker with same 
   try {
     const orchestratorPort = await port(); let workerPort = await port(); while (workerPort === orchestratorPort) workerPort = await port();
     await setup({ stateDir: original, project: 'restore-rehearsal', port: orchestratorPort, workerPort });
-    const credentials = JSON.parse(await readFile(join(original, 'credentials.json')));
+    const credentials = JSON.parse(await readFile(join(original, 'credentials.json'), 'utf8'));
     const request = async (path, options = {}) => { const response = await fetch(`http://127.0.0.1:${orchestratorPort}${path}`, { ...options, headers: { Authorization: `Bearer ${credentials.WERK_ADMIN_TOKEN}`, 'Content-Type': 'application/json', ...options.headers }, signal: AbortSignal.timeout(2000) }); assert.equal(response.ok, true); return response.json(); };
     running = launch(original); await running.ready();
     await assert.rejects(backupState(original, join(root, 'live-refused')), /running|owner/);

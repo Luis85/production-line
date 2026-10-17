@@ -149,22 +149,29 @@ flowchart TB
 | `orchestrator/server.ts` | Server composition root: constructs SQLite Store, application and HTTP handler; owns listener/reaper shutdown |
 | `orchestrator/http.ts` | Routes, role-token authorization, request parsing and HTTP presentation; invokes application operations |
 | `orchestrator/application.ts`, `application/worker-interaction.ts` | Commands/queries through `OrchestratorRepository`; injected worker interaction port with worker/session identity validation |
-| `orchestrator/persistence/store.ts` | Transactional SQLite implementation of that port; persists tasks, attempts, snapshots and events |
+| `orchestrator/persistence/store.ts`, `session.ts`, focused persistence modules | Store facade and one SQLite transaction owner; task intake/lifecycle, leases, worker registry, queries and snapshot mapping share that owner |
 | `orchestrator/persistence/schema.ts` | Versioned SQLite schema and atomic migrations |
 | `orchestrator/context/*` | Exact-commit resolution, bounded admission and operator-owned context binding; committed source remains untrusted data |
 | `orchestrator/policies.ts` | Scheduling eligibility, lease ownership and snapshot-assignment checks |
 | `orchestrator/intake/importer.ts` | CLI composition of local Git reads and the HTTP task gateway |
 | `orchestrator/intake/iteration.ts` | Committed-feature collection and import/revision policy through `IterationSource`/`IterationTaskGateway` ports |
 | `worker/cli.ts` | Parses runtime/status commands, loads configuration and supplies process cancellation |
-| `worker/runner.ts` | Worker composition/lifecycle: concrete HTTP gateway, selected mock/Codex adapter, journal, identity, workspace/status service and the shared single-slot scheduler |
+| `worker/runner.ts`, `runner-runtime.ts`, `runner-assignments.ts` | State-lock/lifecycle entry, concrete service composition, and assignment polling/lease dispatch through typed ports; share one execution slot and claim identity |
 | `worker/application/*` | Attempt execution, sessions, approved-file tasks, frozen gates and shared feature lifecycle through injected ports; no infrastructure imports, filesystem I/O or SQLite ownership |
 | `worker/infrastructure/*` | HTTP operation mapping, pinned-context verification, mock/Codex adapters, review artifacts and persisted registration identity |
 | `worker/infrastructure/journal/{snapshots,files,retention}.ts` | Measurement capture, immutable journal, serialized upload and durable local file operations |
-| `worker/status/server.ts`, `status/workspace.ts`, `worker/webview/*` | Public health/status, authenticated workspace API and Vue UI; workspace composes local task, session and settings services |
+| `worker/status/server.ts`, `monitoring.ts`, `status/workspace.ts` | Public health/status, authenticated workspace facade and monitoring projection |
+| `worker/status/workspace-context.ts`, `workspace-*.ts` | One composition-owned service/state context; focused task, request, repository, feature, settings and lifecycle operations |
+| `worker/application/local-tasks.ts`, `sessions.ts`, `conversation.ts` | Stable facades with typed admission, execution, recovery and catalog collaborators; each facade retains its serialized state owner |
+| `worker/infrastructure/journal/requests.ts`, `journal/requests/*` | Request-journal facade, one SQLite store/transaction owner and focused gate, execution, command, review and query operations |
+| `*/webview/store.ts`, frontend controllers and composables | Reactive state and focused API/UI controllers; shared transport mechanics preserve per-service credentials, epochs and request identities |
 | `shared/domain.ts`, `context.ts`, `validation.ts`, `snapshots.ts` | Domain data and pure validation of input/evidence |
 | `shared/protocol.ts`, `factory.ts`, `worker-interaction.ts` | Typed request/response DTOs, Factory records, overview and cross-service interaction validation |
 | `shared/build-info.ts` | Source-only development marker; distribution staging generates the root release version for snapshots and MCP |
 | `shared/lifecycle.ts`, `http/server-lifecycle.ts` | Ordered cleanup that settles every resource; bounded HTTP drain remains an explicit transport helper |
+| `shared/serialized-operations.ts` | FIFO scheduling with independent caller results and a snapshot drain; callers own admission, transaction boundaries and cancellation |
+| `shared/http/dispatcher.ts`, `http/transport.ts` | Owned dispatcher/proxy mechanics through complete body consumption; adapters retain deadlines, authentication, limits and protocol errors |
+| `shared/webview/http.ts`, `webview/components/SettingsSaveFeedback.vue` | Common browser JSON defaults and settings feedback; application stores retain credentials, session fencing and retry identities |
 | `shared/git/environment.ts`, `http/response-body.ts` | Explicit Git authority profiles and bounded response reading; each adapter retains its auth, limits and error policy |
 | `shared/wiki.ts` | Pure vault-reference syntax parser; no repository resolution |
 | `shared/mcp/*` | Stdio tool catalog/transport mapped to one configured HTTP service, read-only by default |
@@ -184,8 +191,8 @@ composition root chooses SQLite. Shared code never imports either application.
 
 The AST architecture guard checks imports, reexports, type edges, require calls,
 literal dynamic imports and package aliases, with negative fixtures that must
-fail the same policies. All worker application modules and the extracted
-orchestrator application directory depend inward; they cannot import concrete
+fail the same policies. All worker and Factory application modules, the root orchestrator application
+and its extracted application directory depend inward; they cannot import concrete
 adapters even for types. Selected shared contracts have a closed pure dependency
 graph. Node crypto/path/timer helpers and YAML parsing remain explicit application
 allowances. Composition may select configured adapters dynamically; the guard is
@@ -197,8 +204,10 @@ has a separate object model. The Store still combines transactional persistence
 with several state-transition decisions. The importer composes Git and HTTP
 adapters; its collection/revision policy lives separately in `iteration.ts`. `request<T>` provides a TypeScript expectation; its generic
 does **not** runtime-validate an arbitrary server response against that DTO.
-The worker HTTP adapter separately checks registration/assignment shapes and
-verifies that heartbeat responses still identify the same attempt. Other
+The worker HTTP adapter checks registration and the consumed assignment input,
+including routing, timestamps, context and gate receipts. Legacy assignments without
+an execution mode remain supported, and valid extension fields are preserved.
+Heartbeat responses must still identify the same attempt. Other
 boundary checks remain necessary when adding external services or plugins.
 
 ## Worker policy and presentation reuse
@@ -215,6 +224,30 @@ environment; each caller keeps its deadlines, output bounds, errors and durable
 checkpoint ordering. Provider account environments and MCP configuration remain
 separate. See the [worker architecture review](../reports/worker-architecture-review.md)
 for review decisions, qualification and remaining orchestration debt.
+
+## Reused mechanics and owned policy
+
+Worker definition, session, task, intake and journal writers share
+`SerializedOperations`. Each submitted operation retains its own result or error;
+a rejection does not prevent later operations. `drain()` observes work already queued,
+so shutdown owners must stop admission first. It does not replace the execution-slot
+scheduler, keyed repository locks, abort handling or transactional persistence.
+
+Backend HTTP adapters use an owned dispatcher until response consumption finishes.
+The common layer selects the packaged transport and proxy behavior, then destroys
+the pool on success, error or cancellation. It does not introduce retries or choose
+application credentials. Provider invocation deadlines, MCP session semantics,
+Factory response checks and web-tool redirect/body limits remain in their adapters.
+
+Browser stores share only JSON wire defaults. Authentication, stale-response fencing,
+mutation identities and policy remain with each application. The settings feedback
+component presents errors, uncertain acknowledgements and recovery actions; the
+existing editor controllers still own drafts and resubmission behavior.
+
+The [0.11 architecture review](../reports/architecture-review-0.11.md) records the
+boundaries, retained debt and follow-up review. Mutation measurements are a scoped,
+advisory signal, described in the [mutation guide](../how-to/mutation-testing.md),
+and are separate from ordinary development and release qualification gates.
 
 ## Ownership across the client/server boundary
 
@@ -339,7 +372,7 @@ remains separate from the runtime.
 | SQLite, registration, idempotency, slots, leases; viewer/operator/admin tokens | Broader identity integration, per-project enrollment grants and shared quota groups |
 | Mock assignments; native Linux Codex review adapter; local API and Codex/Claude CLI execution with operator-granted tools | Mixed/concurrent live assignments and shared provider quota enforcement |
 | Verified local review artifacts, telemetry API, shared Git claims and feature branch/review-note publication | Lease-checked orchestrator publisher, early draft PR and automatic merge tracking |
-| Snapshot/run dashboards, guarded questions/rework, configurable ready/done rules and resource alerts | Git webhook verification and independently executed project-check evidence |
+| Snapshot/run dashboards, guarded questions/rework, configurable ready/done rules, candidate-bound project checks and resource alerts | Git webhook verification and deployment-specific live-provider qualification |
 | Native/Docker launchers, VM profile, qualification gates and stopped-state backup/restore | Environment-specific deployment qualification and high-availability design |
 
 The native, Docker and VM gates validate simulated task journeys. Their existence

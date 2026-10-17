@@ -1,3 +1,4 @@
+import { requiredValue } from '../ui/helpers/required-value.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
@@ -39,13 +40,14 @@ test('repository editor updates pristine data and protects unsaved assignments f
   e.reload(); assert.equal(e.entries.value[0].branch, 'external'); assert.equal(e.stale.value, false); assert.equal(e.dirty.value, false);
 });
 test('repository editor snapshots assignments, prevents duplicate saves and clears after lock', async t => {
-  const e = await editor(t); let finish, submitted;
+  const e = await editor(t); let submitted = /** @type {{ value?: {repositories: import('../../src/worker/application/repositories.js').RepositoryConfiguration} }} */ ({});
   e.entries.value[0].branch = 'main'; e.seconds.value = 15;
-  e.onSave(async (_, body) => { submitted = body; await new Promise(resolve => { finish = resolve; }); return body; });
+  const { promise: held, resolve: finish } = Promise.withResolvers();
+  e.onSave(async (_, body) => { submitted.value = body; await held; return body; });
   const saving = e.save(); assert.equal(e.busy.value, true);
-  await e.save(); assert.equal(submitted.repositories.pollMs, 15000); assert.equal(submitted.repositories.items[0].branch, 'main');
+  await e.save(); assert.equal(requiredValue(submitted.value).repositories.pollMs, 15000); assert.equal(requiredValue(submitted.value).repositories.items[0].branch, 'main');
   e.state.unlocked = false; e.state.draftEpoch++; await nextTick();
-  assert.deepEqual(e.entries.value, []); finish(); await saving;
+  assert.deepEqual(e.entries.value, []); finish(undefined); await saving;
   assert.equal(e.notice.value, ''); assert.equal(e.busy.value, false);
 });
 test('repository editor blocks assignment replacement while tasks wait and retains failed drafts', async t => {

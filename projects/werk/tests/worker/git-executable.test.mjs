@@ -14,7 +14,7 @@ test('Windows Git in both launch modes resolves native executable only from its 
   // A repository-local executable is never an implicit search candidate.
   await copyFile(process.execPath, join(directory, 'git.exe'));
   const env = { SystemRoot: process.env.SystemRoot, Path: first + ';' + second, Pathext: '.CMD;.EXE' };
-  for (const mode of ['plain', 'contained']) {
+  for (const mode of /** @type {const} */ (['plain', 'contained'])) {
     assert.equal(await gitExecutable(directory, env, mode), expected);
     const result = await runProcess(await gitExecutable(directory, env, mode), ['-e', "process.stdout.write('native')"], { cwd: directory, env, mode, signal: t.signal, timeoutMs: 10000, maxOutputBytes: 1024 });
     assert.equal(result.stdout.toString(), 'native');

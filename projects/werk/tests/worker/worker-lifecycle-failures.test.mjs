@@ -1,3 +1,5 @@
+import { requiredValue } from '../ui/helpers/required-value.mjs';
+import { testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, lstat, rm } from 'node:fs/promises';
@@ -22,7 +24,8 @@ async function restart(config) {
 test('worker constructor failure releases its lock and journal even when journal cleanup fails', { timeout: 15000 }, async t => {
   const config = await fixture(t), secondary = Error('journal close failed'), close = SnapshotJournal.prototype.close; let closed = 0;
   const mocked = t.mock.method(SnapshotJournal.prototype, 'close', function () { close.call(this); closed++; throw secondary; });
-  await assert.rejects(runWorker({ ...config, repositories: { items: 'invalid' } }, new AbortController().signal), error => error !== secondary && /repositor/i.test(error.message));
+  // @ts-expect-error Malformed repository configuration tests constructor cleanup.
+  await assert.rejects(runWorker({ ...config, repositories: { items: 'invalid' } }, new AbortController().signal), error => error !== secondary && /repositor/i.test(testErrorMessage(error)));
   assert.equal(closed, 1);
   await assert.rejects(lstat(join(config.stateDir, 'worker.lock')), { code: 'ENOENT' });
   mocked.mock.restore();
@@ -35,12 +38,12 @@ test('worker failed shutdown drains HTTP and evidence, persists stopped state an
   const mocked = t.mock.method(WorkerWorkspace.prototype, 'close', async function (options) { await close.call(this, options); events.push('workspace'); throw failure; });
   t.mock.method(WorkerWorkspace.prototype, 'closeEvidence', async function () { await evidence.call(this); events.push('evidence'); });
   t.mock.method(SnapshotJournal.prototype, 'close', function () { journal.call(this); events.push('journal'); });
-  let address;
-  await assert.rejects(runWorker(config, stop.signal, { ready: async value => { address = value; stop.abort(); } }), error => error === failure);
+  const address = /** @type {{ value?: { port: number; address: string } }} */ ({});
+  await assert.rejects(runWorker(config, stop.signal, { ready: async value => { address.value = value; stop.abort(); } }), error => error === failure);
   assert.deepEqual(events, ['workspace', 'evidence', 'journal']);
   await assert.rejects(lstat(join(config.stateDir, 'worker.lock')), { code: 'ENOENT' });
   assert.equal(JSON.parse(await readFile(join(config.stateDir, 'status.json'), 'utf8')).state, 'stopped');
-  await assert.rejects(fetch(`http://127.0.0.1:${address.port}/healthz`, { signal: AbortSignal.timeout(1000) }));
+  await assert.rejects(fetch(`http://127.0.0.1:${requiredValue(address.value).port}/healthz`, { signal: AbortSignal.timeout(1000) }));
   mocked.mock.restore();
   await restart(config);
 });

@@ -46,7 +46,7 @@ test('exhausted Windows publication preserves the previous file and removes only
 
 test('nontransient failures and POSIX permission failures fail immediately without retries', async t => {
   const f = await fixture(t);
-  for (const [platform, code] of [['win32', 'ENOENT'], ['win32', 'EXDEV'], ['win32', 'EIO'], ['linux', 'EPERM'], ['darwin', 'EACCES'], ['linux', 'EBUSY']]) {
+  for (const [platform, code] of /** @type {const} */ ([['win32', 'ENOENT'], ['win32', 'EXDEV'], ['win32', 'EIO'], ['linux', 'EPERM'], ['darwin', 'EACCES'], ['linux', 'EBUSY']])) {
     const error = ioError(code); let calls = 0;
     await assert.rejects(atomicWrite(f.path, 'never published', 0o600, {
       platform, async rename() { calls++; throw error; }, async wait() { assert.fail('must not retry'); }
@@ -91,9 +91,9 @@ test('concurrent readers observe complete files and Windows contention preserves
   } catch (error) { publicationError = error; }
   finally {
     stopped = true;
-    const outcomes = await joined;
-    for (const outcome of outcomes) if (outcome.status === 'rejected') throw outcome.reason;
+    await joined;
   }
+  for (const outcome of await joined) if (outcome.status === 'rejected') throw outcome.reason;
   // Windows may retain overlapping reader handles for the whole bounded retry window.
   // Exhaustion must preserve the last complete version; publication succeeds once every reader closes.
   if (publicationError) {

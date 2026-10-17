@@ -1,3 +1,5 @@
+import { testErrorStatus, testErrorOutput } from '../helpers/process-errors.mjs';
+import { testErrorCode } from '../helpers/typed-boundaries.mjs';
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -65,7 +67,7 @@ test('copied script creates stable drafts without worker or node_modules and fai
   const ready = await f.run(['ready', '--file', created.path, '--if-match', created.revision]);
   assert.equal(ready.valid, false);
   assert.match(await readFile(join(f.root, created.path), 'utf8'), /status: draft/);
-  assert.throws(() => execFileSync(process.execPath, [entry, 'validate', '--file', created.path], { cwd: f.root, stdio: 'pipe' }), error => error.status === 2);
+  assert.throws(() => execFileSync(process.execPath, [entry, 'validate', '--file', created.path], { cwd: f.root, stdio: 'pipe' }), error => testErrorStatus(error, 'status') === 2);
 });
 
 test('ready rechecks current rules, rejects stale edits, preserves ID/body, and cannot repeat', async () => {
@@ -168,7 +170,7 @@ test('standalone authoring runs through a symlinked parent and stays inert when 
   const created = JSON.parse(execFileSync(process.execPath, [entry, 'create', '--name', 'aliased.md', '--title', 'Aliased invocation'], { cwd: alias, encoding: 'utf8' }));
   assert.equal(created.status, 'draft');
   assert.match(await readFile(join(f.root, created.path), 'utf8'), /title: Aliased invocation/);
-  assert.throws(() => execFileSync(process.execPath, [entry, 'validate', '--file', created.path], { cwd: alias, stdio: 'pipe' }), error => error.status === 2 && JSON.parse(error.stdout).valid === false);
+  assert.throws(() => execFileSync(process.execPath, [entry, 'validate', '--file', created.path], { cwd: alias, stdio: 'pipe' }), error => testErrorStatus(error, 'status') === 2 && JSON.parse(testErrorOutput(error, 'stdout')).valid === false);
   const moduleUrl = pathToFileURL(entry).href;
   const importer = join(f.root, 'import-only.mjs');
   await writeFile(importer, 'await import(' + JSON.stringify(moduleUrl) + '); console.log("imported");\n');
@@ -281,7 +283,7 @@ test('portable feature setup accepts --if-match and rejects a malformed revision
   await writeFile(join(f.root, scriptPath), released + '// customized\n');
   const cli = new URL('../../scripts/runtime/portable/cli.mjs', import.meta.url).href;
   const run = (...args) => execFileSync(process.execPath, ['--input-type=module', '-e', `import { main } from ${JSON.stringify(cli)}; await main('worker', process.argv.slice(1));`, 'feature', 'setup', '--project-dir', f.root, ...args], { encoding: 'utf8', stdio: 'pipe' });
-  assert.throws(() => run('--if-match', 'not-a-revision'), error => error.status === 2 && /64-character SHA-256/.test(error.stderr));
+  assert.throws(() => run('--if-match', 'not-a-revision'), error => testErrorStatus(error, 'status') === 2 && /64-character SHA-256/.test(testErrorOutput(error, 'stderr')));
   const warned = JSON.parse(run());
   const revision = warned.warnings.find(warning => warning.code === 'authoring_script_outdated').revision;
   const replaced = JSON.parse(run('--if-match', revision));
@@ -299,17 +301,17 @@ test('managed refresh preserves executable permission bits without retaining set
   assert.equal(await recorded(f.root), sha256(script));
 });
 
-for (const failingStep of ['writeFile', 'sync']) test('managed refresh cleans temporary files after a failed ' + failingStep, async t => {
+for (const failingStep of /** @type {const} */ (['writeFile', 'sync'])) test('managed refresh cleans temporary files after a failed ' + failingStep, async t => {
   const f = await fixture({ script: released });
   const manifest = await readFile(join(f.root, manifestPath), 'utf8');
   const originalOpen = filesystem.open;
-  t.mock.method(filesystem, 'open', async (...args) => {
-    const handle = await originalOpen(...args);
-    if (String(args[0]).includes('._authoring-')) t.mock.method(handle, failingStep, async () => { throw Object.assign(Error('Injected authoring storage failure'), { code: 'EIO' }); });
+  t.mock.method(filesystem, 'open', async (path, flags, mode) => {
+    const handle = await originalOpen(path, flags, mode);
+    if (String(path).includes('._authoring-')) t.mock.method(handle, failingStep, async () => { throw Object.assign(Error('Injected authoring storage failure'), { code: 'EIO' }); });
     return handle;
   });
   syncBuiltinESMExports();
-  try { await assert.rejects(initializeFeatureAuthoring(f.root, { script }), error => error.code === 'EIO'); }
+  try { await assert.rejects(initializeFeatureAuthoring(f.root, { script }), error => testErrorCode(error) === 'EIO'); }
   finally { t.mock.restoreAll(); syncBuiltinESMExports(); }
   assert.equal(await readFile(join(f.root, scriptPath), 'utf8'), released);
   assert.equal(await readFile(join(f.root, manifestPath), 'utf8'), manifest);

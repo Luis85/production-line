@@ -1,0 +1,347 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-10-17T12:56:38.381Z",
+  "packageVersion": "0.11.0",
+  "commit": "2572a8863b2b8c4cf1f1d32332e114a2ac4151f0",
+  "workingTreeDirty": true,
+  "nodeVersion": "v24.19.0",
+  "platform": "linux-x64",
+  "strykerVersion": "10.0.0",
+  "scope": {
+    "id": "worker-accounting-protocol-v2",
+    "targets": [
+      "src/shared/serialized-operations.ts",
+      "src/shared/request-gate.ts",
+      "src/shared/http/response-body.ts",
+      "src/shared/webview/bounded-polling.ts",
+      "src/worker/application/consumption.ts",
+      "src/worker/infrastructure/journal/consumption.ts",
+      "src/worker/infrastructure/responses.ts"
+    ],
+    "testFiles": [
+      "scripts/mutation/suites/*.test.mjs",
+      ".mutation-build/tests/*.test.mjs"
+    ],
+    "reusedTests": [
+      "tests/shared/serialized-operations.test.mjs",
+      "tests/worker/consumption.test.mjs"
+    ],
+    "supportFiles": [
+      "tests/helpers/typed-boundaries.mjs"
+    ],
+    "timeoutMs": 480000
+  },
+  "sources": {
+    "digest": "c926f0265c2ca3dee9315b0879f509c9eac7a1f8ad723e9a4ad977de881970e2",
+    "files": {
+      "src/shared/http/response-body.ts": "95a702a3591b539a129b18583ab67d153333246c0f1f716a31580ccdca916c25",
+      "src/shared/request-gate.ts": "e068e96af488d65ff1e85206f0390c93abe8199fd39af1521321fb174a0009c6",
+      "src/shared/serialized-operations.ts": "f6e8b8eb54f113e9890da69e1f187eebc52467f636d9b117b6b0b69bd760751e",
+      "src/shared/webview/bounded-polling.ts": "7ba75a812d0c44cfebcdc64eaaf2ca26d51e0e9ee1fd2ace1f4a1c500b01c71e",
+      "src/worker/application/consumption.ts": "5c81a95c40106cc1f7c3f1fb877546c8a127b9e686c75acf18bc663f5bfc98e0",
+      "src/worker/infrastructure/journal/consumption.ts": "2699c3ab4a7bb0ce2c158d7c6fd9fb75cecb22f81a7a3f6fee42fa1f17e05a9a",
+      "src/worker/infrastructure/responses.ts": "9401dc031876c7e00fb0a22599498c734a845ac1e78727fb0d3671579cdd3173"
+    }
+  },
+  "tests": {
+    "digest": "ed33b54fdaeac5ffcc6ff644255ca2f7f8e452136213757d1ff40ebfae49e2d4",
+    "files": {
+      "scripts/mutation/suites/bounded-polling.test.mjs": "2852f8c07ff92b5b60e2f98105cd5e6e800b8d5b9afed27f6d3c35bc40b52df3",
+      "scripts/mutation/suites/consumption-lifecycle.test.mjs": "24146324b1c662c8b7665e10fd06e85af439436c850b4f29ad41348c8dc31ad8",
+      "scripts/mutation/suites/consumption-policy.test.mjs": "d9e1ae85264407471cd3c1d57bcb0e565ebd48a60b00969e67933a0b75d76a0b",
+      "scripts/mutation/suites/request-gate.test.mjs": "5f0da662e9fcf095c4c7919bf7d647105cc0a1871117417cc40357bc77338243",
+      "scripts/mutation/suites/response-body.test.mjs": "7da0fcfbbddf5c1864cf81668f070cd618bad701061a505188f33e8552f574f8",
+      "scripts/mutation/suites/worker-responses.test.mjs": "a2b2ef5ef32f5e3b5e5bbad3c6cd8f9dfc01ff7e8cef030c88a99ff747783ba9",
+      "tests/helpers/typed-boundaries.mjs": "c4f36a4f1b0b71a7a5cc3e91ea9a7606e49ed6b1f5564811a6b437faa8f075ec",
+      "tests/shared/serialized-operations.test.mjs": "034a5fd726ce143cf576c128aab83facb17398add39cf81c3e267cd4496e2bd5",
+      "tests/worker/consumption.test.mjs": "2fe84a40d4a721deac7aefca4a4627cc70364ca8389a5102492e1737d1cd6735"
+    }
+  },
+  "configuration": {
+    "digest": "4de1652650bb909d78da1787f94f353929676bae56c94dbafb6373513bbe5269",
+    "files": {
+      "scripts/mutation/build.mjs": "d8ab83af258d0a598801dd81f9be7b83555b4739bdc5ef60d1bb01e1f5129b3c",
+      "scripts/mutation/scope.mjs": "6bb839e53799a55f8b4af1118ba6cbd952687c92d0da10308316156466e0a259",
+      "stryker.config.mjs": "2bf4f4f1733a5cb2da44a74b3191652b3fd78e44f33c595112e99789982f2e4d"
+    }
+  },
+  "reportDigest": "cbd0499bf3ddf42cc1d947c0ec7cbfebacfa16e5d8602241a2c9a4d49ea0386d",
+  "status": "completed",
+  "advisory": true,
+  "score": 97.78,
+  "baselineDelta": null,
+  "totalMutants": 811,
+  "counts": {
+    "Killed": 777,
+    "Survived": 18,
+    "NoCoverage": 0,
+    "Timeout": 16,
+    "CompileError": 0,
+    "RuntimeError": 0,
+    "Ignored": 0,
+    "Pending": 0
+  },
+  "files": [
+    {
+      "path": "src/shared/serialized-operations.ts",
+      "total": 2,
+      "counts": {
+        "Killed": 1,
+        "Survived": 0,
+        "NoCoverage": 0,
+        "Timeout": 1,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 100
+    },
+    {
+      "path": "src/shared/request-gate.ts",
+      "total": 93,
+      "counts": {
+        "Killed": 90,
+        "Survived": 3,
+        "NoCoverage": 0,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 96.77
+    },
+    {
+      "path": "src/shared/http/response-body.ts",
+      "total": 35,
+      "counts": {
+        "Killed": 29,
+        "Survived": 0,
+        "NoCoverage": 0,
+        "Timeout": 6,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 100
+    },
+    {
+      "path": "src/shared/webview/bounded-polling.ts",
+      "total": 46,
+      "counts": {
+        "Killed": 36,
+        "Survived": 1,
+        "NoCoverage": 0,
+        "Timeout": 9,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 97.83
+    },
+    {
+      "path": "src/worker/application/consumption.ts",
+      "total": 311,
+      "counts": {
+        "Killed": 304,
+        "Survived": 7,
+        "NoCoverage": 0,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 97.75
+    },
+    {
+      "path": "src/worker/infrastructure/journal/consumption.ts",
+      "total": 75,
+      "counts": {
+        "Killed": 75,
+        "Survived": 0,
+        "NoCoverage": 0,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 100
+    },
+    {
+      "path": "src/worker/infrastructure/responses.ts",
+      "total": 249,
+      "counts": {
+        "Killed": 242,
+        "Survived": 7,
+        "NoCoverage": 0,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 97.19
+    }
+  ],
+  "findings": [
+    {
+      "file": "src/shared/request-gate.ts",
+      "id": "59",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 33,
+      "replacement": "false"
+    },
+    {
+      "file": "src/shared/request-gate.ts",
+      "id": "66",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 35,
+      "replacement": "false"
+    },
+    {
+      "file": "src/shared/request-gate.ts",
+      "id": "100",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 47,
+      "replacement": "false"
+    },
+    {
+      "file": "src/shared/webview/bounded-polling.ts",
+      "id": "172",
+      "status": "Survived",
+      "mutator": "UpdateOperator",
+      "line": 26,
+      "replacement": "generation--"
+    },
+    {
+      "file": "src/worker/application/consumption.ts",
+      "id": "242",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 19,
+      "replacement": "false"
+    },
+    {
+      "file": "src/worker/application/consumption.ts",
+      "id": "246",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 19,
+      "replacement": "false"
+    },
+    {
+      "file": "src/worker/application/consumption.ts",
+      "id": "291",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 74,
+      "replacement": "true"
+    },
+    {
+      "file": "src/worker/application/consumption.ts",
+      "id": "315",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 82,
+      "replacement": "false"
+    },
+    {
+      "file": "src/worker/application/consumption.ts",
+      "id": "318",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 82,
+      "replacement": "false"
+    },
+    {
+      "file": "src/worker/application/consumption.ts",
+      "id": "327",
+      "status": "Survived",
+      "mutator": "LogicalOperator",
+      "line": 85,
+      "replacement": "typeof cost === 'number' || Number.isFinite(cost)"
+    },
+    {
+      "file": "src/worker/application/consumption.ts",
+      "id": "328",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 85,
+      "replacement": "true"
+    },
+    {
+      "file": "src/worker/infrastructure/responses.ts",
+      "id": "663",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 28,
+      "replacement": "\"\""
+    },
+    {
+      "file": "src/worker/infrastructure/responses.ts",
+      "id": "671",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 30,
+      "replacement": "\"\""
+    },
+    {
+      "file": "src/worker/infrastructure/responses.ts",
+      "id": "672",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 30,
+      "replacement": "\"\""
+    },
+    {
+      "file": "src/worker/infrastructure/responses.ts",
+      "id": "686",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 35,
+      "replacement": "\"\""
+    },
+    {
+      "file": "src/worker/infrastructure/responses.ts",
+      "id": "689",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 36,
+      "replacement": "\"\""
+    },
+    {
+      "file": "src/worker/infrastructure/responses.ts",
+      "id": "699",
+      "status": "Survived",
+      "mutator": "MethodExpression",
+      "line": 37,
+      "replacement": "keys"
+    },
+    {
+      "file": "src/worker/infrastructure/responses.ts",
+      "id": "701",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 37,
+      "replacement": "true"
+    }
+  ],
+  "execution": {
+    "exitCode": 0,
+    "signal": null,
+    "timedOut": false,
+    "durationMs": 53178
+  },
+  "warnings": [
+    "18 surviving and 0 uncovered mutants in this limited scope.",
+    "Baseline scope differs; scores cannot be compared."
+  ]
+}

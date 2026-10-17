@@ -1,3 +1,5 @@
+import { workerStatus } from '../helpers/worker-status.mjs';
+import { testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -18,11 +20,11 @@ async function fixture(t) {
     repos.push({ id, path, remote: 'origin', watch: false, branch: 'main' });
   }
   const journal = new SnapshotJournal(state, 'a'.repeat(64), 'b'.repeat(64)); await journal.init();
-  const current = { activeTasks: [], queuedTasks: [] };
+  const current = workerStatus({ queuedTasks: [] });
   const workspace = new WorkerWorkspace({ stateDir: state, pollMs: 1000, timeoutMs: 60000 }, journal, () => current); await workspace.init();
   const server = await statusServer(() => current, '127.0.0.1', 0, undefined, workspace);
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await workspace.close(); journal.close(); await rm(root, { recursive: true, force: true }); });
-  const base = 'http://127.0.0.1:' + server.address().port, token = (await readFile(join(state, 'webview-token'), 'utf8')).trim(), headers = { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' };
+  const base = 'http://127.0.0.1:' + testListeningAddress(server).port, token = (await readFile(join(state, 'webview-token'), 'utf8')).trim(), headers = { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' };
   return { root, state, workspace, journal, current, repos, base, headers, post: (path, body) => fetch(base + path, { method: 'POST', headers, body: JSON.stringify(body) }) };
 }
 test('repository assignments are authenticated, persisted, watched, and available after restart', async t => {

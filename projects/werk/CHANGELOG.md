@@ -7,6 +7,27 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-17
+
+### Added
+
+- Source files are limited to 400 code lines and tests/helpers to 450, excluding blank and comment-only lines. Oversized services, frontend controllers and components are split by responsibility. Test typechecking covers maintained JavaScript, CommonJS and TypeScript fixtures against original source contracts.
+- Pinned Oxlint and fallow-rs enforce correctness, dependency hygiene and architectural boundaries in `check:fast` and CI. Existing export findings have an explicit reviewed baseline; new findings and boundary violations fail the check.
+- Stryker mutation testing with recorded shared-boundary and expanded worker-accounting/protocol baselines, opt-in local commands, JSON/HTML reports and an advisory release job. Survivors, regressions and incomplete measurements warn without blocking publication; ordinary development checks do not run mutation testing.
+- A documentation-first Storybook with ordered setup paths for local workers, distributed teams, system operators and frontend contributors. Canonical guides, system journeys and source-derived component contracts remain together in the published documentation.
+
+### Changed
+
+- Worker persistence and admission queues share one FIFO operation helper with explicit failure isolation and drain semantics. Owners retain their transactions, cancellation and admission rules. Architecture checks now cover Factory application policy and the orchestrator application boundary.
+- Factory, MCP, web tools and model providers share owned HTTP dispatcher mechanics while preserving their own authentication, deadlines, response limits and error contracts.
+- All three webviews share JSON request construction, and worker settings panels share save/retry/recovery feedback with consistent accessible controls.
+
+### Fixed
+
+- Worker HTTP adapters reject malformed assignment data before application execution while preserving valid legacy assignments and extension fields.
+- Public worker summaries explicitly project operational policy fields, keeping internal configuration hashes and future private fields out of status responses.
+- Storybook qualification binds the documentation inputs as well as component source, preventing stale setup guidance from being packaged as current evidence.
+
 ## [0.10.0] - 2026-10-17
 
 ### Added

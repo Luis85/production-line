@@ -1,3 +1,5 @@
+import { testErrorStatus } from '../helpers/process-errors.mjs';
+import { testErrorMessage, testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, rm, lstat } from 'node:fs/promises';
@@ -21,7 +23,7 @@ function launch(args, environment = {}) {
 }
 async function until(check, label) { const deadline = Date.now() + 20000; while (Date.now() < deadline) { const result = await check(); if (result) return result; await delay(30); } throw Error('Timed out: ' + label); }
 function records(owner) { return owner.output.split('\n').filter(line => line.startsWith('{')).map(line => { try { return JSON.parse(line); } catch { return {}; } }); }
-async function ports(count) { const servers = []; try { for (let n = 0; n < count; n++) { const server = createServer(); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); servers.push(server); } return servers.map(server => server.address().port); } finally { await Promise.all(servers.map(server => new Promise(resolve => server.close(resolve)))); } }
+async function ports(count) { const servers = []; try { for (let n = 0; n < count; n++) { const server = createServer(); await new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(undefined))); servers.push(server); } return servers.map(server => testListeningAddress(server).port); } finally { await Promise.all(servers.map(server => new Promise(resolve => server.close(resolve)))); } }
 async function fixture(t) { const root = await mkdtemp(join(tmpdir(), 'werk-log-output-')); t.after(() => rm(root, { recursive: true, force: true })); return root; }
 async function stopOnFinish(t, owner) { t.after(async () => { if (owner.child.exitCode === null) owner.child.kill('SIGTERM'); await owner.done; }); }
 async function request(port, path, token) { const response = await fetch(`http://127.0.0.1:${port}${path}`, { headers: token ? { Authorization: 'Bearer ' + token } : {}, signal: AbortSignal.timeout(3000) }); await response.text(); return response.status; }
@@ -37,7 +39,7 @@ test('native and system env defaults have explicit flag precedence and reject in
   assert.equal(systemParse(['up', '--file', 'system.yaml'], {}).options['log-output'], 'file');
   for (const parse of [nativeParse, systemParse]) {
     const args = parse === systemParse ? ['start', '--file', 'system.yaml'] : ['start'];
-    assert.throws(() => parse(args, { WERK_LOG_OUTPUT: 'invalid-secret-marker' }), error => error.exitCode === 2 && !error.message.includes('invalid-secret-marker'));
+    assert.throws(() => parse(args, { WERK_LOG_OUTPUT: 'invalid-secret-marker' }), error => testErrorStatus(error, 'exitCode') === 2 && !testErrorMessage(error).includes('invalid-secret-marker'));
     assert.equal(parse([...args, '--log-output', 'stream'], { WERK_LOG_OUTPUT: 'invalid' }).options['log-output'], 'stream');
     assert.throws(() => parse([...args, '--log-output', 'file', '--log-output', 'both'], {}));
   }

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RequestGateController, initialGateState } from '../../src/worker/webview/request-gate-controller.ts';
-const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
+const deferred = () => Promise.withResolvers();
 const record = (id = 'request-a', revision = 1, sessionId = 'session-a') => ({ schemaVersion: 1, id, revision, inputRevision: 1, inputHash: 'a'.repeat(64), policyDigest: 'b'.repeat(64), owner: { sessionId, rootTurnId: 'turn-' + id }, phase: 'ready', input: { kind: 'chat', title: 'Fixture', message: 'PRIVATE accepted instruction' } });
 const list = records => ({ schemaVersion: 1, rows: records.map(item => ({ id: item.id, revision: item.revision, owner: item.owner, phase: item.phase, title: item.input.title })), total: records.length, nextOffset: null });
 function fixture(api) {

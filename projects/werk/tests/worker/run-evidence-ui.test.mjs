@@ -23,8 +23,7 @@ test('run export follows every stable cursor and retains the original filter and
   const exported = JSON.parse(f.downloads[0][0]); assert.equal(exported.rows.length, 120); assert.equal(exported.rows[0].id, 'newer-0'); assert.equal(exported.rows[100].id, 'older-0');
 });
 test('access expiry clears retained private run evidence and prevents an in-flight export download', async t => {
-  let resolve;
-  const pending = new Promise(done => { resolve = done; });
+  const { promise: pending, resolve } = Promise.withResolvers();
   const f = await fixture(t, async () => pending);
   f.page.value = { rows: [{ id: 'private' }], total: 1, asOf: 7 }; f.analysis.value = { total: 1 }; f.selected.value = { id: 'private' };
   const exporting = f.exportRuns(); f.state.unlocked = false; await nextTick(); resolve({ rows: [{ id: 'private' }], nextCursor: null }); await exporting;
@@ -37,7 +36,7 @@ test('failed evidence refresh keeps previously loaded values and exposes a retry
 });
 
 test('task-scoped navigation discards a slow prior task response and loads the latest task', async t => {
-  let resolveA; const pendingA = new Promise(done => { resolveA = done; });
+  const { promise: pendingA, resolve: resolveA } = Promise.withResolvers();
   const f = await fixture(t, async (path, method, body) => body.action === 'analyze' ? { total: 1 } : body.sessionId === 'A' ? pendingA : { rows: [{ id: 'B' }], total: 1, asOf: 2, nextCursor: null });
   f.route.query.runSession = 'A'; await nextTick();
   f.route.query.runSession = 'B'; await nextTick(); await nextTick(); await nextTick();

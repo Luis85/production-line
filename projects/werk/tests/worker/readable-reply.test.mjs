@@ -4,6 +4,7 @@ import { createSSRApp, h } from 'vue';
 import { renderToString } from '@vue/server-renderer';
 import { frontend } from '../ui/helpers/frontend-loader.mjs';
 import { codeSpan, lineChangeStats, patchReplyMessage, readableMarkdown, readableReply } from '../../src/worker/dist/worker/application/readable-reply.js';
+/** @type {Parameters<typeof readableReply>[1]} */
 const proposal = { fileTask: 'proposal' };
 const { markdownTokens, markdownNodes } = await frontend('src/worker/webview/markdown.ts');
 const render = text => renderToString(createSSRApp({ render: () => h('div', markdownNodes(markdownTokens(text))) }));
@@ -126,7 +127,9 @@ test('large bounded line statistics disclose that counts are approximate', () =>
 
 test('ordinary and implementation prose render literal globs without changing stored protocol text', async () => {
   const source = 'Review src/**/*.spec.ts and tests/**/*.ts.\nKeep [the guide](docs/guide.md) and \x60\x60a\x60b src/**/*.ts\x60\x60 literal.';
-  for (const context of [{}, { fileTask: 'implementation' }]) {
+  /** @type {Parameters<typeof readableReply>[1][]} */
+  const contexts = [{}, { fileTask: 'implementation' }];
+  for (const context of contexts) {
     const reply = readableReply(source, context);
     assert.equal(reply.kind, 'text'); assert.equal(reply.raw, undefined);
     assert.equal(readableReply(reply.text, context).text, reply.text, 'Already formatted saved prose must not gain repeated escaping or line breaks.');
@@ -190,7 +193,9 @@ test('long assistant replies retain the renderer’s bounded literal fallback', 
   const source = ('Review src/**/*.ts and **literal** <script>example()</script>\r\n').repeat(700);
   assert.ok(source.length > 32768);
   assert.equal(readableMarkdown(source), source, 'Oversized text is returned unchanged before Markdown preprocessing.');
-  for (const context of [{}, { fileTask: 'implementation' }]) {
+  /** @type {Parameters<typeof readableReply>[1][]} */
+  const contexts = [{}, { fileTask: 'implementation' }];
+  for (const context of contexts) {
     const reply = readableReply(source, context);
     assert.deepEqual(reply, { kind: 'text', text: source });
     const html = await render(reply.text);

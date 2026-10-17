@@ -62,7 +62,8 @@ contracts, and explanations describe the system and its limits.
 - [Runtime operator CLI](reference/runtime-cli.md)
 - [Configuration, environment and state](reference/configuration.md)
 - [Release artifacts and verification](reference/releases.md)
-- [Illustrated Storybook and storymaps](reference/releases.md#illustrated-storybook-and-storymaps): versioned UI stories and screenshot evidence.
+- [System handbook and frontend reference](reference/releases.md#illustrated-storybook-and-storymaps): versioned setup paths, component contracts and screenshot evidence.
+- [Mutation testing evidence](how-to/mutation-testing.md): read advisory release reports and understand the limited baseline; running the tool requires a source checkout.
 - [Access roles and audit events](reference/access-control.md)
 - [Security and authority boundaries](reference/security.md)
 

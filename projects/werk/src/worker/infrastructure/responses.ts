@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
-import type { Task } from '../../shared/contracts.js';
+import type { Task } from '../../shared/domain.js';
+import { identifier, taskInput } from '../../shared/validation.js';
+import { validateRequestGateEvidence } from '../../shared/request-gate.js';
 import type { Snapshot } from '../../shared/snapshots.js';
 import { validateContextReference } from './context.js';
 import { ReportingError } from '../application/errors.js';
@@ -11,17 +13,34 @@ export function responseRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-/** Validate fields needed for safe assignment routing and lease ownership. */
+/** Validate the consumed protocol before admitting an assignment; keep its original values and extensions. */
 export function assignmentResponse(value: unknown): Task {
   const task = responseRecord(value);
   if (typeof task.id !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(task.id) ||
       typeof task.lease !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(task.lease) ||
-      typeof task.project !== 'string' || typeof task.workerId !== 'string' ||
-      typeof task.profile !== 'string' || !Number.isSafeInteger(task.attempt) || (task.attempt as number) < 1 ||
-      typeof task.expiresAt !== 'number' || !Number.isSafeInteger(task.expiresAt) || task.status !== 'running') {
+      !Number.isSafeInteger(task.attempt) || Number(task.attempt) < 1 ||
+      !Number.isSafeInteger(task.expiresAt) || Number(task.expiresAt) < 0 ||
+      !Number.isSafeInteger(task.createdAt) || Number(task.createdAt) < 0 || task.status !== 'running') {
     return invalid('Invalid orchestrator assignment');
   }
-  if (task.context !== undefined) validateContextReference(task.context);
+  try {
+    for (const key of ['project', 'workerId', 'profile']) {
+      if (identifier(task[key], key) !== task[key]) return invalid('Invalid orchestrator assignment');
+    }
+    if (task.repository !== undefined && identifier(task.repository, 'repository') !== task.repository) return invalid('Invalid orchestrator assignment');
+    // An assignment is complete server-owned data, so input defaults must not
+    // manufacture missing fields. Project only input keys: lease authority and
+    // future response extensions must never be accepted as intake parameters.
+    const required = ['title', 'criteria', 'wikilinks', 'provider', 'priority'];
+    if (required.some(key => task[key] === undefined)) return invalid('Invalid orchestrator assignment');
+    const keys = ['project', 'repository', 'executionMode', 'title', 'requirementRef', 'criteria', 'wikilinks', 'provider', 'priority', 'source'];
+    taskInput(Object.fromEntries(keys.filter(key => task[key] !== undefined).map(key => [key, task[key]])));
+    if (task.context !== undefined) validateContextReference(task.context);
+    if (task.requestGate !== undefined) validateRequestGateEvidence(task.requestGate);
+  } catch {
+    // Never expose remote task text, source paths or validator internals in status.
+    return invalid('Invalid orchestrator assignment');
+  }
   return task as unknown as Task;
 }
 

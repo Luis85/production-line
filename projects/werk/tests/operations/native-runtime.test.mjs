@@ -1,3 +1,4 @@
+import { testErrorMessage, testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, rm, cp, lstat, symlink } from 'node:fs/promises';
@@ -18,7 +19,7 @@ const source = fileURLToPath(new URL('../../', import.meta.url));
 const exec = promisify(execFile);
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function directory(t) { const path = await mkdtemp(join(tmpdir(), 'werk-native-')); t.after(() => rm(path, { recursive: true, force: true })); return path; }
-async function freePort() { const server = netServer(); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); const port = server.address().port; await new Promise(resolve => server.close(resolve)); return port; }
+async function freePort() { const server = netServer(); await new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(undefined))); const port = testListeningAddress(server).port; await new Promise(resolve => server.close(resolve)); return port; }
 function launch(root, args) {
   const child = spawn(process.execPath, [join(root, 'werk.mjs'), ...args], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = '', stderr = '';
@@ -70,7 +71,7 @@ test('setup contention and native/Docker mode boundaries preserve existing state
 test('malformed private JSON never reflects credential bytes and oversized/symlink/special files fail boundedly', async t => {
   const root = await directory(t), file = join(root, 'credentials.json'), marker = 'private-credential-marker';
   await writeFile(file, marker, { mode: 0o600 });
-  await assert.rejects(readPrivate(file), error => /invalid JSON/.test(error.message) && !error.message.includes(marker) && !error.message.includes('private-cr'));
+  await assert.rejects(readPrivate(file), error => /invalid JSON/.test(testErrorMessage(error)) && !testErrorMessage(error).includes(marker) && !testErrorMessage(error).includes('private-cr'));
   await writeFile(file, 'x'.repeat(65537), { mode: 0o600 }); await assert.rejects(readPrivate(file), /Invalid/);
   if (process.platform !== 'win32') {
     const alias = join(root, 'alias'); await symlink(file, alias); await assert.rejects(readPrivate(alias), /regular file/);
@@ -86,12 +87,13 @@ test('runtime parser rejects ambiguous flags and service environments exclude in
 
 test('browser opening uses bounded platform commands without a shell or token-bearing URL', async () => {
   for (const [platform, executable] of [['linux', 'xdg-open'], ['darwin', 'open'], ['win32', 'rundll32.exe']]) {
+    /** @type {{command: string, args: string[], options: import('node:child_process').SpawnOptions}} */
     let called;
-    const result = await openBrowser('http://127.0.0.1:3000/', { platform, launch(command, args, options) { called = { command, args, options }; const child = new EventEmitter(); child.kill = () => {}; queueMicrotask(() => child.emit('close', 0)); return child; } });
+    const result = await openBrowser('http://127.0.0.1:3000/', { platform, launch(command, args, options) { called = { command, args, options }; const child = Object.assign(new EventEmitter(), { kill() {} }); queueMicrotask(() => child.emit('close', 0)); return child; } });
     assert.equal(result.opened, true); assert.equal(called.command, executable); assert.equal(called.options.shell, false); assert.equal(called.options.windowsHide, true); assert.ok(called.args.includes('http://127.0.0.1:3000/'));
   }
   let killed = false;
-  assert.equal((await openBrowser('http://127.0.0.1:3000/', { timeoutMs: 10, launch() { const child = new EventEmitter(); child.kill = () => { killed = true; }; return child; } })).opened, false);
+  assert.equal((await openBrowser('http://127.0.0.1:3000/', { timeoutMs: 10, launch() { const child = Object.assign(new EventEmitter(), { kill() { killed = true; } }); return child; } })).opened, false);
   assert.equal(killed, true);
   for (const url of ['https://example.com/', 'http://127.0.0.1:3000/#token=secret', 'http://secret@127.0.0.1:3000/']) await assert.rejects(openBrowser(url));
 });
@@ -101,7 +103,7 @@ test('malformed control authorization cannot crash the supervisor and valid auth
   const snapshot = () => ({ runId, state: 'running', project: 'demo', mode: 'mock', url: 'http://127.0.0.1:3000/', workers: [] });
   const server = await createControl({ runId, controlToken, snapshot, stop: () => { stops++; } });
   t.after(() => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }));
-  const port = server.address().port;
+  const port = testListeningAddress(server).port;
   const raw = headers => new Promise((resolve, reject) => { const req = request({ host: '127.0.0.1', port, path: '/status', headers }, res => { res.resume(); res.once('end', () => resolve(res.statusCode)); }); req.once('error', reject); req.end(); });
   assert.equal(await raw({ Authorization: 'Bearer ' + 'é'.repeat(64), 'X-Werk-Run': runId }), 401);
   assert.equal(await raw({ Authorization: 'Bearer ' + controlToken, 'X-Werk-Run': 'wrong' }), 401);
@@ -111,11 +113,13 @@ test('malformed control authorization cannot crash the supervisor and valid auth
 });
 
 test('authenticated status and stop preserve mock, live and mixed execution modes', async t => {
-  const runId = 'e'.repeat(64), controlToken = 'f'.repeat(64); let mode = 'mock';
+  const runId = 'e'.repeat(64), controlToken = 'f'.repeat(64);
+  /** @type {unknown} */
+  let mode = 'mock';
   const server = await createControl({ runId, controlToken,
     snapshot: () => ({ runId, state: 'running', project: 'example', mode, url: 'http://127.0.0.1:3000/', workers: [] }), stop() {} });
   t.after(() => new Promise(resolve => { server.close(resolve); server.closeAllConnections(); }));
-  const record = { schemaVersion: 1, runId, controlToken, pid: process.pid, controlPort: server.address().port, children: [] };
+  const record = { schemaVersion: 1, runId, controlToken, pid: process.pid, controlPort: testListeningAddress(server).port, children: [] };
   for (mode of ['mock', 'cli', 'mixed']) {
     assert.equal((await controlRequest(record)).mode, mode);
     assert.equal((await controlRequest(record, 'stop')).mode, mode);

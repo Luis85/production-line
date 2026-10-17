@@ -3,13 +3,16 @@
 In this tutorial you will start an extracted Werk release, submit one requirement
 reference and inspect a completed mock attempt. You need Node **24.x**, a browser
 and unused local ports **3000** (orchestrator) and **4100** (worker status). No provider account, npm install or source build is
-needed. The result is `simulated`: Werk does not run a coding provider or publish a PR.
+needed. This tutorial’s result is `simulated`: its default assignment does not run a
+coding provider or publish a PR. For a real coding workflow, use the
+[local worker tutorial](worker-feature-lifecycle.md) and
+[implementation guide](../how-to/implement-feature.md).
 
 ## Extract and configure
 
 Obtain the release archive and checksum file from your trusted delivery source.
 Follow the [release verification instructions](../reference/releases.md), extract
-it into a new directory, and open a terminal inside `werk-0.1.0`.
+it into a new directory, and open a terminal inside the extracted version directory.
 
 ```text
 node --version

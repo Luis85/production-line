@@ -1,0 +1,1143 @@
+{
+  "schemaVersion": 1,
+  "toolVersion": "3.33.1",
+  "reviewedAt": "2026-10-17",
+  "configSha256": "0bac7ec8d31b572f48cc61057c353ea00d5c9990219bb1c2df27e756049ee4b6",
+  "baselineSha256": "c4d77449332aa7563bc0ef4b42593124e320960fddc7355f84e55949eb81673a",
+  "scope": "Maintained application, CLI, build, runtime, documentation and test entrypoints. Final source-tree scan after architecture and typed-fixture refactors; service boundaries run separately without a baseline.",
+  "counts": {
+    "unused_files": 0,
+    "unused_exports": 75,
+    "unused_types": 27,
+    "private_type_leaks": 0,
+    "deprecated_exports_in_use": 0,
+    "unused_dependencies": 0,
+    "unused_dev_dependencies": 0,
+    "circular_dependencies": 1,
+    "re_export_cycles": 0,
+    "package_cycles": 0,
+    "unused_optional_dependencies": 0,
+    "unused_enum_members": 0,
+    "unused_class_members": 65,
+    "unused_store_members": 0,
+    "unprovided_injects": 0,
+    "unrendered_components": 0,
+    "unused_component_props": 0,
+    "absent_component_props": 0,
+    "unused_component_emits": 0,
+    "unused_component_inputs": 0,
+    "unused_component_outputs": 0,
+    "unused_svelte_events": 0,
+    "unused_server_actions": 0,
+    "unused_load_data_keys": 0,
+    "unresolved_imports": 0,
+    "unlisted_dependencies": 0,
+    "duplicate_exports": 8,
+    "type_only_dependencies": 0,
+    "test_only_dependencies": 0,
+    "dev_dependencies_in_production": 5,
+    "boundary_violations": 0,
+    "boundary_coverage_violations": 0,
+    "boundary_call_violations": 0,
+    "policy_violations": 0,
+    "stale_suppressions": 0,
+    "unused_catalog_entries": 0,
+    "empty_catalog_groups": 0,
+    "unresolved_catalog_references": 0,
+    "unused_dependency_overrides": 0,
+    "misconfigured_dependency_overrides": 0,
+    "invalid_client_exports": 0,
+    "mixed_client_server_barrels": 0,
+    "misplaced_directives": 0,
+    "route_collisions": 0,
+    "dynamic_segment_name_conflicts": 0
+  },
+  "findings": [
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:scripts/release/install.mjs:release",
+      "classification": "retained-api-debt",
+      "rationale": "The standalone installer template is a published release asset. Its version-pinned configuration and startup entry remain available; removal is deferred to an explicit installer API review."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:scripts/release/install.mjs:start",
+      "classification": "retained-api-debt",
+      "rationale": "The standalone installer template is a published release asset. Its version-pinned configuration and startup entry remain available; removal is deferred to an explicit installer API review."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/orchestrator/application.ts:WorkerOperations",
+      "classification": "retained-api-debt",
+      "rationale": "Explicit compatibility facade retains prior source/compiled import paths after focused-module extraction. Removing the old path requires an intentional migration; this is retained API debt."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/orchestrator/webview/concept/workspace.mjs:conceptViews",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported conceptViews in src/orchestrator/webview/concept/workspace.mjs is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/shared/contracts.ts:sha256",
+      "classification": "retained-api-debt",
+      "rationale": "Explicit compatibility facade retains prior source/compiled import paths after focused-module extraction. Removing the old path requires an intentional migration; this is retained API debt."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/shared/html.ts:escapeHtml",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported escapeHtml in src/shared/html.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/shared/http/access.ts:validateAccess",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/shared/http/access.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/shared/http/client.ts:DEFAULT_REQUEST_TIMEOUT_MS",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/operations/portable-cli-input-timeout.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/shared/http/client.ts:RequestTimeoutError",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/operations/portable-cli-input-timeout.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/shared/http/observability.ts:routeName",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/shared/http/observability.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/shared/http/observability.ts:safeErrorCode",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/shared/http/observability.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/shared/http/observability.ts:serviceRoutes",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/shared/http/observability.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/shared/http/observability.ts:stateWriteSites",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/shared/http/observability.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/shared/io.ts:args",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/shared/contracts-polish.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/shared/io.ts:escapeHtml",
+      "classification": "retained-api-debt",
+      "rationale": "Explicit compatibility facade retains prior source/compiled import paths after focused-module extraction. Removing the old path requires an intentional migration; this is retained API debt."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/shared/io.ts:fail",
+      "classification": "retained-api-debt",
+      "rationale": "Explicit compatibility facade retains prior source/compiled import paths after focused-module extraction. Removing the old path requires an intentional migration; this is retained API debt."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/shared/io.ts:input",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/shared/contracts-polish.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/shared/io.ts:integer",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/shared/contracts-polish.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/shared/io.ts:readJson",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/shared/contracts-polish.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/shared/io.ts:request",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/shared/contracts-polish.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/shared/io.ts:validateOptions",
+      "classification": "retained-api-debt",
+      "rationale": "Explicit compatibility facade retains prior source/compiled import paths after focused-module extraction. Removing the old path requires an intentional migration; this is retained API debt."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/shared/mcp/stdio.ts:serveStdio",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/shared/mcp/mcp-hardening.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/shared/webview/http.ts:WebviewHttpError",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported WebviewHttpError in src/shared/webview/http.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/shared/webview/http.ts:boundedSignal",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported boundedSignal in src/shared/webview/http.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/shared/webview/markdown.ts:safeMarkdownLink",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported safeMarkdownLink in src/shared/webview/markdown.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/application/approved-paths.ts:maxApprovedPathLength",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported maxApprovedPathLength in src/worker/application/approved-paths.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/application/approved-paths.ts:safeApprovedPath",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/worker/approved-paths.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/application/cli-tool-policy.ts:cliToolDefaults",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported cliToolDefaults in src/worker/application/cli-tool-policy.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/application/consumption.ts:consumptionStatus",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported consumptionStatus in src/worker/application/consumption.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/application/consumption.ts:consumptionWindow",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/worker/consumption.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/application/consumption.ts:observeConsumption",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported observeConsumption in src/worker/application/consumption.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/application/definitions.ts:definitionReference",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported definitionReference in src/worker/application/definitions.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/application/definitions.ts:definitionRevision",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported definitionRevision in src/worker/application/definitions.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/application/definitions.ts:previewDefinition",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/worker/application-fixtures.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/application/development.ts:developmentCheckFingerprint",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/worker/development-notes.test.mjs, tests/worker/development-policy.test.mjs, tests/worker/development-verification.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/application/execution-policy.ts:MIN_MAX_RUNTIME_MS",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported MIN_MAX_RUNTIME_MS in src/worker/application/execution-policy.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/application/feature-tracking.ts:projectFeatureTracking",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/worker/development-notes.test.mjs, tests/worker/feature-tracking.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/application/feature-workflow.ts:evaluateFeatureDone",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/worker/feature-workflow.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/application/patch-protocol.ts:PATCH_REPLY_LIMITS",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/worker/review-patch.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/application/readable-reply.ts:codeSpan",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/worker/readable-reply.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/application/readable-reply.ts:readableMarkdown",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/worker/readable-reply.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/application/request-review.ts:parseAdvisoryReview",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/worker/request-review-schema.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/application/tool-policy.ts:assertChatDirectories",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported assertChatDirectories in src/worker/application/tool-policy.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/application/tool-policy.ts:validateToolDefinitions",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported validateToolDefinitions in src/worker/application/tool-policy.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/infrastructure/cli-tool-bridge.ts:bridgeToolTimeoutMs",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/worker/tool-budget.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/infrastructure/codex-adapter.ts:providerEnvironment",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/worker/windows-claude-cli.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/infrastructure/feature-authoring.ts:authoringManifestPath",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported authoringManifestPath in src/worker/infrastructure/feature-authoring.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/infrastructure/feature-authoring.ts:authoringScriptPath",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported authoringScriptPath in src/worker/infrastructure/feature-authoring.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/infrastructure/features/git-io.ts:ordinaryDirectory",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported ordinaryDirectory in src/worker/infrastructure/features/git-io.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/infrastructure/features/git-io.ts:removeLinks",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/worker/publication-worktree-links.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/infrastructure/features/git-repository.ts:GitFeatureError",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported GitFeatureError in src/worker/infrastructure/features/git-repository.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/infrastructure/features/workflow.ts:featureRequestSections",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/worker/feature-workflow.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/infrastructure/project-integrations.ts:seedProjectIntegrations",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/operations/agent-integrations.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/infrastructure/provider-account.ts:parseProviderAccount",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/worker/provider-account.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/infrastructure/provider-process.ts:providerEnvironment",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported providerEnvironment in src/worker/infrastructure/provider-process.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/infrastructure/providers.ts:claudeArguments",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/worker/windows-claude-cli.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/infrastructure/providers.ts:claudeToolEnvironment",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/worker/provider-tool-limits.test.mjs, tests/worker/tool-budget.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/infrastructure/tool-mcp-stdio.ts:mcpEnvironment",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported mcpEnvironment in src/worker/infrastructure/tool-mcp-stdio.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/infrastructure/tool-runtime.ts:mcpToolName",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/worker/tool-chat-directory.test.mjs, tests/worker/tool-limits.test.mjs, tests/worker/tool-provider-integration.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/infrastructure/tool-runtime.ts:toolBudgetMessage",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported toolBudgetMessage in src/worker/infrastructure/tool-runtime.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/infrastructure/tool-runtime.ts:toolBudgetNote",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/worker/tool-budget-exhaustion.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/infrastructure/workspace-services.ts:createWorkerDefinitions",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/worker/application-fixtures.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/infrastructure/workspace-services.ts:workspaceModelFactory",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/worker/application-fixtures.mjs, tests/worker/application-ports.test.mjs, tests/worker/consumption-runner.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/runner.ts:MockAdapter",
+      "classification": "retained-api-debt",
+      "rationale": "Explicit compatibility facade retains prior source/compiled import paths after focused-module extraction. Removing the old path requires an intentional migration; this is retained API debt."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/runner.ts:reportWithRetry",
+      "classification": "compiled-test-consumer",
+      "rationale": "Named imports in tests/worker/worker-polish.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/webview/shared-intake-editor.ts:defaultSharedIntakeConfig",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported defaultSharedIntakeConfig in src/worker/webview/shared-intake-editor.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/webview/status/store.ts:validateStatus",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported validateStatus in src/worker/webview/status/store.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/webview/tool-access-editor.ts:formatCliRules",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported formatCliRules in src/worker/webview/tool-access-editor.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/webview/tool-access-editor.ts:parseCliRules",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported parseCliRules in src/worker/webview/tool-access-editor.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:src/worker/webview/tool-access-editor.ts:toolTimeoutMs",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported toolTimeoutMs in src/worker/webview/tool-access-editor.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:storybook/fixtures/portfolio.ts:factories",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported factories in storybook/fixtures/portfolio.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:storybook/fixtures/portfolio.ts:overview",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported overview in storybook/fixtures/portfolio.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:storybook/fixtures/portfolio.ts:tasks",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported tasks in storybook/fixtures/portfolio.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:storybook/worker-fixtures.ts:fileReplyFixture",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported fileReplyFixture in storybook/worker-fixtures.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_exports",
+      "identity": "unused-export:storybook/worker-fixtures.ts:fixtureUsage",
+      "classification": "retained-api-debt",
+      "rationale": "Existing exported fixtureUsage in storybook/worker-fixtures.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/factory/webview/taskboard.ts:SourceTaskPage",
+      "classification": "retained-api-debt",
+      "rationale": "SourceTaskPage remains an exported contract in src/factory/webview/taskboard.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/orchestrator/intake/iteration.ts:ImportResult",
+      "classification": "retained-api-debt",
+      "rationale": "ImportResult remains an exported contract in src/orchestrator/intake/iteration.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/shared/contracts.ts:Provider",
+      "classification": "retained-api-debt",
+      "rationale": "Provider remains an exported contract in src/shared/contracts.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/shared/protocol.ts:ClaimRequest",
+      "classification": "retained-api-debt",
+      "rationale": "ClaimRequest remains an exported contract in src/shared/protocol.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/shared/protocol.ts:ClaimResponse",
+      "classification": "retained-api-debt",
+      "rationale": "ClaimResponse remains an exported contract in src/shared/protocol.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/shared/protocol.ts:ErrorResponse",
+      "classification": "retained-api-debt",
+      "rationale": "ErrorResponse remains an exported contract in src/shared/protocol.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/shared/protocol.ts:HealthResponse",
+      "classification": "retained-api-debt",
+      "rationale": "HealthResponse remains an exported contract in src/shared/protocol.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/shared/protocol.ts:LeaseRequest",
+      "classification": "retained-api-debt",
+      "rationale": "LeaseRequest remains an exported contract in src/shared/protocol.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/shared/protocol.ts:RegistrationRequest",
+      "classification": "retained-api-debt",
+      "rationale": "RegistrationRequest remains an exported contract in src/shared/protocol.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/shared/protocol.ts:RegistrationResponse",
+      "classification": "retained-api-debt",
+      "rationale": "RegistrationResponse remains an exported contract in src/shared/protocol.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/shared/protocol.ts:SnapshotListResponse",
+      "classification": "retained-api-debt",
+      "rationale": "SnapshotListResponse remains an exported contract in src/shared/protocol.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/shared/webview/line-interaction.ts:InteractionMessage",
+      "classification": "retained-api-debt",
+      "rationale": "InteractionMessage remains an exported contract in src/shared/webview/line-interaction.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/worker/application/development-verification.ts:ClassifiedDevelopmentCheck",
+      "classification": "retained-api-debt",
+      "rationale": "ClassifiedDevelopmentCheck remains an exported contract in src/worker/application/development-verification.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/worker/application/tool-policy.ts:CommandPreset",
+      "classification": "retained-api-debt",
+      "rationale": "CommandPreset remains an exported contract in src/worker/application/tool-policy.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/worker/infrastructure/project-integrations.ts:IntegrationFile",
+      "classification": "retained-api-debt",
+      "rationale": "IntegrationFile remains an exported contract in src/worker/infrastructure/project-integrations.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/worker/infrastructure/project-integrations.ts:IntegrationPlan",
+      "classification": "retained-api-debt",
+      "rationale": "IntegrationPlan remains an exported contract in src/worker/infrastructure/project-integrations.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/worker/infrastructure/tool-mcp.ts:McpClientDependencies",
+      "classification": "retained-api-debt",
+      "rationale": "McpClientDependencies remains an exported contract in src/worker/infrastructure/tool-mcp.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/worker/infrastructure/tool-mcp.ts:McpToolDefinition",
+      "classification": "retained-api-debt",
+      "rationale": "McpToolDefinition remains an exported contract in src/worker/infrastructure/tool-mcp.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/worker/webview/execution-profile-editor.ts:ExecutionProfilesView",
+      "classification": "retained-api-debt",
+      "rationale": "ExecutionProfilesView remains an exported contract in src/worker/webview/execution-profile-editor.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/worker/webview/execution-profile-editor.ts:ProfileCommand",
+      "classification": "retained-api-debt",
+      "rationale": "ProfileCommand remains an exported contract in src/worker/webview/execution-profile-editor.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/worker/webview/request-gate-controller.ts:GateControllerContext",
+      "classification": "retained-api-debt",
+      "rationale": "GateControllerContext remains an exported contract in src/worker/webview/request-gate-controller.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/worker/webview/request-gate-controller.ts:GateDispatchReceipt",
+      "classification": "retained-api-debt",
+      "rationale": "GateDispatchReceipt remains an exported contract in src/worker/webview/request-gate-controller.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/worker/webview/request-gate-controller.ts:GateMutationResult",
+      "classification": "retained-api-debt",
+      "rationale": "GateMutationResult remains an exported contract in src/worker/webview/request-gate-controller.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/worker/webview/store.ts:AgentDefinition",
+      "classification": "retained-api-debt",
+      "rationale": "AgentDefinition remains an exported contract in src/worker/webview/store.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/worker/webview/store.ts:HistoryRow",
+      "classification": "retained-api-debt",
+      "rationale": "HistoryRow remains an exported contract in src/worker/webview/store.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/worker/webview/tool-access-editor.ts:CliToolDraft",
+      "classification": "retained-api-debt",
+      "rationale": "CliToolDraft remains an exported contract in src/worker/webview/tool-access-editor.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "unused_types",
+      "identity": "unused-type:src/worker/webview/tool-access-editor.ts:CommandDraft",
+      "classification": "retained-api-debt",
+      "rationale": "CommandDraft remains an exported contract in src/worker/webview/tool-access-editor.ts. Preserved for source consumers, adapters and prior import-path compatibility; removal would require a deliberate API review. It is retained API surface debt, not asserted to be a false positive."
+    },
+    {
+      "category": "circular_dependencies",
+      "identity": "circular-dependency:tests/helpers/workspace-processes.mjs|tests/helpers/workspace-watchdog.mjs",
+      "classification": "subprocess-boundary",
+      "rationale": "The workspace-processes helper constructs a child-process URL to workspace-watchdog; that separate watchdog imports cleanup helpers. Reviewed as a subprocess boundary rather than a same-process module initialization cycle."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/orchestrator/application/worker-operations.ts:WorkerOperations:claim",
+      "classification": "interface-dispatch",
+      "rationale": "src/orchestrator/application/worker-operations.ts retains WorkerOperations:claim on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/orchestrator/application/worker-operations.ts:WorkerOperations:context",
+      "classification": "interface-dispatch",
+      "rationale": "src/orchestrator/application/worker-operations.ts retains WorkerOperations:context on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/orchestrator/application/worker-operations.ts:WorkerOperations:current",
+      "classification": "interface-dispatch",
+      "rationale": "src/orchestrator/application/worker-operations.ts retains WorkerOperations:current on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/orchestrator/application/worker-operations.ts:WorkerOperations:execute",
+      "classification": "interface-dispatch",
+      "rationale": "src/orchestrator/application/worker-operations.ts retains WorkerOperations:execute on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/orchestrator/application/worker-operations.ts:WorkerOperations:snapshot",
+      "classification": "interface-dispatch",
+      "rationale": "src/orchestrator/application/worker-operations.ts retains WorkerOperations:snapshot on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/orchestrator/application/worker-operations.ts:WorkerOperations:updateProfiles",
+      "classification": "interface-dispatch",
+      "rationale": "src/orchestrator/application/worker-operations.ts retains WorkerOperations:updateProfiles on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/orchestrator/persistence/store.ts:Store:checkLease",
+      "classification": "interface-dispatch",
+      "rationale": "src/orchestrator/persistence/store.ts retains Store:checkLease on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/orchestrator/persistence/store.ts:Store:event",
+      "classification": "interface-dispatch",
+      "rationale": "src/orchestrator/persistence/store.ts retains Store:event on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/shared/http/server-lifecycle.ts:HttpRequestLifecycle:drain",
+      "classification": "interface-dispatch",
+      "rationale": "src/shared/http/server-lifecycle.ts retains HttpRequestLifecycle:drain on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/shared/http/server-lifecycle.ts:HttpRequestLifecycle:stop",
+      "classification": "interface-dispatch",
+      "rationale": "src/shared/http/server-lifecycle.ts retains HttpRequestLifecycle:stop on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/application/conversation.ts:WorkerConversation:clear",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/application/conversation.ts retains WorkerConversation:clear on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/application/definitions.ts:WorkerDefinitions:action",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/application/definitions.ts retains WorkerDefinitions:action on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/application/feature-tracking.ts:FeatureTracking:record",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/application/feature-tracking.ts retains FeatureTracking:record on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/application/local-tasks.ts:LocalTaskboard:tick",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/application/local-tasks.ts retains LocalTaskboard:tick on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/application/remote-request-gates.ts:RemoteRequestGates:recoverSnapshot",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/application/remote-request-gates.ts retains RemoteRequestGates:recoverSnapshot on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/application/request-review.ts:RequestReviewManager:cancelSessionAndDrain",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/application/request-review.ts retains RequestReviewManager:cancelSessionAndDrain on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/application/request-review.ts:RequestReviewManager:snapshot",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/application/request-review.ts retains RequestReviewManager:snapshot on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/application/resource-monitor.ts:WorkerResourceMonitor:status",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/application/resource-monitor.ts retains WorkerResourceMonitor:status on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/application/serial-executor.ts:SerialExecutor:run",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/application/serial-executor.ts retains SerialExecutor:run on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/application/serial-executor.ts:SerialExecutor:startedAt",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/application/serial-executor.ts retains SerialExecutor:startedAt on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/application/serial-executor.ts:SerialExecutor:startedMonotonicAt",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/application/serial-executor.ts retains SerialExecutor:startedMonotonicAt on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/application/sessions.ts:WorkerSessions:action",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/application/sessions.ts retains WorkerSessions:action on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/application/sessions.ts:WorkerSessions:assertSelected",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/application/sessions.ts retains WorkerSessions:assertSelected on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/application/sessions.ts:WorkerSessions:blockContinuation",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/application/sessions.ts retains WorkerSessions:blockContinuation on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/application/sessions.ts:WorkerSessions:prepareTask",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/application/sessions.ts retains WorkerSessions:prepareTask on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/application/sessions.ts:WorkerSessions:protectTask",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/application/sessions.ts retains WorkerSessions:protectTask on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/application/sessions.ts:WorkerSessions:recordTask",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/application/sessions.ts retains WorkerSessions:recordTask on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/application/sessions.ts:WorkerSessions:reloadProviders",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/application/sessions.ts retains WorkerSessions:reloadProviders on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/application/sessions.ts:WorkerSessions:setTaskState",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/application/sessions.ts retains WorkerSessions:setTaskState on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/conversation.ts:CodexConversationModel:reply",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/conversation.ts retains CodexConversationModel:reply on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/conversation.ts:CodexConversationModel:toolManifest",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/conversation.ts retains CodexConversationModel:toolManifest on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/conversation.ts:CodexConversationModel:toolManifestFor",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/conversation.ts retains CodexConversationModel:toolManifestFor on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/features/git-repository.ts:GitFeatureRepository:snapshot",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/features/git-repository.ts retains GitFeatureRepository:snapshot on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/interactions.ts:WorkerInteractionJournal:init",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/interactions.ts retains WorkerInteractionJournal:init on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/interactions.ts:WorkerInteractionJournal:resultForRun",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/interactions.ts retains WorkerInteractionJournal:resultForRun on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/interactions.ts:WorkerInteractionJournal:retainSessions",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/interactions.ts retains WorkerInteractionJournal:retainSessions on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/local-runs.ts:WorkerRunJournal:analyze",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/local-runs.ts retains WorkerRunJournal:analyze on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/local-runs.ts:WorkerRunJournal:begin",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/local-runs.ts retains WorkerRunJournal:begin on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/local-runs.ts:WorkerRunJournal:close",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/local-runs.ts retains WorkerRunJournal:close on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/local-runs.ts:WorkerRunJournal:finish",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/local-runs.ts retains WorkerRunJournal:finish on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/local-runs.ts:WorkerRunJournal:init",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/local-runs.ts retains WorkerRunJournal:init on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/local-runs.ts:WorkerRunJournal:latest",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/local-runs.ts retains WorkerRunJournal:latest on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/local-runs.ts:WorkerRunJournal:list",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/local-runs.ts retains WorkerRunJournal:list on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/local-runs.ts:WorkerRunJournal:observeUsage",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/local-runs.ts retains WorkerRunJournal:observeUsage on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/local-runs.ts:WorkerRunJournal:start",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/local-runs.ts retains WorkerRunJournal:start on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/requests.ts:WorkerRequestJournal:close",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/requests.ts retains WorkerRequestJournal:close on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/requests.ts:WorkerRequestJournal:completeReview",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/requests.ts retains WorkerRequestJournal:completeReview on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/requests.ts:WorkerRequestJournal:events",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/requests.ts retains WorkerRequestJournal:events on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/requests.ts:WorkerRequestJournal:execution",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/requests.ts retains WorkerRequestJournal:execution on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/requests.ts:WorkerRequestJournal:failReview",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/requests.ts retains WorkerRequestJournal:failReview on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/requests.ts:WorkerRequestJournal:init",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/requests.ts retains WorkerRequestJournal:init on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/requests.ts:WorkerRequestJournal:list",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/requests.ts retains WorkerRequestJournal:list on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/requests.ts:WorkerRequestJournal:observeReviewUsage",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/requests.ts retains WorkerRequestJournal:observeReviewUsage on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/requests.ts:WorkerRequestJournal:policy",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/requests.ts retains WorkerRequestJournal:policy on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/requests.ts:WorkerRequestJournal:queuedReviews",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/requests.ts retains WorkerRequestJournal:queuedReviews on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/requests.ts:WorkerRequestJournal:reserveReview",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/requests.ts retains WorkerRequestJournal:reserveReview on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/requests.ts:WorkerRequestJournal:setPolicy",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/requests.ts retains WorkerRequestJournal:setPolicy on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/requests.ts:WorkerRequestJournal:startReview",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/requests.ts retains WorkerRequestJournal:startReview on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/snapshots.ts:SnapshotJournal:checkpoint",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/snapshots.ts retains SnapshotJournal:checkpoint on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/snapshots.ts:SnapshotJournal:started",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/journal/snapshots.ts retains SnapshotJournal:started on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/repository-discovery.ts:RepositoryDiscovery:legacyAllowed",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/infrastructure/repository-discovery.ts retains RepositoryDiscovery:legacyAllowed on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/status/workspace.ts:WorkerWorkspace:chat",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/status/workspace.ts retains WorkerWorkspace:chat on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/status/workspace.ts:WorkerWorkspace:featureView",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/status/workspace.ts retains WorkerWorkspace:featureView on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/status/workspace.ts:WorkerWorkspace:sharedRuntime",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/status/workspace.ts retains WorkerWorkspace:sharedRuntime on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/status/workspace.ts:WorkerWorkspace:taskDetail",
+      "classification": "interface-dispatch",
+      "rationale": "src/worker/status/workspace.ts retains WorkerWorkspace:taskDetail on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
+    },
+    {
+      "category": "duplicate_exports",
+      "identity": "duplicate-export:LocalTaskboard:src/worker/application/local-tasks.ts|tests/worker/application-fixtures.mjs",
+      "classification": "distinct-module-namespace",
+      "rationale": "The test fixture re-exports the genuine composition factory under the application class name; it preserves inferred arguments and return contracts rather than wrapping them in an untyped function. Production class and test composition namespaces are intentionally distinct."
+    },
+    {
+      "category": "duplicate_exports",
+      "identity": "duplicate-export:WorkerSessions:src/worker/application/sessions.ts|tests/worker/application-fixtures.mjs",
+      "classification": "distinct-module-namespace",
+      "rationale": "The test fixture re-exports the genuine composition factory under the application class name; it preserves inferred arguments and return contracts rather than wrapping them in an untyped function. Production class and test composition namespaces are intentionally distinct."
+    },
+    {
+      "category": "duplicate_exports",
+      "identity": "duplicate-export:featureWorkflowPath:src/worker/application/feature-workflow.ts|src/worker/infrastructure/feature-authoring.ts",
+      "classification": "distinct-module-namespace",
+      "rationale": "Same name in separate CLI/service modules or a compatibility re-export. Call sites select an explicit module; these are not duplicate runtime implementations to consolidate by name alone."
+    },
+    {
+      "category": "duplicate_exports",
+      "identity": "duplicate-export:main:scripts/runtime/cli.mjs|scripts/system/cli.mjs",
+      "classification": "distinct-module-namespace",
+      "rationale": "Same name in separate CLI/service modules or a compatibility re-export. Call sites select an explicit module; these are not duplicate runtime implementations to consolidate by name alone."
+    },
+    {
+      "category": "duplicate_exports",
+      "identity": "duplicate-export:parse:scripts/runtime/cli.mjs|scripts/system/cli.mjs",
+      "classification": "distinct-module-namespace",
+      "rationale": "Same name in separate CLI/service modules or a compatibility re-export. Call sites select an explicit module; these are not duplicate runtime implementations to consolidate by name alone."
+    },
+    {
+      "category": "duplicate_exports",
+      "identity": "duplicate-export:reportWithRetry:src/worker/application/reporting.ts|src/worker/runner.ts",
+      "classification": "distinct-module-namespace",
+      "rationale": "Same name in separate CLI/service modules or a compatibility re-export. Call sites select an explicit module; these are not duplicate runtime implementations to consolidate by name alone."
+    },
+    {
+      "category": "duplicate_exports",
+      "identity": "duplicate-export:validateDefinition:scripts/system/definition.mjs|src/guide/webview/composer.ts",
+      "classification": "distinct-module-namespace",
+      "rationale": "Same name in separate CLI/service modules or a compatibility re-export. Call sites select an explicit module; these are not duplicate runtime implementations to consolidate by name alone."
+    },
+    {
+      "category": "duplicate_exports",
+      "identity": "duplicate-export:workspaceModelFactory:src/worker/infrastructure/workspace-services.ts|tests/worker/application-fixtures.mjs",
+      "classification": "distinct-module-namespace",
+      "rationale": "The test fixture re-exports the genuine composition factory under the application class name; it preserves inferred arguments and return contracts rather than wrapping them in an untyped function. Production class and test composition namespaces are intentionally distinct."
+    },
+    {
+      "category": "dev_dependencies_in_production",
+      "identity": "dev-dependency-in-production:package.json:@nuxt/ui",
+      "classification": "build-or-qualification-dependency",
+      "rationale": "Browser build dependency bundled into generated public assets; downloaded service distributions do not resolve this package at runtime."
+    },
+    {
+      "category": "dev_dependencies_in_production",
+      "identity": "dev-dependency-in-production:package.json:@vue/compiler-sfc",
+      "classification": "build-or-qualification-dependency",
+      "rationale": "Used by contributor source analysis, Storybook generation and Vue fixtures; not part of a downloaded worker runtime."
+    },
+    {
+      "category": "dev_dependencies_in_production",
+      "identity": "dev-dependency-in-production:package.json:fflate",
+      "classification": "build-or-qualification-dependency",
+      "rationale": "Used by release archive construction/extraction qualification scripts in the source checkout; not imported by shipped service applications."
+    },
+    {
+      "category": "dev_dependencies_in_production",
+      "identity": "dev-dependency-in-production:package.json:tar",
+      "classification": "build-or-qualification-dependency",
+      "rationale": "Used by release archive construction/extraction qualification scripts in the source checkout; not imported by shipped service applications."
+    },
+    {
+      "category": "dev_dependencies_in_production",
+      "identity": "dev-dependency-in-production:package.json:vue",
+      "classification": "build-or-qualification-dependency",
+      "rationale": "Browser build dependency bundled into generated public assets; downloaded service distributions do not resolve this package at runtime."
+    }
+  ]
+}

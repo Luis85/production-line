@@ -1,3 +1,5 @@
+import { testErrorOutput } from '../helpers/process-errors.mjs';
+import { testErrorCode, testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, cp, writeFile, readFile, rm, access, symlink } from 'node:fs/promises';
@@ -22,7 +24,7 @@ test('both fleet entrypoints execute through directory aliases while importing t
     await mkdir(join(root, 'scripts'), { recursive: true });
     await symlink(root, alias, 'dir');
     for (const name of ['fleet.mjs', 'factory-fleet.mjs']) await cp(new URL('../../scripts/' + name, import.meta.url), join(root, 'scripts', name));
-    for (const name of ['fleet.mjs', 'factory-fleet.mjs']) await assert.rejects(exec(process.execPath, [join(alias, 'scripts', name), '--unknown']), error => error.code === 1 && /Usage: npm run dev:/.test(error.stderr));
+    for (const name of ['fleet.mjs', 'factory-fleet.mjs']) await assert.rejects(exec(process.execPath, [join(alias, 'scripts', name), '--unknown']), error => testErrorCode(error) === 1 && /Usage: npm run dev:/.test(testErrorOutput(error, 'stderr')));
     await rm(join(root, '.state'), { recursive: true, force: true });
     const importer = join(root, 'import-only.mjs');
     await writeFile(importer, "await import('./scripts/fleet.mjs'); await import('./scripts/factory-fleet.mjs'); console.log('imported');\n");
@@ -45,8 +47,8 @@ test('fleet credential reuse accepts only distinct generated secrets',()=>{
   assert.throws(()=>validateCredentials({...secrets,WERK_ADMIN_TOKEN:"'$(unsafe)"}));
 });
 test('fleet port preflight refuses an occupied listener',async()=>{
-  const server=createServer();await new Promise(r=>server.listen(0,'127.0.0.1',r));
-  try {await assert.rejects(assertFreePort(server.address().port));}finally{await new Promise(r=>server.close(r));}
+  const server=createServer();await new Promise(r=>server.listen(0,'127.0.0.1',() => r(undefined)));
+  try {await assert.rejects(assertFreePort(testListeningAddress(server).port));}finally{await new Promise(r=>server.close(r));}
 });
 test('clean standalone build removes stale output and compiles nested shared modules',async()=>{
   const root=await mkdtemp(join(tmpdir(),'werk-build-'));
@@ -87,8 +89,8 @@ test('clean standalone build removes stale output and compiles nested shared mod
 test('fleet reuses credentials, exports custom URL and drains workers before server', { skip:process.platform==='win32' }, async()=>{
   const root=await mkdtemp(join(tmpdir(),'werk-fleet-'));
   const listeners=[createServer(),createServer()];
-  await Promise.all(listeners.map(s=>new Promise(r=>s.listen(0,'127.0.0.1',r))));
-  const [port,status]=listeners.map(s=>s.address().port);await Promise.all(listeners.map(s=>new Promise(r=>s.close(r))));
+  await Promise.all(listeners.map(s=>new Promise(r=>s.listen(0,'127.0.0.1',() => r(undefined)))));
+  const [port,status]=listeners.map(s=>testListeningAddress(s).port);await Promise.all(listeners.map(s=>new Promise(r=>s.close(r))));
   let child;
   try{
     await mkdir(join(root,'scripts'));await cp(new URL('../../scripts/fleet.mjs',import.meta.url),join(root,'scripts/fleet.mjs'));

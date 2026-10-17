@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 const root=fileURLToPath(new URL('../',import.meta.url));
 /** Node resolves module URLs through aliases such as macOS /var -> /private/var. */
+/** @param {string | URL} moduleUrl @param {string | URL} [entry] */
 export function isMainScript(moduleUrl, entry = process.argv[1]) {
   if (!entry) return false;
   try { return realpathSync(entry) === realpathSync(fileURLToPath(moduleUrl)); }

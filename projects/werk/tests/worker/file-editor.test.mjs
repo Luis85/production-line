@@ -1,3 +1,4 @@
+import { requiredValue } from '../ui/helpers/required-value.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -40,8 +41,8 @@ test('file edits are opt-in and use the single request command, with duplicate s
   assert.ok(f.events.some(([event, id]) => event === 'created' && id === 'local-' + commands[0].id));
 });
 test('ordinary requests omit file permissions even when repository paths were drafted earlier', async () => {
-  let submitted; const f = await editorFixture(async command => { submitted = command; return { session: { id: command.id }, chat: {} }; });
-  assert.equal(f.intake.fileChanges, false); await f.create(); assert.equal(submitted.files, undefined); assert.equal(submitted.message, 'Clarify the navigation.');
+  let submitted = /** @type {{ value?: import('../../src/worker/webview/store.ts').FeatureRequestCommand }} */ ({}); const f = await editorFixture(async command => { submitted.value = command; return { session: { id: command.id }, chat: {} }; });
+  assert.equal(f.intake.fileChanges, false); await f.create(); assert.equal(requiredValue(submitted.value).files, undefined); assert.equal(requiredValue(submitted.value).message, 'Clarify the navigation.');
 });
 test('provider mismatch and missing adaptation block the unified request; rejected input stays editable', async () => {
   let calls = 0; const f = await editorFixture(async () => { calls++; throw Object.assign(Error('Invalid repository'), { status: 400 }); });
@@ -64,11 +65,11 @@ test('collapsing optional repository fields retains input and the single compose
   await f.focusInstructions(); assert.equal(f.focused.at(-1), 'new-task-instructions');
 });
 test('assigned IDs, unsafe paths and duplicates are validated before granting file changes', async () => {
-  let submitted; const f = await editorFixture(async command => { submitted = command; return { session: { id: command.id }, chat: {} }; });
+  let submitted = /** @type {{ value?: import('../../src/worker/webview/store.ts').FeatureRequestCommand }} */ ({}); const f = await editorFixture(async command => { submitted.value = command; return { session: { id: command.id }, chat: {} }; });
   f.state.settings.repositories.items = [{ id: 'web', path: '/projects/web' }, { id: 'api', path: '/projects/api' }]; f.intake.fileChanges = true;
   f.intake.repository = 'missing'; assert.equal(f.canCreate.value, false); f.intake.repository = 'web';
   for (const paths of ['../secret', '.env', 'src/a.ts\nsrc/a.ts', 'secrets.json', '']) { f.intake.paths = paths; assert.equal(f.canCreate.value, false, paths); }
-  f.intake.paths = 'src/a.ts\nsrc/new.ts'; assert.equal(f.canCreate.value, true); await f.create(); assert.equal(submitted.files.repository, 'web');
+  f.intake.paths = 'src/a.ts\nsrc/new.ts'; assert.equal(f.canCreate.value, true); await f.create(); assert.equal(requiredValue(requiredValue(submitted.value).files).repository, 'web');
 });
 test('explicit lock during creation clears the operation and ignores its late identity', async () => {
   const pending = deferred(), f = await editorFixture(() => pending.promise); const creating = f.create();
@@ -124,13 +125,13 @@ test('repository implementation preview requires file access and an enabled expl
 
 
 test('assigned repository choices display the complete checkout while the unified command submits its ID', async () => {
-  let submitted;
-  const f = await editorFixture(async command => { submitted = command; return { session: { id: command.id }, chat: {} }; });
+  let submitted = /** @type {{ value?: import('../../src/worker/webview/store.ts').FeatureRequestCommand }} */ ({});
+  const f = await editorFixture(async command => { submitted.value = command; return { session: { id: command.id }, chat: {} }; });
   f.state.settings.repositories.items = [{ id: 'web', path: '/projects/long-checkout/web', remote: 'origin', watch: true }, { id: 'api', path: '/projects/api', remote: 'origin', watch: true }];
   f.intake.fileChanges = true; f.intake.repository = 'missing';
   assert.equal(f.canCreate.value, false);
   f.intake.repository = 'web'; assert.equal(f.canCreate.value, true);
-  await f.create(); assert.equal(submitted.files.repository, 'web');
+  await f.create(); assert.equal(requiredValue(requiredValue(submitted.value).files).repository, 'web');
   const source = await readFile(new URL('../../src/worker/webview/components/RunTask.vue', import.meta.url), 'utf8');
   assert.match(source, /selectedRepository\.path/);
   assert.match(source, /:aria-describedby="[^"]*file-task-checkout/);
@@ -138,14 +139,19 @@ test('assigned repository choices display the complete checkout while the unifie
 
 
 test('preparation progress retains instructions and operation until the durable session is confirmed', async () => {
-  const pending = deferred(); let progress;
-  const f = await editorFixture((command, observe) => { progress = observe; return pending.promise; });
+  const pending = deferred();
+  const progress = /** @type {{ value?: NonNullable<Parameters<typeof import('../../src/worker/webview/store.ts').createFeatureRequest>[1]> }} */ ({});
+  const f = await editorFixture((command, observe) => { progress.value = observe; return pending.promise; });
   f.intake.fileChanges = true; const creating = f.create(); const id = f.intake.pending.id;
-  progress({ id, phase: 'worktree', state: 'preparing' });
+  const preparing = {
+    id, title: 'Change', repository: '/project', error: null,
+    createdAt: '2026-10-17T00:00:00Z', finishedAt: null,
+  };
+  requiredValue(progress.value)({ ...preparing, phase: 'worktree', state: 'preparing' });
   assert.equal(f.intake.message, 'Clarify the navigation.'); assert.equal(f.intake.paths, 'src/a.ts'); assert.equal(f.intake.pending.id, id);
   assert.match(f.preparationNote.value, /Git worktree/); assert.match(f.admissionNote.value, /has not joined the queue/); assert.equal(f.canCreate.value, false);
   assert.ok(!f.events.some(([event]) => event === 'created'));
-  progress({ id, phase: 'admission', state: 'preparing' }); assert.match(f.preparationNote.value, /Saving approved files/);
+  requiredValue(progress.value)({ ...preparing, phase: 'admission', state: 'preparing' }); assert.match(f.preparationNote.value, /Saving approved files/);
   pending.resolve({ session: { id: 'local-' + id }, chat: {} }); await creating;
   assert.equal(f.intake.pending, null); assert.equal(f.preparation.value, null); assert.equal(f.intake.message, '');
 });

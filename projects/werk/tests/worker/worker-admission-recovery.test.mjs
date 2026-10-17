@@ -1,3 +1,5 @@
+import { workspaceFixture, resultWith } from './contract-fixtures.mjs';
+import { workspaceContext } from './runtime-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm } from 'node:fs/promises';
@@ -6,7 +8,6 @@ import { join } from 'node:path';
 import { WorkerSettings } from '../../src/worker/dist/worker/infrastructure/settings.js';
 import { WorkerSessions } from './application-fixtures.mjs';
 import { LocalTaskboard } from './application-fixtures.mjs';
-import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';
 import { defaultGatePolicy } from '../../src/worker/dist/worker/application/request-gates.js';
 import { modelCapabilities } from '../../src/worker/dist/worker/application/model-contract.js';
 
@@ -27,13 +28,19 @@ async function fixture(t, execute) {
       return execute ? execute(request) : { type: 'completed', text: request.operation === 'patch' ? JSON.stringify({ summary: 'Fixture patch', files: [{ path: 'new.txt', content: 'created\n' }] }) : 'Fixture completed.' };
     },
   });
-  let sessions, board;
+  /** @type {ReturnType<typeof WorkerSessions>} */
+  let sessions;
+  let board;
+  const workspace = await workspaceFixture(t, directory), context = workspaceContext(workspace);
+  context.reviews.tick = () => {}; context.reviews.cancel = () => {};
   async function open() {
-    sessions = new WorkerSessions(directory, settings, model, undefined, () => board?.active ?? 0);
+    sessions = WorkerSessions(directory, settings, model, undefined, () => board?.active ?? 0);
     await sessions.init();
-    board = new LocalTaskboard(directory, settings, sessions, model); await board.init();
+    board = LocalTaskboard(directory, settings, sessions, model); await board.init();
+    Object.assign(context, { settings, sessions, board });
   }
   await open();
+  assert.ok(sessions);
   const policy = defaultGatePolicy(); policy.reviewer.enabled = false;
   for (const kind of ['chat', 'patch']) policy.ready[kind].push({ id: 'explicit-message', fact: 'input.messageLength', op: 'gte', value: 80 });
   sessions.requests.setPolicy({ policy, expectedRevision: sessions.requests.policy().revision, operationId: 'fixture-policy' });
@@ -41,12 +48,12 @@ async function fixture(t, execute) {
   const f = {
     directory, repository, settings, calls,
     get sessions() { return sessions; }, get board() { return board; },
-    get workspace() { return Object.assign(Object.create(WorkerWorkspace.prototype), { acceptingTasks: true, settings, sessions, board, reviews: { tick() {}, cancel() {} } }); },
-    command(id, action, extra = {}, operationId = crypto.randomUUID()) {
+    workspace,
+    command(id, action, extra = {}, operationId = String(crypto.randomUUID())) {
       return { requestId: id, expectedRevision: sessions.requests.get(id).revision, operationId, action, ...extra };
     },
     async execute(id, body = this.command(id, 'execute')) {
-      return WorkerWorkspace.prototype.requestCommand.call(this.workspace, body);
+      return resultWith(await workspace.requestCommand(body), 'dispatch');
     },
     async held(kind) {
       if (kind === 'chat') await sessions.start('Short');
@@ -124,6 +131,7 @@ test('a chat answer blocked by queue capacity remains saved and resumes once wit
   await f.sessions.start(instruction); await f.settle();
   await f.block();
   const view = f.sessions.interactions.view('default');
+  /** @type {import('../../src/worker/application/interactions.js').InteractionCommand} */
   const answer = { action: 'answer', sessionId: 'default', pendingId: view.pending.id, expectedRevision: view.revision, operationId: 'saved-answer', answer: 'opaque_b' };
   await assert.rejects(f.sessions.interact(answer), /queue is full/);
   const saved = f.sessions.interactions.view('default');
@@ -135,11 +143,11 @@ test('a chat answer blocked by queue capacity remains saved and resumes once wit
   await f.settle(); assert.equal(count, 2);
 });
 
-test('shutdown rejects new chat admission before asynchronous resource drains finish', async () => {
-  let calls = 0;
-  const workspace = { acceptingTasks: false, settings: { value: { board: { queueCapacity: 16 } } }, board: { active: 0 }, sessions: { chatActive: 0, start() { calls++; } } };
-  await assert.rejects(WorkerWorkspace.prototype.startChat.call(workspace, instruction), /stopping/);
-  assert.equal(calls, 0);
+test('shutdown rejects new chat admission before asynchronous resource drains finish', async t => {
+  const f = await fixture(t);
+  workspaceContext(f.workspace).acceptingTasks = false;
+  await assert.rejects(f.workspace.startChat(instruction), /stopping/);
+  assert.equal(f.calls.length, 0);
 });
 
 for (const action of ['execute', 'answer']) {
@@ -152,16 +160,16 @@ for (const action of ['execute', 'answer']) {
     const request = await f.held('patch');
     if (action === 'answer') { await f.execute(request.id); await f.settle(); }
     await f.settings.update({ board: { queueCapacity: 1 } });
-    let entered, release;
-    const pending = new Promise(resolve => { entered = resolve; });
-    const gate = new Promise(resolve => { release = resolve; });
+    const entering = Promise.withResolvers(), waiting = Promise.withResolvers();
+    const pending = entering.promise, gate = waiting.promise;
+    const entered = () => entering.resolve(undefined), release = () => waiting.resolve(undefined);
     const begin = f.sessions.runs.begin.bind(f.sessions.runs);
     f.sessions.runs.begin = async (...args) => { entered(); await gate; return begin(...args); };
     const interaction = f.sessions.interactions.view(request.owner.sessionId);
     const admission = action === 'execute' ? f.execute(request.id) : f.board.interact({ action: 'answer', sessionId: request.owner.sessionId, pendingId: interaction.pending.id, expectedRevision: interaction.revision, operationId: 'pending-patch-answer', answer: 'opaque_b' });
     try {
       await pending;
-      await assert.rejects(WorkerWorkspace.prototype.startChat.call(f.workspace, instruction), /queue is full/);
+      await assert.rejects(f.workspace.startChat(instruction), /queue is full/);
     } finally {
       release();
       await admission;
@@ -176,9 +184,9 @@ for (const action of ['execute', 'answer']) {
     const f = await fixture(t, async () => { calls++; return question; });
     const request = await f.held('patch');
     if (action === 'answer') { await f.execute(request.id); await f.settle(); }
-    let entered, release;
-    const pending = new Promise(resolve => { entered = resolve; });
-    const gate = new Promise(resolve => { release = resolve; });
+    const entering = Promise.withResolvers(), waiting = Promise.withResolvers();
+    const pending = entering.promise, gate = waiting.promise;
+    const entered = () => entering.resolve(undefined), release = () => waiting.resolve(undefined);
     const begin = f.sessions.runs.begin.bind(f.sessions.runs);
     f.sessions.runs.begin = async (...args) => { entered(); await gate; return begin(...args); };
     const interaction = f.sessions.interactions.view(request.owner.sessionId);

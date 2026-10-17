@@ -56,7 +56,9 @@ async function fixture(t, options = {}) {
   const controls = { claimAckBlocked: false, submitAckBlocked: false, patchAckBlocked: false, changeAfterClaim: false, saveBlocked: false, admit: true, inspect: null, repositoryFailures: 0 };
   const events = [], repositories = new Map(), tasks = new Map();
   const lifecycleAttempts = [], patchAttempts = [], submits = [];
-  let counter = 0, primaryExecutions = 0, featureCommits = 0, journal, requests, intake, headGate;
+  let counter = 0, primaryExecutions = 0, featureCommits = 0, journal, requests, headGate;
+  /** @type {SharedFeatureIntake} */
+  let intake;
   const nextCommit = () => (++counter).toString(16).padStart(40, '0');
   function addRepository(id = 'shared', content = source) {
     const configuration = defaultFeatureWorkflow(), done = defaultFeatureCheck('done');
@@ -123,6 +125,7 @@ async function fixture(t, options = {}) {
   };
   async function open() { journal = new SharedFeatureJournal(directory); requests = new WorkerRequestJournal(directory); await requests.init(); intake = new SharedFeatureIntake(ports); await intake.init(); }
   await open();
+  assert.ok(intake);
   const config = { enabled: true, repositoryId: 'shared', remote: 'origin', branch: 'main', workflowPath: '.werk/feature-workflow.json', pollMs: 1000 };
   await intake.configure(config, 0);
   t.after(async () => { await intake.close(); requests.close(); await rm(directory, { recursive: true, force: true }); });
@@ -137,7 +140,7 @@ async function fixture(t, options = {}) {
       requests.recordResult(request.id, task.currentTurnId, task.runId, { type: 'completed', text: JSON.stringify({ summary: 'Fixture change; tests are not independently verified.', files: [{ path: 'src/navigation.ts', content: 'after\n' }] }) }, { 'output.protocolValid': true, 'output.patchPresent': true, 'output.changedFileCount': 1 });
       Object.assign(task, { status: 'review', patch, summary: 'Fixture proposed navigation change.' });
     },
-    blockNextHead() { let enter, release; const entered = new Promise(resolve => { enter = resolve; }), wait = new Promise(resolve => { release = resolve; }); headGate = { enter, wait }; return { entered, release }; },
+    blockNextHead() { const entered = Promise.withResolvers(), wait = Promise.withResolvers(); headGate = { enter: () => entered.resolve(undefined), wait: wait.promise }; return { entered: entered.promise, release: () => wait.resolve(undefined) }; },
   };
 }
 

@@ -1,3 +1,4 @@
+import { testListeningAddress } from '../../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, request as httpRequest } from 'node:http';
@@ -11,13 +12,14 @@ import { HttpLineReader } from '../../../src/factory/dist/factory/infrastructure
 const token = 'security-boundary-admin-token';
 const line = { id: 'alpha', name: 'Alpha', factoryId: 'root', orchestratorUrl: 'http://127.0.0.1', webviewUrl: 'http://127.0.0.1/', tokenEnv: 'WERK_LINE_ALPHA_TOKEN' };
 const summary = () => ({ schemaVersion: 1, observedAt: '2026-10-12T00:00:00.000Z', mode: 'mock', project: 'demo', tasks: { total: 0, queued: 0, running: 0, simulated: 0, blocked: 0 }, workers: { total: 0, online: 0, offline: 0, slotsTotal: 0, slotsBusy: 0, slotsAvailable: 0 }, snapshots: { total: 0, before: 0, after: 0 }, cost: { amountUsd: null, reason: 'unavailable_mock' } });
+/** @returns {import('../../../src/shared/factory.ts').LineOverview} */
 const observed = overview => ({ line, status: 'available', checkedAt: overview.observedAt, error: null, overview: validateOverview(overview) });
 
 async function withServer(handler, run) {
   const server = createServer(handler);
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
-  try { await run('http://127.0.0.1:' + server.address().port); }
+  try { await run('http://127.0.0.1:' + testListeningAddress(server).port); }
   finally {
     server.closeAllConnections();
     await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
@@ -48,7 +50,9 @@ for (const service of ['factory', 'orchestrator']) {
     const errors = [];
     const application = { createFactory: create, createTask: create };
     const handler = service === 'factory'
+      // @ts-expect-error Deliberately instrument only the mutation seam reached by this HTTP boundary test.
       ? createFactoryHandler(application, token, '', error => errors.push(error))
+      // @ts-expect-error Deliberately instrument only the mutation seam reached by this HTTP boundary test.
       : createHttpHandler({ application, schemaVersion: 3, authorize: tokenAuthorization(token, 'enrollment-token'), views: { intake: '', concept: '' }, reportError: error => errors.push(error) });
     await withServer(handler, async base => {
       const url = base + (service === 'factory' ? '/v1/factories' : '/v1/tasks');

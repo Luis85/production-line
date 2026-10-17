@@ -1,3 +1,4 @@
+import { workerClient, snapshotFixture } from './contract-fixtures.mjs';
 import { RemoteGateReconciler } from "../../src/worker/dist/worker/application/reconcile-request-gates.js";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -12,6 +13,7 @@ import {
   workerCommands,
   workerBody,
 } from "../../scripts/runtime/portable/worker-commands.mjs";
+/** @returns {import('../../src/shared/contracts.js').Task} */
 const assigned = (lease = "lease-1", attempt = 1) => ({
   id: "task-1",
   project: "demo",
@@ -40,6 +42,7 @@ async function fixture(t, policy = defaultGatePolicy()) {
   const entries = new Map(),
     events = [];
   let invocations = 0;
+  /** @type {import('../../src/worker/application/ports.js').AttemptJournal} */
   const journal = {
     async read(pair, phase) {
       return entries.get(`${pair}-${phase}`) ?? null;
@@ -54,7 +57,7 @@ async function fixture(t, policy = defaultGatePolicy()) {
       outcome = "pending",
       error = null,
     ) {
-      return {
+      return snapshotFixture({
         id: `${task.lease}-${phase}`,
         pairId: task.lease,
         phase,
@@ -66,13 +69,14 @@ async function fixture(t, policy = defaultGatePolicy()) {
         provider: profile.provider,
         mode: "mock",
         provenance: {
+          ...snapshotFixture().provenance,
           contextManifestHash: null,
           featureId: null,
           sourceCommit: null,
           iterationId: null,
         },
-        execution: { outcome, error },
-      };
+        execution: { ...snapshotFixture().execution, outcome, error },
+      });
     },
     async persist(snapshot) {
       entries.set(snapshot.id, snapshot);
@@ -82,7 +86,7 @@ async function fixture(t, policy = defaultGatePolicy()) {
       for (const snapshot of entries.values()) await send(snapshot);
     },
   };
-  const client = {
+  const client = workerClient({
     async heartbeat(task) {
       return { ...task, expiresAt: 11000 };
     },
@@ -98,12 +102,13 @@ async function fixture(t, policy = defaultGatePolicy()) {
       assert.equal(gate.status, "blocked");
       assert.deepEqual(entries.get(`${task.lease}-after`).requestGate, gate);
     },
-  };
+  });
   const gates = new RemoteRequestGates(requests, "http://line.test", () => ({
     id: "claude-cli",
     model: "fixture",
     instruction: "",
   }));
+  /** @type {import('../../src/worker/application/ports.js').AttemptDependencies} */
   const deps = {
     client,
     journal,
@@ -304,11 +309,15 @@ test("passed remote Done gate reconciles its historical held lease once and pres
 test('remote repository selection is frozen in the accepted request and legacy requests retain their shape', async t => {
   const f = await fixture(t), task = { ...assigned(), repository: 'backend' };
   await f.deps.gates.ready(task);
-  assert.equal(f.requests.forTurn('remote-task-1', 'remote-task-1').input.context.repository, 'backend');
+  const context = f.requests.forTurn('remote-task-1', 'remote-task-1').input.context;
+  assert.ok(context && typeof context === 'object' && 'repository' in context);
+  assert.equal(context.repository, 'backend');
   await assert.rejects(f.deps.gates.ready({ ...task, repository: 'frontend' }), /context changed/);
   await assert.rejects(f.deps.gates.ready(assigned()), /context changed/);
   const legacy = { ...assigned(), id: 'legacy' };
   await f.deps.gates.ready(legacy);
-  assert.equal(Object.hasOwn(f.requests.forTurn('remote-legacy', 'remote-legacy').input.context, 'repository'), false);
+  const legacyContext = f.requests.forTurn('remote-legacy', 'remote-legacy').input.context;
+  assert.ok(legacyContext && typeof legacyContext === 'object');
+  assert.equal(Object.hasOwn(legacyContext, 'repository'), false);
   await f.deps.gates.ready(legacy);
 });

@@ -2,93 +2,15 @@ import { cleanup } from './fixture-cleanup.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  mkdtemp,
-  realpath,
-  rm,
   symlink,
   writeFile,
   readFile,
 } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WorkerRequestJournal } from "../../src/worker/dist/worker/infrastructure/journal/requests.js";
-import {
-  defaultGatePolicy,
-  evaluateGate,
-  validateGatePolicy,
-  inputGateFacts,
-  gateDigest,
-} from "../../src/worker/dist/worker/application/request-gates.js";
+import { defaultGatePolicy, evaluateGate, validateGatePolicy, inputGateFacts } from "../../src/worker/dist/worker/application/request-gates.js";
 import { unknownUsage } from "../../src/worker/dist/worker/application/run-evidence.js";
-import { prepareModelRequest } from "../../src/worker/dist/worker/application/model-contract.js";
-const provider = {
-  id: "fixture",
-  model: "fixture-v1",
-  instruction: "No external calls.",
-};
-const input = {
-  kind: "chat",
-  title: "Clarify retry semantics",
-  message: "Explain retry behavior.",
-};
-async function fixture(t) {
-  const directory = await realpath(
-    await mkdtemp(join(tmpdir(), "werk-gates-")),
-  );
-  const journal = new WorkerRequestJournal(directory);
-  await journal.init();
-  cleanup(t, async () => {
-    journal.close();
-    await rm(directory, { recursive: true, force: true });
-  });
-  return { directory, journal };
-}
-function admit(journal, patch = {}, key = "root") {
-  return journal.ensure({
-    owner: { sessionId: "session", rootTurnId: key },
-    provider,
-    input: { ...input, ...patch },
-  });
-}
-function execute(
-  journal,
-  request,
-  result = { type: "completed", text: "Known answer." },
-  facts = {},
-) {
-  journal.evaluate(request.id, "ready");
-  journal.bindTurn(request.id, "turn");
-  journal.prepareExecution(request.id, "turn", "run");
-  journal.startExecution(request.id, "turn", "run");
-  return journal.recordResult(request.id, "turn", "run", result, facts);
-}
-function command(journal, request, action, rest = {}) {
-  return journal.command({
-    action,
-    requestId: request.id,
-    expectedRevision: request.revision,
-    operationId: "op-" + action,
-    ...rest,
-  });
-}
-const dispatch = () =>
-  prepareModelRequest(
-    {
-      configuration: provider,
-      async reply() {
-        throw Error("No provider call in tests");
-      },
-    },
-    [
-      {
-        id: "review",
-        role: "user",
-        state: "complete",
-        text: "Review only.",
-        at: new Date().toISOString(),
-      },
-    ],
-  );
+import { provider, input, fixture, admit, execute, command, dispatch } from './request-gate-fixtures.mjs';
 
 test("policy is bounded and typed; missing facts never satisfy neq or numeric comparisons", () => {
   const policy = defaultGatePolicy();
@@ -231,6 +153,7 @@ test("failed readiness queues one review and survives restart without phantom pr
   assert.equal(journal.queuedReviews().length, 1);
   const intent = journal.queuedReviews()[0];
   journal.startReview(request.id, intent.id, "review-run", dispatch());
+  /** @type {import('../../src/worker/application/run-evidence.js').ProviderUsage} */
   const usage = {
     ...unknownUsage(),
     inputTokens: 12,
@@ -279,6 +202,7 @@ test("advisory approval cannot pass a gate or change file scope; accepted candid
       }),
     /approved file scope/,
   );
+  /** @type {import('../../src/worker/application/request-gates.js').RequestCommand} */
   const body = {
     action: "accept_candidate",
     requestId: request.id,
@@ -311,7 +235,10 @@ test("known result survives recovery; unknown started execution interrupts witho
   await reopened.init();
   cleanup(t, () => reopened.close());
   assert.equal(reopened.get(first.id).phase, "done");
-  assert.equal(reopened.get(first.id).execution.result.text, "Known answer.");
+  const result = reopened.get(first.id).execution.result;
+  assert.equal(result.type, "completed");
+  assert.ok(result.type === "completed");
+  assert.equal(result.text, "Known answer.");
   assert.equal(reopened.get(pending.id).phase, "interrupted");
   // A stronger, already durable result in the interaction journal can reconcile after restart.
   const reconciled = reopened.recordResult(
@@ -458,6 +385,7 @@ test("execute and evaluate are different idempotent intents", async (t) => {
       }),
     /different input/,
   );
+  /** @type {import('../../src/worker/application/request-gates.js').RequestCommand} */
   const body = {
     action: "execute",
     requestId: request.id,

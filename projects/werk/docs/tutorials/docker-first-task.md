@@ -3,12 +3,15 @@
 You will start one Werk line and worker from the extracted release, submit a task
 in the browser, then stop it while preserving its state. You need Docker Engine 26 or newer, Compose 2.35 or newer (or a current Docker Desktop),
 and either Bash or PowerShell. **Host Node and npm are not required.**
-Docker must be running and able to obtain the release image's base layers.
+Docker must be running and able to obtain the release image's base layers. This
+tutorial uses simulated orchestrator assignments. Independently configured
+local workers can use supported API providers; see
+[execution modes](../explanation/modes.md) for the separate paths.
 
 ## Extract and set up
 
 Verify and extract the archive using the [release instructions](../reference/releases.md).
-Open a terminal inside `werk-0.1.0`. Use an empty state directory for this tutorial;
+Open a terminal inside the extracted version directory. Use an empty state directory for this tutorial;
 a state configured for native execution cannot silently switch to Docker.
 
 Bash:

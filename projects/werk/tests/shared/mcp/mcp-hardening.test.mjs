@@ -1,3 +1,4 @@
+import { testErrorMessage, testListeningAddress } from '../../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -39,7 +40,7 @@ const data = response => { assert.equal(response.result?.isError, false, JSON.st
 
 async function withApi(handler, run) {
   const server = createServer(handler); server.listen(0, '127.0.0.1'); await once(server, 'listening');
-  try { await run('http://127.0.0.1:' + server.address().port); }
+  try { await run('http://127.0.0.1:' + testListeningAddress(server).port); }
   finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 }
 
@@ -54,13 +55,13 @@ test('MCP task, worker and event tools default to 100-item pages and expose comp
     workers.push(app.store.register('demo', [{ id: 'mock', provider: 'claude', mode: 'mock' }]));
   }
   for (let i = 0; i < 100; i++) app.store.event(firstTask.id, 'fixture_event', { index: i });
-  const session = client('http://127.0.0.1:' + app.server.address().port);
+  const session = client('http://127.0.0.1:' + testListeningAddress(app.server).port);
   try {
     await session.init();
     const tools = (await session.call('tools/list')).result.tools;
-    for (const [name, collection, args] of [
-      ['werk_task_list', 'tasks', {}], ['werk_workers_list', 'workers', {}], ['werk_task_events', 'events', { id: firstTask.id }],
-    ]) {
+    /** @type {[string, string, Record<string, unknown>][]} */
+    const collections = [['werk_task_list', 'tasks', {}], ['werk_workers_list', 'workers', {}], ['werk_task_events', 'events', { id: firstTask.id }]];
+    for (const [name, collection, args] of collections) {
       const definition = tools.find(tool => tool.name === name);
       assert.equal(definition.inputSchema.properties.limit.default, 100);
       assert.equal(definition.inputSchema.properties.cursor.maxLength, 1024);
@@ -105,8 +106,7 @@ test('MCP rejects unpaged, oversized and contradictory collection results rather
     }
     response = { tasks: [{ id: 'one', token, description: token }], hasMore: false, nextCursor: null };
     const page = await catalog.call('werk_task_list', { limit: 2 });
-    assert.equal(page.hasMore, false); assert.equal(page.nextCursor, null);
-    assert.equal(page.tasks[0].token, '[REDACTED]'); assert.equal(page.tasks[0].description, '[REDACTED]');
+    assert.deepEqual(page, { tasks: [{ id: 'one', token: '[REDACTED]', description: '[REDACTED]' }], hasMore: false, nextCursor: null });
   });
 });
 
@@ -120,11 +120,12 @@ test('MCP refuses a repeated continuation cursor and surfaces API cursor-scope r
     const catalog = new ToolCatalog('orchestrator', base, token);
     await assert.rejects(catalog.call('werk_task_list', { cursor }), /HTTP 502/);
     fail = true;
-    await assert.rejects(catalog.call('werk_task_list', { cursor }), error => /HTTP 400/.test(error.message) && !error.message.includes(token));
+    await assert.rejects(catalog.call('werk_task_list', { cursor }), error => /HTTP 400/.test(testErrorMessage(error)) && !testErrorMessage(error).includes(token));
   });
 });
 
-const fixtureCatalog = call => ({ definitions: [{ name: 'fixture', inputSchema: { type: 'object', properties: {}, additionalProperties: false } }], has: name => name === 'fixture', call });
+/** @param {import('../../../src/shared/mcp/catalog.ts').ToolCatalog['call']} call @returns {Parameters<typeof serveStdio>[0]} */
+const fixtureCatalog = call => ({ definitions: [{ name: 'fixture', description: 'Isolated transport fixture', annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }, inputSchema: { type: 'object', properties: {}, additionalProperties: false } }], has: name => name === 'fixture', call });
 function collector() {
   const records = [];
   const output = new Writable({ write(chunk, _encoding, callback) { records.push(Buffer.from(chunk)); callback(); } });

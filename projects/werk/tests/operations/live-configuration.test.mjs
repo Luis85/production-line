@@ -1,3 +1,5 @@
+import { testErrorStatus } from '../helpers/process-errors.mjs';
+import { testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
@@ -8,6 +10,7 @@ import { loadConfig, setup, validateConfig } from '../../scripts/runtime/config.
 import { loadDefinition, validateDefinition, planDefinition } from '../../scripts/system/definition.mjs';
 import { prepare } from '../../scripts/infrastructure/cloud-init.mjs';
 const execution = () => ({ mode: 'cli', codex: { executable: '/opt/codex/bin/codex', repository: '/srv/approved-project', allowedPaths: ['README.md', 'docs/example.txt'] } });
+/** @returns {{schemaVersion: number, id: string, environment: string, factory: {id: string, name: string, port: number}, productionLines: Array<{id: string, name: string, project: string, orchestrator: {port: number}, workers: {count: number, statusPort: number, execution?: ReturnType<typeof execution>}}>}} */
 const definition = () => ({ schemaVersion: 1, id: 'live-example', environment: 'native', factory: { id: 'factory', name: 'Factory', port: 3100 }, productionLines: [{ id: 'line', name: 'Line', project: 'example', orchestrator: { port: 3001 }, workers: { count: 1, statusPort: 4101, execution: execution() } }] });
 const config = () => ({ schemaVersion: 1, project: 'example', runtime: 'native', orchestratorPort: 3001, workerPort: 4101, workers: 1, mode: 'cli', execution: execution() });
 async function temporary(t) { const path = await mkdtemp(join(tmpdir(), 'werk-live-config-')); t.after(() => rm(path, { recursive: true, force: true })); return path; }
@@ -30,7 +33,7 @@ test('live deployment rejects injected configuration, secret paths, traversal an
     value => { value.codex.allowedPaths = Array.from({ length: 33 }, (_, n) => `${n}.txt`); },
     ...[999, 3600001, '1000', Infinity].map(timeoutMs => value => { value.timeoutMs = timeoutMs; }),
   ];
-  for (const change of invalid) { const value = execution(); change(value); assert.throws(() => normalizeExecution(value), error => error.exitCode === 2 && !error.message.includes('do-not-print-secret')); }
+  for (const change of invalid) { const value = execution(); change(value); assert.throws(() => normalizeExecution(value), error => testErrorStatus(error, 'exitCode') === 2 && !testErrorMessage(error).includes('do-not-print-secret')); }
   for (const value of [null, [], {}, true]) assert.throws(() => normalizeExecution(value));
 });
 

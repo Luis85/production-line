@@ -79,6 +79,7 @@ export function parseReleaseChangelog(markdown, version) {
   return { version, date: entry.date, notes: lines.slice(entry.line, end).join('\n').trimEnd() + '\n' };
 }
 
+/** @param {string} [projectRoot] @param {{version?: string, env?: Record<string, string | undefined>}} [options] */
 export async function readReleaseChangelog(projectRoot = root, { version, env = process.env } = {}) {
   const info = JSON.parse(await readFile(join(projectRoot, 'package.json'), 'utf8'));
   if (version !== undefined && version !== info.version) throw Error('Requested release version must match package.json version');

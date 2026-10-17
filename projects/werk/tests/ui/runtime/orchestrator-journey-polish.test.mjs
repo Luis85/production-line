@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { line, task, deferred, page } from "../helpers/runtime-harness.mjs";
+import { line, task, deferred } from "../helpers/runtime-harness.mjs";
 test("task routing keeps dirty destination through event reload and ignores another task late error", async () => {
   const pending = deferred();
   const f = line((_path, init) =>

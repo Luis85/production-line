@@ -1,3 +1,4 @@
+import { testErrorCode, testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -77,7 +78,7 @@ for (const adapter of ['repository', 'feature']) test(`${adapter} Git cancellati
   let pids;
   t.after(async () => { controller.abort(); for (const pid of Object.values(pids ?? {})) { try { process.kill(pid, 'SIGKILL'); } catch {} } });
   const pending = adapter === 'repository' ? repositoryGit(f.repository, ['fetch', 'origin'], signal) : f.io.output(f.repository, ['fetch', 'origin'], signal);
-  const checked = assert.rejects(pending, error => { assert.match(error.message, /cancelled|Shared feature Git operation failed/); assert.doesNotMatch(error.message, /PRIVATE_GIT_HELPER|fixture\.invalid/); return true; });
+  const checked = assert.rejects(pending, error => { assert.match(testErrorMessage(error), /cancelled|Shared feature Git operation failed/); assert.doesNotMatch(testErrorMessage(error), /PRIVATE_GIT_HELPER|fixture\.invalid/); return true; });
   let failed = false; pending.catch(() => { failed = true; });
   await until(async () => { try { pids = JSON.parse(await readFile(marker, 'utf8')); return true; } catch { assert.equal(failed, false, 'Git helper must start before cancellation'); return false; } }, t.signal, 20000);
   controller.abort();
@@ -121,7 +122,7 @@ for (const adapter of ['repository', 'feature']) test(`${adapter} metadata reads
     await rm(marker);
     if (adapter === 'repository') await assert.rejects(repositoryGit(f.repository, args, t.signal), /Git operation failed/);
     else await assert.rejects(f.io.output(f.repository, args, t.signal), /Shared feature Git operation failed/);
-    await assert.rejects(readFile(marker), error => error.code === 'ENOENT');
+    await assert.rejects(readFile(marker), error => testErrorCode(error) === 'ENOENT');
   });
 });
 
@@ -150,5 +151,5 @@ for (const adapter of ['repository', 'feature']) test(`${adapter} machine log re
   const output = adapter === 'repository' ? await repositoryGit(f.repository, args, t.signal) : await f.io.output(f.repository, args, t.signal);
   assert.ok(output.includes(commit));
   assert.ok(output.includes('Signature fixture'));
-  await assert.rejects(readFile(marker), error => error.code === 'ENOENT');
+  await assert.rejects(readFile(marker), error => testErrorCode(error) === 'ENOENT');
 });

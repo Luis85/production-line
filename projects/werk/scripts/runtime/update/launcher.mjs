@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { parse as parseSystem } from '../../system/cli.mjs';
 import { loadDefinition } from '../../system/definition.mjs';
 import { parse as parseLine } from '../cli.mjs';
-import { storeFor, selection, activeRoot, manifest, exists, lock } from './store.mjs';
+import { storeFor, selection, activeRoot, exists, lock } from './store.mjs';
 import { apply } from './manager.mjs';
 
 export async function invocationFor(baseRoot, arguments_, environment = process.env) {

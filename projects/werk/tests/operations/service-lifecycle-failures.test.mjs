@@ -1,3 +1,4 @@
+import { testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import assert from 'node:assert/strict';
@@ -19,7 +20,7 @@ test('Factory closes previously acquired registry when intake construction fails
   await mkdir(db + '.intake.sqlite');
   const close = SqliteFactoryRegistry.prototype.close, secondary = Error('secondary registry cleanup'); let closed = 0;
   t.mock.method(SqliteFactoryRegistry.prototype, 'close', function () { close.call(this); closed++; throw secondary; });
-  await assert.rejects(startFactoryServer({ ...factoryConfig, db }), error => error !== secondary && /open|database/i.test(error.message));
+  await assert.rejects(startFactoryServer({ ...factoryConfig, db }), error => error !== secondary && /open|database/i.test(testErrorMessage(error)));
   assert.equal(closed, 1);
 });
 
@@ -44,7 +45,7 @@ test('orchestrator closes context acquired before a store constructor failure', 
   t.after(() => rm(directory, { recursive: true, force: true }));
   const close = BoundContextIntake.prototype.close, secondary = Error('secondary context cleanup'); let closed = 0;
   t.mock.method(BoundContextIntake.prototype, 'close', async function () { await close.call(this); closed++; throw secondary; });
-  await assert.rejects(startServer({ ...lineConfig, db: directory }), error => error !== secondary && /open|database/i.test(error.message));
+  await assert.rejects(startServer({ ...lineConfig, db: directory }), error => error !== secondary && /open|database/i.test(testErrorMessage(error)));
   assert.equal(closed, 1);
 });
 
@@ -70,7 +71,7 @@ test('Factory intake schema failure closes its own database and preserves the sc
   fixture.exec('CREATE TABLE intake(id TEXT PRIMARY KEY)'); fixture.close();
   const original = DatabaseSync.prototype.close, closed = [], secondary = Error('database close failed');
   t.mock.method(DatabaseSync.prototype, 'close', function () { original.call(this); closed.push(this); throw secondary; });
-  assert.throws(() => new SqliteIntakeStore(path), error => error !== secondary && /no such column/i.test(error.message));
+  assert.throws(() => new SqliteIntakeStore(path), error => error !== secondary && /no such column/i.test(testErrorMessage(error)));
   assert.equal(closed.length, 1);
   assert.equal(closed[0].isOpen, false);
 });

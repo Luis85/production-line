@@ -1,3 +1,14 @@
+import { modelCapabilities } from '../../src/worker/dist/worker/application/model-contract.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { workerStatus } from '../helpers/worker-status.mjs';
+import { sessionInstances } from './runtime-fixtures.mjs';
+import { WorkerConversation } from '../../src/worker/dist/worker/application/conversation.js';
+import { WorkerRequestJournal } from '../../src/worker/dist/worker/infrastructure/journal/requests.js';
+import { WorkerRunJournal } from '../../src/worker/dist/worker/infrastructure/journal/local-runs.js';
+import { WorkerInteractionJournal } from '../../src/worker/dist/worker/infrastructure/journal/interactions.js';
+import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
+import { testErrorCode } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { join, resolve } from 'node:path';
@@ -9,32 +20,27 @@ import { workspaceModelFactory } from '../../src/worker/dist/worker/infrastructu
 import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';
 import { httpStatus } from '../../src/worker/dist/shared/http/errors.js';
 
+/** @returns {import('../../src/worker/application/workspace-ports.js').DefinitionStorage} */
 function memoryStorage() {
   let value;
   return { async read() { return value; }, async write(next) { value = next; } };
 }
-function fixture() {
-  const catalog = memoryStorage(), definitions = new WorkerDefinitions(memoryStorage()), conversations = new Map(), requests = new Map(), modelCalls = [];
+async function fixture(t) {
+  const directory = await mkdtemp(join(tmpdir(), 'werk-injected-ports-'));
+  const catalog = memoryStorage(), definitions = new WorkerDefinitions(memoryStorage()), conversations = new Map(), modelCalls = [];
+  /** @type {import('../../src/worker/application/workspace-ports.js').WorkerSettingsPort} */
   const settings = {
-    value: { repositories: { items: [], pollMs: 30000 }, execution: { maxRuntimeMs: 1000 }, board: { paused: false, maxParallel: 1, queueCapacity: 16, orchestratorQueue: 0, order: 'fifo' } },
-    provider(id) { assert.ok(['codex-cli', 'openai-api'].includes(id)); return { id, executable: '', apiKey: '', model: 'fixture', instruction: '' }; },
+    value: { repositories: { items: [], pollMs: 30000 }, execution: { maxRuntimeMs: 1000, maxToolCalls: 8, commandTimeoutMs: 1000 }, board: { paused: false, maxParallel: 1, queueCapacity: 16, orchestratorQueue: 0, order: 'fifo' } },
+    provider(id) { assert.ok(id === 'codex-cli' || id === 'openai-api'); return { id, executable: '', apiKey: '', model: 'fixture', instruction: '' }; },
     toolPolicy: defaultToolPolicy,
   };
   const journals = {
-    requests: {
-      async init() {}, close() {},
-      forSession(id) { return [...requests.values()].find(request => request.owner.sessionId === id); },
-      forTurn() {}, hasActiveReview() { return false; },
-      get(id) { return requests.get(id); },
-      ensure(input) { const value = { ...input, id: input.owner.rootTurnId, revision: 1, inputRevision: 1, phase: 'readiness', execution: null }; requests.set(value.id, value); return value; },
-      evaluate() { return { passed: false }; }, deleteSession() {},
-    },
-    interactions: {
-      async init() {}, close() {}, retainSessions() {}, resultForRun() {}, deleteSession() {},
-      view(sessionId) { return { schemaVersion: 1, sessionId, revision: 0, phase: 'idle', latestTurn: null, pending: null }; },
-    },
-    runs: { async init() {}, close() {} },
+    requests: new WorkerRequestJournal(directory),
+    interactions: new WorkerInteractionJournal(directory),
+    runs: new WorkerRunJournal(directory),
   };
+  const closeJournals = Object.values(journals).map(journal => journal.close.bind(journal));
+  t.after(async () => { for (const close of closeJournals) close(); await rm(directory, { recursive: true, force: true }); });
   const storage = { ...catalog, async conversation(id) {
     if (!conversations.has(id)) conversations.set(id, { messages: [] });
     return { async read() { return structuredClone(conversations.get(id)); }, async write(value) { conversations.set(id, structuredClone(value)); } };
@@ -57,8 +63,8 @@ test('definition policy commits through an injected store and retains prior stat
   assert.deepEqual(restored.view(), saved);
 });
 
-test('sessions use injected catalogs, transcripts and model scopes and roll back a rejected catalog commit', async () => {
-  const f = fixture(), sessions = f.makeSessions(); await sessions.init();
+test('sessions use injected catalogs, transcripts and model scopes and roll back a rejected catalog commit', async t => {
+  const f = await fixture(t), sessions = f.makeSessions(); await sessions.init();
   assert.equal(f.modelCalls[0].scope.sessionId, 'default');
   const write = f.storage.write, before = sessions.view(), failure = Error('session catalog write failed');
   f.storage.write = async () => { throw failure; };
@@ -73,24 +79,25 @@ test('sessions use injected catalogs, transcripts and model scopes and roll back
   await restarted.close();
 });
 
-test('approved-file admission rejects invalid scope before file ports and preserves injected snapshots when readiness is held', async () => {
-  const f = fixture(), sessions = f.makeSessions(); await sessions.init();
+test('approved-file admission rejects invalid scope before file ports and preserves injected snapshots when readiness is held', async t => {
+  const f = await fixture(t), sessions = f.makeSessions(); await sessions.init();
   const storage = { ...memoryStorage(), async writePatch() { throw Error('Held work cannot publish a patch'); } };
   let reads = 0;
   const root = resolve('virtual-repository');
   const board = new LocalTaskboard(f.settings, sessions, {
-    model: () => { throw Error('Readiness-held tasks cannot invoke a model'); }, storage,
+    model: () => ({ async reply() { throw Error('Readiness-held tasks cannot invoke a model'); } }), storage,
     files: { async identity() { throw Error('Plain folders have no worktree identity'); }, async snapshot(prepared, paths) { reads++; return { repository: prepared.repository, path: prepared.path, files: paths.map(path => ({ path, content: 'accepted input\n', existed: true })) }; } },
   });
   await board.init();
   const input = { title: 'Scoped request', instruction: 'Retain the accepted input for review.', provider: 'openai-api', repository: root, paths: ['a.txt'] };
   for (const paths of [[], ['../outside'], ['credentials.json'], ['a.txt', 'a.txt']]) {
-    await assert.rejects(board.create({ ...input, paths }), error => error.code === 'invalid_input' && httpStatus(error) === 400);
+    await assert.rejects(board.create({ ...input, paths }), error => testErrorCode(error) === 'invalid_input' && httpStatus(error) === 400);
   }
-  await assert.rejects(board.create({ ...input, repository: 'relative-folder' }), error => error.code === 'invalid_input');
+  await assert.rejects(board.create({ ...input, repository: 'relative-folder' }), error => testErrorCode(error) === 'invalid_input');
   assert.equal(reads, 0);
-  // A configuration inspection may occur before readiness; it must never execute the returned model.
-  board.model = () => ({ async reply() { throw Error('Held work must not execute'); } });
+  // The injected gate refuses admission; inspecting model configuration must not execute it.
+  const evaluate = f.journals.requests.evaluate.bind(f.journals.requests);
+  f.journals.requests.evaluate = (...args) => ({ ...evaluate(...args), passed: false });
   const result = await board.create(input);
   assert.equal(reads, 1); assert.equal(result.tasks[0].status, 'needs_rework');
   const saved = JSON.parse(await storage.read());
@@ -99,10 +106,12 @@ test('approved-file admission rejects invalid scope before file ports and preser
   await board.close(); await sessions.close();
 });
 
-test('model composition is lazy and preserves readiness checks without tool grants', () => {
-  const settings = { toolPolicy() { throw Error('Constructing a model cannot acquire tool authority'); } };
-  const calls = [], connection = { id: 'openai-api', executable: '', apiKey: 'private', model: 'fixture' };
-  const factory = workspaceModelFactory(resolve('virtual-state'), settings, (saved, directory, transport, options) => { calls.push({ saved, directory, transport, options }); return { configuration: saved }; });
+test('model composition is lazy and preserves readiness checks without tool grants', async t => {
+  const settings = { ...(await fixture(t)).settings, toolPolicy() { throw Error('Constructing a model cannot acquire tool authority'); } };
+  const calls = [];
+  /** @type {import('../../src/worker/application/provider-contract.js').ProviderConnection} */
+  const connection = { id: 'openai-api', executable: '', apiKey: 'private', model: 'fixture' };
+  const factory = workspaceModelFactory(resolve('virtual-state'), settings, (saved, directory, transport, options) => { calls.push({ saved, directory, transport, options }); return { configuration: { ...saved, instruction: saved.instruction ?? '' }, capabilities: modelCapabilities, async execute() { throw Error('Model composition must not execute a provider.'); }, async reply() { throw Error('Model composition must not execute a provider.'); } }; });
   factory(connection);
   assert.equal(calls[0].options, undefined);
   factory(connection, { sessionId: 'session-a' });
@@ -110,16 +119,21 @@ test('model composition is lazy and preserves readiness checks without tool gran
   assert.equal(typeof calls[1].options.tools, 'function');
 });
 
-test('session close waits for every conversation before closing all journals after a failure', async () => {
-  const f = fixture(), sessions = f.makeSessions(); await sessions.init();
+test('session close waits for every conversation before closing all journals after a failure', async t => {
+  const f = await fixture(t), sessions = f.makeSessions(); await sessions.init();
   const events = [], failure = Error('conversation shutdown failed');
-  let release;
-  const pending = new Promise(resolve => { release = resolve; });
-  sessions.instances.set('failed', { async close() { events.push('failed'); throw failure; } });
-  sessions.instances.set('slow', { async close() { events.push('slow'); await pending; events.push('drained'); } });
-  f.journals.requests.close = () => { events.push('requests'); throw Error('journal failed'); };
-  f.journals.runs.close = () => { events.push('runs'); };
-  f.journals.interactions.close = () => { events.push('interactions'); };
+  /** @type {PromiseWithResolvers<void>} */
+  const { promise: pending, resolve: release } = Promise.withResolvers();
+  const failed = new WorkerConversation({ async read() { return { messages: [] }; }, async write() {} });
+  const slow = new WorkerConversation({ async read() { return { messages: [] }; }, async write() {} });
+  failed.close = async () => { events.push('failed'); throw failure; };
+  slow.close = async () => { events.push('slow'); await pending; events.push('drained'); };
+  sessionInstances(sessions).set('failed', failed);
+  sessionInstances(sessions).set('slow', slow);
+  const close = Object.fromEntries(Object.entries(f.journals).map(([key, journal]) => [key, journal.close.bind(journal)]));
+  f.journals.requests.close = () => { close.requests(); events.push('requests'); throw Error('journal failed'); };
+  f.journals.runs.close = () => { close.runs(); events.push('runs'); };
+  f.journals.interactions.close = () => { close.interactions(); events.push('interactions'); };
   const closing = sessions.close(); assert.equal(sessions.close(), closing);
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(events, ['failed', 'slow']);
@@ -127,21 +141,25 @@ test('session close waits for every conversation before closing all journals aft
   assert.deepEqual(events, ['failed', 'slow', 'drained', 'requests', 'runs', 'interactions']);
 });
 
-test('workspace shutdown preserves staged remote evidence and completes all cleanup after an intake failure', async () => {
+test('workspace shutdown preserves staged remote evidence and completes all cleanup after an intake failure', async t => {
   const events = [], failure = Error('intake shutdown failed');
-  let releaseTracking;
-  const trackingFlush = new Promise(resolve => { releaseTracking = resolve; });
-  const workspace = Object.create(WorkerWorkspace.prototype);
-  Object.assign(workspace, {
-    repositoryStop: new AbortController(), taskRequests: Promise.resolve(),
-    featureTracking: { async close() { events.push('tracking'); await trackingFlush; events.push('tracking flushed'); } },
-    consumption: { close() { events.push('consumption'); } },
-    features: { async stopIntake() { events.push('intake'); throw failure; }, async close() { events.push('feature evidence'); } },
-    sharedRuntime: { async close() { events.push('shared'); } }, providerAccounts: { async close() {} }, providerStatuses: { async close() {} },
-    repositories: { async close() {} }, board: { async close() {} }, reviews: { async close() {} }, resources: { async close() { events.push('resources'); } },
-    sessions: { async close(options) { assert.equal(options.retainEvidence, true); events.push('sessions'); },
-      runs: { close() { events.push('runs'); throw Error('run close failed'); } }, interactions: { close() { events.push('interactions'); } }, requests: { close() { events.push('requests'); } } },
-  });
+  /** @type {PromiseWithResolvers<void>} */
+  const { promise: trackingFlush, resolve: releaseTracking } = Promise.withResolvers();
+  const directory = await mkdtemp(join(tmpdir(), 'werk-shutdown-ports-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const journal = new SnapshotJournal(directory, 'a'.repeat(64), 'b'.repeat(64));
+  const workspace = new WorkerWorkspace({ stateDir: join(directory, 'state'), pollMs: 1000, timeoutMs: 1000,
+    features: { directory: join(directory, 'features'), provider: 'openai-api', pollMs: 1000 } }, journal, workerStatus);
+  workspace.featureTracking.close = async () => { events.push('tracking'); await trackingFlush; events.push('tracking flushed'); return workspace.featureTracking.status(); };
+  workspace.consumption.close = () => { events.push('consumption'); };
+  workspace.features.stopIntake = async () => { events.push('intake'); throw failure; };
+  workspace.features.close = async () => { events.push('feature evidence'); };
+  workspace.sharedRuntime.close = async () => { events.push('shared'); };
+  workspace.resources.close = async () => { events.push('resources'); };
+  workspace.sessions.close = async options => { assert.equal(options.retainEvidence, true); events.push('sessions'); };
+  workspace.sessions.runs.close = () => { events.push('runs'); throw Error('run close failed'); };
+  workspace.sessions.interactions.close = () => { events.push('interactions'); };
+  workspace.sessions.requests.close = () => { events.push('requests'); };
   const draining = workspace.close({ deferEvidence: true }); assert.equal(workspace.close({ deferEvidence: true }), draining);
   await assert.rejects(draining, error => error === failure);
   assert.deepEqual(events, ['intake', 'shared', 'sessions']);

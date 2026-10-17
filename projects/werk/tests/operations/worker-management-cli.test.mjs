@@ -1,3 +1,5 @@
+import { testErrorOutput } from '../helpers/process-errors.mjs';
+import { testErrorCode } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
@@ -20,7 +22,7 @@ test('copied worker CLI manages drafts, tasks, queues and history without a brow
   const markdown = join(cwd, 'request.md'); const raw = '---\nschemaVersion: 1\ntitle: CLI lifecycle\nstatus: draft\n---\nDescribe a feature.\n'; await writeFile(markdown, raw);
   let file = await cli('feature', 'create', '--name', 'example.md', '--markdown', markdown); assert.equal(file.markdown, raw);
   assert.equal((await cli('feature', 'list', '--status', 'draft')).files.length, 1);
-  await assert.rejects(cli('feature', 'edit', '--name', 'example.md', '--markdown', markdown, '--if-match', 'stale'), error => error.code === 2 && /revision/.test(error.stderr));
+  await assert.rejects(cli('feature', 'edit', '--name', 'example.md', '--markdown', markdown, '--if-match', 'stale'), error => testErrorCode(error) === 2 && /revision/.test(testErrorOutput(error, 'stderr')));
   file = await cli('feature', 'edit', '--name', 'example.md', '--markdown', markdown, '--if-match', file.revision);
   await cli('feature', 'validate', '--name', 'example.md'); await cli('feature', 'submit', '--name', 'example.md', '--if-match', file.revision);
   for (let i = 0; i < 30; i++) { await cli('feature', 'list'); file = await cli('feature', 'get', '--name', 'example.md'); if (file.record?.submitted) break; await new Promise(r => setTimeout(r, 100)); }
@@ -39,7 +41,7 @@ test('copied worker CLI manages drafts, tasks, queues and history without a brow
   assert.equal(queuedRuns[0].usage.source, 'unavailable');
   await cli('task', 'rename', '--id', id, '--title', 'Renamed from CLI');
   assert.equal((await cli('task', 'get', '--id', id)).session.title, 'Renamed from CLI');
-  await assert.rejects(cli('task', 'wait', '--id', id, '--timeout-ms', '1'), error => error.code === 1 && /continues/.test(error.stderr));
+  await assert.rejects(cli('task', 'wait', '--id', id, '--timeout-ms', '1'), error => testErrorCode(error) === 1 && /continues/.test(testErrorOutput(error, 'stderr')));
   assert.equal((await cli('task', 'get', '--id', id)).session.status, 'queued');
   file = await cli('feature', 'cancel', '--name', 'example.md', '--if-match', file.revision);
   assert.equal((await cli('feature', 'wait', '--name', 'example.md', '--timeout-ms', '1000')).record.status, 'cancelled');

@@ -89,6 +89,7 @@ test('deadlines, cancellation, output limits and missing executables are typed f
 });
 
 test('cancellation stops descendants of a plain launch on POSIX and of a contained launch everywhere', { timeout: 40000 }, async t => {
+  /** @type {import('../../src/shared/process/launcher.ts').LaunchMode[]} */
   const modes = process.platform === 'win32' ? ['contained'] : ['plain', 'contained'];
   for (const mode of modes) {
     const directory = await mkdtemp(join(tmpdir(), 'werk-launcher-tree-')); t.after(() => rm(directory, { recursive: true, force: true }));

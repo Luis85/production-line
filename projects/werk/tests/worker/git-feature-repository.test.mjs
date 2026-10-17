@@ -1,3 +1,5 @@
+import { featureGitIo } from './runtime-fixtures.mjs';
+import { testErrorCode, testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import childProcess, { execFileSync } from 'node:child_process';
@@ -68,8 +70,8 @@ test('one of two competing clones claims a request; a losing claim never overwri
 });
 
 test('publication retries a concurrent teammate commit and preserves both histories', async t => {
-  const f = await fixture(t), adapter = f.client(), push = adapter.io.push.bind(adapter.io); let teammateCommit;
-  adapter.io.push = async (...args) => { if (!teammateCommit) teammateCommit = await f.teammate('teammate.txt', 'concurrent work\n'); return push(...args); };
+  const f = await fixture(t), adapter = f.client(), push = featureGitIo(adapter).push.bind(featureGitIo(adapter)); let teammateCommit;
+  featureGitIo(adapter).push = async (...args) => { if (!teammateCommit) teammateCommit = await f.teammate('teammate.txt', 'concurrent work\n'); return push(...args); };
   const result = await adapter.publishLifecycle(f.lifecycle());
   assert.equal(result.head, f.main()); assert.equal(result.commit, f.main());
   assert.equal(git(f.remote, 'show', 'main:teammate.txt'), 'concurrent work');
@@ -79,22 +81,22 @@ test('publication retries a concurrent teammate commit and preserves both histor
 });
 
 test('a teammate edit to the same request stops stale publication without changing that edit', async t => {
-  const f = await fixture(t), adapter = f.client(), push = adapter.io.push.bind(adapter.io); let changed;
-  adapter.io.push = async (...args) => { if (!changed) changed = await f.teammate('features/request.md', request.replace('Improve the file.', 'Preserve this revised goal.')); return push(...args); };
-  await assert.rejects(adapter.publishLifecycle(f.lifecycle()), error => error.code === 'conflict');
+  const f = await fixture(t), adapter = f.client(), push = featureGitIo(adapter).push.bind(featureGitIo(adapter)); let changed;
+  featureGitIo(adapter).push = async (...args) => { if (!changed) changed = await f.teammate('features/request.md', request.replace('Improve the file.', 'Preserve this revised goal.')); return push(...args); };
+  await assert.rejects(adapter.publishLifecycle(f.lifecycle()), error => testErrorCode(error) === 'conflict');
   assert.equal(f.main(), changed); assert.match(git(f.remote, 'show', 'main:features/request.md'), /revised goal/);
   assert.equal(git(f.remote, 'ls-tree', '--name-only', 'main', 'feature-reviews'), '');
 });
 
 test('a lost push acknowledgement and a restarted adapter replay the same lifecycle operation once', async t => {
-  const f = await fixture(t), adapter = f.client(), push = adapter.io.push.bind(adapter.io);
-  adapter.io.push = async (...args) => { await push(...args); throw Error('Simulated connection loss after receive-pack accepted the commit'); };
+  const f = await fixture(t), adapter = f.client(), push = featureGitIo(adapter).push.bind(featureGitIo(adapter));
+  featureGitIo(adapter).push = async (...args) => { await push(...args); throw Error('Simulated connection loss after receive-pack accepted the commit'); };
   const input = f.lifecycle(), result = await adapter.publishLifecycle(input), head = f.main();
   assert.equal(result.head, head);
   await adapter.close();
   const restarted = f.client(), repeated = await restarted.publishLifecycle(input);
   assert.equal(repeated.replayed, true); assert.equal(repeated.commit, result.commit); assert.equal(f.main(), head);
-  await assert.rejects(restarted.publishLifecycle({ ...input, artifacts: [{ ...input.artifacts[0], content: 'different intent' }] }), error => error.code === 'conflict');
+  await assert.rejects(restarted.publishLifecycle({ ...input, artifacts: [{ ...input.artifacts[0], content: 'different intent' }] }), error => testErrorCode(error) === 'conflict');
 });
 
 test('lifecycle publication cannot overwrite developer body, other paths or changed review notes', async t => {
@@ -102,7 +104,7 @@ test('lifecycle publication cannot overwrite developer body, other paths or chan
   await assert.rejects(adapter.publishLifecycle(f.lifecycle('bad-body', claimed().replace('Improve the file.', 'Overwritten goal'))), /only the request ID/);
   assert.throws(() => adapter.publishLifecycle({ ...f.lifecycle(), artifacts: [{ path: 'file.txt', expectedRevision: null, content: 'wrong' }] }), /configured review directory/);
   await f.teammate('feature-reviews/shared-one.md', 'Developer review note\n');
-  await assert.rejects(adapter.publishLifecycle(f.lifecycle()), error => error.code === 'conflict');
+  await assert.rejects(adapter.publishLifecycle(f.lifecycle()), error => testErrorCode(error) === 'conflict');
   assert.equal(git(f.remote, 'show', 'main:feature-reviews/shared-one.md'), 'Developer review note');
 });
 
@@ -139,10 +141,10 @@ test('explicit approved regular-file deletion publishes once without deleting so
 });
 
 test('feature publication confirms a lost acknowledgement and preserves an existing conflicting branch', async t => {
-  const f = await fixture(t), adapter = f.client(), push = adapter.io.push.bind(adapter.io);
-  adapter.io.push = async (...args) => { await push(...args); throw Error('Lost acknowledgement'); };
+  const f = await fixture(t), adapter = f.client(), push = featureGitIo(adapter).push.bind(featureGitIo(adapter));
+  featureGitIo(adapter).push = async (...args) => { await push(...args); throw Error('Lost acknowledgement'); };
   const input = f.publication(), result = await adapter.publishPatch(input);
-  await assert.rejects(f.client().publishPatch({ ...input, patch: patch().replace('+implemented', '+different') }), error => error.code === 'conflict');
+  await assert.rejects(f.client().publishPatch({ ...input, patch: patch().replace('+implemented', '+different') }), error => testErrorCode(error) === 'conflict');
   assert.equal(git(f.remote, 'rev-parse', result.branch), result.commit);
   assert.equal(git(f.remote, 'show', `${result.branch}:file.txt`), 'implemented');
 });
@@ -190,7 +192,7 @@ test('copied operation metadata cannot make a different feature tree pass replay
   const tree = git(f.producer, 'write-tree');
   const replacement = git(f.producer, 'commit-tree', tree, '-p', f.sourceCommit, '-m', message);
   git(f.producer, 'push', '--force', 'origin', replacement + ':refs/heads/' + original.branch);
-  await assert.rejects(f.client().publishPatch(input), error => error.code === 'conflict');
+  await assert.rejects(f.client().publishPatch(input), error => testErrorCode(error) === 'conflict');
   assert.equal(git(f.remote, 'rev-parse', original.branch), replacement, 'A conflicting remote branch is retained for human review.');
   assert.equal(f.main(), f.sourceCommit);
 });
@@ -244,8 +246,8 @@ test('deep publication and later task worktrees support committed receipt paths 
     }
   }
   // Observe the actual paths while exercising the unmodified production runner.
-  const publicationPaths = [], originalGit = adapter.io.git.bind(adapter.io);
-  adapter.io.git = async (cwd, args, ...options) => {
+  const publicationPaths = [], originalGit = featureGitIo(adapter).git.bind(featureGitIo(adapter));
+  featureGitIo(adapter).git = async (cwd, args, ...options) => {
     if (args[0] === 'worktree' && args[1] === 'add') publicationPaths.push(resolve(cwd, args.at(-2)));
     return originalGit(cwd, args, ...options);
   };
@@ -278,8 +280,8 @@ test('deep publication and later task worktrees support committed receipt paths 
 
 test('Windows shared publication rejects an excessive metadata path before reserving a worktree', { skip: process.platform !== 'win32' }, async t => {
   const f = await fixture(t), stateDirectory = join(f.directory, 'state-' + 'x'.repeat(120), 'nested-' + 'y'.repeat(120));
-  const adapter = f.client({ stateDirectory }), originalGit = adapter.io.git.bind(adapter.io); let checkoutAttempted = false;
-  adapter.io.git = async (...args) => {
+  const adapter = f.client({ stateDirectory }), originalGit = featureGitIo(adapter).git.bind(featureGitIo(adapter)); let checkoutAttempted = false;
+  featureGitIo(adapter).git = async (...args) => {
     if (args[1][0] === 'worktree' && args[1][1] === 'add') checkoutAttempted = true;
     return originalGit(...args);
   };
@@ -300,12 +302,12 @@ test('a published file cannot alias a tracked name that differs only by Unicode 
   const f = await fixture(t), path = 'docs/Übersicht.md';
   const sourceCommit = await f.teammate(path.normalize('NFD'), 'decomposed\n');
   git(f.repository, 'fetch', 'origin');
-  await assert.rejects(f.client().publishPatch({ ...f.publication('publish-alias'), sourceCommit, patch: addedFilePatch(path, 'composed'), approvedPaths: [path] }), error => error.code === 'conflict' && /Unicode normalization/.test(error.message));
+  await assert.rejects(f.client().publishPatch({ ...f.publication('publish-alias'), sourceCommit, patch: addedFilePatch(path, 'composed'), approvedPaths: [path] }), error => testErrorCode(error) === 'conflict' && /Unicode normalization/.test(testErrorMessage(error)));
 });
 
 test('publication refuses new approved paths with colliding parent spellings', async t => {
   const f = await fixture(t), approvedPaths = ['Änderungen/a.md', 'änderungen/b.md'];
   const patch = approvedPaths.map(path => addedFilePatch(path, 'content')).join('');
-  assert.throws(() => f.client().publishPatch({ ...f.publication('publish-parent-alias'), approvedPaths, patch }), error => error.code === 'invalid_input' && /folder aliases/.test(error.message));
+  assert.throws(() => f.client().publishPatch({ ...f.publication('publish-parent-alias'), approvedPaths, patch }), error => testErrorCode(error) === 'invalid_input' && /folder aliases/.test(testErrorMessage(error)));
   assert.equal(f.main(), f.sourceCommit);
 });

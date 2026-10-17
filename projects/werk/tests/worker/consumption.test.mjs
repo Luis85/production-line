@@ -8,6 +8,10 @@ import { WorkerConsumption, defaultConsumptionPolicy, validateConsumptionPolicy,
 import { WorkerConsumptionJournal } from '../../src/worker/dist/worker/infrastructure/journal/consumption.js';
 import { unknownUsage } from '../../src/worker/dist/worker/application/run-evidence.js';
 
+/** @param {number | null} [inputTokens]
+ * @param {number | null} [outputTokens]
+ * @param {Partial<import('../../src/worker/application/run-evidence.js').ProviderUsage>} [extra]
+ * @returns {import('../../src/worker/application/run-evidence.js').ProviderUsage} */
 const usage = (inputTokens = 30, outputTokens = 20, extra = {}) => ({ ...unknownUsage(), source: 'provider_reported', inputTokens, outputTokens, ...extra });
 async function fixture(t, overrides = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'werk-consumption-'));
@@ -67,10 +71,12 @@ test('atomic reservations prevent separate callers from spending the same remain
   assert.equal(f.service.status().reason, 'exhausted');
 });
 
-for (const [name, final, complete] of [
+/** @type {Array<[string, import('../../src/worker/application/run-evidence.js').ProviderUsage, boolean]>} */
+const uncertainResults = [
   ['unreported result', unknownUsage(), true], ['partial result', usage(20, null), true],
   ['failed invocation after partial observation', usage(), false], ['invalid counter', usage(-1, 20), true],
-]) test(name + ' blocks subsequent enabled invocations until the UTC window changes', async t => {
+];
+for (const [name, final, complete] of uncertainResults) test(name + ' blocks subsequent enabled invocations until the UTC window changes', async t => {
   const f = await fixture(t), attempt = f.service.begin('codex-cli');
   f.service.observe(attempt.id, usage()); f.service.finish(attempt.id, final, complete);
   assert.equal(f.service.status().uncertainInvocations, 1);

@@ -1,3 +1,5 @@
+import { testErrorOutput } from '../helpers/process-errors.mjs';
+import { testErrorCode } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
@@ -47,7 +49,7 @@ test('packaged authoring kit travels through Git and works in a teammate clone w
   const created = await cli(entry, ['create', '--name', 'search.md', '--title', 'Find matching requests'], teammate);
   assert.match(created.id, /^fr-[a-f0-9-]{36}$/);
   await assert.rejects(cli(entry, ['validate', '--file', created.path], teammate), error => {
-    assert.equal(error.code, 2); assert.equal(JSON.parse(error.stdout).valid, false); return true;
+    assert.equal(testErrorCode(error), 2); assert.equal(JSON.parse(testErrorOutput(error, 'stdout')).valid, false); return true;
   });
   const path = join(teammate, created.path);
   const draft = (await readFile(path, 'utf8')).replace('paths: []', 'paths: [src/search.ts]')

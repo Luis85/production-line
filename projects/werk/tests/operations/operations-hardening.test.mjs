@@ -1,3 +1,4 @@
+import { testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { connect } from 'node:net';
@@ -14,6 +15,7 @@ const timed = async (promise, timeout = 1000) => {
 };
 
 test('queued polls cancel immediately on close even while an upstream request is still unwinding', async t => {
+  /** @type {() => void} */
   let finish;
   const started = Promise.withResolvers();
   t.mock.method(globalThis, 'fetch', async () => { started.resolve(); return new Promise(resolve => { finish = () => resolve(new Response('', { status: 503 })); }); });
@@ -26,10 +28,11 @@ test('queued polls cancel immediately on close even while an upstream request is
     const results = await timed(Promise.all(queued));
     assert.ok(results.every(result => result.status === 'unavailable'));
     assert.equal((await reader.read(line(21))).error, 'Factory service is stopping');
-  } finally { finish(); await active; reader.close(); }
+  } finally { assert.ok(finish); finish(); await active; reader.close(); }
 });
 
 test('a queued poll deadline is independent of the occupied network slot', async t => {
+  /** @type {() => void} */
   let finish;
   const started = Promise.withResolvers();
   t.mock.method(globalThis, 'fetch', async () => { started.resolve(); return new Promise(resolve => { finish = () => resolve(new Response('', { status: 503 })); }); });
@@ -40,10 +43,11 @@ test('a queued poll deadline is independent of the occupied network slot', async
     const result = await timed(reader.read(line(1)));
     assert.equal(result.status, 'unavailable');
     assert.match(result.error, /waiting to poll/);
-  } finally { finish(); await active; reader.close(); }
+  } finally { assert.ok(finish); finish(); await active; reader.close(); }
 });
 
 test('polling rejects excess retained work without starving duplicate reads', async t => {
+  /** @type {() => void} */
   let finish;
   const started = Promise.withResolvers();
   const fetchMock = t.mock.method(globalThis, 'fetch', async () => { started.resolve(); return new Promise(resolve => { finish = () => resolve(new Response('', { status: 503 })); }); });
@@ -58,12 +62,12 @@ test('polling rejects excess retained work without starving duplicate reads', as
     const duplicate = reader.read({ ...line(0), id: 'alias' });
     reader.close();
     await timed(Promise.all(queued));
-    finish();
+    assert.ok(finish); finish();
     const [original, alias] = await Promise.all([active, duplicate]);
     assert.equal(original.line.id, '0');
     assert.equal(alias.line.id, 'alias');
     assert.equal(fetchMock.mock.callCount(), 1);
-  } finally { reader.close(); finish(); await active; await Promise.all(queued); }
+  } finally { reader.close(); assert.ok(finish); finish(); await active; await Promise.all(queued); }
 });
 
 test('polling constructor rejects invalid limits before retaining requests', () => {
@@ -74,7 +78,7 @@ test('polling constructor rejects invalid limits before retaining requests', () 
 test('Factory shutdown closes an incomplete HTTP upload within its five-second grace period', { timeout: 9000 }, async () => {
   const token = 'factory-operations-test-token';
   const app = await startFactoryServer({ db: ':memory:', host: '127.0.0.1', port: 0, adminToken: token, credentials: {} });
-  const socket = connect(app.server.address().port, '127.0.0.1');
+  const socket = connect(testListeningAddress(app.server).port, '127.0.0.1');
   socket.on('error', () => {});
   try {
     await once(socket, 'connect');

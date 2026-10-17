@@ -1,3 +1,4 @@
+import { testErrorCode, testErrorMessage, testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
@@ -7,18 +8,18 @@ const base = pathToFileURL(
   resolve(process.env.WERK_FACTORY_TEST_ROOT ?? "src/factory/dist") + "/",
 ).href;
 const { taskPageQuery, checkedTaskPage } = await import(
-  new URL("factory/application/task-pages.js", base)
+  new URL("factory/application/task-pages.js", base).href
 );
 const { HttpLineReader } = await import(
-  new URL("factory/infrastructure/poller.js", base)
+  new URL("factory/infrastructure/poller.js", base).href
 );
 const { FactoryApplication } = await import(
-  new URL("factory/application/service.js", base)
+  new URL("factory/application/service.js", base).href
 );
 const { SqliteFactoryRegistry } = await import(
-  new URL("factory/infrastructure/registry.js", base)
+  new URL("factory/infrastructure/registry.js", base).href
 );
-const { createFactoryHandler } = await import(new URL("factory/http.js", base));
+const { createFactoryHandler } = await import(new URL("factory/http.js", base).href);
 const row = () => ({
   id: "task-one",
   title: "Review checkout retry behavior",
@@ -41,10 +42,10 @@ const line = (url) => ({
 });
 async function serve(handler) {
   const server = createServer(handler);
-  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  await new Promise((r) => server.listen(0, "127.0.0.1", () => r(undefined)));
   return {
     server,
-    url: "http://127.0.0.1:" + server.address().port,
+    url: "http://127.0.0.1:" + testListeningAddress(server).port,
     close: () =>
       new Promise((r) => {
         server.close(r);
@@ -69,7 +70,7 @@ test("Factory task query rejects unknown, duplicate and unbounded inputs", () =>
   ])
     assert.throws(
       () => taskPageQuery(new URLSearchParams(query)),
-      (e) => e.code === "invalid_input",
+      (e) => testErrorCode(e) === "invalid_input",
     );
 });
 test("Task cards strip private payload and expose only validated gate phase", () => {
@@ -260,13 +261,13 @@ test("Task proxy refuses redirects, does not leak upstream errors, bounds concur
     mode = "redirect";
     await assert.rejects(
       reader.tasks(line(upstream.url), { limit: 50 }),
-      (e) => e.code === "unavailable",
+      (e) => testErrorCode(e) === "unavailable",
     );
     assert.equal(redirectCalls, 0);
     mode = "error";
     await assert.rejects(
       reader.tasks(line(upstream.url), { limit: 50 }),
-      (e) => !e.message.includes("private-upstream"),
+      (e) => !testErrorMessage(e).includes("private-upstream"),
     );
     mode = "slow";
     const pending = Array.from({ length: 5 }, () =>

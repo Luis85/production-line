@@ -39,12 +39,13 @@ registerHooks({
 });
 export const frontend = (path) => import(pathToFileURL(resolve(path)).href);
 export const deferred = () => {
-  let resolve, reject;
-  const promise = new Promise((yes, no) => {
-    resolve = yes;
-    reject = no;
-  });
-  return { promise, resolve, reject };
+  const { promise, resolve, reject } = Promise.withResolvers();
+  return {
+    promise,
+    /** @param {unknown} [value] */
+    resolve(value) { resolve(value); },
+    reject,
+  };
 };
 
 let freshModule = 0;

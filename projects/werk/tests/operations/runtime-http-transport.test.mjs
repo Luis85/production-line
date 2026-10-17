@@ -1,3 +1,4 @@
+import { testErrorCode, testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
@@ -77,16 +78,16 @@ test('control, health and private requests retain body bounds, identity checks a
     const data = mode === 'identity' ? { ...snapshot, runId: 'c'.repeat(64) } : snapshot;
     res.end(JSON.stringify({ schemaVersion: 1, ...data, ...(mode === 'large' ? { padding: 'x'.repeat(1048576) } : {}) }));
   });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  await new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(undefined)));
   t.after(() => close(server));
-  const port = server.address().port, base = `http://127.0.0.1:${port}`;
+  const port = testListeningAddress(server).port, base = `http://127.0.0.1:${port}`;
   const dispatchers = [], fetch = globalThis.fetch;
   t.mock.method(globalThis, 'fetch', (url, options) => { dispatchers.push(options.dispatcher); return fetch(url, options); });
   const health = () => orchestratorReady({ orchestratorPort: port, project: 'demo' }, { WERK_ADMIN_TOKEN: controlToken });
   mode = 'identity'; await assert.rejects(controlRequest(record(port)), /identity could not be verified/);
   mode = 'large'; await assert.rejects(controlRequest(record(port)), /Invalid supervisor response/);
   await assert.rejects(health(), /Unexpected health response/);
-  await assert.rejects(privateJson(new URL(base), controlToken), error => error.code === 'unavailable');
+  await assert.rejects(privateJson(new URL(base), controlToken), error => testErrorCode(error) === 'unavailable');
   mode = 'redirect'; await assert.rejects(controlRequest(record(port))); await assert.rejects(health());
   assert.equal(redirected, false);
   mode = 'hang'; await assert.rejects(controlRequest(record(port))); await assert.rejects(health());
@@ -94,7 +95,7 @@ test('control, health and private requests retain body bounds, identity checks a
   assert.equal(dispatchers.length, 10);
   for (const dispatcher of dispatchers) {
     assert.ok(dispatcher);
-    await assert.rejects(dispatcher.request({ origin: base, path: '/', method: 'GET' }), error => error.code === 'UND_ERR_DESTROYED');
+    await assert.rejects(dispatcher.request({ origin: base, path: '/', method: 'GET' }), error => testErrorCode(error) === 'UND_ERR_DESTROYED');
   }
 });
 
@@ -102,13 +103,13 @@ test('local control and health requests never forward their credentials through 
   let proxied = 0;
   const proxy = createServer((req, res) => { proxied++; res.writeHead(502); res.end(); });
   const service = createServer((req, res) => res.end(JSON.stringify({ schemaVersion: 1, ...snapshot })));
-  await Promise.all([proxy, service].map(server => new Promise(resolve => server.listen(0, '127.0.0.1', resolve))));
+  await Promise.all([proxy, service].map(server => new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(undefined)))));
   t.after(() => Promise.all([proxy, service].map(close)));
   const previous = Object.fromEntries(['HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy', 'no_proxy', 'NODE_USE_ENV_PROXY'].map(key => [key, process.env[key]]));
   t.after(() => { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } });
-  const endpoint = `http://127.0.0.1:${proxy.address().port}`;
+  const endpoint = `http://127.0.0.1:${testListeningAddress(proxy).port}`;
   Object.assign(process.env, { HTTP_PROXY: endpoint, HTTPS_PROXY: endpoint, http_proxy: endpoint, https_proxy: endpoint, NO_PROXY: '', no_proxy: '', NODE_USE_ENV_PROXY: '1' });
-  assert.equal((await controlRequest(record(service.address().port))).state, 'running');
-  assert.equal(await orchestratorReady({ orchestratorPort: service.address().port, project: 'demo' }, { WERK_ADMIN_TOKEN: controlToken }), true);
+  assert.equal((await controlRequest(record(testListeningAddress(service).port))).state, 'running');
+  assert.equal(await orchestratorReady({ orchestratorPort: testListeningAddress(service).port, project: 'demo' }, { WERK_ADMIN_TOKEN: controlToken }), true);
   assert.equal(proxied, 0);
 });

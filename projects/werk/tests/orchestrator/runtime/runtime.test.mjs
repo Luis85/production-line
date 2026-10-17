@@ -1,3 +1,6 @@
+import { expectPreview, expectImported } from '../iteration-results.mjs';
+import { workerStatus } from '../../helpers/worker-status.mjs';
+import { testErrorCode, testListeningAddress } from '../../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile, writeFile, mkdir } from 'node:fs/promises';
@@ -18,10 +21,10 @@ function addPair(store,w,t){const j=new SnapshotJournal('/tmp',w.config.configHa
 test('submission is validated and idempotent; changed payload cannot reuse a key',()=>{
   const s=new Store(':memory:');try{
     const a=s.submit(task(),'a');assert.equal(s.submit(task(),'a').id,a.id);assert.equal(s.list().length,1);
-    assert.throws(()=>s.submit(task({title:'Other'}),'a'),e=>e.code==='conflict');
-    assert.throws(()=>s.submit(task({provider:'cursor'}),'b'),e=>e.code==='invalid_input');
-    assert.throws(()=>s.submit(task({criteria:[]}),'c'),e=>e.code==='invalid_input');
-    assert.throws(()=>s.submit(task({wikilinks:['bad link']}),'d'),e=>e.code==='invalid_input');
+    assert.throws(()=>s.submit(task({title:'Other'}),'a'),e=>testErrorCode(e)==='conflict');
+    assert.throws(()=>s.submit(task({provider:'cursor'}),'b'),e=>testErrorCode(e)==='invalid_input');
+    assert.throws(()=>s.submit(task({criteria:[]}),'c'),e=>testErrorCode(e)==='invalid_input');
+    assert.throws(()=>s.submit(task({wikilinks:['bad link']}),'d'),e=>testErrorCode(e)==='invalid_input');
   }finally{s.close();}
 });
 test('project/profile routing, priority and one slot across multiple profiles',()=>{
@@ -39,9 +42,9 @@ test('expired lease is reassigned and cannot heartbeat or finish; completion rep
     const w1=s.worker(s.register('demo',ps).token),w2=s.worker(s.register('demo',ps).token);
     s.submit(task(),'a');const a=s.claim(w1);now=1200;const b=s.claim(w2);
     assert.equal(b.attempt,2);assert.notEqual(a.lease,b.lease);
-    assert.throws(()=>s.heartbeat(w1,a.id,a.lease,a.attempt),e=>e.code==='conflict');
-    assert.throws(()=>s.finish(w1,a.id,a.lease,a.attempt),e=>e.code==='conflict');
-    assert.throws(()=>s.finish(w2,b.id,b.lease,b.attempt),e=>e.code==='conflict');const pair=addPair(s,w2,b);s.snapshot(w2,pair[0]);assert.throws(()=>s.snapshot(w2,{...pair[0],capturedAt:'2000-01-01T00:00:00.000Z'}),e=>e.code==='conflict');const finished=s.finish(w2,b.id,b.lease,b.attempt);assert.equal(finished.status,'simulated');
+    assert.throws(()=>s.heartbeat(w1,a.id,a.lease,a.attempt),e=>testErrorCode(e)==='conflict');
+    assert.throws(()=>s.finish(w1,a.id,a.lease,a.attempt),e=>testErrorCode(e)==='conflict');
+    assert.throws(()=>s.finish(w2,b.id,b.lease,b.attempt),e=>testErrorCode(e)==='conflict');const pair=addPair(s,w2,b);s.snapshot(w2,pair[0]);assert.throws(()=>s.snapshot(w2,{...pair[0],capturedAt:'2000-01-01T00:00:00.000Z'}),e=>testErrorCode(e)==='conflict');const finished=s.finish(w2,b.id,b.lease,b.attempt);assert.equal(finished.status,'simulated');
     s.finish(w2,b.id,b.lease,b.attempt);
     assert.equal(s.events(b.id).filter(e=>e.kind==='simulation_finished').length,1);
   }finally{s.close();}
@@ -51,7 +54,7 @@ test('SQLite state and worker identity survive reopen',async()=>{
   try{s=new Store(file);const auth=s.register('demo',ps),id=s.submit(task(),'persist').id;s.close();s=new Store(file);assert.equal(s.get(id).wikilinks[0],'[[DoD]]');assert.equal(s.worker(auth.token).id,auth.id);assert.equal(s.events(id).length,1);}finally{s?.close();await rm(dir,{recursive:true,force:true});}
 });
 test('HTML status snapshot escapes hostile values and is independent of the worker endpoint',()=>{
-  const output=statusHtml({workerId:'</script><img src=x>',project:'demo'});
+  const output=statusHtml(workerStatus({workerId:'</script><img src=x>',project:'demo'}));
   assert.ok(!output.includes('</script><img'));assert.ok(output.includes('Exported snapshot'));assert.ok(!output.includes('setInterval(refresh,3000)'));
 });
 test('serial worker configuration is hashed; server retains machine and profile capacity enforcement',async()=>{
@@ -77,7 +80,7 @@ test('journal recovers an incomplete attempt and preserves unknown timing; late 
     now=1200;const other=s.worker(s.register('demo',ps).token);s.claim(other);
     await j.flush(snapshot=>Promise.resolve(s.snapshot(w,snapshot)));
     const after=await j.read(t.lease,'after');assert.equal(after.execution.outcome,'interrupted');assert.equal(after.execution.durationMs,null);assert.equal(after.health.recoveredAfterCrash,true);
-    assert.throws(()=>s.finish(w,t.id,t.lease,t.attempt),e=>e.code==='conflict');assert.equal(s.snapshots().length,2);
+    assert.throws(()=>s.finish(w,t.id,t.lease,t.attempt),e=>testErrorCode(e)==='conflict');assert.equal(s.snapshots().length,2);
   }finally{j?.close();s.close();await rm(dir,{recursive:true,force:true});}
 });
 test('iteration importer reads committed ready notes, deduplicates, and flags changed specifications',async()=>{
@@ -88,11 +91,11 @@ test('iteration importer reads committed ready notes, deduplicates, and flags ch
     await mkdir(join(dir,'docs/features'),{recursive:true});const file=join(dir,'docs/features/order.md');await writeFile(file,await readFile('examples/feature.md'));
     await writeFile(join(dir,'docs/features/planned.md'),'---\ntitle: Later\nfactory_status: planning\n---\nNot ready');await git('add','.');await git('commit','-m','Plan iteration');
     app=await startServer({db:join(dir,'store.sqlite'),host:'127.0.0.1',port:0,adminToken:admin,enrollmentToken:enroll,project:'demo'});
-    const o={repo:dir,branch:'iteration/2026-W42',project:'demo',iteration:'2026-W42','iteration-pr':'https://git.example/project/pull/10',url:'http://127.0.0.1:'+app.server.address().port};
-    const preview=await importIteration({...o,'dry-run':'true'},admin);assert.equal(preview.ready.length,1);assert.equal(app.store.list().length,0);
-    const first=await importIteration(o,admin);assert.equal(first.results[0].status,'created');const again=await importIteration(o,admin);assert.equal(again.results[0].status,'unchanged');assert.equal(app.store.list().length,1);
+    const o={repo:dir,branch:'iteration/2026-W42',project:'demo',iteration:'2026-W42','iteration-pr':'https://git.example/project/pull/10',url:'http://127.0.0.1:'+testListeningAddress(app.server).port};
+    const preview=expectPreview(await importIteration({...o,'dry-run':'true'},admin));assert.equal(preview.ready.length,1);assert.equal(app.store.list().length,0);
+    const first=expectImported(await importIteration(o,admin));assert.equal(first.results[0].status,'created');const again=expectImported(await importIteration(o,admin));assert.equal(again.results[0].status,'unchanged');assert.equal(app.store.list().length,1);
     await writeFile(file,(await readFile(file,'utf8'))+'\nNew specification.\n');await git('add','docs');await git('commit','-m','Revise specification');
-    const revised=await importIteration(o,admin);assert.equal(revised.requiresDecision,true);assert.equal(app.store.list().length,1);
+    const revised=expectImported(await importIteration(o,admin));assert.equal(revised.requiresDecision,true);assert.equal(app.store.list().length,1);
   }finally{await app?.close();await rm(dir,{recursive:true,force:true});}
 });
 const waitFor=async(fn,timeout=10000)=>{const end=Date.now()+timeout;while(Date.now()<end){const x=await fn();if(x)return x;await new Promise(r=>setTimeout(r,60));}throw Error('Timed out');};
@@ -102,7 +105,7 @@ test('HTTP intake, stdin CLI and three real worker processes complete a mock fle
   const admin='a'.repeat(48),enroll='e'.repeat(48);
   try{
     app=await startServer({db:join(dir,'db.sqlite'),host:'127.0.0.1',port:0,adminToken:admin,enrollmentToken:enroll,project:'demo'});
-    const url='http://127.0.0.1:'+app.server.address().port;
+    const url='http://127.0.0.1:'+testListeningAddress(app.server).port;
     const page=await (await fetch(url)).text();assert.match(page,/<div id="app"/);const modulePath=page.match(/<script[^>]+type="module"[^>]+src="([^"]+)"/)[1];const asset=await fetch(new URL(modulePath,url));assert.equal(asset.status,200);assert.match(asset.headers.get('content-type'),/javascript/);assert.equal(await(await fetch(url+'/intake')).text(),page);
     assert.equal((await fetch(url+'/v1/tasks')).status,401);
     assert.equal((await fetch(url+'/v1/tasks',{method:'POST',headers:{Authorization:'Bearer '+admin,'Content-Type':'application/json','Idempotency-Key':'null'},body:'null'})).status,400);

@@ -6,7 +6,7 @@ import { accessAuthorization, accessView, withAccess, requireWrite, type AccessD
 import { auditMutation, type AuditSink } from '../shared/http/audit.js';
 import { prometheus } from '../shared/monitoring.js';
 import { DomainError } from '../shared/errors.js';
-import { ApiError, httpStatus, isExpectedError } from '../shared/http/errors.js';
+import { httpStatus, isExpectedError } from '../shared/http/errors.js';
 import { json, html, readJson, bearerToken, rejectRequest } from '../shared/http/server.js';
 import { identifier } from '../shared/contracts.js';
 import type { FactoryApplication } from './application/service.js';

@@ -1,3 +1,4 @@
+import { SerializedOperations } from '../../../shared/serialized-operations.js';
 import { parseFeature } from '../features/document.js';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -11,7 +12,7 @@ import { validateFeatureReadiness } from '../features/workflow.js';
 /** Private recovery journal. No claim is dispatched from an unvalidated or partially written record. */
 export class SharedFeatureJournal {
   private path: string;
-  private writes = Promise.resolve();
+  private readonly writes = new SerializedOperations();
   constructor(directory: string) { this.path = join(directory, 'shared-intake.json'); }
   async load(): Promise<SharedFeatureState> {
     try {
@@ -49,7 +50,6 @@ export class SharedFeatureJournal {
   save(state: SharedFeatureState) {
     const text = JSON.stringify(state);
     if (Buffer.byteLength(text) > 16777216) return Promise.reject(Error('Shared intake journal exceeds 16 MiB.'));
-    const write = this.writes.catch(() => {}).then(() => atomicWrite(this.path, text));
-    this.writes = write; return write;
+    return this.writes.run(() => atomicWrite(this.path, text));
   }
 }

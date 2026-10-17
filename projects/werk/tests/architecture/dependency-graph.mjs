@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { parse as parseVue } from '@vue/compiler-sfc';
 
-export async function sourceFiles(directory) {
+async function sourceFiles(directory) {
   const files = [];
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     if (['dist', 'node_modules', 'public'].includes(entry.name) || entry.name.startsWith('.')) continue;
@@ -27,8 +27,9 @@ export function references(file, contents) {
   const values = [], requireFactories = new Set(), requireNames = new Set(['require']);
   const walk = visit => { const next = node => { visit(node); ts.forEachChild(node, next); }; next(tree); };
   walk(node => {
-    if (ts.isImportDeclaration(node) && ['node:module', 'module'].includes(node.moduleSpecifier.text)) {
-      for (const element of node.importClause?.namedBindings?.elements ?? []) {
+    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier) && ['node:module', 'module'].includes(node.moduleSpecifier.text)) {
+      const bindings = node.importClause?.namedBindings;
+      for (const element of bindings && ts.isNamedImports(bindings) ? bindings.elements : []) {
         if ((element.propertyName ?? element.name).text === 'createRequire') requireFactories.add(element.name.text);
       }
     }
@@ -44,8 +45,10 @@ export function references(file, contents) {
   walk(node => {
     if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier) {
       const bindings = ts.isImportDeclaration(node) ? node.importClause?.namedBindings : node.exportClause;
-      const typeOnly = Boolean(node.isTypeOnly || node.importClause?.isTypeOnly ||
-        (!node.importClause?.name && bindings?.elements?.length && bindings.elements.every(item => item.isTypeOnly)));
+      const declarationTypeOnly = ts.isImportDeclaration(node) ? node.importClause?.isTypeOnly : node.isTypeOnly;
+      const hasDefaultImport = ts.isImportDeclaration(node) && Boolean(node.importClause?.name);
+      const elements = bindings && (ts.isNamedImports(bindings) || ts.isNamedExports(bindings)) ? bindings.elements : [];
+      const typeOnly = Boolean(declarationTypeOnly || (!hasDefaultImport && elements.length && elements.every(item => item.isTypeOnly)));
       add(node, node.moduleSpecifier, ts.isImportDeclaration(node) ? 'import' : 'export', typeOnly);
     }
     if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) add(node, node.moduleReference.expression, 'require', node.isTypeOnly);
@@ -64,7 +67,7 @@ export async function dependencyGraph(directories) {
   return graph;
 }
 
-export function resolveDependency(file, specifier, graph, { sourceRoot, aliases = {} }) {
+function resolveDependency(file, specifier, graph, { sourceRoot, aliases = {} }) {
   if (specifier === null) return null;
   let target;
   if (specifier.startsWith('.')) target = resolve(dirname(file), specifier);

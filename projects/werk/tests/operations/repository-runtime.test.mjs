@@ -1,3 +1,5 @@
+import { testErrorStatus } from '../helpers/process-errors.mjs';
+import { testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -31,7 +33,7 @@ test('runtime worker documents preserve multiple assignments without a legacy Co
 
 test('runtime assignment validation rejects ambiguous or unsafe references without echoing input', () => {
   const invalid = [null, [], { items: null }, { items: [{ id: 'app', path: 'relative' }] }, { items: [{ id: 'app', path: '/srv/app\u0000' }] }, { pollMs: 999 }, { pollMs: 3600001 }, { items: [{ id: 'app', path: resolve('/srv/app'), remote: '--upload-pack' }] }, { items: [{ id: 'app', path: resolve('/srv/app'), branch: 'main..other' }] }, { items: [{ id: 'app', path: resolve('/srv/app'), watch: 'true' }] }, { items: [{ id: 'app', path: resolve('/srv/app'), token: 'never-echo-secret' }] }, { items: [{ id: 'app', path: '/srv/app' }, { id: 'app', path: '/srv/other' }] }, { items: [{ id: 'app', path: '/srv/app' }, { id: 'other', path: '/srv/other/../app' }] }];
-  for (const value of invalid) assert.throws(() => normalizeRepositories(value), error => error.exitCode === 2 && !error.message.includes('never-echo-secret'));
+  for (const value of invalid) assert.throws(() => normalizeRepositories(value), error => testErrorStatus(error, 'exitCode') === 2 && !testErrorMessage(error).includes('never-echo-secret'));
   const base = { schemaVersion: 1, project: 'app', runtime: 'native', orchestratorPort: 3001, workerPort: 4101, workers: 1, mode: 'cli', execution: execution() };
   assert.throws(() => validateConfig(base), /repository/);
   assert.deepEqual(validateConfig({ ...base, repositories: repositories() }).repositories, normalizeRepositories(repositories()));

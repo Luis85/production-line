@@ -47,6 +47,11 @@ The shared source lives in `src/shared/webview`:
   main landmark.
 - `PageHeading`, `ConnectionStatus`, `AsyncState` and `StatCard` standardize
   repeated presentation without owning application data.
+- `SettingsSaveFeedback` presents save errors, notices and uncertain acknowledgement
+  recovery. It emits `retry`, `reload` and `refresh`; the owning settings controller
+  retains the submitted command, draft and conflict policy. Busy, checking and
+  locked states disable recovery controls. Queue, duration and consumption forms
+  reuse this presentation while keeping their own validation and payloads.
 - `TaskKanban` is the one board renderer used by Worker file tasks, Factory
   aggregate/line views, Orchestrator tasks and the concept simulation. It owns
   keyboard column navigation, literal card/source identity, scoped counts and
@@ -61,17 +66,32 @@ The shared source lives in `src/shared/webview`:
 
 Import components directly and use Nuxt UI explicitly. Keep `UApp` at the
 application root. Shared `theme.css` contains color, spacing, typography and
-layout rules; application styles describe their own page content. Add shared
+layout rules through ordered concern imports. The application CSS entrypoints
+preserve the same cascade while separating conversation, capacity, task and
+responsive rules. Keep Tailwind source declarations in those original entrypoints
+so utility discovery stays relative to the application. Add shared
 patterns when multiple applications need the same behavior, rather than copying
 large application controllers into a common directory.
 
 ## State and asynchronous work
 
 Use injectable controllers/stores for access, requests and domain presentation.
-Vue components render state and call operations. Keep credentials out of browser
+Vue components render state and call operations. Page-specific `use*` composables
+own their filters, actions and lifecycle; they expose the presentation bindings
+needed by each template. Keep those composables beside their owning page until
+multiple consumers need the same behavior. Worker conversation history and
+request-gate evidence have separate components so conversation selection and
+read-only gate presentation do not grow the history or lifecycle controller.
+Keep credentials out of browser
 storage and URLs. A disconnect or changed selection must fence late responses
 before they can restore private data. Polling must not overwrite a draft, clear
 an action error, or announce unchanged values repeatedly.
+
+`jsonRequestInit` in the shared HTTP adapter applies JSON serialization,
+`cache: no-store` and a bounded cancellation signal consistently. Each caller
+chooses its credentials, authorization and idempotency headers, timeout budget
+and response-adoption epoch. `requestJson` parses responses and reports transport
+errors without taking ownership of login, retries or application state.
 
 The shared bounded-polling composable supports visibility and lifecycle cleanup.
 Domain requests still need their own session/selection identity checks. Keep

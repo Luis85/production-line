@@ -1,3 +1,4 @@
+import { testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
@@ -17,7 +18,7 @@ for (const [source, destination] of [['storybook/fixtures/portfolio.ts', 'portfo
   const output = ts.transpileModule(content, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
   await writeFile(join(directory, destination), output);
 }
-const { factoryFixture, orchestratorFixture } = await import(pathToFileURL(modulePath)).catch(async error => { await rm(directory, { recursive: true, force: true }); throw error; });
+const { factoryFixture, orchestratorFixture } = await import(pathToFileURL(modulePath).href).catch(async error => { await rm(directory, { recursive: true, force: true }); throw error; });
 
 function errors(t) {
   const previous = globalThis.__WERK_STORY_ERRORS__;
@@ -48,7 +49,7 @@ test('Factory fixture rejects and records unknown requests outside the UI catch 
   await assert.rejects(store.api('/v1/unexpected'), /no fixture for GET/);
   await assert.rejects(store.api('/v1/lines/alpha/unknown-action', { method: 'POST', body: {} }), /no fixture for POST/);
   assert.equal(recorded.length, 2);
-  await assert.rejects(store.api('/v1/lines', { method: 'POST', body: {} }), error => error.status === 405 && /Read-only fixture/.test(error.message));
+  await assert.rejects(store.api('/v1/lines', { method: 'POST', body: {} }), error => error instanceof Error && 'status' in error && error.status === 405 && /Read-only fixture/.test(testErrorMessage(error)));
   assert.equal(recorded.length, 2, 'a documented disabled mutation is intentional, not an unknown request');
 });
 
@@ -61,6 +62,6 @@ test('Orchestrator fixture records unknown calls even when the store catches the
   assert.equal(store.state.stale, true);
   assert.ok(recorded.some(message => message.includes('GET /v1/overview')));
   const count = recorded.length;
-  await assert.rejects(store.api('/v1/tasks', {}, 'POST'), error => error.status === 405 && /Read-only fixture/.test(error.message));
+  await assert.rejects(store.api('/v1/tasks', {}, 'POST'), error => error instanceof Error && 'status' in error && error.status === 405 && /Read-only fixture/.test(testErrorMessage(error)));
   assert.equal(recorded.length, count);
 });

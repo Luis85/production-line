@@ -4,6 +4,7 @@ import { readFile, writeFile, mkdir, readdir, lstat, rm } from 'node:fs/promises
 import { dirname, extname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderStorymap } from './render-storymap.mjs';
+import { verifyDocumentation } from './verify-documentation.mjs';
 
 const PROJECT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 export const VIEWPORTS = Object.freeze([
@@ -34,7 +35,7 @@ export function validateCaptureRecords(entries, records) {
   return issues;
 }
 
-export function validateStoryEvidence({ id, metadata, mounted, errors = [], meaningful, horizontalOverflow = false }, components) {
+export function validateStoryEvidence({ id, metadata, mounted, errors = [], meaningful, horizontalOverflow = false, document: renderedDocument }, components, documents = []) {
   const issues = errors.map((message) => `${id}: ${message}`);
   const known = new Set(components.map((component) => component.path));
   if (!meaningful) issues.push(`${id}: the story did not render a visible, meaningful interface`);
@@ -42,6 +43,11 @@ export function validateStoryEvidence({ id, metadata, mounted, errors = [], mean
   if (!metadata || typeof metadata !== 'object') return [...issues, `${id}: missing storymap metadata`];
   if (typeof metadata.app !== 'string' || !metadata.app.trim()) issues.push(`${id}: missing application`);
   if (typeof metadata.summary !== 'string' || !metadata.summary.trim()) issues.push(`${id}: missing summary`);
+  if (metadata.kind === 'documentation') {
+    if (metadata.app !== 'Documentation' || !documents.some(page => page.id === metadata.document) || renderedDocument !== metadata.document) issues.push(`${id}: documentation must render an indexed page`);
+    if (!Array.isArray(metadata.covers) || metadata.covers.length || mounted.length) issues.push(`${id}: documentation cannot claim component coverage`);
+    return issues;
+  }
   if (!Array.isArray(metadata.covers) || !metadata.covers.length) {
     issues.push(`${id}: covers must name at least one source component`);
   } else {
@@ -116,6 +122,7 @@ export function readStoryEvidence() {
   const visibleErrors = [...document.querySelectorAll(errorSelector)].filter(visible).map((element) => element.textContent);
   return {
     metadata: window.__WERK_STORYMAP__,
+    document: document.querySelector?.('.werk-docs[data-document]')?.getAttribute('data-document'),
     mounted: [...(window.__WERK_MOUNTED_SOURCES__ ?? [])].sort(),
     errors: [...(window.__WERK_STORY_ERRORS__ ?? []), ...visibleErrors],
     meaningful,
@@ -210,7 +217,7 @@ async function inspectStory(browser, origin, entry, viewport, inventory, output)
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     });
     const evidence = await page.evaluate(readStoryEvidence);
-    const issues = validateStoryEvidence({ id: entry.id, ...evidence, errors: [...errors, ...evidence.errors] }, inventory.components);
+    const issues = validateStoryEvidence({ id: entry.id, ...evidence, errors: [...errors, ...evidence.errors] }, inventory.components, inventory.documents);
     if (issues.length) throw new Error(issues.join('\n'));
     const screenshot = `screenshots/${entry.id}-${viewport.name}.png`;
     await page.screenshot({ path: join(output, screenshot), fullPage: true, animations: 'disabled', caret: 'hide' });
@@ -266,9 +273,10 @@ export async function capture({ root = PROJECT_ROOT, staticRoot = join(root, 'st
     await writeFile(join(output, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
     await writeFile(join(output, 'index.html'), renderStorymap(inventory, manifest));
     const catalog = await verifyStorymap(browser, serving.origin, inventory, manifest);
+    const documentation = await verifyDocumentation(browser, serving.origin, inventory, staticRoot, VIEWPORTS);
     if (inventory.sourceDigest !== await sourceDigest(root) || inventory.commit !== sourceCommit(root)) throw new Error('Source identity changed during catalog qualification; rebuild and capture again.');
     const qualification = { schemaVersion: 1, version: inventory.version, commit: inventory.commit, sourceDigest: inventory.sourceDigest,
-      passed: true, coverage, stories: entries.length, screenshots: records.length, catalog, errors: [], files: await assetManifest(staticRoot) };
+      passed: true, coverage, stories: entries.length, screenshots: records.length, catalog, documentation, errors: [], files: await assetManifest(staticRoot) };
     await writeFile(join(output, 'qualification.json'), `${JSON.stringify(qualification, null, 2)}\n`);
     process.stdout.write(`Storymap qualified: ${coverage.covered}/${coverage.total} components, ${entries.length} stories, ${records.length} screenshots.\n`);
     return qualification;

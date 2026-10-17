@@ -1,3 +1,4 @@
+import { testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { childEnvironment } from '../../scripts/fleet.mjs';
@@ -26,8 +27,8 @@ test('actual fleet worker subprocess receives enrollment without admin credentia
   const {createServer}=await import('node:net');const {spawn}=await import('node:child_process');
   const root=await mkdtemp(join(tmpdir(),'werk-token-scope-'));
   const listeners=[createServer(),createServer()];
-  await Promise.all(listeners.map(s=>new Promise(r=>s.listen(0,'127.0.0.1',r))));
-  const [port,status]=listeners.map(s=>s.address().port);await Promise.all(listeners.map(s=>new Promise(r=>s.close(r))));
+  await Promise.all(listeners.map(s=>new Promise(r=>s.listen(0,'127.0.0.1',() => r(undefined)))));
+  const [port,status]=listeners.map(s=>testListeningAddress(s).port);await Promise.all(listeners.map(s=>new Promise(r=>s.close(r))));
   let child,exited;
   try{
     await mkdir(join(root,'scripts'));await cp(new URL('../../scripts/fleet.mjs',import.meta.url),join(root,'scripts/fleet.mjs'));

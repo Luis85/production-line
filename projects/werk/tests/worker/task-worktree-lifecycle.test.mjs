@@ -1,3 +1,5 @@
+import { workerStatus } from '../helpers/worker-status.mjs';
+import { testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -113,11 +115,11 @@ test('a configured worktree directory keeps new task copies outside the checkout
 async function worker(t) {
   const { root, path: repo, item } = await repository(t, 'werk-worktree-api-', false), state = join(root, 'state'); await mkdir(state);
   const journal = new SnapshotJournal(state, 'a'.repeat(64), 'b'.repeat(64)); await journal.init();
-  const current = { activeTasks: [], queuedTasks: [] };
+  const current = workerStatus({ activeTasks: [], queuedTasks: [] });
   const workspace = new WorkerWorkspace({ stateDir: state, pollMs: 1000, timeoutMs: 60000 }, journal, () => current); await workspace.init();
   const server = await statusServer(() => current, '127.0.0.1', 0, undefined, workspace);
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await workspace.close(); journal.close(); await rm(root, { recursive: true, force: true }); });
-  const base = 'http://127.0.0.1:' + server.address().port, token = (await readFile(join(state, 'webview-token'), 'utf8')).trim();
+  const base = 'http://127.0.0.1:' + testListeningAddress(server).port, token = (await readFile(join(state, 'webview-token'), 'utf8')).trim();
   const headers = { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' };
   const call = async (path, body) => { const response = await fetch(base + path, body === undefined ? { headers } : { method: 'POST', headers, body: JSON.stringify(body) }); return { status: response.status, value: await response.json() }; };
   return { root, repo, item, workspace, call, base };

@@ -1,3 +1,4 @@
+import { workerClient } from './contract-fixtures.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, realpath, rm } from "node:fs/promises";
@@ -27,6 +28,7 @@ for (const scenario of ["completed", "ready-held", "done-held", "unknown"])
         store.close();
         await rm(directory, { recursive: true, force: true });
       });
+      /** @type {import('../../src/shared/contracts.js').Profile[]} */
       const profiles = [{ id: "codex-mock", provider: "codex", mode: "mock" }];
       const registration = store.register("demo", profiles),
         worker = store.worker(registration.token);
@@ -77,6 +79,7 @@ for (const scenario of ["completed", "ready-held", "done-held", "unknown"])
       );
       await journal.init();
       const state = {
+        lastError: null, lastSnapshot: null,
         lastContact: null,
         heartbeatErrors: 0,
         completedSimulations: 0,
@@ -127,7 +130,7 @@ for (const scenario of ["completed", "ready-held", "done-held", "unknown"])
       );
       let invocations = 0;
       const actions = [];
-      const client = {
+      const client = workerClient({
         heartbeat: async (assigned) =>
           store.heartbeat(
             worker,
@@ -135,10 +138,10 @@ for (const scenario of ["completed", "ready-held", "done-held", "unknown"])
             assigned.lease,
             assigned.attempt,
           ),
-        publishSnapshot: async (snapshot) => store.snapshot(worker, snapshot),
+        publishSnapshot: async (snapshot) => { store.snapshot(worker, snapshot); },
         complete: async (assigned) => {
           actions.push("complete");
-          return store.finish(
+          store.finish(
             worker,
             assigned.id,
             assigned.lease,
@@ -147,7 +150,7 @@ for (const scenario of ["completed", "ready-held", "done-held", "unknown"])
         },
         hold: async (assigned, receipt) => {
           actions.push("hold");
-          return store.hold(
+          store.hold(
             worker,
             assigned.id,
             assigned.lease,
@@ -157,14 +160,14 @@ for (const scenario of ["completed", "ready-held", "done-held", "unknown"])
         },
         abandon: async (assigned) => {
           actions.push("abandon");
-          return store.abandon(
+          store.abandon(
             worker,
             assigned.id,
             assigned.lease,
             assigned.attempt,
           );
         },
-      };
+      });
       await executeAttempt(task, new AbortController().signal, {
         gates,
         client,

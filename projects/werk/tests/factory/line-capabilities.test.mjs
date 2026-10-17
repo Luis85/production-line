@@ -1,3 +1,4 @@
+import { testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -31,16 +32,18 @@ test('capability validator rejects oversized, inconsistent and unrecognized remo
   for (const mutate of mutations) { const value = capabilities(); mutate(value); assert.throws(() => validateLineCapabilities(value, 'alpha')); }
 });
 test('real Factory poller retains valid capability DTO, rejects hostile DTO and tolerates legacy absence', async t => {
+  // This HTTP fixture deliberately alternates current, hostile and legacy wire payloads.
+  /** @type {unknown} */
   let body = { ...overview(), capabilities: capabilities() };
   const token = 'line-private-token-'.repeat(3);
   const server = createServer((request, response) => {
     assert.equal(request.url, '/v1/overview'); assert.equal(request.headers.authorization, 'Bearer ' + token);
     response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify(body));
   });
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  await new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(undefined)));
   t.after(() => new Promise(resolve => server.close(resolve)));
   const reader = new HttpLineReader({ WERK_LINE_ALPHA_TOKEN: token }); t.after(() => reader.close());
-  const url = 'http://127.0.0.1:' + server.address().port;
+  const url = 'http://127.0.0.1:' + testListeningAddress(server).port;
   const line = { id: 'alpha', name: 'Alpha', factoryId: 'root', orchestratorUrl: url, webviewUrl: url, tokenEnv: 'WERK_LINE_ALPHA_TOKEN' };
   const current = await reader.read(line); assert.equal(current.status, 'available'); assert.equal(current.overview.capabilities.execution, 'mock');
   body = { ...overview(), capabilities: { ...capabilities(), project: 'beta', adminToken: token } };

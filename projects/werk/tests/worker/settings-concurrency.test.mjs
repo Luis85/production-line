@@ -1,3 +1,5 @@
+import { workerStatus } from '../helpers/worker-status.mjs';
+import { testErrorCode, testErrorMessage, testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import { cleanup } from './fixture-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -26,7 +28,7 @@ test('concurrent queue editors reject the stale save and preserve independent pa
   ]);
   assert.equal(pause.status, 'fulfilled'); assert.equal(edit.status, 'fulfilled');
   assert.equal(settings.value.board.paused, true);
-  await assert.rejects(settings.update({ board: { queueCapacity: 32 }, expectedBoard: baseline, resources: { longRunningMs: 2000 } }), error => error.code === 'conflict' && /Reload the current queue settings/.test(error.message));
+  await assert.rejects(settings.update({ board: { queueCapacity: 32 }, expectedBoard: baseline, resources: { longRunningMs: 2000 } }), error => testErrorCode(error) === 'conflict' && /Reload the current queue settings/.test(testErrorMessage(error)));
   assert.deepEqual(queue(settings), { queueCapacity: 24, orchestratorQueue: 2, order: 'priority' });
   assert.equal(settings.value.resources.longRunningMs, 3600000);
   await settings.update({ board: { paused: false } }); assert.equal(settings.value.board.paused, false);
@@ -48,7 +50,7 @@ test('competing queue saves compare their baseline inside the serialized write',
     { expectedBoard: { queueCapacity: 20 }, board: { order: 'priority' } },
     { expectedBoard: { ...current, queueCapacity: 0 }, board: { order: 'priority' } },
     { expectedBoard: current, board: { queueCapacity: 21, paused: true } },
-  ]) await assert.rejects(settings.update(body), error => error.code === 'invalid_input');
+  ]) await assert.rejects(settings.update(body), error => testErrorCode(error) === 'invalid_input');
   assert.deepEqual(queue(settings), current); assert.equal(settings.value.board.paused, false);
   await settings.update({ board: { queueCapacity: 21 } }); assert.equal(settings.value.board.queueCapacity, 21, 'legacy clients remain compatible');
 });
@@ -63,14 +65,14 @@ test('duration editors guard warning and execution limit together without partia
   assert.deepEqual(duration(settings), { maxRuntimeMs: 7200000, longRunningMs: 1800000 });
   const current = duration(settings);
   await settings.update({ resources: { longRunningMs: 1200000 } });
-  await assert.rejects(settings.update({ execution: { maxRuntimeMs: 14400000 }, expectedDuration: current }), error => error.code === 'conflict' && /Reload the current duration settings/.test(error.message));
+  await assert.rejects(settings.update({ execution: { maxRuntimeMs: 14400000 }, expectedDuration: current }), error => testErrorCode(error) === 'conflict' && /Reload the current duration settings/.test(testErrorMessage(error)));
   assert.deepEqual(duration(settings), { maxRuntimeMs: 7200000, longRunningMs: 1200000 });
   for (const body of [
     { expectedDuration: duration(settings) },
     { expectedDuration: { maxRuntimeMs: 7200000 }, resources: { longRunningMs: 1000 } },
     { expectedDuration: { ...duration(settings), longRunningMs: 0 }, execution: { maxRuntimeMs: 2000 } },
     { expectedDuration: duration(settings), execution: { maxRuntimeMs: 999 }, resources: { longRunningMs: 1000 } },
-  ]) await assert.rejects(settings.update(body), error => error.code === 'invalid_input');
+  ]) await assert.rejects(settings.update(body), error => testErrorCode(error) === 'invalid_input');
   assert.deepEqual(duration(settings), { maxRuntimeMs: 7200000, longRunningMs: 1200000 });
 });
 
@@ -82,7 +84,7 @@ test('environment execution override allows guarded warning edits and retains th
   const expectedDuration = duration(overridden);
   await overridden.update({ resources: { longRunningMs: 900000 }, expectedDuration });
   assert.deepEqual(duration(overridden), { maxRuntimeMs: 10800000, longRunningMs: 900000 });
-  await assert.rejects(overridden.update({ resources: { longRunningMs: 600000 }, expectedDuration }), error => error.code === 'conflict');
+  await assert.rejects(overridden.update({ resources: { longRunningMs: 600000 }, expectedDuration }), error => testErrorCode(error) === 'conflict');
   await assert.rejects(overridden.update({ execution: { maxRuntimeMs: 3600000 }, resources: { longRunningMs: 600000 }, expectedDuration: duration(overridden) }), /environment override/);
   assert.equal(overridden.value.resources.longRunningMs, 900000);
   assert.equal(JSON.parse(await readFile(join(directory, 'workspace-settings.json'), 'utf8')).execution.maxRuntimeMs, 7200000);
@@ -90,9 +92,9 @@ test('environment execution override allows guarded warning edits and retains th
 
 test('authenticated settings API returns actionable 409 responses for stale queue and duration editors', async t => {
   const { directory } = await fixture(t), journal = new SnapshotJournal(directory, 'a'.repeat(64), 'b'.repeat(64)); await journal.init(); cleanup(t, () => journal.close());
-  const state = { activeTasks: [], queuedTasks: [] }, workspace = new WorkerWorkspace({ stateDir: directory, pollMs: 1000, timeoutMs: 60000 }, journal, () => state); await workspace.init(); cleanup(t, () => workspace.close());
+  const state = workerStatus({ queuedTasks: [] }), workspace = new WorkerWorkspace({ stateDir: directory, pollMs: 1000, timeoutMs: 60000 }, journal, () => state); await workspace.init(); cleanup(t, () => workspace.close());
   const server = await statusServer(() => state, '127.0.0.1', 0, undefined, workspace); cleanup(t, async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); });
-  const token = (await readFile(join(directory, 'webview-token'), 'utf8')).trim(), endpoint = 'http://127.0.0.1:' + server.address().port + '/api/settings';
+  const token = (await readFile(join(directory, 'webview-token'), 'utf8')).trim(), endpoint = 'http://127.0.0.1:' + testListeningAddress(server).port + '/api/settings';
   const post = body => fetch(endpoint, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const expectedBoard = queue(workspace.settings), expectedDuration = duration(workspace.settings);
   for (const body of [{ board: { queueCapacity: 24 }, expectedBoard }, { execution: { maxRuntimeMs: 7200000 }, resources: { longRunningMs: 1800000 }, expectedDuration }]) {
@@ -113,9 +115,9 @@ test('tool budgets reject stale atomic saves and remain editable under a duratio
   const savedDefaults = JSON.parse(await readFile(join(directory, 'workspace-settings.json'), 'utf8')).execution;
   assert.equal(savedDefaults.maxToolCalls, undefined); assert.equal(savedDefaults.commandTimeoutMs, undefined);
   await settings.update({ execution: { maxToolCalls: 256, commandTimeoutMs: 600000 }, expectedToolBudget });
-  await assert.rejects(settings.update({ execution: { maxRuntimeMs: 7200000, maxToolCalls: 10 }, resources: { longRunningMs: 1000 }, expectedDuration, expectedToolBudget }), error => error.code === 'conflict');
+  await assert.rejects(settings.update({ execution: { maxRuntimeMs: 7200000, maxToolCalls: 10 }, resources: { longRunningMs: 1000 }, expectedDuration, expectedToolBudget }), error => testErrorCode(error) === 'conflict');
   assert.deepEqual(duration(settings), expectedDuration); assert.deepEqual(budget(settings), { maxToolCalls: 256, commandTimeoutMs: 600000 });
-  for (const body of [{ expectedToolBudget: budget(settings) }, { execution: { maxToolCalls: 10 }, expectedToolBudget: { maxToolCalls: 256 } }, { execution: { maxToolCalls: 513 }, expectedToolBudget: budget(settings) }, { execution: { commandTimeoutMs: 999 }, expectedToolBudget: budget(settings) }]) await assert.rejects(settings.update(body), error => error.code === 'invalid_input');
+  for (const body of [{ expectedToolBudget: budget(settings) }, { execution: { maxToolCalls: 10 }, expectedToolBudget: { maxToolCalls: 256 } }, { execution: { maxToolCalls: 513 }, expectedToolBudget: budget(settings) }, { execution: { commandTimeoutMs: 999 }, expectedToolBudget: budget(settings) }]) await assert.rejects(settings.update(body), error => testErrorCode(error) === 'invalid_input');
   process.env.WERK_WORKER_MAX_RUNTIME_MS = '10800000';
   const overridden = new WorkerSettings(directory); await overridden.init();
   assert.deepEqual(budget(overridden), { maxToolCalls: 256, commandTimeoutMs: 600000 });

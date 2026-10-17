@@ -1,66 +1,34 @@
 <script setup lang="ts">
+import TaskConversationHistory from '../components/TaskConversationHistory.vue';
 import RunEvidencePanel from '../components/RunEvidencePanel.vue';
 import FeatureRequestsPanel from '../components/FeatureRequestsPanel.vue';
-import { useRoute, useRouter } from 'vue-router';
 import Taskboard from '../components/Taskboard.vue';
-import { computed, nextTick, ref, watch, onActivated } from 'vue';
 import UInput from '@nuxt/ui/components/Input.vue';
 import USelect from '@nuxt/ui/components/Select.vue';
 import UButton from '@nuxt/ui/components/Button.vue';
 import UBadge from '@nuxt/ui/components/Badge.vue';
 import UAlert from '@nuxt/ui/components/Alert.vue';
 import UIcon from '@nuxt/ui/components/Icon.vue';
-import { state, bytes, date, duration, outcome, workspaceAction, taskStatus } from '../store';
-const route = useRoute(), router = useRouter(), opening = ref('');
-const chatSearch = ref(''), chatStatus = ref('all'), chatArchive = ref('active'), taskKind = ref('all');
-const taskKindOptions = [{ label: 'All task types', value: 'all' }, { label: 'Chat tasks', value: 'chat' }, { label: 'File tasks', value: 'local' }, { label: 'Assigned tasks', value: 'orchestrator' }];
-const kindLabel = (kind: string) => kind === 'local' ? 'File task' : kind === 'orchestrator' ? 'Assigned task' : 'Chat task';
-watch(() => route.query.taskState, value => { chatStatus.value = value === 'failed' ? 'failed' : value === 'attention' ? 'attention' : 'all'; chatSearch.value = ''; taskKind.value = 'all'; chatArchive.value = 'active'; }, { immediate: true });
-async function focusTaskConversations() {
-  const shouldFocus = () => state.unlocked && route.path === '/history' && ['failed', 'attention'].includes(String(route.query.taskState)) && !['review', 'failed'].includes(String(route.query.fileState));
-  if (!shouldFocus()) return;
-  await nextTick();
-  if (!shouldFocus()) return;
-  const heading = document.getElementById('chat-history-title');
-  heading?.focus({ preventScroll: true });
-  heading?.scrollIntoView({ block: 'start' });
-}
-onActivated(() => { void focusTaskConversations(); });
-watch(() => route.query.taskState, () => { void focusTaskConversations(); });
-const chatStatusOptions = [{ label: 'All states', value: 'all' }, { label: 'Needs your input', value: 'attention' }, ...['draft', 'queued', 'running', 'waiting_input', 'escalated', 'completed', 'failed', 'cancelled', 'interrupted'].map(value => ({ label: taskStatus(value), value }))];
-const chatArchiveOptions = [{ label: 'Active tasks', value: 'active' }, { label: 'Archived tasks', value: 'archived' }, { label: 'All tasks', value: 'all' }];
-const allChatTasks = computed(() => state.sessions?.records ?? []);
-const chatTasks = computed(() => allChatTasks.value.filter(item =>
-  (taskKind.value === 'all' || item.kind === taskKind.value) &&
-  (chatStatus.value === 'all' || chatStatus.value === 'attention' && ['waiting_input', 'escalated'].includes(item.status) || item.status === chatStatus.value) &&
-  (chatArchive.value === 'all' || item.archived === (chatArchive.value === 'archived')) &&
-  [item.title, item.taskId, item.provider].join(' ').toLowerCase().includes(chatSearch.value.trim().toLowerCase())
-).slice().sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)));
-function clearChatFilters() { chatSearch.value = ''; chatStatus.value = 'all'; chatArchive.value = 'all'; taskKind.value = 'all'; }
-async function openChat(id: string) { if (opening.value) return; opening.value = id; try { if (await workspaceAction('/api/sessions', { action: 'select', id })) await router.push({ path: '/taskboard', query: { session: id } }); } finally { opening.value = ''; } }
-const search = ref(''), filter = ref('all'), page = ref(1), selectedId = ref('');
-let inspectTrigger: HTMLElement | null = null;
-async function closeEvidence() {
-  selectedId.value = '';
-  await nextTick();
-  if (inspectTrigger?.isConnected) inspectTrigger.focus();
-}
-async function inspect(pairId: string, event: MouseEvent) {
-  if (selectedId.value === pairId) { await closeEvidence(); return; }
-  inspectTrigger = event.currentTarget as HTMLElement;
-  selectedId.value = pairId;
-  await nextTick();
-  const heading = document.getElementById('evidence-title');
-  heading?.focus({ preventScroll: true });
-  heading?.scrollIntoView({ block: 'start' });
-}
-const options = [{ label: 'All outcomes', value: 'all' }, { label: 'Simulated', value: 'simulated' }, { label: 'Review required', value: 'change-set' }, { label: 'Failed', value: 'failed' }, { label: 'Interrupted', value: 'interrupted' }, { label: 'Running', value: 'running' }, { label: 'Incomplete evidence', value: 'incomplete' }];
-const filtered = computed(() => (state.history?.rows ?? []).filter(row => (filter.value === 'all' || row.outcome === filter.value) && [row.title, row.taskId, row.project, row.profile, row.provenance.featureId].join(' ').toLowerCase().includes(search.value.toLowerCase())));
-const pages = computed(() => Math.max(1, Math.ceil(filtered.value.length / 25)));
-const visible = computed(() => filtered.value.slice((page.value - 1) * 25, page.value * 25));
-const selected = computed(() => state.history?.rows.find(row => row.pairId === selectedId.value));
-watch([search, filter], () => { page.value = 1; });
-watch(pages, value => { page.value = Math.min(page.value, value); });
+import { useHistoryPage } from "./useHistoryPage";
+const {
+  bytes,
+  closeEvidence,
+  date,
+  duration,
+  filter,
+  filtered,
+  inspect,
+  options,
+  outcome,
+  page,
+  pages,
+  route,
+  search,
+  selected,
+  selectedId,
+  state,
+  visible,
+} = useHistoryPage();
 </script>
 <template>
   <section>
@@ -81,106 +49,7 @@ watch(pages, value => { page.value = Math.min(page.value, value); });
     <RunEvidencePanel v-if="state.unlocked && (route.query.view === 'runs' || route.query.runSession)" />
     <FeatureRequestsPanel v-if="state.unlocked && route.query.view === 'features'" />
     <div v-show="route.query.view !== 'runs' && route.query.view !== 'features'">
-    <section v-if="state.unlocked" class="monitor-section" aria-labelledby="chat-history-title">
-      <div class="section-heading">
-        <h2 id="chat-history-title" tabindex="-1">Task conversations</h2>
-        <UButton to="/taskboard" color="neutral" variant="outline">Open taskboard</UButton>
-      </div>
-      <p class="page-note">
-        Find conversations from chat, file tasks and orchestrator assignments. Open one to read its
-        transcript or continue after execution finishes. Opening an archived task restores it to
-        your task list.
-      </p>
-      <div class="history-filters history-task-filters">
-        <div>
-          <label for="chat-history-search">Find a task conversation</label>
-          <UInput
-            id="chat-history-search"
-            v-model="chatSearch"
-            icon="i-lucide-search"
-            placeholder="Title, task ID or provider"
-            class="w-full"
-          />
-        </div>
-        <div>
-          <label for="history-task-kind">Task type</label>
-          <USelect
-            id="history-task-kind"
-            v-model="taskKind"
-            :items="taskKindOptions"
-            class="w-full"
-          />
-        </div>
-        <div>
-          <label for="chat-history-state">State</label>
-          <USelect
-            id="chat-history-state"
-            v-model="chatStatus"
-            :items="chatStatusOptions"
-            class="w-full"
-          />
-        </div>
-        <div>
-          <label for="chat-history-archive">Archive</label>
-          <USelect
-            id="chat-history-archive"
-            v-model="chatArchive"
-            :items="chatArchiveOptions"
-            class="w-full"
-          />
-        </div>
-      </div>
-      <p class="page-note" role="status">
-        {{ chatTasks.length }} matching
-        {{ chatTasks.length === 1 ? 'conversation' : 'conversations' }} · Newest first
-      </p>
-      <div v-if="!chatTasks.length" class="board-empty">
-        <p>
-          {{
-            allChatTasks.length
-              ? 'No conversations match these filters.'
-              : 'No saved conversations yet. Start with New task on the Taskboard.'
-          }}
-        </p>
-        <UButton
-          v-if="allChatTasks.length"
-          color="neutral"
-          variant="outline"
-          @click="clearChatFilters"
-        >
-          Show all conversations
-        </UButton>
-      </div>
-      <ul class="chat-task-history">
-        <li v-for="task in chatTasks" :key="task.id">
-          <div>
-            <strong>{{ task.title }}</strong>
-            <span class="muted">
-              {{ kindLabel(task.kind) }} · {{ task.provider }} · {{ date(task.createdAt)
-              }}{{ task.archived ? ' · archived' : '' }}
-            </span>
-          </div>
-          <UBadge
-            :color="
-              task.status === 'failed' ? 'error' : task.status === 'running' ? 'primary' : 'neutral'
-            "
-            variant="subtle"
-          >
-            {{ taskStatus(task.status) }}
-          </UBadge>
-          <UButton
-            color="neutral"
-            variant="outline"
-            :loading="opening === task.id"
-            :disabled="!!opening || state.workspaceBusy"
-            :aria-label="(task.archived ? 'Restore and open task ' : 'Open task ') + task.title"
-            @click="openChat(task.id)"
-          >
-            {{ task.archived ? 'Restore and open' : 'Open task' }}
-          </UButton>
-        </li>
-      </ul>
-    </section>
+    <TaskConversationHistory />
     <Taskboard />
     <h2 class="monitor-section">Orchestrator attempt history</h2>
     <UAlert

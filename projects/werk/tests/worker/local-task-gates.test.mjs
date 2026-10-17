@@ -1,3 +1,4 @@
+import { taskboardRuntime } from './runtime-fixtures.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -48,14 +49,18 @@ async function fixture(t, execute, policy = defaultGatePolicy()) {
       throw Error("Typed model required");
     },
   });
-  let sessions, board;
+  /** @type {ReturnType<typeof WorkerSessions>} */
+  let sessions;
+  /** @type {ReturnType<typeof LocalTaskboard>} */
+  let board;
   async function open() {
-    sessions = new WorkerSessions(directory, settings, factory);
+    sessions = WorkerSessions(directory, settings, factory);
     await sessions.init();
-    board = new LocalTaskboard(directory, settings, sessions, factory);
+    board = LocalTaskboard(directory, settings, sessions, factory);
     await board.init();
   }
   await open();
+  assert.ok(sessions);
   sessions.requests.setPolicy({
     policy,
     expectedRevision: sessions.requests.policy().revision,
@@ -174,8 +179,8 @@ test("Known patch held by completion policy survives projection failure and rest
       policy,
     ),
     id = await f.create();
-  const original = f.board.writePatch.bind(f.board);
-  f.board.writePatch = async () => {
+  const original = taskboardRuntime(f.board).writePatch.bind(f.board);
+  taskboardRuntime(f.board).writePatch = async () => {
     throw Error("Fixture projection failure");
   };
   await f.board.tick();
@@ -185,7 +190,7 @@ test("Known patch held by completion policy survives projection failure and rest
   assert.equal(calls, 1);
   assert.equal(request(f, id).execution.result.text, completed.text);
   assert.equal(request(f, id).phase, "review");
-  f.board.writePatch = original;
+  taskboardRuntime(f.board).writePatch = original;
   await f.restart();
   assert.equal(f.board.detail(id).status, "review");
   assert.equal(request(f, id).phase, "review");
@@ -197,8 +202,9 @@ test("Known patch held by completion policy survives projection failure and rest
     /Only stopped or failed/,
   );
   assert.equal(calls, 1);
-  const held = request(f, id),
-    body = {
+  const held = request(f, id);
+  /** @type {import('../../src/worker/application/request-gates.js').RequestCommand} */
+  const body = {
       requestId: held.id,
       expectedRevision: held.revision,
       operationId: "attest-exact",

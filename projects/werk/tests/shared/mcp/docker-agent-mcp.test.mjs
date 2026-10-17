@@ -1,3 +1,4 @@
+import { testListeningAddress } from '../../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -25,7 +26,7 @@ const toolData=response=>JSON.parse(response.result.content[0].text);
 
 test('MCP stdio negotiates legacy version and enforces a read-only catalog', {timeout:15000},async()=>{
   const app=await startServer({db:':memory:',host:'127.0.0.1',port:0,adminToken:token,enrollmentToken:enrollment,project:'demo'});
-  const session=client('orchestrator','http://127.0.0.1:'+app.server.address().port);
+  const session=client('orchestrator','http://127.0.0.1:'+testListeningAddress(app.server).port);
   try{
     assert.equal((await session.call('tools/list')).error.code,-32002);
     assert.equal((await session.init('2024-11-05')).result.protocolVersion,'2024-11-05');
@@ -46,7 +47,7 @@ test('MCP stdio negotiates legacy version and enforces a read-only catalog', {ti
 
 test('MCP task creation reaches the real orchestrator with reference intake and stable idempotency', {timeout:15000},async()=>{
   const app=await startServer({db:':memory:',host:'127.0.0.1',port:0,adminToken:token,enrollmentToken:enrollment,project:'demo'});
-  const session=client('orchestrator','http://127.0.0.1:'+app.server.address().port,true);
+  const session=client('orchestrator','http://127.0.0.1:'+testListeningAddress(app.server).port,true);
   try{
     await session.init();const args={task:{project:'demo',requirementRef:'[[Features/Invoice]]'},idempotencyKey:'mcp-feature-1'};
     const a=toolData(await session.call('tools/call',{name:'werk_task_create',arguments:args}));
@@ -61,7 +62,7 @@ test('MCP task creation reaches the real orchestrator with reference intake and 
 
 test('MCP Factory tools operate on real hierarchy registry and require explicit write keys', {timeout:15000},async()=>{
   const app=await startFactoryServer({db:':memory:',host:'127.0.0.1',port:0,adminToken:token});
-  const session=client('factory','http://127.0.0.1:'+app.server.address().port,true);
+  const session=client('factory','http://127.0.0.1:'+testListeningAddress(app.server).port,true);
   try{
     await session.init();
     const tools=(await session.call('tools/list')).result.tools;
@@ -78,7 +79,7 @@ test('MCP Factory tools operate on real hierarchy registry and require explicit 
 test('MCP errors and successful tool responses redact configured credentials', {timeout:15000},async()=>{
   let fail=false,large=false;
   const server=createServer((req,res)=>{assert.equal(req.headers.authorization,'Bearer '+token);res.writeHead(fail?401:200,{'content-type':'application/json'});res.end(JSON.stringify(fail?{error:'secret '+token}:large?{data:'x'.repeat(1100000)}:{token,detail:'token='+token,[token]:'echoed as property'}));});
-  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const session=client('orchestrator','http://127.0.0.1:'+server.address().port);
+  await new Promise(resolve=>server.listen(0, '127.0.0.1', () => resolve(undefined)));const session=client('orchestrator','http://127.0.0.1:'+testListeningAddress(server).port);
   try{
     await session.init();const value=toolData(await session.call('tools/call',{name:'werk_orchestrator_overview',arguments:{}}));
     assert.equal(value.token,'[REDACTED]');assert.ok(!JSON.stringify(value).includes(token));
@@ -106,8 +107,9 @@ test('Factory MCP receipts replay all mutation results after restart without res
   const directory = await mkdtemp(join(tmpdir(), 'werk-factory-mcp-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const config = { db: join(directory, 'factory.sqlite'), host: '127.0.0.1', port: 0, adminToken: token };
+  const createFactory = { factory: { id: 'root', name: 'Original factory', parentId: null }, idempotencyKey: 'root-create' };
   const mutations = [
-    ['werk_factory_create', { factory: { id: 'root', name: 'Original factory', parentId: null }, idempotencyKey: 'root-create' }],
+    ['werk_factory_create', createFactory],
     ['werk_line_create', { line: { id: 'line', name: 'Original line', factoryId: 'root', orchestratorUrl: 'http://127.0.0.1:1', webviewUrl: 'http://127.0.0.1:1', tokenEnv: 'WERK_LINE_DEMO_TOKEN' }, idempotencyKey: 'line-create' }],
     ['werk_line_update', { id: 'line', changes: { name: 'Changed line' }, idempotencyKey: 'line-update' }],
     ['werk_line_delete', { id: 'line', idempotencyKey: 'line-delete' }],
@@ -118,7 +120,7 @@ test('Factory MCP receipts replay all mutation results after restart without res
   for (const restarting of [false, true]) {
     // Successful replay remains valid after credentials are removed from deployment configuration.
     const app = await startFactoryServer({ ...config, credentials: restarting ? {} : { WERK_LINE_DEMO_TOKEN: 'private-production-line-token' } });
-    const session = client('factory', 'http://127.0.0.1:' + app.server.address().port, true);
+    const session = client('factory', 'http://127.0.0.1:' + testListeningAddress(app.server).port, true);
     try {
       await session.init();
       const tools = (await session.call('tools/list')).result.tools;
@@ -131,7 +133,7 @@ test('Factory MCP receipts replay all mutation results after restart without res
       }
       assert.deepEqual(toolData(await session.call('tools/call', { name: 'werk_factory_list', arguments: {} })), { factories: [], access: { principal: { id: 'legacy-admin', role: 'admin' }, permissions: { read: true, write: true } } });
       assert.deepEqual(toolData(await session.call('tools/call', { name: 'werk_line_list', arguments: {} })), { lines: [] });
-      const conflict = await session.call('tools/call', { name: 'werk_factory_create', arguments: { ...mutations[0][1], factory: { ...mutations[0][1].factory, name: 'Conflicting intent' } } });
+      const conflict = await session.call('tools/call', { name: 'werk_factory_create', arguments: { ...createFactory, factory: { ...createFactory.factory, name: 'Conflicting intent' } } });
       assert.equal(conflict.result.isError, true); assert.match(conflict.result.content[0].text, /HTTP 409/);
       assert.ok(!session.stdout.includes(token)); assert.ok(!session.stdout.includes('private-production-line-token')); assert.equal(session.stderr, '');
     } finally { await session.close(); await app.close(); }

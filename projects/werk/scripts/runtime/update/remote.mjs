@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-export const repository = 'Luis85/production-line';
+const repository = 'Luis85/production-line';
 const stable = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 export function versionParts(version) {
   if (typeof version !== 'string' || !stable.test(version)) throw Error('Updates require a stable semantic version.');
@@ -11,7 +11,7 @@ export function newer(candidate, current) {
   for (let i = 0; i < 3; i++) if (left[i] !== right[i]) return left[i] > right[i];
   return false;
 }
-export async function download(url, { fetcher = fetch, limit = 16384, timeout = 15000 } = {}) {
+async function download(url, { fetcher = fetch, limit = 16384, timeout = 15000 } = {}) {
   const response = await fetcher(url, { signal: AbortSignal.timeout(timeout) });
   if (!response.ok) throw Error(`GitHub release download failed (HTTP ${response.status}).`);
   let length = 0; const chunks = [];

@@ -1,3 +1,5 @@
+import { workerStatus } from '../helpers/worker-status.mjs';
+import { testErrorCode } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -8,7 +10,16 @@ import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.j
 import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
 import { statusServer } from '../../src/worker/dist/worker/status/server.js';
 import { SharedFeatureIntake } from '../../src/worker/dist/worker/application/shared-feature-intake.js';
+import { gateDigest } from '../../src/worker/dist/worker/application/request-gates.js';
+import { defaultSharedIntakeConfig } from '../../src/worker/dist/worker/application/shared-feature-state.js';
+import { defaultFeatureWorkflow, defaultFeatureCheck, featureWorkflowPolicy, featureContentHash } from '../../src/worker/dist/worker/application/feature-workflow.js';
 import { publicTaskConversation } from '../../src/worker/dist/worker/application/public-task-transcript.js';
+
+/** @param {import('../../src/worker/application/local-tasks.js').LocalTaskboard} board */
+function localRuntime(board) {
+  // @ts-expect-error Fault injection deliberately accesses the taskboard's private runtime.
+  return board.runtime;
+}
 
 async function fixture(t, configuredFolder = false) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-unified-tracking-'))), state = join(directory, 'state'), project = join(directory, 'project'), features = join(project, 'features');
@@ -19,18 +30,23 @@ async function fixture(t, configuredFolder = false) {
   async function close() { if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); server = undefined; } if (workspace) { await workspace.close(); workspace = undefined; } journal?.close(); journal = undefined; }
   async function open() {
     journal = new SnapshotJournal(state, 'a'.repeat(64), 'b'.repeat(64)); await journal.init();
-    workspace = new WorkerWorkspace(config, journal, () => ({ activeTasks: [], queuedTasks: [] })); await workspace.init();
+    workspace = new WorkerWorkspace(config, journal, () => workerStatus({ queuedTasks: [] })); await workspace.init();
     await workspace.updateSettings({ board: { paused: true }, provider: { id: 'openai-api', apiKey: 'fixture-secret-api-key', model: 'fixture-model' } });
   }
   t.after(async () => { await close(); await rm(directory, { recursive: true, force: true }); });
   await open();
   async function api() {
-    server = await statusServer(() => ({ activeTasks: [], queuedTasks: [] }), '127.0.0.1', 0, undefined, workspace);
+    server = await statusServer(() => workerStatus({ queuedTasks: [] }), '127.0.0.1', 0, undefined, workspace);
     const token = (await readFile(join(state, 'webview-token'), 'utf8')).trim();
     return async (path, body, authenticated = true) => fetch('http://127.0.0.1:' + server.address().port + path, { method: body === undefined ? 'GET' : 'POST', headers: { ...(authenticated ? { Authorization: 'Bearer ' + token } : {}), 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   }
   return { state, project, features, get workspace() { return workspace; }, open, close, api };
 }
+/**
+ * @param {string} id
+ * @param {Partial<import('../../src/worker/webview/store.ts').FeatureRequestCommand>} [extra]
+ * @returns {import('../../src/worker/webview/store.ts').FeatureRequestCommand}
+ */
 const command = (id, extra = {}) => ({ action: 'create', id, title: 'Request ' + id, provider: 'openai-api', message: 'Implement the requested improvement.', ...extra });
 
 test('unified chat creation is idempotent under concurrency and immediately returns its saved Markdown identity', async t => {
@@ -45,8 +61,8 @@ test('unified chat creation is idempotent under concurrency and immediately retu
   const note = await f.workspace.featureTrackingCommand({ action: 'get', sessionId: 'chat-one' });
   assert.equal(note.path, results[0].session.featureRequest.path); assert.match(note.markdown, /Implement the requested improvement/);
   assert.doesNotMatch(note.markdown, /fixture-secret-api-key|PRIVATE APPROVED SNAPSHOT/);
-  await assert.rejects(f.workspace.task({ ...input, message: 'Different work' }), error => error.code === 'conflict');
-  await assert.rejects(f.workspace.task({ ...input, files: { repository: f.project, paths: ['approved.txt'] } }), error => error.code === 'conflict');
+  await assert.rejects(f.workspace.task({ ...input, message: 'Different work' }), error => testErrorCode(error) === 'conflict');
+  await assert.rejects(f.workspace.task({ ...input, files: { repository: f.project, paths: ['approved.txt'] } }), error => testErrorCode(error) === 'conflict');
   assert.equal(f.workspace.board.view().tasks.length, 0);
   assert.equal(f.workspace.sessions.runs.list().total, 2);
 });
@@ -62,8 +78,8 @@ test('unified file creation replays the exact session and rejects identity or ap
   assert.equal(f.workspace.board.view().tasks.length, 1); assert.equal(f.workspace.sessions.runs.list().total, 1);
   assert.equal(first.session.submissionHash, f.workspace.board.detail('file-one').submissionHash);
   for (const changed of [{ ...input, message: 'Other work' }, { ...input, files: { ...input.files, paths: ['other.txt'] } }, command('file-one'), command('local-file-one')])
-    await assert.rejects(f.workspace.task(changed), error => error.code === 'conflict');
-  await assert.rejects(f.workspace.task(command('invalid', { files: { repository: f.project, paths: ['../escape'] } })), error => error.code === 'invalid_input');
+    await assert.rejects(f.workspace.task(changed), error => testErrorCode(error) === 'conflict');
+  await assert.rejects(f.workspace.task(command('invalid', { files: { repository: f.project, paths: ['../escape'] } })), error => testErrorCode(error) === 'invalid_input');
   assert.equal(f.workspace.board.view().tasks.length, 1);
   const note = await f.workspace.featureTrackingCommand({ action: 'get', sessionId: first.session.id });
   assert.match(note.markdown, /approved.txt/); assert.doesNotMatch(note.markdown, /PRIVATE APPROVED SNAPSHOT|fixture-secret-api-key/);
@@ -113,11 +129,12 @@ test('authenticated API exposes exact records and safe local conversation while 
 
 test('public transcript projection matches generated context without changing retained input or trimmed follow-ups', () => {
   const task = { instruction: 'Make the approved improvement.', paths: ['approved.txt'] }, context = task.instruction + '\nApproved paths: approved.txt';
-  const snapshot = { messages: [{ id: 'initial', role: 'user', text: context, state: 'complete' }, { id: 'result', role: 'assistant', text: 'Completed change.', state: 'complete' }, { id: 'followup', role: 'user', text: 'Explain the change.', state: 'complete' }, { id: 'repeat', role: 'user', text: context, state: 'complete' }] };
+  /** @type {Parameters<typeof publicTaskConversation>[0]} */
+  const snapshot = { available: true, busy: false, phase: 'idle', persistenceError: false, messages: [{ id: 'initial', role: 'user', text: context, state: 'complete', at: '2026-10-17T00:00:00.000Z' }, { id: 'result', role: 'assistant', text: 'Completed change.', state: 'complete', at: '2026-10-17T00:00:00.000Z' }, { id: 'followup', role: 'user', text: 'Explain the change.', state: 'complete', at: '2026-10-17T00:00:00.000Z' }, { id: 'repeat', role: 'user', text: context, state: 'complete', at: '2026-10-17T00:00:00.000Z' }] };
   const projected = publicTaskConversation(snapshot, task);
   assert.equal(projected.messages[0].text, task.instruction); assert.equal(projected.messages[2].text, 'Explain the change.'); assert.equal(projected.messages[3].text, task.instruction);
   assert.equal(snapshot.messages[0].text, context); assert.equal(publicTaskConversation(snapshot), snapshot);
-  const trimmed = { messages: snapshot.messages.slice(2, 3) };
+  const trimmed = { ...snapshot, messages: snapshot.messages.slice(2, 3) };
   assert.deepEqual(publicTaskConversation(trimmed, task).messages, trimmed.messages, 'retention must not rewrite a genuine first retained follow-up');
 });
 
@@ -148,8 +165,27 @@ test('remote assignment admission immediately creates its own Markdown request',
 
 
 test('shared request provenance follows the retained task binding without exposing mutable private state', async () => {
-  const stored = { schemaVersion: 1, workerId: 'fixture', revision: 1, config: { repositoryId: 'new-repository' }, records: [{ taskId: 'shared-one', binding: { repositoryId: 'original-repository' }, sourcePath: 'features/original.md', sourceMarkdown: 'Private retained source content' }] };
-  const intake = new SharedFeatureIntake({ load: async () => stored }); await intake.init();
+  const configuration = defaultFeatureWorkflow(), readyCheck = defaultFeatureCheck('ready'), doneCheck = defaultFeatureCheck('done');
+  const policy = featureWorkflowPolicy(readyCheck, doneCheck), commit = 'a'.repeat(40);
+  const template = '---\ntemplateId: fixture\nstatus: draft\nmode: patch\n---\n# Goal\n## Context\n## Acceptance criteria\n## Verification plan\n';
+  const file = (path, content) => ({ path, sha256: featureContentHash(content) });
+  /** @type {import('../../src/worker/application/shared-feature-state.js').SharedFeatureState} */
+  const stored = {
+    schemaVersion: 1, workerId: 'fixture', revision: 1, config: { ...defaultSharedIntakeConfig(), repositoryId: 'new-repository' },
+    records: [{
+      id: 'original', name: 'original.md', title: 'Retained provenance', status: 'ready_for_review', owner: 'fixture', isLocal: true,
+      sourceCommit: commit, updatedAt: '2026-10-17T00:00:00.000Z', ready: { passed: true, issues: [] }, done: null,
+      featureBranch: null, reviewNote: null, publication: 'synced', error: null, taskId: 'shared-one',
+      binding: { ...defaultSharedIntakeConfig(), repositoryId: 'original-repository' }, sourcePath: 'features/original.md',
+      sourceMarkdown: 'Private retained source content', remoteRevision: 'b'.repeat(64), inputHash: 'c'.repeat(64), claimed: true, submitted: true,
+      accepted: { id: 'original', templateId: 'fixture', title: 'Retained provenance', mode: 'patch', provider: 'openai-api', message: 'Retain the original repository.', paths: ['src/file.ts'], priority: 1, criteria: ['Provenance is stable.'], metadata: {}, sections: { goal: 'Retain provenance.', context: 'The binding changed.', verificationPlan: 'Read the retained task.' } },
+      workflow: { schemaVersion: 1, commit, configuration, readyCheck, doneCheck, policy, policyDigest: gateDigest(policy), template,
+        files: { configuration: file('.werk/feature-workflow.json', JSON.stringify(configuration)), readyCheck: file(configuration.readyCheck, JSON.stringify(readyCheck)), doneCheck: file(configuration.doneCheck, JSON.stringify(doneCheck)), template: file(configuration.template, template), base: file(configuration.base, 'views: []') } },
+    }],
+  };
+  const unexpected = () => { assert.fail('Reading retained provenance must not access the repository or mutate intake'); };
+  const intake = new SharedFeatureIntake({ load: async () => stored, save: unexpected, repository: unexpected, loadWorkflow: unexpected, ready: unexpected, source: unexpected, renderSource: unexpected, submit: unexpected, inspect: unexpected, canAdmit: unexpected });
+  await intake.init();
   const source = intake.sourceForTask('shared-one'); assert.deepEqual(source, { repositoryId: 'original-repository', path: 'features/original.md' });
   source.path = 'mutated.md'; assert.equal(intake.sourceForTask('shared-one').path, 'features/original.md');
   assert.equal(intake.sourceForTask('missing'), undefined);
@@ -162,11 +198,14 @@ for (const boundary of ['snapshot', 'taskboard']) test('exact file request recov
   git('init', '--initial-branch=main'); git('add', 'approved.txt'); git('commit', '-m', 'Initial recovery fixture');
   await f.workspace.updateSettings({ repositories: { pollMs: 30000, items: [{ id: 'fixture', path: f.project, remote: 'origin', branch: 'main', watch: false }] } });
   const input = command('recover-' + boundary, { files: { repository: 'fixture', paths: ['approved.txt'] } });
-  const board = f.workspace.board, property = boundary === 'snapshot' ? 'files' : 'storage', method = boundary === 'snapshot' ? 'snapshot' : 'write', original = board[property];
+  const board = f.workspace.board, runtime = localRuntime(board);
   let faults = 0;
-  board[property] = { ...original, [method]: async () => { faults++; throw new Error('Fixture transient admission failure'); } };
+  const fail = async () => { faults++; throw new Error('Fixture transient admission failure'); };
+  const injection = boundary === 'snapshot'
+    ? t.mock.method(runtime.files, 'snapshot', fail)
+    : t.mock.method(runtime.storage, 'write', fail);
   try { await assert.rejects(f.workspace.task(input), /Fixture transient admission failure/); }
-  finally { board[property] = original; }
+  finally { injection.mock.restore(); }
   assert.equal(faults, 1); assert.equal(board.view().tasks.length, 0);
   const retained = (await readdir(join(f.project, '.werk', 'worktrees'))).filter(name => !name.startsWith('.'));
   assert.equal(retained.length, 1);
@@ -190,10 +229,9 @@ for (const alteration of ['tracked', 'ignored']) test('changed interrupted check
   git('init', '--initial-branch=main'); git('add', 'approved.txt', '.gitignore'); git('commit', '-m', 'Initial changed worktree fixture');
   await f.workspace.updateSettings({ repositories: { pollMs: 30000, items: [{ id: 'fixture', path: f.project, remote: 'origin', branch: 'main', watch: false }] } });
   const input = command('changed-' + alteration, { files: { repository: 'fixture', paths: ['approved.txt'] } });
-  const original = f.workspace.board.files;
-  f.workspace.board.files = { ...original, snapshot: async () => { throw new Error('Fixture snapshot interruption'); } };
+  const injection = t.mock.method(localRuntime(f.workspace.board).files, 'snapshot', async () => { throw new Error('Fixture snapshot interruption'); });
   try { await assert.rejects(f.workspace.task(input), /Fixture snapshot interruption/); }
-  finally { f.workspace.board.files = original; }
+  finally { injection.mock.restore(); }
   const names = await readdir(join(f.project, '.werk', 'worktrees')); assert.equal(names.length, 1);
   const retained = join(f.project, '.werk', 'worktrees', names[0]), changedPath = join(retained, alteration === 'tracked' ? 'approved.txt' : 'ignored.txt');
   await writeFile(changedPath, 'Human work must be preserved.\n');
@@ -205,12 +243,12 @@ for (const alteration of ['tracked', 'ignored']) test('changed interrupted check
   assert.equal(f.workspace.sessions.runs.list().total, 0);
   const replay = await (await api('/api/tasks', input)).json(); assert.equal(replay.session.id, receipt.session.id); assert.equal(replay.session.status, 'failed');
   await (await api('/api/sessions', { action: 'select', id: receipt.session.id })).json();
-  for (const [path, body] of [
+  for (const [path, body] of /** @type {const} */ ([
     ['/api/tasks', { action: 'send', id: receipt.session.id, message: 'Continue this request.' }],
     ['/api/chat', { sessionId: receipt.session.id, message: 'Continue from the legacy chat endpoint.' }],
     ['/api/taskboard/action', { action: 'retry', id: input.id }],
     ['/api/interactions', { action: 'resume', sessionId: receipt.session.id, turnId: 'never-accepted', expectedRevision: 0, operationId: 'attempted-bypass' }],
-  ]) {
+  ])) {
     const blocked = await api(path, body); assert.equal(blocked.status, 409, path); const failure = await blocked.json(); assert.match(failure.error, /No file snapshots were accepted|no accepted file snapshots/i);
   }
   assert.equal(f.workspace.sessions.runs.list().total, 0); assert.equal(f.workspace.sessions.interactions.view(receipt.session.id).turns.length, 0);
@@ -219,11 +257,11 @@ for (const alteration of ['tracked', 'ignored']) test('changed interrupted check
   assert.match(note.markdown, /No file snapshots were accepted/); assert.doesNotMatch(note.markdown, /### Approved files|Human work must be preserved/);
   const removed = await api('/api/taskboard/action', { action: 'delete', id: input.id }); assert.equal(removed.status, 200); await removed.json();
   assert.equal(f.workspace.board.view().tasks.length, 0);
-  for (const [path, body] of [
+  for (const [path, body] of /** @type {const} */ ([
     ['/api/tasks', { action: 'send', id: receipt.session.id, message: 'Continue after board history deletion.' }],
     ['/api/chat', { sessionId: receipt.session.id, message: 'Continue through selected session.' }],
     ['/api/interactions', { action: 'resume', sessionId: receipt.session.id, turnId: 'never-accepted', expectedRevision: 0, operationId: 'deleted-board-bypass' }],
-  ]) { const blocked = await api(path, body); assert.equal(blocked.status, 409, path); await blocked.json(); }
+  ])) { const blocked = await api(path, body); assert.equal(blocked.status, 409, path); await blocked.json(); }
   await assert.rejects(f.workspace.sessions.start('Direct session continuation', receipt.session.id), /No file snapshots were accepted/);
   await assert.rejects(f.workspace.sessions.interact({ action: 'resume', sessionId: receipt.session.id, turnId: 'never-accepted', expectedRevision: 0, operationId: 'direct-session-bypass' }), /No file snapshots were accepted/);
   await f.close(); await f.open();

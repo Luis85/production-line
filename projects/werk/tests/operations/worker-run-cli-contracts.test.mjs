@@ -1,3 +1,5 @@
+import { testErrorStatus } from '../helpers/process-errors.mjs';
+import { testErrorCode, testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { commands } from '../../scripts/runtime/portable/commands.mjs';
@@ -12,8 +14,8 @@ test('worker schema discovers template, redacted providers and read-only attempt
 test('run filters produce typed bounded requests and reject mistakes before any API call',async()=>{
   const body=await workerBody(catalog['run list'],undefined,{'session-id':'session-one','task-id':'task-one',provider:'codex-cli',kind:'chat',outcome:'failed',since:'2026-10-14T02:00:00+02:00',until:'2026-10-15T00:00:00Z',limit:'10',offset:'0','as-of':'1234'});
   assert.deepEqual(body,{action:'list',sessionId:'session-one',taskId:'task-one',provider:'codex-cli',kind:'chat',outcome:'failed',since:'2026-10-14T00:00:00.000Z',until:'2026-10-15T00:00:00.000Z',limit:10,offset:0,asOf:1234});
-  for(const options of [{limit:'101'},{limit:'0'},{offset:'-1'},{offset:'1.2'},{provider:'unknown'},{kind:'patch'},{outcome:'done'},{since:'2026-10-14'},{since:'2026-10-15T00:00:00Z',until:'2026-10-14T00:00:00Z'},{cursor:'one',offset:'0'},{cursor:'one','as-of':'100'}]) await assert.rejects(workerBody(catalog['run list'],undefined,options),error=>error.exitCode===2);
-  await assert.rejects(workerBody(catalog['run export'],undefined,{format:'yaml'}),error=>error.exitCode===2);
+  for(const options of [{limit:'101'},{limit:'0'},{offset:'-1'},{offset:'1.2'},{provider:'unknown'},{kind:'patch'},{outcome:'done'},{since:'2026-10-14'},{since:'2026-10-15T00:00:00Z',until:'2026-10-14T00:00:00Z'},{cursor:'one',offset:'0'},{cursor:'one','as-of':'100'}]) await assert.rejects(workerBody(catalog['run list'],undefined,options),error=>testErrorStatus(error, 'exitCode')===2);
+  await assert.rejects(workerBody(catalog['run export'],undefined,{format:'yaml'}),error=>testErrorStatus(error, 'exitCode')===2);
   assert.deepEqual(await workerBody(catalog['run get'],undefined,{id:'attempt-one'}),{action:'get',id:'attempt-one'});
 });
 test('JSON export preserves nullable original evidence and CSV escapes spreadsheet formulas and full snapshots',()=>{
@@ -26,7 +28,7 @@ test('JSON export preserves nullable original evidence and CSV escapes spreadshe
 test('wait observes failure as terminal and timeout has a stable code without cancelling work',async()=>{
   for (const status of ['failed','needs_rework','interrupted','done']) { const stopped={session:{status}};assert.equal(await waitForWorker(async()=>stopped,'task','10'),stopped); }
   const held={execution:{status:'needs_rework',request:{phase:'needs_rework'}}};assert.equal(await waitForWorker(async()=>held,'feature','10'),held);
-  let calls=0;await assert.rejects(waitForWorker(async()=>{calls++;return{session:{status:'queued'}};},'task','1'),error=>error.code==='wait_timeout'&&/continues/.test(error.message));assert.ok(calls>=1);
+  let calls=0;await assert.rejects(waitForWorker(async()=>{calls++;return{session:{status:'queued'}};},'task','1'),error=>testErrorCode(error)==='wait_timeout'&&/continues/.test(testErrorMessage(error)));assert.ok(calls>=1);
 });
 
 test('feature wait observes terminal execution only after its generated record settles', async () => {

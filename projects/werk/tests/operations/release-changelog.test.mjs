@@ -23,7 +23,7 @@ test('extracts only the current entry, preserves literal Markdown and normalizes
   assert.equal(parseReleaseChangelog(changelog(entry('1.2.3-rc.1')), '1.2.3-rc.1').version, '1.2.3-rc.1');
 });
 
-for (const [name, source, pattern] of [
+for (const [name, source, pattern] of /** @type {[string, string, RegExp][]} */ ([
   ['unclosed hidden draft', changelog('<!-- Draft entry\n' + entry()), /unclosed HTML comment/],
   ['missing release', changelog(''), /Missing changelog entry/],
   ['wrong release', changelog(entry('1.2.4')), /Missing changelog entry/],
@@ -42,7 +42,7 @@ for (const [name, source, pattern] of [
   ['current release below another version', changelog(entry('1.2.4') + '\n' + entry()), /first release/],
   ['invalid calendar date', changelog().replace('2026-10-16', '2026-02-30'), /Invalid changelog release date/],
   ['undated release', changelog().replace(' - 2026-10-16', ''), /release headings/],
-]) test(`rejects ${name}`, () => assert.throws(() => parseReleaseChangelog(source, '1.2.3'), pattern));
+])) test(`rejects ${name}`, () => assert.throws(() => parseReleaseChangelog(source, '1.2.3'), pattern));
 
 for (const version of ['01.2.3', '1.2', '1.2.3-01', '1.2.3-rc..1', '../1.2.3']) {
   test(`rejects invalid release version ${version}`, () => assert.throws(() => parseReleaseChangelog(changelog(entry(version)), version), /safe release version/));

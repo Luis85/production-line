@@ -1,3 +1,5 @@
+import { testErrorOutput } from '../helpers/process-errors.mjs';
+import { testErrorCode } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
@@ -29,7 +31,7 @@ test('prebuilt copied worker CLI completes a feature retry and inspects/exports 
   file=await cli('feature','edit','--state-dir',state,'--name','lifecycle.md','--markdown',markdown,'--if-match',file.revision);
   await cli('feature','validate','--state-dir',state,'--name','lifecycle.md');
   await cli('feature','submit','--state-dir',state,'--name','lifecycle.md','--if-match',file.revision);
-  await assert.rejects(cli('feature','wait','--state-dir',state,'--name','lifecycle.md','--timeout-ms','1'),error=>error.code===1&&/"code":"wait_timeout"/.test(error.stderr));
+  await assert.rejects(cli('feature','wait','--state-dir',state,'--name','lifecycle.md','--timeout-ms','1'),error=>testErrorCode(error)===1&&/"code":"wait_timeout"/.test(testErrorOutput(error, 'stderr')));
   await cli('queue','resume','--state-dir',state);
   const failed=await cli('feature','wait','--state-dir',state,'--name','lifecycle.md','--timeout-ms','10000');assert.equal(failed.execution.status,'failed');
   file=await cli('feature','get','--state-dir',state,'--name','lifecycle.md');const sessionId=file.record.sessionId;
@@ -44,7 +46,7 @@ test('prebuilt copied worker CLI completes a feature retry and inspects/exports 
   const analysis=await cli('run','analyze','--state-dir',state,'--session-id',sessionId);assert.equal(analysis.total,2);assert.equal(analysis.consumption.coverage.providerReportedCostUsd,0);
   const exported=await cli('run','export','--state-dir',state,'--session-id',sessionId);assert.equal(exported.rows.length,2);assert.deepEqual(exported.rows.find(run=>run.id===successful.id).before,successful.before);
   const csv=await invoke(['run','export','--state-dir',state,'--session-id',sessionId,'--format','csv']);assert.match(csv.stdout,/^id,sessionId,taskId,/);assert.match(csv.stdout,/worker_process/);
-  await assert.rejects(cli('run','list','--state-dir',state,'--limit','101'),error=>error.code===2);await assert.rejects(cli('run','export','--state-dir',state,'--format','yaml'),error=>error.code===2);
+  await assert.rejects(cli('run','list','--state-dir',state,'--limit','101'),error=>testErrorCode(error)===2);await assert.rejects(cli('run','export','--state-dir',state,'--format','yaml'),error=>testErrorCode(error)===2);
   await cli('stop','--state-dir',state);running=false;await cli('start','--state-dir',state,'--port','0','--project-dir',cwd,'--features-dir','features','--poll-ms','100');running=true;
   assert.deepEqual(await cli('run','get','--state-dir',state,'--id',successful.id),successful);
   assert.equal((await cli('feature','result','--state-dir',state,'--name','lifecycle.md')).execution.status,'completed');

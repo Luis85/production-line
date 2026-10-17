@@ -1,3 +1,5 @@
+import { testErrorOutput } from '../../helpers/process-errors.mjs';
+import { testErrorCode } from '../../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
@@ -9,8 +11,10 @@ import { createHash } from 'node:crypto';
 import { gitContextSource } from '../../../src/orchestrator/dist/orchestrator/context/git-source.js';
 import { resolveContext, CONTEXT_LIMITS } from '../../../src/orchestrator/dist/orchestrator/context/resolver.js';
 const exec = promisify(execFile);
+/** @param {unknown} [dependencies] @param {Record<string, unknown>} [overrides] */
 const note = (dependencies = [], overrides = {}) => '---\n' + Object.entries({ factory_id: 'feature-1', title: 'Pinned feature', factory_status: 'ready_for_implementation', factory_acceptance: ['Observable success'], factory_context: dependencies, ...overrides }).map(([key, value]) => `${key}: ${JSON.stringify(value)}`).join('\n') + '\n---\n# Original content\n';
 const request = { project: 'demo', vaultRoot: 'docs', wikilink: '[[Feature|Approved feature]]' };
+/** @param {import('node:test').TestContext} t @param {Record<string, string | Buffer>} [contents] */
 async function fixture(t, contents = { 'docs/Feature.md': note(['[[Specs/Detail]]']), 'docs/Specs/Detail.md': '# Committed detail\n' }) {
     const root = await mkdtemp(join(tmpdir(), 'werk-context-'));
     t.after(() => rm(root, { recursive: true, force: true }));
@@ -39,12 +43,12 @@ test('local context CLI emits JSON without server credentials and rejects unrela
     const args = [cli, 'context', 'resolve', '--repo', f.root, '--commit', f.commit, '--vault-root', 'docs', '--project', 'demo', '--wikilink', '[[Feature]]'];
     const { stdout } = await exec(process.execPath, args, { env: { ...process.env, WERK_ADMIN_TOKEN: '' } });
     assert.equal(JSON.parse(stdout).files.length, 2);
-    await assert.rejects(exec(process.execPath, [...args, '--url', 'https://example.invalid']), error => error.code === 2 && error.stderr.includes('Unknown option --url'));
+    await assert.rejects(exec(process.execPath, [...args, '--url', 'https://example.invalid']), error => testErrorCode(error) === 2 && testErrorOutput(error, 'stderr').includes('Unknown option --url'));
 });
 test('blocks missing, ambiguous, escaped and unsupported references', async t => {
     const f = await fixture(t, { 'docs/Feature.md': note(), 'docs/A/Detail.md': '# A', 'docs/B/Detail.md': '# B', 'outside.md': '# outside' });
     const source = await gitContextSource(f.root, f.commit);
-    for (const [wikilink, error] of [['[[Missing]]', /Missing/], ['[[Detail]]', /Ambiguous/], ['[[../outside]]', /traversal/], ['[[Feature#Heading]]', /Unsupported/], ['[[Feature#^block]]', /Unsupported/], ['![[Feature]]', /Wikilink/], ['[[image.png]]', /only whole Markdown/]]) {
+    for (const [wikilink, error] of /** @type {[string, RegExp][]} */ ([['[[Missing]]', /Missing/], ['[[Detail]]', /Ambiguous/], ['[[../outside]]', /traversal/], ['[[Feature#Heading]]', /Unsupported/], ['[[Feature#^block]]', /Unsupported/], ['![[Feature]]', /Wikilink/], ['[[image.png]]', /only whole Markdown/]])) {
         await assert.rejects(resolveContext(source, { ...request, wikilink }), error);
     }
     await assert.rejects(resolveContext(source, { ...request, vaultRoot: '../docs' }), /traversal/);
@@ -90,9 +94,9 @@ test('enforces traversal depth, file count and aggregate bytes', async () => {
     const source = content => ({ repository: '/fixture', commit: 'a'.repeat(40), files: [...content.keys()].map(path => ({ path, mode: '100644', objectId: 'b'.repeat(40) })), read: async file => Buffer.from(content.get(file.path)) });
     const deep = new Map(Array.from({ length: 10 }, (_, index) => [`docs/${index ? 'N' + index : 'Feature'}.md`, note(index < 9 ? [`[[N${index + 1}]]`] : [])]));
     await assert.rejects(resolveContext(source(deep), request), /depth limit/);
-    const wide = new Map([['docs/Feature.md', note(Array.from({ length: 32 }, (_, index) => `[[N${index}]]`))], ...Array.from({ length: 32 }, (_, index) => [`docs/N${index}.md`, '# note'])]);
+    const wide = new Map([['docs/Feature.md', note(Array.from({ length: 32 }, (_, index) => `[[N${index}]]`))], ...Array.from({ length: 32 }, (_, index) => /** @type {[string,string]} */ ([`docs/N${index}.md`, '# note']))]);
     await assert.rejects(resolveContext(source(wide), request), /file count limit/);
-    const heavy = new Map([['docs/Feature.md', note(['[[N0]]','[[N1]]','[[N2]]','[[N3]]','[[N4]]'])], ...Array.from({ length: 5 }, (_, index) => [`docs/N${index}.md`, 'a'.repeat(CONTEXT_LIMITS.fileBytes)])]);
+    const heavy = new Map([['docs/Feature.md', note(['[[N0]]','[[N1]]','[[N2]]','[[N3]]','[[N4]]'])], ...Array.from({ length: 5 }, (_, index) => /** @type {[string,string]} */ ([`docs/N${index}.md`, 'a'.repeat(CONTEXT_LIMITS.fileBytes)]))]);
     await assert.rejects(resolveContext(source(heavy), request), /total byte limit/);
 });
 

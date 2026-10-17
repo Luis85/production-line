@@ -1,6 +1,10 @@
 import { spawn } from 'node:child_process';
 
-/** Injectable launcher; no shell, URL credentials, detached polling or secret-bearing URL. */
+/**
+ * Injectable launcher; no shell, URL credentials, detached polling or secret-bearing URL.
+ * @param {string} url
+ * @param {{platform?: string, launch?: (command: string, args: string[], options: import('node:child_process').SpawnOptions) => Pick<import('node:events').EventEmitter, 'once'> & {kill(): unknown}, timeoutMs?: number}} [options]
+ */
 export async function openBrowser(url, { platform = process.platform, launch = spawn, timeoutMs = 3000 } = {}) {
   const target = new URL(url);
   if (target.protocol !== 'http:' || target.hostname !== '127.0.0.1' || target.username || target.password || target.search || target.hash) throw Error('Browser target must be a clean loopback HTTP URL.');

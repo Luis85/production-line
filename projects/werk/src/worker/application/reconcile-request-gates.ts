@@ -21,7 +21,7 @@ export class RemoteGateReconciler {
     this.verifyReview = verifyReview;
   }
   async tick(
-    client: WorkerClient,
+    client: Pick<WorkerClient, "resolveHold">,
     identity: WorkerIdentity,
     now = Date.now(),
   ): Promise<{ failed: number }> {

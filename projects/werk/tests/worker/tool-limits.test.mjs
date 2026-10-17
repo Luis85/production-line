@@ -1,10 +1,12 @@
+import { toolPropertyDescription } from './model-fixtures.mjs';
+import { testErrorCode } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { cleanup } from './fixture-cleanup.mjs';
-import { defaultToolPolicy, persistedToolPolicy, publicToolPolicy, updateToolPolicy, validateToolPolicy } from '../../src/worker/dist/worker/application/tool-policy.js';
+import { persistedToolPolicy, publicToolPolicy, updateToolPolicy, validateToolPolicy } from '../../src/worker/dist/worker/application/tool-policy.js';
 import { resolveToolLimits, resolveCommandTimeoutMs } from '../../src/worker/dist/worker/application/tool-limits.js';
 import { cliToolName } from '../../src/worker/dist/worker/application/cli-tool-policy.js';
 import { developmentCheckFingerprint, freezeDevelopmentScope, assertDevelopmentPolicy, validateDevelopmentState } from '../../src/worker/dist/worker/application/development.js';
@@ -31,7 +33,7 @@ test('legacy policy has no new configuration and inherits the established invoca
   const legacy = { schemaVersion: 1, revision: 4, builtins: { files: false, commands: [preset()], webOrigins: [] }, mcp: [httpMcp()] };
   const policy = validateToolPolicy(legacy), limits = resolveToolLimits(policy);
   assert.deepEqual(persistedToolPolicy(policy), legacy);
-  assert.equal(policy.limits, undefined); assert.equal(policy.builtins.commands[0].timeoutMs, undefined); assert.equal(policy.mcp[0].timeoutMs, undefined);
+  assert.equal('limits' in policy, false); assert.equal(policy.builtins.commands[0].timeoutMs, undefined); assert.equal(policy.mcp[0].timeoutMs, undefined);
   assert.deepEqual({ maxCalls: limits.maxCalls, maxRuntimeMs: limits.maxRuntimeMs, commandTimeoutMs: limits.commandTimeoutMs }, { maxCalls: 128, maxRuntimeMs: 21600000, commandTimeoutMs: 300000 });
   assert.equal(limits.presetTimeoutMs['unit-tests'], 300000); assert.equal(limits.mcpTimeoutMs.remote, 30000);
   assert.throws(() => validateToolPolicy({ ...legacy, limits: { windowMs: 120000 } }), /documented tool policy/);
@@ -61,7 +63,7 @@ test('omitted update fields preserve overrides and MCP authority; explicit null 
   const cleared = updateToolPolicy(next, reset);
   for (const item of [...cleared.builtins.commands, ...cleared.builtins.cliTools, ...cleared.mcp]) assert.equal('timeoutMs' in item, false);
   assert.equal(cleared.builtins.commands[0].verification, true); assert.equal(cleared.mcp[0].secret, 'retained-secret'); assert.deepEqual(cleared.mcp[0].allowedTools, ['suite']);
-  assert.throws(() => updateToolPolicy(next, older), error => error.code === 'conflict');
+  assert.throws(() => updateToolPolicy(next, older), error => testErrorCode(error) === 'conflict');
   const changed = update(previous); delete changed.mcp[0].timeoutMs; changed.mcp[0].args = ['different.mjs'];
   const moved = updateToolPolicy(previous, changed); assert.equal(moved.mcp[0].timeoutMs, 30000); assert.equal(moved.mcp[0].secret, ''); assert.deepEqual(moved.mcp[0].allowedTools, []);
 });
@@ -97,7 +99,7 @@ test('runtime records immutable effective deadlines while unchanged tool descrip
   assert.ok(Object.isFrozen(runtime.manifest.limits)); assert.ok(Object.isFrozen(runtime.manifest.limits.callTimeoutMs));
   policy.builtins.commands[0].timeoutMs = 1000; assert.equal(runtime.manifest.limits.presetTimeoutMs['unit-tests'], 300000);
   const plain = await runtimeFor(t, policyWith({ commands: [preset()], cliTools: [cliTool()] }));
-  assert.equal(plain.runtime.manifest.tools[0].inputSchema.properties.preset.description, 'unit-tests: Unit tests');
+  assert.equal(toolPropertyDescription(plain.runtime.manifest.tools[0], 'preset'), 'unit-tests: Unit tests');
   assert.doesNotMatch(plain.runtime.manifest.tools[1].description, /timeout|stops after/);
 });
 
@@ -106,7 +108,7 @@ test('per-grant deadlines stop real commands, CLI tools and MCP startup while la
   const policy = policyWith({ commands: [preset({ args: ['-e', 'setInterval(()=>{},1000)'], timeoutMs: 1000 }), preset({ id: 'quick' })], cliTools: [cliTool({ timeoutMs: 1000 })], mcp: [stdioMcp({ args: ['-e', silentServer], timeoutMs: 1000, discoveredTools: [{ name: 'suite', description: 'Suite', inputSchema: { type: 'object' } }], allowedTools: ['suite'] })] });
   const { worktree, runtime } = await runtimeFor(t, policy);
   await writeFile(join(worktree, 'harness.mjs'), 'setInterval(()=>{},1000);');
-  for (const [name, args] of [['werk_command_run', { preset: 'unit-tests' }], [cliToolName('harness'), { args: ['check'] }], [mcpToolName('local', 'suite'), {}]]) {
+  for (const [name, args] of /** @type {const} */ ([['werk_command_run', { preset: 'unit-tests' }], [cliToolName('harness'), { args: ['check'] }], [mcpToolName('local', 'suite'), {}]])) {
     const result = await runtime.call(name, args, signal()); assert.equal(result.isError, true, name);
   }
   const quick = await runtime.call('werk_command_run', { preset: 'quick' }, signal()); assert.equal(quick.isError, undefined); assert.match(quick.content[0].text, /exitCode/);

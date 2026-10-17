@@ -54,10 +54,10 @@ test('private journal configuration failure closes its database while preserving
   assert.equal(closed.length, 1); assert.equal(closed[0].isOpen, false);
 });
 
-for (const [name, Journal] of [
+for (const [name, Journal] of /** @type {const} */ ([
   ['interactions', WorkerInteractionJournal], ['runs', WorkerRunJournal],
   ['resources', WorkerResourceJournal], ['requests', WorkerRequestJournal],
-]) test(`${name} journal closes failed schema initialization and can initialize again`, async t => {
+])) test(`${name} journal closes failed schema initialization and can initialize again`, async t => {
   const root = await directory(t), journal = new Journal(root), failure = Error('schema failed');
   const execute = DatabaseSync.prototype.exec, close = DatabaseSync.prototype.close, closed = [];
   const mocked = t.mock.method(DatabaseSync.prototype, 'exec', function (sql) {

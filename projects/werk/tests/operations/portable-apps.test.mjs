@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cp, mkdtemp, mkdir, readFile, writeFile, rm, stat, chmod, symlink, realpath } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
@@ -128,7 +128,7 @@ test('copied apps operate independently with agent tasks, durable state and late
     await ok('worker', 'settings set', [], { board: { paused: false } });
     await until(() => ok('worker', 'task get', ['--id', 'fixture-2']), value => !value.chat.busy);
     assert.equal((await ok('worker', 'task get', ['--id', 'fixture-1'])).chat.messages.at(-1).text, 'Protocol fixture response');
-    const events = (await readFile(audit, 'utf8')).trim().split('\n').map(JSON.parse);
+    const events = (await readFile(audit, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
     assert.deepEqual(events.map(event => event.phase), ['start', 'end', 'start', 'end']);
     await ok('worker', 'session action', [], { action: 'rename', id: 'fixture-1', title: 'Renamed by the user' });
     const replay = await ok('worker', 'task create', [], { ...task, id: 'fixture-1' });

@@ -15,7 +15,9 @@ function customPolicy() {
 }
 test('required verification cannot be removed or inverted by a custom completion rule', () => {
   const policy = customPolicy();
-  for (const configured of [[], policy.done.patch, [{ id: 'expect-unverified', fact: 'output.verificationPassed', op: 'eq', value: false }]]) {
+  /** @type {import('../../src/worker/application/request-gates.js').GateRule[][]} */
+  const variants = [[], policy.done.patch, [{ id: 'expect-unverified', fact: 'output.verificationPassed', op: 'eq', value: false }]];
+  for (const configured of variants) {
     policy.done.patch = configured;
     const result = evaluateGate(policy, 'done', 'patch', { 'output.nonEmpty': true, 'output.verificationPassed': false });
     assert.equal(result.passed, false);

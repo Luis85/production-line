@@ -1,6 +1,7 @@
+import { SerializedOperations } from '../../shared/serialized-operations.js';
 import { DomainError } from '../../shared/errors.js';
 import type { FeatureWorkflowSnapshot } from './feature-workflow.js';
-import type { SharedFeatureView, SharedIntakeConfig, SharedIntakeView, SharedIntakeNote } from './shared-intake-contract.js';
+import type { SharedFeatureView, SharedIntakeView, SharedIntakeNote } from './shared-intake-contract.js';
 import { bindingKey, defaultSharedIntakeConfig, sharedTerminal, validateSharedIntakeConfig, type SharedFeatureRecord, type SharedFeatureState, type SharedIntakePorts } from './shared-feature-state.js';
 import { SharedFeatureLifecycle } from './shared-feature-lifecycle.js';
 import { sharedHash } from './shared-feature-notes.js';
@@ -19,7 +20,7 @@ export class SharedFeatureIntake {
   private stopping = new AbortController();
   private initialized = false;
   private configuring = false;
-  private configureWork: Promise<unknown> = Promise.resolve();
+  private readonly configureWork = new SerializedOperations();
   constructor(ports: SharedIntakePorts) { this.ports = ports; this.lifecycle = new SharedFeatureLifecycle(ports, () => this.save()); }
   get enabled() { return this.initialized && this.state.config.enabled; }
   get busy() { return !!this.syncing || this.configuring; }
@@ -57,7 +58,7 @@ export class SharedFeatureIntake {
   }
   async configure(value: unknown, expectedRevision: number) {
     const config = validateSharedIntakeConfig(value);
-    const operation = this.configureWork.catch(() => {}).then(async () => {
+    await this.configureWork.run(async () => {
       if (this.stopping.signal.aborted) throw new DomainError('unavailable', 'Worker is stopping.');
       if (this.syncing) throw new DomainError('conflict', 'Wait for shared synchronization to finish.');
       if (expectedRevision !== this.state.revision) throw new DomainError('conflict', 'Shared intake changed. Reload before saving.');
@@ -70,8 +71,6 @@ export class SharedFeatureIntake {
       if (bindingKey(config) !== bindingKey(previous.config)) { this.snapshot = null; this.discovered = []; this.syncedAt = null; }
       this.fault = null;
     });
-    this.configureWork = operation;
-    await operation;
   }
   async sync() {
     if ((!this.enabled && !this.state.records.length) || this.stopping.signal.aborted || this.configuring) return;
@@ -147,5 +146,5 @@ export class SharedFeatureIntake {
     if (markdown === null) throw new DomainError('not_found', 'The review note is not present in the last synchronized commit. Refresh shared intake.');
     return { path, markdown };
   }
-  async close() { this.stopping.abort(); if (this.timer) clearTimeout(this.timer); await this.syncing; await this.configureWork.catch(() => {}); }
+  async close() { this.stopping.abort(); if (this.timer) clearTimeout(this.timer); await this.syncing; await this.configureWork.drain(); }
 }

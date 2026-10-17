@@ -16,7 +16,8 @@ test('restored fleet preserves registry, identities and pending evidence without
   const original = join(directory, 'original'), backup = join(directory, 'backup'), restored = join(directory, 'restored');
   let store, registry, journal;
   const clock = () => 1000;
-  const profile = { id: 'claude-1', provider: 'claude', mode: 'mock' };
+  /** @type {import('../../src/orchestrator/dist/shared/contracts.js').Profile} */
+const profile = { id: 'claude-1', provider: 'claude', mode: 'mock' };
   const state = { lastContact: null, heartbeatErrors: 0 };
   try {
     await mkdir(original);

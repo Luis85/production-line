@@ -25,6 +25,7 @@ function views(value) {
   };
 }
 test('execution, review Markdown and UI share current-candidate check outcomes', () => {
+  /** @type {Array<[string, (value: ReturnType<typeof fixture>) => void, boolean, string, string]>} */
   const scenarios = [
     ['passed', () => {}, true, 'passed', 'Passed'],
     ['missing', value => { value.evidence.checks = []; }, false, 'not_run', 'Not run'],
@@ -42,6 +43,7 @@ test('execution, review Markdown and UI share current-candidate check outcomes',
   }
 });
 test('duplicate identities and out-of-scope evidence cannot become a passing display or execution gate', () => {
+  /** @type {Array<[string, (value: ReturnType<typeof fixture>) => void]>} */
   const malformed = [
     ['two passes', value => { value.evidence.checks.push({ ...value.evidence.checks[0] }); }],
     ['failure before pass', value => { value.evidence.checks.unshift({ ...value.evidence.checks[0], status: 'failed', exitCode: 1 }); }],

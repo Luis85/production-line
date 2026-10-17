@@ -16,3 +16,11 @@ backups/
 
 /storybook-static/
 /work/storybook-public/
+
+# Opt-in mutation qualification; never shipped with the runtime.
+/.stryker-tmp/
+/.mutation-build/
+/reports/mutation/
+
+# Local static-analysis caches; the reviewed baseline is tracked under quality/.
+/.fallow/

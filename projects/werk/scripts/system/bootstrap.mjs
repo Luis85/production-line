@@ -3,7 +3,9 @@ import { inputError } from '../runtime/config.mjs';
 import { tokenEnv } from './state.mjs';
 
 export async function factoryRequest(url, token, path, { method = 'GET', body, key, signal } = {}) {
+  // The caller selects GET or POST; an absent optional body is valid for GET.
   const response = await fetch(new URL(path, url), { method, redirect: 'error', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(4000)]) : AbortSignal.timeout(4000),
+    // oxlint-disable-next-line unicorn/no-invalid-fetch-options -- Dynamic method defaults are mistaken for a fixed GET.
     headers: { Authorization: `Bearer ${token}`, ...(body ? { 'Content-Type': 'application/json' } : {}), ...(key ? { 'Idempotency-Key': key } : {}) }, body: body ? JSON.stringify(body) : undefined });
   const reader = response.body.getReader(), chunks = []; let bytes = 0;
   try { for (;;) { const { done, value } = await reader.read(); if (done) break; bytes += value.length; if (bytes > 1048576) { await reader.cancel(); throw Error('Factory response exceeded its limit.'); } chunks.push(value); } }
@@ -11,6 +13,7 @@ export async function factoryRequest(url, token, path, { method = 'GET', body, k
   let value; try { value = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw Error('Factory returned an invalid response.'); }
   return { status: response.status, value };
 }
+/** @param {ReturnType<typeof import('./definition.mjs').validateDefinition>} definition @param {{adminToken: string, credentials: Record<string, string>}} credentials @param {{factoryUrl?: string, internalUrls?: string[], signal?: AbortSignal}} [options] */
 export async function bootstrapSystem(definition, credentials, { factoryUrl = `http://127.0.0.1:${definition.factory.port}`, internalUrls, signal } = {}) {
   async function ensure(kind, expected) {
     const path = `/v1/${kind}/${encodeURIComponent(expected.id)}`;

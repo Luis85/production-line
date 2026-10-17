@@ -1,3 +1,4 @@
+import { testErrorField, testErrorMessage, testListeningAddress } from '../../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, request as httpRequest } from 'node:http';
@@ -22,7 +23,7 @@ async function withServer(handler, run) {
   const server = createServer(handler);
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
-  try { await run('http://127.0.0.1:' + server.address().port); }
+  try { await run('http://127.0.0.1:' + testListeningAddress(server).port); }
   finally {
     server.closeAllConnections();
     await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
@@ -163,8 +164,8 @@ for (const variant of variants) {
 }
 
 test('empty configured credentials fail closed', () => {
-  assert.throws(() => tokenAuthorization('', '')('', 'admin'), error => error.status === 401);
-  assert.throws(() => tokenAuthorization('', '')('', 'enrollment'), error => error.status === 401);
+  assert.throws(() => tokenAuthorization('', '')('', 'admin'), error => testErrorField(error, 'status') === 401);
+  assert.throws(() => tokenAuthorization('', '')('', 'enrollment'), error => testErrorField(error, 'status') === 401);
 });
 
 test('HTTP client rejects invalid UTF-8 without silently altering remote JSON', async () => {
@@ -172,6 +173,6 @@ test('HTTP client rejects invalid UTF-8 without silently altering remote JSON', 
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(Buffer.concat([Buffer.from('{"value":"'), Buffer.from([0xff]), Buffer.from('"}')]));
   }, async base => {
-    await assert.rejects(request(base, '/', 'token'), error => error.status === 502 && error.message.includes('invalid JSON'));
+    await assert.rejects(request(base, '/', 'token'), error => testErrorField(error, 'status') === 502 && testErrorMessage(error).includes('invalid JSON'));
   });
 });

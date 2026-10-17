@@ -1,3 +1,4 @@
+import { testErrorCode } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
@@ -33,6 +34,7 @@ async function fixture(t, options = {}) {
   const settings = new WorkerSettings(state); await settings.init();
   await settings.update({ provider: { id: 'openai-api', model: 'fixture', apiKey: 'fixture-only' }, repositories: { pollMs: 30000, items: [{ id: 'shared', path: repository, remote: 'origin', watch: false }] } });
   const calls = [], preparations = [];
+  /** @type {import('../../src/worker/infrastructure/workspace-services.js').WorkspaceProviderFactory} */
   const factory = connection => ({
     configuration: { id: connection.id, model: connection.model, instruction: 'Fixture only; no external calls' },
     capabilities: modelCapabilities,
@@ -49,8 +51,8 @@ async function fixture(t, options = {}) {
   } };
   let sessions, board;
   async function open() {
-    sessions = new WorkerSessions(state, settings, factory); await sessions.init();
-    board = new LocalTaskboard(state, settings, sessions, factory, port); await board.init();
+    sessions = WorkerSessions(state, settings, factory); await sessions.init();
+    board = LocalTaskboard(state, settings, sessions, factory, port); await board.init();
   }
   await open();
   t.after(async () => { await board.close(); await sessions.close(); await rm(directory, { recursive: true, force: true }); });
@@ -133,7 +135,7 @@ test('HTTP task input cannot override trusted gates or source and malformed rese
   for (const [key, value] of Object.entries({ policy: submission.policy, criteria: submission.criteria, repositoryId: 'shared', baseCommit: f.baseCommit }))
     await assert.rejects(f.board.create({ ...f.input, [key]: value }), /unknown field/i);
   for (const change of [{ policy: {} }, { criteria: ['x'.repeat(2001)] }, { criteria: Array(65).fill('Criterion') }, { baseCommit: 'HEAD' }, { repositoryId: '../outside' }])
-    await assert.rejects(f.board.create(f.input, { ...submission, ...change }), error => error.code === 'invalid_input');
+    await assert.rejects(f.board.create(f.input, { ...submission, ...change }), error => testErrorCode(error) === 'invalid_input');
   await assert.rejects(f.board.create(f.input, { ...submission, repositoryId: 'other' }), /reserved assignment/);
   assert.equal(f.preparations.length, 0); assert.equal(f.board.view().tasks.length, 0);
 });

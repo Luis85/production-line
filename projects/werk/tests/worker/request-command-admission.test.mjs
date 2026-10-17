@@ -1,21 +1,26 @@
+import { testErrorCode, testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { WorkerWorkspace } from "../../src/worker/dist/worker/status/workspace.js";
-import { WorkerRequestJournal } from "../../src/worker/dist/worker/infrastructure/journal/requests.js";
+import { SnapshotJournal } from "../../src/worker/dist/worker/infrastructure/journal/snapshots.js";
+import { workerStatus } from "../helpers/worker-status.mjs";
 import { DomainError } from "../../src/worker/dist/shared/errors.js";
 
 test("a saved command with failed owner admission returns a receipt on retry and needs a fresh guarded execution", async () => {
   const directory = await mkdtemp(join(tmpdir(), "werk-command-admission-")),
-    gates = new WorkerRequestJournal(directory);
+    journal = new SnapshotJournal(directory, "a".repeat(64), "b".repeat(64)),
+    workspace = new WorkerWorkspace({ stateDir: directory, pollMs: 1000, timeoutMs: 1000 }, journal, workerStatus),
+    gates = workspace.sessions.requests;
   let failed = true,
     admissions = 0;
   try {
-    await gates.init();
+    await journal.init();
+    await workspace.init();
     const request = gates.ensure({
-      owner: { sessionId: "session-1", rootTurnId: "root-1" },
+      owner: { sessionId: "default", rootTurnId: "root-1" },
       input: {
         kind: "chat",
         title: "Fixture",
@@ -24,32 +29,28 @@ test("a saved command with failed owner admission returns a receipt on retry and
       provider: { id: "fixture", model: "pinned", instruction: "" },
     });
     const ready = gates.get(request.id);
-    const session = { id: "session-1" };
-    const workspace = Object.assign(Object.create(WorkerWorkspace.prototype), {
-      acceptingTasks: true,
-      board: { view: () => ({ tasks: [] }) },
-      reviews: { tick() {}, cancel() {} },
-      sessions: {
-        requests: gates,
-        view: () => ({ records: [session] }),
-        async executeRequest(id) {
-          if (failed) {
-            failed = false;
-            throw new DomainError("unavailable", "Fixture admission failed.");
-          }
-          admissions++;
-          const current = gates.get(id),
-            turnId = "primary-" + current.inputRevision,
-            runId = "run-" + current.inputRevision;
-          gates.bindTurn(id, turnId);
-          gates.prepareExecution(id, turnId, runId);
-          gates.startExecution(id, turnId, runId);
-          return current;
-        },
-      },
-    });
-    const execute = (body) =>
-      WorkerWorkspace.prototype.requestCommand.call(workspace, body);
+    const view = workspace.sessions.view.bind(workspace.sessions);
+    const session = view().records.find(item => item.id === 'default');
+    assert.ok(session);
+    workspace.sessions.view = () => ({ ...view(), records: [session] });
+    workspace.reviews.tick = () => {};
+    workspace.sessions.executeRequest = async id => {
+      if (failed) {
+        failed = false;
+        throw new DomainError('unavailable', 'Fixture admission failed.');
+      }
+      admissions++;
+      const current = gates.get(id), turnId = 'primary-' + current.inputRevision, runId = 'run-' + current.inputRevision;
+      gates.bindTurn(id, turnId);
+      gates.prepareExecution(id, turnId, runId);
+      gates.startExecution(id, turnId, runId);
+      return workspace.sessions.detail('default').chat;
+    };
+    const execute = async body => {
+      const result = await workspace.requestCommand(body);
+      assert.ok('dispatch' in result && 'request' in result);
+      return result;
+    };
     const original = {
       action: "execute",
       requestId: request.id,
@@ -57,16 +58,16 @@ test("a saved command with failed owner admission returns a receipt on retry and
       operationId: "original-execute",
     };
     session.continuationBlockedReason = "Interrupted admission has no accepted snapshots.";
-    await assert.rejects(execute(original), error => error.code === "conflict" && error.message === session.continuationBlockedReason);
+    await assert.rejects(execute(original), error => testErrorCode(error) === "conflict" && testErrorMessage(error) === session.continuationBlockedReason);
     assert.equal(gates.get(request.id).revision, ready.revision, "The real continuation guard rejects before saving a request command.");
     assert.equal(admissions, 0);
     delete session.continuationBlockedReason;
     await assert.rejects(
       execute(original),
       (error) =>
-        error.code === "unavailable" &&
-        /command was saved/.test(error.message) &&
-        /new operation ID/.test(error.message),
+        testErrorCode(error) === "unavailable" &&
+        /command was saved/.test(testErrorMessage(error)) &&
+        /new operation ID/.test(testErrorMessage(error)),
     );
     assert.equal(admissions, 0);
     const replay = await execute(original);
@@ -89,7 +90,8 @@ test("a saved command with failed owner admission returns a receipt on retry and
     assert.equal(knownReplay.dispatch.state, "admitted");
     assert.equal(admissions, 1);
   } finally {
-    gates.close();
+    await workspace.close();
+    journal.close();
     await rm(directory, { recursive: true, force: true });
   }
 });

@@ -27,15 +27,19 @@ async function fixture(t) {
   const files = new Map([
     ['index.html', '<!doctype html><title>Werk Storybook</title>'],
     ['index.json', '{"v":5,"entries":{"worker--board":{"type":"story"}}}'],
+    ['handbook/index.html', '<!doctype html><title>Documentation</title>'],
+    ['handbook/start.html', '<!doctype html><title>Start here</title>'],
     ['storymap/index.html', '<!doctype html><title>Storymap</title>'],
     ['storymap/manifest.json', '{"stories":["worker--board"]}'],
     ['storymap/screenshots/worker--board-desktop.png', 'fixture desktop screenshot'],
     ['storymap/screenshots/worker--board-mobile.png', 'fixture mobile screenshot'],
     ['assets/app.js', 'console.log("fixture");'],
   ]);
+  files.set('handbook/catalog.json', JSON.stringify({ version: '0.2.0', commit, sourceDigest: await sourceDigest(root), pages: [{ id: 'start', path: 'handbook/start.html' }] }));
   for (const [path, content] of files) await put(`storybook-static/${path}`, content);
   const report = {
     schemaVersion: 1, version: '0.2.0', commit, sourceDigest: await sourceDigest(root), passed: true,
+    documentation: { passed: true, pages: 1, results: ['desktop', 'mobile'].map(viewport => ({ viewport, passed: true, pages: 1 })) },
     coverage: { total: 1, covered: 1, missing: [] }, stories: 1, screenshots: 2, errors: [],
     files: [...files].map(([path, content]) => ({ path, sha256: hash(content) })),
   };
@@ -83,6 +87,9 @@ test('failed browser checks, incomplete component coverage and missing screensho
   for (const [change, message] of [
     [{ passed: false }, /did not pass/],
     [{ errors: ['browser failed'] }, /did not pass/],
+    [{ documentation: undefined }, /Documentation browser qualification is incomplete/],
+    [{ documentation: { passed: false, pages: 1 } }, /Documentation browser qualification is incomplete/],
+    [{ documentation: { passed: true, pages: 2, results: [] } }, /Documentation browser qualification is incomplete/],
     [{ coverage: { total: 2, covered: 1, missing: ['App.vue'] } }, /component coverage is incomplete/],
     [{ screenshots: 3 }, /screenshot coverage is incomplete/],
     [{ stories: 3 }, /screenshot coverage is incomplete/],
@@ -129,4 +136,21 @@ test('Storybook packaging rejects symlinks and oversized files before reading pa
   await put('storybook-static/assets/oversized.js', '');
   await truncate(join(root, 'storybook-static/assets/oversized.js'), 32 * 1024 * 1024 + 1);
   await assert.rejects(packageStorybook(root), /32 MiB/);
+});
+
+test('documentation changes invalidate qualified archives even when runtime source is unchanged', async t => {
+  const { root, put, report, save } = await fixture(t);
+  await put('docs/how-to/setup.md', '# Setup\n\nOriginal setup guidance.\n');
+  await put('README.md', '# Werk\n');
+  report.sourceDigest = await sourceDigest(root);
+  const catalog = JSON.parse(await readFile(join(root, 'storybook-static/handbook/catalog.json'), 'utf8'));
+  catalog.sourceDigest = report.sourceDigest;
+  await put('storybook-static/handbook/catalog.json', JSON.stringify(catalog));
+  report.files.find(file => file.path === 'handbook/catalog.json').sha256 = hash(JSON.stringify(catalog));
+  await save(); await packageStorybook(root);
+  await put('docs/how-to/setup.md', '# Setup\n\nChanged setup command after capture.\n');
+  await assert.rejects(packageStorybook(root), /source digest is stale/);
+  report.sourceDigest = await sourceDigest(root); await save();
+  await put('README.md', '# Updated release entrypoint\n');
+  await assert.rejects(packageStorybook(root), /source digest is stale/);
 });

@@ -88,6 +88,7 @@ function validateTokens(kind, values) {
   }
   if (kind === 'orchestrator' && values.WERK_ADMIN_TOKEN !== undefined && values.WERK_ADMIN_TOKEN === values.WERK_ENROLLMENT_TOKEN) throw inputError('Component admin and enrollment tokens must be distinct.');
 }
+/** @param {string} kind @param {string} directory @param {Record<string, string | undefined>} [environment] */
 export async function loadEnvironment(kind, directory, environment = process.env) {
   const path = join(await realpath(resolve(directory)), '.env'), file = await readText(path);
   const values = file ? parseEnvironment(kind, file.content) : {};
@@ -165,6 +166,7 @@ async function appendFile(path, previous, content, privateFile = false) {
     await handle.sync();
   } finally { await handle.close(); }
 }
+/** @param {string} kind @param {string} directory @param {{stateDirectory?: string, defaults?: Record<string, unknown>, fallbacks?: Record<string, unknown>, environment?: Record<string, string | undefined>}} [options] */
 export async function seedEnvironment(kind, directory, { stateDirectory, defaults = {}, fallbacks = {}, environment = process.env } = {}) {
   const config = definition(kind), project = await realpath(resolve(directory));
   const path = join(project, '.env'), examplePath = join(project, '.env.example'), gitignorePath = join(project, '.gitignore');

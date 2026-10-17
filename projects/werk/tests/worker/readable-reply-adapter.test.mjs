@@ -43,9 +43,9 @@ for (const provider of ['openai-api', 'anthropic-api']) {
       return Response.json(envelope(provider, requests.length === 1 ? checkpointText : patchText));
     };
     const adapter = (connection, stateDirectory, _transport, options) => modelFor(connection, stateDirectory, transport, options);
-    sessions = new WorkerSessions(directory, settings, adapter);
+    sessions = WorkerSessions(directory, settings, adapter);
     await sessions.init();
-    board = new LocalTaskboard(directory, settings, sessions, adapter);
+    board = LocalTaskboard(directory, settings, sessions, adapter);
     await board.init();
     await board.create({ title: 'Readable adapter proposal', instruction: 'Append the approved fixture line.', repository, paths: ['checkout.txt'], provider });
     const id = board.view().tasks.at(-1).id;
@@ -67,6 +67,7 @@ for (const provider of ['openai-api', 'anthropic-api']) {
     await settle('waiting_input');
     const waiting = sessions.interactions.view(sessionId);
     assert.deepEqual(sessions.interactions.turn(sessionId, waiting.latestTurn.id).result, { type: 'needs_input', request: checkpoint });
+    /** @type {import('../../src/worker/application/interactions.js').InteractionCommand} */
     const answer = { action: 'answer', sessionId, pendingId: waiting.pending.id, expectedRevision: waiting.revision, operationId: 'answer-offline-checkpoint', answer: 'keep' };
     await board.interact(answer);
     await settle('review');
