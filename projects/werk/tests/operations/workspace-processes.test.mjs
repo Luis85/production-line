@@ -6,12 +6,11 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
-import { ownWorkspace, processesUnder, removeWorkspace, terminateProcessesUnder } from '../helpers/workspace-processes.mjs';
+import { ownWorkspace, processesUnder, processIsRunning as alive, removeWorkspace, terminateProcessesUnder } from '../helpers/workspace-processes.mjs';
 
 // Fixture cleanup for tests that start detached portable workers: only processes whose
 // command line names the owned temporary workspace are terminated.
 const watchdog = fileURLToPath(new URL('../helpers/workspace-watchdog.mjs', import.meta.url));
-const alive = pid => { try { process.kill(pid, 0); return true; } catch (error) { return error.code === 'EPERM'; } };
 async function eventually(check, message, timeout = 30000) {
   for (const end = Date.now() + timeout; Date.now() < end; await delay(200)) if (await check()) return;
   assert.fail(message);
@@ -64,4 +63,16 @@ test('the guard cleans up when the test process dies before its after hooks run'
   owner.kill('SIGKILL');
   await eventually(async () => !alive(worker) && !alive(Number(guard)), 'the guard terminated the workspace processes and exited');
   await eventually(async () => access(directory).then(() => false, () => true), 'the guard removed the workspace');
+});
+
+test('owned workspaces fail explicitly when the detached guard cannot start', { timeout: 120000 }, async t => {
+  const directory = await workspace('process launch failure');
+  t.after(() => removeWorkspace(directory));
+  const prior = process.env.NODE_OPTIONS;
+  try {
+    process.env.NODE_OPTIONS = '--invalid-werk-fixture-option';
+    await assert.rejects(ownWorkspace(t, directory), /Could not start workspace cleanup guard/);
+  } finally {
+    if (prior === undefined) delete process.env.NODE_OPTIONS; else process.env.NODE_OPTIONS = prior;
+  }
 });
