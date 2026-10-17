@@ -94,6 +94,57 @@ incomplete output, authentication, quota/rate limit and protocol failures remain
 separate safe error categories where the adapter can identify them. No raw error
 body or credential is needed in the public status.
 
+## Approved-file proposal replies
+
+This format applies to snapshot-based proposals. Verified candidate implementations
+use the candidate tools and return a plain-text summary after required checks pass.
+
+A proposal asks for one JSON object and states these limits in its prompt:
+
+```json
+{"summary": "What changed and which checks ran", "files": [{"path": "approved/path.md", "content": "complete new file text"}]}
+```
+
+| Rule | Limit |
+| --- | --- |
+| Whole reply | At most 64,000 characters |
+| `summary` | Text, at most 2,000 characters |
+| `files` | 1 up to the number of approved paths; each approved path at most once |
+| `content` | The complete new file text, at most 64,000 characters, no NUL character |
+| Review patch | At most 131,072 characters, with no private key or access-token pattern |
+
+The worker reads a bare object or an object in a Markdown fence. Prose before or
+after it is tolerated when the reply contains exactly one object with `summary`
+or `files`; two different such objects are refused as ambiguous. Extraction also refuses replies
+that exceed its 256-candidate search bound instead of accepting an unexamined tail. Every rule above
+is still checked before the reply becomes reviewable.
+
+The review patch is a Git unified diff with three lines of context per hunk.
+Unchanged files are omitted, paths are always quoted so non-ASCII names apply with
+`git apply`, and a missing final newline is marked as Git does. A file with more
+than 2,000 changed lines is shown as a full replacement.
+
+A reply that breaks a rule fails the attempt without a durable completed result.
+The task error starts with `The model reply did not follow the patch format:` and
+names the rule and the measured value, never reply or file content. The interaction
+turn and its `failed` event carry a matching error code:
+
+| Code | Cause |
+| --- | --- |
+| `patch_reply_too_large` | The reply exceeds 64,000 characters |
+| `patch_reply_not_json` | No JSON patch object was found |
+| `patch_reply_ambiguous` | More than one different patch object was found, or bounded extraction could not examine the whole reply |
+| `patch_summary_invalid` | `summary` is missing, not text or too long |
+| `patch_files_invalid` | `files` is missing, empty, too long or has a non-object entry |
+| `patch_file_unapproved` | An entry names a path outside the approved list (shown quoted and shortened) |
+| `patch_file_duplicate` | An approved path is listed twice |
+| `patch_file_content_invalid` | `content` is not text, too long or contains NUL |
+| `patch_unchanged` | Every listed file equals its snapshot |
+| `patch_too_large` | The generated review patch exceeds 131,072 characters |
+| `patch_sensitive_material` | The patch looks like it contains a private key or token |
+
+Resume the task from saved context to let the model correct its reply.
+
 ## State and ownership
 
 | Phase | Meaning and next action |

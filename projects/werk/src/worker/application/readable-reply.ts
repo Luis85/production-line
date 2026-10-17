@@ -1,5 +1,6 @@
 import { Lexer, Tokenizer, type Token } from 'marked';
 import { parseModelResult } from './model-contract.js';
+import { parsePatchReply } from './patch-protocol.js';
 // Pure transcript formatting shared by the worker runtime and its webview.
 // Model protocol replies stay unchanged in interaction evidence; the conversation shows a readable view.
 
@@ -224,10 +225,10 @@ function truncatedChangeSet(text: string) {
 export function readableReply(text: string, context: ReplyContext = {}): ReadableReply {
   const trimmed = text.trim();
   const unfenced = trimmed.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
-  if (!unfenced.startsWith("{")) return { kind: "text", text: readableMarkdown(text) };
+  if (!unfenced.startsWith("{") && context.fileTask !== "proposal") return { kind: "text", text: readableMarkdown(text) };
   let value: unknown;
   try {
-    value = JSON.parse(unfenced);
+    value = context.fileTask === "proposal" ? parsePatchReply(text) : JSON.parse(unfenced);
   } catch {
     const partial = context.fileTask === "proposal" ? truncatedChangeSet(unfenced) : null;
     return partial

@@ -199,3 +199,14 @@ test('long assistant replies retain the renderer’s bounded literal fallback', 
     assert.doesNotMatch(html, /<(?:code|strong|script)\b/);
   }
 });
+
+test('prose-wrapped legacy proposal formatting requires retained proposal context', () => {
+  const text = 'Here is the patch:\n' + observed + '\nReady for inspection.';
+  const formatted = readableReply(text, { fileTask: 'proposal' });
+  assert.equal(formatted.kind, 'patch');
+  assert.equal(formatted.raw, text);
+  assert.match(formatted.text, /Changed files/);
+  assert.doesNotMatch(formatted.text, /export const LANGUAGES/);
+  assert.equal(readableReply(text).kind, 'text');
+  assert.equal(readableReply(text, { fileTask: 'implementation' }).kind, 'text');
+});

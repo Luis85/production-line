@@ -1,7 +1,6 @@
 import { developmentCompletionValid, type DevelopmentCompletion, assertDevelopmentPolicy, developmentScopeView, developmentVerified, freezeDevelopmentScope, validateDevelopmentState, type DevelopmentFactory, type DevelopmentScope, type DevelopmentEvidence, type DevelopmentRuntime } from './development.js';
 import type { LocalTaskboardView, LocalTaskDetailView, LocalTaskStatus } from './workspace-view.js';
 import { projectLocalTaskSummary, projectLocalTaskDetail } from './local-task-view.js';
-import { containsSensitivePatchMaterial } from './review-patch-policy.js';
 import type { ToolWorktreeIdentity } from './tool-runtime.js';
 import type { ModelFactory, ProviderId } from './provider-contract.js';
 import type { WorkerSettingsPort, LocalTaskStorage, ApprovedTaskFiles } from './workspace-ports.js';
@@ -27,6 +26,7 @@ import { object, text } from "../../shared/contracts.js";
 import { DomainError } from "../../shared/errors.js";
 import type { WorkerSessions } from "./sessions.js";
 import type { ConversationModel } from "./conversation.js";
+import { PatchProtocolError, parsePatchReply, patchProtocolInstruction, validatePatchReply } from "./patch-protocol.js";
 /** Repository adapters prepare committed worktrees; plain folders remain a legacy fallback. */
 export interface LocalTaskWorkspaces {
   prepareWorktree(
@@ -120,30 +120,6 @@ export interface LocalTask {
 }
 const fingerprint = (value: string) =>
   createHash("sha256").update(value).digest("hex");
-function patchFile(file: TaskFile, content: string) {
-  if (file.content === content && file.existed) return "";
-  const lines = (value: string, prefix: string) =>
-    !value
-      ? ""
-      : value
-          .split("\n")
-          .slice(0, value.endsWith("\n") ? -1 : undefined)
-          .map(
-            (line, index, all) =>
-              prefix +
-              line +
-              "\n" +
-              (index === all.length - 1 && !value.endsWith("\n")
-                ? "\\ No newline at end of file\n"
-                : ""),
-          )
-          .join("");
-  const count = (value: string) =>
-    value ? value.split("\n").length - (value.endsWith("\n") ? 1 : 0) : 0;
-  const oldCount = count(file.content),
-    newCount = count(content);
-  return `diff --git ${JSON.stringify("a/" + file.path)} ${JSON.stringify("b/" + file.path)}\n${file.existed ? "" : "new file mode 100644\n"}--- ${file.existed ? JSON.stringify("a/" + file.path) : "/dev/null"}\n+++ ${JSON.stringify("b/" + file.path)}\n@@ -${oldCount ? 1 : 0},${oldCount} +${newCount ? 1 : 0},${newCount} @@\n${lines(file.content, "-")}${lines(content, "+")}`;
-}
 /** Explicit tasks generate bounded, reviewable patches; provider output is never executed as shell code. */
 export class LocalTaskboard {
   private storage: LocalTaskStorage;
@@ -342,7 +318,7 @@ export class LocalTaskboard {
   }
   private originalPrompt(task: LocalTask) {
     if (task.implementation) return `Implement this feature in the assigned isolated worktree. Use werk_candidate_status to inspect approved paths and their current hashes, werk_candidate_apply to update/create/delete only approved files, and werk_candidate_check for EVERY required check. Check results refer to the current candidate; after edits rerun checks. Repair failures within this invocation. Other granted commands may help investigation but do not replace required checks. Return a concise plain-text summary only after every required check passes. Human review is required; do not commit, push or merge. If blocked, use the interaction protocol.\nTask: ${task.title}\nInstruction: ${task.instruction}${task.criteria?.length ? '\nAcceptance criteria: ' + JSON.stringify(task.criteria) : ''}\nApproved file snapshots: ${JSON.stringify(task.files)}\nRequired checks: ${JSON.stringify(task.implementation.checks.map(({ id, name }) => ({ id, name })))}\nRetained candidate evidence: ${JSON.stringify(task.developmentEvidence ?? null)}`;
-    return `Implement the requested changes to the supplied files. Return ONLY a JSON object {"summary":"...","files":[{"path":"approved path","content":"complete new file content"}]}. Use only tools explicitly granted by the worker. Only include changed approved files. Claim tests were run only when a granted tool actually ran them. This creates a patch for human review.\nTask: ${task.title}\nInstruction: ${task.instruction}${task.criteria?.length ? "\nAcceptance criteria: " + JSON.stringify(task.criteria) : ""}\nApproved file snapshots: ${JSON.stringify(task.files)}`;
+    return `Implement the requested changes to the supplied files. ${patchProtocolInstruction(task.files.length)} Use only tools explicitly granted by the worker. Claim tests were run only when a granted tool actually ran them. This creates a patch for human review.\nTask: ${task.title}\nInstruction: ${task.instruction}${task.criteria?.length ? "\nAcceptance criteria: " + JSON.stringify(task.criteria) : ""}\nApproved file snapshots: ${JSON.stringify(task.files)}`;
   }
   private preparedRequest(
     task: LocalTask,
@@ -511,50 +487,15 @@ export class LocalTaskboard {
     this.sessions.requests.prepareExecution(request.id, turn.id, task.runId);
   }
   private validatedPatch(task: LocalTask, reply: string) {
-    if (reply.length > 64000) throw Error("Reply limit");
-    const result = JSON.parse(
-      reply.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, ""),
-    );
-    if (
-      typeof result.summary !== "string" ||
-      result.summary.length > 2000 ||
-      !Array.isArray(result.files) ||
-      !result.files.length ||
-      result.files.length > task.files.length ||
-      new Set(result.files.map((item: any) => item.path)).size !==
-        result.files.length
-    )
-      throw Error("Invalid change set");
-    let patch = "";
-    for (const change of result.files) {
-      const before = task.files.find((file) => file.path === change.path);
-      if (
-        !before ||
-        typeof change.content !== "string" ||
-        change.content.length > 64000 ||
-        change.content.includes("\0")
-      )
-        throw Error("Invalid changed file");
-      patch += patchFile(before, change.content);
-    }
-    if (
-      !patch ||
-      patch.length > 131072 ||
-      containsSensitivePatchMaterial(patch)
-    )
-      throw Error("Patch is empty, too large or contains sensitive material");
-    return {
-      summary: result.summary as string,
-      patch,
-      changedFileCount: result.files.length as number,
-    };
+    return validatePatchReply(task.files, reply);
   }
   private completionMessage(task: LocalTask, summary: string, reply: string) {
     // Candidate implementations return prose; only validated proposals use replacement JSON.
     if (task.implementation) return reply;
-    const changes = JSON.parse(
-      reply.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, ""),
-    ).files as Array<{ path: string; content: string }>;
+    const changes = (parsePatchReply(reply).files as Array<{ path: string; content: string }>).filter(change => {
+      const before = task.files.find(file => file.path === change.path);
+      return !before?.existed || before.content !== change.content;
+    });
     return patchReplyMessage(
       summary,
       changes.map((change) => ({
@@ -1612,7 +1553,7 @@ export class LocalTaskboard {
           ? "operator_cancelled"
           : signal.aborted
             ? "timeout"
-            : error instanceof ProviderModelError
+            : error instanceof ProviderModelError || error instanceof PatchProtocolError
               ? error.code
               : "execution_failed";
         if (failed && turnId) {
@@ -1635,7 +1576,9 @@ export class LocalTaskboard {
             ? "This attempt reached its configured execution time limit. Resume explicitly from saved context to make another attempt."
             : error instanceof ProviderModelError
               ? error.message
-              : "Task could not produce a valid patch. Check provider settings and the approved file list, then resume from saved context.";
+              : error instanceof PatchProtocolError
+                ? `The model reply did not follow the patch format: ${error.message} Resume from saved context to let the model correct it.`
+                : "Task could not produce a valid patch. Check provider settings and the approved file list, then resume from saved context.";
         if (failed?.status === "running")
           await this.sessions
             .recordTask(failed.sessionId, this.input(failed), message, true)

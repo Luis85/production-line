@@ -129,6 +129,34 @@ test('validated file result recovers after patch projection failure without anot
   assert.match(await readFile(join(f.directory, 'local-review', id + '.patch'), 'utf8'), /\+after/);
 });
 
+test('patch protocol failures record a specific reason in the task and interaction events', async t => {
+  const f = await fixture(t, async () => ({ type: 'completed', text: JSON.stringify({ summary: 's'.repeat(2001), files: [{ path: 'checkout.txt', content: 'after\n' }] }) }));
+  const id = await f.create(); await f.settle(id, 'failed');
+  assert.match(f.board.detail(id).error, /^The model reply did not follow the patch format: The summary has 2001 characters; the limit is 2000\. Resume/);
+  const sessionId = f.board.detail(id).sessionId, turn = f.sessions.interactions.turn(sessionId, f.sessions.interactions.view(sessionId).latestTurn.id);
+  assert.equal(f.sessions.interactions.events(sessionId).events.find(event => event.type === 'failed').errorCode, 'patch_summary_invalid');
+  assert.equal(turn.errorCode, 'patch_summary_invalid');
+  assert.match(turn.dispatch.messages[0].text, /the summary is at most 2000 characters/);
+});
+
+test('a patch object wrapped in prose becomes a minimal review patch', async t => {
+  const reply = 'Updated the file as requested:\n```json\n' + JSON.stringify({ summary: 'Changed checkout; tests not run.', files: [{ path: 'checkout.txt', content: 'after\n' }] }) + '\n```\nThanks!';
+  let calls = 0;
+  const f = await fixture(t, async () => { calls++; return { type: 'completed', text: reply }; });
+  const id = await f.create(); await f.settle(id, 'review');
+  const sessionId = f.board.detail(id).sessionId, turnId = f.sessions.interactions.view(sessionId).latestTurn.id;
+  assert.equal(f.sessions.interactions.turn(sessionId, turnId).result.text, reply);
+  const transcript = f.sessions.detail(sessionId).chat.messages.at(-1).text;
+  assert.match(transcript, /^Changed checkout; tests not run\./);
+  assert.match(transcript, /1 line added, 1 removed/);
+  assert.doesNotMatch(transcript, /Thanks!|"files"|\+after/);
+  await f.restart();
+  assert.equal(calls, 1);
+  assert.equal(f.board.detail(id).status, 'review');
+  assert.equal(f.sessions.detail(sessionId).chat.messages.at(-1).text, transcript);
+  assert.equal(f.board.detail(id).patch, 'diff --git "a/checkout.txt" "b/checkout.txt"\n--- "a/checkout.txt"\n+++ "b/checkout.txt"\n@@ -1 +1 @@\n-before\n+after\n');
+});
+
 test('out-of-scope patch output never becomes a durable completed file result', async t => {
   const f = await fixture(t, async () => ({ type: 'completed', text: JSON.stringify({ summary: 'Invalid fixture', files: [{ path: '../outside', content: 'bad' }] }) }));
   const id = await f.create(); await f.settle(id, 'failed');
