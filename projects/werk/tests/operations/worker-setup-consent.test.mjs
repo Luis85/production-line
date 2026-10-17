@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, readFile, writeFile, realpath, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, realpath, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
+import { ownWorkspace } from '../helpers/workspace-processes.mjs';
 const execute = promisify(execFile), installer = resolve('bin/apps/worker/cli.mjs');
 
 test('installed worker retains repository consent and edited profiles, then uses an owned task worktree', { timeout: 120000 }, async t => {
@@ -13,7 +14,7 @@ test('installed worker retains repository consent and edited profiles, then uses
   let running = false;
   const cli = async (...args) => JSON.parse((await execute(process.execPath, [entry, ...args], { cwd, timeout: 40000, maxBuffer: 1048576 })).stdout);
   const git = (...args) => execute('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', ...args], { cwd });
-  t.after(async () => { try { if (running) await cli('stop'); } finally { await rm(cwd, { recursive: true, force: true }); } });
+  await ownWorkspace(t, cwd, async () => { if (running) await cli('stop'); });
   await git('init', '-b', 'main'); await git('config', 'core.autocrlf', 'false');
   await writeFile(join(cwd, 'approved.txt'), 'Committed input\n');
   await git('add', 'approved.txt'); await git('commit', '-m', 'Initial fixture');

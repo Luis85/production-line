@@ -2,14 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, rm, readFile, writeFile, realpath } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, realpath } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
+import { ownWorkspace } from '../helpers/workspace-processes.mjs';
 const exec = promisify(execFile), installer = resolve('bin/apps/worker/cli.mjs');
 test('copied worker CLI manages drafts, tasks, queues and history without a browser', { timeout: 120000 }, async t => {
   const cwd = await realpath(await mkdtemp(join(tmpdir(), 'werk-management-cli-'))), entry = join(cwd, 'bin/apps/worker/cli.mjs'); let running = false;
   const cli = async (...args) => { const result = await exec(process.execPath, [entry, ...args], { cwd, timeout: 40000 }); return JSON.parse(result.stdout); };
-  t.after(async () => { try { if (running) await cli('stop'); } finally { await rm(cwd, { recursive: true, force: true }); } });
+  await ownWorkspace(t, cwd, async () => { if (running) await cli('stop'); });
   await exec(process.execPath, [installer, 'init', '--provider', 'openai-api'], { cwd });
   const schema = await cli('schema'); for (const name of ['feature edit', 'feature submit', 'feature result', 'feature wait', 'task retry', 'file-task priority', 'queue pause', 'session restore']) assert.ok(schema.commands[name], name);
   await cli('start', '--port', '0'); running = true;

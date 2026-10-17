@@ -42,6 +42,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Fixed
 
+- Test fixtures that start portable apps no longer leave detached workers running on Windows after a failed, timed-out or interrupted run. Cleanup stops each app and then terminates any process still running from the fixture's temporary directory. It waits for those processes to exit before removing the directory.
 - An exhausted tool budget no longer removes tools silently or fails the invocation. Calls beyond the limit or after the tool window, and calls stopped when the window ends, return a clear tool error telling the model to finish or ask the operator. API adapters allow one more response to finish. The Claude Code and Codex bridge returns the error instead of dropping the call.
 - Budget exhaustion is recorded as a `tool_budget_exhausted` interaction event and a `toolBudget` field on the turn, with counts only, and is shown with the latest turn's consumption.
 - Local stdio MCP connections that need no credential can be saved without a secret environment variable. A secret still requires a dedicated variable name, and clearing or changing the variable removes the saved secret instead of passing it to another variable.

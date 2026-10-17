@@ -7,6 +7,7 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { parse } from 'yaml';
 import { initializeWorker } from '../../scripts/runtime/portable/project.mjs';
+import { ownWorkspace } from '../helpers/workspace-processes.mjs';
 const exec = promisify(execFile), installer = resolve('bin/apps/worker/cli.mjs');
 async function project(t, cleanup = true) { const path = await realpath(await mkdtemp(join(tmpdir(), 'werk project worker '))); if (cleanup) t.after(() => rm(path, { recursive: true, force: true })); return path; }
 async function cli(entry, cwd, ...args) { const result = await exec(process.execPath, [entry, ...args], { cwd, timeout: 45000, maxBuffer: 1048576 }); return JSON.parse(result.stdout); }
@@ -30,7 +31,7 @@ test('project init installs a self-contained worker, configurable template and D
 });
 test('installed native worker consumes files, exports review patches and keeps task identity across restart', { skip: process.platform === 'win32', timeout: 120000 }, async t => {
   const cwd = await project(t, false), entry = join(cwd, 'bin/apps/worker/cli.mjs'); let running = false;
-  t.after(async () => { try { if (running) await cli(entry, cwd, 'stop'); } finally { await rm(cwd, { recursive: true, force: true }); } });
+  await ownWorkspace(t, cwd, async () => { if (running) await cli(entry, cwd, 'stop'); });
   await cli(installer, cwd, 'init');
   const configPath = join(cwd, '.werk/worker.json'), config = JSON.parse(await readFile(configPath, 'utf8')); config.features.pollMs = 250; await writeFile(configPath, JSON.stringify(config), { mode: 0o600 });
   const provider = join(cwd, 'provider-fixture'); await writeFile(provider, `#!${process.execPath}\nlet input='';for await(const p of process.stdin)input+=p;const text=input.includes('Implement the requested changes')?JSON.stringify({summary:'Review fixture patch',files:[{path:'approved.txt',content:'changed\\n'}]}):'Feature protocol fixture completed.';console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text}}));\n`, { mode: 0o700 });
