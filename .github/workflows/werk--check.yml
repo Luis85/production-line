@@ -41,6 +41,9 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: ${{ env.FORGE_PROJECT_PATH }}/package-lock.json
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
       - run: npm ci --ignore-scripts
       - run: npm run check
       - run: npm run audit:dependencies

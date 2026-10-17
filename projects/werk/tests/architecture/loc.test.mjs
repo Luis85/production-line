@@ -41,6 +41,7 @@ test('Python selection falls back past unavailable aliases and old interpreters 
   for (const unavailable of [
     { status: 9009, stdout: '', stderr: 'Python was not found; install it from the Store.' },
     { status: 0, stdout: '2\n', stderr: '' },
+    { status: null, stdout: '', stderr: '', error: Object.assign(Error('Timed out'), { code: 'ETIMEDOUT' }) },
     { status: null, stdout: '', stderr: '', error: Object.assign(Error('Not found'), { code: 'ENOENT' }) },
   ]) {
     const commands = [];
@@ -63,6 +64,28 @@ test('Python selection falls back past unavailable aliases and old interpreters 
   }), /Python LOC tokenization failed: TokenError/);
   assert.deepEqual(commands, ['python3', 'python3'], 'Source errors from a usable interpreter must not retry another binary');
   assert.throws(() => countPythonLines('', () => ({ status: 9009, stdout: '', stderr: 'Unavailable' })), /Python 3 is required/);
+});
+
+test('Python discovery tolerates slow startup while retaining bounded and actionable failures', () => {
+  const commands = [];
+  const timeout = { status: null, stdout: '', stderr: '', error: Object.assign(Error('Timed out'), { code: 'ETIMEDOUT' }) };
+  assert.equal(countPythonLines('value = 1', (binary, args, options) => {
+    commands.push(binary);
+    if (args[1].includes('version_info')) {
+      // Simulate an interpreter that needs five seconds on a busy runner, without sleeping.
+      assert.ok(Number.isFinite(options.timeout) && options.timeout <= 30000, 'Discovery must remain bounded');
+      return options.timeout <= 5000 ? timeout : { status: 0, stdout: '3\n', stderr: '' };
+    }
+    return { status: 0, stdout: '1\n', stderr: '' };
+  }), 1);
+  assert.deepEqual(commands, ['python3', 'python3'], 'A slow but usable interpreter should not fall through to another alias');
+  assert.throws(() => countPythonLines('', (binary) => binary === 'python3'
+    ? timeout : { status: 9009, stdout: '', stderr: 'Unavailable' }), error => {
+    assert.ok(error instanceof Error);
+    assert.match(error.message, /python3: startup timed out after \d+ seconds/);
+    assert.match(error.message, /python: exit 9009/);
+    return true;
+  });
 });
 
 test('Vue counts template, styles and TypeScript but excludes each language’s actual comments', () => {

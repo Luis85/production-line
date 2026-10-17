@@ -111,16 +111,24 @@ export function countPythonLines(text, run = spawnSync) {
     '        if lines[line - 1].strip(): code.add(line)',
     'print(json.dumps(len(code)))',
   ].join('\n');
+  const failures = [];
+  const probeTimeout = 15000;
   for (const binary of ['python3', 'python']) {
     // Windows Store aliases may exist but fail to launch an interpreter. Probe before tokenizing.
-    const probe = run(binary, ['-c', 'import sys; print(sys.version_info[0])'], { encoding: 'utf8', timeout: 3000, maxBuffer: 4096, windowsHide: true });
+    const probe = run(binary, ['-c', 'import sys; print(sys.version_info[0])'], { encoding: 'utf8', timeout: probeTimeout, maxBuffer: 4096, windowsHide: true });
     const version = Number(probe.stdout?.trim());
-    if (probe.error || probe.status !== 0 || !Number.isInteger(version) || version < 3) continue;
+    if (probe.error || probe.status !== 0 || !Number.isInteger(version) || version < 3) {
+      const timedOut = probe.error && 'code' in probe.error && probe.error.code === 'ETIMEDOUT';
+      const reason = timedOut ? `startup timed out after ${probeTimeout / 1000} seconds`
+        : probe.error?.message ?? (probe.status !== 0 ? `exit ${probe.status}` : `unsupported major version ${JSON.stringify(probe.stdout?.trim())}`);
+      failures.push(`${binary}: ${reason}`);
+      continue;
+    }
     const result = run(binary, ['-c', program], { input: text, encoding: 'utf8', timeout: 10000, maxBuffer: 1048576, windowsHide: true });
     if (result.error || result.status !== 0) throw new Error('Python LOC tokenization failed: ' + (result.error?.message ?? result.stderr));
     return JSON.parse(result.stdout);
   }
-  throw new Error('Python 3 is required for the Python test LOC check; install python3 or python on PATH.');
+  throw new Error('Python 3 is required for the Python test LOC check; install python3 or python on PATH. ' + failures.join('; '));
 }
 
 export function countCodeLines(text, file) {
