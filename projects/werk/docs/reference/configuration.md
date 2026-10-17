@@ -355,10 +355,59 @@ Each assigned coding task gets a detached Git worktree under
 edits are excluded. The managed directory is excluded through Git's local exclude
 file. Source checkout files stay separate from task edits; background pulls do
 not change an existing task's base. Worktrees survive worker shutdown and restart.
-Review them before cleanup; use `git worktree list` and Git's normal
-`git worktree remove PATH` for reviewed clean worktrees. Do not delete a worktree
-while a task is using it. Back up repositories and retained worktrees separately
-from private worker state.
+Back up repositories and retained worktrees separately from private worker state.
+
+Set the optional `repositories.worktreeDirectory` to an absolute folder outside
+every checkout to create new task worktrees there instead, for example when
+project tools such as a vault linter scan `.werk/worktrees`:
+
+```json
+{ "repositories": { "pollMs": 30000, "worktreeDirectory": "D:\\werk-worktrees", "items": [ { "id": "app", "path": "D:\\src\\app", "remote": "origin", "watch": true } ] } }
+```
+
+The parent folder must exist; the worker creates the folder itself as an ordinary
+directory and rejects a location inside a checkout or its Git directory. Several
+repositories can share it: names start with the assignment ID. On Windows choose
+a short path; worktree and Git administration path limits are checked before
+checkout. Existing worktrees stay at the location recorded in their ownership
+marker and are still verified there after the setting changes. The default
+(setting omitted or empty) keeps `<repository>/.werk/worktrees/`. `settings set`
+replaces the whole `repositories` object, so include `items` and the directory.
+The setting applies to assigned repositories; unassigned legacy Git folders keep
+the in-checkout location.
+
+Checkout uses Git's parallel checkout (`checkout.workers`, at most 8); on Windows
+it falls back to a serial checkout when the worktree's Git administration path
+exceeds Git's 220-byte `GIT_DIR` limit, so short repository paths check out
+faster. One
+120-second budget covers repository queueing, fetch, checkout and verification of
+a new task worktree; with `"background": true` on file-task creation the request
+returns at once and the budget is 10 minutes. `worktree add` itself may run up to
+5 minutes within that budget, independent of short Git metadata timeouts.
+
+Deleting a file task removes its worktree when it is clean and still verifiably
+owned: the recorded identity (device, inode, creation time), ownership marker,
+registration with the repository, detached HEAD at the recorded base, and no
+operator lock. A worktree with uncommitted or untracked files is kept unless the
+delete sets `discardChanges: true`. One with commits on its detached HEAD, a lock,
+or any symbolic link or junction inside is always kept for manual review: Git for
+Windows deletes through junctions, also in ignored folders and without `--force`.
+`removeWorktree: false` keeps it; `removeWorktree: true` fails the deletion unless
+the worktree was removed. The delete response includes `worktree.outcome`
+(`removed`, `kept` with `reason`, or `not_applicable`).
+
+`GET /api/worktrees` lists ownership records of each assigned repository with
+state `present`, `missing`, `incomplete` (interrupted checkout), `locked`,
+`unregistered` or `invalid`, the location (`repository` or `external`) and the
+`taskId` of a file task still using it. `POST /api/worktrees`
+`{"action":"prune","dryRun":true}` reports what would be removed;
+without `dryRun` it removes, under the same rules, worktrees that no file task
+uses, such as those left by interrupted admissions or retained Codex runs. `id`
+selects one worktree name, `repositoryId` one assignment and `discardChanges`
+also removes changed and interrupted ones. Pruning requires no queued, running or
+admitting work; a dry run is always available. Never delete task worktree folders
+with a recursive file delete; use these commands or `git worktree remove` after
+checking for links.
 
 Local file tasks select an assignment ID in their existing `repository` field;
 an assigned absolute checkout path is also accepted. With assignments configured,

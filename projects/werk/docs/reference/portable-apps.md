@@ -83,12 +83,19 @@ Use **Settings → Repositories** or
 `repositories` object: `{pollMs: 30000, items: [{id, path, remote, branch?, watch}]}`.
 Assign existing local Git checkouts; the worker watches/fetches each enabled
 repository and only fast-forwards clean bases. Coding tasks use retained worktrees
-under each checkout's `.werk/worktrees`. Drain tasks before changing assignments.
+under each checkout's `.werk/worktrees`, or under the optional absolute
+`repositories.worktreeDirectory` outside every checkout so project tools do not
+scan task copies. Drain tasks before changing assignments.
 Worker JSON passed through `--config` can seed assignments; saved private settings
 take precedence after the first start. Git must be installed on the worker host.
 
 Use `repository status` to inspect assignments and `repository sync --id app`
-to check/pull one assignment; omit `--id` for all. The same private endpoint is
+to check/pull one assignment; omit `--id` for all. `worktrees list` shows the task
+worktrees this worker created, their state and the file task still using each.
+`worktrees prune --dry-run` previews and `worktrees prune [--id NAME]` removes
+clean ones no file task uses; add `--discard-changes true` to also remove changed
+or interrupted ones. Worktrees with commits, locks, symbolic links or junctions
+are always kept for manual review. The same private endpoint is
 available with `api --path /api/repositories`. Local file tasks select the assignment ID
 in their existing `repository` field. Assigning repositories does not change
 mock execution or give provider Chat arbitrary filesystem tools. See the
@@ -302,7 +309,11 @@ approved-file execution contract. Supply an explicit repository and paths:
 {"title":"Explain the acceptance rule","instruction":"Add a comment explaining the rule.","provider":"codex-cli","repository":"/absolute/project","paths":["acceptance.txt"]}
 ```
 
-Inspect `file-task list`, `file-task get --id ID`, or use `file-task action --file`
+Add `"background": true` to return immediately: the task appears once its Git
+worktree is ready, and `file-task list` shows it under `preparations` meanwhile,
+or with the reason it failed (dismiss that entry with `file-task delete --id ID`).
+Use it with large repositories, where checkout can outlast the CLI request
+timeout. Inspect `file-task list`, `file-task get --id ID`, or use `file-task action --file`
 for taskboard operations. File tasks capture approved input and produce review
 patches. They do not apply changes or run tests. `session action --file` supports
 rename/archive/delete with the same restrictions as the webview. `settings set`
@@ -448,6 +459,9 @@ explicit IDs and do not change the webview selection, except `session select`.
 | `session select` | `--id SESSION_ID`; explicitly changes the selected webview session. |
 | `file-task create` | `--file PATH\|-`; approved-file input contract shown by `schema`. |
 | `file-task get\|cancel\|retry\|archive\|restore\|delete` | `--id TASK_ID`; retry uses captured input/files; archive/restore are explicit, repeatable states. |
+| `file-task delete` | Also removes the task's Git worktree when clean, otherwise keeps it and reports why. `--remove-worktree false` keeps it; `true` fails unless removed. `--discard-changes true` removes uncommitted/untracked files too. |
+| `worktrees list` | Task worktrees of assigned repositories: name, location, state and the file task using each. |
+| `worktrees prune` | Optional `--id NAME`, `--repository ID`, `--discard-changes true`, `--dry-run`; removes worktrees no file task uses. Requires no queued or running work, except with `--dry-run`. |
 | `file-task priority` | `--id TASK_ID --priority 1\|2`; queued tasks only. |
 | `task wait`, `file-task wait` | `--id ID [--timeout-ms N]`; stopped/action-required polling, default 60 seconds, maximum 24 hours. Inspect status to distinguish success, failure, cancellation or pending input; timeout exits 1 without cancelling. |
 | `queue get`, `queue settings` | Executor/session state or redacted configuration. |

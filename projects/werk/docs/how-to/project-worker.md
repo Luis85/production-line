@@ -121,7 +121,11 @@ In **New request**, expand **Repository files · optional**, enable **Allow chan
 to approved repository files**, and select an assigned repository and paths.
 The same **Create request** action captures committed files in a task worktree
 beneath that repository's `.werk/worktrees` directory and returns a review patch.
-Feature-folder patch
+If project tools such as a vault linter scan that folder, set
+`repositories.worktreeDirectory` to a short absolute folder outside the checkout.
+Deleting a file task removes its clean, verified worktree; changed or protected
+worktrees remain available for inspection. `worktrees list` and
+`worktrees prune --dry-run` find retained worktrees. Feature-folder patch
 requests still target this installed project's directory; include it among the
 assignments when using that intake. Ordinary Chat only receives its supplied
 conversation input, and mock execution remains simulated. Every task still has

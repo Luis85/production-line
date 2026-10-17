@@ -121,3 +121,17 @@ test('repository implementation preview requires file access and an enabled expl
   state.toolAccess.builtins.commands[0].enabled = false; assert.equal(values.implementationEnabled.value, false);
   state.toolAccess.builtins.commands[0].enabled = true; state.toolAccess.builtins.files = false; assert.equal(values.implementationEnabled.value, false);
 });
+
+
+test('assigned repository choices display the complete checkout while the unified command submits its ID', async () => {
+  let submitted;
+  const f = await editorFixture(async command => { submitted = command; return { session: { id: command.id }, chat: {} }; });
+  f.state.settings.repositories.items = [{ id: 'web', path: '/projects/long-checkout/web', remote: 'origin', watch: true }, { id: 'api', path: '/projects/api', remote: 'origin', watch: true }];
+  f.intake.fileChanges = true; f.intake.repository = 'missing';
+  assert.equal(f.canCreate.value, false);
+  f.intake.repository = 'web'; assert.equal(f.canCreate.value, true);
+  await f.create(); assert.equal(submitted.files.repository, 'web');
+  const source = await readFile(new URL('../../src/worker/webview/components/RunTask.vue', import.meta.url), 'utf8');
+  assert.match(source, /selectedRepository\.path/);
+  assert.match(source, /aria-describedby=["'][^"']*file-task-checkout/);
+});

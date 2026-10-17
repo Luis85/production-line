@@ -1,10 +1,12 @@
 import { resolve } from 'node:path';
 import { DomainError } from '../../shared/errors.js';
 import { validateRepositoryConfiguration, type RepositoryAssignment, type RepositoryConfiguration } from '../application/repositories.js';
-import { createRepositoryWorktree, repositoryGit, RepositoryGitError, repositoryRoot, type RepositoryRoot, type RepositoryWorktree } from './repositories-git.js';
+import { createRepositoryWorktree, removeRepositoryWorktree, repositoryGit, RepositoryGitError, repositoryRoot, retainedWorktrees, worktreeName, WorktreeProblem, type RemovalOptions, type RepositoryRoot, type RepositoryWorktree, type RetainedWorktree, type WorktreeRemoval } from './repositories-git.js';
 
-export { prepareRepositoryWorktree } from './repositories-git.js';
-export type { RepositoryAssignment, RepositoryConfiguration, RepositoryWorktree };
+export { prepareRepositoryWorktree, RepositoryGitError, WorktreeProblem } from './repositories-git.js';
+export type { RepositoryAssignment, RepositoryConfiguration, RepositoryWorktree, RetainedWorktree, WorktreeRemoval };
+/** Checkout and removal of a large tree may outlast metadata commands; callers still bound the whole operation. */
+export const WORKTREE_CHECKOUT_TIMEOUT_MS = 300000;
 export type RepositoryState = 'pending' | 'syncing' | 'ready' | 'dirty' | 'ahead' | 'behind' | 'diverged' | 'error';
 export interface RepositoryStatus extends RepositoryAssignment {
   state: RepositoryState;
@@ -96,21 +98,54 @@ export class RepositoryManager {
       // A network failure leaves an inspectable status; local committed work remains available offline.
       const root = await this.inspectRoot(item, bounded);
       if (!pinnedShared && item.branch && (await repositoryGit(root.path, ['branch', '--show-current'], bounded, this.timeoutMs)).trim() !== item.branch) throw new DomainError('conflict', 'Check out the assigned branch before starting a task.');
-      return createRepositoryWorktree(root, item.id, taskKey, bounded, baseCommit, this.timeoutMs);
-    });
+      return createRepositoryWorktree(root, item.id, taskKey, bounded, baseCommit, this.timeoutMs, this.worktreeOptions());
+    }, bounded);
+  }
+  /** Re-verify a retained task worktree without fetching or creating anything. */
+  async verifyWorktree(selector: string, taskKey: string, signal: AbortSignal, baseCommit?: string): Promise<RepositoryWorktree> {
+    this.ensureOpen(); const item = this.resolve(selector), bounded = AbortSignal.any([signal, this.shutdown.signal]);
+    return this.enqueue(item.id, async () => {
+      const root = await this.inspectRoot(item, bounded);
+      return createRepositoryWorktree(root, item.id, taskKey, bounded, baseCommit, this.timeoutMs, { ...this.worktreeOptions(), reuseOnly: true });
+    }, bounded);
+  }
+  /** Ownership records of every assigned repository; one unavailable repository does not hide the others. */
+  async worktrees(signal: AbortSignal): Promise<Array<{ repositoryId: string; worktrees: RetainedWorktree[]; error?: string }>> {
+    this.ensureOpen(); const bounded = AbortSignal.any([signal, this.shutdown.signal]);
+    return Promise.all(this.config.items.map(item => this.enqueue(item.id, async () => {
+      try { return { repositoryId: item.id, worktrees: await retainedWorktrees(await this.inspectRoot(item, bounded), bounded, this.timeoutMs) }; }
+      catch (error) { return { repositoryId: item.id, worktrees: [], error: error instanceof RepositoryGitError || error instanceof WorktreeProblem || error instanceof RepositoryProblem ? error.message : 'Repository unavailable or invalid. Check its local path and Git configuration.' }; }
+    }, bounded)));
+  }
+  /** Remove one owned worktree, identified by name or by the task key that created it. */
+  async removeWorktree(selector: string, target: { name?: string; taskKey?: string }, signal: AbortSignal, options: RemovalOptions = {}): Promise<WorktreeRemoval> {
+    this.ensureOpen(); const item = this.resolve(selector), bounded = AbortSignal.any([signal, this.shutdown.signal]);
+    const name = target.name ?? worktreeName(item.id, target.taskKey ?? '');
+    return this.enqueue(item.id, async () => removeRepositoryWorktree(await this.inspectRoot(item, bounded), name, bounded, this.timeoutMs, { checkoutTimeoutMs: WORKTREE_CHECKOUT_TIMEOUT_MS, ...options }), bounded);
+  }
+  private worktreeOptions() {
+    return { checkoutTimeoutMs: WORKTREE_CHECKOUT_TIMEOUT_MS, ...(this.config.worktreeDirectory ? { directory: this.config.worktreeDirectory } : {}) };
   }
   async close() {
     if (!this.closed) { this.closed = true; this.running = false; if (this.timer) clearTimeout(this.timer); this.shutdown.abort(); }
     await Promise.allSettled([...this.operations.values()]);
   }
   private ensureOpen() { if (this.closed) throw new DomainError('unavailable', 'Repository watcher is stopped.'); }
-  private enqueue<T>(id: string, action: () => Promise<T>): Promise<T> {
+  private enqueue<T>(id: string, action: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     const previous = this.operations.get(id) ?? Promise.resolve();
-    const operation = previous.catch(() => {}).then(action);
+    const operation = previous.catch(() => {}).then(() => { signal?.throwIfAborted(); return action(); });
     this.operations.set(id, operation);
     const clear = () => { if (this.operations.get(id) === operation) this.operations.delete(id); };
     void operation.then(clear, clear);
-    return operation;
+    if (!signal) return operation;
+    // A caller's deadline also covers waiting behind another operation of this repository.
+    // The queued operation stays in order and fails fast when it starts.
+    return new Promise<T>((resolve, reject) => {
+      const abort = () => reject(signal.reason);
+      if (signal.aborted) { void operation.catch(() => {}); abort(); return; }
+      signal.addEventListener('abort', abort, { once: true });
+      operation.then(value => { signal.removeEventListener('abort', abort); resolve(value); }, error => { signal.removeEventListener('abort', abort); reject(error); });
+    });
   }
   private async inspectRoot(item: RepositoryAssignment, signal: AbortSignal) {
     await this.beforeRepositoryUse?.(item);

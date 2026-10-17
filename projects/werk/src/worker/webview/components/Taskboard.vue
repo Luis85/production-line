@@ -215,7 +215,17 @@ onDeactivated(() => {
       "Evidence loading was paused when you left History. Retry to load this task.";
   detailLoading.value = false;
 });
-async function action(body: { id: string; action: string; priority?: number }) {
+const preparations = computed(() => state.board?.preparations ?? []);
+// Delete removes a clean Git worktree by default; the worker keeps a changed one and says why.
+const removeWorktree = ref(true);
+const worktreeNotice = ref("");
+async function dismissPreparation(id: string) {
+  if (busy.value) return;
+  busy.value = true;
+  try { await workspaceAction("/api/taskboard/action", { id, action: "delete" }); }
+  finally { busy.value = false; }
+}
+async function action(body: { id: string; action: string; priority?: number; removeWorktree?: boolean }) {
   if (busy.value) return;
   const failedAdmission = state.board?.tasks.find(item => item.id === body.id)?.admissionFailure || (detail.value?.id === body.id && detail.value.admissionFailure);
   if (body.action === "retry" && failedAdmission) return;
@@ -230,6 +240,7 @@ async function action(body: { id: string; action: string; priority?: number }) {
       return;
     }
     removing.value = false;
+    worktreeNotice.value = result.worktree?.outcome === "kept" ? `The task was deleted; its Git worktree was kept. ${result.worktree.reason}` : "";
     if (body.action === "delete") await closeDetail();
     else await readDetail(body.id);
   } finally {
@@ -311,6 +322,19 @@ function download() {
       A task result could not be saved. Check free disk space and
       state-directory permissions before restarting.
     </p>
+    <p v-if="worktreeNotice" role="status" class="notice">{{ worktreeNotice }}</p>
+    <ul v-if="preparations.length" class="file-task-preparations" aria-label="File tasks being prepared">
+      <li v-for="item in preparations" :key="item.id">
+        <strong>{{ item.title }}</strong>
+        <span v-if="item.state === 'preparing'" role="status" class="muted">
+          {{ item.phase === "waiting" ? "Waiting for an earlier task to be admitted…" : item.phase === "worktree" ? "Preparing its Git worktree…" : "Saving approved file snapshots…" }}
+        </span>
+        <template v-else>
+          <span role="alert" class="error-text">Not created: {{ item.error }}</span>
+          <UButton color="neutral" variant="ghost" size="xs" :disabled="busy" @click="dismissPreparation(item.id)">Dismiss</UButton>
+        </template>
+      </li>
+    </ul>
     <div v-if="state.settings?.board.paused" class="notice">
       Queue paused. The running task can finish; queued chat, file tasks and
       orchestrator assignments wait.
@@ -490,10 +514,14 @@ function download() {
         </div>
         <div v-if="removing" class="confirm-row">
           <p>Delete the saved task and its board evidence?</p>
+          <label v-if="detail.worktree" class="check-label">
+            <input v-model="removeWorktree" type="checkbox" />
+            Also remove its Git worktree when it has no uncommitted or untracked changes
+          </label>
           <UButton
             color="error"
             :disabled="busy"
-            @click="action({ id: detail.id, action: 'delete' })"
+            @click="action({ id: detail.id, action: 'delete', ...(removeWorktree ? {} : { removeWorktree: false }) })"
           >
             Confirm deletion
           </UButton>

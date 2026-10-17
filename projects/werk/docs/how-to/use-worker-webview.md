@@ -248,7 +248,8 @@ polling interval. Use **Save assignments** to persist edits. Dirty changes and
 local/divergent commits are preserved.
 
 Each assigned coding task receives a detached worktree beneath the selected repository's
-`.werk/worktrees` directory. Worktrees are retained across restart. See
+`.werk/worktrees` directory, or beneath **Task worktree folder** when set to an
+absolute folder outside the checkouts. Worktrees are retained across restart. See
 [repository configuration](../reference/configuration.md#assigned-git-repositories)
 for startup seeds, saved-setting precedence, polling and cleanup.
 
@@ -259,6 +260,12 @@ In **New request**, keep your instructions in the same composer and expand
 files**, choose an assigned repository and list the relative paths the request
 may use. Provider, task name and agent choices remain in Task options. Submit
 with **Create request**; the same request retains its instructions and tracking.
+
+Submission returns while the worker prepares the Git worktree. The task board
+shows **Preparing its Git worktree…** until the task appears, or explains the
+preparation failure with a **Dismiss** action. Deleting a task also removes its
+clean, verified worktree; clear the confirmation checkbox to retain it. Changed,
+locked or otherwise protected worktrees remain available for inspection.
 
 The worker captures approved files from a pinned worktree when accepting the
 request. When no repositories are assigned, the absolute-directory input remains

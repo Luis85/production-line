@@ -10,6 +10,7 @@ import type { DevelopmentScopeView, DevelopmentEvidence } from './development.js
 import type { DefinitionSnapshot } from './definitions.js';
 import type { ToolWorktreeIdentity } from './tool-runtime.js';
 import type { ProviderId } from './provider-contract.js';
+import type { LocalTaskPreparation } from './local-tasks.js';
 import type { InteractionView } from './interactions.js';
 import type { RequestPhase, GatePolicy } from './request-gates.js';
 
@@ -86,6 +87,8 @@ export interface LocalTaskDetailView extends LocalTaskView {
 export interface LocalTaskboardView {
   settings: WorkerBoardSettings;
   tasks: LocalTaskSummaryView[];
+  /** Background admissions (`background: true`) until their task appears, or failed with a reason. Absent from older workers. */
+  preparations?: LocalTaskPreparation[];
   persistenceError: boolean;
   running: number;
 }
