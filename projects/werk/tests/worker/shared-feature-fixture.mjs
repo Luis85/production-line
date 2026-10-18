@@ -54,7 +54,7 @@ export async function fixture(t, options = {}) {
   const controls = { claimAckBlocked: false, submitAckBlocked: false, patchAckBlocked: false, changeAfterClaim: false, saveBlocked: false, admit: true, inspect: null, repositoryFailures: 0 };
   const events = [], repositories = new Map(), tasks = new Map();
   const lifecycleAttempts = [], patchAttempts = [], submits = [];
-  let counter = 0, primaryExecutions = 0, featureCommits = 0, journal, requests, headGate, diagnosticGate;
+  let counter = 0, primaryExecutions = 0, featureCommits = 0, journal, requests, headGate, diagnosticGate, reviewSaveGate;
   /** @type {SharedFeatureIntake} */
   let intake;
   const nextCommit = () => (++counter).toString(16).padStart(40, '0');
@@ -101,7 +101,13 @@ export async function fixture(t, options = {}) {
   }
   const ports = {
     load: () => journal.load(),
-    async save(state) { if (controls.saveBlocked) throw Error('Fixture state write failure'); await journal.save(state); },
+    async save(state) {
+      if (controls.saveBlocked) throw Error('Fixture state write failure');
+      await journal.save(state);
+      if (reviewSaveGate && state.records.some(record => record.status === 'ready_for_review' && record.reviewNote && !record.pending && !record.publishedReview)) {
+        const gate = reviewSaveGate; reviewSaveGate = undefined; gate.enter(); await gate.wait;
+      }
+    },
     repository,
     loadWorkflow: (repo, commit, configPath) => loadFeatureWorkflowSnapshot({ commit, configPath, readBlob: (at, path) => repo.readBlob(at, path) }),
     ready: (markdown, snapshot) => validateFeatureReadiness(markdown, snapshot.readyCheck, undefined, snapshot.template),
@@ -139,6 +145,7 @@ export async function fixture(t, options = {}) {
       requests.recordResult(request.id, task.currentTurnId, task.runId, { type: 'completed', text: JSON.stringify({ summary: 'Fixture change; tests are not independently verified.', files: [{ path: 'src/navigation.ts', content: 'after\n' }] }) }, { 'output.protocolValid': true, 'output.patchPresent': true, 'output.changedFileCount': 1 });
       Object.assign(task, { status: 'review', patch, summary: 'Fixture proposed navigation change.' });
     },
+    blockNextReviewSave() { const entered = Promise.withResolvers(), wait = Promise.withResolvers(); reviewSaveGate = { enter: () => entered.resolve(undefined), wait: wait.promise }; return { entered: entered.promise, release: () => wait.resolve(undefined) }; },
     blockNextDiagnosticRead() { const entered = Promise.withResolvers(), wait = Promise.withResolvers(); diagnosticGate = { enter: () => entered.resolve(undefined), wait: wait.promise }; return { entered: entered.promise, release: () => wait.resolve(undefined) }; },
     blockNextHead() { const entered = Promise.withResolvers(), wait = Promise.withResolvers(); headGate = { enter: () => entered.resolve(undefined), wait: wait.promise }; return { entered: entered.promise, release: () => wait.resolve(undefined) }; },
   };

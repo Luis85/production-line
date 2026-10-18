@@ -29,7 +29,7 @@ export class SharedFeatureIntake {
   constructor(ports: SharedIntakePorts) { this.ports = ports; this.lifecycle = new SharedFeatureLifecycle(ports, () => this.save()); }
   get enabled() { return this.initialized && this.state.config.enabled; }
   get busy() { return !!this.syncing || this.configuring || this.responses > 0; }
-  requiredRepositoryIds(): string[] { return [...new Set([...(this.enabled ? [this.state.config.repositoryId] : []), ...this.state.records.filter(record => !sharedTerminal(record.status) || sharedTaskActive(record) || record.publication !== 'synced').map(record => record.binding.repositoryId)])]; }
+  requiredRepositoryIds(): string[] { return [...new Set([...(this.enabled ? [this.state.config.repositoryId] : []), ...this.state.records.filter(record => !sharedTerminal(record.status) || sharedTaskActive(record) || this.lifecycle.publication(record) !== 'synced').map(record => record.binding.repositoryId)])]; }
   /** Retain provenance across binding changes without exposing request contents or credentials. */
   sourceForTask(taskId: string): { repositoryId: string; path: string } | undefined {
     const record = this.state.records.find(record => record.taskId === taskId);
@@ -42,14 +42,15 @@ export class SharedFeatureIntake {
     return record.submitted || reference.key === existingKey ? reference : undefined;
   }
   get binding() { return this.initialized ? structuredClone(this.state.config) : undefined; }
-  async init() { this.state = await this.ports.load(); this.initialized = true; }
+  async init() { this.state = await this.ports.load(); this.refreshPublications(); this.initialized = true; }
   start() { if (!this.timer && !this.stopping.signal.aborted) this.schedule(); }
   private schedule() {
     if (this.stopping.signal.aborted) return;
     this.timer = setTimeout(() => { this.timer = undefined; void this.sync().finally(() => this.schedule()); }, this.state.config.pollMs);
     this.timer.unref();
   }
-  private save() { return this.ports.save(this.state); }
+  private refreshPublications() { for (const record of this.state.records) record.publication = this.lifecycle.publication(record); }
+  private save() { this.refreshPublications(); return this.ports.save(this.state); }
   view(blockedReason: string | null = null): SharedIntakeView {
     const workflow = this.snapshot;
     const locals = this.state.records.filter(record => bindingKey(record.binding) === bindingKey(this.state.config)).map(record => this.publicRecord(record));
@@ -64,7 +65,8 @@ export class SharedFeatureIntake {
     };
   }
   private publicRecord(record: SharedFeatureRecord): SharedFeatureView {
-    const { id, name, title, status, owner, sourceCommit, updatedAt, ready, done, featureBranch, reviewNote, taskNote, publication, error, taskId } = record;
+    const { id, name, title, status, owner, sourceCommit, updatedAt, ready, done, featureBranch, reviewNote, taskNote, error, taskId } = record;
+    const publication = this.lifecycle.publication(record);
     const task = record.task;
     const responseStatus = task?.response?.status;
     const taskResponse: SharedFeatureView['taskResponse'] = task && (task.uiResponse || task.response) ? {
@@ -81,7 +83,7 @@ export class SharedFeatureIntake {
       if (this.stopping.signal.aborted) throw new DomainError('unavailable', 'Worker is stopping.');
       if (this.syncing || this.responses) throw new DomainError('conflict', 'Wait for shared synchronization to finish.');
       if (expectedRevision !== this.state.revision) throw new DomainError('conflict', 'Shared intake changed. Reload before saving.');
-      if (bindingKey(config) !== bindingKey(this.state.config) && this.state.records.some(record => !sharedTerminal(record.status) || sharedTaskActive(record) || record.publication !== 'synced')) throw new DomainError('conflict', 'Finish the owned requests and publish their notes before changing the shared repository binding. Disable intake to pause it.');
+      if (bindingKey(config) !== bindingKey(this.state.config) && this.state.records.some(record => !sharedTerminal(record.status) || sharedTaskActive(record) || this.lifecycle.publication(record) !== 'synced')) throw new DomainError('conflict', 'Finish the owned requests and publish their notes before changing the shared repository binding. Disable intake to pause it.');
       if (config.enabled) this.ports.repository(config);
       const previous = this.state;
       this.configuring = true;
@@ -123,7 +125,7 @@ export class SharedFeatureIntake {
   private async reconcile() {
     const signal = this.stopping.signal, config = structuredClone(this.state.config);
     for (const record of this.state.records) {
-      if (bindingKey(record.binding) !== bindingKey(config) && sharedTerminal(record.status) && !sharedTaskActive(record) && record.publication === 'synced') continue;
+      if (bindingKey(record.binding) !== bindingKey(config) && sharedTerminal(record.status) && !sharedTaskActive(record) && this.lifecycle.publication(record) === 'synced') continue;
       await this.lifecycle.reconcile(record, signal);
     }
     if (!config.enabled) { this.fault = null; return; }

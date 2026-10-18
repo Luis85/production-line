@@ -278,6 +278,10 @@ separate states. Typical projections are `ready`, `queued`, `running`,
 `waiting_input`, `needs_rework`, `checking`, `publishing` and `ready_for_review`;
 failures can appear as `failed`, `cancelled`, `interrupted` or `blocked`. Read the
 gate findings and `publication` field alongside the status.
+Publication is `synced` only when the current lifecycle and its review artifact
+have confirmed publication receipts. Preparing a review note keeps publication
+pending until the shared Git push is confirmed; recovery cannot treat an older
+lifecycle receipt as confirmation of the new handoff.
 
 A passing completion evaluation must match the current request input revision,
 input hash, policy digest, run/turn identifiers and immutable output digest. The

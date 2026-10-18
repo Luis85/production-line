@@ -25,6 +25,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Fixed
 
+- Shared Feature Requests only report synchronized publication when the current lifecycle and review note are confirmed. Recovery retries unfinished handoff publication without repeating completed model work.
 - Unresponsive development-service hosts cannot hold startup or shutdown operations indefinitely. Unconfirmed cleanup retains its occupied slot, reports an actionable state and blocks overlapping replacements.
 - Review links preserve the exact request through section navigation; inconsistent ownership and stale checks cannot be presented as current approval evidence. Background refresh preserves controls and readable Markdown summaries.
 - Shared intake observes actual worker admission capacity before claiming ready requests. Temporary holds and preparation failures publish accurate informational Task notes and retain safe retry/publication behavior.

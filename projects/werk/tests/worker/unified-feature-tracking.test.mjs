@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os';
 import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';
 import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
 import { statusServer } from '../../src/worker/dist/worker/status/server.js';
+import { renderSharedSource } from '../../src/worker/dist/worker/infrastructure/features/shared-source.js';
 import { SharedFeatureIntake } from '../../src/worker/dist/worker/application/shared-feature-intake.js';
 import { gateDigest } from '../../src/worker/dist/worker/application/request-gates.js';
 import { defaultSharedIntakeConfig } from '../../src/worker/dist/worker/application/shared-feature-state.js';
@@ -181,7 +182,7 @@ test('shared request provenance follows the retained task binding without exposi
     records: [{
       id: 'original', name: 'original.md', title: 'Retained provenance', status: 'ready_for_review', owner: 'fixture', isLocal: true,
       sourceCommit: commit, updatedAt: '2026-10-17T00:00:00.000Z', ready: { passed: true, issues: [] }, done: null,
-      featureBranch: null, reviewNote: null, publication: 'synced', error: null, taskId: 'shared-one',
+      featureBranch: null, reviewNote: null, publication: 'pending', error: null, taskId: 'shared-one',
       binding: { ...defaultSharedIntakeConfig(), repositoryId: 'original-repository' }, sourcePath: 'features/original.md',
       sourceMarkdown: 'Private retained source content', remoteRevision: 'b'.repeat(64), inputHash: 'c'.repeat(64), claimed: true, submitted: true,
       accepted: { id: 'original', templateId: 'fixture', title: 'Retained provenance', mode: 'patch', provider: 'openai-api', message: 'Retain the original repository.', paths: ['src/file.ts'], priority: 1, criteria: ['Provenance is stable.'], metadata: {}, sections: { goal: 'Retain provenance.', context: 'The binding changed.', verificationPlan: 'Read the retained task.' } },
@@ -190,7 +191,7 @@ test('shared request provenance follows the retained task binding without exposi
     }],
   };
   const unexpected = () => { assert.fail('Reading retained provenance must not access the repository or mutate intake'); };
-  const intake = new SharedFeatureIntake({ load: async () => stored, save: unexpected, repository: unexpected, loadWorkflow: unexpected, ready: unexpected, source: unexpected, renderSource: unexpected, submit: unexpected, inspect: unexpected, canAdmit: unexpected });
+  const intake = new SharedFeatureIntake({ load: async () => stored, save: unexpected, repository: unexpected, loadWorkflow: unexpected, ready: unexpected, source: unexpected, renderSource: renderSharedSource, submit: unexpected, inspect: unexpected, canAdmit: unexpected });
   await intake.init();
   const source = intake.sourceForTask('shared-one'); assert.deepEqual(source, { repositoryId: 'original-repository', path: 'features/original.md' });
   source.path = 'mutated.md'; assert.equal(intake.sourceForTask('shared-one').path, 'features/original.md');

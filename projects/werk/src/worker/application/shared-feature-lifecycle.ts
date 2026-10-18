@@ -19,6 +19,17 @@ export class SharedFeatureLifecycle {
   private save: () => Promise<void>;
   private feedback: SharedFeatureFeedback;
   constructor(ports: SharedIntakePorts, save: () => Promise<void>) { this.ports = ports; this.save = save; this.feedback = new SharedFeatureFeedback(ports, save); }
+  /** A receipt confirms only the exact source and artifacts it published, never later local changes. */
+  publication(record: SharedFeatureRecord): SharedFeatureRecord['publication'] {
+    if (record.publication === 'error') return 'error';
+    if (record.pending || !record.claimed || record.remoteRevision !== record.publishedState
+      || sharedHash(this.ports.renderSource(record)) !== record.publishedState) return 'pending';
+    if (record.status === 'ready_for_review' && (!record.featureCommit || !record.featureBranch || !record.outputDigest || !record.reviewNote)) return 'pending';
+    if (record.reviewNote && (!record.reviewMarkdown || record.publishedReview !== record.reviewNote + ':' + sharedHash(record.reviewMarkdown))) return 'pending';
+    if (record.task && sharedHash(record.task.markdown) !== record.task.revision) return 'pending';
+    if (record.diagnostic && record.taskNote === record.diagnostic.path && record.diagnostic.published !== sharedHash(record.diagnostic.markdown)) return 'pending';
+    return 'synced';
+  }
   private async flush(record: SharedFeatureRecord, repository: SharedRepositoryPort, signal: AbortSignal) {
     if (!record.pending) return;
     const write = record.pending;
@@ -63,7 +74,7 @@ export class SharedFeatureLifecycle {
     if (record.status !== status || record.error !== error) { record.status = status; record.error = error; record.updatedAt = new Date().toISOString(); }
   }
   private settled(record: SharedFeatureRecord) {
-    if (sharedTaskActive(record) || !sharedTerminal(record.status) || record.publication !== 'synced' || record.pending) return false;
+    if (sharedTaskActive(record) || !sharedTerminal(record.status) || this.publication(record) !== 'synced') return false;
     const execution = this.ports.inspect(record.taskId!);
     // Confirmed terminal publications survive removed assignments or archived local
     // history. A resumed task still has to publish its new lifecycle and evidence.
