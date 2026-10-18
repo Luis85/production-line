@@ -23,8 +23,9 @@ remain available without duplicating task identities across sources.
 
 New request starts with the operator's instructions. Task options disclose the
 provider, optional name and reusable agent definition. Follow up continues the
-selected task. Taskboard shows execution and admission capacity. Metrics presents
-observed consumption and health. History retains conversations, review patches
+selected task. Taskboard shows execution and admission capacity. Metrics visualizes
+this worker's current capacity, token allowance, resources and retained execution
+activity. History retains conversations, review patches
 and execution evidence; Settings
 owns provider accounts, queue/duration policy, tools, repositories, shared intake,
 profiles and optional orchestrator enrollment.
@@ -93,6 +94,29 @@ baseline before replacing policy; another operator's change produces a conflict
 instead of an unseen overwrite. A lost acknowledgement requires inspecting the
 saved result before retrying. Existing requirements to pause or drain work still
 apply where needed before changing providers, repositories, profiles or tools.
+
+## Worker Metrics
+
+Metrics brings current activity, the configured UTC token allowance and resource
+observations together for this worker. Reported tokens, reservations and remaining
+allowance stay distinct; the budget is not a provider subscription balance and
+excludes everyday usage outside the worker. Resource meters distinguish worker
+Node-process CPU/RSS/heap from whole-host memory and state-volume free space.
+Model subprocesses are not measured, and no historical resource time series is
+implied.
+
+Execution activity offers acceptance-time windows of 24 hours, 7 days, 30 days or
+all retained attempts. It shows outcomes, average measured duration, reported
+input/output tokens and cost with coverage. Attempts include follow-ups, retries
+and reviews, so they do not count delivered Feature Requests. Unknown measurements
+remain unavailable and reported cost may be an estimate. Original remote lease
+execution keeps its separate evidence contract.
+
+Each source exposes freshness and failed reads retain clearly marked last values.
+Background updates keep controls stable; pausing reads does not freeze measurement
+age. Configuration stays in Settings, detailed evidence and export in History,
+and current work in Taskboard. See the
+[metrics reference](docs/reference/worker-run-metrics.md#metrics-webview).
 
 ## Worker Provider and Agent Definitions
 

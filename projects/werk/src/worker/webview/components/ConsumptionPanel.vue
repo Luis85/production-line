@@ -17,21 +17,14 @@ import SettingsSaveFeedback from '../../../shared/webview/components/SettingsSav
 import USelect from '@nuxt/ui/components/Select.vue';
 import UBadge from '@nuxt/ui/components/Badge.vue';
 import { state } from '../store';
+import { consumptionStateLabel, consumptionBlockedMessage } from '../consumption-view';
 const props = withDefaults(defineProps<{ readonly?: boolean; editorOpen?: boolean }>(), { readonly: false, editorOpen: false });
 const { draft, dirty, stale, locked, validation, canSave, workerAllowance } = consumptionEditor;
 const report = computed(() => state.consumption);
 const count = (value: number) => value.toLocaleString();
 const utcDate = (value: string) => new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }) + ' UTC';
-const stateLabel = computed(() => !report.value ? 'Unavailable' : !report.value.accountingAvailable ? 'Accounting unavailable' : !report.value.policy.enabled ? 'Limits off' : report.value.blocked ? 'New model calls blocked' : 'Within allowance');
-const blockedMessage = computed(() => {
-  switch (report.value?.reason) {
-    case 'accounting_unavailable': return 'Usage accounting is unavailable. New model calls are blocked to avoid losing consumption records. Check the worker storage and restart after resolving the error.';
-    case 'unmeasured_usage': return 'A model call did not report complete usage. New model calls are blocked for this period because the remaining allowance cannot be verified. Review the run evidence; the block clears at the next UTC reset.';
-    case 'exhausted': return 'This worker has used its share for this period. New model calls stay blocked until the next UTC reset or you increase the saved allowance.';
-    case 'insufficient_reservation': return 'The remaining share is smaller than the reservation for another model call. Wait for the next UTC reset or review the allowance and reservation in Settings.';
-    default: return '';
-  }
-});
+const stateLabel = computed(() => consumptionStateLabel(report.value));
+const blockedMessage = computed(() => consumptionBlockedMessage(report.value));
 const hasMeasurements = computed(() => !!report.value?.accountingAvailable);
 </script>
 

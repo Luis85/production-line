@@ -6,7 +6,7 @@ import App from '../src/worker/webview/App.vue';
 import WorkerShell from '../src/worker/webview/components/WorkerShell.vue';
 import TaskboardPage from '../src/worker/webview/pages/TaskboardPage.vue';
 import HistoryPage from '../src/worker/webview/pages/HistoryPage.vue';
-import MonitoringPage from '../src/worker/webview/pages/MonitoringPage.vue';
+import { renderMetricsPage } from './worker-metrics-fixtures';
 import SettingsPage from '../src/worker/webview/pages/SettingsPage.vue';
 import DurationSettingsPanel from '../src/worker/webview/components/DurationSettingsPanel.vue';
 import ChatPage from '../src/worker/webview/pages/ChatPage.vue';
@@ -158,9 +158,9 @@ export const EvidenceUnavailable: Story = {
 };
 export const WorkerDashboard: Story = {
   name: '13 · Review consumption and worker health',
-  parameters: { storymap: storymap('Metrics separates read-only token consumption, retained attempts and process health from configuration. Missing provider cost stays unavailable.', ['components/WorkerShell', 'pages/MonitoringPage', 'components/ConsumptionPanel', 'components/ResourceMonitorPanel', 'components/RunEvidencePanel'], '/dashboard', 12) },
-  render: renderPage(MonitoringPage),
-  play: async ({ canvasElement }) => { await element(canvasElement, '.consumption-summary'); await element(canvasElement, '.run-analysis-grid'); await ready(canvasElement); },
+  parameters: { storymap: storymap('Metrics identifies this worker, explains its current capacity, visualizes measured and reserved consumption, and separates current process resources from retained execution outcomes. All values are fictional examples.', ['components/WorkerShell', 'pages/MonitoringPage', 'components/MetricsConsumptionPanel', 'components/MetricsResourcesPanel', 'components/MetricsExecutionPanel', 'components/ResourceMonitorPanel'], '/dashboard', 12) },
+  render: renderMetricsPage(),
+  play: async ({ canvasElement }) => { await element(canvasElement, '#consumption-limits'); await element(canvasElement, '[data-resource="cpu"] meter'); await element(canvasElement, '[data-execution-metric="duration"]'); await ready(canvasElement); },
 };
 export const ModelControls: Story = {
   name: '14 · Configure model connections and gate policy',

@@ -72,10 +72,29 @@ as configured. Do not substitute current connection settings for an older run,
 or treat the model from a completed attempt as the model of a new active turn.
 If a provider uses an unspecified default, the actual model remains unknown.
 Missing usage, cost, progress and provider telemetry remain unavailable. Metrics
-labels measurement age and scope: Node process CPU/RSS exclude provider children;
-machine-wide memory/load include other host activity. Run evidence covers local
-invocations, while original remote assignments retain their separate snapshot
-contract. Token allowance is configured worker policy, not subscription balance.
+starts with current activity and capacity, then token allowance beside worker and
+host resources. Execution activity follows with outcome distribution, measured
+duration, input/output tokens and reported cost. Runtime and connection diagnostics
+remain in a disclosure. Taskboard, History and Settings links lead to their owned
+workflows instead of adding configuration or task management to Metrics.
+
+Current activity and the daily/monthly UTC allowance remain independent of the
+execution selector: last 24 hours, 7 days, 30 days or all retained attempts. Its
+window uses acceptance time and the default is 7 days. Preserve each response's
+window labels; changing the selector clears the old summary. Attempts include
+retries and reviews, not delivered Feature Requests. Show per-field measurement
+coverage beside totals and average duration. Reported cost can include estimates;
+unknown usage is not zero. Token allowance is configured worker policy, not
+subscription balance or everyday usage outside this worker.
+
+Resource meters show current observations with warning thresholds. Node process
+CPU/RSS/heap exclude provider children; machine-wide memory includes other host
+activity, and free disk space covers the state volume. No historical resource
+chart is implied. Run evidence covers local invocations, while original remote
+assignments retain their separate snapshot contract. Measurement age and failures
+stay visible per source. Quiet background reads retain matching values and stable
+buttons; freshness keeps aging while updates are paused. Lock and page lifecycle
+changes fence late private responses, and cached-page re-entry refreshes its data.
 
 Saved interaction events, checkpoints, transcripts and run evidence explain what
 has happened. Structured questions and escalations release the execution slot;

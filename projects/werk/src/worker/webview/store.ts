@@ -16,8 +16,9 @@ export type HistoryRow = Awaited<ReturnType<WorkerWorkspace['history']>>['rows']
 export const state = reactive({
   executionProfiles: null as ExecutionProfilesView | null,
   toolAccess: null as ToolAccessView | null,
-  consumption: null as ConsumptionStatus | null, consumptionError: '',
+  consumption: null as ConsumptionStatus | null, consumptionError: '', consumptionReadAt: '',
   settings: null as WorkerSettingsView | null, sessions: null as SessionView | null, board: null as LocalTaskboardView | null,
+  statusReadAt: '', statusError: '', environmentReadAt: '', environmentError: '',
   status: null as Status | null, environment: null as Awaited<ReturnType<WorkerWorkspace['environment']>> | null,
   history: null as Awaited<ReturnType<WorkerWorkspace['history']>> | null,
   chat: null as ReturnType<WorkerConversation['snapshot']> | null,
@@ -106,7 +107,7 @@ export async function request<T = any>(path: string, method = 'GET', body?: unkn
 }
 function relock() {
   if (state.sessions?.selected) drafts.set(state.sessions.selected, state.draft);
-  generation++; accessGeneration++; featureAdmission = null; state.unlocked = false; state.environment = null; state.executionProfiles = null; state.toolAccess = null; state.consumption = null; state.consumptionError = ''; state.history = null; state.chat = null; state.settings = null; state.sessions = null; state.sessionsReadAt = ''; state.sessionsStale = false; state.board = null; state.definitions = []; state.actionError = ''; state.workspaceBusy = false;
+  generation++; accessGeneration++; featureAdmission = null; state.unlocked = false; state.statusReadAt = ''; state.statusError = ''; state.environmentReadAt = ''; state.environmentError = ''; state.consumptionReadAt = ''; state.environment = null; state.executionProfiles = null; state.toolAccess = null; state.consumption = null; state.consumptionError = ''; state.history = null; state.chat = null; state.settings = null; state.sessions = null; state.sessionsReadAt = ''; state.sessionsStale = false; state.board = null; state.definitions = []; state.actionError = ''; state.workspaceBusy = false;
 }
 export async function lock() {
   try { await request('/api/access', 'DELETE'); state.draftEpoch++; relock(); state.draft = ''; drafts.clear(); state.accessMessage = 'This browser is locked and unsent drafts were cleared. Running tasks continue on the worker.'; }
@@ -122,17 +123,23 @@ export async function unlock(candidate: string) {
   generation++; accessGeneration++; state.unlocked = true; state.accessMessage = '';
   await refresh();
 }
+async function measuredRequest(path: string) {
+  const value = await request(path);
+  return { value, readAt: new Date().toISOString() };
+}
 export async function refresh() {
   if (state.loading || !state.unlocked) return;
   state.loading = true; const current = generation;
   if (state.sessionsReadAt && Date.now() - Date.parse(state.sessionsReadAt) > 15000) state.sessionsStale = true;
   try {
-    const results = await Promise.allSettled([request('/status'), request('/monitoring'), request('/api/environment'), request('/api/history'), request('/api/chat/session'), request('/api/settings'), request('/api/taskboard'), request('/api/definitions'), request('/api/execution-profiles'), request('/api/tool-access'), request('/api/consumption')]);
+    const results = await Promise.allSettled([measuredRequest('/status'), request('/monitoring'), measuredRequest('/api/environment'), request('/api/history'), request('/api/chat/session'), request('/api/settings'), request('/api/taskboard'), request('/api/definitions'), request('/api/execution-profiles'), request('/api/tool-access'), measuredRequest('/api/consumption')]);
     if (current !== generation) return;
     const [status, monitoring, environment, history, pair, settings, board, definitions, executionProfiles, toolAccess, consumption] = results;
-    if (status.status === 'fulfilled') state.status = status.value;
+    if (status.status === 'fulfilled') { state.status = status.value.value; state.statusReadAt = status.value.readAt; state.statusError = ''; }
+    else state.statusError = 'Worker status could not be refreshed. Check the worker process and retry.';
     if (monitoring.status === 'fulfilled') state.monitoring = monitoring.value;
-    if (environment.status === 'fulfilled') state.environment = environment.value;
+    if (environment.status === 'fulfilled') { state.environment = environment.value.value; state.environmentReadAt = environment.value.readAt; state.environmentError = ''; }
+    else state.environmentError = 'Environment measurements could not be refreshed. Last loaded values may be stale.';
     if (history.status === 'fulfilled') state.history = history.value;
     if (pair.status === 'fulfilled') { state.chat = pair.value.chat; adoptSessions(pair.value.sessions); }
     else state.sessionsStale = true;
@@ -141,11 +148,11 @@ export async function refresh() {
     if (definitions.status === 'fulfilled') state.definitions = definitions.value.definitions;
     if (executionProfiles.status === 'fulfilled') state.executionProfiles = executionProfiles.value;
     if (toolAccess.status === 'fulfilled') state.toolAccess = toolAccess.value;
-    if (consumption.status === 'fulfilled') { state.consumption = consumption.value; state.consumptionError = ''; }
+    if (consumption.status === 'fulfilled') { state.consumption = consumption.value.value; state.consumptionReadAt = consumption.value.readAt; state.consumptionError = ''; }
     else state.consumptionError = 'Consumption could not be refreshed. Check that the worker is running, then refresh.';
     const labels = ['Worker status', 'Monitoring', 'Environment', 'History', 'Task conversation', 'Settings', 'File tasks', 'Agent definitions', 'Execution profiles', 'Tool access', 'Consumption'];
     const failures = results.flatMap((result, index) => result.status === 'rejected' ? [labels[index]] : []);
-    state.error = status.status === 'rejected' ? 'Worker status could not be refreshed. Check the worker process and retry.' : '';
+    state.error = state.statusError;
     state.partialError = failures.length && !state.error ? `${failures.join(', ')} could not be refreshed. Those values may be stale. Refresh to retry.` : '';
     if (!failures.length) state.lastRead = new Date().toISOString();
     // Completion invalidates independent resources even when one optional snapshot failed.

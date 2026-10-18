@@ -7,6 +7,15 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+### Changed
+
+- Worker Metrics visualizes current execution/admission capacity, configured token allowance, process/host resources and retained attempt outcomes. Execution summaries offer acceptance-time windows with measured duration and token/cost coverage, while settings and detailed evidence remain linked to their own pages.
+- Allowance and resource displays distinguish reported usage, reservations, unverified balances, worker-process measurements and host/volume context. Runtime diagnostics and alert history disclose beneath the overview.
+
+### Fixed
+
+- Metrics reads track freshness independently, retain stale values on failed refreshes and keep background updates from animating action buttons. Query changes, locking and page lifecycle changes reject obsolete responses; displayed age continues to advance while browser updates are paused.
+
 ## [0.12.0] - 2026-10-18
 
 ### Added

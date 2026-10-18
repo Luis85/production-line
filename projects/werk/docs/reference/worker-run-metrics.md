@@ -6,6 +6,51 @@ the orchestrator's lease/snapshot journal. An original remote assignment keeps
 its orchestrator evidence; a later local conversation turn is a separate local
 execution, not a replay of that assignment.
 
+## Metrics webview
+
+Open **Metrics** to inspect one worker. Its sections have different time scopes:
+
+| Section | What it measures |
+| --- | --- |
+| Current activity | The shared execution slot, occupied local places and separate accepted-assignment buffer; includes preparation reservations |
+| Token allowance | Reported input/output tokens, outstanding reservations and remaining share in the configured daily or monthly UTC window |
+| Worker & host | Latest worker-process CPU, resident memory and heap; state-volume free space and whole-machine memory |
+| Execution activity | Retained attempts accepted in the last 24 hours, 7 days, 30 days or all retained time; defaults to 7 days |
+
+The execution-window selector affects **Execution activity** only. Its bounds are
+captured when the request starts and shown under **About these measurements**.
+They filter acceptance time, not completion time. Retries, follow-ups, gate
+reviews and rework can produce multiple attempts for one Feature Request.
+Outcome counts therefore do not measure delivered features. Token/cost totals
+use finished attempt records; durations show their measured subset and exclude
+queue time. Each summary shows coverage so missing measurements stay visible.
+
+The allowance is a configured worker budget, not a provider subscription balance;
+usage in everyday tools outside this worker is not measured. Reservations are
+separate from reported usage, and an active call can exceed its reservation.
+Incomplete accounting keeps remaining allowance unverified. See
+[consumption limits](../how-to/worker-consumption-limits.md) for the admission policy.
+
+Resource samples normally update every 10 seconds. CPU and memory describe the
+worker's Node.js process and exclude model subprocesses; CPU needs two samples.
+Host memory includes other applications. Free space describes the whole state
+volume, not the size of Werk's files. These are current observations, not a
+historical resource time series. **Alerts & task monitoring** retains warning
+transitions separately, up to 1,000 events; these do not provide a resource time
+series.
+
+Read times and stale/error labels belong to each source. Background refreshes
+retain the last matching values without animating action buttons. Pausing browser
+updates does not stop the worker, and displayed measurements continue to age.
+Changing the execution window clears the previous window's summary until its
+replacement arrives. Missing or failed measurements never become measured zero.
+
+Use **View taskboard** to inspect work, **Manage consumption limits** or **Worker
+settings** to change configuration, and **Explore all retained attempts** to open
+History's detailed records and export controls. **Runtime & connection details**
+keeps machine identifiers and diagnostics out of the primary reading path. See
+[the webview guide](../how-to/use-worker-webview.md) for workspace navigation.
+
 ## Storage and identity
 
 The private worker state contains `worker-runs.sqlite`. Each admitted invocation
@@ -88,8 +133,8 @@ pairs, per-field consumption coverage, measured duration count/mean and scoped
 resource totals. Empty or entirely unmeasured averages/totals remain null.
 
 Filters: `--session-id`, `--task-id`, `--provider`, `--kind`, `--outcome`,
-`--since` and `--until`. Timestamp filters use ISO timestamps with an explicit
-`Z` or offset. Providers are `codex-cli`, `claude-cli`, `openai-api` and
+`--since` and `--until`. Timestamp filters select admission time (the run's
+`acceptedAt`) and use ISO timestamps with an explicit `Z` or offset. Providers are `codex-cli`, `claude-cli`, `openai-api` and
 `anthropic-api`; kinds are `chat`, `local` and `orchestrator`. Outcomes are
 `queued`, `running`, `completed`, `review`, `waiting_input`, `escalated`, `failed`, `cancelled` and `interrupted`.
 
@@ -113,8 +158,9 @@ be presented as a complete export merely because a file downloaded successfully.
 For an exact completed dataset, stop new submissions and let active work finish
 before starting the export.
 
-The webview exposes Project requests and Execution evidence inside History, with
-Metrics links. Filters affect both the displayed list and its analysis.
+The webview exposes Project requests and Execution evidence inside History.
+History filters affect both its displayed list and analysis; the Metrics window
+selector is independent.
 Measurements, missing coverage and recovered interruptions remain visibly
 separate. The [worker lifecycle tutorial](../tutorials/worker-feature-lifecycle.md)
 walks through this from a downloaded package.
