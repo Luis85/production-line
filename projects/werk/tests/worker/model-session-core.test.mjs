@@ -19,6 +19,11 @@ const messages = (count = 80) => Array.from({ length: count }, (_, i) => ({ id: 
 /** @returns {import('../../src/worker/application/model-contract.ts').StructuredModel} */
 function model() { return { configuration: { id: 'openai-api', model: 'fixture', instruction: '' }, sessionBinding: { ...binding, schemaVersion: 1 }, capabilities: modelCapabilities, toolManifest: { revision: 0, tools: [sessionHistoryTool('/unused', { ...binding, schemaVersion: 1 }).definition] }, async reply() { return 'Done'; }, async execute() { return { type: 'completed', text: 'Done' }; } }; }
 async function scratch(t) { const path = await mkdtemp(join(tmpdir(), 'werk-model-session-')); t.after(() => rm(path, { recursive: true, force: true })); return path; }
+async function journalFixture(t) {
+  const directory = await mkdtemp(join(tmpdir(), 'werk-model-session-')), journal = new WorkerInteractionJournal(directory);
+  t.after(async () => { journal.close(); await rm(directory, { recursive: true, force: true }); });
+  await journal.init(); return { directory, journal };
+}
 test('durable session revision guards survive restart, preserve old checkpoints and reject another FR', async t => {
   const directory = await scratch(t), first = new FileModelSessionStore(directory);
   const initial = await first.load(binding); assert.equal(initial.revision, 0);
@@ -47,7 +52,7 @@ test('long v2 context retains accepted scope, latest question/answer and explici
   assert.throws(() => requireModelRequest({ ...prepared, schemaVersion: 1 }, 'openai-api'));
 });
 test('bound history reads original archived answers after restart and refuses a different session turn', async t => {
-  const directory = await scratch(t), journal = new WorkerInteractionJournal(directory); await journal.init();
+  const { directory, journal } = await journalFixture(t);
   const first = journal.accept({ sessionId: binding.logicalSessionId, operationId: 'one', kind: 'message', input: 'First scope', context: { answer: 'Do not remove the old behavior' } }).turn;
   journal.prepare(binding.logicalSessionId, first.id, prepareModelRequest(model(), messages(2)), 'run-one'); journal.start(binding.logicalSessionId, first.id); journal.complete(binding.logicalSessionId, first.id, { type: 'completed', text: 'Retained original result' }, unknownUsage());
   const foreign = journal.accept({ sessionId: 'other-session', operationId: 'two', kind: 'message', input: 'Private other feature' }).turn;
@@ -60,7 +65,7 @@ test('bound history reads original archived answers after restart and refuses a 
   await assert.rejects(tool.call({ sessionId: 'other-session' }, signal()), /Invalid history/);
 });
 test('only accepted explicit resume of a stopped prior turn carries a matching recovery receipt', async t => {
-  const directory = await scratch(t), journal = new WorkerInteractionJournal(directory); await journal.init(); t.after(() => journal.close());
+  const { journal } = await journalFixture(t);
   const turn = journal.accept({ sessionId: binding.logicalSessionId, operationId: 'first', kind: 'message', input: 'Work' }).turn;
   const dispatch = prepareModelRequest(model(), messages(2)); journal.prepare(binding.logicalSessionId, turn.id, dispatch, 'run'); journal.start(binding.logicalSessionId, turn.id); journal.fail(binding.logicalSessionId, turn.id, 'failed', 'timeout');
   const view = journal.view(binding.logicalSessionId), resumed = journal.accept({ sessionId: binding.logicalSessionId, operationId: 'resume-op', kind: 'resume', input: '', expectedRevision: view.revision, priorTurnId: turn.id }).turn;
