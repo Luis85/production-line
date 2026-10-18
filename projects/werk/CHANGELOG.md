@@ -7,6 +7,8 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-18
+
 ### Added
 
 - Verified implementation source bounds are configurable in **Settings → Queue & duration → Repository inspection limits** and through the settings API/CLI: 64 MiB total source, 20,000 paths and 8 MiB per file outside the approved edit list by default. Guarded saves detect concurrent changes; each prepared implementation dispatch freezes the bounds and records them with tool-limit evidence. Larger repositories still receive complete inspection without widening approved edit scope.
