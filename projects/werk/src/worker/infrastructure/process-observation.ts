@@ -4,8 +4,8 @@ import type { ObservedProcessKind, ObservedProcessMeasurement, ObservedProcessRe
 import type { ProcessMeasurement } from '../application/process-supervision.js';
 import { sampleOwnedProcessGroup } from './processes/sampler.js';
 
-interface Entry { record: ObservedProcessRecord; launch?: ObservedLaunch; }
-interface ObservationOptions { sampleGroup?: (groupId: number) => Promise<ProcessMeasurement>; }
+interface Entry { record: ObservedProcessRecord; launch?: ObservedLaunch; samplingLifetime: AbortController; }
+interface ObservationOptions { sampleGroup?: (groupId: number, signal: AbortSignal) => Promise<ProcessMeasurement>; }
 const kinds = new Set<ObservedProcessKind>(['provider', 'tool', 'mcp', 'git', 'other']);
 const labels: Record<ObservedProcessKind, string> = { provider: 'Model provider', tool: 'Approved command', mcp: 'MCP connection', git: 'Git operation', other: 'Worker process' };
 const live = (entry: Entry) => !!entry.launch?.child.pid && entry.record.state === 'running' && entry.launch.child.exitCode === null && entry.launch.child.signalCode === null;
@@ -33,7 +33,7 @@ export function createProcessObservation(options: ObservationOptions = {}): Proc
       let measurement: ObservedProcessMeasurement;
       if (!launch.ownsProcessGroup) measurement = unknown(process.platform === 'win32' ? 'Process-group CPU and memory sampling is available on Linux.' : 'This process shares an existing group; separate counters are unavailable.');
       else try {
-        const value = await sampleGroup(launch.child.pid!);
+        const value = await sampleGroup(launch.child.pid!, entry.samplingLifetime.signal);
         measurement = value.coverage === 'complete_group' && numeric(value.cpuTotalMicros) && numeric(value.rssBytes) && numeric(value.processCount) && value.processCount! > 0
           ? { scope: 'owned_execution_process_group', platform: value.platform, capturedAt: value.capturedAt, cpuTotalMicros: value.cpuTotalMicros, rssBytes: value.rssBytes, processCount: value.processCount, coverage: 'complete_group', unavailableReason: null }
           : unknown(value.unavailableReason ?? 'The operating system did not provide complete process-group counters.');
@@ -47,19 +47,22 @@ export function createProcessObservation(options: ObservationOptions = {}): Proc
     const requestedKind = purpose?.kind ?? context.kind ?? 'other';
     const kind = kinds.has(requestedKind as ObservedProcessKind) ? requestedKind as ObservedProcessKind : 'other';
     const label = (purpose?.label ?? context.label ?? labels[kind]).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 120) || labels[kind];
-    const entry: Entry = { launch, record: { id: randomUUID(), kind, label,
+    const entry: Entry = { launch, samplingLifetime: new AbortController(), record: { id: randomUUID(), kind, label,
       featureRequestKey: context.featureRequestKey ?? null, sessionId: context.sessionId ?? null, taskId: context.taskId ?? null, runId: context.runId ?? null,
       state: 'running', startedAt: new Date().toISOString(), endedAt: null, exitCode: null, measurement: null } };
     entries.push(entry);
     launch.child.once('error', () => { launch.failed = true; });
+    // Process exit ends measurement ownership even while output pipes are still draining.
+    launch.child.once('exit', () => entry.samplingLifetime.abort());
     launch.child.once('close', code => {
+      entry.samplingLifetime.abort();
       entry.record.state = launch.failed || code !== 0 ? 'failed' : 'exited';
       entry.record.exitCode = code; entry.record.endedAt = new Date().toISOString();
       entry.launch = undefined;
       prune();
       if (!active().length && timer) { clearInterval(timer); timer = undefined; }
     });
-    // A background sample does not keep an otherwise finished worker alive.
+    // Both the timer and an in-flight filesystem scan end with the owned child.
     timer ??= setInterval(() => { void sample(); }, 1000);
     timer.unref();
     if (Date.now() - sampledAt >= 1000) void sample();

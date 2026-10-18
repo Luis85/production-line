@@ -151,3 +151,25 @@ test('observer failure and pre-aborted execution do not change finite launch sem
   await assert.rejects(registry.run(identity, () => runProcess(node, ['-e', ''], { env, maxOutputBytes: 1024, signal: AbortSignal.abort() })), error => error instanceof ProcessRunError && error.reason === 'cancelled');
   assert.equal((await registry.status()).summary.total, 0);
 });
+
+
+test('owned child exit cancels its in-flight measurement before output close', { skip: process.platform === 'win32' && 'POSIX group attribution', timeout: 5000 }, async t => {
+  /** @type {PromiseWithResolvers<AbortSignal>} */
+  const started = Promise.withResolvers();
+  const registry = createProcessObservation({ sampleGroup: async (_pid, signal) => {
+    started.resolve(signal);
+    await delay(10000, undefined, { signal });
+    return known();
+  } });
+  const child = await held(t, registry);
+  const sampleSignal = await started.promise;
+  const snapshot = registry.status(), exited = once(child.child, 'exit');
+  child.child.stdin.end();
+  await exited;
+  assert.equal(sampleSignal.aborted, true, 'measurement ownership ends at leader exit');
+  await child.closed;
+  await snapshot;
+  const state = await registry.status();
+  assert.equal(state.processes[0].measurement, null);
+  assert.equal(state.summary.active, 0);
+});

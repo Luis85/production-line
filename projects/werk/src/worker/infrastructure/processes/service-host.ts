@@ -11,12 +11,14 @@ type Payload = ReturnType<typeof launchProcess>;
 let child: Payload | undefined, stopping = false, launched = false;
 let sampleTimer: ReturnType<typeof setInterval> | undefined;
 let ttlTimer: ReturnType<typeof setTimeout> | undefined;
+const samplingLifetime = new AbortController();
+let sampling = false;
 const send = (value: unknown, done?: () => void) => process.stdout.write(JSON.stringify(value) + '\n', done);
 const stopReasons: ServiceStopReason[] = ['operator', 'feature_ended', 'revoked', 'shutdown', 'ttl', 'startup_timeout', 'storage_failed'];
 /** This live group leader owns the payload. Its stdin is a private lifetime lease from the worker. */
 function finish(exit: ServiceExit) {
   if (stopping) return;
-  stopping = true; if (sampleTimer) clearInterval(sampleTimer); if (ttlTimer) clearTimeout(ttlTimer);
+  stopping = true; samplingLifetime.abort(); if (sampleTimer) clearInterval(sampleTimer); if (ttlTimer) clearTimeout(ttlTimer);
   const killGroup = () => {
     if (process.platform === 'win32') { if (child && child.exitCode === null && child.signalCode === null) child.kill(); process.exit(0); }
     // A live host signals its own group, never a persisted PID or a re-adopted process.
@@ -67,7 +69,12 @@ input.on('line', async line => {
     payload.once('exit', code => finish({ code, reason: 'exit' }));
     payload.once('spawn', () => {
       send({ type: 'started' });
-      const sample = async () => { const measurement = await sampleOwnedProcessGroup(process.pid); if (!stopping) send({ type: 'measurement', value: measurement }); };
+      const sample = async () => {
+        if (sampling || stopping) return;
+        sampling = true;
+        try { const measurement = await sampleOwnedProcessGroup(process.pid, samplingLifetime.signal); if (!stopping) send({ type: 'measurement', value: measurement }); }
+        finally { sampling = false; }
+      };
       void sample(); sampleTimer = setInterval(() => { void sample(); }, 5000); sampleTimer.unref();
     });
     ttlTimer = setTimeout(() => finish({ code: null, reason: 'ttl' }), remaining); ttlTimer.unref();

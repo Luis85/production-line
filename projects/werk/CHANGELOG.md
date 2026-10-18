@@ -26,6 +26,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Fixed
 
+- Process metrics scans stop when their owned process exits and use a bounded read budget. Cancelled or incomplete scans report unavailable counters, so background observation cannot prolong worker shutdown by scanning the remaining process table.
 - Shared Feature Requests only report synchronized publication when the current lifecycle and review note are confirmed. Recovery retries unfinished handoff publication without repeating completed model work.
 - Unresponsive development-service hosts cannot hold startup or shutdown operations indefinitely. Unconfirmed cleanup retains its occupied slot, reports an actionable state and blocks overlapping replacements.
 - Review links preserve the exact request through section navigation; inconsistent ownership and stale checks cannot be presented as current approval evidence. Background refresh preserves controls and readable Markdown summaries.

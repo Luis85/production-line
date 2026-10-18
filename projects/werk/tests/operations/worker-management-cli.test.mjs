@@ -41,8 +41,15 @@ test('copied worker CLI manages drafts, tasks, queues and history without a brow
   assert.equal(queuedRuns[0].usage.source, 'unavailable');
   await cli('task', 'rename', '--id', id, '--title', 'Renamed from CLI');
   assert.equal((await cli('task', 'get', '--id', id)).session.title, 'Renamed from CLI');
-  await assert.rejects(cli('task', 'wait', '--id', id, '--timeout-ms', '1'), error => testErrorCode(error) === 1 && /continues/.test(testErrorOutput(error, 'stderr')));
-  assert.equal((await cli('task', 'get', '--id', id)).session.status, 'queued');
+  await assert.rejects(cli('task', 'wait', '--id', id, '--timeout-ms', '1'), error => {
+    assert.equal(testErrorCode(error), 1);
+    const failure = JSON.parse(testErrorOutput(error, 'stderr'));
+    assert.equal(failure.code, 'wait_timeout'); assert.equal(failure.exitCode, 1);
+    return true;
+  });
+  assert.equal((await cli('task', 'get', '--id', id)).session.status, 'queued', 'Stopping the wait must not cancel the accepted task.');
+  const afterWait = (await cli('run', 'list', '--session-id', id)).rows;
+  assert.deepEqual(afterWait.map(run => [run.id, run.outcome, run.startedAt]), queuedRuns.map(run => [run.id, run.outcome, run.startedAt]), 'Waiting preserves the same unstarted attempt without cancellation or redispatch.');
   file = await cli('feature', 'cancel', '--name', 'example.md', '--if-match', file.revision);
   assert.equal((await cli('feature', 'wait', '--name', 'example.md', '--timeout-ms', '1000')).record.status, 'cancelled');
   await cli('task', 'retry', '--id', id); assert.equal((await cli('task', 'get', '--id', id)).chat.messages.length, 4);
