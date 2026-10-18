@@ -44,7 +44,7 @@ test('wait retries a poll that timed out and returns the settled result', async 
   let calls = 0;
   const result = await waitForWorker(async pollTimeout => { timeouts.push(pollTimeout); if (++calls === 1) throw slowPoll(); return settled; }, 'task', '5000', 10000);
   assert.equal(result, settled); assert.equal(calls, 2);
-  assert.ok(timeouts.every(ms => ms >= 1 && ms <= 5000), 'each poll is bounded by the remaining wait');
+  assert.ok(timeouts.every(ms => ms >= 1000 && ms <= 5000), 'each poll is bounded by the remaining wait, never below one poll interval');
 });
 test('wait retries dropped connections but ends on API and input errors', async () => {
   const settled = { status: 'done' };
@@ -59,6 +59,19 @@ test('wait retries dropped connections but ends on API and input errors', async 
 });
 test('repeated slow polls end in wait_timeout at the deadline and say how many timed out', async () => {
   const started = Date.now(), timeouts = [];
-  await assert.rejects(waitForWorker(async pollTimeout => { timeouts.push(pollTimeout); await new Promise(resolve => setTimeout(resolve, 150)); throw slowPoll(); }, 'feature', '400', 200), error => testErrorCode(error) === 'wait_timeout' && /continues/.test(testErrorMessage(error)) && /\d+ status polls? timed out/.test(testErrorMessage(error)));
-  assert.ok(Date.now() - started < 1800); assert.ok(timeouts.length >= 2); assert.ok(timeouts.every(ms => ms <= 200));
+  await assert.rejects(waitForWorker(async pollTimeout => { timeouts.push(pollTimeout); await new Promise(resolve => setTimeout(resolve, 150)); throw slowPoll(); }, 'feature', '400', 200), error => testErrorCode(error) === 'wait_timeout' && /continues/.test(testErrorMessage(error)) && /\d+ status polls? timed out/.test(testErrorMessage(error)) && /--request-timeout-ms/.test(testErrorMessage(error)));
+  assert.ok(Date.now() - started < 1800); assert.ok(timeouts.length >= 2); assert.ok(timeouts.every(ms => ms === 200));
+});
+test('an expired wait with fast polls reports no slow polls and its final poll at the deadline still reads the state', async () => {
+  const latency = 5, budgets = [];
+  const poll = answer => async budget => { budgets.push(budget); if (budget < latency) throw slowPoll(); await new Promise(resolve => setTimeout(resolve, latency)); return answer(); };
+  await assert.rejects(waitForWorker(poll(() => ({ session: { status: 'running' } })), 'task', '30', 10000), error => testErrorCode(error) === 'wait_timeout' && !/status poll|--request-timeout-ms/.test(testErrorMessage(error)));
+  assert.ok(budgets.length >= 2 && budgets.every(ms => ms >= 1000), 'a poll at the deadline keeps a full interval budget');
+  let reads = 0;
+  const settled = { session: { status: 'done' } };
+  assert.equal(await waitForWorker(poll(() => ++reads < 2 ? { session: { status: 'running' } } : settled), 'task', '30', 10000), settled);
+  assert.equal(reads, 2);
+});
+test('connection losses name the last error', async () => {
+  await assert.rejects(waitForWorker(async () => { throw Object.assign(Error('fetch failed'), { cause: Object.assign(Error('read ECONNRESET'), { code: 'ECONNRESET' }) }); }, 'task', '30'), error => /lost the connection \(last: read ECONNRESET\)/.test(testErrorMessage(error)));
 });

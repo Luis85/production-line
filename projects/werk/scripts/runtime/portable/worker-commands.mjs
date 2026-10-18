@@ -756,6 +756,7 @@ async function readMarkdown(path) {
 }
 
 const DEFAULT_POLL_TIMEOUT_MS = 10000;
+const POLL_INTERVAL_MS = 1000;
 const TRANSIENT_CODES = ["ECONNRESET", "ECONNREFUSED", "UND_ERR_SOCKET"];
 /** Classify a failed poll: a client timeout or a dropped connection says nothing about the awaited work. */
 function retryablePoll(error) {
@@ -771,7 +772,8 @@ function retryablePoll(error) {
 
 /**
  * Poll until the work settles or the wait deadline passes. `request(pollTimeoutMs)` is bounded by the
- * smaller of the request timeout and the remaining wait; slow or dropped polls are retried, other errors end the wait.
+ * smaller of the request timeout and the remaining wait, but never below one poll interval, so the poll
+ * at the deadline is a real read rather than an instant timeout. Slow or dropped polls are retried; other errors end the wait.
  */
 export async function waitForWorker(request, kind, timeoutValue = "60000", requestTimeoutMs = DEFAULT_POLL_TIMEOUT_MS) {
   const timeout = Number(timeoutValue);
@@ -784,16 +786,18 @@ export async function waitForWorker(request, kind, timeoutValue = "60000", reque
     throw inputError("--timeout-ms must be 1–86400000.");
   const deadline = Date.now() + timeout;
   const failed = { timeout: 0, connection: 0 };
+  let lastConnectionError;
   for (;;) {
     let result;
     try {
       result = await request(
-        Math.max(1, Math.min(requestTimeoutMs ?? DEFAULT_POLL_TIMEOUT_MS, deadline - Date.now())),
+        Math.min(requestTimeoutMs ?? DEFAULT_POLL_TIMEOUT_MS, Math.max(deadline - Date.now(), POLL_INTERVAL_MS)),
       );
     } catch (error) {
       const retryable = retryablePoll(error);
       if (!retryable) throw error;
       failed[retryable]++;
+      if (retryable === "connection") lastConnectionError = error?.cause?.message ?? error?.cause?.code ?? error?.message;
     }
     if (result !== undefined) {
       const state =
@@ -826,18 +830,19 @@ export async function waitForWorker(request, kind, timeoutValue = "60000", reque
     if (Date.now() >= deadline) {
       const notes = [
         failed.timeout && `${failed.timeout} status poll${failed.timeout === 1 ? "" : "s"} timed out`,
-        failed.connection && `${failed.connection} status poll${failed.connection === 1 ? "" : "s"} lost the connection`,
+        failed.connection && `${failed.connection} status poll${failed.connection === 1 ? "" : "s"} lost the connection${lastConnectionError ? ` (last: ${String(lastConnectionError).slice(0, 200)})` : ""}`,
       ].filter(Boolean);
       throw Object.assign(
         Error(
           "Wait timed out; task continues. Inspect it or cancel explicitly." +
-            (notes.length ? ` ${notes.join(" and ")}.` : ""),
+            (notes.length ? ` ${notes.join(" and ")}.` : "") +
+            (failed.timeout ? " Raise --request-timeout-ms if the worker is busy." : ""),
         ),
         { code: "wait_timeout" },
       );
     }
     await new Promise((resolve) =>
-      setTimeout(resolve, Math.min(1000, deadline - Date.now())),
+      setTimeout(resolve, Math.min(POLL_INTERVAL_MS, deadline - Date.now())),
     );
   }
 }
