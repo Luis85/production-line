@@ -1,3 +1,4 @@
+import { claudeVersion, minimumClaudeVersion } from './provider-version.js';
 import { runProviderProbe } from './provider-process.js';
 import { constants } from 'node:fs';
 import { access } from 'node:fs/promises';
@@ -41,11 +42,9 @@ export class ProviderStatusChecks {
     try {
       if (connection.id === 'claude-cli') {
         const version = await statusCommand(connection, this.controller.signal, ['--version']);
-        const matched = /^v?(\d{1,4})\.(\d{1,4})\.(\d{1,6})(?:\s|\(|$)/m.exec(version.output);
-        const parts = matched?.slice(1).map(Number);
-        const minimumMet = !!parts && (parts[0] > 2 || parts[0] === 2 && (parts[1] > 1 || parts[1] === 1 && parts[2] >= 248));
-        available = { ...available, minimumVersion: '2.1.248', ...(matched && version.code === 0 ? { version: matched.slice(1).join('.'), compatibility: minimumMet ? 'minimum_met' : 'unsupported' } : { compatibility: 'unknown' }) };
-        if (available.compatibility === 'unsupported') return { ...available, available: false, authentication: 'unknown', message: 'Upgrade Claude Code to 2.1.248 or later. This worker requires --restricted and keeps all no-tools isolation flags enabled. No model request was made.' };
+        const parsed = claudeVersion(version.output, version.code);
+        available = { ...available, minimumVersion: minimumClaudeVersion, ...(parsed.version ? { version: parsed.version } : {}), compatibility: parsed.compatibility };
+        if (parsed.compatibility !== 'minimum_met') return { ...available, available: false, authentication: 'unknown', message: 'Claude Code ' + minimumClaudeVersion + ' or later is required. Update the CLI and check again so this worker can verify isolated feature-request sessions. No model request was made.' };
       }
       const result = await statusCommand(connection, this.controller.signal);
       if (connection.id === 'codex-cli') {
@@ -54,12 +53,12 @@ export class ProviderStatusChecks {
       } else {
         try {
           const value = JSON.parse(result.output);
-          if (value.loggedIn === true && result.code === 0) return { ...available, authentication: 'authenticated', message: 'Claude Code reports a signed-in account. No model request was made.' + (available.compatibility === 'unknown' ? ' The CLI version could not be verified; this worker requires Claude Code 2.1.248 or later.' : '') };
+          if (value.loggedIn === true && result.code === 0) return { ...available, authentication: 'authenticated', message: 'Claude Code reports a signed-in account. No model request was made.' };
           if (value.loggedIn === false) return { ...available, authentication: 'signed-out', message: 'Run claude auth login in a terminal as the worker account, then check again.' };
         } catch { /* Older CLI versions may not provide a machine-readable status. */ }
       }
       return { ...available, authentication: 'unknown', message: 'The CLI could not confirm login. Check its status in the worker account terminal; updating the CLI may be needed.' };
-    } catch { return { ...available, authentication: 'unknown', message: 'The CLI status check failed or timed out. Check the installation and login in the worker account terminal.' }; }
+    } catch { return { ...available, ...(connection.id === 'claude-cli' && available.compatibility !== 'minimum_met' ? { available: false, minimumVersion: minimumClaudeVersion, compatibility: 'unknown' as const } : {}), authentication: 'unknown', message: 'The CLI status check failed or timed out. Check the installation and login in the worker account terminal.' }; }
   }
   async close() { this.controller.abort(); await Promise.allSettled([...this.pending.values()].map(item => item.operation)); this.cached.clear(); }
 }

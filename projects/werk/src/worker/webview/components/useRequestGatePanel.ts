@@ -1,9 +1,9 @@
-import { reactive, computed, onActivated, onDeactivated, onBeforeUnmount, onMounted, ref, watch, toRaw, toRef } from "vue";
+import { reactive, computed, nextTick, onActivated, onDeactivated, onBeforeUnmount, onMounted, ref, watch, toRaw, toRef } from "vue";
 import { useBoundedPolling } from '../../../shared/webview/composables/useBoundedPolling';
 import type {
   WorkerRequest,
-  GateEvaluation,
   GateStage,
+  RequestFinding,
 } from "../../application/request-gates";
 import { state, request, refresh, date } from "../store";
 import {
@@ -11,11 +11,12 @@ import {
   initialGateState,
   type GateCommandFields,
 } from "../request-gate-controller";
+import { buildFeatureReviewView, currentRequestEvaluation } from '../feature-review';
 import { requestDrafts, requestOperations } from "./request-gate-drafts";
 import type { GateActionCommand } from "../request-gate-controller";
 
 /** Owns this page's state, actions and lifecycle; the Vue component owns rendering. */
-export function useRequestGatePanel(props: { requestId?: string; sessionId?: string }, emit: (event: "change", value: WorkerRequest | null) => void) {
+export function useRequestGatePanel(props: { requestId?: string; sessionId?: string; featureSource?: string; disabled?: boolean }, emit: (event: "change", value: WorkerRequest | null) => void) {
   const gateState = reactive(initialGateState());
   const view = toRef(gateState, "view"),
     rows = toRef(gateState, "rows"),
@@ -28,7 +29,12 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
   const sessionId = computed(
     () => props.sessionId ?? state.sessions?.selected ?? "",
   );
-  const sharedRequest = computed(() => state.sessions?.records.find(session => session.id === (view.value?.owner.sessionId ?? sessionId.value))?.feature?.source === 'shared_git');
+  const session = computed(() => state.sessions?.records.find(row => row.id === (view.value?.owner.sessionId ?? sessionId.value)));
+  const sharedRequest = computed(() => props.featureSource === 'shared_git' || session.value?.feature?.source === 'shared_git');
+  const review = computed(() => buildFeatureReviewView({ request: view.value ?? undefined, session: session.value, freshness: { stale: gateState.stale, error: error.value } }));
+  const pendingKey = ref('');
+  let pendingAttempt: symbol | undefined;
+  const isPending = (key: string) => busy.value && pendingKey.value === key;
   const scopeMutable = computed(() => !sharedRequest.value);
   const scopeActions = new Set(['propose', 'accept_candidate', 'rework', 'execute']);
   function allowed(action: string) {
@@ -55,6 +61,7 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
   const mutable = computed(
     () =>
       !!view.value &&
+      !props.disabled &&
       !busy.value &&
       !loading.value &&
       !gateState.stale &&
@@ -77,14 +84,17 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
         (candidate) => candidate.status === "pending",
       ) ?? [],
   );
-  const canAttest = computed(
-    () =>
-      !!view.value?.execution?.outputDigest &&
-      view.value.execution.result?.type === "completed" &&
-      view.value.policy.done[view.value.input.kind].some(
-        (rule) => rule.fact === "operator.accepted",
-      ),
+  const canAttest = computed(() =>
+    !!view.value?.execution?.outputDigest &&
+    view.value.execution.result?.type === 'completed' &&
+    view.value.execution.inputRevision === view.value.inputRevision &&
+    review.value.evidence.attestationRequired && !review.value.evidence.attested &&
+    !['done', 'cancelled'].includes(view.value.phase),
   );
+  function acceptanceFinding(finding: RequestFinding) {
+    const evaluation = view.value?.evaluations.find(item => item.id === finding.evaluationId);
+    return evaluation?.rules.some(rule => rule.ruleId === finding.ruleId && rule.fact === 'operator.accepted') ?? false;
+  }
   const draftKey = (part: string) =>
     identity.value + ":" + (view.value?.inputRevision ?? 0) + ":" + part;
   function draft(part: string) {
@@ -112,17 +122,7 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
       cancelled: "Request cancelled",
       interrupted: "Worker interrupted",
     })[phase] ?? phase;
-  function currentEvaluation(stage: GateStage): GateEvaluation | undefined {
-    return view.value?.evaluations.findLast(
-      (value) =>
-        value.stage === stage &&
-        value.inputHash === view.value!.inputHash &&
-        value.inputRevision === view.value!.inputRevision &&
-        value.policyDigest === view.value!.policyDigest &&
-        (stage === "ready" ||
-          value.outputDigest === view.value!.execution?.outputDigest),
-    );
-  }
+  const currentEvaluation = (stage: GateStage) => currentRequestEvaluation(view.value, stage);
   function gateLabel(stage: GateStage) {
     const value = currentEvaluation(stage);
     return !value
@@ -148,8 +148,21 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
     refresh,
   });
   const load = (force = false) => controller.load(force);
-  const command = (fields: GateCommandFields) => allowed(fields.action) ? controller.mutate(fields) : Promise.resolve();
-  const send = (value: GateActionCommand) => allowed(value.action) ? controller.send(value) : Promise.resolve();
+  function actionKey(fields: GateCommandFields) {
+    const detail = 'findingId' in fields ? fields.findingId : 'candidateId' in fields ? fields.candidateId :
+      'assignee' in fields ? fields.assignee : 'stage' in fields ? fields.stage : undefined;
+    return fields.action + (detail ? ':' + detail : '');
+  }
+  async function perform(key: string, action: string, invoke: () => Promise<void>) {
+    if (props.disabled || busy.value || !allowed(action)) return;
+    const attempt = Symbol(key);
+    pendingAttempt = attempt;
+    pendingKey.value = key;
+    try { await invoke(); }
+    finally { if (pendingAttempt === attempt) pendingKey.value = ''; }
+  }
+  const command = (fields: GateCommandFields) => perform(actionKey(fields), fields.action, () => controller.mutate(fields));
+  const send = (value: GateActionCommand) => perform('retry', value.action, () => controller.send(value));
   async function propose() {
     if (!scopeMutable.value || !mutable.value || !view.value || !proposedMessage.value.trim()) return;
     if (proposedMessage.value === view.value.input.message) {
@@ -178,17 +191,26 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
       !view.value?.execution?.outputDigest
     )
       return;
+    const requestId = view.value.id;
     await command({
       action: "attest",
       inputHash: view.value.inputHash,
       outputDigest: view.value.execution.outputDigest,
       note,
     });
+    if (view.value?.id === requestId && !error.value && review.value.evidence.attested) {
+      notice.value = currentEvaluation('done')?.passed
+        ? 'Acceptance recorded. The configured completion checks passed; merge remains separate.'
+        : 'Acceptance recorded. Completion still needs attention; inspect the remaining findings.';
+      await nextTick();
+      document.getElementById('request-acceptance-recorded')?.focus();
+    }
   }
   function chooseRequest(id: string) {
     void controller.select(id);
   }
   watch([sessionId, () => props.requestId, () => state.unlocked], () => {
+    pendingKey.value = '';
     controller.invalidate();
     if (state.unlocked) void load(true);
   });
@@ -199,6 +221,9 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
   onBeforeUnmount(() => controller.dispose());
 
   return {
+    acceptanceFinding,
+    isPending,
+    review,
     sharedRequest,
     scopeMutable,
     activeExecution,

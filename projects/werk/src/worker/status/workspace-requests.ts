@@ -1,3 +1,5 @@
+import { minimumClaudeVersion } from '../infrastructure/provider-version.js';
+import { delegationLimits } from '../application/delegation-policy.js';
 import { isSharedFeatureSession } from './workspace-feature-authoring.js';
 import type { WorkspaceContext } from './workspace-context.js';
 import { requestGateSchema } from '../application/request-gate-schema.js';
@@ -25,7 +27,22 @@ export function capabilities(workspace: WorkspaceContext){
       mergeAuthority: false,
     },
     events: { transport: "polling", streaming: false },
+    // Retain the v1 wrapper profile; session-aware callers inspect the additive v2 profiles.
     capabilities: modelCapabilities,
+    modelSessions: {
+      requestVersions: [1, 2],
+      scope: "per_feature_request",
+      history: "worker_private_journal",
+      context: "bounded_replay_with_explicit_archive",
+      recovery: "explicit_guarded_resume",
+      providers: {
+        "claude-cli": { v2Continuation: "provider_session", nativeResume: true, minimumVersion: minimumClaudeVersion },
+        "codex-cli": { v2Continuation: "worker_context_replay", nativeResume: false },
+        "openai-api": { v2Continuation: "worker_context_replay", nativeResume: false },
+        "anthropic-api": { v2Continuation: "worker_context_replay", nativeResume: false },
+      },
+      delegation: { tool: "werk_delegate", default: "disabled", ...delegationLimits, depth: 1, consumption: "per_child_invocation" },
+    },
     toolAccess: { supported: true, management: "worker_global_revision", default: "none", scope: "local_model_invocations", repositoryFiles: "task_worktree_read_only", implementation: { supported: true, activation: "new_git_request_with_approved_paths_and_required_checks", writes: "approved_paths_in_owned_worktree", review: "actual_patch_and_matching_required_checks", humanMergeRequired: true }, cliTools: "argument_policy_in_task_worktree", executionLimits: "operator_configured_per_grant", revocation: "pause_and_drain_before_save" },
     consumption: { supported: true, unit: 'tokens', periods: ['daily', 'monthly'], clock: 'UTC', scope: 'this_worker_model_invocations', enforcement: 'admission', personalUsageObserved: false },
     resources: {

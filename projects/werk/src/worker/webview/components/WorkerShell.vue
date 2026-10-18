@@ -13,7 +13,7 @@ function skipToContent() { document.getElementById('main')?.focus(); }
       <RouterLink class="wordmark" :to="homePath" :aria-label="homeLabel">werk<span>.</span></RouterLink>
       <div class="worker-header-identity"><slot name="identity" /></div>
       <nav :aria-label="navLabel">
-        <RouterLink v-for="link in links" :key="link.path" :to="link.path" :aria-current="route.path === link.path ? 'page' : undefined"><UIcon v-if="link.icon" :name="link.icon" /><span>{{ link.label }}</span></RouterLink>
+        <RouterLink v-for="link in links" :key="link.path" :to="link.path" :aria-current="route.path === link.path ? 'page' : route.path === '/review' && link.path === '/taskboard' ? 'location' : undefined"><UIcon v-if="link.icon" :name="link.icon" /><span>{{ link.label }}</span></RouterLink>
       </nav>
       <div class="worker-header-actions"><slot name="actions" /></div>
     </header>
@@ -38,7 +38,7 @@ function skipToContent() { document.getElementById('main')?.focus(); }
 nav { display: flex; align-self: stretch; align-items: center; gap: 6px; margin-left: 12px; }
 nav a { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 10px 14px; border-radius: 6px; color: var(--ui-text-muted); font-size: .875rem; font-weight: 550; white-space: nowrap; text-decoration: none; }
 nav a:hover { background: #1d2c35; color: var(--ui-text-highlighted); }
-nav a[aria-current='page'] { background: #243b37; color: #b3f1cf; }
+nav a[aria-current] { background: #243b37; color: #b3f1cf; }
 .worker-header-actions :deep(button), .worker-header-actions :deep(a) { min-width: 44px; min-height: 44px; justify-content: center; }
 .worker-header-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 #main { flex: 1; min-width: 0; width: 100%; max-width: none; margin: 0; padding: 0; }

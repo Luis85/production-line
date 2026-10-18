@@ -1,3 +1,5 @@
+import type { ProcessSupervisor } from '../application/process-supervisor.js';
+import { createProcessObservation } from '../infrastructure/process-observation.js';
 import { FeatureTracking } from '../application/feature-tracking.js';
 import { MarkdownFeatureTracking } from '../infrastructure/features/tracking.js';
 import { WorkerConsumption } from '../application/consumption.js';
@@ -29,6 +31,7 @@ import { join } from "node:path";
 import type { SnapshotJournal } from "../infrastructure/journal/snapshots.js";
 import type { Status } from "./server.js";
 import { task } from './workspace-tasks.js';
+import { sharedFeatureAdmissionHold } from './workspace-feature-admission.js';
 import { taskboardAction } from './workspace-task-views.js';
 import { featureTrackingSnapshot, inspectSharedFeature, submitSharedFeature, submitFeature, inspectFeature, continueFeatureInteraction } from './workspace-features.js';
 import { prepareTaskWorkspace, removeTaskWorkspace } from './workspace-repositories.js';
@@ -67,6 +70,9 @@ export class WorkspaceContext {
   repositoriesUpdating = false;
   repositoryStop = new AbortController();
   readonly resources: WorkerResourceMonitor;
+  processes?: ProcessSupervisor;
+  readonly processObservations = createProcessObservation();
+  processReconciliation?: ReturnType<typeof setInterval>;
   readonly consumption: WorkerConsumption;
   readonly reviews: RequestReviewManager;
   readonly settings: WorkerSettings;
@@ -121,6 +127,7 @@ export class WorkspaceContext {
     this.sessions = createWorkerSessions(
       config.stateDir, this.settings, modelFor, undefined, () => this.board.active, this.consumption,
       { remote: () => { const status = this.get(); return { waiting: status.queuedTasks?.length ?? null, running: status.activeTasks.length }; } },
+      { supervisor: () => this.processes, observations: this.processObservations },
     );
     this.sessions.featureSource = record => {
       const shared = record.kind === 'local' && record.id.startsWith('local-')
@@ -132,11 +139,11 @@ export class WorkspaceContext {
       this.settings,
       this.sessions,
       {
-        prepareWorktree: (selector, key, signal, commit) => prepareTaskWorkspace(this, selector, key, signal, commit),
-        verifyWorktree: (selector, key, signal, commit) => prepareTaskWorkspace(this, selector, key, signal, commit, true),
+        prepareWorktree: (selector, key, signal, commit, inspection) => prepareTaskWorkspace(this, selector, key, signal, commit, false, inspection),
+        verifyWorktree: (selector, key, signal, commit, inspection) => prepareTaskWorkspace(this, selector, key, signal, commit, true, inspection),
         removeWorktree: (selector, key, signal, expected) => removeTaskWorkspace(this, selector, key, signal, expected),
       },
-      undefined, this.consumption,
+      undefined, this.consumption, { supervisor: () => this.processes, observations: this.processObservations },
     );
     this.featureTracking = new FeatureTracking(new MarkdownFeatureTracking(
       config.features ? join(config.features.directory, '_tasks') : join(config.stateDir, 'feature-requests'), config.stateDir,
@@ -187,7 +194,8 @@ export class WorkspaceContext {
       stateDirectory: config.stateDir,
       resolve: id => this.repositories.resolve(id),
       allowed: path => this.repositoryDiscovery.assertAllowed(path),
-      canAdmit: () => this.acceptingTasks && !this.settings.value.board.paused && !this.consumption.status().blocked && !this.configurationUpdating && !this.repositoriesUpdating && !this.executionProfiles?.pending(),
+      canAdmit: () => !sharedFeatureAdmissionHold(this),
+      admissionHold: () => sharedFeatureAdmissionHold(this),
       submit: record => submitSharedFeature(this, record),
       continue: (record, command) => continueFeatureInteraction(this, this.board.executionDetail(record.taskId!).sessionId, command),
       admissionIssue: input => {

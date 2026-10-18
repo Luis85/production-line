@@ -1,3 +1,5 @@
+import { validateServicePolicy, type ServicePolicy } from './service-access-policy.js';
+import { validateDelegationPolicy, type DelegationPolicy } from './delegation-policy.js';
 import { callTimeout, toolTimeLimits } from './tool-limits.js';
 import { validateMcpAddress } from './mcp-endpoint.js';
 import { DomainError } from '../../shared/errors.js';
@@ -20,7 +22,7 @@ export interface ToolMcpConnection extends ToolChatDirectory {
   allowedTools: string[]; discoveredTools: ToolDefinition[];
   /** Additional per-call deadline; absence keeps the 30-second MCP default. */ timeoutMs?: number;
 }
-export interface ToolPolicy { schemaVersion: 1; revision: number; builtins: ToolBuiltinPolicy; mcp: ToolMcpConnection[]; }
+export interface ToolPolicy { schemaVersion: 1; revision: number; builtins: ToolBuiltinPolicy; mcp: ToolMcpConnection[]; delegation?: DelegationPolicy; services?: ServicePolicy; }
 export interface McpConnectionView extends Omit<ToolMcpConnection, 'secret'> { hasSecret: boolean; }
 /** `workerNode` is the Node.js executable running this worker, offered as a CLI tool interpreter. */
 export interface ToolAccessView extends Omit<ToolPolicy, 'mcp'> { mcp: McpConnectionView[]; canEdit: boolean; saveBlockedReason: string | null; workerNode: string; }
@@ -28,8 +30,8 @@ export interface ToolMcpInput extends Omit<ToolMcpConnection, 'secret' | 'discov
 export type ToolCommandInput = Omit<ToolCommandPreset, 'timeoutMs'> & { timeoutMs?: number | null };
 export type ToolCliInput = Omit<ToolCliTool, 'timeoutMs'> & { timeoutMs?: number | null };
 export interface ToolBuiltinInput extends Omit<ToolBuiltinPolicy, 'commands' | 'cliTools'> { commands: ToolCommandInput[]; cliTools: ToolCliInput[]; }
-/** Omitted overrides preserve an existing grant; explicit null resets it to inheritance. */
-export interface ToolAccessUpdate { expectedRevision: number; builtins: ToolBuiltinInput; mcp: ToolMcpInput[]; }
+/** Omitted grants preserve saved access; explicit null only clears per-tool timeout overrides. */
+export interface ToolAccessUpdate { expectedRevision: number; builtins: ToolBuiltinInput; mcp: ToolMcpInput[]; delegation?: DelegationPolicy; services?: ServicePolicy; }
 function invalid(message: string): never { throw new DomainError('invalid_input', message); }
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 function fields(value: unknown, allowed: string[], label: string): Record<string, unknown> {
@@ -136,22 +138,24 @@ function connection(value: unknown): ToolMcpConnection {
   return { id: id(input.id), name: string(input.name, 'connection name', 120), transport, enabled: boolean(input.enabled, 'MCP enabled'), command, args, url: address, secretEnv, secret: string(input.secret, 'MCP secret', 4096, true), allowedTools, discoveredTools, ...chatDirectory(input.chatDirectory, 'MCP connection'), ...(timeoutMs === undefined ? {} : { timeoutMs }) };
 }
 export function validateToolPolicy(value: unknown): ToolPolicy {
-  const input = fields(value, ['schemaVersion', 'revision', 'builtins', 'mcp'], 'tool policy');
+  const input = fields(value, ['schemaVersion', 'revision', 'builtins', 'mcp', 'delegation', 'services'], 'tool policy');
   if (input.schemaVersion !== 1 || !Number.isSafeInteger(input.revision) || Number(input.revision) < 0 || Number(input.revision) >= Number.MAX_SAFE_INTEGER || !Array.isArray(input.mcp) || input.mcp.length > 8) invalid('Invalid saved tool policy.');
   const mcp = input.mcp.map(connection);
   if (new Set(mcp.map(item => item.id)).size !== mcp.length) invalid('MCP connection IDs must be unique.');
   const builtinPolicy = builtins(input.builtins);
+  const delegation = input.delegation === undefined ? undefined : validateDelegationPolicy(input.delegation);
+  const services = input.services === undefined ? undefined : validateServicePolicy(input.services);
   const granted = mcp.filter(item => item.enabled).flatMap(item => item.discoveredTools.filter(tool => item.allowedTools.includes(tool.name)));
-  const count = granted.length + (builtinPolicy.files ? 3 + (builtinPolicy.commands.some(item => item.enabled && item.verification) ? 3 : 0) : 0) + (builtinPolicy.commands.some(item => item.enabled) ? 1 : 0) + builtinPolicy.cliTools.filter(item => item.enabled).length + (builtinPolicy.webOrigins.length ? 1 : 0);
-  if (count > 64) invalid('Enable at most 64 model tools across built-ins and MCP connections.');
+  const count = (services?.enabled && services.presets.some(item => item.enabled) ? 5 : 0) + (delegation?.enabled ? 1 : 0) + granted.length + (builtinPolicy.files ? 3 + (builtinPolicy.commands.some(item => item.enabled && item.verification) ? 3 : 0) : 0) + (builtinPolicy.commands.some(item => item.enabled) ? 1 : 0) + builtinPolicy.cliTools.filter(item => item.enabled).length + (builtinPolicy.webOrigins.length ? 1 : 0);
+  if (count > 64) invalid('Enable at most 64 model tools across built-ins, services, delegation and MCP connections.');
   const cliDefinitions = builtinPolicy.cliTools.filter(item => item.enabled).map(item => ({ description: cliToolDescription(item), inputSchema: cliToolInputSchema(item) }));
   if (JSON.stringify(granted).length + JSON.stringify(cliDefinitions).length > 98304) invalid('Granted MCP and CLI tool descriptions and schemas exceed 96 KiB. Enable fewer tools or shorten their descriptions.');
-  return { schemaVersion: 1, revision: Number(input.revision), builtins: builtinPolicy, mcp };
+  return { schemaVersion: 1, revision: Number(input.revision), builtins: builtinPolicy, mcp, ...(delegation === undefined ? {} : { delegation }), ...(services === undefined ? {} : { services }) };
 }
 const destination = (item: Pick<ToolMcpConnection, 'transport' | 'command' | 'args' | 'url' | 'secretEnv'>) => JSON.stringify([item.transport, item.command, item.args, item.url, item.secretEnv]);
 /** `assignedRepositoryIds` are the worker's current repository assignments; chat directories must name one of them. */
 export function updateToolPolicy(previous: ToolPolicy, value: unknown, assignedRepositoryIds: readonly string[] = []): ToolPolicy {
-  const input = fields(value, ['expectedRevision', 'builtins', 'mcp'], 'tool access update');
+  const input = fields(value, ['expectedRevision', 'builtins', 'mcp', 'delegation', 'services'], 'tool access update');
   if (input.expectedRevision !== previous.revision) throw new DomainError('conflict', 'Tool access changed. Reload the saved policy before applying your changes.');
   if (!Array.isArray(input.mcp) || input.mcp.length > 8) invalid('Configure at most eight MCP connections.');
   const mcp = input.mcp.map(raw => {
@@ -167,7 +171,9 @@ export function updateToolPolicy(previous: ToolPolicy, value: unknown, assignedR
     const secret = clearSecret === true ? '' : entry.secret !== undefined && entry.secret !== '' ? entry.secret : same ? saved.secret : '';
     return connection(withSavedTimeout({ ...rest, secret, allowedTools: sameCatalog ? entry.allowedTools : [], discoveredTools: sameCatalog ? saved.discoveredTools : [] }, saved));
   });
-  const next = validateToolPolicy({ schemaVersion: 1, revision: previous.revision + 1, builtins: builtins(input.builtins, previous.builtins), mcp });
+  const delegation = input.delegation === undefined ? previous.delegation : input.delegation;
+  const services = input.services === undefined ? previous.services : input.services;
+  const next = validateToolPolicy({ schemaVersion: 1, revision: previous.revision + 1, builtins: builtins(input.builtins, previous.builtins), mcp, ...(delegation === undefined ? {} : { delegation }), ...(services === undefined ? {} : { services }) });
   assertChatDirectories(next, assignedRepositoryIds);
   return next;
 }

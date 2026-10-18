@@ -26,6 +26,13 @@ export class WorkerInteractionJournal implements InteractionStore {
 
   async init() {
     if (this.db) return;
+    await this.open();
+    try { this.recover(); } catch (error) { this.close(); throw error; }
+  }
+
+  /** Startup coordinator inspects all durable authorities before reconciliation. */
+  async open() {
+    if (this.db) return;
     this.db = await openPrivateJournal(this.directory, 'worker-interactions.sqlite', 'Interaction storage must be a regular file.');
     try {
       this.db.exec(`
@@ -35,10 +42,21 @@ export class WorkerInteractionJournal implements InteractionStore {
         CREATE TABLE IF NOT EXISTS interaction_operations (session_id TEXT NOT NULL, operation_id TEXT NOT NULL, digest TEXT NOT NULL, turn_id TEXT NOT NULL, PRIMARY KEY(session_id,operation_id));
         CREATE TABLE IF NOT EXISTS interaction_events (sequence INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, session_id TEXT NOT NULL, payload TEXT NOT NULL);
         CREATE INDEX IF NOT EXISTS interaction_events_session ON interaction_events(session_id,sequence);`);
-      for (const row of this.db.prepare("SELECT session_id,id FROM interaction_turns WHERE status IN ('queued','running')").all()) {
-        this.fail(String(row.session_id), String(row.id), 'interrupted', 'worker_restarted');
-      }
     } catch (error) { this.close(); throw error; }
+  }
+
+  preparedForRecovery(sessionId: string, turnId: string): boolean {
+    const db = this.database(), turn = this.turn(sessionId, turnId);
+    const row = db.prepare('SELECT session_id,run_id,status FROM interaction_turns WHERE id=?').get(turnId);
+    const started = db.prepare("SELECT 1 FROM interaction_events WHERE session_id=? AND json_extract(payload,'$.turnId')=? AND json_extract(payload,'$.type') NOT IN ('accepted','prepared') LIMIT 1").get(sessionId, turnId);
+    return row?.status === 'queued' && row.session_id === sessionId && row.run_id === turn.runId && !started;
+  }
+
+  recover(retained: ReadonlySet<string> = new Set()) {
+    for (const row of this.database().prepare("SELECT session_id,id FROM interaction_turns WHERE status IN ('queued','running')").all()) {
+      if (retained.has(String(row.id)) && this.preparedForRecovery(String(row.session_id), String(row.id))) continue;
+      this.fail(String(row.session_id), String(row.id), 'interrupted', 'worker_restarted');
+    }
   }
 
   close() { this.db?.close(); this.db = undefined; }

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from 'node:sqlite';
 import { DomainError } from "../../../../shared/errors.js";
 import {
+  gateDigest,
   type RequestEvent,
   type WorkerRequest
 } from "../../../application/request-gates.js";
@@ -15,6 +16,11 @@ export class RequestStore {
     this.directory = directory;
   }
   async init() {
+    if (this.db) return;
+    await this.open();
+    try { this.recover(); } catch (error) { this.close(); throw error; }
+  }
+  async open() {
     if (this.db) return;
     this.db = await openPrivateJournal(this.directory, 'worker-requests.sqlite', 'Request journal must be a regular file.');
     try {
@@ -30,6 +36,9 @@ export class RequestStore {
         CREATE INDEX IF NOT EXISTS request_sessions ON worker_requests(session_id,sequence);
         CREATE TABLE IF NOT EXISTS request_policy(singleton INTEGER PRIMARY KEY CHECK(singleton=1),revision INTEGER NOT NULL,payload TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS request_policy_operations(operation_id TEXT PRIMARY KEY,digest TEXT NOT NULL);`);
+    } catch (error) { this.close(); throw error; }
+  }
+  recover(retained: ReadonlySet<string> = new Set()) {
       for (const row of this.database()
         .prepare("SELECT payload FROM worker_requests")
         .all()) {
@@ -38,7 +47,8 @@ export class RequestStore {
         if (
           request.execution &&
           ["prepared", "running"].includes(request.execution.status) &&
-          !request.execution.result
+          !request.execution.result &&
+          !(retained.has(request.id) && this.preparedForRecovery(request.id))
         ) {
           request.execution.status = "interrupted";
           request.execution.outcome = "interrupted";
@@ -55,10 +65,20 @@ export class RequestStore {
         if (changed)
           this.transaction(() => this.save(request, "recovered_interrupted"));
       }
-    } catch (error) {
-      this.close();
-      throw error;
-    }
+  }
+  preparedForRecovery(id: string): boolean {
+    const db = this.database(), request = this.get(id), execution = request.execution;
+    if (!execution || execution.status !== 'prepared') return false;
+    const row = db.prepare('SELECT session_id,root_turn_id,phase FROM worker_requests WHERE id=?').get(id);
+    const bound = db.prepare('SELECT request_id,input_revision FROM request_turns WHERE session_id=? AND turn_id=?').get(request.owner.sessionId, execution.turnId);
+    const saved = db.prepare('SELECT payload FROM request_executions WHERE request_id=? AND turn_id=?').get(id, execution.turnId);
+    const generation = db.prepare('SELECT payload FROM request_generations WHERE request_id=? AND input_revision=?').get(id, request.inputRevision);
+    if (!generation) return false;
+    const accepted = JSON.parse(String(generation.payload));
+    if (['input', 'inputHash', 'policy', 'policyDigest', 'provider'].some(key => gateDigest(accepted[key]) !== gateDigest(request[key as keyof WorkerRequest]))) return false;
+    const started = db.prepare("SELECT 1 FROM request_events WHERE request_id=? AND json_extract(payload,'$.turnId')=? AND json_extract(payload,'$.type')='execution_started' LIMIT 1").get(id, execution.turnId);
+    return row?.session_id === request.owner.sessionId && row.root_turn_id === request.owner.rootTurnId && row.phase === request.phase &&
+      bound?.request_id === id && bound.input_revision === request.inputRevision && !!saved && JSON.stringify(JSON.parse(String(saved.payload))) === JSON.stringify(execution) && !started;
   }
   close() {
     this.db?.close();

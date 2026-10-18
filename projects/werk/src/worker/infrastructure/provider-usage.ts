@@ -42,3 +42,13 @@ export function codexUsage(output: Buffer, onUsage?: (usage: ProviderUsage) => v
     onUsage({ ...total });
   }
 }
+
+/** Normalize only the current Claude invocation; retained session totals must not be charged twice. */
+export function claudeSessionUsage(response: unknown, resumed: boolean, scope: 'invocation' | 'session' | undefined, previous: number | null | undefined): ProviderUsage {
+  const usage = providerUsage('claude', response), total = usage.providerReportedCostUsd;
+  if (!resumed || scope === 'invocation') return usage;
+  const delta = scope === 'session' && total !== null && previous != null && total >= previous ? total - previous : null;
+  const reason = 'The resumed provider cost could not be separated from earlier session usage.';
+  if (delta === null && [usage.inputTokens, usage.outputTokens, usage.cacheReadTokens, usage.cacheWriteTokens].every(value => value === null)) return unknownUsage(reason);
+  return { ...usage, providerReportedCostUsd: delta, costBasis: delta === null ? 'unavailable' : 'reported_estimate', ...(delta === null ? { reason } : {}) };
+}

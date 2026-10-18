@@ -1,5 +1,5 @@
 import { DomainError } from '../../shared/errors.js';
-import { DEFAULT_COMMAND_TIMEOUT_MS, DEFAULT_MAX_RUNTIME_MS, DEFAULT_MAX_TOOL_CALLS, MAX_COMMAND_TIMEOUT_MS, MAX_MAX_RUNTIME_MS, MAX_TOOL_CALLS } from './execution-policy.js';
+import { candidateFileLimitError, candidateInspectionBounds, candidateInspectionFields, DEFAULT_COMMAND_TIMEOUT_MS, DEFAULT_MAX_RUNTIME_MS, DEFAULT_MAX_TOOL_CALLS, MAX_COMMAND_TIMEOUT_MS, MAX_MAX_RUNTIME_MS, MAX_TOOL_CALLS, type CandidateInspectionLimits } from './execution-policy.js';
 import { ToolAccessError } from './tool-runtime.js';
 import type { ToolPolicy } from './tool-policy.js';
 
@@ -22,6 +22,12 @@ function budget(value: number | undefined, fallback: number, maximum: number): n
   // Sub-second values are supported by internal fixtures; editable settings require at least one second.
   if (!Number.isSafeInteger(effective) || effective < 1 || effective > maximum) throw new ToolAccessError('Invalid tool execution limits.');
   return effective;
+}
+/** Frozen candidate source bounds for one implementation attempt; absent values use the settings defaults. */
+export function resolveCandidateInspectionLimits(input: Partial<CandidateInspectionLimits> = {}): Readonly<CandidateInspectionLimits> {
+  const limits = Object.fromEntries(candidateInspectionFields.map(field => [field, budget(input[field], candidateInspectionBounds[field].default, candidateInspectionBounds[field].maximum)])) as unknown as CandidateInspectionLimits;
+  if (limits.candidateFileMaxBytes > limits.candidateSourceMaxBytes) throw new ToolAccessError(candidateFileLimitError(limits.candidateFileMaxBytes, limits.candidateSourceMaxBytes));
+  return Object.freeze(limits);
 }
 export function resolveCommandTimeoutMs(cap?: number, override?: number): number {
   const maximum = budget(cap, DEFAULT_COMMAND_TIMEOUT_MS, MAX_COMMAND_TIMEOUT_MS);

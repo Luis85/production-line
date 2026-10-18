@@ -4,12 +4,13 @@ import { reactive, nextTick } from 'vue';
 import { frontend, deferred } from '../ui/helpers/frontend-loader.mjs';
 const { createQueueSettingsEditor, createDurationSettingsEditor, queuePolicy, durationPolicy } = await frontend('src/worker/webview/worker-policy-editors.ts');
 const queue = (overrides = {}) => ({ queueCapacity: 16, orchestratorQueue: 0, order: 'fifo', ...overrides });
-const duration = (overrides = {}) => ({ longRunningMs: 3600000, maxRuntimeMs: 21600000, maxToolCalls: 128, commandTimeoutMs: 300000, fromEnvironment: false, ...overrides });
+const inspection = (overrides = {}) => ({ candidateSourceMaxBytes: 64 * 1024 * 1024, candidateSourceMaxFiles: 20000, candidateFileMaxBytes: 8 * 1024 * 1024, ...overrides });
+const duration = (overrides = {}) => ({ longRunningMs: 3600000, maxRuntimeMs: 21600000, maxToolCalls: 128, commandTimeoutMs: 300000, ...inspection(), fromEnvironment: false, ...overrides });
 function editor(t, kind = 'queue', initial) {
   const state = reactive({ unlocked: true, epoch: 0, saved: initial ?? (kind === 'queue' ? queue() : duration()) });
   const commands = [];
   let write = async command => {
-    state.saved = kind === 'queue' ? command.board : { longRunningMs: command.resources.longRunningMs, maxRuntimeMs: command.execution?.maxRuntimeMs ?? state.saved.maxRuntimeMs, maxToolCalls: command.execution.maxToolCalls, commandTimeoutMs: command.execution.commandTimeoutMs, fromEnvironment: state.saved.fromEnvironment };
+    state.saved = kind === 'queue' ? command.board : { ...command.execution, longRunningMs: command.resources.longRunningMs, maxRuntimeMs: command.execution?.maxRuntimeMs ?? state.saved.maxRuntimeMs, maxToolCalls: command.execution.maxToolCalls, commandTimeoutMs: command.execution.commandTimeoutMs, fromEnvironment: state.saved.fromEnvironment };
     return state.saved;
   }, refresh = async () => {};
   const create = kind === 'queue' ? createQueueSettingsEditor : createDurationSettingsEditor;
@@ -80,7 +81,7 @@ test('duration saves validate both fields and atomically submit warning, maximum
   assert.equal(e.commands.length, 0); e.draft.values.warningHours = 1 / 3600;
   e.draft.values.maximumHours = 25; assert.match(e.validation.value, /one second to 24 hours/);
   e.draft.values.maximumHours = 24; await e.save();
-  assert.deepEqual(e.commands[0], { resources: { longRunningMs: 1000 }, execution: { maxRuntimeMs: 86400000, maxToolCalls: 128, commandTimeoutMs: 300000 }, expectedDuration: { longRunningMs: 3600000, maxRuntimeMs: 21600000 }, expectedToolBudget: { maxToolCalls: 128, commandTimeoutMs: 300000 } });
+  assert.deepEqual(e.commands[0], { resources: { longRunningMs: 1000 }, execution: { ...inspection(), maxRuntimeMs: 86400000, maxToolCalls: 128, commandTimeoutMs: 300000 }, expectedDuration: { longRunningMs: 3600000, maxRuntimeMs: 21600000 }, expectedToolBudget: { maxToolCalls: 128, commandTimeoutMs: 300000 }, expectedCandidateInspection: inspection() });
   assert.equal(e.dirty.value, false); assert.match(e.draft.notice, /New attempts/);
 });
 test('environment-controlled maximum stays authoritative and is omitted from warning-only saves', async t => {
@@ -88,7 +89,7 @@ test('environment-controlled maximum stays authoritative and is omitted from war
   const initial = durationPolicy(settings); assert.equal(initial.fromEnvironment, true);
   const e = editor(t, 'duration', initial); e.draft.values.warningHours = .5; e.draft.values.maximumHours = 25;
   assert.equal(e.validation.value, ''); await e.save();
-  assert.deepEqual(e.commands[0], { resources: { longRunningMs: 1800000 }, execution: { maxToolCalls: 128, commandTimeoutMs: 300000 }, expectedDuration: { longRunningMs: 3600000, maxRuntimeMs: 7200000 }, expectedToolBudget: { maxToolCalls: 128, commandTimeoutMs: 300000 } });
+  assert.deepEqual(e.commands[0], { resources: { longRunningMs: 1800000 }, execution: { ...inspection(), maxToolCalls: 128, commandTimeoutMs: 300000 }, expectedDuration: { longRunningMs: 3600000, maxRuntimeMs: 7200000 }, expectedToolBudget: { maxToolCalls: 128, commandTimeoutMs: 300000 }, expectedCandidateInspection: inspection() });
   assert.equal(e.draft.values.maximumHours, 2);
 });
 test('duration authority changes make an in-progress draft stale until reloaded', async t => {
@@ -105,7 +106,7 @@ test('tool budget inputs reject invalid bounds and preserve the existing policy 
   for (const value of ['', 0, 3601, Infinity]) { e.draft.values.commandSeconds = value; assert.match(e.validation.value, /command timeout/); await e.save(); }
   assert.equal(e.commands.length, 0);
   e.draft.values.commandSeconds = 900; await e.save();
-  assert.deepEqual(e.commands[0].execution, { maxRuntimeMs: 21600000, maxToolCalls: 256, commandTimeoutMs: 900000 });
+  assert.deepEqual(e.commands[0].execution, { ...inspection(), maxRuntimeMs: 21600000, maxToolCalls: 256, commandTimeoutMs: 900000 });
   assert.deepEqual(e.commands[0].expectedToolBudget, { maxToolCalls: 128, commandTimeoutMs: 300000 });
   assert.deepEqual(e.commands[0].expectedDuration, { longRunningMs: 3600000, maxRuntimeMs: 21600000 });
   assert.equal(e.dirty.value, false);
@@ -126,4 +127,60 @@ test('lost tool-budget acknowledgement retries the original duration and budget 
   e.draft.values.maxToolCalls = 128;
   e.onWrite(async () => duration({ fromEnvironment: true, maxToolCalls: 64, commandTimeoutMs: 600000 })); await e.retry();
   assert.deepEqual(e.commands[1], submitted); assert.equal(e.draft.uncertain, null);
+});
+
+
+test('inspection defaults use readable units and preserve exact saved bytes through an unrelated edit', async t => {
+  const defaults = durationPolicy({ resources: { longRunningMs: 3600000 }, execution: { maxRuntimeMs: 7200000 } });
+  assert.deepEqual({ candidateSourceMaxBytes: defaults.candidateSourceMaxBytes, candidateSourceMaxFiles: defaults.candidateSourceMaxFiles, candidateFileMaxBytes: defaults.candidateFileMaxBytes }, inspection());
+  const exact = inspection({ candidateSourceMaxBytes: 64 * 1024 * 1024 + 1, candidateFileMaxBytes: 8 * 1024 * 1024 + 1 });
+  const e = editor(t, 'duration', duration(exact));
+  assert.equal(e.draft.values.sourceMiB, exact.candidateSourceMaxBytes / 1048576); assert.equal(e.dirty.value, false);
+  e.draft.values.warningHours = 2; await e.save();
+  assert.deepEqual(e.commands[0].expectedCandidateInspection, exact);
+  assert.equal(e.commands[0].execution.candidateSourceMaxBytes, exact.candidateSourceMaxBytes);
+  assert.equal(e.commands[0].execution.candidateFileMaxBytes, exact.candidateFileMaxBytes); assert.equal(e.dirty.value, false);
+});
+
+test('inspection form rejects out-of-range, fractional-byte and inconsistent limits before saving', async t => {
+  const e = editor(t, 'duration');
+  /** @type {Array<[string, Array<string | number>, RegExp]>} */
+  const cases = [
+    ['sourceMiB', ['', 0, 1025, Infinity, 1.00000001], /total source/],
+    ['sourceFiles', ['', 0, 200001, 1.5, Infinity], /file limit/],
+    ['fileMiB', ['', 0, 0.0624, 257, Infinity, 8.00000001], /individual file/],
+  ];
+  for (const [field, values, message] of cases) {
+    for (const value of values) { e.draft.values[field] = value; assert.match(e.validation.value, message); await e.save(); }
+    e.reload();
+  }
+  e.draft.values.sourceMiB = 4; e.draft.values.fileMiB = 8; assert.match(e.validation.value, /cannot exceed/); await e.save();
+  assert.equal(e.commands.length, 0);
+  e.draft.values.fileMiB = .0625; e.draft.values.sourceFiles = 200000; await e.save();
+  assert.equal(e.commands[0].execution.candidateSourceMaxBytes, 4194304); assert.equal(e.commands[0].execution.candidateFileMaxBytes, 65536);
+  assert.equal(e.commands[0].execution.candidateSourceMaxFiles, 200000);
+});
+
+test('concurrent inspection edits block stale duration saves and preserve the draft until explicit reload', async t => {
+  const e = editor(t, 'duration'); e.draft.values.maximumHours = 8; e.draft.values.sourceFiles = 40000;
+  e.state.saved = duration({ candidateSourceMaxBytes: 128 * 1048576 }); await nextTick();
+  assert.equal(e.stale.value, true); assert.equal(e.draft.values.sourceFiles, 40000); await e.save(); assert.equal(e.commands.length, 0);
+  e.reload(); assert.equal(e.draft.values.sourceMiB, 128); assert.equal(e.draft.values.maximumHours, 6); assert.equal(e.stale.value, false);
+});
+
+test('an uncertain inspection save retries the exact byte values and baseline under an environment duration', async t => {
+  const e = editor(t, 'duration', duration({ fromEnvironment: true })); e.draft.values.sourceMiB = 128; e.draft.values.fileMiB = 16;
+  e.onWrite(async () => { throw Error('Response lost'); }); await e.save(); const submitted = structuredClone(e.commands[0]);
+  assert.equal('maxRuntimeMs' in submitted.execution, false); assert.deepEqual(submitted.expectedCandidateInspection, inspection());
+  e.draft.values.sourceMiB = 256;
+  e.onWrite(async () => duration({ fromEnvironment: true, candidateSourceMaxBytes: 128 * 1048576, candidateFileMaxBytes: 16 * 1048576 })); await e.retry();
+  assert.deepEqual(e.commands[1], submitted); assert.equal(e.draft.uncertain, null);
+});
+
+
+test('a refreshed saved inspection policy confirms a lost acknowledgement without another write', async t => {
+  const e = editor(t, 'duration'); e.draft.values.sourceMiB = 128;
+  e.onWrite(async () => { throw Error('Response lost'); }); await e.save(); assert.ok(e.draft.uncertain);
+  e.state.saved = durationPolicy({ resources: { longRunningMs: 3600000 }, execution: { maxRuntimeMs: 21600000, maxToolCalls: 128, commandTimeoutMs: 300000, ...inspection({ candidateSourceMaxBytes: 128 * 1048576 }) } });
+  await nextTick(); assert.equal(e.draft.uncertain, null); assert.equal(e.dirty.value, false); assert.equal(e.commands.length, 1);
 });

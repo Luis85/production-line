@@ -6,6 +6,7 @@ import { validateApprovedPaths } from './approved-paths.js';
 import { gateDigest } from './request-gates.js';
 import type { ToolPolicy, ToolCommandPreset } from './tool-policy.js';
 import type { ToolWorktreeIdentity } from './tool-runtime.js';
+import type { CandidateInspectionLimits } from './execution-policy.js';
 
 /** Frozen authority for a new repository implementation. Never inferred for saved proposal tasks. */
 export interface DevelopmentCheck { id: string; name: string; executable: string; args: string[]; fingerprint: string; timeoutMs?: number; }
@@ -24,9 +25,11 @@ export interface DevelopmentRuntime {
   capture(signal: AbortSignal): Promise<DevelopmentCandidate>;
   evidence(): DevelopmentEvidence;
 }
-export interface DevelopmentFactoryOptions {
+/** Execution limits frozen with an attempt's dispatch; absent values use the settings defaults. */
+export type DevelopmentLimits = Partial<CandidateInspectionLimits> & { commandTimeoutMs?: number };
+export interface DevelopmentFactoryOptions extends DevelopmentLimits {
   scope: DevelopmentScope; worktree: string; worktreeIdentity: ToolWorktreeIdentity; repository: string;
-  initialEvidence?: DevelopmentEvidence; commandTimeoutMs?: number;
+  initialEvidence?: DevelopmentEvidence;
   checkpoint(evidence: DevelopmentEvidence): Promise<void>;
   verifyWorkspace(signal: AbortSignal): Promise<void>;
   currentPolicy(): ToolPolicy;

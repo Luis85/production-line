@@ -3,11 +3,13 @@ import { posix, resolve } from 'node:path';
 import { Marked } from 'marked';
 import { escapeHtml } from './render-storymap.mjs';
 import { mountDocumentation } from './documentation-client.mjs';
+import { overviewMarkdown } from './readme-source.mjs';
 
 const DOCUMENTATION_DIRECTORIES = ['docs/tutorials', 'docs/how-to', 'docs/reference', 'docs/explanation'];
 const DOCUMENTATION_CHAPTERS = ['Start here', 'Set up your workspace', 'Work with requests', 'Operate the system', 'Frontend reference', 'Architecture and contracts'];
 const entrypoints = [
   ['start', 'Start here', 'docs/handbook.md', 0],
+  ['project-overview', 'From one worker to a Factory', 'docs/overview.md', 0],
   ['execution-modes', 'Choose an execution mode', 'docs/explanation/modes.md', 0],
   ['install-worker', 'Install a local worker', 'docs/how-to/project-worker.md', 1],
   ['shared-intake', 'Connect the shared Markdown queue', 'docs/how-to/shared-feature-intake.md', 1],
@@ -45,7 +47,7 @@ export async function documentationFiles(root) {
       for (const name of (await readdir(resolve(root, directory))).sort()) if (name.endsWith('.md')) files.push(`${directory}/${name}`);
     } catch (error) { if (error.code !== 'ENOENT') throw error; }
   }
-  for (const path of ['docs/handbook.md', 'docs/index.md', 'README.md']) {
+  for (const path of ['docs/handbook.md', 'docs/index.md', 'docs/overview.md', 'README.md']) {
     try { await lstat(resolve(root, path)); files.push(path); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   }
   return [...new Set(files)].sort();
@@ -54,7 +56,9 @@ export async function documentationCatalog(root) {
   const files = await documentationFiles(root);
   const pages = [];
   for (const path of files) {
-    const markdown = await readFile(resolve(root, path), 'utf8');
+    if (path === 'README.md' && files.includes('docs/overview.md')) continue;
+    const source = await readFile(resolve(root, path), 'utf8');
+    const markdown = path === 'docs/overview.md' ? await overviewMarkdown(root, source) : source;
     const preferred = entrypoints.find(entry => entry[2] === path);
     pages.push({ id: preferred?.[0] ?? slug(path), title: preferred?.[1] ?? markdown.match(/^#\s+(.+)$/m)?.[1] ?? path,
       source: path, chapter: DOCUMENTATION_CHAPTERS[preferred?.[3] ?? (path.includes('/how-to/') ? 3 : 5)], markdown });
@@ -72,7 +76,7 @@ export function documentationLink(href, source, pages, commit) {
   let decoded; try { decoded = decodeURIComponent(pathname); } catch { throw Error(`Invalid documentation URL in ${source}: ${href}`); }
   const target = posix.normalize(posix.join(posix.dirname(source), decoded));
   if (target.startsWith('../') || target.startsWith('/')) throw Error(`Documentation link leaves the project: ${source}: ${href}`);
-  const page = pages.find(page => page.source === target);
+  const page = pages.find(page => page.source === target || target === 'README.md' && page.source === 'docs/overview.md');
   if (page) return `${page.id}.html${fragment ? `#${fragment}` : ''}`;
   return `https://github.com/Luis85/production-line/blob/${commit}/projects/werk/${target.split('/').map(encodeURIComponent).join('/')}${fragment ? `#${fragment}` : ''}`;
 }

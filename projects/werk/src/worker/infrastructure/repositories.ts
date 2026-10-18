@@ -1,3 +1,4 @@
+import type { CandidateInspectionLimits } from '../application/execution-policy.js';
 import { resolve } from 'node:path';
 import { DomainError } from '../../shared/errors.js';
 import { validateRepositoryConfiguration, type RepositoryAssignment, type RepositoryConfiguration } from '../application/repositories.js';
@@ -86,7 +87,7 @@ export class RepositoryManager {
     if (signal?.aborted) signal.throwIfAborted();
     return this.view();
   }
-  async prepareWorktree(selector: string, taskKey: string, signal: AbortSignal, baseCommit?: string): Promise<RepositoryWorktree> {
+  async prepareWorktree(selector: string, taskKey: string, signal: AbortSignal, baseCommit?: string, inspection: Partial<CandidateInspectionLimits> = {}): Promise<RepositoryWorktree> {
     this.ensureOpen(); const item = this.resolve(selector), bounded = AbortSignal.any([signal, this.shutdown.signal]);
     return this.enqueue(item.id, async () => {
       bounded.throwIfAborted();
@@ -98,15 +99,15 @@ export class RepositoryManager {
       // A network failure leaves an inspectable status; local committed work remains available offline.
       const root = await this.inspectRoot(item, bounded);
       if (!pinnedShared && item.branch && (await repositoryGit(root.path, ['branch', '--show-current'], bounded, this.timeoutMs)).trim() !== item.branch) throw new DomainError('conflict', 'Check out the assigned branch before starting a task.');
-      return createRepositoryWorktree(root, item.id, taskKey, bounded, baseCommit, this.timeoutMs, this.worktreeOptions());
+      return createRepositoryWorktree(root, item.id, taskKey, bounded, baseCommit, this.timeoutMs, { ...this.worktreeOptions(), ...inspection });
     }, bounded);
   }
   /** Re-verify a retained task worktree without fetching or creating anything. */
-  async verifyWorktree(selector: string, taskKey: string, signal: AbortSignal, baseCommit?: string): Promise<RepositoryWorktree> {
+  async verifyWorktree(selector: string, taskKey: string, signal: AbortSignal, baseCommit?: string, inspection: Partial<CandidateInspectionLimits> = {}): Promise<RepositoryWorktree> {
     this.ensureOpen(); const item = this.resolve(selector), bounded = AbortSignal.any([signal, this.shutdown.signal]);
     return this.enqueue(item.id, async () => {
       const root = await this.inspectRoot(item, bounded);
-      return createRepositoryWorktree(root, item.id, taskKey, bounded, baseCommit, this.timeoutMs, { ...this.worktreeOptions(), reuseOnly: true });
+      return createRepositoryWorktree(root, item.id, taskKey, bounded, baseCommit, this.timeoutMs, { ...this.worktreeOptions(), ...inspection, reuseOnly: true });
     }, bounded);
   }
   /** Ownership records of every assigned repository; one unavailable repository does not hide the others. */

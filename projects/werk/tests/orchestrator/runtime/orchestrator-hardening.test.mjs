@@ -54,7 +54,7 @@ test('FIFO scheduling skips saturated providers while preserving order among com
 test('independent SQLite processes claim disjoint assignments and retain fencing after reopen', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'werk-scheduler-concurrency-'));
   const path = join(directory, 'state.sqlite');
-  let store;
+  let store, failure, cleanupFailure;
   try {
     store = new Store(path);
     const registrations = Array.from({ length: 2 }, () => store.register('demo', [{ ...profiles[0], maxParallel: 8 }], { maxParallel: 8, order: 'priority', configHash: 'default' }));
@@ -66,7 +66,11 @@ test('independent SQLite processes claim disjoint assignments and retain fencing
         for (let i = 0; i < 400 && tasks.length < 8; i++) { const task = store.claim(worker, 'claim-' + i); if (task) tasks.push(task); else await new Promise(resolve => setTimeout(resolve, 10)); }
         console.log(JSON.stringify(tasks));
       } finally { store.close(); }`;
-    const results = await Promise.all(registrations.map(auth => promisify(execFile)(process.execPath, ['--input-type=module', '-e', source, path, auth.token])));
+    // Drain both process lifetimes before releasing their shared database directory.
+    const settled = await Promise.allSettled(registrations.map(auth => promisify(execFile)(process.execPath, ['--input-type=module', '-e', source, path, auth.token], { timeout: 30000 })));
+    const failed = settled.find(result => result.status === 'rejected');
+    if (failed) throw failed.reason;
+    const results = settled.flatMap(result => result.status === 'fulfilled' ? [result.value] : []);
     const assigned = results.flatMap(result => JSON.parse(result.stdout));
     assert.equal(assigned.length, 16);
     assert.ok(assigned.every(Boolean));
@@ -79,7 +83,12 @@ test('independent SQLite processes claim disjoint assignments and retain fencing
     assert.equal(store.claim(worker, 'claim-0').lease, JSON.parse(results[0].stdout)[0].lease);
     assert.throws(() => store.heartbeat(worker, foreign.id, foreign.lease, foreign.attempt), error => testErrorCode(error) === 'conflict');
     assert.equal(store.heartbeat(worker, own.id, own.lease, own.attempt).status, 'running');
-  } finally { store?.close(); await rm(directory, { recursive: true, force: true }); }
+  } catch (error) { failure = error; }
+  try { store?.close(); await rm(directory, { recursive: true, force: true }); }
+  catch (error) { cleanupFailure = error; }
+  if (failure !== undefined && cleanupFailure !== undefined) throw new AggregateError([failure, cleanupFailure], 'SQLite fixture failed and cleanup also failed.', { cause: failure });
+  if (failure !== undefined) throw failure;
+  if (cleanupFailure !== undefined) throw cleanupFailure;
 });
 
 test('shutdown aborts an unfinished upload at its configured deadline and releases the database', { timeout: 15000 }, async t => {

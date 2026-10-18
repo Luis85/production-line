@@ -14,9 +14,8 @@ defineEmits<{ open: [TaskOverviewItem] }>();
     <div class="overview-card-footer">
       <span v-if="item.provider" class="task-provider">{{ item.provider }}</span>
       <time v-else-if="item.updatedAt" :datetime="item.updatedAt">{{ date(item.updatedAt) }}</time>
-      <button type="button" :disabled="disabled" @click="$emit('open', item)">{{ item.primaryAction.label }}<UIcon name="i-lucide-arrow-up-right" /></button>
+      <button type="button" :class="{ 'review-action': item.primaryAction.kind === 'review' }" :disabled="disabled" @click="$emit('open', item)">{{ item.primaryAction.label }}<UIcon name="i-lucide-arrow-up-right" /></button>
     </div>
-    <RouterLink v-if="item.localTaskId && item.status === 'review'" class="patch-review-link" :to="{ path: '/history', query: { fileState: 'review', fileId: item.localTaskId } }">Review proposed patch<UIcon name="i-lucide-arrow-up-right" /></RouterLink>
   </article>
 </template>
 <style scoped>
@@ -33,17 +32,17 @@ h3 { margin: 13px 0 11px; font-size: 1.0625rem; line-height: 1.5; font-weight: 6
 .overview-card-summary { margin: 12px 0 15px; font-size: .875rem; line-height: 1.65; color: #b5c4cd; overflow-wrap: anywhere; }
 .overview-card-footer { display: flex; align-items: center; gap: 8px; justify-content: space-between; flex-wrap: wrap; }
 .task-provider, time { font-size: .6875rem; color: #a4b7c2; }
-button, .patch-review-link { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; border: 1px solid #40565e; border-radius: 6px; padding: 8px 12px; font-size: .75rem; font-weight: 550; color: #e1edf0; background: #23353e; cursor: pointer; text-decoration: none; }
-button:hover, .patch-review-link:hover { background: #2d4349; border-color: #7ca79a; }
+button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; border: 1px solid #40565e; border-radius: 6px; padding: 8px 12px; font-size: .75rem; font-weight: 550; color: #e1edf0; background: #23353e; cursor: pointer; text-decoration: none; }
+button:hover { background: #2d4349; border-color: #7ca79a; }
 button:disabled { opacity: .5; cursor: default; }
-.patch-review-link { margin-top: 12px; width: 100%; color: #b8eccf; }
+.review-action { color: #09221c; background: #8be0b8; border-color: #8be0b8; }
+.review-action:hover { color: #09221c; background: #a5edcb; border-color: #a5edcb; }
 .compact { display: grid; grid-template-columns: minmax(120px, .8fr) minmax(180px, 1.5fr) minmax(110px, .7fr) minmax(160px, 1fr); gap: 16px; align-items: center; padding: 14px 18px; }
 .compact h3 { margin: 0; font-size: .875rem; }
 .compact .overview-card-summary { display: none; }
 .overview-card-title { min-width: 0; }
 .compact .task-identity { margin: var(--space-1) 0 0; }
 .compact .overview-card-footer { justify-content: flex-end; }
-.compact .patch-review-link { grid-column: 2 / -1; width: fit-content; margin: 0; }
 @media (max-width: 1300px) { .compact { grid-template-columns: minmax(140px, 1fr) minmax(180px, 1.3fr); } .compact .overview-card-footer { justify-content: flex-start; } }
 @media (max-width: 560px) { .overview-card { padding: 16px; } .compact { display: block; } .compact h3 { margin-block: 12px; } .compact .overview-card-footer { margin-top: 12px; } }
 </style>

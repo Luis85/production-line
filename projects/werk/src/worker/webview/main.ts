@@ -11,6 +11,7 @@ const router = createRouter({ history: createWebHistory(), scrollBehavior(to, fr
 }, routes: [
   { path: '/', redirect: '/taskboard' },
   { path: '/taskboard', component: () => import('./pages/TaskboardPage.vue'), meta: { title: 'Taskboard' } },
+  { path: '/review', component: () => import('./pages/ReviewPage.vue'), meta: { title: 'Feature request review' } },
   { path: '/chat', redirect: to => ({ path: '/taskboard', query: to.query, hash: to.hash }) },
   { path: '/history', component: () => import('./pages/HistoryPage.vue'), meta: { title: 'History' } },
   { path: '/dashboard', component: () => import('./pages/MonitoringPage.vue'), meta: { title: 'Metrics' } },

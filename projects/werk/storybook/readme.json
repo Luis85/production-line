@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "source": "docs/overview.md",
+  "screenshots": [
+    {
+      "file": "worker-taskboard.png",
+      "story": "worker-workspace--populated-taskboard",
+      "viewport": "desktop",
+      "alt": "Worker taskboard showing capacity and requests grouped by their current state.",
+      "caption": "The real worker taskboard with sample local requests. Select a request to inspect its conversation and progress; use Metrics, History and Settings to inspect and configure the worker."
+    },
+    {
+      "file": "worker-create-request.png",
+      "story": "worker-shared-feature-requests--describe-request",
+      "viewport": "desktop",
+      "alt": "Shared Feature Request authoring in the worker, with request instructions and the Prepare request action.",
+      "caption": "The shared-request entry screen with example instructions. The next step lets you review the template, approved scope and readiness before publishing."
+    },
+    {
+      "file": "worker-metrics.png",
+      "story": "worker-metrics--active-worker",
+      "viewport": "desktop",
+      "alt": "Worker Metrics with current capacity, configured token allowance, resources and execution activity.",
+      "caption": "Metrics in the real worker UI with deterministic sample measurements. Worker process resources, host observations and the configured allowance are separate; these are not live account balances."
+    },
+    {
+      "file": "worker-review.png",
+      "story": "worker-review--verified-candidate",
+      "viewport": "desktop",
+      "alt": "Feature Request review with the accepted goal, changed files, required checks and the next human action.",
+      "caption": "The real review workspace with a fictional verified candidate and a policy requiring human acceptance. Recording acceptance is separate from merging the change."
+    },
+    {
+      "file": "worker-settings.png",
+      "story": "worker-workspace--worker-settings",
+      "viewport": "desktop",
+      "alt": "Worker settings with provider connections and navigation to repositories, tool access and consumption settings.",
+      "caption": "Settings in the real worker UI, using sample configuration. Keep credentials local to the worker machine."
+    }
+  ]
+}

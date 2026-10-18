@@ -1,7 +1,8 @@
+import type { ModelSessionAccess } from '../application/model-session.js';
 import { ProviderModelError, type ModelInvocationControl, type ModelRequest } from '../application/model-contract.js';
 import type { ToolManifest, ToolRuntime } from '../application/tool-runtime.js';
 export type ToolRuntimeFactory = (policy?: ModelRequest['policy']) => ToolRuntime;
-export interface ProviderOptions { tools?: ToolRuntimeFactory; }
+export interface ProviderOptions { tools?: ToolRuntimeFactory; session?: ModelSessionAccess; }
 /** Factories must remain lazy: metadata inspection starts no processes, timers or network sessions. */
 export function currentToolManifest(factory?: ToolRuntimeFactory, policy?: ModelRequest['policy']): ToolManifest | undefined {
   const manifest = factory?.(policy).manifest;

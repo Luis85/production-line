@@ -1,6 +1,6 @@
 {
   "name": "software-fabrik",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -21,7 +21,7 @@
     "check": "npm run check:fast && npm test",
     "audit:dependencies": "npm audit --audit-level=low",
     "release:package": "node scripts/release/package.mjs",
-    "release:build": "npm run changelog:check && npm run build && npm run storybook:ci && npm run release:package && npm run release:storybook",
+    "release:build": "npm run readme:check && npm run changelog:check && npm run build && npm run storybook:ci && npm run release:package && npm run release:storybook && npm run release:readme",
     "storybook": "npm run storybook:generate && storybook dev -p 6006 --no-open",
     "storybook:generate": "node scripts/storybook/generate.mjs",
     "storybook:build": "npm run storybook:generate && storybook build --disable-telemetry",
@@ -36,9 +36,12 @@
     "lint:oxlint": "oxlint --deny-warnings src scripts storybook .storybook tests werk.mjs stryker.config.mjs",
     "analyze:fallow": "node scripts/quality/fallow.mjs",
     "check:architecture": "node --test tests/architecture/architecture-boundaries.test.mjs tests/architecture/dependency-graph.test.mjs",
-    "check:fast": "npm run check:loc && npm run lint:oxlint && npm run analyze:fallow && npm run check:architecture && npm run typecheck && npm run typecheck:tests",
+    "check:fast": "npm run readme:check && npm run check:loc && npm run lint:oxlint && npm run analyze:fallow && npm run check:architecture && npm run typecheck && npm run typecheck:tests",
     "check:loc": "node scripts/quality/loc.mjs",
-    "typecheck:tests": "node scripts/quality/typecheck-tests.mjs"
+    "typecheck:tests": "node scripts/quality/typecheck-tests.mjs",
+    "readme:generate": "node scripts/storybook/readme-source.mjs generate",
+    "readme:check": "node scripts/storybook/readme-source.mjs check",
+    "release:readme": "node scripts/release/readme-package.mjs"
   },
   "devDependencies": {
     "@iconify-json/lucide": "1.2.143",

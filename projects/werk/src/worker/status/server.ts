@@ -104,6 +104,10 @@ export async function statusServer(
             );
           if (req.method === "GET" && req.url === "/api/consumption")
             return json(res, 200, workspace.consumption.status());
+          if (req.method === "GET" && req.url === "/api/processes")
+            return json(res, 200, await workspace.processStatus());
+          if (req.method === "POST" && req.url === "/api/processes")
+            return json(res, 200, await workspace.processCommand(await readJson(req)));
           if (req.method === "GET" && req.url === "/api/resources")
             return json(res, 200, workspace.resources.status());
           if (req.method === "POST" && req.url === "/api/resources")

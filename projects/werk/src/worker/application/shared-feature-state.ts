@@ -87,6 +87,13 @@ export interface SharedExecution {
   runId?: string;
   error?: string | null;
 }
+/** A start restriction, distinct from invalid Feature Request content. */
+export interface SharedAdmissionHold {
+  code: 'paused' | 'budget' | 'configuration' | 'capacity' | 'stopping' | 'history_capacity';
+  message: string;
+  /** A known UTC allowance boundary, not a promise that every other restriction clears then. */
+  resumesAt?: string;
+}
 export interface SharedIntakePorts {
   load(): Promise<SharedFeatureState>;
   save(state: SharedFeatureState): Promise<void>;
@@ -99,6 +106,8 @@ export interface SharedIntakePorts {
   continue?(record: SharedFeatureRecord, command: InteractionCommand): Promise<unknown>;
   inspect(taskId: string): SharedExecution | undefined;
   canAdmit(): boolean;
+  /** Informational reason to retain ready work without claiming or dispatching it. */
+  admissionHold?(): SharedAdmissionHold | undefined;
   /** A reason this worker cannot run the input, such as a missing instruction profile. The request then stays unclaimed for another worker or a later sync. */
   admissionIssue?(input: SharedFeatureInput): string | undefined;
 }

@@ -12,14 +12,16 @@ import UBadge from '@nuxt/ui/components/Badge.vue';
 import USelect from '@nuxt/ui/components/Select.vue';
 import McpConnectionsEditor from './McpConnectionsEditor.vue';
 import CliToolsEditor from './CliToolsEditor.vue';
+import ServicePresetsEditor from './ServicePresetsEditor.vue';
 import { state, workspaceAction } from '../store';
 import { toolLimitSeconds } from '../tool-access-editor';
+import { delegationLimits } from '../../application/delegation-policy';
 const { draft, dirty, stale, locked, validation, canSave } = editor;
 const view = computed(() => state.toolAccess), pausing = ref(false);
 const effective = computed(() => {
   const value = view.value;
   if (!value) return 'Loading saved access';
-  const count = (value.builtins.files ? 1 : 0) + value.builtins.commands.filter(item => item.enabled).length + (value.builtins.cliTools ?? []).filter(item => item.enabled).length + (value.builtins.webOrigins.length ? 1 : 0) + value.mcp.filter(item => item.enabled).reduce((total, item) => total + item.allowedTools.length, 0);
+  const count = (value.services?.enabled ? 1 : 0) + (value.delegation?.enabled ? 1 : 0) + (value.builtins.files ? 1 : 0) + value.builtins.commands.filter(item => item.enabled).length + (value.builtins.cliTools ?? []).filter(item => item.enabled).length + (value.builtins.webOrigins.length ? 1 : 0) + value.mcp.filter(item => item.enabled).reduce((total, item) => total + item.allowedTools.length, 0);
   return count ? 'Tool access configured' : 'All tools off';
 });
 async function pause() {
@@ -45,6 +47,16 @@ async function pause() {
             <UTextarea id="tool-web-origins" v-model="draft.webOrigins" :rows="3" placeholder="https://docs.example.com" class="w-full" aria-describedby="tool-web-help" />
             <p id="tool-web-help" class="page-note">An empty list disables web access. Granted origins allow bounded reads; redirects do not expand the allowed destinations.</p>
           </section>
+          <section class="delegation-section" aria-labelledby="tool-delegation-title">
+            <h3 id="tool-delegation-title">Model delegation</h3>
+            <label class="check-label file-grant" for="tool-delegation-enabled"><input id="tool-delegation-enabled" v-model="draft.delegation.enabled" type="checkbox" aria-describedby="tool-delegation-help"><span><strong>Allow models to delegate work to subagents</strong><span>Off by default. When enabled, the model can ask Werk to run bounded subtasks within the current attempt.</span></span></label>
+            <div class="command-fields">
+              <div><label for="tool-delegation-children">Subagent limit per attempt</label><UInput id="tool-delegation-children" v-model.number="draft.delegation.maxChildren" type="number" min="1" :max="delegationLimits.maxChildren" step="1" required class="w-full" aria-describedby="tool-delegation-limits" /></div>
+              <div><label for="tool-delegation-concurrent">Concurrent subagents</label><UInput id="tool-delegation-concurrent" v-model.number="draft.delegation.maxConcurrent" type="number" min="1" :max="delegationLimits.maxConcurrent" step="1" required class="w-full" aria-describedby="tool-delegation-limits" /></div>
+            </div>
+            <p id="tool-delegation-limits" class="page-note">Allow 1–4 subagents in total and 1–2 at a time. The concurrent limit cannot exceed the total.</p>
+            <p id="tool-delegation-help" class="page-note">Subagents use the parent’s model, execution profile and Feature Request, within its approved tools. They share the attempt’s time and tool-call budget, and their consumption counts toward the worker’s allowance. Subagents cannot delegate further.</p>
+          </section>
           <p class="page-note">Set the overall attempt duration, total tool calls and command limit in <RouterLink to="/settings#queue">Queue &amp; duration</RouterLink>. Set individual tool timeouts below. Command and CLI deadlines stay within the worker command limit; remaining attempt time applies to every call.</p>
           <section class="commands-section" aria-labelledby="command-presets-title">
             <div class="section-heading"><h3 id="command-presets-title">Command presets</h3><UButton type="button" color="neutral" variant="outline" icon="i-lucide-plus" :disabled="draft.commands.length >= 16" @click="editor.addCommand">Add command</UButton></div>
@@ -65,6 +77,7 @@ async function pause() {
               <p :id="`tool-command-check-help-${index}`" class="page-note">When enabled, this check must pass on the current changes before a new implementation request is ready for review. Use a test, lint or build command that exits when finished. Disabling the command excludes it from new requests.</p>
             </div>
           </section>
+          <ServicePresetsEditor :editor="editor" />
           <CliToolsEditor :editor="editor" />
           <McpConnectionsEditor :editor="editor" />
           <div class="tool-save-actions"><UButton type="submit" :loading="draft.busy && !draft.discovering" :disabled="!canSave">Save tool access</UButton><UButton v-if="dirty || stale" type="button" color="neutral" variant="ghost" @click="editor.reload">Discard edits and reload</UButton></div>
@@ -87,7 +100,7 @@ async function pause() {
 h2, h3 { margin: 0; color: var(--ui-text-highlighted); } h3 { font-size: 1rem; font-weight: 650; }
 .section-heading { flex-wrap: wrap; gap: 12px; }
 .tool-fields { border: 0; margin: 0; padding: 0; min-width: 0; }
-.builtins-section, .commands-section { display: grid; gap: 10px; padding-block: 24px; border-bottom: 1px solid var(--ui-border); margin-bottom: 24px; }
+.builtins-section, .delegation-section, .commands-section { display: grid; gap: 10px; padding-block: 24px; border-bottom: 1px solid var(--ui-border); margin-bottom: 24px; }
 .access-scope, .authority-note, .access-notice { padding: 14px; background: var(--ui-bg-elevated); border-left: 2px solid var(--ui-border-accented); font-size: .8125rem; line-height: 1.6; }
 .file-grant { align-items: start; gap: 12px; padding-block: 14px; }
 .timeout-input { max-width: 16rem; }

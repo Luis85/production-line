@@ -23,6 +23,7 @@ cannot retain a grant that appears revoked in the editor.
 | Repository files | List, read and search files in an approved task's Git worktree. New implementation requests can also edit their explicitly approved paths when a required feature check is enabled. Requests without an approved task worktree have no repository file tools. |
 | Command presets | Run the exact executable and arguments you configure. The model chooses a preset; it cannot supply an arbitrary shell command. |
 | CLI tools | Run a project command-line tool in the task worktree with arguments the model chooses, within the commands, flags and refusals you allow. See [Give the model a project CLI](#give-the-model-a-project-cli). |
+| Development services | Start and manage explicitly granted fixed service presets in a Feature Request’s pinned worktree, within its lifetime and restart allowance. This is separate from finite command presets. |
 | Web origins | Fetch HTTP(S) content from the origins you allow. This is page fetching, not a search-engine connection. |
 
 List, read and search tools remain read-only. They exclude Git metadata, reject
@@ -59,6 +60,40 @@ managed process tree.
 Web grants use exact origins, including any non-default port, such as
 `https://docs.example.com`. A grant covers that origin's paths. Redirects must
 remain within granted origins. URLs with embedded credentials are rejected.
+
+## Allow the model to delegate
+
+In **Settings → Tools & MCP → Model delegation**, enable **Allow models to
+delegate work to subagents**. As with other grants, pause new starts and drain
+queued/running work before saving, then resume the worker. Existing policies
+without this grant keep delegation disabled.
+
+Set **Subagent limit per attempt** to 1–4 and **Concurrent subagents** to 1–2,
+no greater than the total. The parent model receives `werk_delegate` and decides
+whether a child would help. It can narrow each child's tools or give a child no
+tools. Children use the same provider, model, execution profile and Feature
+Request; they do not create another request in the team's intake folder.
+
+Children share the attempt's time limit and tool-call allowance. Each model call
+also counts toward the worker's configured consumption allowance. They cannot
+delegate again. Stopping the parent stops its children. Repository operations
+remain serialized through the same approved worktree and required verification
+checks; ask for independent work and let the parent reconcile the reports.
+
+This capability uses Werk's controlled delegation tool. It does not enable
+unrestricted native provider agents. Child reports are inputs to the parent,
+not human approval or proof that project checks passed. A blocked child returns
+its question to the parent, which decides whether the Feature Request needs a
+Task note for the team.
+
+The portable CLI edits the same optional `delegation` policy field:
+
+```json
+{"enabled": true, "maxChildren": 4, "maxConcurrent": 2}
+```
+
+Read `tool-access get`, edit its `delegation` value and save the complete guarded
+payload with `tool-access set --file`, following the CLI procedure below.
 
 ## Give the model a project CLI
 
@@ -223,6 +258,30 @@ save duration settings; those global defaults are omitted from saved settings.
 Restore the stopped-state backup from before the upgrade when retained task state is incompatible, using the
 [portable update workflow](../reference/portable-apps.md#update-a-copied-app).
 
+## Grant development services
+
+For a preview server or watcher that should remain available after a model turn,
+configure **Development services** in this editor. Enable the service capability
+and each named preset separately. The preset fixes its absolute executable,
+arguments, maximum lifetime, readiness signal and bounded restart policy. The
+model cannot supply a shell command, environment or different working directory.
+A canonical Feature Request with a still-valid pinned task worktree is required;
+a repository checkout selected only for Chat does not grant service access.
+
+The model receives `werk_service_start`, `werk_service_status`,
+`werk_service_logs`, `werk_service_stop` and `werk_service_restart` only when this
+capability is granted for its worktree. These calls use the invocation's normal
+tool-call allowance. The service itself has a separate maximum lifetime, so it
+can remain for human review after the invocation finishes. Services and their
+logs remain scoped to their owning Feature Request/session/task. Service output
+is private project data that the selected model may receive through its tools.
+
+Manage active services in **Metrics → Services & execution processes**. Changes
+to grants reconcile existing services; revocation or a changed preset stops the
+old service instead of silently changing its executable. The
+[worker process guide](manage-worker-processes.md) explains the setup, limits,
+confirmation/retry controls and platform cleanup boundaries.
+
 ## Connect an MCP server
 
 Add a connection with a recognizable name and choose its transport:
@@ -342,13 +401,16 @@ and checks all count as tool calls.
 | Stdio MCP call timeout | 30 seconds | 1–900 seconds | Each connection; optional `timeoutMs` |
 | HTTP MCP call timeout | 30 seconds | 1–300 seconds | Each connection; optional `timeoutMs` |
 | Web fetch deadline | 10 seconds | Fixed | — |
+| Candidate source inspection | 64 MiB, 20,000 paths, 8 MiB per file outside the approved edit list | See [configuration](../reference/configuration.md#local-worker-execution-policy) | **Queue & duration → Repository inspection limits**; the three `execution.candidate*` settings |
 
 Command presets, project CLI tools and required feature checks use the smaller
 of their optional timeout and the invocation's captured global command ceiling.
 A larger per-grant value cannot raise that ceiling. MCP calls use their own
 connection timeout, independently of the command ceiling; it includes session
-startup, schema revalidation and the tool call. Every operation also stops when
-the total invocation deadline or cancellation signal ends it. API providers can
+startup, schema revalidation and the tool call. Every finite operation also stops when
+the total invocation deadline or cancellation signal ends it. Granted development
+services have their own bounded lifetime; their start/control calls still follow
+the invocation deadline and cancellation policy. API providers can
 return a final answer after the last permitted tool call.
 
 An already prepared dispatch keeps its captured budgets while queued or when
@@ -412,6 +474,12 @@ ceiling can record:
 when the first tool starts. It is not a field in `tool-access.json`.
 `callTimeoutMs` records resolved tool deadlines; the command-run entry uses the
 longest preset deadline and `presetTimeoutMs` records individual presets.
+An implementation dispatch with candidate tools also records `candidateInspection`
+with the frozen `candidateSourceMaxBytes`, `candidateSourceMaxFiles` and
+`candidateFileMaxBytes`; the same values are in its `policy` and bound candidate
+inspection for that attempt. Delegated candidate tools inherit the same frozen
+bounds; a child granted only status/check tools keeps that evidence without
+gaining candidate-edit authority.
 Metadata is evidence, not authority: the accepted execution budget and current
 matching grants govern calls. Legacy dispatches without `limits` remain supported
 when their policy revision and exact tool definitions still match; missing
@@ -419,7 +487,15 @@ metadata cannot widen their accepted budget. New manifests must match completely
 
 Before rollback, clear the optional timeouts rather than saving their numeric
 defaults; see the compatibility steps above. Old worker versions do not understand
-these fields. Preserve a stopped-state backup before upgrading.
+these fields. Before rolling back to 0.12.0 or earlier, use the current worker to
+save all three repository-inspection defaults together: 64 MiB total, 20,000 paths
+and 8 MiB per file. Equivalently, send
+`{"execution":{"candidateSourceMaxBytes":67108864,"candidateSourceMaxFiles":20000,"candidateFileMaxBytes":8388608}}`
+through `settings set`. Saving defaults removes these keys from persisted settings;
+omitting them in a partial update does not reset them. Older workers refuse the
+new keys at startup. This settings reset does not migrate retained dispatches:
+restore the stopped-state backup from before the upgrade when retained task state
+is incompatible, using the [portable update workflow](../reference/portable-apps.md#update-a-copied-app).
 
 ### When the tool budget runs out
 

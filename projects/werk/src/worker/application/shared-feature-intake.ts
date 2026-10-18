@@ -6,7 +6,7 @@ import { DomainError } from '../../shared/errors.js';
 import { featureTaskDirectory, type FeatureWorkflowSnapshot } from './feature-workflow.js';
 import { publishIntakeDiagnostic } from './intake-diagnostics.js';
 import type { SharedFeatureView, SharedIntakeView, SharedIntakeNote } from './shared-intake-contract.js';
-import { bindingKey, defaultSharedIntakeConfig, sharedTerminal, sharedTaskActive, validateSharedIntakeConfig, type SharedFeatureRecord, type SharedFeatureState, type SharedIntakePorts } from './shared-feature-state.js';
+import { bindingKey, defaultSharedIntakeConfig, sharedTerminal, sharedTaskActive, validateSharedIntakeConfig, type SharedAdmissionHold, type SharedFeatureRecord, type SharedFeatureState, type SharedIntakePorts } from './shared-feature-state.js';
 import { SharedFeatureLifecycle } from './shared-feature-lifecycle.js';
 import { sharedHash } from './shared-feature-notes.js';
 
@@ -29,7 +29,7 @@ export class SharedFeatureIntake {
   constructor(ports: SharedIntakePorts) { this.ports = ports; this.lifecycle = new SharedFeatureLifecycle(ports, () => this.save()); }
   get enabled() { return this.initialized && this.state.config.enabled; }
   get busy() { return !!this.syncing || this.configuring || this.responses > 0; }
-  requiredRepositoryIds(): string[] { return [...new Set([...(this.enabled ? [this.state.config.repositoryId] : []), ...this.state.records.filter(record => !sharedTerminal(record.status) || sharedTaskActive(record) || record.publication !== 'synced').map(record => record.binding.repositoryId)])]; }
+  requiredRepositoryIds(): string[] { return [...new Set([...(this.enabled ? [this.state.config.repositoryId] : []), ...this.state.records.filter(record => !sharedTerminal(record.status) || sharedTaskActive(record) || this.lifecycle.publication(record) !== 'synced').map(record => record.binding.repositoryId)])]; }
   /** Retain provenance across binding changes without exposing request contents or credentials. */
   sourceForTask(taskId: string): { repositoryId: string; path: string } | undefined {
     const record = this.state.records.find(record => record.taskId === taskId);
@@ -42,14 +42,15 @@ export class SharedFeatureIntake {
     return record.submitted || reference.key === existingKey ? reference : undefined;
   }
   get binding() { return this.initialized ? structuredClone(this.state.config) : undefined; }
-  async init() { this.state = await this.ports.load(); this.initialized = true; }
+  async init() { this.state = await this.ports.load(); this.refreshPublications(); this.initialized = true; }
   start() { if (!this.timer && !this.stopping.signal.aborted) this.schedule(); }
   private schedule() {
     if (this.stopping.signal.aborted) return;
     this.timer = setTimeout(() => { this.timer = undefined; void this.sync().finally(() => this.schedule()); }, this.state.config.pollMs);
     this.timer.unref();
   }
-  private save() { return this.ports.save(this.state); }
+  private refreshPublications() { for (const record of this.state.records) record.publication = this.lifecycle.publication(record); }
+  private save() { this.refreshPublications(); return this.ports.save(this.state); }
   view(blockedReason: string | null = null): SharedIntakeView {
     const workflow = this.snapshot;
     const locals = this.state.records.filter(record => bindingKey(record.binding) === bindingKey(this.state.config)).map(record => this.publicRecord(record));
@@ -64,7 +65,8 @@ export class SharedFeatureIntake {
     };
   }
   private publicRecord(record: SharedFeatureRecord): SharedFeatureView {
-    const { id, name, title, status, owner, sourceCommit, updatedAt, ready, done, featureBranch, reviewNote, taskNote, publication, error, taskId } = record;
+    const { id, name, title, status, owner, sourceCommit, updatedAt, ready, done, featureBranch, reviewNote, taskNote, error, taskId } = record;
+    const publication = this.lifecycle.publication(record);
     const task = record.task;
     const responseStatus = task?.response?.status;
     const taskResponse: SharedFeatureView['taskResponse'] = task && (task.uiResponse || task.response) ? {
@@ -81,7 +83,7 @@ export class SharedFeatureIntake {
       if (this.stopping.signal.aborted) throw new DomainError('unavailable', 'Worker is stopping.');
       if (this.syncing || this.responses) throw new DomainError('conflict', 'Wait for shared synchronization to finish.');
       if (expectedRevision !== this.state.revision) throw new DomainError('conflict', 'Shared intake changed. Reload before saving.');
-      if (bindingKey(config) !== bindingKey(this.state.config) && this.state.records.some(record => !sharedTerminal(record.status) || sharedTaskActive(record) || record.publication !== 'synced')) throw new DomainError('conflict', 'Finish the owned requests and publish their notes before changing the shared repository binding. Disable intake to pause it.');
+      if (bindingKey(config) !== bindingKey(this.state.config) && this.state.records.some(record => !sharedTerminal(record.status) || sharedTaskActive(record) || this.lifecycle.publication(record) !== 'synced')) throw new DomainError('conflict', 'Finish the owned requests and publish their notes before changing the shared repository binding. Disable intake to pause it.');
       if (config.enabled) this.ports.repository(config);
       const previous = this.state;
       this.configuring = true;
@@ -123,7 +125,7 @@ export class SharedFeatureIntake {
   private async reconcile() {
     const signal = this.stopping.signal, config = structuredClone(this.state.config);
     for (const record of this.state.records) {
-      if (bindingKey(record.binding) !== bindingKey(config) && sharedTerminal(record.status) && !sharedTaskActive(record) && record.publication === 'synced') continue;
+      if (bindingKey(record.binding) !== bindingKey(config) && sharedTerminal(record.status) && !sharedTaskActive(record) && this.lifecycle.publication(record) === 'synced') continue;
       await this.lifecycle.reconcile(record, signal);
     }
     if (!config.enabled) { this.fault = null; return; }
@@ -135,8 +137,8 @@ export class SharedFeatureIntake {
     const ids = new Map<string, number>();
     const observed = files.map(file => { try { const source = this.ports.source(file); if (source.id) ids.set(source.id, (ids.get(source.id) ?? 0) + 1); return { file, source }; } catch { return { file, source: null }; } });
     const diagnosticErrors: string[] = [];
-    const diagnostic = async (file: Parameters<typeof publishIntakeDiagnostic>[0]['file'], issues: string[]) => {
-      try { return await publishIntakeDiagnostic({ repository, workflow: snapshot, file, owner: this.state.workerId, issues, signal }); }
+    const diagnostic = async (file: Parameters<typeof publishIntakeDiagnostic>[0]['file'], issues: string[], hold?: SharedAdmissionHold) => {
+      try { return await publishIntakeDiagnostic({ repository, workflow: snapshot, file, owner: this.state.workerId, issues, hold, signal }); }
       catch (error) {
         signal.throwIfAborted();
         diagnosticErrors.push(file.name + ': ' + (error instanceof Error ? error.message : 'Intake Task could not be published.'));
@@ -161,9 +163,16 @@ export class SharedFeatureIntake {
       if (!ready.valid || !ready.input || !ready.inputHash) { const issues = ready.errors.map(e => e.message); const taskNote = await diagnostic(file, issues); this.discovered.push({ ...this.unclaimed(file.name, source.id ?? '', source.title, 'needs_rework', commit, issues), taskNote }); continue; }
       const issue = this.ports.admissionIssue?.(ready.input);
       if (issue) { const taskNote = await diagnostic(file, [issue]); this.discovered.push({ ...this.unclaimed(file.name, ready.input.id, ready.input.title, 'ready', commit, []), error: issue.slice(0, 500), taskNote }); continue; }
+      const waiting = async (hold: SharedAdmissionHold) => {
+        const taskNote = await diagnostic(file, [], hold);
+        this.discovered.push({ ...this.unclaimed(file.name, ready.input!.id, ready.input!.title, 'ready', commit, []), error: hold.message.slice(0, 500), taskNote });
+      };
+      const hold = this.admissionHold();
+      if (hold) { await waiting(hold); continue; }
       await diagnostic(file, []);
-      if (!this.ports.canAdmit()) { this.discovered.push(this.unclaimed(file.name, ready.input.id, ready.input.title, 'ready', commit, [])); continue; }
-      if (this.state.records.length >= 100) throw new DomainError('conflict', 'Shared intake has reached 100 owned requests. Retain this worker state and configure another worker for further requests.');
+      // Publication awaited Git: a chat or manual task may have taken the place meanwhile.
+      const changedHold = this.admissionHold();
+      if (changedHold) { await waiting(changedHold); continue; }
       const at = new Date().toISOString();
       const record: SharedFeatureRecord = {
         id: ready.input.id, name: file.name, title: ready.input.title, status: 'queued', owner: this.state.workerId, isLocal: true, sourceCommit: commit, updatedAt: at,
@@ -182,6 +191,10 @@ export class SharedFeatureIntake {
     }
     this.syncedAt = new Date().toISOString();
     this.fault = diagnosticErrors.length ? diagnosticErrors.join(' ').slice(0, 500) : null;
+  }
+  private admissionHold(): SharedAdmissionHold | undefined {
+    if (this.state.records.length >= 100) return { code: 'history_capacity', message: 'Shared intake retains the provenance of 100 owned requests and cannot claim more. Preserve this worker state and configure another worker for further requests; completed ownership records are not deleted automatically.' };
+    return this.ports.admissionHold?.() ?? (!this.ports.canAdmit() ? { code: 'configuration', message: 'This worker is temporarily unavailable. The ready request will be checked again automatically when the worker can accept it.' } : undefined);
   }
   private unclaimed(name: string, id: string, title: string, status: string, commit: string, issues?: string[]): SharedFeatureView {
     return { id: id || 'file-' + sharedHash(name).slice(0, 24), name, title, status, owner: null, isLocal: false, sourceCommit: commit, updatedAt: '', ready: issues ? { passed: issues.length === 0, issues } : null, done: null, featureBranch: null, reviewNote: null, publication: 'synced', error: null, taskId: null };

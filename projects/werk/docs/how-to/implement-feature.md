@@ -18,7 +18,21 @@ Mark only meaningful verification commands as required. A help command that exit
 
 ## Submit one feature request
 
-In **Taskboard → New request**, describe the requested behavior and acceptance criteria. Expand **Repository files · optional**, enable **Allow changes to approved repository files**, choose the repository and list the files the implementation may change. Include intended new paths and any files to be deleted. A request cannot widen its own approved scope.
+For a worker bound to shared Git intake, create a draft from the committed project
+template in your editor or through **Taskboard → New request → Prepare request**.
+Complete its approved paths and acceptance criteria, check readiness, then mark
+it ready and commit/push it. In the webview, **Mark ready and publish** performs
+that publication. The shared watcher claims the same Feature Request; the chat
+interface does not bypass Git or create a second implementation workflow.
+
+For a standalone local worker without a shared binding, describe the behavior in
+**Taskboard → New request**. Expand **Repository files · optional**, enable
+**Allow changes to approved repository files**, choose the repository and list
+the files the implementation may change. Both paths use the same execution and
+verification contracts. Include intended new files and deletions; a request
+cannot widen its own approved scope.
+
+For a team batch, follow the [evening handoff and morning review](shared-feature-intake.md#work-during-the-day-implement-overnight).
 
 For example:
 
@@ -54,6 +68,25 @@ This supplements the existing mandatory rules. Proposal-only or unverified resul
 
 A request approves at most 32 text-file paths. Initial input is limited to 24,000 bytes per file and 48,000 characters total; the edited candidate is limited to 24,000 bytes per approved file and 48,000 bytes total, with a 120,000-byte review patch. Approved binary files, secret-like paths, dotfiles and path traversal are excluded. Split larger changes into reviewable features.
 
-Candidate verification inspects every tracked and nonignored source file, including files outside the approved edit list. Repositories containing symlinks, hard-linked source files, submodules, sparse or assume-unchanged index entries are currently refused. Unapproved binary source files are supported up to 8 MiB each; the source snapshot is limited to 20,000 files and 64 MiB. Ignored dependency/build outputs are excluded from the snapshot. A dependency installer or external MCP tool has the authority of its saved grant; a Git worktree is not an operating-system sandbox.
+Candidate verification inspects every tracked file and every nonignored untracked
+file, including files outside the approved edit list. Repositories containing
+symlinks, hard-linked source files, submodules, sparse or assume-unchanged index
+entries are currently refused. By default, files outside the approved edit list,
+including binary assets, are limited to 8 MiB each; the complete source inspection
+is limited to 20,000 paths and 64 MiB. The path count includes approved new paths.
+Untracked ignored dependency/build outputs are excluded.
+
+If inspection reports a size or file-count limit, open **Settings → Queue & duration**
+and expand **Repository inspection limits**. Raise the named bound to cover the
+project, keeping the individual-file limit within the total, then **Save execution limits**. The CLI exposes the same values through
+`settings set`; see [worker execution policy](../reference/configuration.md#local-worker-execution-policy).
+A successful inspection still reads and fingerprints every included file. These
+settings do not widen the approved edit list or the fixed review-patch limits.
+A new attempt captures current settings; a queued or running attempt keeps its
+prepared values. Inspect the request's retained result and use its available
+retry/resume action after resolving the blocker.
+
+A dependency installer or external MCP tool has the authority of its saved grant;
+a Git worktree is not an operating-system sandbox.
 
 See [model tool permissions](manage-model-tools.md), [question and recovery controls](answer-and-resume-worker.md), and the [worker–model contract](../reference/model-interaction.md) for detailed behavior.

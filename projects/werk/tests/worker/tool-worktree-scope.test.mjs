@@ -76,6 +76,7 @@ for (const scenario of ['replacement', 'legacy identity missing']) test(`CLI-onl
   await f.restart();
   await f.worker.updateSettings({ board: { paused: false } });
   if (scenario === 'legacy identity missing') assert.equal(f.worker.board.detail(f.task.id).worktreeIdentity, undefined);
+  await settle(f.worker, f.task.id, 'failed');
   await assert.rejects(f.worker.board.action({ id: f.task.id, action: 'retry' }), /retained task worktree could not be verified/);
   assert.equal(f.executions, 0, 'A CLI-only grant must not bypass retained worktree verification');
   const task = f.worker.board.detail(f.task.id);

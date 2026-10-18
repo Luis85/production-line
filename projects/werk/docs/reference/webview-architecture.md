@@ -11,7 +11,7 @@ frontend dependency installation at startup.
 | --- | --- | --- |
 | Factory | `src/factory/webview/main.ts` | `/`, `/factories/:id` |
 | Orchestrator | `src/orchestrator/webview/main.ts` | `/`, `/intake`; hash navigation preserves task handoffs |
-| Worker workspace | `src/worker/webview/main.ts` | `/taskboard`, `/dashboard` (Metrics), `/history`, `/settings`; `/chat` redirects |
+| Worker workspace | `src/worker/webview/main.ts` | `/taskboard`, `/dashboard` (Metrics), `/history`, `/settings`, `/review?session=…`; `/chat` redirects |
 | Public guide | `src/guide/webview/main.ts` | `/guide` on Factory/orchestrator and standalone release HTML |
 | Concept simulation | `src/orchestrator/webview/concept/main.ts` | `/concept`; illustrative local state, no live task execution |
 | Worker diagnostics | `src/worker/webview/status/main.ts` | Status-only server and offline HTML status export |
@@ -35,6 +35,19 @@ draft preservation, acknowledgement recovery and conflict detection. Their domai
 validation and payloads remain separate. Candidate evidence uses the same pure
 receipt classification as application and Markdown projections; frontend task
 detail is an explicit public DTO rather than a private persistence aggregate.
+
+The dedicated review page joins existing Feature Request, session, gate, interaction
+and candidate evidence through canonical identity checks. It has no second request
+lifecycle. `feature-review.ts` projects stages and the next valid action;
+`review-reader.ts` rejects inconsistent ownership before adopting a snapshot.
+`PatchReview` and `CandidateEvidence` are reused by current review and retained
+History details. Inspecting a review never changes the selected conversation.
+
+`useWorkerSnapshot` owns quiet reads, identity changes, freshness and access/page
+lifetime fencing. The process panel reuses it for scoped service and finite-process
+observations. `useServiceControls` retains the exact guarded operation across an
+uncertain response; polling never resubmits a mutation. Process resource summaries
+expose coverage and retain their backend-defined scope.
 
 ## Reusable components
 

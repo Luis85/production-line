@@ -4,6 +4,8 @@ import UInput from "@nuxt/ui/components/Input.vue";
 import USelect from "@nuxt/ui/components/Select.vue";
 import RequestGatePanel from "./RequestGatePanel.vue";
 import CandidateEvidence from "./CandidateEvidence.vue";
+import MessageContent from "./MessageContent.vue";
+import PatchReview from "./PatchReview.vue";
 import TaskKanban from "../../../shared/webview/components/TaskKanban.vue";
 import { useTaskboard } from "./useTaskboard";
 const {
@@ -14,6 +16,8 @@ const {
   beginRemoval,
   busy,
   clearFilters,
+  canRetry,
+  canManage,
   closeDetail,
   columns,
   date,
@@ -21,7 +25,6 @@ const {
   detailError,
   detailLoading,
   dismissPreparation,
-  download,
   inspect,
   kanbanTasks,
   openConversation,
@@ -154,6 +157,7 @@ const {
           color="neutral"
           variant="ghost"
           aria-label="Close local task"
+          class="min-w-11 min-h-11"
           icon="i-lucide-x"
           @click="closeDetail"
         />
@@ -178,19 +182,23 @@ const {
           {{ detail.status }} · {{ date(detail.createdAt) }} ·
           {{ detail.provider }}
         </p>
-        <p>{{ detail.instruction }}</p>
-        <RequestGatePanel
-          v-if="detail.requestId && !detail.admissionFailure"
-          :request-id="detail.requestId"
-          :session-id="detail.sessionId"
-        />
+        <UButton :to="{ path: '/review', query: { session: detail.sessionId, fileId: detail.id } }" icon="i-lucide-git-pull-request">Open Feature Request review</UButton>
+        <details class="accepted-instructions"><summary>Accepted instructions</summary><MessageContent :text="detail.instruction" /></details>
+
         <p v-if="detail.error" class="error-text">{{ detail.error }}</p>
         <div v-if="detail.admissionFailure" class="notice" role="status">
           <p>This request stopped before approved file snapshots were saved. Inspect the preserved worktree, then use New request on the taskboard to continue.</p>
           <p v-if="detail.worktree" class="break-anywhere">Preserved worktree: <code>{{ detail.worktree }}</code></p>
         </div>
-        <p v-if="detail.summary">{{ detail.summary }}</p>
+        <MessageContent v-if="detail.summary" :text="detail.summary" />
         <CandidateEvidence v-if="!detail.admissionFailure" :key="detail.id" :task="detail" />
+        <PatchReview v-if="detail.patch" :patch="detail.patch" :task-id="detail.id" />
+        <RequestGatePanel
+          v-if="detail.requestId && !detail.admissionFailure"
+          :request-id="detail.requestId"
+          :session-id="detail.sessionId"
+          :feature-source="detail.feature?.source"
+        />
         <p class="break-anywhere">{{ detail.repository }}</p>
         <ul>
           <li v-for="file in detail.files" :key="file.path" class="break-anywhere">{{ file.path }}</li>
@@ -231,20 +239,13 @@ const {
             {{ detail.priority === 2 ? "Normal priority" : "Raise priority" }}
           </UButton>
           <UButton
-            v-if="!detail.admissionFailure && ['failed', 'cancelled'].includes(detail.status)"
+            v-if="canRetry"
             :disabled="busy"
             @click="action({ id: detail.id, action: 'retry' })"
           >
             Retry saved input
           </UButton>
-          <UButton
-            v-if="detail.patch"
-            icon="i-lucide-download"
-            @click="download"
-          >
-            Download patch
-          </UButton>
-          <template v-if="!['queued', 'running'].includes(detail.status)">
+          <template v-if="canManage">
             <UButton
               color="neutral"
               variant="outline"
@@ -293,10 +294,7 @@ const {
           <code>git apply</code>. Inputs were captured when this task was
           queued.
         </p>
-        <details v-if="detail.patch">
-          <summary>Inspect patch</summary>
-          <pre>{{ detail.patch }}</pre>
-        </details>
+
       </template>
     </section>
     <p class="page-note">Queue capacity and task duration are managed in <RouterLink to="/settings#queue">Settings</RouterLink>.</p>

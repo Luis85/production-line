@@ -21,7 +21,7 @@ async function fixture(t, name, ports = {}) {
   const document = { getElementById: id => ({ focus: () => focused.push(id), scrollIntoView() {} }) };
   let deactivate, activate;
   const bindings = { reactive, ref, computed, watch, nextTick, onActivated: callback => { activate = callback; }, onDeactivated: callback => { deactivate = callback; }, useRoute: () => route, useRouter: () => router, state, workspaceAction, request, document, taskStatus: value => value };
-  const exposed = name.startsWith('components') ? 'inspect, closeDetail, readDetail, detail, selectedId, detailLoading, detailError, actionError, action, beginRemoval, removeWorktree, removing, worktreeNotice, openConversation, search, status, archived, visible' : 'chatArchive, taskKind, chatTasks, openChat, chatStatus, clearChatFilters';
+  const exposed = name.startsWith('components') ? 'inspect, closeDetail, readDetail, detail, selectedId, detailLoading, detailError, actionError, action, beginRemoval, removeWorktree, removing, worktreeNotice, openConversation, search, status, archived, visible, canRetry, canManage' : 'chatArchive, taskKind, chatTasks, openChat, chatStatus, clearChatFilters';
   const js = ts.transpile(script, { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS });
   const scope = effectScope(); t.after(() => scope.stop());
   const result = scope.run(() => new Function(...Object.keys(bindings), `${js}\nreturn { ${exposed} };`)(...Object.values(bindings)));
@@ -137,4 +137,34 @@ test('lock and reopen cannot apply a late delete result to a new confirmation of
   f.state.unlocked = true; await f.inspect('a', event); f.beginRemoval();
   pending.resolve({ worktree: { outcome: 'kept', reason: 'old private result' } }); await deleting;
   assert.equal(f.detail.value.id, 'a'); assert.equal(f.removing.value, true); assert.equal(f.worktreeNotice.value, '');
+});
+
+
+test('matching background refresh keeps controls stable and updates same-status evidence', async t => {
+  let pending, reads = 0;
+  const f = await fixture(t, 'components/Taskboard.vue', { request: async () => {
+    reads++;
+    return pending ? pending.promise : { id: 'a', title: 'Alpha', status: 'review', summary: 'Earlier result' };
+  } });
+  await f.inspect('a', event); f.activate(); await nextTick();
+  pending = deferred(); f.state.refreshRevision = 1; await nextTick();
+  assert.equal(f.detailLoading.value, false);
+  assert.equal(f.detail.value.summary, 'Earlier result');
+  f.state.refreshRevision = 2; await nextTick(); assert.equal(reads, 2);
+  pending.resolve({ id: 'a', title: 'Alpha', status: 'review', summary: 'Current check result' });
+  await nextTick(); await nextTick();
+  assert.equal(f.detail.value.summary, 'Current check result');
+});
+
+test('history management respects shared checkpoint and pending-input boundaries', async t => {
+  const f = await fixture(t, 'components/Taskboard.vue');
+  await f.inspect('b', event);
+  f.detail.value.feature = { source: 'shared_git' };
+  assert.equal(f.canRetry.value, false);
+  await f.action({ id: 'b', action: 'retry' }); assert.equal(f.calls.length, 0);
+  f.detail.value.status = 'waiting_input';
+  assert.equal(f.canManage.value, false);
+  await f.action({ id: 'b', action: 'archive' });
+  await f.action({ id: 'b', action: 'delete' }); assert.equal(f.calls.length, 0);
+  f.detail.value.status = 'review'; assert.equal(f.canManage.value, true);
 });

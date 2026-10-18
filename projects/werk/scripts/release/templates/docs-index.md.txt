@@ -27,6 +27,7 @@ contracts, and explanations describe the system and its limits.
 - [Assemble independent workers, orchestrators and Factories](how-to/assemble-independent-components.md)
 - [Install a project worker](how-to/project-worker.md): app, private environment, provider and team authoring kit.
 - [Connect the shared Markdown queue](how-to/shared-feature-intake.md): CLI setup, committed requests, Task answers and PullRequest review handoffs.
+- [Work during the day, implement overnight](how-to/shared-feature-intake.md#work-during-the-day-implement-overnight): evening handoff, unattended operation and morning review.
 - [Operate a project worker](how-to/operate-project-worker.md): checklist, Windows PowerShell 5.1 JSON files, task worktrees, tool limits and answers.
 - [Author feature requests with your team](how-to/team-feature-authoring.md): portable skill, editable template, shared checks and Obsidian queue; no worker connection required.
 - [Integrate with Claude and Codex](how-to/project-agent-integrations.md)
@@ -38,7 +39,7 @@ contracts, and explanations describe the system and its limits.
 - [Markdown feature-request contract](reference/feature-requests.md)
 - [Use the worker webview](how-to/use-worker-webview.md): Taskboard, Metrics, History and Settings.
 - [Implement a feature with the worker](how-to/implement-feature.md): approved worktree changes, required checks, repair and review.
-- [Manage model tools](how-to/manage-model-tools.md): built-in grants, MCP connections and revocation.
+- [Manage model tools](how-to/manage-model-tools.md): built-in grants, MCP connections, bounded subagents and revocation.
 - [Set a worker consumption limit](how-to/worker-consumption-limits.md): daily/monthly token allowance, worker share, reservations and recovery.
 
 - [Operate, back up and replace a Linux VM](how-to/operate-linux-vm.md)

@@ -1,5 +1,6 @@
+import type { ProcessObservation } from './process-observation.js';
 import type { SerializedOperations } from '../../shared/serialized-operations.js';
-import type { DevelopmentFactory, DevelopmentRuntime } from './development.js';
+import type { DevelopmentFactory, DevelopmentLimits, DevelopmentRuntime } from './development.js';
 import type { LocalTaskboardView, LocalTaskDetailView } from './workspace-view.js';
 import type { ModelFactory, ProviderConnection } from './provider-contract.js';
 import type { WorkerSettingsPort, LocalTaskStorage, ApprovedTaskFiles } from './workspace-ports.js';
@@ -19,6 +20,7 @@ export interface LocalTaskDependencies {
   files: ApprovedTaskFiles;
   workspaces?: LocalTaskWorkspaces;
   development?: DevelopmentFactory;
+  observations?: ProcessObservation;
 }
 export interface LocalTaskState {
   tasks: LocalTask[];
@@ -69,9 +71,9 @@ export interface LocalTaskRuntime extends LocalTaskDependencies, LocalTaskState 
   context(task: LocalTask): Record<string, unknown>;
   originalPrompt(task: LocalTask): string;
   preparedRequest(task: LocalTask, turn: InteractionTurn, model: ConversationModel): ModelRequest;
-  developmentRuntime(task: LocalTask, commandTimeoutMs?: number): DevelopmentRuntime | undefined;
+  developmentRuntime(task: LocalTask, limits?: DevelopmentLimits): DevelopmentRuntime | undefined;
   restoredDevelopment(task: LocalTask, turn: InteractionTurn): ValidatedPatch | null;
-  assertToolWorkspace(task: LocalTask, signal: AbortSignal, verifyOnly?: boolean): Promise<void>;
+  assertToolWorkspace(task: LocalTask, signal: AbortSignal, verifyOnly?: boolean, inspection?: DevelopmentLimits): Promise<void>;
   assertAcceptedSnapshots(task: LocalTask): void;
   prepareTurn(task: LocalTask, turn: InteractionTurn, admission?: AbortSignal): Promise<void>;
   validatedPatch(task: LocalTask, reply: string): ValidatedPatch;

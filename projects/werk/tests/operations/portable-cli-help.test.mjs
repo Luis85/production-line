@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { candidateInspectionBounds } from '../../src/worker/dist/worker/application/execution-policy.js';
 const execute = promisify(execFile);
 const cli = new URL('../../scripts/runtime/portable/cli.mjs', import.meta.url).href;
 // Exercise shipped dispatch code, without a running app, credentials or inference.
@@ -18,6 +19,11 @@ test('worker help exposes bounded local policy and safe gate recovery without ch
   assert.equal(value.executionPolicy.defaultMs, 6 * 60 * 60 * 1000);
   assert.equal(value.executionPolicy.maximumMs, 24 * 60 * 60 * 1000);
   assert.match(value.executionPolicy.scope, /not total session age/);
+  for (const [field, { default: fallback, minimum, maximum }] of Object.entries(candidateInspectionBounds))
+    assert.deepEqual({ ...value.executionPolicy.candidateInspection[field], constraint: undefined }, { default: fallback, minimum, maximum, constraint: undefined }, `schema text matches the enforced ${field} range`);
+  assert.deepEqual(value.executionPolicy.candidateInspection.guard.fields, Object.keys(candidateInspectionBounds));
+  assert.equal(value.executionPolicy.candidateInspection.guard.field, 'expectedCandidateInspection');
+  assert.match(value.executionPolicy.candidateInspection.guard.behavior, /all three current values.*reject stale/);
   assert.match(value.requestGates.dispatch, /never admits new work/);
   assert.deepEqual(value.commands['request execute'].required, ['id', 'if-match', 'key']);
   assert.equal(value.commands['request execute'].body, false);

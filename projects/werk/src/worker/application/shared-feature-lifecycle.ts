@@ -19,6 +19,17 @@ export class SharedFeatureLifecycle {
   private save: () => Promise<void>;
   private feedback: SharedFeatureFeedback;
   constructor(ports: SharedIntakePorts, save: () => Promise<void>) { this.ports = ports; this.save = save; this.feedback = new SharedFeatureFeedback(ports, save); }
+  /** A receipt confirms only the exact source and artifacts it published, never later local changes. */
+  publication(record: SharedFeatureRecord): SharedFeatureRecord['publication'] {
+    if (record.publication === 'error') return 'error';
+    if (record.pending || !record.claimed || record.remoteRevision !== record.publishedState
+      || sharedHash(this.ports.renderSource(record)) !== record.publishedState) return 'pending';
+    if (record.status === 'ready_for_review' && (!record.featureCommit || !record.featureBranch || !record.outputDigest || !record.reviewNote)) return 'pending';
+    if (record.reviewNote && (!record.reviewMarkdown || record.publishedReview !== record.reviewNote + ':' + sharedHash(record.reviewMarkdown))) return 'pending';
+    if (record.task && sharedHash(record.task.markdown) !== record.task.revision) return 'pending';
+    if (record.diagnostic && record.taskNote === record.diagnostic.path && record.diagnostic.published !== sharedHash(record.diagnostic.markdown)) return 'pending';
+    return 'synced';
+  }
   private async flush(record: SharedFeatureRecord, repository: SharedRepositoryPort, signal: AbortSignal) {
     if (!record.pending) return;
     const write = record.pending;
@@ -63,7 +74,7 @@ export class SharedFeatureLifecycle {
     if (record.status !== status || record.error !== error) { record.status = status; record.error = error; record.updatedAt = new Date().toISOString(); }
   }
   private settled(record: SharedFeatureRecord) {
-    if (sharedTaskActive(record) || !sharedTerminal(record.status) || record.publication !== 'synced' || record.pending) return false;
+    if (sharedTaskActive(record) || !sharedTerminal(record.status) || this.publication(record) !== 'synced') return false;
     const execution = this.ports.inspect(record.taskId!);
     // Confirmed terminal publications survive removed assignments or archived local
     // history. A resumed task still has to publish its new lifecycle and evidence.
@@ -80,12 +91,28 @@ export class SharedFeatureLifecycle {
       await this.flush(record, repository, signal);
       if (!record.claimed) await this.publish(record, repository, signal);
       if (!record.submitted) {
+        const hold = this.ports.admissionHold?.();
+        if (hold && !this.ports.inspect(record.taskId!)) {
+          await this.admissionDiagnostic(record, repository, signal, hold.message, true);
+          return;
+        }
         if (!this.ports.canAdmit()) return;
         const head = await repository.head(signal);
         const current = await repository.readBlob(head, record.sourcePath, signal);
         if (current === null || sharedHash(current) !== record.remoteRevision) throw Error('The remotely claimed request changed before admission. Restore its claimed content or resolve the change before execution.');
-        await this.ports.submit(record);
+        try { await this.ports.submit(record); }
+        catch (error) {
+          signal.throwIfAborted();
+          // A lost acknowledgement may already own an execution. Replay its exact
+          // submission on the next sync rather than publishing a false failure.
+          if (this.ports.inspect(record.taskId!)) throw error;
+          const hold = this.ports.admissionHold?.();
+          const reason = hold?.message ?? (error instanceof Error ? error.message.slice(0, 500) : 'Request preparation could not be confirmed.');
+          await this.admissionDiagnostic(record, repository, signal, reason, !!hold);
+          return;
+        }
         record.submitted = true;
+        if (!record.task && record.diagnostic && record.taskNote === record.diagnostic.path) record.taskNote = null;
         this.change(record, 'queued');
         await this.save();
       }
@@ -98,6 +125,25 @@ export class SharedFeatureLifecycle {
       record.error = error instanceof Error ? error.message.slice(0, 500) : 'Shared progress could not be published.';
       await this.save();
     }
+  }
+  private async admissionDiagnostic(record: SharedFeatureRecord, repository: SharedRepositoryPort, signal: AbortSignal, reason: string, held: boolean) {
+    this.change(record, held ? 'queued' : 'blocked', reason);
+    record.progress = (held ? 'Request admission is waiting.' : 'Request preparation needs attention.')
+      + ' Follow the diagnostic Task; the worker will retry admission using this same request identity.';
+    const artifacts = this.blocker(record, reason);
+    const guarded = [];
+    const head = artifacts.length ? await repository.head(signal) : null;
+    for (const artifact of artifacts) {
+      const existing = await repository.readBlob(head!, artifact.path, signal);
+      if (existing !== null && existing !== artifact.content) throw new DomainError('conflict', 'A teammate changed the admission diagnostic. Their note was preserved; restore its worker-generated content before synchronization.');
+      // A recurring hold may reuse an older immutable note. Guard the exact content
+      // instead of treating its deterministic path as a new file.
+      guarded.push({ ...artifact, expectedRevision: existing === null ? null : sharedHash(existing) });
+    }
+    await this.save();
+    // Compare the claimed source and retain publication receipts when an acknowledgement
+    // is lost. A concurrent teammate edit must never be replaced by this notice.
+    await this.publish(record, repository, signal, guarded);
   }
   private blocker(record: SharedFeatureRecord, reason: string) {
     const markdown = renderSharedBlocker(record, reason), digest = sharedHash(markdown);

@@ -30,7 +30,7 @@ async function fixture(t) {
   const catalog = memoryStorage(), definitions = new WorkerDefinitions(memoryStorage()), conversations = new Map(), modelCalls = [];
   /** @type {import('../../src/worker/application/workspace-ports.js').WorkerSettingsPort} */
   const settings = {
-    value: { repositories: { items: [], pollMs: 30000 }, execution: { maxRuntimeMs: 1000, maxToolCalls: 8, commandTimeoutMs: 1000 }, board: { paused: false, maxParallel: 1, queueCapacity: 16, orchestratorQueue: 0, order: 'fifo' } },
+    value: { repositories: { items: [], pollMs: 30000 }, execution: { maxRuntimeMs: 1000, maxToolCalls: 8, commandTimeoutMs: 1000, candidateSourceMaxBytes: 67108864, candidateSourceMaxFiles: 20000, candidateFileMaxBytes: 8388608 }, board: { paused: false, maxParallel: 1, queueCapacity: 16, orchestratorQueue: 0, order: 'fifo' } },
     provider(id) { assert.ok(id === 'codex-cli' || id === 'openai-api'); return { id, executable: '', apiKey: '', model: 'fixture', instruction: '' }; },
     toolPolicy: defaultToolPolicy,
   };

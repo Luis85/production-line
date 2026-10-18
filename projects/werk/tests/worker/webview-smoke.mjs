@@ -8,7 +8,13 @@ const { page, api, screenshot, refresh, choose, result } = h;
 const panel = () => page.locator('.task-interaction');
 async function selectTask(title) {
   const card = page.locator('article').filter({ has: page.getByRole('heading', { name: title, exact: true }) }).first();
-  await card.getByRole('button', { name: /^(Open task|Answer task)$/ }).click();
+  const action = card.getByRole('button', { name: /^(Open task|Answer task|Review changes|Review result)$/ });
+  const opensReview = (await action.textContent())?.includes('Review');
+  await action.click();
+  if (opensReview) {
+    await page.locator('#review-title').filter({ hasText: title }).waitFor();
+    await page.getByRole('link', { name: 'Open conversation', exact: true }).click();
+  }
   await until(async () => (await page.locator('#chat-task-title').textContent()) === title, 'selected ' + title);
 }
 async function showNew() {
@@ -259,7 +265,7 @@ try {
   await queuePanel.getByRole('button', { name: 'Save queue settings', exact: true }).click();
   await until(async () => (await api('/api/settings')).board.queueCapacity === 16, 'queue settings saved');
   await page.locator('#resource-warning-hours').fill('2');
-  await page.getByRole('button', { name: 'Save duration settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Save execution limits', exact: true }).click();
   await until(async () => (await api('/api/settings')).resources.longRunningMs === 7200000, 'duration saved');
   await screenshot('settings-queue-desktop');
   await page.setViewportSize({ width: 390, height: 844 }); await screenshot('settings-queue-mobile');
@@ -315,16 +321,31 @@ try {
   assert.equal(fileRecord.sessionId, fileRequest); assert.match(fileRecord.markdown, /Clarify the task interaction guidance/);
   assert.doesNotMatch(await panel().locator('.task-conversation').textContent(), /Approved file snapshots:/);
   await until(async () => (await api('/api/taskboard')).tasks.some(task => task.title === 'Review navigation patch' && task.status === 'review'), 'file patch ready for review');
-  await refresh();
-  await page.getByRole('article', { name: 'Review navigation patch', exact: true }).getByRole('link', { name: 'Review proposed patch', exact: true }).click();
-  await page.locator('#local-task-detail').filter({ hasText: 'Review navigation patch' }).waitFor();
-  assert.equal(new URL(page.url()).pathname, '/history');
+  await api('/api/sessions', { action: 'select', id: checkpoint }); await refresh();
+  await page.getByRole('article', { name: 'Review navigation patch', exact: true }).getByRole('button', { name: 'Review changes', exact: true }).click();
+  await page.getByRole('heading', { name: 'Review navigation patch', exact: true }).waitFor();
+  await page.locator('#review-changes .patch-review').waitFor();
+  assert.equal(new URL(page.url()).pathname, '/review');
+  assert.equal(new URL(page.url()).searchParams.get('session'), fileRequest);
   assert.ok(new URL(page.url()).searchParams.get('fileId'));
-  assert.equal(await page.evaluate(() => document.activeElement?.id), 'local-task-detail');
+  assert.equal((await api('/api/sessions')).selected, checkpoint, 'read-only review leaves the selected conversation alone');
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'review-title');
+  assert.match(await page.locator('#review-goal').textContent(), /Clarify the task interaction guidance/);
+  assert.match(await page.locator('.patch-content').textContent(), /Updated task interaction guidance/);
   await screenshot('file-patch-review-desktop');
+  await page.setViewportSize({ width: 390, height: 844 }); await screenshot('file-patch-review-mobile');
+  await page.setViewportSize({ width: 1440, height: 1000 });
   assert.equal(await readFile(join(h.repository, 'README.md'), 'utf8'), '# Worker UI fixture\nOriginal instructions.\n');
-  await page.getByRole('link', { name: 'Taskboard', exact: true }).click();
-  result.checks.push('approved-file task produces review patch without checkout changes; board Review proposed patch deep-link opens and focuses exact file evidence');
+  await page.getByRole('link', { name: 'Open conversation', exact: true }).click();
+  await until(async () => (await api('/api/sessions')).selected === fileRequest && await page.locator('#chat-task-title').textContent() === 'Review navigation patch', 'explicit review conversation link selects its request');
+  await panel().locator('.review-entry').click();
+  await page.locator('#review-changes .patch-review').waitFor();
+  assert.equal(new URL(page.url()).searchParams.get('session'), fileRequest);
+  assert.equal(new URL(page.url()).searchParams.has('fileId'), false, 'conversation review resolves the exact board task without guessing its ID');
+  assert.match(await page.locator('#review-goal').textContent(), /Clarify the task interaction guidance/);
+  await page.getByRole('link', { name: 'Open conversation', exact: true }).click();
+  await until(async () => await page.locator('#chat-task-title').textContent() === 'Review navigation patch', 'return from session-only review');
+  result.checks.push('approved-file request produces an unapplied patch; exact file and session-only review show accepted scope and diff without changing the selected task; explicit conversation navigation retains request identity');
 
   await showNew();
   const representativeOptions = panel().locator('.intake-definition:not(.repository-options)');

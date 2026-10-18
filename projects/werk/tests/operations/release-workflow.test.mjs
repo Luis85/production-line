@@ -80,8 +80,8 @@ test('stable publication uploads the complete draft before selecting latest', { 
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(calls.map(args => args[1]), ['view', 'create', 'upload', 'edit']);
   assert.ok(calls[1].includes('--draft'));
-  for (const path of ['release/werk-0.1.0.tar.gz', 'release/werk-0.1.0.zip', 'release/install.mjs', 'release/SHA256SUMS', 'release/werk-storybook-0.1.0.zip', 'release/STORYBOOK-SHA256SUMS']) assert.ok(calls[2].includes(path));
-  assert.equal(calls[2].filter(arg => arg.startsWith('release/')).length, 6);
+  for (const path of ['release/werk-0.1.0.tar.gz', 'release/werk-0.1.0.zip', 'release/install.mjs', 'release/SHA256SUMS', 'release/werk-storybook-0.1.0.zip', 'release/STORYBOOK-SHA256SUMS', 'release/werk-readme-0.1.0.zip', 'release/README-SHA256SUMS']) assert.ok(calls[2].includes(path));
+  assert.equal(calls[2].filter(arg => arg.startsWith('release/')).length, 8);
   assert.match(notes, /^## \[0\.1\.0\] - 2026-10-16/);
   assert.ok(notes.includes('$(touch changelog-executed)'));
   assert.ok(notes.includes('$HOME'));
@@ -284,4 +284,25 @@ test('mutation infrastructure failures emit warnings and a durable summary witho
     assert.ok(report.includes('measurement: ' + env.MUTATION_OUTCOME));
     assert.ok(report.includes('artifact: ' + env.EVIDENCE_OUTCOME));
   }
+});
+
+
+test('release README is generated from qualified captures and published with the same gated candidate', () => {
+  const steps = workflow.jobs.storybook.steps;
+  const check = steps.findIndex(step => step.run === 'npm run readme:check');
+  const capture = steps.findIndex(step => step.run === 'npm run storybook:ci');
+  const generate = steps.findIndex(step => step.run === 'npm run release:readme');
+  const packageSite = steps.findIndex(step => step.run === 'npm run release:storybook');
+  assert.ok(check >= 0 && capture > check && generate > capture && packageSite > generate);
+  const upload = steps.find(step => step.with?.name === 'werk-readme-candidate');
+  assert.equal(upload.with['if-no-files-found'], 'error');
+  assert.match(upload.with.path, /werk-readme-\*\.zip/);
+  assert.match(upload.with.path, /README-SHA256SUMS/);
+  assert.ok(workflow.jobs.publish.needs.includes('storybook'));
+  const download = workflow.jobs.publish.steps.find(step => step.with?.name === 'werk-readme-candidate');
+  assert.equal(download.with.path, 'release');
+  const publication = workflow.jobs.publish.steps.at(-1).run;
+  assert.match(publication, /release\/werk-readme-\$RELEASE_VERSION\.zip/);
+  assert.match(publication, /release\/README-SHA256SUMS/);
+  assert.ok(!steps.some(step => /git (?:commit|push)/.test(step.run ?? '')));
 });

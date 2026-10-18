@@ -1,41 +1,22 @@
 # README screenshots
 
-Captured on 2026-10-18 from Werk's actual Vue components in the qualified
-Storybook build for commit `4f3a2ef356cd786ac0506fccf832f28b81e1f387`.
-These are browser captures with deterministic sample data, not design mockups.
-No provider was invoked, real account inspected, or Git publication performed.
-The sample-data labels remain visible in the images.
+Generated from the qualified real Vue components for Werk 0.12.0, commit `8aa2f88ddce2b51e2e011ab194fadd848db3d994`.
+Capture: 2026-10-18T13:15:56.947Z. Fixture clock: 2026-10-15T09:30:00.000Z.
 
-| Image | Story ID | Capture |
-| --- | --- | --- |
-| [Worker taskboard](worker-taskboard.png) | `worker-workspace--populated-taskboard` | 1440 × 1000 viewport, full page (1440 × 1265) |
-| [Create a shared request](worker-create-request.png) | `worker-shared-feature-requests--describe-request` | 1000 × 760 viewport, `main` element (760 × 701) |
-| [Worker settings](worker-settings.png) | `worker-workspace--worker-settings` | 1440 × 1000 viewport, full page (1440 × 1275) |
+These browser captures use deterministic **sample data**. They do not establish
+live model execution, real account usage, Git publication or human acceptance.
+No screenshot has been retouched; these are the exact qualified PNG bytes.
 
-The taskboard fixture shows local requests to illustrate capacity, queue and
-attention states. The separate creation fixture shows the shared Git template
-entry point. Settings uses a fictional executable path and explicitly unavailable
-account status. The fixture clock is 2026-10-15 09:30 UTC; those UI timestamps are
-example data rather than the capture time.
+| Image | Story | Viewport | Image size |
+| --- | --- | --- | --- |
+| [Worker taskboard showing capacity and requests grouped by their current state.](worker-taskboard.png) | `worker-workspace--populated-taskboard` | desktop | 1440 × 1246 |
+| [Shared Feature Request authoring in the worker, with request instructions and the Prepare request action.](worker-create-request.png) | `worker-shared-feature-requests--describe-request` | desktop | 1440 × 1000 |
+| [Worker Metrics with current capacity, configured token allowance, resources and execution activity.](worker-metrics.png) | `worker-metrics--active-worker` | desktop | 1440 × 3198 |
+| [Feature Request review with the accepted goal, changed files, required checks and the next human action.](worker-review.png) | `worker-review--verified-candidate` | desktop | 1440 × 3827 |
+| [Worker settings with provider connections and navigation to repositories, tool access and consumption settings.](worker-settings.png) | `worker-workspace--worker-settings` | desktop | 1440 × 1275 |
 
-Source stories:
+[Machine-readable provenance](provenance.json) records source identity and every image hash.
+Source digest: `a6e8c5a036f2f2e0f0a0565bb2d74e3fa1283afe327e64959d2f7cb20efcb7d0`.
 
-- [Worker workspace](../../../storybook/worker.stories.ts)
-- [Shared Feature Request authoring](../../../storybook/worker-feature-authoring.stories.ts)
-
-To refresh after an interface change:
-
-1. Build and qualify the intended source with `npm run storybook:ci`; see
-   [the Storybook guide](../../how-to/generate-storybook.md).
-2. Serve `storybook-static` locally and open
-   `/iframe.html?id=STORY_ID&viewMode=story`, using an ID from the table.
-3. Wait for the story's play function to finish. Keep the fixture labels visible
-   and use the viewport/capture target shown above. Use a browser screenshot;
-   do not retouch the interface or replace its displayed content.
-4. Inspect each image and update this source commit and capture date. Verify
-   both [the project README](../../../README.md) and the repository landing page
-   still describe the visible state accurately.
-
-The captures were checked for browser errors, unexpected network requests and
-horizontal overflow. Screenshots document these example UI states; they do not
-establish successful model execution or shared Git delivery.
+Refresh instructions are maintained in [README generation](https://github.com/Luis85/production-line/blob/8aa2f88ddce2b51e2e011ab194fadd848db3d994/projects/werk/docs/how-to/generate-readme.md).
+Release generation writes separate artifacts and never commits changes to the source branch.

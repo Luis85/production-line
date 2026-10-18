@@ -25,10 +25,12 @@ test('JSON export preserves nullable original evidence and CSV escapes spreadshe
   const csv=workerOutput(page,{format:'csv'},catalog['run export']);assert.match(csv,/^id,sessionId,taskId,kind,title,provider,model,attempt,sequence,outcome/);assert.match(csv,/usage,resourceDelta,before,after,schemaVersion,total,asOf,nextOffset,nextCursor,purpose,requestId\r\n/);assert.match(csv,/"page-two","gate_review","request-one"$/);assert.match(csv,/"'=SUM\(1,2\)"/);assert.match(csv,/""costUsd"":null/);assert.match(csv,/""capturedAt"":""before""/);assert.match(csv,/""capturedAt"":""after""/);
   assert.deepEqual(JSON.parse(workerOutput({providers:[{id:'codex-cli'}],connection:{url:'private-worker'}},{},catalog['provider list'])),{providers:[{id:'codex-cli'}]});
 });
-test('wait observes failure as terminal and timeout has a stable code without cancelling work',async()=>{
+test('wait observes failure as terminal and timeout has a stable code without cancelling work',async t=>{
   for (const status of ['failed','needs_rework','interrupted','done']) { const stopped={session:{status}};assert.equal(await waitForWorker(async()=>stopped,'task','10'),stopped); }
   const held={execution:{status:'needs_rework',request:{phase:'needs_rework'}}};assert.equal(await waitForWorker(async()=>held,'feature','10'),held);
-  let calls=0;await assert.rejects(waitForWorker(async()=>{calls++;return{session:{status:'queued'}};},'task','1'),error=>testErrorCode(error)==='wait_timeout'&&/continues/.test(testErrorMessage(error)));assert.ok(calls>=1);
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 1000 });
+  let calls=0;const waiting=assert.rejects(waitForWorker(async()=>{calls++;return{session:{status:'queued'}};},'task','1'),error=>testErrorCode(error)==='wait_timeout'&&/without cancelling/.test(testErrorMessage(error)));
+  await new Promise(resolve=>setImmediate(resolve));t.mock.timers.tick(1);await waiting;assert.equal(calls,1);
 });
 
 test('feature wait observes terminal execution only after its generated record settles', async () => {
@@ -36,4 +38,82 @@ test('feature wait observes terminal execution only after its generated record s
   const completed = {record:{status:'completed',result:'_results/fixture.md'},execution:{status:'completed',text:'Fixture output'}};
   const result = await waitForWorker(async () => ++reads === 1 ? {record:{status:'running'},execution:completed.execution} : completed, 'feature', '2000');
   assert.equal(reads,2); assert.equal(result,completed);
+});
+
+const slowPoll = () => Object.assign(Error('No response within 10 s. The request may still be running on the server; inspect its status before retrying.'), { code: 'timeout' });
+test('wait retries a poll that timed out and returns the settled result', async () => {
+  const settled = { session: { status: 'done' } }, timeouts = [];
+  let calls = 0;
+  const result = await waitForWorker(async pollTimeout => { timeouts.push(pollTimeout); if (++calls === 1) throw slowPoll(); return settled; }, 'task', '5000', 10000);
+  assert.equal(result, settled); assert.equal(calls, 2);
+  assert.ok(timeouts.every(ms => ms > 0 && ms <= 5000), 'each poll is bounded by the remaining wait');
+});
+test('wait retries dropped connections but ends on API and input errors', async () => {
+  const settled = { status: 'done' };
+  for (const error of [Object.assign(Error('fetch failed'), { cause: { code: 'ECONNRESET' } }), Object.assign(Error('fetch failed'), { cause: { code: 'ECONNREFUSED' } }), Error('socket hang up')]) {
+    let calls = 0;
+    assert.equal(await waitForWorker(async () => { if (++calls === 1) throw error; return settled; }, 'file-task', '5000'), settled);
+    assert.equal(calls, 2);
+  }
+  let calls = 0;
+  await assert.rejects(waitForWorker(async () => { calls++; throw Object.assign(Error('Not found'), { status: 404 }); }, 'task', '5000'), error => testErrorStatus(error, 'status') === 404);
+  assert.equal(calls, 1);
+});
+test('a slow poll uses the remaining wait without a minimum grace interval', async t => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 1000 });
+  const budgets = [];
+  const waiting = assert.rejects(waitForWorker(async budget => {
+    budgets.push(budget); await new Promise(resolve => setTimeout(resolve, budget)); throw slowPoll();
+  }, 'feature', '30', 10000), error => testErrorCode(error) === 'wait_timeout' && /state could not be read/.test(testErrorMessage(error)) && /1 status poll timed out/.test(testErrorMessage(error)) && /--timeout-ms/.test(testErrorMessage(error)));
+  await new Promise(resolve => setImmediate(resolve));
+  t.mock.timers.tick(30); await waiting;
+  assert.deepEqual(budgets, [30]); assert.equal(Date.now(), 1030);
+});
+test('a wait never starts another status read at its deadline', async t => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 1000 });
+  const budgets = [];
+  const waiting = assert.rejects(waitForWorker(async budget => { budgets.push(budget); return { session: { status: 'running' } }; }, 'task', '30'), error => testErrorCode(error) === 'wait_timeout' && /without cancelling/.test(testErrorMessage(error)) && !/status poll/.test(testErrorMessage(error)));
+  await new Promise(resolve => setImmediate(resolve));
+  t.mock.timers.tick(30); await waiting;
+  assert.deepEqual(budgets, [30]);
+});
+test('a shorter request timeout still applies to every retry within the wait deadline', async t => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 1000 });
+  const budgets = [], settled = { status: 'done' };
+  const waiting = waitForWorker(async budget => { budgets.push(budget); if (budgets.length === 1) throw slowPoll(); return settled; }, 'file-task', '2400', 200);
+  await new Promise(resolve => setImmediate(resolve));
+  t.mock.timers.tick(1000);
+  assert.equal(await waiting, settled); assert.deepEqual(budgets, [200, 200]);
+});
+test('connection losses name the last error', async () => {
+  await assert.rejects(waitForWorker(async () => { throw Object.assign(Error('fetch failed'), { cause: Object.assign(Error('read ECONNRESET'), { code: 'ECONNRESET' }) }); }, 'task', '30'), error => /lost the connection \(last: read ECONNRESET\)/.test(testErrorMessage(error)));
+});
+test('connection losses fall back to the cause code when Node reports an empty message', async () => {
+  const refused = () => Object.assign(Error('fetch failed'), { cause: Object.assign(new AggregateError([], ''), { code: 'ECONNREFUSED' }) });
+  await assert.rejects(waitForWorker(async () => { throw refused(); }, 'task', '30'), error => /lost the connection \(last: ECONNREFUSED\)/.test(testErrorMessage(error)));
+});
+test('HTTP answers, input rejection and cancellation never retry even with transient-looking details', async () => {
+  for (const error of [
+    Object.assign(Error('socket hang up'), { status: 502 }),
+    Object.assign(Error('server timeout'), { status: 503, code: 'timeout' }),
+    Object.assign(Error('socket hang up'), { exitCode: 2 }),
+    Object.assign(Error('request cancelled'), { name: 'AbortError', cause: { code: 'ECONNRESET' } }),
+    Object.assign(Error('request cancelled'), { code: 'ABORT_ERR', cause: { code: 'ECONNRESET' } }),
+  ]) {
+    let calls = 0;
+    await assert.rejects(waitForWorker(async () => { calls++; throw error; }, 'task', '5000'), failure => failure === error);
+    assert.equal(calls, 1);
+  }
+});
+test('a stale successful read followed by connection loss cannot claim the task continues', async t => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 1000 });
+  let calls = 0;
+  const waiting = assert.rejects(waitForWorker(async () => {
+    if (++calls === 1) return { session: { status: 'running' } };
+    throw Object.assign(Error('fetch failed'), { cause: { code: 'ECONNREFUSED' } });
+  }, 'task', '1500'), error => testErrorCode(error) === 'wait_timeout' && /state could not be read/.test(testErrorMessage(error)) && /No cancellation was sent/.test(testErrorMessage(error)) && !/task continues/.test(testErrorMessage(error)));
+  await new Promise(resolve => setImmediate(resolve));
+  t.mock.timers.tick(1000); await new Promise(resolve => setImmediate(resolve));
+  t.mock.timers.tick(500); await waiting;
+  assert.equal(calls, 2);
 });

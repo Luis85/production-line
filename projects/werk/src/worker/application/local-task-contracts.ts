@@ -1,3 +1,5 @@
+import type { CandidateInspectionLimits } from './execution-policy.js';
+import type { ProjectModelContext } from './model-context.js';
 import { validateFeatureRequestReference, type FeatureRequestReference } from './feature-request-reference.js';
 
 import { type DevelopmentCompletion, type DevelopmentScope, type DevelopmentEvidence } from './development.js';
@@ -21,6 +23,7 @@ export interface LocalTaskWorkspaces {
     taskKey: string,
     signal: AbortSignal,
     baseCommit?: string,
+    inspection?: Partial<CandidateInspectionLimits>,
   ): Promise<{
     repositoryId?: string;
     repository: string;
@@ -94,6 +97,7 @@ export interface TaskFile {
   existed: boolean;
 }
 export interface LocalTask {
+  projectContext?: ProjectModelContext | null;
   feature?: FeatureRequestReference;
   implementation?: DevelopmentScope;
   developmentEvidence?: DevelopmentEvidence;

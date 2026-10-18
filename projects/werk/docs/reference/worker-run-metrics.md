@@ -6,6 +6,96 @@ the orchestrator's lease/snapshot journal. An original remote assignment keeps
 its orchestrator evidence; a later local conversation turn is a separate local
 execution, not a replay of that assignment.
 
+## Metrics webview
+
+Open **Metrics** to inspect one worker. Its sections have different time scopes:
+
+| Section | What it measures |
+| --- | --- |
+| Current activity | The shared execution slot, occupied local places and separate accepted-assignment buffer; includes preparation reservations |
+| Token allowance | Reported input/output tokens, outstanding reservations and remaining share in the configured daily or monthly UTC window |
+| Worker & host | Latest worker-process CPU, resident memory and heap; state-volume free space and whole-machine memory |
+| Services & execution processes | Granted development-service groups and observed finite local execution groups; current readings with explicit coverage |
+| Execution activity | Retained attempts accepted in the last 24 hours, 7 days, 30 days or all retained time; defaults to 7 days |
+
+The execution-window selector affects **Execution activity** only. Its bounds are
+captured when the request starts and shown under **About these measurements**.
+They filter acceptance time, not completion time. Retries, follow-ups, gate
+reviews and rework can produce multiple attempts for one Feature Request.
+Outcome counts therefore do not measure delivered features. Token/cost totals
+use finished attempt records; durations show their measured subset and exclude
+queue time. Each summary shows coverage so missing measurements stay visible.
+
+The allowance is a configured worker budget, not a provider subscription balance;
+usage in everyday tools outside this worker is not measured. Reservations are
+separate from reported usage, and an active call can exceed its reservation.
+Incomplete accounting keeps remaining allowance unverified. See
+[consumption limits](../how-to/worker-consumption-limits.md) for the admission policy.
+
+Resource samples normally update every 10 seconds. CPU and memory describe the
+worker's Node.js process and exclude model subprocesses; CPU needs two samples.
+Host memory includes other applications. Free space describes the whole state
+volume, not the size of Werk's files. These are current observations, not a
+historical resource time series. **Alerts & task monitoring** retains warning
+transitions separately, up to 1,000 events; these do not provide a resource time
+series.
+
+Read times and stale/error labels belong to each source. Background refreshes
+retain the last matching values without animating action buttons. Pausing browser
+updates does not stop the worker, and displayed measurements continue to age.
+Changing the execution window clears the previous window's summary until its
+replacement arrives. Missing or failed measurements never become measured zero.
+
+Use **View taskboard** to inspect work, **Manage consumption limits** or **Worker
+settings** to change configuration, and **Explore all retained attempts** to open
+History's detailed records and export controls. **Runtime & connection details**
+keeps machine identifiers and diagnostics out of the primary reading path. See
+[the webview guide](../how-to/use-worker-webview.md) for workspace navigation.
+
+## Services and finite execution observations
+
+Authenticated `GET /api/processes` returns `WorkerProcessesView` with
+`schemaVersion: 1`, `capturedAt`, `services` and `executions`. This view is
+independent of durable attempt evidence and of the Execution activity window.
+
+| Group | Scope and retention |
+| --- | --- |
+| `services` | `worker_owned_services`: up to 50 private service records, with grants, lifetime, readiness, restart allowance and projected stop/restart availability |
+| `executions` | `worker_launched_finite_processes`: 100 completed entries plus active launches; `retention.scope: current_worker_process` means restart clears this in-memory list |
+
+Finite entries have an opaque ID, safe purpose label, kind, nullable Feature
+Request/session/task/run identities, lifecycle timestamps, exit code and nullable
+measurement. Their public DTO has no PID, command arguments, environment, paths
+or output. A delegated call keeps the same Feature Request/task but uses its own
+session and run. Instrumented local task scopes also include final candidate
+capture after the model returns. Worker-owned maintenance may have null
+identities. This is not a machine-wide inventory: provider discovery probes and
+unrelated machine processes are excluded. Separate orchestrator adapters are not
+covered by this local execution instrumentation.
+
+Measurements use `owned_service_process_group` or
+`owned_execution_process_group`. Linux sampling reads the visible live group's
+CPU counters and RSS; services include the supervision host. Other platforms or
+inaccessible counters report unavailable. Each summary exposes `measuredGroups`,
+`activeGroups` and `coverage` (`complete`, `partial` or `unavailable`); a partial
+sum covers only measured groups. Empty or unmeasured values must be interpreted
+with those counts, not as whole-machine totals.
+
+These CPU counters can decrease when a group member exits. They are not
+utilization percentages, final lifetime totals or an addition to token/cost
+usage. RSS can count shared pages more than once. Finite entries retain their
+last live sample after completion; service measurements are cleared when the
+service ends. Neither is a historical resource time series. Normal sampling
+intervals are 5 seconds for services and 1 second for active finite executions.
+
+Authenticated `POST /api/processes` accepts `status`, bounded `logs`, `stop` and
+`restart`. Stop/restart require `id`, `expectedRevision` and `operationId`; an
+uncertain response must be retried with exactly the same command. Logs return
+`id`, `revision`, `entries`, `nextAfter` and `gap`. Model service tools are
+separately granted and restricted to their owning Feature Request/worktree.
+See [manage worker processes](../how-to/manage-worker-processes.md) for setup,
+controls, retention and operating-system interruption boundaries.
+
 ## Storage and identity
 
 The private worker state contains `worker-runs.sqlite`. Each admitted invocation
@@ -69,6 +159,22 @@ failure. Missing, malformed or unreported usage stays unknown. Analysis exposes
 per-field coverage counts so a token total and cost total can have different
 coverage. A partial measured total is not the account's total bill.
 
+### Delegated attempts
+
+A child model invocation keeps the same Feature Request/task identity and adds
+`parentRunId`, `parentSessionId` and `delegationId` to its numeric run record.
+Its token usage and reported cost count separately toward totals and the worker
+allowance. Attempt counts therefore include child calls; they are not counts of
+delivered features. A parent session filter selects that session's own runs;
+use the task filter to include its linked children.
+
+Child execution intervals overlap the parent. Aggregate worker-process CPU
+therefore excludes child intervals to avoid counting the same CPU time twice;
+individual child snapshots remain inspectable. Duration totals sum invocation
+durations and are not elapsed wall time when children overlap. Peak RSS remains
+an observed worker-process gauge. These measurements exclude model subprocess
+CPU and memory.
+
 ## HTTP and CLI
 
 Execution evidence uses authenticated `POST /api/runs`; the public health/Prometheus
@@ -88,8 +194,8 @@ pairs, per-field consumption coverage, measured duration count/mean and scoped
 resource totals. Empty or entirely unmeasured averages/totals remain null.
 
 Filters: `--session-id`, `--task-id`, `--provider`, `--kind`, `--outcome`,
-`--since` and `--until`. Timestamp filters use ISO timestamps with an explicit
-`Z` or offset. Providers are `codex-cli`, `claude-cli`, `openai-api` and
+`--since` and `--until`. Timestamp filters select admission time (the run's
+`acceptedAt`) and use ISO timestamps with an explicit `Z` or offset. Providers are `codex-cli`, `claude-cli`, `openai-api` and
 `anthropic-api`; kinds are `chat`, `local` and `orchestrator`. Outcomes are
 `queued`, `running`, `completed`, `review`, `waiting_input`, `escalated`, `failed`, `cancelled` and `interrupted`.
 
@@ -113,8 +219,9 @@ be presented as a complete export merely because a file downloaded successfully.
 For an exact completed dataset, stop new submissions and let active work finish
 before starting the export.
 
-The webview exposes Project requests and Execution evidence inside History, with
-Metrics links. Filters affect both the displayed list and its analysis.
+The webview exposes Project requests and Execution evidence inside History.
+History filters affect both its displayed list and analysis; the Metrics window
+selector is independent.
 Measurements, missing coverage and recovered interruptions remain visibly
 separate. The [worker lifecycle tutorial](../tutorials/worker-feature-lifecycle.md)
 walks through this from a downloaded package.

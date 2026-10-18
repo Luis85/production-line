@@ -1,3 +1,4 @@
+import { interactionFeatureRequest } from './feature-request-reference.js';
 
 import { developmentVerified, validateDevelopmentState } from './development.js';
 
@@ -70,16 +71,18 @@ export async function execute(host: Pick<LocalTaskRuntime, "change" | "execution
         throw Error("Task has no reserved execution context.");
       const turn = host.sessions.interactions.turn(task.sessionId, turnId);
       if (!turn.dispatch) throw Error("Task request was not durably prepared.");
-      await host.assertToolWorkspace(task, AbortSignal.any([controller.signal, host.workspaceController.signal, AbortSignal.timeout(30000)]));
+      await host.assertToolWorkspace(task, AbortSignal.any([controller.signal, host.workspaceController.signal, AbortSignal.timeout(30000)]), false, turn.dispatch.policy);
       const connection = {
         ...host.settings.provider(task.provider),
         model: task.model,
       };
-      const development = host.developmentRuntime(task, turn.dispatch.policy.commandTimeoutMs);
+      // Implementation limits come from the accepted dispatch, never from settings changed later.
+      const { commandTimeoutMs, candidateSourceMaxBytes, candidateSourceMaxFiles, candidateFileMaxBytes } = turn.dispatch.policy;
+      const development = host.developmentRuntime(task, { commandTimeoutMs, candidateSourceMaxBytes, candidateSourceMaxFiles, candidateFileMaxBytes });
       if (!!task.implementation !== (turn.dispatch.policy.development === true)) throw Error('Prepared implementation mode differs from accepted authority.');
       const model = host.model(
         definitionConnection(connection, task.definition),
-        { worktree: task.worktree, worktreeIdentity: task.worktreeIdentity, development },
+        { sessionId: task.sessionId, feature: task.feature ?? interactionFeatureRequest(task.id), baseCommit: task.baseCommit, worktree: task.worktree, worktreeIdentity: task.worktreeIdentity, development },
       );
       if (!model) throw Error("Provider not configured");
       signal = AbortSignal.any([

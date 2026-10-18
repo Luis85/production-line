@@ -23,8 +23,9 @@ remain available without duplicating task identities across sources.
 
 New request starts with the operator's instructions. Task options disclose the
 provider, optional name and reusable agent definition. Follow up continues the
-selected task. Taskboard shows execution and admission capacity. Metrics presents
-observed consumption and health. History retains conversations, review patches
+selected task. Taskboard shows execution and admission capacity. Metrics visualizes
+this worker's current capacity, token allowance, resources and retained execution
+activity. History retains conversations, review patches
 and execution evidence; Settings
 owns provider accounts, queue/duration policy, tools, repositories, shared intake,
 profiles and optional orchestrator enrollment.
@@ -60,12 +61,18 @@ time across Chat, explicit local file tasks and remote orchestrator assignments.
 Local admission counts queued/running chat and file work, including preparation
 reservations. Accepted remote assignments use a separate buffer; ready notes not
 yet admitted are not occupied places. These counts never add execution slots.
-Stale observations do not establish availability. Parallel work
-requires separate worker instances, each with its own native state directory or
-Docker volume and webview port.
+Stale observations do not establish availability. Separate Feature Requests need
+separate worker instances for parallel execution, each with its own state and
+webview port. Within one attempt, an explicitly granted parent model can use
+bounded child sessions. Those children keep the same request and grants, share
+its tool-call/time budget, and count toward the worker allowance.
 
 Every task owns a dedicated worker-managed session and an automatically maintained
 Markdown feature-request record. Follow-ups, answers and retries keep that record.
+A request retains its logical model session across invocations; native resume and
+worker context replay are distinct adapter capabilities. Shared project context
+comes from an explicit committed manifest, while private conversation history
+remains request-specific.
 The unified interaction starts with instructions; approved repository-file work is
 an optional permission, never an opt-in to persistence. Source notes retain their
 own intake authority; the generated record reports progress without replacing them.
@@ -85,6 +92,29 @@ model prompt. The worker is the only component that prompts an LLM; Factory and
 orchestrator own routing, not model execution. Repository-file approval lives in
 the same task interaction; generated patches still require human review.
 
+## Feature Request Review
+
+Review is a request-scoped page reached from the Taskboard, conversation or History.
+Accepted scope, changes, current checks, human decisions and shared publication
+appear together with one next valid action. It projects existing request authority;
+it never creates a parallel lifecycle. Inconsistent ownership or stale evidence
+blocks decisions. Read-only inspection does not select another conversation.
+Acceptance, implementation completion and a Git merge are distinct events.
+
+## Worker-owned Processes
+
+Development services require explicit fixed presets, a bounded lifetime and restart
+budget. They belong to one Feature Request and its pinned worktree. Successful model
+turns may leave them running for review; cancellation, failed work, revoked grants,
+archive, lifetime expiry and shutdown stop the owned service. Model and UI controls
+use opaque service identities, never arbitrary process IDs or command arguments.
+
+Metrics shows owned services and finite process observations with separate scope,
+resource coverage and retention. Service logs are bounded. An unavailable sample is
+not zero usage, a live process is not a health check, and services do not add task
+execution slots. The webview provides explicit stop/restart decisions with conflict
+and uncertain-response recovery.
+
 ## Worker Settings
 
 Settings sections save independently and retain unsaved edits while navigating
@@ -93,6 +123,30 @@ baseline before replacing policy; another operator's change produces a conflict
 instead of an unseen overwrite. A lost acknowledgement requires inspecting the
 saved result before retrying. Existing requirements to pause or drain work still
 apply where needed before changing providers, repositories, profiles or tools.
+
+## Worker Metrics
+
+Metrics brings current activity, the configured UTC token allowance and resource
+observations together for this worker. Reported tokens, reservations and remaining
+allowance stay distinct; the budget is not a provider subscription balance and
+excludes everyday usage outside the worker. Resource meters distinguish worker
+Node-process CPU/RSS/heap from whole-host memory and state-volume free space.
+The process section separately observes finite model/tool/MCP/Git groups and
+explicitly granted development services. Resource coverage remains visible; no
+historical resource time series or complete provider-account consumption is implied.
+
+Execution activity offers acceptance-time windows of 24 hours, 7 days, 30 days or
+all retained attempts. It shows outcomes, average measured duration, reported
+input/output tokens and cost with coverage. Attempts include follow-ups, retries
+and reviews, so they do not count delivered Feature Requests. Unknown measurements
+remain unavailable and reported cost may be an estimate. Original remote lease
+execution keeps its separate evidence contract.
+
+Each source exposes freshness and failed reads retain clearly marked last values.
+Background updates keep controls stable; pausing reads does not freeze measurement
+age. Configuration stays in Settings, detailed evidence and export in History,
+and current work in Taskboard. See the
+[metrics reference](docs/reference/worker-run-metrics.md#metrics-webview).
 
 ## Worker Provider and Agent Definitions
 

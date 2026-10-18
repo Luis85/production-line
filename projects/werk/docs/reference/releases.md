@@ -1,7 +1,7 @@
 # Release artifacts and verification
 
-Version 0.12.0 is packaged as `werk-0.12.0.tar.gz` and `werk-0.12.0.zip`. Each archive
-has one top directory, `werk-0.12.0/`. Obtain it and `SHA256SUMS` from a delivery
+Version 0.13.0 is packaged as `werk-0.13.0.tar.gz` and `werk-0.13.0.zip`. Each archive
+has one top directory, `werk-0.13.0/`. Obtain it and `SHA256SUMS` from a delivery
 source you trust. Checksums detect corruption or mismatch; an unsigned checksum
 file does not independently authenticate its publisher.
 
@@ -37,9 +37,9 @@ After manual extraction or installation, run `node werk.mjs up` from the install
 ## Verify before extraction
 
 Compare the SHA-256 of your chosen archive with its exact entry in `SHA256SUMS`.
-For example, Linux provides `sha256sum werk-0.12.0.tar.gz`, macOS provides
-`shasum -a 256 werk-0.12.0.tar.gz`, and PowerShell provides
-`Get-FileHash ./werk-0.12.0.zip -Algorithm SHA256`. A mismatch means stop and obtain
+For example, Linux provides `sha256sum werk-0.13.0.tar.gz`, macOS provides
+`shasum -a 256 werk-0.13.0.tar.gz`, and PowerShell provides
+`Get-FileHash ./werk-0.13.0.zip -Algorithm SHA256`. A mismatch means stop and obtain
 the correct artifact. Extract into a new directory; do not overwrite a running
 installation or its state.
 
@@ -109,6 +109,20 @@ Pull requests and manual branch runs do not deploy. The Pages job has its own
 status: a failed deployment leaves the previous site and the published release
 available.
 
+## Generated project overview and screenshots
+
+Each release also provides `werk-readme-<version>.zip` and `README-SHA256SUMS`.
+The ZIP contains the generated project README, selected unretouched Storybook
+PNGs and their source/qualification provenance. Documentation links point to the
+exact source commit; images remain local to the ZIP. It is a documentation
+artifact, independent of the installed runtime and its runtime-specific README.
+
+The release job builds it only after all Storybook browser checks pass. It verifies
+the current source digest and commit, selected story IDs and every qualified file
+hash. It neither edits nor commits the repository README or tracked screenshots.
+See [README generation](../how-to/generate-readme.md) for maintaining the source
+journey, screenshot selection and refreshing the repository images before tagging.
+
 ## Maintainer build contract
 
 Maintain [CHANGELOG.md](../../CHANGELOG.md) as part of every release. During
@@ -140,6 +154,9 @@ validates the changelog before producing output, writes the candidate's
 `RELEASE-NOTES.md` sidecar and includes the full changelog in both archives.
 `npm run storybook:ci` rebuilds the static Storybook and captures its stories;
 `npm run release:storybook` validates and packages that evidence separately.
+`npm run release:readme` derives the overview and selected PNGs from the same
+qualified output. `npm run readme:check` runs in normal checks and rejects text
+drift before any documentation build.
 
 The release workflow checks the changelog before dependency installation. Its
 publication step uses the staged candidate notes and appends the existing
@@ -197,7 +214,7 @@ QEMU, `cloud-localds`, OpenSSH, OpenSSL, curl and `nc` (netcat):
 
 ```text
 node scripts/release/extract.mjs release /tmp/werk-candidate
-node scripts/release/cloud-init-smoke.mjs --root /tmp/werk-candidate/werk-0.12.0 --archives release
+node scripts/release/cloud-init-smoke.mjs --root /tmp/werk-candidate/werk-0.13.0 --archives release
 ```
 
 The gate downloads the official Ubuntu Noble cloud image and checks its digest
@@ -218,14 +235,14 @@ Forge generates `.github/workflows/werk--release.yml`. Edit the source, then run
 manual branch runs qualify candidates without publishing.
 
 1. Update `projects/werk/package.json` and its lockfile to the desired version in
-   a reviewed change (for example, `0.12.0`). Merge to `main` after checks pass.
+   a reviewed change (for example, `0.13.0`). Merge to `main` after checks pass.
 2. From a clean checkout of the merged commit, create and push its matching tag:
 
    ```sh
    git switch main
    git pull --ff-only origin main
-   git tag -a v0.12.0 -m "Werk 0.12.0"
-   git push origin v0.12.0
+   git tag -a v0.13.0 -m "Werk 0.13.0"
+   git push origin v0.13.0
    ```
 
 3. Watch **Actions → Werk release**. The tag must match `package.json`, use a
@@ -234,8 +251,9 @@ manual branch runs qualify candidates without publishing.
    Linux/macOS/Windows, Docker, cloud-init VM and Storybook qualification must all pass.
 4. The publishing job uses GitHub's automatic `GITHUB_TOKEN` with `contents: write`.
    No separate release secret is required. It uploads both runtime archives,
-   `install.mjs`, `SHA256SUMS`, the versioned Storybook ZIP and
-   `STORYBOOK-SHA256SUMS` to a draft, then publishes it. Stable versions are marked
+   `install.mjs`, `SHA256SUMS`, the versioned Storybook ZIP,
+   `STORYBOOK-SHA256SUMS`, the versioned README ZIP and `README-SHA256SUMS`
+   to a draft, then publishes it. Stable versions are marked
    latest; versions such as `0.2.0-rc.1` are prereleases and never replace latest.
    Release notes include download/start commands.
 5. The **Publish released Storybook to GitHub Pages** job deploys the qualified

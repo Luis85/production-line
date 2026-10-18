@@ -28,7 +28,7 @@ export async function providerCommand(executable: string, args: string[], cwd: s
         env.MCP_TOOL_TIMEOUT = String(timeout);
     }
     let result: RunResult, failed = false;
-    try { result = await runProcess(executable, args, { cwd, env, mode: 'contained', signal, input, maxOutputBytes: 4 * 1024 * 1024, captureStdout: capture }); }
+    try { result = await runProcess(executable, args, { cwd, env, mode: 'contained', observation: { kind: 'provider', label: 'Model provider' }, signal, input, maxOutputBytes: 4 * 1024 * 1024, captureStdout: capture }); }
     catch (error) { if (!(error instanceof ProcessRunError)) throw error; result = error.result; failed = true; }
     // Numeric telemetry may exist even when execution fails; diagnostics never leave this callback.
     try { observeOutput?.(result.stdout); } catch { /* Telemetry must not mask process cleanup or outcome. */ }
@@ -44,6 +44,6 @@ export async function runProviderProbe(executable: string, provider: 'codex' | '
     const directory = await mkdtemp(join(tmpdir(), 'werk-provider-probe-'));
     try {
         return await runProcess(executable, args, { ...options, cwd: directory, env: providerEnvironment(provider),
-            mode: 'contained', graceMs: 0, captureStderr: provider === 'codex', allowNonZeroExit: true });
+            mode: 'contained', observation: 'ignore', graceMs: 0, captureStderr: provider === 'codex', allowNonZeroExit: true });
     } finally { await rm(directory, { recursive: true, force: true }).catch(() => {}); }
 }

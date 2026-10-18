@@ -26,11 +26,11 @@ test('read-only CLI status checks report login, redact diagnostics and share con
   const results = await Promise.all([checks.check(connection), checks.check(connection), checks.check(connection)]);
   assert.equal(results[0].authentication, 'authenticated'); assert.equal(results[0].available, true); assert.doesNotMatch(JSON.stringify(results), /secret-private-account/);
   await checks.check(connection); assert.equal(await readFile(path + '.calls', 'utf8'), 'x');
-  const claude = await executable(t, `console.error('private-startup-diagnostic'); if (process.argv.slice(2).join(' ') !== 'auth status') process.exit(3); console.log(JSON.stringify({loggedIn: true, email: 'private@example.com', authMethod: 'oauth_token'}));`);
+  const claude = await executable(t, `if(process.argv.includes('--version')){console.log('2.1.257');process.exit(0)}console.error('private-startup-diagnostic'); if (process.argv.slice(2).join(' ') !== 'auth status') process.exit(3); console.log(JSON.stringify({loggedIn: true, email: 'private@example.com', authMethod: 'oauth_token'}));`);
   const status = await checks.check(provider('claude-cli', { executable: claude })); assert.equal(status.authentication, 'authenticated'); assert.doesNotMatch(JSON.stringify(status), /private@example|oauth_token|private-startup-diagnostic/);
 });
 test('signed-out, malformed and excessive CLI output never becomes authenticated or exposes raw output', { skip: process.platform === 'win32' }, async t => {
-  const signedOut = await executable(t, `console.log(JSON.stringify({loggedIn: false, error:'secret'})); process.exitCode = 1;`);
+  const signedOut = await executable(t, `if(process.argv.includes('--version')){console.log('2.1.257');process.exit(0)}console.log(JSON.stringify({loggedIn: false, error:'secret'})); process.exitCode = 1;`);
   const checks = new ProviderStatusChecks(); assert.equal((await checks.check(provider('claude-cli', { executable: signedOut }))).authentication, 'signed-out');
   const bad = await executable(t, `console.log('private broken status');`);
   const unknown = await checks.check(provider('claude-cli', { executable: bad })); assert.equal(unknown.authentication, 'unknown'); assert.doesNotMatch(JSON.stringify(unknown), /private broken/);
@@ -58,10 +58,10 @@ test('Codex negative status wins even with exit zero; changed configuration wait
 });
 
 test('Claude saved-connection preflight reports minimum version without a model request', { skip: process.platform === 'win32' }, async t => {
-  for (const [version, compatibility] of [['2.1.247', 'unsupported'], ['2.1.248', 'minimum_met'], ['3.0.0', 'minimum_met']]) {
+  for (const [version, compatibility] of [['2.1.247', 'unsupported'], ['2.1.256', 'unsupported'], ['2.1.257', 'minimum_met'], ['3.0.0', 'minimum_met']]) {
     const cli = await executable(t, `const args=process.argv.slice(2);if(args.join(' ')==='--version'){console.log(${JSON.stringify(version)}+' (Claude Code)')}else if(args.join(' ')==='auth status'){console.log(JSON.stringify({loggedIn:true,email:'private-account'}))}else{process.exit(99)}`);
     const result = await new ProviderStatusChecks().check(provider('claude-cli', { executable: cli }));
-    assert.equal(result.version, version); assert.equal(result.minimumVersion, '2.1.248'); assert.equal(result.compatibility, compatibility);
+    assert.equal(result.version, version); assert.equal(result.minimumVersion, '2.1.257'); assert.equal(result.compatibility, compatibility);
     assert.equal(result.available, compatibility === 'minimum_met');
     assert.equal(result.authentication, compatibility === 'minimum_met' ? 'authenticated' : 'unknown');
     assert.doesNotMatch(JSON.stringify(result), /private-account/);

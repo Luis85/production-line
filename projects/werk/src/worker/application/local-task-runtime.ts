@@ -36,8 +36,8 @@ export function createLocalTaskRuntime(settings: WorkerSettingsPort, sessions: W
     completionMessage: (task, summary, reply) => group1.completionMessage(task, summary, reply),
     writePatch: (task, patch) => group1.writePatch(runtime, task, patch),
     input: (task) => group1.input(task),
-    developmentRuntime: (task, commandTimeoutMs) => group2.developmentRuntime(runtime, task, commandTimeoutMs),
-    assertToolWorkspace: (task, signal, verifyOnly) => group2.assertToolWorkspace(runtime, task, signal, verifyOnly),
+    developmentRuntime: (task, limits) => group2.developmentRuntime(runtime, task, limits),
+    assertToolWorkspace: (task, signal, verifyOnly, inspection) => group2.assertToolWorkspace(runtime, task, signal, verifyOnly, inspection),
     removeTaskWorktree: (task, requested, discardChanges) => group2.removeTaskWorktree(runtime, task, requested, discardChanges),
     get active() { return group3.active(runtime); },
     get admissionOccupancy() { return group3.admissionOccupancy(runtime); },
@@ -63,7 +63,12 @@ export function createLocalTaskRuntime(settings: WorkerSettingsPort, sessions: W
     continueTask: (body) => group6.continueTask(runtime, body),
     action: (input, expectedInteractionRevision) => group7.action(runtime, input, expectedInteractionRevision),
     tick: () => group8.tick(runtime),
-    execute: (id, controller) => group8.execute(runtime, id, controller),
+    execute: (id, controller) => {
+      const task = runtime.tasks.find(item => item.id === id);
+      return task && runtime.observations
+        ? runtime.observations.run({ featureRequestKey: task.feature?.key ?? null, sessionId: task.sessionId, taskId: task.id, runId: task.runId ?? null }, () => group8.execute(runtime, id, controller))
+        : group8.execute(runtime, id, controller);
+    },
   };
   return runtime;
 }

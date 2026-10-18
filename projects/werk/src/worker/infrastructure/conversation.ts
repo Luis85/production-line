@@ -1,3 +1,5 @@
+import type { ModelSessionAccess } from '../application/model-session.js';
+import { withReplaySession } from './native-session.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { currentToolManifest, withProviderTools, type ToolRuntimeFactory } from './provider-tool-session.js';
@@ -26,18 +28,20 @@ export class CodexConversationModel implements StructuredModel {
   get toolManifest() { return currentToolManifest(this.tools); }
   toolManifestFor(policy: ModelRequest['policy']) { return currentToolManifest(this.tools, policy); }
   readonly configuration;
+  readonly sessionBinding;
+  private readonly session?: ModelSessionAccess;
   private executable: string; private directory: string; private readonly tools?: ToolRuntimeFactory;
-  constructor(executable: string, directory: string, instruction = '', model = '', tools?: ToolRuntimeFactory) { this.executable = executable; this.directory = directory; this.tools = tools; this.configuration = Object.freeze({ id: 'codex-cli', model, instruction }); }
+  constructor(executable: string, directory: string, instruction = '', model = '', tools?: ToolRuntimeFactory, session?: ModelSessionAccess) { this.session = session; this.sessionBinding = session ? structuredClone(session.binding) : undefined; this.executable = executable; this.directory = directory; this.tools = tools; this.configuration = Object.freeze({ id: 'codex-cli', model, instruction }); }
   reply(messages: ChatMessage[], signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void) { return legacyModelReply(this, messages, signal, onUsage); }
   async execute(request: ModelRequest, signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void, control?: ModelInvocationControl) {
     requireModelRequest(request, 'codex-cli');
-    return observeModelInvocation(signal, onUsage, observe => withProviderTools(request, signal, this.tools, async (runtime, bounded) => {
+    return observeModelInvocation(signal, onUsage, observe => withProviderTools(request, signal, this.tools, (runtime, bounded) => withReplaySession(request, this.session, this.executable, bounded, control, async guarded => {
       const workspace = join(resolve(this.directory), 'chat-workspace');
       await ensureDirectory(workspace);
       const cwd = runtime ? await mkdtemp(join(tmpdir(), 'werk-codex-workspace-')) : workspace;
       try {
       const output = await withCliToolBridge(runtime, bounded, bridge => {
-        control?.beforeCall();
+        guarded?.beforeCall();
         return providerCommand(this.executable, ['exec', ...(request.provider.model ? ['--model', request.provider.model] : []), '--ignore-user-config', '--ephemeral', '--skip-git-repo-check', '--sandbox', 'read-only', '--json', '--disable', 'shell_tool', '--disable', 'unified_exec', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'code_mode', '--disable', 'multi_agent', '-c', 'approval_policy="never"', '-c', 'web_search="disabled"', '-c', 'project_doc_max_bytes=0', '-c', 'shell_environment_policy.inherit="none"', ...(bridge ? ['-c', bridge.codexConfig] : []), '-C', cwd, '-'], cwd, bounded, request.renderedPrompt, true, 'codex', output => codexUsage(output, observe));
       });
       const replies: string[] = [];
@@ -59,6 +63,6 @@ export class CodexConversationModel implements StructuredModel {
       }
       return parseModelResult(replies.join('\n\n'));
       } finally { if (runtime) await rm(cwd, { recursive: true, force: true }); }
-    }, control));
+    }), control));
   }
 }

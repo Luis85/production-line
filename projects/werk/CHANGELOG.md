@@ -7,6 +7,37 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-18
+
+### Added
+
+- Verified implementation source bounds are configurable in **Settings → Queue & duration → Repository inspection limits** and through the settings API/CLI: 64 MiB total source, 20,000 paths and 8 MiB per file outside the approved edit list by default. Guarded saves detect concurrent changes; each prepared implementation dispatch freezes the bounds and records them with tool-limit evidence. Larger repositories still receive complete inspection without widening approved edit scope.
+- A dedicated Feature Request review page brings accepted scope, navigable diffs, current verification, human acceptance and shared handoff together with an explicit next action.
+- Explicit service presets let requests run bounded development services in their owned worktree. The worker supervises lifetime, readiness, restarts, logs and cleanup; Metrics exposes service controls and separately scoped finite-process observations.
+- Generated README documentation uses maintained content and qualified Storybook screenshots. Release verification produces a versioned README bundle with screenshot provenance and checksums, while drift checks keep source text in sync.
+- Durable model sessions belong to each Feature Request, with explicit Claude CLI continuation, worker-managed replay for Codex/API adapters, bounded active context and private history retrieval. An optional committed project-context manifest shares reviewed knowledge without mixing conversations.
+- Tool Access can grant bounded model subagents. Children retain the parent request, provider/profile, approved tools and execution budget, with separate consumption and linked run evidence.
+- An overnight team guide explains evening Git handoff, unattended implementation, Markdown answers and morning human review.
+
+### Changed
+
+- The README follows the setup journey from a project worker through Orchestrator enrollment to Factory line registration, with a hierarchy diagram and current execution-mode boundaries.
+- Claude Code readiness now requires version 2.1.257 or later for explicit session continuation with refreshed instructions.
+- Worker Metrics visualizes current execution/admission capacity, configured token allowance, process/host resources and retained attempt outcomes. Execution summaries offer acceptance-time windows with measured duration and token/cost coverage, while settings and detailed evidence remain linked to their own pages.
+- Allowance and resource displays distinguish reported usage, reservations, unverified balances, worker-process measurements and host/volume context. Runtime diagnostics and alert history disclose beneath the overview.
+
+### Fixed
+
+- Process metrics scans stop when their owned process exits and use a bounded read budget. Cancelled or incomplete scans report unavailable counters, so background observation cannot prolong worker shutdown by scanning the remaining process table.
+- Shared Feature Requests only report synchronized publication when the current lifecycle and review note are confirmed. Recovery retries unfinished handoff publication without repeating completed model work.
+- Unresponsive development-service hosts cannot hold startup or shutdown operations indefinitely. Unconfirmed cleanup retains its occupied slot, reports an actionable state and blocks overlapping replacements.
+- Review links preserve the exact request through section navigation; inconsistent ownership and stale checks cannot be presented as current approval evidence. Background refresh preserves controls and readable Markdown summaries.
+- Shared intake observes actual worker admission capacity before claiming ready requests. Temporary holds and preparation failures publish accurate informational Task notes and retain safe retry/publication behavior.
+- Restart recovery preserves a prepared queued dispatch only when all retained authorities prove it never started; running, contradictory or incomplete attempts remain fenced for explicit recovery.
+- Metrics reads track freshness independently, retain stale values on failed refreshes and keep background updates from animating action buttons. Query changes, locking and page lifecycle changes reject obsolete responses; displayed age continues to advance while browser updates are paused.
+- Verified implementation inspection no longer fails with a generic Git error when the tracked file list is large: the Git output bound for the candidate file listings now scales with `execution.candidateSourceMaxFiles` (about 4 KiB per file, at least 2 MiB). A listing above that bound reports its size limit and names the setting to raise.
+- `feature wait`, `task wait` and `file-task wait` retry client status-read timeouts and transient connection failures within their `--timeout-ms` deadline. Each poll is bounded by the remaining wait, with no extra poll after expiry; API and input errors still end the wait immediately. Timeout diagnostics report failed polls and explain that no cancellation was sent, without claiming the task is still running when its current state is unknown.
+
 ## [0.12.0] - 2026-10-18
 
 ### Added

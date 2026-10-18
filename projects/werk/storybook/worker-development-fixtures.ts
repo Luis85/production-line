@@ -12,7 +12,7 @@ export function installDevelopmentFixture(variant: DevelopmentFixture = 'passed'
   if (variant === 'stale') evidence.candidateDigest = 'b'.repeat(64);
   const task = { ...base.file, title: 'Add stable request ordering', instruction: 'Sort requests by creation time, preserving input order when dates are equal. Add acceptance tests.', repository: '/example/projects/web', worktree: '/example/.werk/worker/worktrees/request-ordering', status: variant === 'failed' || variant === 'stale' ? 'needs_rework' : 'review', error: variant === 'failed' ? 'Required feature check failed. Repair the candidate and rerun its checks before review.' : null, files: scope.approvedPaths.map(path => ({ path, content: '// Illustrative approved file', existed: true })), summary: 'Illustrative candidate and verification receipts. No model or command was run.', patch: 'diff --git a/src/requests.ts b/src/requests.ts\n--- a/src/requests.ts\n+++ b/src/requests.ts\n@@ -1 +1 @@\n-export const order = requests => requests;\n+export const order = requests => requests.toSorted((a, b) => a.createdAt - b.createdAt);\n', ...(variant === 'proposal' ? {} : { implementation: scope, developmentEvidence: evidence }) };
   state.settings!.board.paused = true;
-  state.settings!.execution = { maxRuntimeMs: 14400000, maxToolCalls: 128, commandTimeoutMs: 300000 };
+  state.settings!.execution = { maxRuntimeMs: 14400000, maxToolCalls: 128, commandTimeoutMs: 300000, candidateSourceMaxBytes: 67108864, candidateSourceMaxFiles: 20000, candidateFileMaxBytes: 8388608 };
   state.settings!.executionSource = variant === 'budget-environment' ? 'environment' : 'saved_settings';
   state.settings!.repositories.items = state.settings!.repositories.items.slice(0, 1);
   state.toolAccess = { schemaVersion: 1, revision: 1, workerNode: '/example/bin/node', canEdit: true, saveBlockedReason: null, builtins: { files: true, commands: scope.checks.map(check => ({ id: check.id, name: check.name, executable: '/example/bin/node', args: check.id === 'tests' ? ['--test', 'test/requests.test.ts'] : ['node_modules/typescript/bin/tsc', '--noEmit'], enabled: true, verification: variant !== 'setup' })), cliTools: [], webOrigins: [] }, mcp: [] };
@@ -31,6 +31,7 @@ export function installDevelopmentFixture(variant: DevelopmentFixture = 'passed'
       if (init.method === 'POST') {
         submissions.push({ path, body: clone(body) });
         if (body.expectedToolBudget && (body.expectedToolBudget.maxToolCalls !== savedSettings.execution.maxToolCalls || body.expectedToolBudget.commandTimeoutMs !== savedSettings.execution.commandTimeoutMs)) return Response.json({ error: 'Reload current tool budget settings before saving.' }, { status: 409 });
+        if (body.expectedCandidateInspection && ['candidateSourceMaxBytes', 'candidateSourceMaxFiles', 'candidateFileMaxBytes'].some(key => body.expectedCandidateInspection[key] !== savedSettings.execution[key as keyof typeof savedSettings.execution])) return Response.json({ error: 'Reload current repository inspection limits before saving.' }, { status: 409 });
         savedSettings = { ...savedSettings, resources: { ...savedSettings.resources, ...body.resources }, execution: { ...savedSettings.execution, ...body.execution } };
       }
       return Response.json(savedSettings);
@@ -52,6 +53,7 @@ export function installDevelopmentFixture(variant: DevelopmentFixture = 'passed'
   };
   (window as unknown as { __WERK_STORY_FETCH__: typeof fetch }).__WERK_STORY_FETCH__ = fetchFixture;
   return { task, state, fetchFixture, submissions, reads: () => reads,
+    changeSavedInspection(candidateSourceMaxBytes: number) { savedSettings.execution.candidateSourceMaxBytes = candidateSourceMaxBytes; state.settings = clone(savedSettings); },
     changeSavedBudget(maxToolCalls: number) { savedSettings.execution.maxToolCalls = maxToolCalls; state.settings = clone(savedSettings); },
     setCandidate(next: 'passed' | 'failed' | 'stale') {
       task.status = next === 'passed' ? 'review' : 'needs_rework'; evidence.candidateDigest = (next === 'stale' ? 'b' : 'a').repeat(64);

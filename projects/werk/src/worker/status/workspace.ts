@@ -1,3 +1,4 @@
+import { processStatus, processCommand } from './workspace-processes.js';
 import type { FeatureAuthoringCommand, FeatureAuthoringResult } from '../application/feature-authoring-contracts.js';
 import type { FeatureActionResult } from '../application/feature-management.js';
 import { assertDirectFeatureCreation, authorFeature, isSharedFeatureSession } from './workspace-feature-authoring.js';
@@ -48,6 +49,7 @@ export class WorkerWorkspace {
   constructor(config: WorkspaceConfiguration, journal: SnapshotJournal, get: () => Status) {
     this.context = new WorkspaceContext(config, journal, get);
   }
+  private observed<T>(operation: () => T): T { return this.context.processObservations.run({}, operation); }
   get executionProfiles() { return this.context.executionProfiles; }
   get features() { return this.context.features; }
   get featureTracking() { return this.context.featureTracking; }
@@ -64,7 +66,7 @@ export class WorkerWorkspace {
   get definitions() { return this.context.definitions; }
   get chat() { return this.context.chat; }
   get executor() { return this.context.executor; }
-  withFeatureTracking<T>(action: () => Promise<T>): Promise<T> { return withFeatureTracking(this.context, action); }
+  withFeatureTracking<T>(action: () => Promise<T>): Promise<T> { return this.observed(() => withFeatureTracking(this.context, action)); }
   taskDetail(id: string) { return taskDetail(this.context, id); }
   chatSnapshot(id = this.sessions.current.id) { return chatSnapshot(this.context, id); }
   cancelChat() { return cancelChat(this.context); }
@@ -72,48 +74,52 @@ export class WorkerWorkspace {
   featureTrackingCommand(input: unknown) { return featureTrackingCommand(this.context, input); }
   taskboardDetail(id: string) { return taskboardDetail(this.context, id); }
   taskboardAction(input: unknown) { return taskboardAction(this.context, input); }
-  startChat(message: unknown) { return startChat(this.context, message); }
+  startChat(message: unknown) { return this.observed(() => startChat(this.context, message)); }
   capabilities() { return capabilities(this.context); }
   requestCommand(input: unknown) { return requestCommand(this.context, input); }
+  processStatus() { return processStatus(this.context); }
+  processCommand(input: unknown) { return processCommand(this.context, input); }
   resourceEvents(input: unknown) { return resourceEvents(this.context, input); }
   integrations(input: unknown = { action: "status" }) { return integrations(this.context, input); }
-  interaction(input: unknown) { return interaction(this.context, input); }
+  interaction(input: unknown) { return this.observed(() => interaction(this.context, input)); }
   runEvidence(input: unknown) { return runEvidence(this.context, input); }
-  task(input: unknown) { return task(this.context, input); }
-  init() { return init(this.context); }
+  task(input: unknown) { return this.observed(() => task(this.context, input)); }
+  init() { return this.observed(() => init(this.context)); }
   providerStatus(input: unknown) { return providerStatus(this.context, input); }
   providerAccount(input: unknown) { return providerAccount(this.context, input); }
   sharedIntakeView() { return sharedIntakeView(this.context); }
-  sharedIntakeCommand(input: unknown) { return sharedIntakeCommand(this.context, input); }
+  sharedIntakeCommand(input: unknown) { return this.observed(() => sharedIntakeCommand(this.context, input)); }
   featureView() { return featureView(this.context); }
   featureList() { return featureList(this.context); }
   featureCommand(input: FeatureAuthoringCommand): Promise<FeatureAuthoringResult>;
   featureCommand(input: unknown): Promise<FeatureActionResult>;
   featureCommand(input: unknown) {
     const action = (input as { action?: unknown } | null)?.action;
-    return action === 'prepare' || action === 'publish' ? authorFeature(this.context, input) : featureCommand(this.context, input);
+    return this.observed(() => action === 'prepare' || action === 'publish' ? authorFeature(this.context, input) : featureCommand(this.context, input));
   }
   createTaskboard(input: unknown) {
     assertDirectFeatureCreation(this.context);
-    return withRepositoryAdmission(this.context, () => this.board.create(input));
+    return this.observed(() => withRepositoryAdmission(this.context, () => this.board.create(input)));
   }
-  sessionCommand(input: unknown) {
+  async sessionCommand(input: unknown) {
     const body = input as { action?: unknown; id?: unknown } | null;
     if (body?.action === 'create') assertDirectFeatureCreation(this.context);
     if (body?.action === 'rename' && typeof body.id === 'string' && isSharedFeatureSession(this.context, body.id))
       throw new DomainError('conflict', 'This title belongs to the published Feature Request. Its accepted scope and title remain fixed.');
-    return this.sessions.action(input);
+    const result = await this.sessions.action(input);
+    await this.context.processes?.reconcileGrants();
+    return result;
   }
   repositoryStatus() { return repositoryStatus(this.context); }
-  repositoryCommand(input: unknown) { return repositoryCommand(this.context, input); }
+  repositoryCommand(input: unknown) { return this.observed(() => repositoryCommand(this.context, input)); }
   toolAccess(): ToolAccessView { return toolAccess(this.context); }
   updateToolAccess(input: unknown) { return updateToolAccess(this.context, input); }
   discoverToolAccess(input: unknown) { return discoverToolAccess(this.context, input); }
   withIdleConfiguration<T>(operation: () => Promise<T>): Promise<T> { return withIdleConfiguration(this.context, operation); }
   withRepositoryAdmission<T>(operation: () => Promise<T>): Promise<T> { return withRepositoryAdmission(this.context, operation); }
-  worktrees() { return worktrees(this.context); }
-  pruneWorktrees(input: unknown) { return pruneWorktrees(this.context, input); }
-  updateSettings(body: unknown) { return updateSettings(this.context, body); }
+  worktrees() { return this.observed(() => worktrees(this.context)); }
+  pruneWorktrees(input: unknown) { return this.observed(() => pruneWorktrees(this.context, input)); }
+  updateSettings(body: unknown) { return this.observed(() => updateSettings(this.context, body)); }
   close(options: { deferEvidence?: boolean } = {}): Promise<void> { return close(this.context, options); }
   closeEvidence(): Promise<void> { return closeEvidence(this.context); }
   rememberTask(task: Task) { return rememberTask(this.context, task); }

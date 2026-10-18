@@ -1,3 +1,4 @@
+import { initProcesses, closeProcesses } from './workspace-processes.js';
 import type { WorkspaceContext } from './workspace-context.js';
 import { loadWebviewToken } from '../infrastructure/webview-token.js';
 import { settleCleanup } from '../../shared/lifecycle.js';
@@ -17,6 +18,7 @@ export async function init(workspace: WorkspaceContext){
   await workspace.repositories.init();
   await workspace.features?.init();
   await workspace.sessions.init();
+  await initProcesses(workspace);
   await workspace.board.init();
   await workspace.taskIndex.init();
   await workspace.featureTracking.init();
@@ -31,7 +33,7 @@ export function close(workspace: WorkspaceContext, options: { deferEvidence?: bo
   workspace.repositoryStop.abort();
   // Abort Git preparation before awaiting intake; preserve evidence until remote assignments drain.
   workspace.draining ??= settleCleanup(
-    [() => workspace.features?.stopIntake(), () => workspace.sharedRuntime.close(), () => workspace.providerAccounts.close(), () => workspace.providerStatuses.close(),
+    [() => closeProcesses(workspace), () => workspace.features?.stopIntake(), () => workspace.sharedRuntime.close(), () => workspace.providerAccounts.close(), () => workspace.providerStatuses.close(),
      () => workspace.repositories.close(), () => workspace.board.close(), () => workspace.reviews.close(), () => workspace.taskRequests],
     () => workspace.sessions.close({ retainEvidence: true }),
   );

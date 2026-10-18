@@ -1,5 +1,6 @@
 import { trackingSharedRecord, trackingWorkflow } from './tracking-fixtures.mjs';
 import test from 'node:test';
+import { createProcessObservation } from '../../src/worker/dist/worker/infrastructure/process-observation.js';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -35,7 +36,7 @@ async function edit(runtime, signal, content = 'after\n') {
 }
 const check = (runtime, signal, allowFailure = false) => call(runtime, 'werk_candidate_check', { preset: 'source-check' }, signal, allowFailure);
 
-async function fixture(t, execute, { verification = true } = {}) {
+async function fixture(t, execute, { verification = true, observations = /** @type {import('../../src/worker/application/process-observation.ts').ProcessObservation | undefined} */ (undefined) } = {}) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'werk-development-task-')));
   const repository = join(root, 'repo'), state = join(root, 'state');
   let sessions, board;
@@ -72,14 +73,16 @@ async function fixture(t, execute, { verification = true } = {}) {
       finally { await runtime.close(); }
     },
   });
-  const workspaces = { prepareWorktree: (selector, key, signal, commit) => prepareRepositoryWorktree(selector, key, signal, commit) };
+  const worktreeInspections = [];
+  const workspaces = { prepareWorktree: (selector, key, signal, commit, inspection) => { worktreeInspections.push(inspection); return prepareRepositoryWorktree(selector, key, signal, commit, inspection); } };
   async function open() {
-    sessions = createWorkerSessions(state, settings, factory); await sessions.init();
-    board = createLocalTaskboard(state, settings, sessions, factory, workspaces); await board.init();
+    const processes = observations ? { observations, supervisor: () => undefined } : undefined;
+    sessions = createWorkerSessions(state, settings, factory, undefined, () => 0, undefined, undefined, processes); await sessions.init();
+    board = createLocalTaskboard(state, settings, sessions, factory, workspaces, undefined, processes); await board.init();
   }
   await open();
   return {
-    root, state, repository, baseCommit, settings, requests, grant,
+    root, state, repository, baseCommit, settings, requests, grant, worktreeInspections,
     get board() { return board; }, get sessions() { return sessions; }, get invocations() { return invocations; },
     request(id) { return sessions.requests.get(board.executionDetail(id).requestId); },
     async create() {
@@ -144,6 +147,24 @@ test('a new implementation edits, fails a real check, repairs and verifies withi
   assert.equal(facts['output.requiredCheckCount'], 1);
   assert.equal(facts['output.candidateDigest'], receipts[1].candidateDigest);
   assert.equal(await readFile(join(f.state, 'local-review', id + '.patch'), 'utf8'), task.patch);
+});
+
+test('candidate inspection uses the limits frozen with the accepted dispatch, not a later settings change', { timeout: testTimeoutMs }, async t => {
+  const f = await fixture(t, async ({ runtime, request, signal }) => {
+    assert.equal(request.policy.candidateFileMaxBytes, 8388608); assert.equal(request.toolManifest.limits.candidateInspection.candidateFileMaxBytes, 8388608);
+    await edit(runtime, signal); await check(runtime, signal);
+    return complete('Verified with the accepted inspection limits.');
+  });
+  await writeFile(join(f.repository, 'asset.bin'), Buffer.alloc(70 * 1024, 1));
+  await git(f.repository, 'add', 'asset.bin'); await git(f.repository, 'commit', '-m', 'Committed asset above the later per-file limit');
+  const id = await f.create();
+  f.worktreeInspections.length = 0;
+  await f.settings.update({ execution: { candidateFileMaxBytes: 65536, candidateSourceMaxFiles: 1 } });
+  const task = await f.settle(id, 'review');
+  assert.equal(task.developmentCompletion.verified, true);
+  assert.ok(f.worktreeInspections.length > 1);
+  assert.ok(f.worktreeInspections.every(value => value.candidateSourceMaxFiles === 20000), 'initial execution and later candidate guards use accepted limits, not live settings');
+  assert.equal(f.settings.publicView().execution.candidateFileMaxBytes, 65536, 'the later change applies to new attempts only');
 });
 
 const incomplete = {
@@ -301,4 +322,22 @@ test('legacy proposal completion remains compatible with a custom policy when ve
   assert.equal(request.phase, 'done');
   assert.equal(request.evaluations.filter(item => item.stage === 'done').at(-1).passed, true);
   assert.equal(await readFile(join(task.worktree, 'approved.txt'), 'utf8'), 'before\n');
+});
+
+
+test('task observation includes candidate capture after model execution with the same FR and run', { timeout: testTimeoutMs }, async t => {
+  const observations = createProcessObservation();
+  let atProviderEnd = new Set();
+  const f = await fixture(t, async ({ runtime, signal }) => {
+    await edit(runtime, signal); await check(runtime, signal);
+    atProviderEnd = new Set((await observations.status()).processes.map(record => record.id));
+    return complete('Edited and verified the candidate.');
+  }, { observations });
+  const id = await f.create(), task = await f.settle(id, 'review');
+  const afterModel = (await observations.status()).processes.filter(record => !atProviderEnd.has(record.id));
+  assert.ok(afterModel.some(record => record.kind === 'git'), 'final candidate capture remains visible after the provider returns');
+  for (const record of afterModel) {
+    assert.equal(record.featureRequestKey, task.feature.key); assert.equal(record.taskId, id);
+    assert.equal(record.sessionId, task.sessionId); assert.equal(record.runId, task.runId);
+  }
 });

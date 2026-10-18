@@ -1,3 +1,5 @@
+import type { CandidateInspectionLimits } from '../application/execution-policy.js';
+import { stopSessionProcesses } from './workspace-processes.js';
 import type { WorkspaceContext } from './workspace-context.js';
 import { prepareRepositoryWorktree, RepositoryGitError, WorktreeProblem, WORKTREE_CHECKOUT_TIMEOUT_MS } from '../infrastructure/repositories.js';
 import { removeRepositoryWorktree, repositoryRoot, worktreeName } from '../infrastructure/repositories-git.js';
@@ -68,14 +70,14 @@ async function chooseDiscoveredRepository(workspace: WorkspaceContext, action: "
   } finally { workspace.repositoriesUpdating = false; }
 }
 
-export async function prepareTaskWorkspace(workspace: WorkspaceContext, selector: string, key: string, signal: AbortSignal, commit?: string, verify = false){
+export async function prepareTaskWorkspace(workspace: WorkspaceContext, selector: string, key: string, signal: AbortSignal, commit?: string, verify = false, inspection: Partial<CandidateInspectionLimits> = workspace.settings.value.execution){
   if (!workspace.acceptingTasks || workspace.repositoriesUpdating || workspace.configurationUpdating || workspace.executionProfiles?.pending())
     throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
   signal = AbortSignal.any([signal, workspace.repositoryStop.signal]);
   workspace.repositoryPreparations++;
   try {
     if (workspace.settings.value.repositories.items.length)
-      return await (verify ? workspace.repositories.verifyWorktree(selector, key, signal, commit) : workspace.repositories.prepareWorktree(selector, key, signal, commit));
+      return await (verify ? workspace.repositories.verifyWorktree(selector, key, signal, commit, inspection) : workspace.repositories.prepareWorktree(selector, key, signal, commit, inspection));
     // Legacy approved-file tasks may still use an ordinary, non-Git project folder.
     if (!isAbsolute(selector)) throw new DomainError("invalid_input", "Choose an assigned repository or an absolute project folder.");
     const repository = await realpath(selector);
@@ -84,7 +86,7 @@ export async function prepareTaskWorkspace(workspace: WorkspaceContext, selector
       if (error.code === "ENOENT") return null;
       throw error;
     });
-    return metadata ? await prepareRepositoryWorktree(repository, key, signal, commit, { checkoutTimeoutMs: WORKTREE_CHECKOUT_TIMEOUT_MS, ...(verify ? { reuseOnly: true } : {}) }) : { repository, path: repository };
+    return metadata ? await prepareRepositoryWorktree(repository, key, signal, commit, { ...inspection, checkoutTimeoutMs: WORKTREE_CHECKOUT_TIMEOUT_MS, ...(verify ? { reuseOnly: true } : {}) }) : { repository, path: repository };
   } catch (error) { throw worktreeFailure(error); }
   finally { workspace.repositoryPreparations--; }
 }
@@ -93,6 +95,8 @@ export async function removeTaskWorkspace(workspace: WorkspaceContext, selector:
   if (!workspace.acceptingTasks || workspace.repositoriesUpdating || workspace.configurationUpdating)
     throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
   signal = AbortSignal.any([signal, workspace.repositoryStop.signal]);
+  const task = workspace.board.view().tasks.find(item => item.worktreeKey === key && item.worktree === expected.path);
+  if (task) await stopSessionProcesses(workspace, task.sessionId);
   const options = { expect: { taskKey: key, path: expected.path, baseCommit: expected.baseCommit }, discardChanges: expected.discardChanges, checkoutTimeoutMs: WORKTREE_CHECKOUT_TIMEOUT_MS };
   workspace.repositoryPreparations++;
   try {

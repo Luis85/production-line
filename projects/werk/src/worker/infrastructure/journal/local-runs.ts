@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { DomainError } from '../../../shared/errors.js';
 import { openPrivateJournal } from './database.js';
-import { unknownUsage, type ConsumptionTotals, type ProviderUsage, type RunAnalysis, type RunMetadata, type RunOutcome, type RunPage, type RunQuery, type RunResources, type WorkerRun } from '../../application/run-evidence.js';
+import { validateRunLineage, unknownUsage, type ConsumptionTotals, type ProviderUsage, type RunAnalysis, type RunMetadata, type RunOutcome, type RunPage, type RunQuery, type RunResources, type WorkerRun } from '../../application/run-evidence.js';
 const usageColumns = { inputTokens: 'input_tokens', outputTokens: 'output_tokens', cacheReadTokens: 'cache_read_tokens', cacheWriteTokens: 'cache_write_tokens', providerReportedCostUsd: 'cost_usd' } as const;
 const outcomes: RunOutcome[] = ['queued', 'running', 'completed', 'review', 'failed', 'cancelled', 'interrupted', 'waiting_input', 'escalated'];
 const processInstanceId = randomUUID();
@@ -11,10 +11,15 @@ const processInstanceId = randomUUID();
 export class WorkerRunJournal {
   private db!: DatabaseSync;
   private initialized = false;
-  private clock = new Map<string, { accepted: number; started?: number }>();
+  private clock = new Map<string, { accepted?: number; started?: number }>();
   private directory: string;
   constructor(directory: string) { this.directory = directory; }
   async init(recovery?: (runId: string) => { outcome: Exclude<RunOutcome, 'queued' | 'running'>; usage: ProviderUsage } | undefined) {
+    if (this.initialized) return;
+    await this.open();
+    try { await this.recover(recovery); } catch (error) { this.close(); throw error; }
+  }
+  async open() {
     if (this.initialized) return;
     this.db = await openPrivateJournal(this.directory, 'worker-runs.sqlite', 'Run evidence storage must be a regular file, not a symlink.');
     try {
@@ -28,13 +33,22 @@ export class WorkerRunJournal {
       CREATE INDEX IF NOT EXISTS worker_runs_session ON worker_runs(session_id, sequence);
       CREATE INDEX IF NOT EXISTS worker_runs_filter ON worker_runs(provider, outcome, sequence);`);
     this.initialized = true;
-    for (const row of this.db.prepare('SELECT id FROM worker_runs WHERE finished=0 ORDER BY sequence').all()) {
-      const id = String(row.id), known = recovery?.(id);
-      await this.complete(id, known?.outcome ?? 'interrupted', known?.usage ?? this.get(id).usage, true);
-    }
     } catch (error) { this.db.close(); this.initialized = false; throw error; }
   }
-  close() { if (this.initialized) { this.db.close(); this.initialized = false; } }
+  queuedForRecovery(id: string): boolean {
+    const run = this.get(id), row = this.db.prepare('SELECT * FROM worker_runs WHERE id=?').get(id);
+    return !!row && row.finished === 0 && row.outcome === 'queued' && row.reported === 0 && row.session_id === run.sessionId && row.task_id === run.taskId && row.kind === run.kind && row.provider === run.provider && row.created_at === run.acceptedAt &&
+      ['input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'cost_usd', 'duration_ms', 'cpu_user', 'cpu_system', 'rss_bytes'].every(key => row[key] === null);
+  }
+  async recover(recovery?: Parameters<WorkerRunJournal['init']>[0], retained: ReadonlySet<string> = new Set()) {
+    for (const row of this.db.prepare('SELECT id FROM worker_runs WHERE finished=0 ORDER BY sequence').all()) {
+      const id = String(row.id);
+      if (retained.has(id) && this.queuedForRecovery(id)) continue;
+      const known = recovery?.(id);
+      await this.complete(id, known?.outcome ?? 'interrupted', known?.usage ?? this.get(id).usage, true);
+    }
+  }
+  close() { if (this.initialized) { this.db.close(); this.initialized = false; } this.clock.clear(); }
   private resources(): RunResources {
     const memory = process.memoryUsage(), cpu = process.cpuUsage();
     return { scope: 'worker_process', processInstanceId, rssBytes: memory.rss, heapUsedBytes: memory.heapUsed, cpuUserMicros: cpu.user, cpuSystemMicros: cpu.system, uptimeSeconds: process.uptime() };
@@ -55,6 +69,7 @@ export class WorkerRunJournal {
   async begin(metadata: RunMetadata): Promise<WorkerRun> {
     if (metadata.purpose !== undefined && !['execution', 'gate_review', 'rework'].includes(metadata.purpose)) throw new DomainError('invalid_input', 'Invalid run purpose.');
     if (metadata.requestId !== undefined && (typeof metadata.requestId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(metadata.requestId))) throw new DomainError('invalid_input', 'Invalid request identity.');
+    validateRunLineage(metadata, metadata.parentRunId === undefined ? undefined : this.get(metadata.parentRunId));
     const id = randomUUID();
     const run = this.transaction(() => {
       const attempt = Number(this.db.prepare('SELECT COUNT(*) AS count FROM worker_runs WHERE session_id=?').get(metadata.sessionId)!.count) + 1;
@@ -67,10 +82,10 @@ export class WorkerRunJournal {
   }
   async start(id: string) {
     const run = this.get(id); if (run.after) throw new DomainError('conflict', 'This execution attempt is already finished.'); if (run.startedAt) return;
-    const timing = this.clock.get(id); if (timing) timing.started = performance.now();
+    const timing = this.clock.get(id) ?? {}; timing.started = performance.now(); this.clock.set(id, timing);
     run.startedAt = new Date().toISOString(); run.outcome = 'running';
     run.before = { measurement: 'execution_boundary', capturedAt: run.startedAt, state: 'running', resources: this.resources(), consumption: this.consumption() };
-    run.queueDurationMs = timing?.started === undefined ? null : Math.max(0, timing.started - timing.accepted); this.save(run);
+    run.queueDurationMs = timing.accepted === undefined ? null : Math.max(0, timing.started - timing.accepted); this.save(run);
   }
   observeUsage(id: string, usage: ProviderUsage) {
     const run = this.get(id);
@@ -154,8 +169,9 @@ export class WorkerRunJournal {
     if (query.cursor !== undefined) throw new DomainError('invalid_input', 'Use asOf, not cursor, for analysis.');
     const { where, values, asOf } = this.filter(query), outcomes: Record<string, number> = {};
     for (const row of this.db.prepare(`SELECT outcome,COUNT(*) AS count FROM worker_runs WHERE ${where} GROUP BY outcome`).all(...values)) outcomes[String(row.outcome)] = Number(row.count);
-    const row = this.db.prepare(`SELECT COUNT(*) AS total,COALESCE(SUM(CASE WHEN finished=1 AND json_extract(payload,'$.before') IS NOT NULL THEN 1 ELSE 0 END),0) AS completed,COUNT(duration_ms) AS measured,SUM(duration_ms) AS duration,AVG(duration_ms) AS mean,COUNT(cpu_user) AS cpuMeasured,SUM(cpu_user) AS cpuUser,SUM(cpu_system) AS cpuSystem,MAX(rss_bytes) AS rss FROM worker_runs WHERE ${where}`).get(...values)!;
+    const rootWindow = "json_extract(payload,'$.parentRunId') IS NULL";
+    const row = this.db.prepare(`SELECT COUNT(*) AS total,COALESCE(SUM(CASE WHEN finished=1 AND json_extract(payload,'$.before') IS NOT NULL THEN 1 ELSE 0 END),0) AS completed,COUNT(duration_ms) AS measured,SUM(duration_ms) AS duration,AVG(duration_ms) AS mean,COUNT(CASE WHEN ${rootWindow} THEN cpu_user END) AS cpuMeasured,SUM(CASE WHEN ${rootWindow} THEN cpu_user END) AS cpuUser,SUM(CASE WHEN ${rootWindow} THEN cpu_system END) AS cpuSystem,MAX(rss_bytes) AS rss FROM worker_runs WHERE ${where}`).get(...values)!;
     const number = (key: string) => row[key] === null ? null : Number(row[key]);
-    return { schemaVersion: 1, scope: 'worker_session_executions', asOf, total: Number(row.total), completedPairs: Number(row.completed), outcomes, consumption: this.consumption(where, values), duration: { measuredRuns: Number(row.measured), totalMs: number('duration'), meanMs: number('mean') }, resources: { scope: 'worker_process_between_snapshots', measuredRuns: Number(row.cpuMeasured), cpuUserMicros: number('cpuUser'), cpuSystemMicros: number('cpuSystem'), peakObservedRssBytes: number('rss') }, notes: ['Only worker session executions are included; orchestrator lease snapshots remain separate.', 'Token totals sum known provider measurements; reported USD values may be client estimates or have unknown historical basis, not billed charges. Null means unavailable. Cache tokens are subsets of input tokens, not additional usage.', 'CPU is the worker Node process between execution snapshots, not the provider subprocess or host. RSS is an observed gauge, not allocated memory or provider process usage.', 'History is durable without automatic eviction. Export pages using nextCursor to exclude newly added runs; already admitted running records may advance state during export.'] };
+    return { schemaVersion: 1, scope: 'worker_session_executions', asOf, total: Number(row.total), completedPairs: Number(row.completed), outcomes, consumption: this.consumption(where, values), duration: { measuredRuns: Number(row.measured), totalMs: number('duration'), meanMs: number('mean') }, resources: { scope: 'worker_process_between_snapshots', measuredRuns: Number(row.cpuMeasured), cpuUserMicros: number('cpuUser'), cpuSystemMicros: number('cpuSystem'), peakObservedRssBytes: number('rss') }, notes: ['Only worker session executions are included; orchestrator lease snapshots remain separate.', 'Token totals sum known provider measurements; reported USD values may be client estimates or have unknown historical basis, not billed charges. Null means unavailable. Cache tokens are subsets of input tokens, not additional usage.', 'CPU is the worker Node process between execution snapshots, not the provider subprocess or host. Delegated child windows are excluded from aggregate CPU because they overlap their parent. RSS is an observed gauge, not allocated memory or provider process usage.', 'History is durable without automatic eviction. Export pages using nextCursor to exclude newly added runs; already admitted running records may advance state during export.'] };
   }
 }

@@ -36,6 +36,7 @@ export async function updateToolAccess(workspace: WorkspaceContext, input: unkno
   const blocked = toolAccessBlockedReason(workspace);
   if (blocked) throw new DomainError('conflict', blocked);
   await withIdleConfiguration(workspace, () => workspace.settings.updateToolAccess(input));
+  await workspace.processes?.reconcileGrants();
   return toolAccess(workspace);
 }
 
@@ -146,6 +147,7 @@ export async function updateSettings(workspace: WorkspaceContext, body: unknown)
       const result = await update();
       await workspace.repositoryDiscovery.assignmentsChanged(workspace.settings.value.repositories.items);
       await workspace.repositories.configure(workspace.settings.value.repositories);
+      await workspace.processes?.reconcileGrants();
       return result;
     } finally { workspace.repositoriesUpdating = false; }
   }

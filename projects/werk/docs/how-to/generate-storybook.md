@@ -3,7 +3,7 @@
 The public Storybook starts with **Documentation**, ordered by the reader’s task:
 Start here, Set up your workspace, Work with requests, Operate the system,
 Frontend reference, and Architecture and contracts.
-[Start here](https://github.com/Luis85/production-line/blob/v0.12.0/projects/werk/docs/handbook.md) routes local worker users, distributed teams, system
+[Start here](https://github.com/Luis85/production-line/blob/v0.13.0/projects/werk/docs/handbook.md) routes local worker users, distributed teams, system
 operators and frontend contributors to the right setup journey.
 
 The same maintained Markdown under `docs/tutorials`, `docs/how-to`,
@@ -95,8 +95,10 @@ npm run release:build
 ```
 
 This builds runtime applications, generates and qualifies the Storybook, then
-packages both deliverables. Commit the intended source revision before final
-qualification. `npm run release:storybook` refuses a stale commit, source digest,
+packages the runtime, Storybook and generated README artifacts. See
+[README generation](generate-readme.md) for the maintained overview and screenshot
+selection; release generation never rewrites the qualified Storybook directory.
+Commit the intended source revision before final qualification. `npm run release:storybook` refuses a stale commit, source digest,
 failed coverage report, missing image or altered generated file. A source edit
 requires regeneration; a commit requires a new qualification tied to that HEAD.
 

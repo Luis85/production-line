@@ -61,6 +61,8 @@ export function consumptionModel(model: ConversationModel | undefined, runtime: 
   if (!model) return undefined;
   const structured = model as Partial<StructuredModel>;
   const wrapped: StructuredModel = {
+    get sessionBinding() { return structured.sessionBinding; },
+    loadProjectContext(signal) { return structured.loadProjectContext?.(signal) ?? Promise.resolve(null); },
     get configuration() { return structured.configuration ?? { id: 'legacy', model: '', instruction: '' }; },
     get capabilities() { return structured.capabilities ?? modelCapabilities; },
     get toolManifest() { return structured.toolManifest; },
