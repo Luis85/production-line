@@ -16,10 +16,10 @@ async function fixture(t, changes = {}) {
   /** @type {Array<{input:Parameters<Host['start']>[0],finish:(exit:Exit)=>void,stops:string[]}>} */ const launched = [];
   let presets = [preset(changes.preset)], failSave = false, scopeValid = true, validations = 0, maximum = 4;
   const journal = { async load() { return structuredClone(saved); }, async save(rows) { if (failSave) throw Error('disk unavailable'); saved = structuredClone(rows); } };
-  /** @type {Host} */ const host = { async start(input) {
+  /** @type {Host} */ const host = { start(input) {
     const closed = Promise.withResolvers(); const stops = [];
     launched.push({ input, finish: closed.resolve, stops });
-    return { closed: closed.promise, async stop(reason) { stops.push(reason); closed.resolve({ code: null, reason }); } };
+    return { started: Promise.resolve(), closed: closed.promise, async stop(reason) { stops.push(reason); closed.resolve({ code: null, reason }); } };
   } };
   const owner = await ProcessSupervisor.open({ journal, host, presets: () => presets, maxActive: () => maximum, async validateScope() { validations++; if (!scopeValid) throw Error('changed worktree'); } });
   t.after(() => owner.close().catch(() => {}));
@@ -95,7 +95,7 @@ test('known zero measurements remain zero; missing and stale groups retain expli
 
 test('journal recovery never reattaches historical processes and storage failure stops live leases', async t => {
   const f = await fixture(t); await f.start(); let calls = 0;
-  const restored = await ProcessSupervisor.open({ journal: f.journal, host: { async start() { calls++; throw Error('never'); } }, presets: () => [preset()], async validateScope() {} });
+  const restored = await ProcessSupervisor.open({ journal: f.journal, host: { start() { calls++; throw Error('never'); } }, presets: () => [preset()], async validateScope() {} });
   t.after(() => restored.close().catch(() => {})); assert.equal(restored.status().services[0].state, 'interrupted'); assert.equal(calls, 0);
   f.failSave(); await assert.rejects(f.owner.stop(command(f.owner.status().services[0])), /journal/); assert.deepEqual(f.launched[0].stops, ['storage_failed']); assert.equal(f.owner.status().persistenceError, true); await assert.rejects(f.start('later', 'b'), /journal/);
 });
@@ -115,7 +115,7 @@ test('control availability explains current grant, scope, capacity and lifetime 
 
 test('stop and feature cleanup never acknowledge completion before the host closes', async t => {
   const closed = Promise.withResolvers(); let requested = false;
-  const owner = await ProcessSupervisor.open({ journal: { async load() { return []; }, async save() {} }, host: { async start() { return { closed: closed.promise, async stop() { requested = true; } }; } }, presets: () => [preset()], async validateScope() {} });
+  const owner = await ProcessSupervisor.open({ journal: { async load() { return []; }, async save() {} }, host: { start() { return { started: Promise.resolve(), closed: closed.promise, async stop() { requested = true; } }; } }, presets: () => [preset()], async validateScope() {} });
   t.after(() => { closed.resolve({ code: null, reason: 'shutdown' }); return owner.close(); });
   const row = await owner.start({ operationId: 'start', presetId: 'dev', scope: scope() }); let completed = false;
   const stopping = owner.stop(command(row)).then(value => { completed = true; return value; });
@@ -125,7 +125,7 @@ test('stop and feature cleanup never acknowledge completion before the host clos
 
 test('feature stop waits for an in-flight launch and cannot miss its new process', async t => {
   const launching = Promise.withResolvers(), launch = Promise.withResolvers(), closed = Promise.withResolvers(); const stops = [];
-  const owner = await ProcessSupervisor.open({ journal: { async load() { return []; }, async save() {} }, host: { async start() { launching.resolve(); await launch.promise; return { closed: closed.promise, async stop(reason) { stops.push(reason); closed.resolve({ code: null, reason }); } }; } }, presets: () => [preset()], async validateScope() {} });
+  const owner = await ProcessSupervisor.open({ journal: { async load() { return []; }, async save() {} }, host: { start() { launching.resolve(); return { started: launch.promise, closed: closed.promise, async stop(reason) { stops.push(reason); closed.resolve({ code: null, reason }); } }; } }, presets: () => [preset()], async validateScope() {} });
   t.after(() => { launch.resolve(); return owner.close(); });
   const started = owner.start({ operationId: 'start', presetId: 'dev', scope: scope() }); await launching.promise;
   const stopped = owner.stopFeature(scope().featureRequestKey); launch.resolve(); await started; await stopped;
@@ -135,7 +135,7 @@ test('feature stop waits for an in-flight launch and cannot miss its new process
 
 test('revoking a preset during the persisted launch intent prevents actual process creation', async t => {
   const blocked = Promise.withResolvers(), saved = Promise.withResolvers(); let presets = [preset()], calls = 0;
-  const owner = await ProcessSupervisor.open({ journal: { async load() { return []; }, async save(rows) { if (rows[0]?.record.generation === 1 && rows[0].record.state === 'starting') { blocked.resolve(); await saved.promise; } } }, host: { async start() { calls++; throw Error('must not launch'); } }, presets: () => presets, async validateScope() {} });
+  const owner = await ProcessSupervisor.open({ journal: { async load() { return []; }, async save(rows) { if (rows[0]?.record.generation === 1 && rows[0].record.state === 'starting') { blocked.resolve(); await saved.promise; } } }, host: { start() { calls++; throw Error('must not launch'); } }, presets: () => presets, async validateScope() {} });
   t.after(() => { saved.resolve(); return owner.close(); });
   const running = owner.start({ operationId: 'start', presetId: 'dev', scope: scope() }); await blocked.promise; presets = []; saved.resolve();
   assert.equal((await running).state, 'failed'); assert.equal(calls, 0);
@@ -144,9 +144,51 @@ test('revoking a preset during the persisted launch intent prevents actual proce
 
 test('manual restart does not replace a host whose cleanup becomes unconfirmed while stopping', async t => {
   const closed = Promise.withResolvers(); let launches = 0;
-  const owner = await ProcessSupervisor.open({ journal: { async load() { return []; }, async save() {} }, host: { async start() { launches++; return { closed: closed.promise, async stop() { closed.resolve({ code: null, reason: 'host_lost' }); } }; } }, presets: () => [preset()], async validateScope() {} });
+  const owner = await ProcessSupervisor.open({ journal: { async load() { return []; }, async save() {} }, host: { start() { launches++; return { started: Promise.resolve(), closed: closed.promise, async stop() { closed.resolve({ code: null, reason: 'host_lost' }); } }; } }, presets: () => [preset()], async validateScope() {} });
   t.after(() => owner.close());
   const row = await owner.start({ operationId: 'start', presetId: 'dev', scope: scope() });
   await assert.rejects(owner.restart(command(row)), /no replacement was launched/);
   assert.equal(owner.status().services[0].state, 'interrupted'); assert.equal(launches, 1);
+});
+
+async function uncertainFixture(t, { failedStart = false, maximum = 1 } = {}) {
+  const handles = []; let holdFirst = true;
+  const owner = await ProcessSupervisor.open({ journal: { async load() { return []; }, async save() {} }, maxActive: maximum,
+    host: { start() { const index = handles.length, closed = Promise.withResolvers(), stops = []; handles.push({ closed, stops });
+      return { started: failedStart && index === 0 ? Promise.reject(Error('did not acknowledge startup')) : Promise.resolve(), closed: closed.promise,
+        async stop(reason) { stops.push(reason); if (index === 0 && holdFirst) throw Error('cleanup could not be confirmed'); closed.resolve({ code: null, reason }); } };
+    } }, presets: () => [preset()], async validateScope() {} });
+  t.after(() => { holdFirst = false; for (const handle of handles) handle.closed.resolve({ code: null, reason: 'shutdown' }); return owner.close().catch(() => {}); });
+  return { owner, handles, release() { holdFirst = false; }, start(operationId = 'start', char = 'a') { return owner.start({ operationId, presetId: 'dev', scope: scope(char) }); } };
+}
+
+test('unconfirmed startup retains its active lease, denies replacement, and leaves the command queue usable', async t => {
+  const f = await uncertainFixture(t, { failedStart: true });
+  await assert.rejects(f.start(), /cleanup|confirm|startup/i);
+  const row = f.owner.status().services[0]; assert.equal(row.state, 'stopping'); assert.equal(f.owner.status().capacity.active, 1);
+  const controls = await f.owner.controls(row.id); assert.equal(controls.stop, true); assert.equal(controls.restart, false);
+  assert.equal((await f.start()).id, row.id, 'Replaying the original start keeps the original owned lease.');
+  await assert.rejects(f.start('replacement'), /active|slots|cleanup|stopping/i);
+  await assert.rejects(f.owner.restart(command(row, 'restart')), /cleanup|stopping|confirm/i); assert.equal(f.handles.length, 1);
+  f.release(); const stopped = await f.owner.stop(command(f.owner.status().services[0], 'retry-stop')); assert.equal(stopped.state, 'stopped');
+  const independent = await f.start('independent', 'b'); assert.equal(independent.state, 'running'); assert.equal(f.handles.length, 2);
+});
+
+for (const failedStart of [false, true]) test(`a late nonzero close after uncertain ${failedStart ? 'startup' : 'operator stop'} never schedules a replacement`, async t => {
+  const f = await uncertainFixture(t, { failedStart });
+  if (failedStart) await assert.rejects(f.start(), /cleanup|confirm|startup/i);
+  else { const row = await f.start(); await assert.rejects(f.owner.stop(command(row)), /cleanup|confirm/i); }
+  assert.equal(f.owner.status().services[0].state, 'stopping');
+  f.handles[0].closed.resolve({ code: 1, reason: 'exit' });
+  await until(() => f.owner.status().capacity.active === 0); await delay(150);
+  assert.equal(f.handles.length, 1, 'Remaining automatic restart budget cannot override an outstanding stop.');
+  assert.notEqual(f.owner.status().services[0].state, 'restarting');
+});
+
+test('close attempts every owned lease even when one cleanup remains unconfirmed', async t => {
+  const f = await uncertainFixture(t, { maximum: 2 }); await f.start(); await f.start('second', 'b');
+  await assert.rejects(f.owner.close(), /cleanup|confirm/i);
+  assert.deepEqual(f.handles[0].stops, ['shutdown']); assert.deepEqual(f.handles[1].stops, ['shutdown']);
+  const rows = f.owner.status().services; assert.equal(rows[0].state, 'stopping'); assert.equal(rows[1].state, 'stopped');
+  assert.equal(f.owner.status().capacity.active, 1);
 });

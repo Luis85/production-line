@@ -80,6 +80,13 @@ Use the project's own acceptance checks to establish whether it works.
 - **Include ended processes** shows retained service records and completed finite
   executions. Up to 50 service records are retained in private worker state.
 
+If a private service host stops responding, the worker limits how long it waits
+for startup or shutdown and requests forced cleanup of that owned host. When
+closure still cannot be confirmed, the service stays **Stopping**, keeps its
+capacity slot and explains the uncertainty. A replacement or restart remains
+blocked; inspect the current state and retry stopping it. A later confirmed
+closure updates the retained record.
+
 New service controls are disabled while readings are stale. Refresh and inspect
 the current state before confirming a new operation. Background polling keeps
 button labels stable. Closing the page does not change the service lifetime.

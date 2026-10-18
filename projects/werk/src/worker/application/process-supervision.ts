@@ -18,10 +18,17 @@ export interface ProcessMeasurement {
   coverage: 'complete_group' | 'unavailable'; unavailableReason: string | null;
 }
 export interface ServiceExit { code: number | null; reason: 'exit' | 'spawn_failed' | 'host_lost' | 'parent_lost' | ServiceStopReason; }
-export type ServiceHostEvent = { type: 'output'; stream: 'stdout' | 'stderr'; text: string } | { type: 'measurement'; value: ProcessMeasurement };
-export interface ServiceHostHandle { closed: Promise<ServiceExit>; stop(reason: ServiceStopReason): Promise<void>; }
+export type ServiceHostEvent = { type: 'output'; stream: 'stdout' | 'stderr'; text: string } | { type: 'measurement'; value: ProcessMeasurement } | { type: 'cleanup_unconfirmed'; reason: ServiceStopReason };
+export interface ServiceHostHandle {
+  /** Bounded startup acknowledgement, separate from the preset's application readiness signal. */
+  started: Promise<void>;
+  /** Settles only after the owned host actually closes. A cleanup timeout never resolves this promise. */
+  closed: Promise<ServiceExit>;
+  /** Resolves after actual close; rejects within the cleanup bound if closure remains unconfirmed. */
+  stop(reason: ServiceStopReason): Promise<void>;
+}
 export interface ServiceHostPort {
-  start(input: { preset: ServicePreset; scope: ServiceScope; expiresAt: string; onEvent(event: ServiceHostEvent): void }): Promise<ServiceHostHandle>;
+  start(input: { preset: ServicePreset; scope: ServiceScope; expiresAt: string; onEvent(event: ServiceHostEvent): void }): ServiceHostHandle;
 }
 export interface ServiceRecord {
   id: string; revision: number; presetId: string; name: string;

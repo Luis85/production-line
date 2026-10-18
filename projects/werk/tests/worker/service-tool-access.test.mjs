@@ -22,10 +22,10 @@ const signal = () => new AbortController().signal;
 async function fixture(t) {
   let policy = { ...defaultToolPolicy(), services: grant() };
   /** @type {Array<{ input:Parameters<Host['start']>[0]; stops:string[]; finish:(exit:Exit)=>void }>} */ const launched = [];
-  /** @type {Host} */ const host = { async start(input) {
+  /** @type {Host} */ const host = { start(input) {
     const closed = Promise.withResolvers(); const stops = [];
     launched.push({ input, stops, finish: closed.resolve });
-    return { closed: closed.promise, async stop(reason) { stops.push(reason); closed.resolve({ code: null, reason }); } };
+    return { started: Promise.resolve(), closed: closed.promise, async stop(reason) { stops.push(reason); closed.resolve({ code: null, reason }); } };
   } };
   const supervisor = await ProcessSupervisor.open({ host, journal: { async load() { return []; }, async save() {} }, presets: () => policy.services.enabled ? policy.services.presets : [], async validateScope() {} });
   t.after(() => supervisor.close());

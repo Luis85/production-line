@@ -2,7 +2,7 @@ import { DomainError } from '../../shared/errors.js';
 import { serviceActive, serviceFingerprint, serviceLimits, serviceOperationId, validateServicePreset, validateServiceScope } from './service-policy.js';
 import type { ProcessStatus, ProcessSupervisorOptions, ServiceCommand, ServiceExit, ServiceHostEvent, ServiceHostHandle, ServicePreset, ServiceRecord, ServiceStart, ServiceStopReason, StoredService } from './process-supervision.js';
 
-interface LiveService { stored: StoredService; handle?: ServiceHostHandle; timer?: ReturnType<typeof setTimeout>; readyTimer?: ReturnType<typeof setTimeout>; readinessTail: string; }
+interface LiveService { stored: StoredService; handle?: ServiceHostHandle; timer?: ReturnType<typeof setTimeout>; readyTimer?: ReturnType<typeof setTimeout>; readinessTail: string; stopReason?: ServiceStopReason; }
 const unavailable = (message: string) => new DomainError('unavailable', message);
 const clone = <T>(value: T): T => structuredClone(value);
 const bytes = (text: string) => new TextEncoder().encode(text).length;
@@ -35,6 +35,11 @@ export class ProcessSupervisor {
     if (!preset) throw new DomainError('forbidden', 'This service preset is not currently granted.');
     return validateServicePreset(preset);
   }
+  private unconfirmed(item: LiveService) {
+    const message = 'Service cleanup could not be confirmed. Its slot remains reserved. Inspect the worker process and retry Stop.';
+    Object.assign(item.stored.record, { state: 'stopping', error: message, measurement: null }); this.touch(item);
+    return unavailable(message);
+  }
   private touch(item: LiveService) { item.stored.record.revision += 1; }
   private clearTimers(item: LiveService) { if (item.timer) clearTimeout(item.timer); if (item.readyTimer) clearTimeout(item.readyTimer); item.timer = undefined; item.readyTimer = undefined; }
   private defer(run: () => Promise<unknown>, delay: number) { const timer = setTimeout(() => { void this.serial(run).catch(() => {}); }, Math.max(0, delay)); timer.unref?.(); return timer; }
@@ -45,8 +50,8 @@ export class ProcessSupervisor {
       await Promise.all([...this.items.values()].map(async item => {
         this.clearTimers(item);
         if (item.handle) {
-          try { await item.handle.stop('storage_failed'); const exit = await item.handle.closed; item.handle = undefined; if (exit.reason === 'host_lost') { Object.assign(item.stored.record, { state: 'interrupted', endedAt: this.iso(), error: 'Service storage failed and descendant cleanup could not be confirmed.' }); return; } }
-          catch { Object.assign(item.stored.record, { state: 'stopping', error: 'Service storage failed; descendant cleanup is still unconfirmed.' }); return; }
+          try { item.stopReason ??= 'storage_failed'; await item.handle.stop('storage_failed'); const exit = await item.handle.closed; item.handle = undefined; if (exit.reason === 'host_lost') { Object.assign(item.stored.record, { state: 'interrupted', endedAt: this.iso(), error: 'Service storage failed and descendant cleanup could not be confirmed.' }); return; } }
+          catch { this.unconfirmed(item); return; }
         }
         if (serviceActive(item.stored.record.state)) Object.assign(item.stored.record, { state: 'failed', endedAt: this.iso(), error: 'Service journal unavailable; service stopped.', lastExit: { code: null, reason: 'storage_failed' } });
       }));
@@ -88,24 +93,25 @@ export class ProcessSupervisor {
       // Validation may await I/O: recheck the current grant immediately before launch.
       if (serviceFingerprint(this.preset(record.presetId)) !== item.stored.presetFingerprint) throw new DomainError('forbidden', 'The service grant changed during validation.');
       if (Date.parse(record.expiresAt) <= this.now()) { await this.stopItem(item, 'ttl'); return; }
-      this.clearTimers(item); record.generation += 1; record.state = 'starting'; record.measurement = null; record.readyAt = null; record.readiness = preset.readyText ? 'waiting' : 'not_configured'; item.readinessTail = ''; this.touch(item);
+      this.clearTimers(item); item.stopReason = undefined; record.generation += 1; record.state = 'starting'; record.measurement = null; record.readyAt = null; record.readiness = preset.readyText ? 'waiting' : 'not_configured'; item.readinessTail = ''; this.touch(item);
       await this.persist();
       await this.options.validateScope(clone(item.stored.scope)); this.available();
       if (serviceFingerprint(this.preset(record.presetId)) !== item.stored.presetFingerprint) throw new DomainError('forbidden', 'The service grant changed before process launch.');
       if (Date.parse(record.expiresAt) <= this.now()) { await this.stopItem(item, 'ttl'); return; }
       const generation = record.generation;
-      item.handle = await this.options.host.start({ preset, scope: clone(item.stored.scope), expiresAt: record.expiresAt, onEvent: event => { if (record.generation === generation) this.event(item, event, preset); } });
-      record.state = 'running'; record.startedAt = this.iso(); record.endedAt = null; record.error = null; this.touch(item);
+      item.handle = this.options.host.start({ preset, scope: clone(item.stored.scope), expiresAt: record.expiresAt, onEvent: event => { if (record.generation === generation) this.event(item, event, preset); } });
       const handle = item.handle;
       void handle.closed.then(exit => this.serial(async () => { if (item.handle === handle) { item.handle = undefined; await this.finished(item, exit); } })).catch(() => {});
+      await handle.started;
+      record.state = 'running'; record.startedAt = this.iso(); record.endedAt = null; record.error = null; this.touch(item);
       item.timer = this.defer(() => this.stopItem(item, 'ttl'), Date.parse(record.expiresAt) - this.now());
       if (preset.readyText && record.readiness === 'waiting') item.readyTimer = this.defer(async () => { record.readiness = 'timed_out'; await this.stopItem(item, 'startup_timeout'); }, preset.startupTimeoutMs);
       await this.persist();
     } catch (error) {
       this.clearTimers(item);
       if (item.handle) {
-        try { await item.handle.stop('storage_failed'); const exit = await item.handle.closed; item.handle = undefined; if (exit.reason === 'host_lost') { record.state = 'interrupted'; record.error = 'The service host disappeared; descendant cleanup could not be confirmed.'; await this.persist(); return; } }
-        catch { record.state = 'stopping'; record.error = 'Service startup failed; descendant cleanup is still unconfirmed.'; throw unavailable(record.error); }
+        try { item.stopReason ??= record.state === 'starting' ? 'startup_timeout' : 'storage_failed'; await item.handle.stop(item.stopReason); const exit = await item.handle.closed; item.handle = undefined; if (exit.reason === 'host_lost') { record.state = 'interrupted'; record.error = 'The service host disappeared; descendant cleanup could not be confirmed.'; await this.persist(); return; } }
+        catch { const failure = this.unconfirmed(item); await this.persist(); throw failure; }
       }
       record.state = 'failed'; record.endedAt = this.iso(); record.error = error instanceof DomainError ? error.message : 'The approved service could not start.'; this.touch(item);
       await this.persist();
@@ -114,6 +120,7 @@ export class ProcessSupervisor {
   private event(item: LiveService, event: ServiceHostEvent, preset: ServicePreset) {
     const record = item.stored.record;
     if (!serviceActive(record.state) || this.persistenceError) return;
+    if (event.type === 'cleanup_unconfirmed') { item.stopReason ??= event.reason; this.clearTimers(item); this.unconfirmed(item); this.flushSoon(); return; }
     if (event.type === 'measurement') record.measurement = clone(event.value);
     else {
       let text = event.text.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '');
@@ -134,7 +141,7 @@ export class ProcessSupervisor {
     const restartable = ['exit', 'spawn_failed'].includes(exit.reason) && exit.code !== 0;
     let preset: ServicePreset | undefined;
     try { preset = this.preset(record.presetId); } catch { /* Revoked grants cannot restart. */ }
-    if (!this.closing && !this.persistenceError && restartable && preset && serviceFingerprint(preset) === item.stored.presetFingerprint && record.restartCount < preset.restart.maxAttempts && this.now() + preset.restart.backoffMs < Date.parse(record.expiresAt)) {
+    if (!item.stopReason && !this.closing && !this.persistenceError && restartable && preset && serviceFingerprint(preset) === item.stored.presetFingerprint && record.restartCount < preset.restart.maxAttempts && this.now() + preset.restart.backoffMs < Date.parse(record.expiresAt)) {
       record.restartCount += 1; record.state = 'restarting'; record.error = 'The service exited; a bounded restart is scheduled.';
       item.timer = this.defer(() => this.launch(item), preset.restart.backoffMs);
     } else if (exit.reason === 'host_lost') { record.state = 'interrupted'; record.error = 'The service host disappeared; descendant cleanup could not be confirmed. No restart was attempted.'; }
@@ -144,9 +151,12 @@ export class ProcessSupervisor {
   private async stopItem(item: LiveService, reason: ServiceStopReason) {
     this.clearTimers(item);
     if (!serviceActive(item.stored.record.state) && !item.handle) return;
-    const record = item.stored.record; record.state = 'stopping'; this.touch(item); await this.persist();
+    const record = item.stored.record; item.stopReason ??= reason; record.state = 'stopping'; this.touch(item); await this.persist();
     const handle = item.handle;
-    if (handle) { await handle.stop(reason); const exit = await handle.closed; if (item.handle === handle) item.handle = undefined; if (exit.reason === 'host_lost') { await this.finished(item, exit); return; } }
+    if (handle) {
+      try { await handle.stop(reason); } catch { const failure = this.unconfirmed(item); await this.persist(); throw failure; }
+      const exit = await handle.closed; if (item.handle === handle) item.handle = undefined; if (exit.reason === 'host_lost') { await this.finished(item, exit); return; }
+    }
     record.state = 'stopped'; record.endedAt = this.iso(); record.lastExit = { code: null, reason }; record.measurement = null; record.error = null; this.touch(item); await this.persist();
   }
   private command(input: ServiceCommand, action: 'stop' | 'restart'): { item: LiveService; replay: boolean } {
@@ -165,7 +175,9 @@ export class ProcessSupervisor {
       const item = this.items.get(id); if (!item) throw new DomainError('not_found', 'This service is not retained by the worker.');
       const stop = serviceActive(item.stored.record.state);
       try {
-        this.available(); const preset = this.preset(item.stored.record.presetId);
+        this.available();
+        if (item.stored.record.state === 'stopping' && item.handle) throw unavailable('Service cleanup is still unconfirmed. Retry Stop before starting a replacement.');
+        const preset = this.preset(item.stored.record.presetId);
         if (item.stored.record.state === 'interrupted') throw new DomainError('conflict', 'Interrupted services require a new explicit start after inspecting their previous state.');
         if (serviceFingerprint(preset) !== item.stored.presetFingerprint) throw new Error('The preset changed; start a new service.');
         if (Date.parse(item.stored.record.expiresAt) <= this.now()) throw new Error('The service lifetime has expired.');
@@ -179,6 +191,7 @@ export class ProcessSupervisor {
   async restart(input: ServiceCommand) {
     return this.serial(async () => {
       this.available(); const { item, replay } = this.command(input, 'restart'); if (replay) return clone(item.stored.record);
+      if (item.stored.record.state === 'stopping' && item.handle) throw unavailable('Service cleanup is still unconfirmed. Retry Stop before starting a replacement.');
       const preset = this.preset(item.stored.record.presetId);
       if (item.stored.record.state === 'interrupted') throw new DomainError('conflict', 'Interrupted services require a new explicit start after inspecting their previous state.');
       if (Date.parse(item.stored.record.expiresAt) <= this.now()) throw new DomainError('conflict', 'The service lifetime has expired; start a new explicitly granted service.');
@@ -195,7 +208,7 @@ export class ProcessSupervisor {
     if (failure) throw failure;
   }
   async stopFeature(featureRequestKey: string, reason: ServiceStopReason = 'feature_ended') { return this.serial(() => this.drain(reason, featureRequestKey)); }
-  async reconcileGrants() { return this.serial(async () => { for (const item of this.items.values()) if (serviceActive(item.stored.record.state)) { try { if (serviceFingerprint(this.preset(item.stored.record.presetId)) !== item.stored.presetFingerprint) throw new Error(); await this.options.validateScope(clone(item.stored.scope)); } catch { await this.stopItem(item, 'revoked'); } } }); }
+  async reconcileGrants() { return this.serial(async () => { for (const item of this.items.values()) if (serviceActive(item.stored.record.state) && item.stored.record.state !== 'stopping') { try { if (serviceFingerprint(this.preset(item.stored.record.presetId)) !== item.stored.presetFingerprint) throw new Error(); await this.options.validateScope(clone(item.stored.scope)); } catch { await this.stopItem(item, 'revoked'); } } }); }
   async close() {
     this.closing = true;
     return this.serial(async () => { if (this.flushTimer) clearTimeout(this.flushTimer); this.flushTimer = undefined; await this.drain('shutdown'); await this.persist(); });

@@ -34,7 +34,30 @@ jobs:
         with:
           python-version: '3.13'
       - run: npm ci --ignore-scripts
-      - run: npm run check
+      - name: Run full check (POSIX)
+        if: matrix.os != 'windows-latest'
+        timeout-minutes: 11
+        run: |
+          set -o pipefail
+          npm run check 2>&1 | tee "$RUNNER_TEMP/werk-check.log"
+      - name: Run full check (Windows)
+        if: matrix.os == 'windows-latest'
+        timeout-minutes: 36
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          npm run check 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/werk-check.log"
+          exit $LASTEXITCODE
+      # Step deadlines leave time for best-effort diagnostics. Runner loss or
+      # cancellation grace exhausting the job budget can still prevent upload.
+      - name: Retain full check output
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: werk-check-output-${{ matrix.os }}
+          path: ${{ runner.temp }}/werk-check.log
+          if-no-files-found: warn
+          retention-days: 7
       - run: npm run audit:dependencies
       - name: Check generated workflow drift
         working-directory: /

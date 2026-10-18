@@ -6,9 +6,18 @@ import { nodeServiceHost } from '../../src/worker/dist/worker/infrastructure/pro
 const mode = process.argv[2];
 if (mode === 'descendant') {
   process.on('SIGTERM', () => {}); process.send?.('ready'); setInterval(() => {}, 1000);
+} else if (mode === 'stalled-host') {
+  process.stdin.resume(); process.on('SIGTERM', () => {});
+  const descendant = spawn(process.execPath, [fileURLToPath(import.meta.url), 'descendant'], { stdio: ['ignore', 'ignore', 'ignore', 'ipc'], windowsHide: true });
+  descendant.once('message', () => {
+    process.stdout.write(JSON.stringify({ type: 'started' }) + '\n');
+    process.stdout.write(JSON.stringify({ type: 'output', stream: 'stdout', text: JSON.stringify({ pid: process.pid, descendant: descendant.pid }) }) + '\n');
+  });
+  setInterval(() => {}, 1000);
 } else if (mode === 'driver') {
   const input = JSON.parse(process.argv[3]);
-  await nodeServiceHost(input.scope.worktree).start({ ...input, onEvent(event) { if (event.type === 'output') process.stdout.write(event.text); } });
+  const handle = nodeServiceHost(input.scope.worktree).start({ ...input, onEvent(event) { if (event.type === 'output') process.stdout.write(event.text); } });
+  await handle.started;
 } else {
   const descendant = spawn(process.execPath, [fileURLToPath(import.meta.url), 'descendant'], { stdio: ['ignore', 'ignore', 'ignore', 'ipc'], windowsHide: true });
   const server = createServer((_request, response) => response.end('service response'));

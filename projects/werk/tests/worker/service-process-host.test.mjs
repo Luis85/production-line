@@ -67,8 +67,9 @@ test('payload leader exit still cleans an ignoring descendant and reports normal
 
 test('host-enforced TTL ends a service even without a supervisor stop request', { timeout: 30000 }, async t => {
   const f = await setup(t, 'server', process.platform === 'win32' ? 10000 : 1500); let text = '';
-  const handle = await nodeServiceHost(f.directory).start({ preset: f.preset, scope: f.scope, expiresAt: new Date(Date.now() + f.preset.ttlMs).toISOString(), onEvent(event) { if (event.type === 'output') text += event.text; } });
+  const handle = nodeServiceHost(f.directory).start({ preset: f.preset, scope: f.scope, expiresAt: new Date(Date.now() + f.preset.ttlMs).toISOString(), onEvent(event) { if (event.type === 'output') text += event.text; } });
   t.after(() => handle.stop('shutdown'));
+  await handle.started;
   const info = await until(() => readiness(text), Boolean, 'The fixture did not start within its lease.');
   const exit = await handle.closed;
   assert.equal(exit.reason, 'ttl'); await until(async () => !(await alive(info.descendant)), Boolean, 'Expired service descendant remains alive.');
@@ -79,7 +80,8 @@ test('host refuses a replaced pinned directory before spawning its approved payl
   const f = await setup(t); const retained = f.directory + '-retained';
   await rename(f.directory, retained); await mkdir(f.directory); t.after(() => rm(retained, { recursive: true, force: true }));
   const events = [];
-  await assert.rejects(nodeServiceHost(f.directory).start({ preset: f.preset, scope: f.scope, expiresAt: new Date(Date.now() + f.preset.ttlMs).toISOString(), onEvent(event) { events.push(event); } }), /could not start/);
+  const handle = nodeServiceHost(f.directory).start({ preset: f.preset, scope: f.scope, expiresAt: new Date(Date.now() + f.preset.ttlMs).toISOString(), onEvent(event) { events.push(event); } });
+  await assert.rejects(handle.started, /could not start/); await handle.closed;
   assert.equal(events.length, 0, 'No payload output or measurements can be published from a replacement directory.');
 });
 
@@ -91,4 +93,18 @@ test('EOF during host setup cannot spawn a payload after its lifetime lease ende
   const closed = new Promise(resolve => host.once('close', resolve));
   host.stdin.end(JSON.stringify({ preset: f.preset, scope: f.scope, expiresAt: new Date(Date.now() + f.preset.ttlMs).toISOString() }) + '\n');
   await closed; assert.equal(text.includes('"type":"started"'), false); assert.equal(text.includes('"ready":true'), false);
+});
+
+test('adapter forces its live stubborn host and descendants after graceful stop is ignored', { timeout: 30000 }, async t => {
+  const f = await setup(t); let info;
+  const handle = nodeServiceHost(f.directory, {
+    launch(executable, _args, options) { return launchProcess(executable, [fixture, 'stalled-host'], options); },
+    stopGraceMs: 100, cleanupTimeoutMs: 5000,
+  }).start({ preset: f.preset, scope: f.scope, expiresAt: new Date(Date.now() + f.preset.ttlMs).toISOString(), onEvent(event) { if (event.type === 'output') info = JSON.parse(event.text); } });
+  t.after(() => handle.stop('shutdown'));
+  await handle.started; const owned = await until(() => info, Boolean, 'The stubborn fixture did not report its owned descendants.');
+  assert.equal(await alive(owned.pid), true); assert.equal(await alive(owned.descendant), true);
+  await handle.stop('operator'); const exit = await handle.closed;
+  assert.equal(exit.reason, 'host_lost', 'Forced cleanup without a host receipt must not invent successful completion.');
+  await until(async () => !(await alive(owned.pid)) && !(await alive(owned.descendant)), Boolean, 'Forced cleanup left an owned service descendant alive.');
 });
