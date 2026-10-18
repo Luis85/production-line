@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, rm, mkdir, access } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm, mkdir, access, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -82,7 +82,7 @@ test('Cursor native implementation requires the retained worktree and keeps supp
   assert.equal(request.policy.development, true); assert.equal(request.policy.tools, 'provider_native');
   await executeModel(model, request, t.signal);
   const run = (await f.calls()).find(call => call.kind === 'run');
-  assert.equal(admitted, 1); assert.equal(closed, 1); assert.equal(run.cwd, worktree); assert.ok(!run.args.includes('--mode'));
+  assert.equal(admitted, 1); assert.equal(closed, 1); assert.equal(run.cwd, await realpath(worktree)); assert.ok(!run.args.includes('--mode'));
   assert.equal(run.pluginManifest.name, 'werk-worker'); assert.equal(run.pluginManifest.mcpServers, 'mcp.json');
   assert.equal(run.mcp.mcpServers.werk.command, process.execPath);
   const plugin = run.args[run.args.indexOf('--plugin-dir') + 1]; await assert.rejects(access(plugin), { code: 'ENOENT' });
