@@ -20,8 +20,8 @@ export async function main(kind, argv = process.argv.slice(2)) {
     const dryRun = argv.includes('--dry-run');
     if (argv.filter(value => value === '--dry-run').length > 1) throw inputError('--dry-run must occur once.');
     // Update switches are valueless like --json; the shared parser requires option values.
-    const switches = argv[0] === 'update' ? ['--stop', '--no-restart'] : kind === 'worker' && argv[0] === 'init' ? ['--no-npm'] : [];
-    if (switches.some(flag => argv.filter(value => value === flag).length > 1)) throw inputError('Switches such as --stop, --no-restart and --no-npm must occur once.');
+    const switches = argv[0] === 'update' ? ['--stop', '--no-restart', '--in-place'] : kind === 'worker' && argv[0] === 'init' ? ['--no-npm'] : [];
+    if (switches.some(flag => argv.filter(value => value === flag).length > 1)) throw inputError('Switches such as --stop, --no-restart, --in-place and --no-npm must occur once.');
     const flags = Object.fromEntries(switches.filter(flag => argv.includes(flag)).map(flag => [flag.slice(2), true]));
     const parsed = args(argv.filter(value => value !== '--json' && value !== '--dry-run' && !switches.includes(value))), cmd = parsed.commands.join(' ');
     let o = parsed.options;

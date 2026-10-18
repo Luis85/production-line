@@ -212,6 +212,34 @@ manifest and runs the staged CLI once. Then it:
    defaults and previous port. A foreground `run` is left for its terminal or
    service manager. `--no-restart` skips the restart.
 
+If another process holds the app folder open and must keep running, so the folder
+cannot be renamed (the `Could not move` error described below), pass
+`--in-place` explicitly. It is never chosen automatically:
+
+```sh
+node bin/apps/worker/cli.mjs update apply --stop --in-place
+```
+
+Release verification, staging, the preflight, `--stop`, the state lock, the state
+backup and the history record are the same. Step 4 changes: the updater copies the
+current folder to `bin/apps/.<app>-update/<version>-<timestamp>` and verifies the
+copy, then writes changed and added files from the verified staged release into the
+app folder, deletes files the release manifest does not list and removes directories
+that become empty. A directory that cannot be removed because a process holds it
+open is left empty and listed in `inPlace.emptyDirectoriesLeft`; this is not an
+error. Finally every file in the app folder is compared with the release manifest,
+byte for byte, and extra or missing files fail the update. On any failure the
+retained copy is written back the same way and verified, the copy is removed, and
+the error says the previous files were restored; the updater then restarts the
+previous version as below. If that restore also fails, the app stays stopped and the
+error names the retained copy to copy back by hand. The result reports
+`method: "in-place"` (otherwise `"swap"`) and `inPlace` with `written`, `removed`
+and `emptyDirectoriesLeft` (otherwise `null`); the history entry records
+`method: "in-place"`.
+Files you added inside the app folder are removed by an in-place update and kept in
+the retained copy. A Docker Compose worker that mounts the folder still needs to be
+stopped and recreated.
+
 The JSON result names the new version, the retained folder, the backup and the
 restart outcome. A failed restart exits 1 after a successful replacement; start the
 app manually. If an update fails after stopping the app and its original folder is
@@ -235,9 +263,12 @@ old ones after the new version is confirmed. Files you added inside the app fold
 remain in the retained folder only.
 
 `rollback` swaps back the folder retained by the last update or rollback, so a
-second rollback returns to the newer version. It never changes state. If the newer
-version already changed state, stop the app, restore the update's backup into a
-new directory and start with that state:
+second rollback returns to the newer version. `update rollback --stop --in-place`
+restores the same retained folder by the in-place method instead: it retains a
+verified copy of the current files, copies the retained files back into the app
+folder, verifies them and keeps the retained folder it copied from. Rollback never
+changes state. If the newer version already changed state, stop the app, restore
+the update's backup into a new directory and start with that state:
 
 ```sh
 node bin/apps/worker/cli.mjs update restore --from .werk/worker.updates/backups/BACKUP --to .werk/worker-restored
@@ -266,7 +297,11 @@ handles, so the tools that list locked files can show nothing. Look for
 long-running processes whose working directory is the project: agent MCP servers,
 language servers and file watchers started from the project folder. Stop them and
 run the update again. Nothing was replaced; if the update stopped the app, it
-restarts the previous version and reports whether that worked.
+restarts the previous version and reports whether that worked. If you cannot stop
+that process, for example the MCP servers of agent sessions you keep open, run
+`update apply --stop --in-place` (or `update rollback --stop --in-place`), as the
+error suggests. It replaces the files inside the folder, verifies them against the
+release manifest and reports directories it had to leave empty.
 
 Downloads and extraction use the system temporary directory to keep paths short.
 

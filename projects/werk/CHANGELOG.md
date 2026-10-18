@@ -18,6 +18,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 - `init --no-npm` skips creating the root `package.json` and reports `npm: { skipped: true }`.
 - `definition import --ref REF` sets the stable reference in the same operation; a reference another definition holds is refused with the existing conflict message.
 - `definition preview`, `import` and `update` responses include a top-level `warnings` array naming each agent that requires adaptation and its unsupported items.
+- `update apply --in-place` and `update rollback --in-place` update a portable app folder that another process holds open, which blocks the folder rename on Windows. The option is explicit, never automatic. Release verification, `--stop`, the state lock, state backup and history are unchanged; instead of renaming, the updater keeps a verified copy in `bin/apps/.<app>-update/`, writes changed and added files, deletes files outside the release manifest, reports directories it had to leave empty and verifies the folder against the manifest byte for byte. On any failure it restores the copy in place, verifies it and restarts the previous version. When a normal update fails because the folder is held open, the error now suggests `update apply --stop --in-place`.
 
 ### Changed
 
