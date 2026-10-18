@@ -16,18 +16,26 @@ function currentProcessTask(workspace: WorkspaceContext, scope: ServiceScope) {
     || task.archived || session.archived || task.admissionFailure || !task.baseCommit || !task.worktreeKey
     || ['failed', 'cancelled', 'interrupted', 'needs_rework'].includes(task.status) || ['failed', 'cancelled', 'interrupted'].includes(session.status)
     || task.worktree !== scope.worktree || !task.worktreeIdentity || (['dev', 'ino', 'birthtimeMs'] as const).some(key => task.worktreeIdentity![key] !== scope.worktreeIdentity[key])) throw invalid();
-  if (task.repositoryId && !workspace.settings.value.repositories.items.some(item => item.id === task.repositoryId && item.path === task.repository)) throw invalid();
+  if (task.repositoryId && !workspace.settings.value.repositories.items.some(item => item.id === task.repositoryId)) throw invalid();
   return task;
 }
 async function validateProcessScope(workspace: WorkspaceContext, scope: ServiceScope): Promise<void> {
-  const task = currentProcessTask(workspace, scope);
-  await workspace.repositoryDiscovery.assertAllowed(task.repository);
+  const { repositoryId, repository } = currentProcessTask(workspace, scope);
+  const assignment = workspace.settings.value.repositories.items.find(item => item.id === repositoryId);
+  const assigned = assignment ? { ...assignment } : undefined;
+  const assignedPath = assigned?.path ?? repository;
+  try { if (await realpath(assignedPath) !== repository) throw invalid(); } catch { throw invalid(); }
+  await workspace.repositoryDiscovery.assertAllowed(repository);
   try {
     const info = await lstat(scope.worktree);
     if (!info.isDirectory() || info.isSymbolicLink() || await realpath(scope.worktree) !== resolve(scope.worktree)
       || String(info.dev) !== scope.worktreeIdentity.dev || String(info.ino) !== scope.worktreeIdentity.ino || info.birthtimeMs !== scope.worktreeIdentity.birthtimeMs) throw invalid();
+    if (await realpath(assignedPath) !== repository) throw invalid();
   } catch { throw invalid(); }
-  currentProcessTask(workspace, scope);
+  const current = currentProcessTask(workspace, scope);
+  const currentAssignment = workspace.settings.value.repositories.items.find(item => item.id === current.repositoryId);
+  if (current.repositoryId !== repositoryId || current.repository !== repository
+    || (['id', 'path', 'remote', 'branch', 'watch'] as const).some(key => currentAssignment?.[key] !== assigned?.[key])) throw invalid();
 }
 export async function initProcesses(workspace: WorkspaceContext) {
   workspace.processes = await createProcessSupervisor({ directory: workspace.config.stateDir,

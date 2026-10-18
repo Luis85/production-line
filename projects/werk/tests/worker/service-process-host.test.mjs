@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { lstat, mkdir, mkdtemp, readFile, rename, rm } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, realpath, rename, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,7 +15,8 @@ const fixture = fileURLToPath(new URL('./service-process-fixture.mjs', import.me
 const alive = async pid => { try { process.kill(pid, 0); if (process.platform === 'linux') { const stat = await readFile(`/proc/${pid}/stat`, 'utf8'); return stat.slice(stat.lastIndexOf(')') + 2).split(' ')[0] !== 'Z'; } return true; } catch { return false; } };
 async function until(read, predicate, message) { for (let i = 0; i < (process.platform === 'win32' ? 750 : 250); i++) { const value = await read(); if (predicate(value)) return value; await delay(20); } assert.fail(message); }
 async function setup(t, mode = 'server', ttlMs = 30000) {
-  const directory = await mkdtemp(join(tmpdir(), 'werk-service-')); const info = await lstat(directory);
+  // Production pins canonical worktrees; macOS temporary paths can pass through /var aliases.
+  const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-service-'))); const info = await lstat(directory);
   const scope = { featureRequestKey: 'fr-' + 'a'.repeat(64), sessionId: 'session-service', worktree: directory, worktreeIdentity: { dev: String(info.dev), ino: String(info.ino), birthtimeMs: info.birthtimeMs } };
   const preset = { id: 'dev', name: 'Development fixture', enabled: true, executable: process.execPath, args: [fixture, mode, 'literal;argument', 'space value'], ttlMs, startupTimeoutMs: Math.min(ttlMs, 10000), readyText: '"ready":true', restart: { maxAttempts: 0, backoffMs: 100 } };
   const owner = await createProcessSupervisor({ directory, presets: () => [preset], async validateScope(value) { const current = await lstat(value.worktree); assert.equal(String(current.ino), value.worktreeIdentity.ino); } });

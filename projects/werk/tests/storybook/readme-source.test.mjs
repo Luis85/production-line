@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkReadme, generateReadmes, readmeLink, renderReadme, rewriteReadmeLinks } from '../../scripts/storybook/readme-source.mjs';
@@ -49,7 +49,7 @@ test('only the exact Forge Git layout generates a second landing page and checks
   await put('projects/werk/README.md', 'Project placeholder.');
   await put('bin/config.json', JSON.stringify({ schemaVersion: 1, paths: { projects: 'projects' } }));
   await put('bin/forge.js', '// Forge fixture marker.');
-  assert.deepEqual(await generateReadmes(project), [join(project, 'README.md'), join(repository, 'README.md')]);
+  assert.deepEqual(await generateReadmes(project), [join(project, 'README.md'), join(await realpath(repository), 'README.md')]);
   const landing = await readFile(join(repository, 'README.md'), 'utf8');
   assert.equal(landing, await renderReadme(project, { repository: true }));
   assert.ok(landing.includes('(projects/werk/docs/how-to/setup.md#first)'));
