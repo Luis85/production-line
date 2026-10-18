@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "version": "0.12.0",
+  "commit": "8aa2f88ddce2b51e2e011ab194fadd848db3d994",
+  "sourceDigest": "a6e8c5a036f2f2e0f0a0565bb2d74e3fa1283afe327e64959d2f7cb20efcb7d0",
+  "capturedAt": "2026-10-18T13:15:56.947Z",
+  "fixtureTime": "2026-10-15T09:30:00.000Z",
+  "sampleData": true,
+  "qualification": "Every Storybook story and desktop/mobile handbook passed before selection.",
+  "source": "docs/overview.md",
+  "screenshots": [
+    {
+      "file": "worker-taskboard.png",
+      "story": "worker-workspace--populated-taskboard",
+      "viewport": "desktop",
+      "alt": "Worker taskboard showing capacity and requests grouped by their current state.",
+      "caption": "The real worker taskboard with sample local requests. Select a request to inspect its conversation and progress; use Metrics, History and Settings to inspect and configure the worker.",
+      "path": "docs/evidence/readme/worker-taskboard.png",
+      "width": 1440,
+      "height": 1246,
+      "sha256": "02378d05534754650b1c904b77200fddb3f45947c34733b24ff44c66af249be6",
+      "capture": "storymap/screenshots/worker-workspace--populated-taskboard-desktop.png"
+    },
+    {
+      "file": "worker-create-request.png",
+      "story": "worker-shared-feature-requests--describe-request",
+      "viewport": "desktop",
+      "alt": "Shared Feature Request authoring in the worker, with request instructions and the Prepare request action.",
+      "caption": "The shared-request entry screen with example instructions. The next step lets you review the template, approved scope and readiness before publishing.",
+      "path": "docs/evidence/readme/worker-create-request.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "183cc2fc5af957b4b534d15264d94f6e727ac865026f3e7bd7a4c2bae85d3ebc",
+      "capture": "storymap/screenshots/worker-shared-feature-requests--describe-request-desktop.png"
+    },
+    {
+      "file": "worker-metrics.png",
+      "story": "worker-metrics--active-worker",
+      "viewport": "desktop",
+      "alt": "Worker Metrics with current capacity, configured token allowance, resources and execution activity.",
+      "caption": "Metrics in the real worker UI with deterministic sample measurements. Worker process resources, host observations and the configured allowance are separate; these are not live account balances.",
+      "path": "docs/evidence/readme/worker-metrics.png",
+      "width": 1440,
+      "height": 3198,
+      "sha256": "254f3c9bfe04bb51cec507699628e15620696e88bd4531be9c6ffc8faebe4eeb",
+      "capture": "storymap/screenshots/worker-metrics--active-worker-desktop.png"
+    },
+    {
+      "file": "worker-review.png",
+      "story": "worker-review--verified-candidate",
+      "viewport": "desktop",
+      "alt": "Feature Request review with the accepted goal, changed files, required checks and the next human action.",
+      "caption": "The real review workspace with a fictional verified candidate and a policy requiring human acceptance. Recording acceptance is separate from merging the change.",
+      "path": "docs/evidence/readme/worker-review.png",
+      "width": 1440,
+      "height": 3827,
+      "sha256": "93004620fbf9f0073642320edd9b25dbef6efc6f1b64731aa091a0aee1b95e1c",
+      "capture": "storymap/screenshots/worker-review--verified-candidate-desktop.png"
+    },
+    {
+      "file": "worker-settings.png",
+      "story": "worker-workspace--worker-settings",
+      "viewport": "desktop",
+      "alt": "Worker settings with provider connections and navigation to repositories, tool access and consumption settings.",
+      "caption": "Settings in the real worker UI, using sample configuration. Keep credentials local to the worker machine.",
+      "path": "docs/evidence/readme/worker-settings.png",
+      "width": 1440,
+      "height": 1275,
+      "sha256": "c69cc2486b697beaf2b8c377961fd95a8eb39a97b13dda0726321c9b6b5b9a14",
+      "capture": "storymap/screenshots/worker-workspace--worker-settings-desktop.png"
+    }
+  ]
+}
