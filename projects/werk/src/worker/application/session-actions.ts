@@ -1,3 +1,4 @@
+import { interactionFeatureRequest } from './feature-request-reference.js';
 import { randomUUID } from 'node:crypto';
 import { object, text } from '../../shared/contracts.js';
 import { DomainError } from '../../shared/errors.js';
@@ -58,6 +59,7 @@ export async function sessionAction(context: SessionActionContext, input: unknow
           ...(definition ? { definition } : {}),
           id,
           taskId: id,
+          feature: interactionFeatureRequest(id),
           kind: "chat",
           title: text(body.title, "Session title", 120),
           provider: provider.id,

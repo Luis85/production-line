@@ -1,7 +1,9 @@
 import { open, unlink } from 'node:fs/promises';
+import { providerIds } from '../application/provider-contract.js';
+import { parseFeature } from './features/document.js';
 import { defaultFeatureWorkflow, defaultFeatureCheck, validateFeatureWorkflow, validateFeatureCheck, featureWorkflowPolicy, type FeatureWorkflowConfiguration } from '../application/feature-workflow.js';
 import { validateFeatureTemplate } from './features/workflow.js';
-import { authoringBase, authoringSkill, authoringTemplate } from './feature-authoring-assets.js';
+import { authoringBase, authoringSkill, authoringTemplateFor } from './feature-authoring-assets.js';
 import { authoringRoot, authoringPath, authoringRevision, readAuthoringFile, replaceAuthoringFile, seedAuthoringFile } from './feature-authoring-files.js';
 
 export const featureWorkflowPath = '.werk/feature-workflow.json';
@@ -15,7 +17,7 @@ const lf = (text: string) => text.replace(/\r\n/g, '\n');
 const contentHash = (text: string) => authoringRevision(lf(text));
 const sameText = (a: string, b: string) => lf(a) === lf(b);
 
-type AuthoringSetup = { featuresDirectory?: string; script: string; ifMatch?: string };
+type AuthoringSetup = { featuresDirectory?: string; provider?: string; script: string; ifMatch?: string };
 type AuthoringWarning = { code: string; message: string; revision?: string };
 type ScriptPlan = { action: 'create' | 'keep' | 'refresh' | 'preserve'; revision?: string; reason?: 'managed' | 'if-match' };
 
@@ -48,6 +50,8 @@ async function planScript(root: string, options: AuthoringSetup): Promise<Script
 /** Installs missing portable authoring files and refreshes only the unmodified, Werk-managed script. */
 async function prepareFeatureAuthoring(directory: string, options: AuthoringSetup) {
   const root = await authoringRoot(directory);
+  const provider = providerIds.find(id => id === (options.provider ?? 'codex-cli'));
+  if (!provider) throw Error('Choose a supported feature provider.');
   if (!options.script || Buffer.byteLength(options.script) > 2097152) throw Error('A bounded bundled authoring script is required.');
   const saved = await readAuthoringFile(root, featureWorkflowPath, 16384);
   let config: FeatureWorkflowConfiguration;
@@ -65,7 +69,10 @@ async function prepareFeatureAuthoring(directory: string, options: AuthoringSetu
   const template = await readAuthoringFile(root, config.template);
   const warnings: AuthoringWarning[] = [];
   if (template !== undefined) {
-    try { validateFeatureTemplate(template); }
+    try {
+      validateFeatureTemplate(template);
+      if (options.provider !== undefined && (parseFeature(template).data.provider ?? 'codex-cli') !== provider) warnings.push({ code: 'template_provider_mismatch', message: `The existing template was preserved and selects another provider. Review its provider field before committing team requests for ${provider}.` });
+    }
     catch (error) { warnings.push({ code: 'template_update_required', message: 'The existing template was preserved. Update it before authoring: ' + (error instanceof Error ? error.message : 'Invalid template contract.') }); }
   }
   const checks = { ready: defaultFeatureCheck('ready'), done: defaultFeatureCheck('done') };
@@ -85,7 +92,7 @@ async function prepareFeatureAuthoring(directory: string, options: AuthoringSetu
     [featureWorkflowPath]: json(config),
     [config.readyCheck]: json(defaultFeatureCheck('ready')),
     [config.doneCheck]: json(defaultFeatureCheck('done')),
-    [config.template]: authoringTemplate,
+    [config.template]: authoringTemplateFor(provider),
     [config.base]: authoringBase(config),
     [authoringScriptPath]: options.script,
     '.werk/authoring/.gitignore': 'write.lock\n',

@@ -1,3 +1,4 @@
+import { validateFeatureRequestReference, type FeatureRequestReference } from './feature-request-reference.js';
 
 import { type DevelopmentCompletion, type DevelopmentScope, type DevelopmentEvidence } from './development.js';
 import type { LocalTaskStatus } from './workspace-view.js';
@@ -56,6 +57,7 @@ export interface LocalTaskPreparation {
 }
 /** Trusted coordinator reservation; these fields are never accepted from a task HTTP body. */
 export interface LocalTaskSubmission {
+  feature?: FeatureRequestReference;
   id: string;
   hash: string;
   policy?: GatePolicy;
@@ -64,7 +66,7 @@ export interface LocalTaskSubmission {
   baseCommit?: string;
 }
 export function freezeSubmission(input: LocalTaskSubmission): LocalTaskSubmission {
-  const value = object(input, "Task reservation", ["id", "hash", "policy", "criteria", "repositoryId", "baseCommit"]);
+  const value = object(input, "Task reservation", ["id", "hash", "policy", "criteria", "repositoryId", "baseCommit", "feature"]);
   if (typeof value.id !== "string" || !/^[a-z0-9-]{1,90}$/.test(value.id) ||
       typeof value.hash !== "string" || !/^[a-f0-9]{64}$/.test(value.hash))
     throw new DomainError("invalid_input", "Invalid feature task identity.");
@@ -75,6 +77,7 @@ export function freezeSubmission(input: LocalTaskSubmission): LocalTaskSubmissio
   return {
     id: value.id,
     hash: value.hash,
+    ...(value.feature === undefined ? {} : { feature: validateFeatureRequestReference(value.feature) }),
     ...(value.policy === undefined ? {} : { policy: validateGatePolicy(value.policy) }),
     ...(value.criteria === undefined ? {} : { criteria: validateGateInput({ kind: "patch", title: "", message: "", criteria: value.criteria }).criteria }),
     ...(value.repositoryId === undefined ? {} : { repositoryId: value.repositoryId as string }),
@@ -91,6 +94,7 @@ export interface TaskFile {
   existed: boolean;
 }
 export interface LocalTask {
+  feature?: FeatureRequestReference;
   implementation?: DevelopmentScope;
   developmentEvidence?: DevelopmentEvidence;
   /** Completed candidate is persisted before the immutable interaction result. */

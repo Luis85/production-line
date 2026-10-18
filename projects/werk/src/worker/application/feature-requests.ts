@@ -1,6 +1,8 @@
+import { featureRequestReference, validateFeatureRequestReference, type FeatureRequestReference } from './feature-request-reference.js';
 import { SerializedOperations } from '../../shared/serialized-operations.js';
 import type { WorkerRequest, RequestPhase } from './request-gates.js';
-import type { InteractionView } from './interactions.js';
+import { FeatureTaskNotes, type FeatureTaskProjection, type FeatureTaskNotesPort } from './feature-task-notes.js';
+import type { InteractionView, InteractionCommand } from './interactions.js';
 import type { RunSnapshot, ProviderUsage } from './run-evidence.js';
 import { manageFeature, type FeatureDocumentPort, type FeatureActionResult } from './feature-management.js';
 import { DomainError } from '../../shared/errors.js';
@@ -21,12 +23,13 @@ export interface FeatureExecutionLinks {
   result?: string; patch?: string;
 }
 export interface FeatureInput { title: string; mode: 'chat' | 'patch'; provider: string; message: string; paths?: string[]; priority: number; definitionId?: string; definitionRef?: string; agent?: string; useInstructionsOnly?: boolean; }
-export interface FeatureRecord { id: string; name: string; source: 'folder' | 'orchestrator'; taskId: string; sessionId: string; input?: FeatureInput; inputHash: string; submitted: boolean; status: string; createdAt: string; updatedAt: string; error?: string; result?: string; patch?: string; attempt?: number; archived?: boolean; execution?: FeatureExecutionLinks; executionDirectory?: string; gates?: FeatureGateProjection; executionStatus?: string; interaction?: { phase: string; revision: number; pendingId?: string; link?: string }; }
+export interface FeatureRecord { feature?: FeatureRequestReference; id: string; name: string; source: 'folder' | 'orchestrator'; taskId: string; sessionId: string; input?: FeatureInput; inputHash: string; submitted: boolean; status: string; createdAt: string; updatedAt: string; error?: string; result?: string; patch?: string; attempt?: number; archived?: boolean; taskNote?: FeatureTaskProjection; attention?: string; execution?: FeatureExecutionLinks; executionDirectory?: string; gates?: FeatureGateProjection; executionStatus?: string; interaction?: { phase: string; revision: number; pendingId?: string; link?: string }; }
 export interface FeatureIndex { version: 1; owner: string; records: FeatureRecord[]; }
 export interface FeatureFile { name: string; revision: string; id?: string; status?: string; source?: string; shared?: boolean; input?: FeatureInput; error?: string; }
 export interface FeatureFolderPort {
   directory: string;
   documents: FeatureDocumentPort;
+  taskNotes?: FeatureTaskNotesPort;
   load(): Promise<FeatureIndex>;
   open(owner: string): Promise<void>;
   scan(): Promise<FeatureFile[]>;
@@ -41,6 +44,8 @@ export interface FeatureFolderPort {
   close(): Promise<void>;
 }
 export interface FeatureQueuePort {
+  reference?(sessionId: string): FeatureRequestReference | undefined;
+  interact?(record: FeatureRecord, command: InteractionCommand): Promise<unknown>;
   control?(record: FeatureRecord, action: 'cancel' | 'retry'): Promise<unknown>;
   submit(record: FeatureRecord): Promise<void>;
   inspect(record: FeatureRecord): { status: string; text?: string; patch?: string; error?: string; evidence?: FeatureExecutionEvidence; interaction?: InteractionView; request?: WorkerRequest } | undefined;
@@ -49,15 +54,26 @@ const fingerprint = (input: FeatureInput) => createHash('sha256').update(JSON.st
 const terminal = new Set(['completed', 'review', 'failed', 'cancelled']);
 /** Files are intake and lifecycle records. The existing worker queue owns execution. */
 export class FeatureRequests {
+  private notes?: FeatureTaskNotes;
   private index: FeatureIndex = { version: 1, owner: '', records: [] };
   private observed = new Map<string, string>();
   private errors: { file: string; message: string }[] = [];
   private readonly work = new SerializedOperations(); private scanning?: Promise<void>; private stopped = false;
   private initialized = false; private lastScan = 0; private lastSaved = ''; private fault: string | null = null;
   private folder: FeatureFolderPort; private queue: FeatureQueuePort; private pollMs: number; private canAdmit: () => boolean;
-  constructor(folder: FeatureFolderPort, queue: FeatureQueuePort, pollMs = 1000, canAdmit = () => true) { this.folder = folder; this.queue = queue; this.pollMs = pollMs; this.canAdmit = canAdmit; }
+  constructor(folder: FeatureFolderPort, queue: FeatureQueuePort, pollMs = 1000, canAdmit = () => true) { this.folder = folder; this.queue = queue; if (folder.taskNotes) this.notes = new FeatureTaskNotes(folder.taskNotes, queue); this.pollMs = pollMs; this.canAdmit = canAdmit; }
+  private reference(record: FeatureRecord): FeatureRequestReference {
+    const reference = record.feature ?? (record.source === 'orchestrator' ? this.queue.reference?.(record.sessionId) : undefined);
+    return reference ? { ...validateFeatureRequestReference(reference), sourcePath: record.name } : featureRequestReference({ id: record.source === 'orchestrator' ? record.taskId : record.id, source: record.source === 'orchestrator' ? 'orchestrator' : 'folder', scope: record.source === 'orchestrator' ? 'legacy-worker-assignment' : this.folder.directory, sourcePath: record.name });
+  }
+  referenceForSession(sessionId: string, existingKey?: string) {
+    const record = this.index.records.find(item => item.sessionId === sessionId);
+    if (!record) return undefined;
+    const reference = this.reference(record);
+    return record.submitted || reference.key === existingKey ? reference : undefined;
+  }
   async init() { this.index = await this.folder.load(); this.lastSaved = JSON.stringify(this.index); await this.folder.open(this.index.owner); this.initialized = true; }
-  view() { return { enabled: true, directory: this.folder.directory, pollMs: this.pollMs, error: this.fault, errors: structuredClone(this.errors), records: this.index.records.map(({ input: _input, ...record }) => ({ ...record })) }; }
+  view() { return { enabled: true, directory: this.folder.directory, pollMs: this.pollMs, error: this.fault, errors: structuredClone(this.errors), records: this.index.records.map(({ input: _input, taskNote, ...record }) => ({ ...record, feature: this.reference(record), ...(taskNote ? { taskNote: { identity: { ...taskNote.identity }, link: taskNote.link, status: taskNote.submission?.outcome ?? 'open' } } : {}) })) }; }
   async list() { await this.tick(true); return { ...this.view(), files: (await this.folder.scan()).map(({ input, ...file }) => ({ ...file, title: input?.title, mode: input?.mode, provider: input?.provider, archived: this.index.records.find(item => item.name === file.name)?.archived ?? false })) }; }
   async action(input: unknown): Promise<FeatureActionResult> {
     return this.exclusive(async () => {
@@ -124,7 +140,7 @@ export class FeatureRequests {
         if (!file.input) continue;
         if (this.index.records.length >= 1000) { this.errors.push({ file: file.name, message: 'Feature index reached 1,000 records. Use a new worker state and folder for further requests.' }); continue; }
         const id = file.id ?? randomUUID(), at = new Date().toISOString();
-        record = { id, name: file.name, source: 'folder', taskId: 'feature-' + id, sessionId: (file.input.mode === 'patch' ? 'local-feature-' : 'feature-') + id, input: structuredClone(file.input), inputHash: fingerprint(file.input), submitted: false, status: 'waiting', createdAt: at, updatedAt: at };
+        record = { id, feature: featureRequestReference({ id, source: 'folder', scope: this.folder.directory, sourcePath: file.name }), name: file.name, source: 'folder', taskId: 'feature-' + id, sessionId: (file.input.mode === 'patch' ? 'local-feature-' : 'feature-') + id, input: structuredClone(file.input), inputHash: fingerprint(file.input), submitted: false, status: 'waiting', createdAt: at, updatedAt: at };
         this.index.records.push(record); await this.persist();
       }
       record.name = file.name;
@@ -139,7 +155,10 @@ export class FeatureRequests {
         await this.persist();
       }
     }
-    for (const record of this.index.records) if (record.submitted) await this.synchronizeExecution(record);
+    for (const record of this.index.records) if (record.submitted) {
+      const local = record.source === 'folder' && !files.some(file => file.shared && (file.id === record.id || file.name === record.name));
+      await this.synchronizeExecution(record, admit && local, local);
+    }
     await this.persist();
     // Refresh revisions after intake publication. Updates preserve the current Markdown body.
     const fresh = await this.folder.scan();
@@ -150,7 +169,15 @@ export class FeatureRequests {
     }
     await this.folder.report({ records: this.index.records, errors: this.errors });
   }
-  private async synchronizeExecution(record: FeatureRecord) {
+  private async synchronizeExecution(record: FeatureRecord, admit = false, local = record.source === 'folder') {
+    if (admit && this.notes) {
+      try {
+        const error = await this.notes.consume(record, () => this.persist());
+        if (error) this.errors.push({ file: record.taskNote?.link ?? record.name, message: error });
+      } catch (error) {
+        this.errors.push({ file: record.taskNote?.link ?? record.name, message: error instanceof Error ? error.message.slice(0, 500) : 'Task reply could not be read.' });
+      }
+    }
     const current = this.queue.inspect(record);
     if (!current) { this.change(record, 'unavailable', 'Task history is no longer retained. This request will not be submitted again.'); return; }
     const phase = current.request?.phase;
@@ -165,8 +192,12 @@ export class FeatureRequests {
     if (current.interaction) {
       const view = current.interaction;
       record.interaction = { phase: view.phase, revision: view.revision, ...(view.pending ? { pendingId: view.pending.id, link: `_questions/${record.id}/${view.pending.id}.md` } : {}) };
-      if (view.pending) await this.folder.question?.(record, view);
+      if (view.pending && !this.notes) await this.folder.question?.(record, view);
     } else delete record.interaction;
+    if (local && this.notes) {
+      try { await this.notes.project(record, current, this.index.owner, () => this.persist()); }
+      catch (error) { this.errors.push({ file: record.taskNote?.link ?? record.name, message: error instanceof Error ? error.message.slice(0, 500) : 'Task note could not be saved.' }); }
+    }
     if (current.evidence) {
       record.execution = await this.folder.evidence(record, current.evidence);
       record.executionDirectory = `_results/${record.id}/`;
@@ -184,14 +215,19 @@ export class FeatureRequests {
       }
     }
   }
-  async rememberRemote(task: { id: string; title: string; criteria: string[]; attempt: number; requirementRef?: string; }) {
+  async rememberRemote(task: { id: string; title: string; criteria: string[]; attempt: number; requirementRef?: string; }, feature?: FeatureRequestReference) {
+    const reference = feature && validateFeatureRequestReference(feature);
     await this.exclusive(async () => {
       let record = this.index.records.find(item => item.source === 'orchestrator' && item.taskId === task.id);
       if (!record) {
         if (this.index.records.length >= 1000) throw Error('Feature index reached 1,000 records.');
         const at = new Date().toISOString(), id = 'remote-' + task.id;
-        record = { id, name: id + '.md', source: 'orchestrator', taskId: task.id, sessionId: id, submitted: true, inputHash: '', status: 'queued', attempt: task.attempt, createdAt: at, updatedAt: at };
+        record = { id, ...(reference ? { feature: reference } : {}), name: id + '.md', source: 'orchestrator', taskId: task.id, sessionId: id, submitted: true, inputHash: '', status: 'queued', attempt: task.attempt, createdAt: at, updatedAt: at };
         this.index.records.push(record);
+      }
+      if (reference) {
+        if (record.feature && record.feature.key !== reference.key) throw new DomainError('conflict', 'This assignment belongs to another Feature Request.');
+        record.feature ??= reference;
       }
       if (record.attempt !== task.attempt) { delete record.result; delete record.patch; delete record.execution; this.change(record, 'queued'); }
       record.attempt = task.attempt;

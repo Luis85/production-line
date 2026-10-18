@@ -31,6 +31,7 @@ onActivated(() => { active.value = true; });
 onDeactivated(() => { active.value = false; modelGeneration++; });
 onBeforeUnmount(() => { active.value = false; modelGeneration++; });
 const current = computed(() => state.sessions?.records.find(item => item.id === state.sessions?.selected));
+const sharedRequest = computed(() => current.value?.feature?.source === 'shared_git');
 const fileTask = computed(() => state.board?.tasks.find(item => item.sessionId === current.value?.id));
 const failedAdmission = computed(() => {
   const task = state.board?.tasks.find(item => item.sessionId === current.value?.id);
@@ -42,7 +43,7 @@ const connection = computed(() => state.settings?.providers.find(item => item.id
 const executing = computed(() => !!current.value && state.sessions?.execution.currentSessionId === current.value.id);
 const busy = computed(() => sending.value || intakeBusy.value || interactionBusy.value || settingsBusy.value);
 const checkpointBlocked = computed(() => !!interaction.value?.pending || !!interaction.value?.latestTurn && ['failed', 'cancelled', 'interrupted'].includes(interaction.value.phase));
-const available = computed(() => state.unlocked && !!current.value && state.chat?.available && !state.workspaceBusy && !busy.value && !checkpointBlocked.value && !failedAdmission.value && !current.value?.busy && !state.chat?.busy && !executing.value);
+const available = computed(() => state.unlocked && !!current.value && !sharedRequest.value && state.chat?.available && !state.workspaceBusy && !busy.value && !checkpointBlocked.value && !failedAdmission.value && !current.value?.busy && !state.chat?.busy && !executing.value);
 const firstMessage = computed(() => !state.chat?.messages.length);
 // A review link reflects a retained artifact, independently of the reply's wording.
 const patchReply = computed(() => {
@@ -149,7 +150,7 @@ defineExpose({ openNewTask, focusConversation, focusControls });
           <h3 id="chat-task-title" tabindex="-1">{{ current.title }}</h3>
           <p>{{ connection?.label ?? current.provider }}<span v-if="savedModel"> · {{ savedModel }}</span></p>
           <p class="model-source">{{ failedAdmission ? 'No model call started for this request' : savedModel ? 'Model recorded in the latest conversation request' : modelError ? 'Saved conversation model unavailable · refresh this worker to retry' : 'Conversation model not yet recorded' }}</p>
-          <button v-if="!checkpointBlocked && !failedAdmission" type="button" class="composer-jump" :disabled="busy || state.workspaceBusy" @click="focusComposer">{{ firstMessage ? 'Write task instructions' : 'Write a follow-up' }}<UIcon name="i-lucide-arrow-down" /></button>
+          <button v-if="!sharedRequest && !checkpointBlocked && !failedAdmission" type="button" class="composer-jump" :disabled="busy || state.workspaceBusy" @click="focusComposer">{{ firstMessage ? 'Write task instructions' : 'Write a follow-up' }}<UIcon name="i-lucide-arrow-down" /></button>
         </header>
         <FeatureRequestNote v-if="current.id !== 'default' || current.requestId || current.messages" :key="current.id" :session="current" />
         <CandidateEvidence v-if="fileTask && !failedAdmission" :key="fileTask.id" :task="fileTask" show-review-link />
@@ -179,8 +180,9 @@ defineExpose({ openNewTask, focusConversation, focusControls });
         </div>
         <p v-if="!failedAdmission && !state.chat?.available" class="interaction-notice">This connection is not ready. Open <RouterLink to="/settings#provider-connections">Settings</RouterLink> to configure it.</p>
         <p v-if="!failedAdmission && checkpointBlocked" class="followup-guidance" role="status">Use the answer or resume controls above to continue. Your follow-up draft stays here.</p>
-        <p v-else-if="!failedAdmission && (current.busy || state.chat?.busy || executing)" class="followup-guidance">{{ executing && !current.busy && !state.chat?.busy ? 'This task is still active. Draft a follow-up now; send it when the worker finishes.' : 'Draft a follow-up now; send it when this task finishes.' }} New request queues separate work.</p>
-        <form v-if="!failedAdmission" class="followup-composer" @submit.prevent="act('send')">
+        <p v-else-if="!sharedRequest && !failedAdmission && (current.busy || state.chat?.busy || executing)" class="followup-guidance">{{ executing && !current.busy && !state.chat?.busy ? 'This task is still active. Draft a follow-up now; send it when the worker finishes.' : 'Draft a follow-up now; send it when this task finishes.' }} New request queues separate work.</p>
+        <p v-if="sharedRequest && !failedAdmission" class="followup-guidance">This conversation belongs to the shared Feature Request. Use its answer or resume controls when input is needed. <button type="button" class="composer-jump" :disabled="busy || state.workspaceBusy" @click="openNewTask">New request for additional scope</button></p>
+        <form v-if="!failedAdmission && !sharedRequest" class="followup-composer" @submit.prevent="act('send')">
           <label for="chat-message">{{ firstMessage ? 'Task instructions' : 'Follow-up for this task' }}</label>
           <UTextarea id="chat-message" v-model="state.draft" :rows="4" :maxrows="10" autoresize :maxlength="8000" :disabled="sending || state.workspaceBusy" :placeholder="firstMessage ? 'Describe the outcome you need…' : 'Add context or revise what this task should do next…'" class="w-full" aria-describedby="followup-draft-note" @keydown="keydown" />
           <p id="followup-draft-note" class="followup-draft-note">{{ state.draft.length.toLocaleString() }} / 8,000 · Ctrl / ⌘ + Enter to send</p>
@@ -190,7 +192,7 @@ defineExpose({ openNewTask, focusConversation, focusControls });
           </div>
           <p v-if="state.actionError" class="error-text" role="alert">{{ state.actionError }}</p>
         </form>
-        <p v-if="!failedAdmission" class="draft-privacy">Drafts stay with each task in this tab until you reload or lock it.</p>
+        <p v-if="!failedAdmission && !sharedRequest" class="draft-privacy">Drafts stay with each task in this tab until you reload or lock it.</p>
         <details v-if="current.requestId && !failedAdmission" ref="gateDetails" class="task-secondary request-controls" :open="controlsOpen" @toggle="controlsOpen = ($event.target as HTMLDetailsElement).open">
           <summary>Request review &amp; controls</summary>
           <RequestGatePanel :request-id="current.requestId" :session-id="current.id" />
@@ -203,8 +205,11 @@ defineExpose({ openNewTask, focusConversation, focusControls });
         <details class="task-secondary task-settings">
           <summary>Task settings</summary>
           <form class="settings-form" @submit.prevent="taskAction('rename')">
+            <p v-if="sharedRequest">The accepted Feature Request owns its title and scope. Create a new request for different work.</p>
+            <template v-else>
             <label for="rename-task">Task name</label><UInput id="rename-task" v-model="rename" required :maxlength="120" :disabled="busy || state.workspaceBusy" class="w-full" />
             <UButton type="submit" color="neutral" variant="outline" :loading="settingsBusy" :disabled="busy || state.workspaceBusy">Rename task</UButton>
+            </template>
             <div class="actions"><UButton type="button" color="neutral" variant="ghost" :disabled="busy || state.workspaceBusy || current.busy" @click="taskAction('archive')">Archive</UButton><UButton type="button" color="error" variant="ghost" :disabled="busy || state.workspaceBusy || current.busy" @click="removing = !removing">Delete</UButton></div>
             <div v-if="removing" class="confirm-row"><p>Delete this task and all its saved messages?</p><UButton type="button" color="error" :disabled="busy || state.workspaceBusy || current.busy" @click="taskAction('delete')">Confirm deletion</UButton><UButton type="button" color="neutral" variant="ghost" @click="removing = false">Keep task</UButton></div>
             <p v-if="settingsError" class="error-text" role="alert">{{ settingsError }}</p>

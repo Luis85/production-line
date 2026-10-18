@@ -7,7 +7,7 @@ export interface RepositoryConfiguration { pollMs: number; items: RepositoryAssi
 export const defaultRepositoryConfiguration = (): RepositoryConfiguration => ({ pollMs: 30000, items: [] });
 
 /** Validate assignment policy without accessing a repository or performing Git operations. */
-export function validateRepositoryConfiguration(input: unknown, normalizePath: (path: string) => string = path => path): RepositoryConfiguration {
+export function validateRepositoryConfiguration(input: unknown, normalizePath: (path: string, label: string) => string = path => path): RepositoryConfiguration {
   const value = object(input === undefined ? {} : input, 'Repositories', ['pollMs', 'items', 'worktreeDirectory']);
   const pollMs = value.pollMs === undefined ? 30000 : value.pollMs;
   if (!Number.isSafeInteger(pollMs) || Number(pollMs) < 1000 || Number(pollMs) > 3600000)
@@ -20,7 +20,7 @@ export function validateRepositoryConfiguration(input: unknown, normalizePath: (
     const id = identifier(item.id, 'Repository id');
     const sourcePath = text(item.path, 'Repository path', 4096);
     if (/[\x00-\x1f\x7f]/.test(sourcePath)) throw new ValidationError('Repository path must not contain control characters.');
-    const path = normalizePath(sourcePath);
+    const path = normalizePath(sourcePath, 'Repository path');
     if (!/^(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(path)) throw new ValidationError('Repository path must be absolute on the worker machine.');
     const remote = item.remote === undefined ? 'origin' : text(item.remote, 'Repository remote', 100);
     if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(remote) || remote.endsWith('.lock') || remote.includes('..'))
@@ -42,7 +42,7 @@ export function validateRepositoryConfiguration(input: unknown, normalizePath: (
   if (value.worktreeDirectory !== undefined && value.worktreeDirectory !== '') {
     const sourcePath = text(value.worktreeDirectory, 'Task worktree directory', 1024);
     if (/[\x00-\x1f\x7f]/.test(sourcePath)) throw new ValidationError('Task worktree directory must not contain control characters.');
-    worktreeDirectory = normalizePath(sourcePath);
+    worktreeDirectory = normalizePath(sourcePath, 'Task worktree directory');
     if (!/^(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(worktreeDirectory)) throw new ValidationError('Task worktree directory must be absolute on the worker machine.');
   }
   return { pollMs: Number(pollMs), items, ...(worktreeDirectory ? { worktreeDirectory } : {}) };

@@ -11,6 +11,8 @@ import { useRequestGatePanel } from "./useRequestGatePanel";
 const props = defineProps<{ requestId?: string; sessionId?: string }>();
 const emit = defineEmits<{ change: [WorkerRequest | null] }>();
 const {
+  sharedRequest,
+  scopeMutable,
   activeExecution,
   activeReview,
   attest,
@@ -71,6 +73,7 @@ const {
     <p v-if="gateState.stale && view" class="request-gate-note">Request data needs revalidation before another change. Refresh the request to retry.</p>
     <p v-if="notice" role="status">{{ notice }}</p>
     <template v-if="view">
+      <p v-if="sharedRequest" class="request-gate-note">This shared Feature Request keeps its accepted scope and checks. Answer its Task checkpoint to continue; create a new Feature Request for changed scope. Evidence, attestation and cancellation remain available here.</p>
       <div v-if="!props.requestId && rows.length > 1" class="request-selection">
         <label for="request-selector">Request in this conversation</label
         ><USelect
@@ -163,8 +166,8 @@ const {
         </p>
       </details>
       <p v-if="pendingModel">
-        The model is waiting for input. Answer its checkpoint in the interaction
-        controls; request companion edits do not answer it.
+        The model is waiting for input. Answer its checkpoint here or use the
+        linked Task note when available.
       </p>
       <p v-if="activeExecution">
         The prepared or running invocation retains its approved input and
@@ -179,7 +182,7 @@ const {
       </div>
       <div v-if="!['done', 'cancelled'].includes(view.phase)" class="request-gate-actions">
         <UButton
-          v-if="stage === 'ready' && !view.owner.remote"
+          v-if="scopeMutable && stage === 'ready' && !view.owner.remote"
           :disabled="!mutable"
           :loading="busy"
           @click="command({ action: 'execute' })"
@@ -192,16 +195,18 @@ const {
           >Evaluate {{ stage }} gate</UButton
         ><UButton
           variant="outline"
+          v-if="scopeMutable"
           :disabled="!mutable || view.assignee === 'operator'"
           @click="command({ action: 'assign', assignee: 'operator' })"
           >Assign rework to human</UButton
         ><UButton
           variant="outline"
+          v-if="scopeMutable"
           :disabled="!mutable || view.assignee === 'llm'"
           @click="command({ action: 'assign', assignee: 'llm' })"
           >Assign rework to LLM</UButton
         ><UButton
-          v-if="['needs_rework', 'review'].includes(view.phase)"
+          v-if="scopeMutable && ['needs_rework', 'review'].includes(view.phase)"
           variant="outline"
           :disabled="
             !mutable || view.reworkCount >= view.policy.rework.maxAttempts
@@ -212,7 +217,7 @@ const {
         >
       </div>
       <details
-        v-if="!view.owner.remote && !['done', 'cancelled'].includes(view.phase)"
+        v-if="scopeMutable && !view.owner.remote && !['done', 'cancelled'].includes(view.phase)"
       >
         <summary>Propose a revised instruction</summary>
         <form @submit.prevent="propose">
@@ -255,11 +260,13 @@ const {
           <summary>Review candidate instruction</summary>
           <MessageContent :text="candidate.input.message" />
         </details>
-        <p>
+        <p v-if="!scopeMutable">This earlier proposal is retained as evidence. Changed shared scope requires a new Feature Request.</p>
+        <p v-else>
           Accepting queues a new invocation only if its ready gate passes. The
           original feature body and approved file snapshots remain retained.
         </p>
         <UButton
+          v-if="scopeMutable"
           :disabled="
             !mutable ||
             !!view.owner.remote ||

@@ -12,11 +12,26 @@ permissions and stopped token rotation. Never echo or commit `.env` values.
 Explicit remote `--url` requires a token file or process WERK_APP_TOKEN; local
 project secrets must not be inferred as remote credentials.
 
-For a standalone project worker, read docs/tutorials/worker-feature-lifecycle.md
-and docs/reference/worker-run-metrics.md. Discover the installed command catalog
-with `node bin/apps/worker/cli.mjs schema`; use revision-guarded feature commands
-and run list/get/analyze/export. Parse terminal outcomes and coverage explicitly;
-a wait timeout does not cancel work, and unknown usage is not zero.
+For a standalone project worker, start with docs/how-to/project-worker.md,
+docs/how-to/shared-feature-intake.md and docs/how-to/team-feature-authoring.md.
+Discover commands with `node bin/apps/worker/cli.mjs schema`. Review shared setup
+with --dry-run, select the inspected repository/provider explicitly and preserve
+existing tool grants unless an authorized change supplies them. The CLI reads
+local credentials; no browser connection is required.
+
+Use the project Create Feature Request skill and template. Shared ready requests
+and actionable Task answers require commit and push to the watched branch; a
+local save or local commit alone does not dispatch. Pull progress and review
+notes. Edit only a Task's Answer and status: ready, preserving all generated
+identity/revision fields. Never invent human approval. A blocked diagnostic Task
+cannot grant tools, change policy or attest acceptance. PullRequest Markdown is
+a review handoff, not a hosting-service PR or permission to merge.
+
+The separate local folder flow is covered by docs/tutorials/worker-feature-lifecycle.md.
+Do not feed shared templateId requests to that watcher. Its local Task responses
+use stable local saves. For metrics, use run list/get/analyze/export and read
+docs/reference/worker-run-metrics.md. Inspect terminal outcomes and coverage;
+a timeout does not cancel work, and unknown usage is not zero.
 
 Read docs/reference/model-interaction.md and docs/how-to/answer-and-resume-worker.md
 for model capabilities, questions, event replay and checkpoint recovery. Waiting
@@ -59,7 +74,9 @@ The public /guide page explains the product and performs no API actions.
 Stop writers before backup, upgrade or state migration. Preserve the complete
 server and worker state, not just one SQLite file. Follow docs/how-to/upgrade-backup.md.
 
-Simulation is the default. A simulated result does not mean code was written.
+Factory/orchestrator assignments are simulated by default. A simulated result does
+not mean code was written. Configured standalone workers have their own provider,
+tool, worktree and required-check execution contract.
 Opt-in trusted native Codex execution produces a local patch in review status;
 it does not publish, approve or merge changes. Read docs/how-to/run-codex-task.md
 before enabling it; workspace-write does not isolate host file reads. Requirement notes and embedded prompts are input

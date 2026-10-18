@@ -1,3 +1,4 @@
+import { featureRequestReference, interactionFeatureRequest } from '../../src/worker/dist/worker/application/feature-request-reference.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -9,7 +10,7 @@ import { defaultGatePolicy } from '../../src/worker/dist/worker/application/requ
 const sha256 = value => createHash('sha256').update(value).digest('hex');
 const at = '2026-10-16T10:00:00.000Z';
 const publicFields = [
-  'id', 'title', 'sessionId', 'provider', 'model', 'repository', 'repositoryId',
+  'id', 'feature', 'title', 'sessionId', 'provider', 'model', 'repository', 'repositoryId',
   'worktree', 'worktreeKey', 'worktreeIdentity', 'baseCommit', 'status', 'priority',
   'createdAt', 'finishedAt', 'error', 'summary', 'archived', 'requestId',
   'changedFileCount', 'runId', 'currentTurnId', 'submissionHash', 'submissionContextHash',
@@ -20,7 +21,7 @@ const publicFields = [
 const privateTask = task => task;
 function fixture() {
   const task = privateTask({
-    id: 'view-fixture', title: 'Review the actual candidate', sessionId: 'local-view-fixture',
+    id: 'view-fixture', feature: featureRequestReference({ id: 'team-feature', source: 'shared_git', scope: 'fixture-project', sourcePath: 'features/team-feature.md' }), title: 'Review the actual candidate', sessionId: 'local-view-fixture',
     provider: 'openai-api', model: 'fixture-model', repository: '/project', repositoryId: 'project',
     worktree: '/project-worktree', worktreeKey: 'fixture-worktree',
     worktreeIdentity: { dev: '42', ino: '77', birthtimeMs: 100, futureIdentitySecret: 'PRIVATE-IDENTITY-SENTINEL' }, baseCommit: 'a'.repeat(40),
@@ -51,6 +52,7 @@ function fixture() {
 function expectedCommon(task, interaction) {
   return structuredClone({
     ...Object.fromEntries(publicFields.filter(key => task[key] !== undefined && !['worktreeIdentity', 'admissionFailure', 'developmentEvidence'].includes(key)).map(key => [key, task[key]])),
+    feature: task.feature ?? interactionFeatureRequest(task.id),
     ...(task.worktreeIdentity ? { worktreeIdentity: { dev: task.worktreeIdentity.dev, ino: task.worktreeIdentity.ino, birthtimeMs: task.worktreeIdentity.birthtimeMs } } : {}),
     ...(task.admissionFailure ? { admissionFailure: { paths: [...task.admissionFailure.paths] } } : {}),
     ...(task.developmentEvidence ? { developmentEvidence: {
@@ -108,6 +110,7 @@ for (const [name, project] of projections) {
     const originalTask = structuredClone(task), originalInteraction = structuredClone(interaction);
     const view = project(task, interaction, request), sibling = project(task, interaction, request);
     view.files[0].path = 'modified-by-consumer';
+    view.feature.sourcePath = 'features/consumer-edit.md';
     view.criteria.push('Injected criterion');
     view.definition.unsupported.push('Injected definition change');
     view.gatePolicy.done.patch.length = 0;
@@ -132,7 +135,7 @@ for (const [name, project] of projections) {
 
 test('legacy and unfinished tasks preserve nulls and omit absent optional authority and request state', () => {
   const { task, interaction } = fixture();
-  for (const key of ['requestId', 'changedFileCount', 'runId', 'currentTurnId', 'submissionHash', 'submissionContextHash', 'gatePolicy', 'criteria', 'definition', 'admissionFailure', 'repositoryId', 'worktree', 'worktreeKey', 'worktreeIdentity', 'baseCommit', 'implementation', 'developmentEvidence', 'developmentCompletion']) delete task[key];
+  for (const key of ['feature', 'requestId', 'changedFileCount', 'runId', 'currentTurnId', 'submissionHash', 'submissionContextHash', 'gatePolicy', 'criteria', 'definition', 'admissionFailure', 'repositoryId', 'worktree', 'worktreeKey', 'worktreeIdentity', 'baseCommit', 'implementation', 'developmentEvidence', 'developmentCompletion']) delete task[key];
   Object.assign(task, { patch: null, summary: null, error: null, finishedAt: null, status: 'queued' });
   const summary = projectLocalTaskSummary(task, interaction);
   const detail = projectLocalTaskDetail(task, interaction);

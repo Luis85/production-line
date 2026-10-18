@@ -1,9 +1,15 @@
-# From a downloaded worker to feature evidence
+# Try a local proposal request and inspect its evidence
 
 This tutorial installs a standalone worker in a project, submits a Markdown
 feature request, inspects its execution evidence and compares later runs. The
 same workflow is available to a human or an AI agent through the JSON CLI. You
 do not need a Factory, orchestrator, npm install or source build.
+
+This tutorial uses the separate local folder intake and a proposal-only patch.
+For the recommended team workflow with committed requests, Markdown answers and
+published feature branches, follow [shared Git intake](../how-to/shared-feature-intake.md).
+Do not connect shared intake while following this local example: its binding
+suspends the local folder queue.
 
 You need Node.js 24 and a verified Werk runtime archive. For real execution, you
 also need a configured provider: a signed-in Codex/Claude CLI on the worker's
@@ -140,8 +146,9 @@ node bin/apps/worker/cli.mjs feature get --name greeting.md
 
 A draft does not execute. The response includes a `revision`; copy it into the
 submission command below. Revisions prevent an agent or editor from overwriting
-someone else's newer request. You can instead copy and edit the installed
-`requests/features/_templates/feature-request.md` template directly.
+someone else's newer request. Use this local draft or `feature template` for this
+example. The installed `requests/features/_templates/feature-request.md` belongs
+to shared Git intake; its `templateId` deliberately prevents local admission.
 
 ## 5. Submit and follow execution
 
@@ -156,9 +163,10 @@ the Markdown frontmatter as the request moves through the queue and execution.
 Only one model request executes at a time. `queue pause` holds new execution;
 `queue resume` releases it. A second request can wait behind the current one.
 
-The terminal status for a successful patch request is `review`. Werk saves the
-patch and result; it does not apply the patch, run your tests, publish or merge
-it. Inspect the saved evidence, run `git apply --check` and apply the patch when
+The terminal status for this successful proposal-only request is `review`.
+Because this tutorial grants no implementation tools or required checks, Werk
+saves a patch and result without applying or testing the proposal or publishing a
+feature branch. Inspect the saved evidence, run `git apply --check` and apply the patch when
 appropriate, then verify the actual project behavior yourself.
 
 A question returns `waiting_input`, or `escalated` for an operator decision.

@@ -3,7 +3,7 @@ import { inputError } from "../config.mjs";
 // Git fetch, claim and publication can outlast the default 10 s API wait on slow remotes.
 const GIT_REQUEST_TIMEOUT_MS = 120000;
 export function workerCommands(catalog) {
-  catalog["feature setup"] = { local: true, required: [], options: ["project-dir", "features-dir", "if-match"], mutating: true, description: "Install a standalone feature authoring kit without starting or installing a worker; preserve existing project files. The authoring script is refreshed only while it matches the content recorded in .werk/authoring/manifest.json; --if-match REVISION replaces an unrecorded script with that revision." };
+  catalog["feature setup"] = { local: true, required: [], options: ["project-dir", "features-dir", "provider", "if-match"], mutating: true, description: "Install a standalone feature authoring kit without starting or installing a worker; preserve existing project files. The authoring script is refreshed only while it matches the content recorded in .werk/authoring/manifest.json; --if-match REVISION replaces an unrecorded script with that revision." };
   for (const action of ["create", "validate", "ready"]) catalog["feature author " + action] = {
     local: true, required: action === "create" ? ["name", "title"] : ["file", ...(action === "ready" ? ["if-match"] : [])],
     options: ["project-dir"], mutating: action !== "validate",
@@ -63,6 +63,11 @@ export function workerCommands(catalog) {
       input:
         "Frontmatter + Markdown from --markdown PATH or - (stdin), at most 64 KiB; status: draft.",
     };
+  for (const name of ['prepare', 'publish']) catalog['feature ' + name] = {
+    ...action('/api/features', name, [], true), timeoutMs: GIT_REQUEST_TIMEOUT_MS,
+    description: name === 'prepare' ? 'Prepare or reopen the shared Feature Request from its configured template, with readiness feedback. Does not dispatch work.' : 'Publish the same Feature Request draft or ready revision to shared Git; the existing intake validates and dispatches it after push.',
+    input: name === 'prepare' ? 'JSON operationId and optional seed {title,message,provider,paths}, or name to reopen a draft. Keep returned binding, workflow digest and revision for publication.' : 'JSON operationId, name, markdown, status (draft|ready), expectedRevision, expectedWorkflowDigest and expectedBinding from prepare. Reuse the exact command after an uncertain response.',
+  };
   catalog["feature template"] = {
     local: true,
     required: [],
@@ -76,10 +81,22 @@ export function workerCommands(catalog) {
     method: "POST", path: "/api/definitions", required: ["id", "ref"], mutating: true,
     description: "Give an imported definition the stable reference that committed requests select with definitionRef. The reference moves from any other definition; existing tasks keep their saved copy.",
   };
+  const yamlInput = "--file PATH.yaml or PATH.yml sends that YAML profile as is; any other --file PATH or - (stdin) is JSON with a yaml field.";
+  catalog["definition preview"] = {
+    ...catalog["definition preview"],
+    input: yamlInput,
+    description: "Validate a Docker Agent instruction profile without saving it. Example: definition preview --file .werk/agents/lacforce.yaml",
+  };
+  catalog["definition import"] = {
+    ...catalog["definition import"], options: ["name"],
+    input: yamlInput + " --name NAME sets the profile name and is required with a YAML file; a JSON file carries name itself (giving both is rejected).",
+    description: "Save an instruction profile. Example: definition import --file .werk/agents/lacforce.yaml --name lacforce. Then give it a reference with definition ref.",
+  };
   catalog["definition update"] = {
-    method: "POST", path: "/api/definitions", body: true, required: ["ref"], options: ["if-match", "dry-run"], mutating: true,
+    method: "POST", path: "/api/definitions", body: true, required: ["ref"], options: ["if-match", "dry-run", "name"], mutating: true,
+    input: yamlInput + " --name NAME renames the profile; without it the stored name is kept (a JSON file may carry name instead, not both).",
     example: { name: "Project reviewer", yaml: "agents:\n  root:\n    model: openai/gpt-4.1\n    instruction: Review the task and list the risks first.\n" },
-    description: "Replace the instruction profile behind a stable reference in place; its id and reference stay. --dry-run previews name, content and per-agent changes without writing. Apply with --if-match REVISION from definition list or the dry run. Existing tasks keep their accepted snapshot.",
+    description: "Replace the instruction profile behind a stable reference in place; its id and reference stay. Example: definition update --ref lacforce --file .werk/agents/lacforce.yaml --dry-run. --dry-run previews name, content and per-agent changes without writing. Apply with --if-match REVISION from definition list or the dry run. Existing tasks keep their accepted snapshot.",
   };
   catalog["repository status"] = {
     method: "GET", path: "/api/repositories",
@@ -120,6 +137,12 @@ export function workerCommands(catalog) {
     timeoutMs: GIT_REQUEST_TIMEOUT_MS,
     description: "Fetch the shared branch now and reconcile ready requests, claims and publications.",
   };
+  catalog["shared setup"] = {
+    method: "POST", path: "/api/shared-intake", body: true, timeoutMs: GIT_REQUEST_TIMEOUT_MS,
+    description: "Connect a notes-only team through existing guarded APIs: pause, verify the local provider, accept only the explicitly selected repository, apply explicit tool grants, configure and synchronize committed Git intake, then optionally resume. --dry-run reads and previews without writes or provider processes. Failure retains completed changes; starts stay paused until final resume. Inspect queue state if an acknowledgement is uncertain.",
+    input: "Use expectedRevision from shared status and exactly one repositoryId or discoveryId from repository status. provider selects codex-cli or claude-cli; optional executable/model update it. toolAccess is optional and uses the tool-access set format; omitted grants are unchanged. resume must be explicit.",
+    example: { expectedRevision: 0, repositoryId: "ASSIGNMENT_ID", provider: { id: "claude-cli" }, intake: { remote: "origin", branch: "main", workflowPath: ".werk/feature-workflow.json", pollMs: 5000 }, resume: true },
+  };
   catalog["shared configure"] = {
     ...action("/api/shared-intake", "configure", [], true),
     timeoutMs: GIT_REQUEST_TIMEOUT_MS,
@@ -134,7 +157,7 @@ export function workerCommands(catalog) {
   catalog["tool-access set"] = {
     method: "POST", path: "/api/tool-access", body: true, inputLimit: 1048576,
     input: "JSON file/stdin up to 1 MiB, including discovered MCP catalogs. After removing read-only fields, the update must fit the 64 KiB API limit.",
-    example: { expectedRevision: 0, builtins: { files: true, commands: [], cliTools: [{ id: "harness", name: "Project harness", description: "Reads the backlog and runs project checks.", enabled: true, executable: "/absolute/path/to/node", args: ["bin/harness.mjs"], commands: [{ command: "help" }, { command: "backlog context" }, { command: "backlog set", requireOneOf: ["--dry-run"] }], refusedOptions: ["--root", "--config", "--out"] }], webOrigins: [] }, mcp: [] },
+    example: { expectedRevision: 0, builtins: { files: true, commands: [{ id: "project-check", name: "Project check", executable: "/absolute/path/to/node", args: ["scripts/check.mjs"], enabled: true, verification: true }], cliTools: [{ id: "harness", name: "Project harness", description: "Reads the backlog and runs project checks.", enabled: true, executable: "/absolute/path/to/node", args: ["bin/harness.mjs"], commands: [{ command: "help" }, { command: "backlog context" }, { command: "backlog set", requireOneOf: ["--dry-run"] }], refusedOptions: ["--root", "--config", "--out"] }], webOrigins: [] }, mcp: [] },
     description: "Replace all model tool grants from JSON file/stdin while new starts are paused and idle. Edit the output of tool-access get and send it back, or supply expectedRevision with builtins and mcp. Omitted MCP connections are removed.",
   };
   catalog["tool-access discover"] = {
@@ -554,25 +577,27 @@ export function workerCommands(catalog) {
   }
   return catalog;
 }
-/** Accept an edited `tool-access get` view: its revision becomes the guard and read-only fields are dropped. */
+/** Accept an edited `tool-access get` view: view-only fields are always dropped and its revision becomes the guard. */
 export function toolAccessBody(body) {
   if (!body || typeof body !== "object" || Array.isArray(body))
     throw inputError("Tool access input must be a JSON object.");
-  let result = body;
-  if (body.expectedRevision === undefined) {
-    if (!Number.isSafeInteger(body.revision))
+  const { revision, schemaVersion, canEdit, saveBlockedReason, workerNode, mcp, ...rest } = body;
+  if (rest.expectedRevision === undefined) {
+    if (!Number.isSafeInteger(revision))
       throw inputError("Include expectedRevision, or send the edited output of tool-access get.");
-    const { revision, schemaVersion, canEdit, saveBlockedReason, workerNode, mcp, ...rest } = body;
-    result = {
-      ...rest,
-      expectedRevision: revision,
-      mcp: Array.isArray(mcp) ? mcp.map((item) => {
-        if (!item || typeof item !== "object") return item;
-        const { hasSecret, discoveredTools, ...connection } = item;
-        return connection;
-      }) : mcp,
-    };
-  }
+    rest.expectedRevision = revision;
+  } else if (!Number.isSafeInteger(rest.expectedRevision))
+    throw inputError("expectedRevision must be the integer revision from tool-access get.");
+  else if (revision !== undefined && revision !== rest.expectedRevision)
+    throw inputError(`revision (${JSON.stringify(revision)}) and expectedRevision (${JSON.stringify(rest.expectedRevision)}) differ. Keep one: the revision you read with tool-access get.`);
+  const result = "mcp" in body ? {
+    ...rest,
+    mcp: Array.isArray(mcp) ? mcp.map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return item;
+      const { hasSecret, discoveredTools, ...connection } = item;
+      return connection;
+    }) : mcp,
+  } : rest;
   if (Buffer.byteLength(JSON.stringify(result)) > 65536)
     throw inputError("Tool access update limit: 64 KiB after removing discovery catalogs.");
   return result;

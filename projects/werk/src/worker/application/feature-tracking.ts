@@ -1,3 +1,4 @@
+import { sessionFeatureRequest, type FeatureRequestReference } from './feature-request-reference.js';
 import { DomainError } from '../../shared/errors.js';
 import type { ChatMessage } from './conversation.js';
 import type { InteractionTurn } from './interactions.js';
@@ -25,6 +26,7 @@ export interface FeatureTrackingStatus {
   directory: string; lastSyncedAt: string | null; error: string | null; records: FeatureTrackingRecord[];
 }
 export interface FeatureTrackingProjection {
+  feature: FeatureRequestReference;
   sessionId: string; taskId: string; title: string; source: string; provider: string;
   status: string; createdAt: string; archived: boolean; instructions: string; sourcePath?: string;
   request: { id: string; phase: string; inputRevision: number; ready: string; done: string; criteria: string[]; findings: string[] } | null;
@@ -87,6 +89,7 @@ export function projectFeatureTracking(input: FeatureTrackingInput): FeatureTrac
   const completedResult = completed ? turnResult(completed, session.kind, !!local?.implementation) : null;
   const result = completedResult ?? local?.summary ?? local?.error ?? session.continuationBlockedReason ?? (!turns.length && latestReply && session.kind !== 'local' ? session.kind === 'orchestrator' ? remoteResult(latestReply.text) : clip(latestReply.text) : null);
   return {
+    feature: sessionFeatureRequest(session),
     sessionId: session.id, taskId: session.taskId, title: session.title, source: session.kind, provider: session.provider,
     status: session.status, createdAt: session.createdAt, archived: session.archived, instructions: clip(instructions, 8000), ...(input.sourcePath ? { sourcePath: input.sourcePath } : {}),
     request: request ? { id: request.id, phase: request.phase, inputRevision: request.inputRevision, ready: gateResult(request, 'ready'), done: gateResult(request, 'done'), criteria: (request.input.criteria ?? []).map(value => clip(value, 2000)), findings: request.findings.filter(finding => finding.status === 'open').map(finding => `${finding.blocking ? 'Blocking' : 'Advisory'} ${finding.kind}: ${clip(finding.message, 2000)}`) } : null,
@@ -98,10 +101,12 @@ export function projectFeatureTracking(input: FeatureTrackingInput): FeatureTrac
 }
 /** Generated Markdown remains a projection, never an intake document or a command. */
 export function renderFeatureTracking(value: FeatureTrackingProjection, metadata: { owner: string; digest: string; updatedAt: string }): string {
-  const frontmatter = Object.entries({ schemaVersion: 1, type: 'feature-request', source: 'worker-tracking', taskKind: value.source, sessionId: value.sessionId, taskId: value.taskId, title: value.title, status: value.status, requestPhase: value.request?.phase ?? null, provider: value.provider, createdAt: value.createdAt, updatedAt: metadata.updatedAt, archived: value.archived, ...(value.sourcePath ? { sourcePath: value.sourcePath } : {}), werkTracking: { owner: metadata.owner, digest: metadata.digest } }).map(([key, field]) => key + ': ' + JSON.stringify(field)).join('\n');
+  const frontmatter = Object.entries({ schemaVersion: 1, type: ['folder', 'shared_git'].includes(value.feature.source) ? 'FeatureRequestProgress' : 'feature-request', featureRequestId: value.feature.id, featureRequestKey: value.feature.key, intakeSource: value.feature.source, source: 'worker-tracking', taskKind: value.source, sessionId: value.sessionId, taskId: value.taskId, title: value.title, status: value.status, requestPhase: value.request?.phase ?? null, provider: value.provider, createdAt: value.createdAt, updatedAt: metadata.updatedAt, archived: value.archived, ...(value.sourcePath ? { sourcePath: value.sourcePath } : {}), werkTracking: { owner: metadata.owner, digest: metadata.digest } }).map(([key, field]) => key + ': ' + JSON.stringify(field)).join('\n');
   const paragraphs = [
     `---\n${frontmatter}\n---\n# ${line(value.title)}\n`,
-    '> Maintained by the worker from saved task evidence. Follow-ups update this request. Editing this generated note does not submit work, answer a question or approve a change.\n',
+    ['folder', 'shared_git'].includes(value.feature.source)
+      ? '> Execution progress for the linked Feature Request. This note is a projection, not another request. Answer its linked Task note or use the worker interaction.\n'
+      : '> Maintained by the worker from saved task evidence. Follow-ups update this request. Editing this generated note does not submit work, answer a question or approve a change.\n',
     `## Request\n\n${value.instructions || 'No instructions have been submitted yet.'}\n`,
     `## Progress\n\n- Task status: ${stateLabel(value.status)}\n- Request checks: ${value.request ? stateLabel(value.request.phase) : 'Not evaluated'}\n- Readiness: ${value.request?.ready ?? 'Not evaluated'}\n- Completion checks: ${value.request?.done ?? 'Not evaluated'}\n- Provider: ${line(value.provider)}\n- Task: \`${value.taskId}\`\n- Session: \`${value.sessionId}\`\n`,
   ];

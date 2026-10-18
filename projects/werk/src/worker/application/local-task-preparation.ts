@@ -1,3 +1,4 @@
+import { interactionFeatureRequest } from './feature-request-reference.js';
 
 import { developmentCompletionValid, developmentScopeView } from './development.js';
 
@@ -69,6 +70,7 @@ export function ensureRequest(host: Pick<LocalTaskRuntime, "sessions" | "setting
         sessionId: task.sessionId,
         rootTurnId: task.id,
         taskId: task.id,
+        featureId: (task.feature ?? interactionFeatureRequest(task.id)).key,
       },
       input: host.gateInput(task),
       provider: profile,

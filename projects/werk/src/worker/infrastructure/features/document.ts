@@ -57,6 +57,7 @@ export function parseFeature(raw: string): FeatureDocument {
 }
 export function featureInput(parsed: FeatureDocument, defaultProvider: string): FeatureInput {
   const d = parsed.data, title = d.title, mode = d.mode ?? 'chat', provider = d.provider ?? defaultProvider;
+  if (d.type === 'Task' || d.type === 'PullRequest') throw Error('Task and PullRequest companions are not new feature requests. Keep them at their generated paths.');
   if (typeof title !== 'string' || !title.trim() || title.length > 120) throw Error('title must contain 1–120 characters.');
   if (!parsed.body.trim() || parsed.body.length > 8000) throw Error('Request Markdown must contain 1–8,000 characters.');
   if (!['chat', 'patch'].includes(String(mode))) throw Error('mode must be chat or patch.');

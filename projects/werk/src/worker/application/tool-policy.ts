@@ -33,7 +33,9 @@ export interface ToolAccessUpdate { expectedRevision: number; builtins: ToolBuil
 function invalid(message: string): never { throw new DomainError('invalid_input', message); }
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 function fields(value: unknown, allowed: string[], label: string): Record<string, unknown> {
-  if (!record(value) || Object.keys(value).some(key => !allowed.includes(key))) invalid(`Use the documented ${label} fields.`);
+  if (!record(value)) invalid(`Use the documented ${label} fields.`);
+  const unexpected = Object.keys(value).filter(key => !allowed.includes(key));
+  if (unexpected.length) invalid(`Use the documented ${label} fields. Unexpected: ${unexpected.slice(0, 5).map(key => key.length > 64 ? `${key.slice(0, 64)}…` : key).join(', ')}${unexpected.length > 5 ? ', …' : ''}.`);
   return value;
 }
 function string(value: unknown, label: string, max: number, empty = false): string {

@@ -28,6 +28,14 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
   const sessionId = computed(
     () => props.sessionId ?? state.sessions?.selected ?? "",
   );
+  const sharedRequest = computed(() => state.sessions?.records.find(session => session.id === (view.value?.owner.sessionId ?? sessionId.value))?.feature?.source === 'shared_git');
+  const scopeMutable = computed(() => !sharedRequest.value);
+  const scopeActions = new Set(['propose', 'accept_candidate', 'rework', 'execute']);
+  function allowed(action: string) {
+    if (scopeMutable.value || !scopeActions.has(action)) return true;
+    error.value = 'The accepted shared Feature Request owns its scope. Create a new Feature Request for different work.';
+    return false;
+  }
   const identity = computed(() => props.requestId || selected.value);
   const operation = computed(() => requestOperations.get(identity.value));
   const activeExecution = computed(
@@ -140,10 +148,10 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
     refresh,
   });
   const load = (force = false) => controller.load(force);
-  const command = (fields: GateCommandFields) => controller.mutate(fields);
-  const send = (value: GateActionCommand) => controller.send(value);
+  const command = (fields: GateCommandFields) => allowed(fields.action) ? controller.mutate(fields) : Promise.resolve();
+  const send = (value: GateActionCommand) => allowed(value.action) ? controller.send(value) : Promise.resolve();
   async function propose() {
-    if (!mutable.value || !view.value || !proposedMessage.value.trim()) return;
+    if (!scopeMutable.value || !mutable.value || !view.value || !proposedMessage.value.trim()) return;
     if (proposedMessage.value === view.value.input.message) {
       error.value = "Revise the instruction before proposing a candidate.";
       return;
@@ -191,6 +199,8 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
   onBeforeUnmount(() => controller.dispose());
 
   return {
+    sharedRequest,
+    scopeMutable,
     activeExecution,
     activeReview,
     attest,

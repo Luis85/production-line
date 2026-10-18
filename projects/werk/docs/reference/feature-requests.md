@@ -1,15 +1,67 @@
 # Markdown feature requests
 
-A worker can use a configurable project folder as a file-based intake and lifecycle
-view. Each request is one UTF-8 `.md` file with YAML frontmatter and a Markdown
-body. The worker's existing serial executor owns the work; watching a folder does
-not add a parallel model process. See [project setup](../how-to/project-worker.md).
+The Feature Request is the parent workflow entity. Intake accepts it; sessions,
+execution requests, attempts, Task questions, gate evaluations and review notes
+refer back to it. A source note is one UTF-8 Markdown file with YAML frontmatter.
+The worker's existing serial executor owns attempts; an authoring channel does
+not create another execution workflow.
+
+For the team workflow, use [shared Git intake](../how-to/shared-feature-intake.md).
+The webview, connected CLI and offline authoring skill produce the same configured
+request template. Ready requests and Task responses must reach the watched remote
+branch before execution. Private workers without a shared binding can use direct
+interaction or local folder intake, where stable local saves trigger admission.
+See [project setup](../how-to/project-worker.md).
+
+## Feature Request identity
+
+The worker exposes a `feature` reference with stable `key`, source `id`, `source`
+and `scope`, plus a source path and repository ID when applicable. The supported
+sources are `interaction`, `folder`, `shared_git` and `orchestrator`. Sessions,
+approved-file tasks and gate requests retain that parent identity; child execution
+IDs still identify their own attempts and evidence. Older retained records derive
+a compatible reference without submitting or replaying work.
+
+Shared Task and PullRequest notes include `featureRequestKey` and their source
+feature ID. A new turn, retry or answer keeps the same parent. Generated tracking
+is a projection, not an independent authoring authority or a second request to
+schedule. Changing shared requirements after acceptance requires a successor
+Feature Request.
+
+## Shared authoring API
+
+Authenticated `POST /api/features` accepts `action: "prepare"` and
+`action: "publish"` when a shared repository is bound. The portable equivalents
+are `feature prepare --file command.json` and `feature publish --file command.json`.
+Both are authoring operations; only shared intake admits execution.
+
+- `prepare` takes a stable `operationId` and can seed a new template with
+  `seed: {title, message, provider, paths}`, reopen `name`, or check edited
+  `markdown`. It returns the canonical Markdown, feature ID, filename/path,
+  readiness findings, current remote `revision` (null for a new note),
+  `workflowDigest` and repository `binding`. It does not invoke a model.
+- `publish` takes `operationId`, `name`, `markdown`, `status: "draft" | "ready"`,
+  `expectedRevision`, `expectedWorkflowDigest` and `expectedBinding`. Copy the
+  guards from preparation. Publishing rechecks the destination, workflow bytes
+  and request revision, then commits and pushes only the request note. Ready
+  publication additionally requires passing readiness checks.
+
+The result's `publication` identifies the confirmed commit and head. This confirms
+Git publication, not a claim or model execution. Retain the exact command and
+operation ID after an uncertain response; retrying it reconciles publication.
+The developer checkout is preserved. A disabled shared intake still permits
+publication, but pauses new claims. Shared-bound workers refuse legacy direct
+creation through chat, task or file-task endpoints rather than bypass this queue.
+
+Webview answers and resume requests publish the linked Task response, then use
+the same shared Markdown response consumer. Accepted requirements and checks
+remain frozen. See the [shared Task contract](shared-feature-intake.md#markdown-communication-contract).
 
 ## Automatic task tracking
 
-Every worker task receives an Obsidian-compatible Markdown feature-request progress
-record automatically. Repository-file permissions and watched-folder intake are
-separate choices; neither is required to retain this record. Follow-ups, answers,
+Every worker task receives an Obsidian-compatible Markdown progress record
+linked to its Feature Request automatically. Repository-file permissions and
+watched-folder intake are separate choices; neither is required to retain this record. Follow-ups, answers,
 continuations and retries use the same session record rather than creating a new
 feature request for each model call.
 
@@ -19,9 +71,12 @@ feature request for each model call.
 | No configured feature folder | `<stateDir>/feature-requests/fr-<stable-session-hash>.md` |
 
 The filename uses a stable 24-character session hash. Generated frontmatter marks
-`type: feature-request` and `source: worker-tracking`; a source path is retained
-when available. These files are progress projections, separate from the original
-local/shared intake note or orchestrator assignment. They are not watched intake:
+`source: worker-tracking` and includes `featureRequestId`, `featureRequestKey`
+and `intakeSource`. Folder/shared-source records use `type: FeatureRequestProgress`
+so the source note remains the single intake Feature Request; private interaction
+and orchestrator projections retain `type: feature-request`. A source path is
+retained when available. These files project existing accepted work. They are
+not watched intake:
 editing them does not submit work, answer a checkpoint or approve completion.
 
 Records separate task status, request phase, gate evaluations, pending input,
@@ -32,7 +87,8 @@ or failed synchronization remains visible and retryable; accepted work stays in
 the durable worker journals and must not be duplicated to recover a Markdown
 write. The worker retries synchronization automatically.
 
-The unified webview submits authenticated `POST /api/tasks` with
+For workers without a shared repository binding, direct interaction submits
+authenticated `POST /api/tasks` with
 `{action: "create", id, title, message, provider}`, optional agent selectors, and
 optional `files: {repository, paths}`. Replaying the same ID and input returns
 the pending preparation or admitted task; changed input conflicts. An admitted
@@ -95,14 +151,19 @@ review-note publication contract.
 
 ## Template and configuration
 
-`worker init` installs `features/_templates/feature-request.md`. Customize it;
-repeating setup preserves it. Generate a fresh default without a running worker:
+`worker init` installs `features/_templates/feature-request.md` for **shared Git
+intake**. It contains `templateId`, uses the configured provider explicitly and
+is authored through `feature author` or the standalone authoring script. Setup
+preserves existing templates. It is never admitted by the local watcher.
+
+For the separate **local folder** flow, generate its default template without a
+running worker:
 
 ```sh
 node bin/apps/worker/cli.mjs feature template > features/new-feature.md
 ```
 
-The template starts in `draft` and uses the configured feature provider unless
+The local template starts in `draft` and uses the configured feature provider unless
 you add a `provider` override. Fill it in and change `status` to `ready` to queue
 it. A minimal request is:
 
@@ -146,6 +207,10 @@ files are reserved/ignored.
 
 ## Request fields
 
+This table describes local folder intake. Shared requests additionally require
+explicit ready status, ID, template ID and patch mode; see the
+[shared contract](shared-feature-intake.md#request-and-template-contract).
+
 | Field | Contract |
 | --- | --- |
 | `schemaVersion` | Required integer `1`. |
@@ -166,10 +231,15 @@ duplicate keys, unsafe mapping keys and excessive depth/nodes are rejected.
 Invalid files stay untouched and appear in `_worker-status.md` and `feature list`.
 
 For a patch request, use `mode: patch` and, for example, `paths: [src/search.ts]`.
-The worker snapshots only those files from the project working directory. It
-produces a patch for review; it does **not** apply changes or run project tests.
-Chat does not discover project files. Both modes use configured providers and may
-consume subscription/API usage when admitted; importing a draft does not prompt.
+In an assigned Git repository the worker captures committed input in an isolated
+worktree; uncommitted developer changes are excluded. Non-Git local requests use
+bounded approved-file snapshots. Proposal-only execution produces a patch for
+review. With configured implementation tools and required checks, the worker can
+apply approved changes in the task worktree and run those checks; inspect its
+recorded evidence. Shared intake can publish a feature branch after its done
+rules pass. Human review/merge remains separate. Chat does not discover files
+without separately granted tools. Both modes may consume subscription/API usage
+when admitted; importing a draft does not invoke the model.
 
 ### Approved file paths
 
@@ -335,8 +405,13 @@ Symlinked request files, feature directories and result directories are refused.
 
 ## CLI management contract
 
-All feature-management commands use the authenticated worker API and require a
-running worker with a configured feature folder, except `feature template` and the local `feature folder get|plan|set` commands.
+The local management commands below use the authenticated worker API and require
+a running worker with a configured feature folder, except `feature template` and
+local `feature folder get|plan|set`. A saved shared repository binding suspends
+local admission and mutations. Connected shared authoring uses `feature prepare`
+and `feature publish` with the guarded API contract above. Offline authors use
+`feature author create|validate|ready` or the committed authoring script without
+a worker connection; they commit and push through their own Git workflow.
 Use `schema` for command discovery. Output is JSON; `feature template` emits
 Markdown. In Docker, prefix commands with `docker compose -f
 .werk/compose.worker.yaml exec -T worker` and run the same Node CLI inside it.
@@ -380,10 +455,36 @@ requests whose history has been removed become `unavailable`, without replay.
 
 A local chat or approved-file task can enter `waiting_input` (a question) or `escalated` (an operator decision). It releases the execution slot while waiting. The worker preserves the accepted request body, approved file snapshots and frozen provider configuration.
 
-The request’s worker-owned `werk.interaction` metadata exposes `phase`, `revision`, and, while pending, `pendingId` and a `link` to `_questions/<feature-id>/<pending-id>.md`. The companion records the question, choice identifiers and escalation reason. It is a historical projection: it can remain after resolution, and editing it never answers the task. Read current interaction state before acting.
+For local folder requests, the linked question at
+`_questions/<feature-id>/<pending-id>.md` now uses `type: Task` and is discoverable
+through `werk.task`. Write the actual
+answer under `## Answer` and set `status: ready`. After a stable local save the
+worker validates the generated identity/revision and calls the guarded interaction
+answer. No Git push is required for this local flow. Supported failed/interrupted
+latest turns get resume Tasks under `_tasks/<feature-id>/`; cancelled turns do not.
+Informational `attention.md` Tasks with `status: blocked` explain held gates or
+unsupported recovery and cannot be executed by editing them. The original request
+links the current diagnostic through `werk.attention`, clearing that link when
+the hold resolves; retained notes are historical checkpoints. Copying a Task or
+PullRequest companion into the intake root cannot create a new feature request.
 
-Answer or resume through the worker’s unified interaction controls (UI, CLI or API), supplying the current revision, pending/turn identifier and a unique operation ID. The same operation can be retried safely; a stale decision is rejected. Answering queues a new measured run using explicit worker-context replay, rather than a hidden provider-session resume. Failed or interrupted continuations require explicit resume. Restart preserves unanswered checkpoints and reconstructs known valid patch results without another provider call. Orchestrator-owned assignments retain their orchestrator lease and routing boundaries.
+Local patch result notes under `_results/<feature-id>.md` use `type: PullRequest`
+as the human review handoff. These files and the generic automatic tracking notes
+remain evidence projections, not response commands. Older question companions
+without the actionable Task contract remain historical; editing them does not
+answer a live checkpoint.
 
-Question companions contain request-specific content; handle them with the same privacy care as feature requests and result artifacts. Numeric before/after evidence remains separate.
+For shared requests, use their `werkTask` link and **commit and push** the ready
+Task response. The local watcher never ingests shared `templateId` requests or
+their responses. The [shared Task contract](shared-feature-intake.md#markdown-communication-contract)
+defines identity checks and remote acknowledgement.
+
+The UI, CLI and API remain equivalent guarded interaction controls. They require
+the current revision, pending/turn identifier and a unique operation ID. Repeating
+the same operation reconciles acknowledgement; stale decisions are rejected.
+Answers queue a new measured invocation using saved context. Restart preserves
+unanswered checkpoints and known results without automatically replaying inference.
+Orchestrator assignments retain their lease and routing boundaries. Handle all
+question/result files with the same privacy care as their feature requests.
 
 A genuine failed, cancelled, or interrupted attempt may use guarded feature retry when its frozen readiness verdict still passes. Gate-held requests and known completed results require the request controls instead. Retry also checks the generated request ID, revision, input revision, and policy digest against the canonical worker record. If admission succeeded but saving its acknowledgement failed, the old file revision cannot dispatch again: inspect `feature get`, refresh the generated projection, and reconcile before another intentional retry.

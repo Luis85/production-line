@@ -2,16 +2,19 @@ import { paths } from './metadata.js';
 
 const skill = `---
 name: werk-worker
-description: Operate this project's Werk worker through its local CLI: feature requests, questions, safe continuation, events, usage evidence and review patches.
+description: Operate this project's Werk worker through Markdown requests and Task answers, with local CLI setup, guarded continuation, evidence and human review.
 ---
 # Werk worker
 
 Run commands from the project root. Read .codex/werk-worker.md for the complete
 workflow. This is shared operational guidance, not a Codex config profile.
 
-Start with node bin/apps/worker/cli.mjs schema, capabilities and status. Use
-feature folder get to discover the configured request folder; never assume it is
-named features. No browser or npm installation is required; Node 24 is required.
+Start with node bin/apps/worker/cli.mjs schema, capabilities and status. Read
+shared status and the project .werk/feature-workflow.json before choosing an
+intake. Use the Create Feature Request skill and committed authoring script for
+the shared team template. Ready requests and Task answers enter shared work only
+after commit and push to the watched branch. Pull to read progress and review
+notes. No browser or npm installation is required; Node 24 is required.
 
 Only submit or continue model work when the user has asked for that work. Read
 capabilities and configuration honestly: configured providers do not prove login,
@@ -19,15 +22,20 @@ quota or native resume. Reading status/events/metrics never prompts a model.
 
 Use private JSON files or stdin for provider credentials, never CLI arguments,
 URLs, transcripts or these integration files. Keep original accepted feature
-input immutable. Question answers and resume are separate guarded operations;
-read the current revision and retain the same operation key after uncertain
-responses. A waiting_input or escalated result is not completed work. Read request get and
+input immutable. For an actionable Task note, write only the authorized Answer,
+set status ready and preserve every identity/action/revision field. Commit and
+push shared responses; local Tasks use stable local saves. A blocked diagnostic
+Task cannot grant permissions or attest completion. For CLI answer/resume, read
+the current revision and retain the operation key after uncertain responses. A waiting_input or escalated result is not completed work. Read request get and
 request events for deterministic readiness/completion gates and reviewer findings.
 A model completion is not Request Done; Request Done is not permission to merge.
 Only make an operator attestation when explicitly authorized for that exact result.
 
-Use the explicit approved-file patch workflow for project changes. Review the
-resulting patch; the worker does not apply it, run project tests, publish or merge.
+Use explicit approved paths for project changes. Configured implementation tools
+and required checks can operate in an isolated task worktree; inspect the actual
+recorded evidence. Proposal-only execution returns a review patch. Shared intake
+can publish a feature branch and PullRequest Markdown handoff. That note is not
+a hosting-service pull request or permission to merge; human review stays explicit.
 `;
 
 const guide = `# Werk worker operational guide
@@ -45,6 +53,36 @@ Process each stable event ID once and persist nextAfter after handling a page.
 usage_observed is cumulative per invocation: replace the prior measurement rather
 than summing observations. Cached tokens are a subset of input tokens.
 providerReportedCostUsd with costBasis is a reported estimate, never an invoice.
+
+## Shared Markdown workflow
+
+The project .werk/feature-workflow.json names request, Task and review folders,
+the template and ready/done rules. Never assume the folder is named features.
+Use the installed Create Feature Request skill for offline authoring:
+
+    node .werk/authoring/feature-request.mjs create --name REQUEST.md --title "Feature title"
+    node .werk/authoring/feature-request.mjs validate --file REQUEST_PATH
+    node .werk/authoring/feature-request.mjs ready --file REQUEST_PATH --if-match REVISION
+
+Complete the actual user goal, context, acceptance criteria, verification plan
+and approved paths. Preserve the explicit template provider unless an authorized
+configured connection is selected. Only commit and push ready work when the user
+has authorized submission. A local save or local commit alone does not dispatch
+shared work. Keep secrets and private worker state out of Git.
+
+Pull updates and follow the original request's werkTask and werkPullRequest links.
+An actionable type: Task has action: answer or resume and one editable ## Answer.
+Write the actual authorized response, change status to ready, and commit and push
+the Task. Preserve its id, featureId, owner, sessionId, pendingId, turnId, action
+and expectedRevision. The owning worker validates it and continues the existing
+request; processed acknowledges acceptance, not completed execution. Inspect an
+error instead of forging a new Task identity or silently repeating model work.
+Resume notes apply only to supported failed/interrupted latest turns.
+
+A status: blocked Task describes an operator action and has no executable Answer.
+It cannot grant tools, change policy or attest acceptance. The PullRequest note
+is the review handoff for a feature branch, not a Git-hosting PR or merge approval.
+Accepted feature input remains immutable; use a successor request for changed work.
 
 ## Deterministic request gates and rework
 
@@ -102,9 +140,23 @@ change. Read schema examples; never print credentials or copy them into this
 file, an agent skill, a URL, shell arguments or task messages. CLI reads its local
 credential file itself. A provider check does not establish quota or execution.
 
-## Create and follow an authorized request
+For reviewed shared setup, inspect repository status and shared status, then use
+shared setup --file SETUP.json --dry-run before applying without --dry-run. The
+JSON chooses expectedRevision, repositoryId OR discoveryId, provider, intake
+remote/branch/workflowPath/pollMs and resume. Optional toolAccess is an explicitly
+reviewed exact replacement; omission preserves grants. Setup pauses execution,
+checks the selected CLI connection and committed workflow, then resumes only
+when requested and successful. The bridge supports claude-cli and codex-cli; API
+providers use the individual provider/repository/shared configuration commands.
+Queued/running work must be drained first. After a confirmed pause, failures
+before resume leave starts paused. Lost pause/resume acknowledgements require
+queue inspection before retry. Setup does not edit templates or infer grants.
 
-Use feature template to read the frontmatter contract. Prepare a NEW draft file
+## Create and follow a local folder request
+
+This alternative is for local intake without a shared repository binding. A
+shared templateId request never enters the local watcher; use offline authoring
+above for the installed team template. Use feature template to read the frontmatter contract. Prepare a NEW draft file
 with status: draft, the user's actual goal and observable acceptance criteria.
 Do not overwrite existing operator files or invent task requirements. Then:
 
@@ -122,6 +174,12 @@ Task create with an explicit stable ID is an alternative JSON intake path; see
 schema. Inspect an uncertain create before retrying, and preserve its original ID.
 
 ## Questions, escalation and continuation
+
+For Markdown responses prefer the generated actionable Task. Shared Tasks require
+commit and push; local question Tasks under _questions and supported resume Tasks
+under _tasks use stable local saves. Generic automatic tracking notes, historical
+question snapshots and blocked diagnostic Tasks are not response commands.
+The following CLI controls remain available when explicitly authorized.
 
 Wait can return waiting_input or escalated. Neither means completion. Inspect:
 
@@ -168,12 +226,14 @@ provider qualification from local protocol fixtures.
 
 ## Explicit patch review and queue ownership
 
-Patch requests require mode: patch and a bounded approved paths list. The worker
-captures those file snapshots and produces a review patch; the original files
-stay unchanged. Read feature result/file-task get, review every change, and run
-project checks through a separately authorized local workflow. Publication and
-merge are explicit operator actions. Orchestrator-owned assignments retain their
-owner's cancellation/routing authority.
+Patch requests require mode: patch and a bounded approved paths list. Assigned
+Git repositories use isolated task worktrees at committed input; developer edits
+are excluded. Without implementation grants, execution produces a proposal patch.
+With configured tools and required checks, inspect the applied candidate and
+recorded verification. Read feature result/file-task get and the PullRequest note,
+review every change and verify any evidence the worker could not establish.
+Shared intake can publish the approved feature branch automatically; human merge
+remains explicit. Orchestrator assignments retain their cancellation/routing owner.
 
 Use queue get/settings/pause/resume to inspect or manage the serial worker. Pause
 retains queued work and lets active work finish. Scaling uses separate workers,

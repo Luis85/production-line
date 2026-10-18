@@ -13,7 +13,9 @@ From a downloaded Werk release, run the portable worker CLI against your project
 node /path/to/werk/bin/apps/worker/cli.mjs feature setup --project-dir /path/to/project
 ```
 
-Use `--features-dir requests/features` to choose a different queue. Setup also
+Use `--features-dir requests/features` to choose a different queue and
+`--provider claude-cli` to seed a new template for Claude (otherwise `codex-cli`).
+Existing templates are preserved. Setup also
 runs during [project worker initialization](project-worker.md). When a worker
 configuration already exists, standalone setup adopts its feature directory.
 Repeating setup preserves existing files and team customization; only an
@@ -31,14 +33,16 @@ Commit these generated files with the project:
 | `.werk/authoring/manifest.json` | Content hash of the authoring script that Werk installed |
 | `fr-ready-check.json`, `fr-done-check.json` | Team readiness and completion rules |
 | `features/_templates/feature-request.md` | Editable request template |
-| `Feature Requests.base` | Obsidian table of requests in the configured queue |
+| `Feature Requests.base` | Obsidian views of requests, human Tasks and PullRequest review notes |
 | `.agents/skills/create-feature-request/SKILL.md` | Create Feature Request skill for compatible agents |
 | `.claude/skills/create-feature-request/SKILL.md` | The same skill for Claude Code |
 
-Queue and template locations follow your selected folder. The Base uses Obsidian's
-built-in table view; no special backlog plugin is needed. Open the project as an
-Obsidian vault to see the table. It reflects files in the local checkout, so pull
-shared Git updates to see teammates' requests and worker notes.
+Queue and template locations follow your selected folder. New Bases use Obsidian's
+built-in table view with **Team feature requests**, **Human tasks** and **Pull
+requests**. Request rows expose the worker and its `werkTask` / `werkPullRequest`
+links. No special backlog plugin is needed. Open the project as an Obsidian vault
+and pull shared Git updates to see current notes. Setup preserves an existing Base;
+review and add the new views/columns yourself when upgrading a customized one.
 
 ### Refresh the authoring script after an upgrade
 
@@ -86,6 +90,9 @@ new draft. Existing requests are never overwritten. Fill in Goal, Context,
 Acceptance criteria, and Verification plan. Keep the Markdown body within 8,000
 characters. Shared implementation requests use `mode: patch`; replace the empty
 `paths` list with the project-relative files you approve for this request.
+New templates include the provider chosen at worker initialization (or `codex-cli`
+for authoring-only setup). Preserve that selection unless the operator has
+configured another connection; creating a request does not configure its provider.
 
 For example, replace `paths: []` with `paths: [src/search.ts]`, describe the user
 problem, add an observable checklist item, and explain how a reviewer will verify
@@ -128,8 +135,9 @@ node .werk/authoring/feature-request.mjs ready --file features/search.md --if-ma
 Readiness checks run again against the current file and rules before `draft`
 changes to `ready`. A stale revision requires reading and validating the changed
 file. Commit the ready request and use your normal Git review and push workflow.
-Creating or validating a draft does not queue it. A connected worker can discover
-ready requests after the relevant commits reach the repository it watches.
+Creating or validating a draft does not queue it. Neither a local save nor a
+local commit dispatches shared work. A connected worker can claim the ready
+request only after its commit is pushed to the watched remote branch.
 
 Once a worker owns a request, leave its lifecycle metadata and original input
 alone. The authoring script rejects readiness mutations of worker-owned or already
@@ -156,6 +164,30 @@ it adds equivalent root aliases prefixed with `worker:`, such as
 project manifests are preserved. Authoring-only setup does not add an app or a
 package manifest, so the standalone Node commands remain the portable option.
 
+## Follow progress and answer the worker
+
+Pull the shared branch to update the original request's progress and linked notes.
+Keep its accepted body and worker-owned fields unchanged. A linked **Task** with
+`action: answer` or `action: resume` is the supported response channel:
+
+1. Read the question, choices or failure reason and obtain the actual human
+   decision where required.
+2. Edit only its `## Answer` section and set `status: ready`. Keep all generated
+   identity, owner, checkpoint, action and revision fields intact.
+3. Commit and push the Task. The owning worker validates it and continues the
+   existing request automatically; pull again to see `processed` or an error.
+
+An answer must be nonempty. A processed response can still be waiting for queue
+capacity. Resume is offered only for supported failed/interrupted latest turns.
+A **blocked** diagnostic Task describes an operator action and has no executable
+Answer; editing it cannot grant tools or satisfy an attestation gate.
+
+When the request reaches `ready_for_review`, follow `werkPullRequest` to its
+**PullRequest** Markdown note and inspect the feature branch and evidence. This
+is a review handoff, not an automatically created hosting-service pull request or
+merge approval. See [shared intake](shared-feature-intake.md) for setup, recovery
+and the distinction between execution, publication and human merge.
+
 ## Select an instruction profile for the team
 
 To run team requests with a [Docker Agent instruction profile](../reference/agent-definitions.md),
@@ -181,12 +213,15 @@ the operator imports it after reviewing the preview. After a reviewed change, th
 operator updates the profile in place on each worker, keeping the reference:
 
 ```sh
-node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file update.json --dry-run
-node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file update.json --if-match REVISION
+node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --dry-run
+node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --if-match REVISION
 ```
 
-`update.json` contains `{"yaml":"YAML_TEXT"}`. Tasks created earlier keep the
-profile they accepted; later tasks use the update.
+A `--file` ending in `.yaml` or `.yml` is sent as the profile itself, so the
+committed file needs no JSON wrapper. Add `--name NAME` to rename the profile;
+without it the stored name stays. A JSON `update.json` with `{"yaml":"YAML_TEXT"}`
+still works. Tasks created earlier keep the profile they accepted; later tasks
+use the update.
 Offline validation checks only the reference's format. A worker without the
 reference leaves the request ready and unclaimed, and shows the reason in its
 shared-intake view, until the operator assigns it. If the profile needs instructions-only
@@ -207,6 +242,7 @@ The workflow configuration defaults to:
   "id": "feature-requests",
   "requestsDirectory": "features",
   "reviewDirectory": "feature-reviews",
+  "tasksDirectory": "feature-tasks",
   "template": "features/_templates/feature-request.md",
   "base": "Feature Requests.base",
   "readyCheck": "fr-ready-check.json",
@@ -216,8 +252,11 @@ The workflow configuration defaults to:
 
 Paths must be safe repository-relative paths. Requests live directly in the
 configured queue; the template lives in a subfolder so it is not itself queued.
-Keep review notes in a separate directory. Review workflow changes in Git before
-using them with a worker.
+Keep review notes and human Tasks separate from intake requests. Omitted
+`tasksDirectory` in an older workflow resolves to `<reviewDirectory>/_tasks`;
+new setup uses `feature-tasks`. Update the corresponding Base folder filters if
+you deliberately change these paths. Review and push workflow changes before
+using them with a worker; already accepted requests retain their original paths.
 
 The template has `schemaVersion: 1`, `templateId: feature-request-v1`,
 `status: draft`, and `mode: patch`. Keep its four core headings. Additional

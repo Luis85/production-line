@@ -102,7 +102,7 @@ test('a lost push acknowledgement and a restarted adapter replay the same lifecy
 test('lifecycle publication cannot overwrite developer body, other paths or changed review notes', async t => {
   const f = await fixture(t), adapter = f.client();
   await assert.rejects(adapter.publishLifecycle(f.lifecycle('bad-body', claimed().replace('Improve the file.', 'Overwritten goal'))), /only the request ID/);
-  assert.throws(() => adapter.publishLifecycle({ ...f.lifecycle(), artifacts: [{ path: 'file.txt', expectedRevision: null, content: 'wrong' }] }), /configured review directory/);
+  assert.throws(() => adapter.publishLifecycle({ ...f.lifecycle(), artifacts: [{ path: 'file.txt', expectedRevision: null, content: 'wrong' }] }), /configured review or Task directories/);
   await f.teammate('feature-reviews/shared-one.md', 'Developer review note\n');
   await assert.rejects(adapter.publishLifecycle(f.lifecycle()), error => testErrorCode(error) === 'conflict');
   assert.equal(git(f.remote, 'show', 'main:feature-reviews/shared-one.md'), 'Developer review note');
@@ -310,4 +310,20 @@ test('publication refuses new approved paths with colliding parent spellings', a
   const patch = approvedPaths.map(path => addedFilePatch(path, 'content')).join('');
   assert.throws(() => f.client().publishPatch({ ...f.publication('publish-parent-alias'), approvedPaths, patch }), error => testErrorCode(error) === 'invalid_input' && /folder aliases/.test(testErrorMessage(error)));
   assert.equal(f.main(), f.sourceCommit);
+});
+
+
+test('configured Task artifacts use guarded updates and cannot become feature patch targets', async t => {
+  const f = await fixture(t), adapter = f.client({ tasksDirectory: 'team/actions' });
+  const path = 'team/actions/answer.md', initial = '# Task\n\nWaiting for an answer.\n';
+  const requestWrite = { path: 'features/request.md', expectedRevision: hash(request), content: request };
+  await adapter.publishLifecycle({ operationId: 'task-create', request: requestWrite, artifacts: [{ path, expectedRevision: null, content: initial }] });
+  const edited = '# Task\n\nHuman answer.\n'; await f.teammate(path, edited);
+  await assert.rejects(adapter.publishLifecycle({ operationId: 'stale-task', request: requestWrite, artifacts: [{ path, expectedRevision: hash(initial), content: '# Incorrect overwrite\n' }] }), /changed before publication/);
+  const acknowledged = edited + '\nProcessed.\n';
+  await adapter.publishLifecycle({ operationId: 'task-ack', request: requestWrite, artifacts: [{ path, expectedRevision: hash(edited), content: acknowledged }] });
+  assert.equal(git(f.remote, 'show', 'main:' + path) + '\n', acknowledged);
+  assert.throws(() => adapter.publishPatch({ ...f.publication('task-patch-denied'), approvedPaths: [path], patch: patch(path) }), /workflow configuration/);
+  assert.throws(() => adapter.publishLifecycle({ operationId: 'outside-task', request: requestWrite, artifacts: [{ path: 'another/actions/answer.md', expectedRevision: null, content: initial }] }), /configured review or Task directories/);
+  assert.equal(git(f.remote, 'show', 'main:features/request.md') + '\n', request);
 });

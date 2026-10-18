@@ -1,3 +1,4 @@
+import { sessionFeatureRequest } from './feature-request-reference.js';
 import { WorkerConversation } from './conversation.js';
 import { definitionConnection } from './definitions.js';
 import type { SessionRecord } from './session-catalog.js';
@@ -64,6 +65,7 @@ export async function loadSessionConversation(context: SessionConversationContex
             instruction: connection.instruction ?? "",
           };
         },
+        feature: () => sessionFeatureRequest(record),
         metadata: () => ({
           sessionId: record.id,
           taskId: record.taskId,

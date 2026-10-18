@@ -30,7 +30,7 @@ import type { SnapshotJournal } from "../infrastructure/journal/snapshots.js";
 import type { Status } from "./server.js";
 import { task } from './workspace-tasks.js';
 import { taskboardAction } from './workspace-task-views.js';
-import { featureTrackingSnapshot, inspectSharedFeature, submitSharedFeature, submitFeature, inspectFeature } from './workspace-features.js';
+import { featureTrackingSnapshot, inspectSharedFeature, submitSharedFeature, submitFeature, inspectFeature, continueFeatureInteraction } from './workspace-features.js';
 import { prepareTaskWorkspace, removeTaskWorkspace } from './workspace-repositories.js';
 import type { readHistory } from './workspace-environment.js';
 
@@ -122,6 +122,11 @@ export class WorkspaceContext {
       config.stateDir, this.settings, modelFor, undefined, () => this.board.active, this.consumption,
       { remote: () => { const status = this.get(); return { waiting: status.queuedTasks?.length ?? null, running: status.activeTasks.length }; } },
     );
+    this.sessions.featureSource = record => {
+      const shared = record.kind === 'local' && record.id.startsWith('local-')
+        ? this.sharedRuntime?.intake.referenceForTask(record.id.slice(6), record.feature?.key) : undefined;
+      return shared ?? this.features?.referenceForSession(record.id, record.feature?.key);
+    };
     this.board = createLocalTaskboard(
       config.stateDir,
       this.settings,
@@ -184,6 +189,7 @@ export class WorkspaceContext {
       allowed: path => this.repositoryDiscovery.assertAllowed(path),
       canAdmit: () => this.acceptingTasks && !this.settings.value.board.paused && !this.consumption.status().blocked && !this.configurationUpdating && !this.repositoriesUpdating && !this.executionProfiles?.pending(),
       submit: record => submitSharedFeature(this, record),
+      continue: (record, command) => continueFeatureInteraction(this, this.board.executionDetail(record.taskId!).sessionId, command),
       admissionIssue: input => {
         try { definitionConnection(this.settings.provider(input.provider), this.definitions.select({ definitionId: input.definitionId, definitionRef: input.definitionRef, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly })); return undefined; }
         catch (error) { return error instanceof Error ? error.message : 'The selected agent definition is unavailable.'; }
@@ -201,6 +207,8 @@ export class WorkspaceContext {
         {
           submit: (record) => submitFeature(this, record),
           inspect: (record) => inspectFeature(this, record),
+          reference: id => this.sessions.view().records.find(record => record.id === id)?.feature,
+          interact: (record, command) => continueFeatureInteraction(this, record.sessionId, command),
           control: (record, action) =>
             record.input?.mode === "patch"
               ? taskboardAction(this, { id: record.taskId, action })

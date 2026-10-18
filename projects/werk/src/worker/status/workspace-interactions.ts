@@ -3,8 +3,9 @@ import type { InteractionCommand } from "../application/interactions.js";
 import { object, text, identifier } from "../../shared/contracts.js";
 import { DomainError } from "../../shared/errors.js";
 import { assertTaskCanContinue } from './workspace-task-views.js';
+import { isSharedFeatureSession } from './workspace-feature-authoring.js';
 
-export async function interaction(workspace: WorkspaceContext, input: unknown){
+export async function interaction(workspace: WorkspaceContext, input: unknown, options: { fromFeatureNote?: boolean } = {}){
   const body = object(input, "Interaction command", [
     "action",
     "sessionId",
@@ -128,6 +129,12 @@ export async function interaction(workspace: WorkspaceContext, input: unknown){
   }
   assertTaskCanContinue(workspace, sessionId);
   const command = body as unknown as InteractionCommand;
+  const local = workspace.board.view().tasks.find(task => task.sessionId === sessionId);
+  if (isSharedFeatureSession(workspace, sessionId)) {
+    if (!local || !workspace.sharedRuntime.intake.sourceForTask(local.id))
+      throw new DomainError('conflict', 'This shared Feature Request’s execution history is unavailable. Restore its owning task history before continuing, or create a successor Feature Request.');
+    if (!options.fromFeatureNote) return workspace.sharedRuntime.intake.respond(local.id, command);
+  }
   const interactions = workspace.sessions.interactions;
   const view = interactions.view(sessionId);
   const acknowledged = interactions.operation(sessionId, command.operationId);
@@ -149,9 +156,6 @@ export async function interaction(workspace: WorkspaceContext, input: unknown){
       : typeof context?.taskId === "string"
         ? "patch"
         : undefined);
-  const local = workspace.board
-    .view()
-    .tasks.find((task) => task.sessionId === sessionId);
   if (
     detail.session.kind === "local" &&
     local &&

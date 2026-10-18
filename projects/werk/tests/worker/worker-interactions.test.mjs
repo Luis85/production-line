@@ -12,6 +12,7 @@ import { unknownUsage } from '../../src/worker/dist/worker/application/run-evide
 import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';
 import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
 import { statusServer } from '../../src/worker/dist/worker/status/server.js';
+import { sharedFeatureRequestReference } from '../../src/worker/dist/worker/application/feature-request-reference.js';
 import { modelCapabilities } from '../../src/worker/dist/worker/application/model-contract.js';
 
 /** @param {import('../../src/worker/application/sessions.js').WorkerSessions} sessions
@@ -303,4 +304,36 @@ test('failed answer admission projects a resumable failed session without overri
   f.sessions.interactions.fail('remote-owner', stale.turn.id, 'failed', 'admission_unavailable');
   assert.equal(f.sessions.detail('remote-owner').session.status, 'queued');
   await f.sessions.setTaskState('remote-owner', 'running'); assert.equal(f.sessions.detail('remote-owner').session.status, 'running');
+});
+
+
+test('a deleted failed shared task cannot resume through its retained conversation, including after restart', async t => {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-shared-orphan-'))), repository = join(directory, 'repo'); await mkdir(repository);
+  const journal = new SnapshotJournal(directory, 'a'.repeat(64), 'b'.repeat(64)); await journal.init();
+  let patchCalls = 0, chatCalls = 0;
+  const create = () => {
+    const workspace = new WorkerWorkspace({ stateDir: directory, pollMs: 1000, timeoutMs: 60000 }, journal, workerStatus);
+    boardRuntime(workspace.board).model = model(async () => { patchCalls++; throw Error('Fixture failed shared patch'); });
+    injectSessionModel(workspace.sessions, model(async () => { chatCalls++; return { type: 'completed', text: 'Must not dispatch orphaned shared work.' }; }));
+    return workspace;
+  };
+  let workspace = create(); await workspace.init();
+  t.after(async () => { await workspace.close(); await journal.close(); await rm(directory, { recursive: true, force: true }); });
+  const feature = sharedFeatureRequestReference({ id: 'shared-orphan', sourcePath: 'features/orphan.md', binding: { repositoryId: 'shared', remote: 'origin', branch: 'main', workflowPath: '.werk/feature-workflow.json' } });
+  await workspace.board.create({ title: 'Retain shared ownership', instruction: 'Create an approved file', repository, paths: ['a.txt'] }, { id: 'shared-orphan-task', hash: 'a'.repeat(64), feature });
+  const task = workspace.board.view().tasks[0];
+  await workspace.board.tick(); await until(() => workspace.board.detail(task.id).status === 'failed' && !workspace.executor.busy);
+  await workspace.taskboardAction({ id: task.id, action: 'delete' });
+  assert.equal(workspace.board.view().tasks.length, 0);
+  const original = workspace.sessions.interactions.view(task.sessionId), runs = workspace.sessions.runs.list().rows.length;
+  assert.equal(workspace.sessions.detail(task.sessionId).session.feature.source, 'shared_git');
+  /** @type {import('../../src/worker/application/interactions.js').InteractionCommand} */
+  const command = { action: 'resume', sessionId: task.sessionId, turnId: original.latestTurn.id, expectedRevision: original.revision, operationId: 'orphan-shared-resume' };
+  for (const restarted of [false, true]) {
+    if (restarted) { await workspace.close(); workspace = create(); await workspace.init(); }
+    await assert.rejects(workspace.interaction(command), /shared Feature Request.*execution history is unavailable/);
+    assert.deepEqual(workspace.sessions.interactions.view(task.sessionId), original, 'Refusal cannot append a new turn or mutate the checkpoint.');
+    assert.equal(workspace.sessions.runs.list().rows.length, runs, 'Refusal cannot admit another run.');
+    assert.equal(patchCalls, 1); assert.equal(chatCalls, 0);
+  }
 });

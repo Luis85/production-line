@@ -1,3 +1,5 @@
+import { restoreFeatureRequestReferences } from './feature-request-migration.js';
+import { sessionFeatureRequest, validateFeatureRequestReference, type FeatureRequestReference } from './feature-request-reference.js';
 import { restoreSessionCatalog, type SessionCatalog, type SessionRecord, type TaskState } from './session-catalog.js';
 import { sessionAction } from './session-actions.js';
 import { sessionView } from './session-view.js';
@@ -25,6 +27,7 @@ export type { SessionRecord, TaskState } from "./session-catalog.js";
 /** Worker-owned transcripts are provider-independent; native CLI session IDs never cross providers. */
 export class WorkerSessions {
   featureTracking?: { status(): FeatureTrackingStatus; record(sessionId: string): FeatureTrackingRecord | undefined };
+  featureSource?: (record: SessionRecord) => FeatureRequestReference | undefined;
   readonly requests: RequestJournal;
   requestPolicy?: () => GatePolicy | undefined;
   onRequestChanged?: (requestId: string) => void;
@@ -84,7 +87,8 @@ export class WorkerSessions {
     await this.definitions.init();
     const saved = await this.storage.read();
     this.catalog = restoreSessionCatalog(saved, this.settings);
-    if (saved === undefined) await this.persist();
+    const migrated = restoreFeatureRequestReferences(this.catalog.records, this.requests, this.featureSource);
+    if (migrated || saved === undefined) await this.persist();
     this.interactions.retainSessions(this.catalog.records.map((record) => record.id));
     for (const record of this.catalog.records) await this.load(record);
   }
@@ -217,10 +221,21 @@ export class WorkerSessions {
     provider: ProviderId,
     submissionHash?: string,
     definition?: DefinitionSnapshot,
+    feature?: FeatureRequestReference,
   ) {
     this.assertProvidersStable();
+    const reference = feature && validateFeatureRequestReference(feature);
     const found = this.catalog.records.find((record) => record.id === id);
-    if (found) return found;
+    if (found) {
+      if (reference && found.feature && found.feature.key !== reference.key)
+        throw new DomainError('conflict', 'This session belongs to another feature request.');
+      if (reference && !found.feature) {
+        found.feature = reference;
+        try { await this.persist(); } catch (error) { delete found.feature; throw error; }
+        this.requests.bindFeature(id, reference.key);
+      }
+      return found;
+    }
     if (this.catalog.changing)
       throw new DomainError(
         "conflict",
@@ -240,6 +255,7 @@ export class WorkerSessions {
         ...(submissionHash ? { submissionHash } : {}),
         id: identifier(id, "task session"),
         taskId: id,
+        feature: feature ? validateFeatureRequestReference(feature) : sessionFeatureRequest({ id, kind }),
         kind,
         ...(kind === "chat" ? {} : { taskState: "queued" as const }),
         title: title.slice(0, 120),

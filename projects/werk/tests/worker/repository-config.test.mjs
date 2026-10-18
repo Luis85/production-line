@@ -61,3 +61,13 @@ test('repository assignments migrate old settings, persist replacements and rema
   await recovered.update({ repositories: { items: [] } });
   assert.deepEqual(recovered.value.repositories, { pollMs: 30000, items: [] });
 });
+
+test('an invalid task worktree directory reports its own field while repository paths keep their message', async t => {
+  const directory = await mkdtemp(join(tmpdir(), 'werk-worktree-field-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const settings = new WorkerSettings(directory); await settings.init();
+  await assert.rejects(settings.update({ repositories: { items: [], worktreeDirectory: 'C:werk-worktrees' } }), { code: 'invalid_input', message: 'Task worktree directory must be absolute on the worker machine.' });
+  await assert.rejects(settings.update({ repositories: { items: [{ id: 'bad', path: './relative' }] } }), { code: 'invalid_input', message: 'Repository path must be absolute on the worker machine.' });
+  await assert.rejects(settings.update({ repositories: { items: [{ id: 'bad', path: './relative' }], worktreeDirectory: 'C:werk-worktrees' } }), { code: 'invalid_input', message: 'Repository path must be absolute on the worker machine.' });
+  assert.equal(settings.value.repositories.worktreeDirectory, undefined);
+});

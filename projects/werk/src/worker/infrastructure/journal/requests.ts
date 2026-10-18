@@ -1,3 +1,4 @@
+import type { FeatureIdentityJournal } from '../../application/journal-ports.js';
 import type {
   ModelProvider,
   ModelRequest,
@@ -14,7 +15,7 @@ import {
   type WorkerRequest
 } from "../../application/request-gates.js";
 import type { ProviderUsage } from "../../application/run-evidence.js";
-import { requestBindTurn, requestEnsure } from './requests/admission.js';
+import { requestBindFeature, requestBindTurn, requestEnsure } from './requests/admission.js';
 import { requestCommand, requestPolicy, requestSetPolicy } from './requests/commands.js';
 import { requestFailExecution, requestPrepareExecution, requestRecordResult, requestStartExecution } from './requests/execution.js';
 import { requestEvaluate, requestHoldRecovery } from './requests/gates.js';
@@ -23,7 +24,7 @@ import { requestCompleteReview, requestFailReview, requestObserveReviewUsage, re
 import { RequestStore } from './requests/store.js';
 
 /** Authoritative request state. The store alone owns its SQLite connection and transactions. */
-export class WorkerRequestJournal implements RequestGatePort {
+export class WorkerRequestJournal implements RequestGatePort, FeatureIdentityJournal {
   private readonly store: RequestStore;
   constructor(directory: string) {
     this.store = new RequestStore(directory);
@@ -33,6 +34,9 @@ export class WorkerRequestJournal implements RequestGatePort {
   }
   close() {
     return this.store.close();
+  }
+  bindFeature(sessionId: string, featureId: string): void {
+    requestBindFeature(this.store, sessionId, featureId);
   }
   get(id: string): WorkerRequest {
     return this.store.get(id);

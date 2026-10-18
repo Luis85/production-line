@@ -1,3 +1,4 @@
+import type { FeatureRequestReference } from './feature-request-reference.js';
 import type { GatePolicy, RequestGatePort } from "./request-gates.js";
 import type { ModelProvider } from "./model-contract.js";
 
@@ -31,6 +32,7 @@ export interface ConversationModel {
 export type ConversationEvidence = {
   journal: RunEvidence;
   metadata: () => RunMetadata;
+  feature?: () => FeatureRequestReference;
   interactions?: InteractionStore;
   requests?: RequestGatePort;
   requestPolicy?: () => GatePolicy | undefined;

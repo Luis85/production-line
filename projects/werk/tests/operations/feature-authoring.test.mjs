@@ -46,7 +46,11 @@ test('authoring setup installs a standalone team kit and preserves customized fi
   await assert.rejects(access(join(f.root, '.werk/worker.json')));
   const base = parse(await readFile(join(f.root, 'Feature Requests.base'), 'utf8'));
   assert.equal(base.views[0].type, 'table');
-  assert.ok(base.filters.and.includes('file.folder == "requests/features"'));
+  assert.ok(base.views[0].filters.and.includes('file.folder == "requests/features"'));
+  assert.deepEqual(base.views.map(view => view.name), ['Team feature requests', 'Human tasks', 'Pull requests']);
+  assert.ok(base.views[1].filters.and.includes('file.folder == "feature-tasks"'));
+  assert.ok(base.views[0].order.includes('note.werkTask'));
+  assert.ok(base.views[0].order.includes('note.werkPullRequest'));
   assert.match(await readFile(join(f.root, '.agents/skills/create-feature-request/SKILL.md'), 'utf8'), /# Create Feature Request/);
   await writeFile(join(f.root, f.installed.workflow.template), '# A customized legacy template\n');
   const repeated = await initializeFeatureAuthoring(f.root, { script });

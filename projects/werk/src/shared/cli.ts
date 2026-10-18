@@ -38,7 +38,7 @@ export function integer(value: string, name: string, min: number, max: number): 
         throw new ValidationError(`${name}: integer ${min}–${max}`);
     return n;
 }
-export async function input(path: string, limit = INPUT_LIMIT): Promise<unknown> {
+async function readInput(path: string, limit: number): Promise<Buffer> {
     const limitMessage = `Input limit: ${limit / 1024} KiB`;
     const chunks: Buffer[] = [];
     let size = 0;
@@ -74,9 +74,16 @@ export async function input(path: string, limit = INPUT_LIMIT): Promise<unknown>
             await handle?.close();
         }
     }
+    return Buffer.concat(chunks);
+}
+/** Read a file or stdin (-) under one size limit. JSON by default; { text: true } returns the UTF-8 text unparsed. Both drop a leading BOM. */
+export async function input(path: string, limit = INPUT_LIMIT, options: { text?: boolean } = {}): Promise<unknown> {
+    // Windows PowerShell 5.1 prefixes piped stdin, and many editors prefix saved files, with a UTF-8 BOM.
+    const text = (await readInput(path, limit)).toString('utf8').replace(/^\uFEFF/, '');
+    if (options.text)
+        return text;
     try {
-        // Windows PowerShell 5.1 prefixes piped stdin, and many editors prefix saved files, with a UTF-8 BOM.
-        return JSON.parse(Buffer.concat(chunks).toString('utf8').replace(/^\uFEFF/, ''));
+        return JSON.parse(text);
     }
     catch {
         throw new ValidationError('Invalid JSON input');
