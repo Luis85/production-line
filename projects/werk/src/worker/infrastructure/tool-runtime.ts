@@ -3,13 +3,14 @@ import { lstatSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { chatRepositoryId, type ToolPolicy } from '../application/tool-policy.js';
 import type { DevelopmentRuntime } from '../application/development.js';
-import { resolveToolLimits, type ResolvedToolLimits } from '../application/tool-limits.js';
+import { resolveCandidateInspectionLimits, resolveToolLimits, type ResolvedToolLimits } from '../application/tool-limits.js';
+import { candidateInspectionFields, type CandidateInspectionLimits } from '../application/execution-policy.js';
 import { cliToolName } from '../application/cli-tool-policy.js';
 import { ToolAccessError, type ToolBudgetEvidence, type ToolManifest, type ToolResult, type ToolRuntime, type ToolWorktreeIdentity } from '../application/tool-runtime.js';
 import { builtinToolOperations, BuiltinToolError, chatRepositoryNote, chatToolDirectory, chatWorkspaceHint, chatWorkspaceNote, type ToolOperation, type ToolRepository } from './builtin-tools.js';
 import { callMcpTool, mcpTransportConfiguration } from './tool-mcp.js';
 
-export interface ToolRuntimeOptions {
+export interface ToolRuntimeOptions extends Partial<CandidateInspectionLimits> {
   policy: ToolPolicy;
   currentRevision: () => number;
   /** Private worker state directory. Chat commands start in its chat-workspace child unless a grant opts in to a repository. */
@@ -36,7 +37,7 @@ export function mcpToolName(connection: string, tool: string): string {
 }
 
 /** Deadline evidence names only exposed tools; grant IDs and numbers disclose no private command configuration. */
-function manifestLimits(policy: ToolPolicy, names: string[], mcp: Map<string, number>, limits: ResolvedToolLimits): NonNullable<ToolManifest['limits']> {
+function manifestLimits(policy: ToolPolicy, names: string[], mcp: Map<string, number>, limits: ResolvedToolLimits, candidate: Partial<CandidateInspectionLimits>): NonNullable<ToolManifest['limits']> {
   const callTimeoutMs: Record<string, number> = {};
   const commands = policy.builtins.commands.filter(item => item.enabled);
   for (const name of names) {
@@ -47,7 +48,9 @@ function manifestLimits(policy: ToolPolicy, names: string[], mcp: Map<string, nu
     else { const tool = (policy.builtins.cliTools ?? []).find(item => item.enabled && cliToolName(item.id) === name); if (tool) callTimeoutMs[name] = limits.cliTimeoutMs[tool.id]; }
   }
   return { maxCalls: limits.maxCalls, windowMs: limits.maxRuntimeMs, callTimeoutMs,
-    ...(names.includes('werk_command_run') ? { presetTimeoutMs: { ...limits.presetTimeoutMs } } : {}) };
+    ...(names.includes('werk_command_run') ? { presetTimeoutMs: { ...limits.presetTimeoutMs } } : {}),
+    // Recorded when the invocation captured candidate limits; dispatches prepared without them keep their exact manifest.
+    ...(names.includes('werk_candidate_status') && candidateInspectionFields.some(field => candidate[field] !== undefined) ? { candidateInspection: { ...resolveCandidateInspectionLimits(candidate) } } : {}) };
 }
 const windowText = (ms: number) => ms >= 1000 ? `${Math.floor(ms / 1000)} s` : `${ms} ms`;
 const remainingText = (ms: number) => ms >= 1000 ? `${Math.floor(ms / 1000)} s` : 'less than 1 s';
@@ -104,7 +107,7 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
   if (operations.length > 64) throw new ToolAccessError('At most 64 tools may be granted for one invocation.');
   const catalog = new Map(operations.map(operation => [operation.definition.name, operation]));
   if (catalog.size !== operations.length) throw new ToolAccessError('Tool names are not unique.');
-  const manifest: ToolManifest = freeze({ revision: policy.revision, tools: structuredClone(operations.map(operation => operation.definition)), limits: manifestLimits(policy, operations.map(operation => operation.definition.name), mcpTimeouts, resolved) });
+  const manifest: ToolManifest = freeze({ revision: policy.revision, tools: structuredClone(operations.map(operation => operation.definition)), limits: manifestLimits(policy, operations.map(operation => operation.definition.name), mcpTimeouts, resolved, options) });
   const lifetime = new AbortController();
   const pending = new Set<Promise<ToolResult>>();
   let calls = 0, refused = 0, startedAt = 0, deadline: AbortSignal | undefined, closed = false, exhausted: ToolBudgetEvidence['reason'] | undefined;

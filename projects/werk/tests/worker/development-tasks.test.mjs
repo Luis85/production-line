@@ -146,6 +146,21 @@ test('a new implementation edits, fails a real check, repairs and verifies withi
   assert.equal(await readFile(join(f.state, 'local-review', id + '.patch'), 'utf8'), task.patch);
 });
 
+test('candidate inspection uses the limits frozen with the accepted dispatch, not a later settings change', { timeout: testTimeoutMs }, async t => {
+  const f = await fixture(t, async ({ runtime, request, signal }) => {
+    assert.equal(request.policy.candidateFileMaxBytes, 8388608); assert.equal(request.toolManifest.limits.candidateInspection.candidateFileMaxBytes, 8388608);
+    await edit(runtime, signal); await check(runtime, signal);
+    return complete('Verified with the accepted inspection limits.');
+  });
+  await writeFile(join(f.repository, 'asset.bin'), Buffer.alloc(70 * 1024, 1));
+  await git(f.repository, 'add', 'asset.bin'); await git(f.repository, 'commit', '-m', 'Committed asset above the later per-file limit');
+  const id = await f.create();
+  await f.settings.update({ execution: { candidateFileMaxBytes: 65536 } });
+  const task = await f.settle(id, 'review');
+  assert.equal(task.developmentCompletion.verified, true);
+  assert.equal(f.settings.publicView().execution.candidateFileMaxBytes, 65536, 'the later change applies to new attempts only');
+});
+
 const incomplete = {
   unchanged: async () => {},
   'missing checks': async ({ runtime, signal }) => { await edit(runtime, signal); },

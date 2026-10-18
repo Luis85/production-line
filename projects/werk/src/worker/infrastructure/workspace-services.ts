@@ -16,10 +16,12 @@ import { modelFor } from './providers.js';
 import { createToolRuntime } from './tool-runtime.js';
 import { createDevelopmentRuntime } from './candidate-tools.js';
 import { executeModel, legacyModelReply, modelCapabilities, type StructuredModel } from '../application/model-contract.js';
-import { DEFAULT_MAX_RUNTIME_MS, DEFAULT_MAX_TOOL_CALLS, DEFAULT_COMMAND_TIMEOUT_MS } from '../application/execution-policy.js';
+import { DEFAULT_MAX_RUNTIME_MS, DEFAULT_MAX_TOOL_CALLS, DEFAULT_COMMAND_TIMEOUT_MS, candidateInspectionFields, type CandidateInspectionLimits } from '../application/execution-policy.js';
 import { definitionStorage, sessionCatalogStorage, localTaskStorage, approvedTaskFiles } from './journal/workspace-files.js';
 
 type ModelSettings = Pick<WorkerSettingsPort, 'toolPolicy'> & { readonly value: Pick<WorkerSettingsPort['value'], 'execution' | 'repositories'> };
+/** Frozen dispatch values, else current settings. Absent dispatch values resolve to defaults in the runtime. */
+const candidateLimits = (source: Partial<CandidateInspectionLimits>): Partial<CandidateInspectionLimits> => Object.fromEntries(candidateInspectionFields.filter(field => source[field] !== undefined).map(field => [field, source[field]]));
 export type WorkspaceProviderFactory = (...args: Parameters<typeof modelFor>) => (ConversationModel & Partial<StructuredModel>) | undefined;
 
 /** Concrete provider/tool construction stays at the worker edge. Each call observes current grants. */
@@ -33,6 +35,7 @@ export function workspaceModelFactory(directory: string, settings: ModelSettings
         maxCalls: policy ? policy.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS : settings.value.execution.maxToolCalls,
         maxRuntimeMs: policy ? policy.maxRuntimeMs ?? DEFAULT_MAX_RUNTIME_MS : settings.value.execution.maxRuntimeMs,
         commandTimeoutMs: policy ? policy.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS : settings.value.execution.commandTimeoutMs,
+        ...candidateLimits(policy ?? settings.value.execution),
       }),
     } : undefined);
     const budgeted: StructuredModel | undefined = instance ? {
@@ -40,7 +43,7 @@ export function workspaceModelFactory(directory: string, settings: ModelSettings
       get capabilities() { return instance.capabilities ?? modelCapabilities; },
       get toolManifest() { return instance.toolManifest; },
       toolManifestFor(policy) { return instance.toolManifestFor ? instance.toolManifestFor(policy) : instance.toolManifest; },
-      get executionPolicy() { return { maxToolCalls: settings.value.execution.maxToolCalls, commandTimeoutMs: settings.value.execution.commandTimeoutMs }; },
+      get executionPolicy() { return { maxToolCalls: settings.value.execution.maxToolCalls, commandTimeoutMs: settings.value.execution.commandTimeoutMs, ...candidateLimits(settings.value.execution) }; },
       reply: (...args) => legacyModelReply(budgeted!, ...args),
       execute: (...args) => executeModel(instance, ...args),
     } : undefined;

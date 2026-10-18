@@ -3,7 +3,7 @@ import type { WorkerSettingsView } from '../application/workspace-view.js';
 import { defaultToolPolicy, discoveredToolPolicy, persistedToolPolicy, publicToolPolicy, updateToolPolicy, validateToolPolicy, type ToolPolicy } from '../application/tool-policy.js';
 import { defaultRepositoryConfiguration, validateRepositoryConfiguration, type RepositoryConfiguration } from '../application/repositories.js';
 import { defaultResourcePolicy, validateResourcePolicy, type ResourcePolicy } from '../application/resources.js';
-import { defaultExecutionPolicy, validateExecutionPolicy, type ExecutionPolicy } from '../application/execution-policy.js';
+import { defaultExecutionPolicy, EXECUTION_POLICY_FIELDS, validateExecutionPolicy, type ExecutionPolicy } from '../application/execution-policy.js';
 import { join, isAbsolute, resolve } from 'node:path';
 import { object, text } from '../../shared/contracts.js';
 import { DomainError } from '../../shared/errors.js';
@@ -67,7 +67,7 @@ export class WorkerSettings {
   async update(input: unknown) {
     const operation = this.writing.catch(() => {}).then(async () => {
       const body = object(input, 'Settings', ['provider', 'connection', 'board', 'resources', 'execution', 'repositories', 'consumption', 'expectedConsumption', 'expectedBoard', 'expectedDuration', 'expectedToolBudget']);
-      if (body.execution !== undefined && object(body.execution, 'Execution', ['maxRuntimeMs', 'maxToolCalls', 'commandTimeoutMs']).maxRuntimeMs !== undefined && this.executionOverride) throw new DomainError('conflict', 'WERK_WORKER_MAX_RUNTIME_MS controls this worker. Change or remove that environment override and restart before editing the execution limit.');
+      if (body.execution !== undefined && object(body.execution, 'Execution', [...EXECUTION_POLICY_FIELDS]).maxRuntimeMs !== undefined && this.executionOverride) throw new DomainError('conflict', 'WERK_WORKER_MAX_RUNTIME_MS controls this worker. Change or remove that environment override and restart before editing the execution limit.');
       if (body.expectedConsumption !== undefined) {
         if (body.consumption === undefined) throw new DomainError('invalid_input', 'A consumption baseline requires a new consumption policy.');
         const expected = validateConsumptionPolicy(body.expectedConsumption);
@@ -97,7 +97,7 @@ export class WorkerSettings {
       }
       if (body.expectedToolBudget !== undefined) {
         if (body.execution === undefined) throw new DomainError('invalid_input', 'A tool budget baseline requires tool execution settings to save.');
-        const patch = object(body.execution, 'Execution', ['maxRuntimeMs', 'maxToolCalls', 'commandTimeoutMs']);
+        const patch = object(body.execution, 'Execution', [...EXECUTION_POLICY_FIELDS]);
         if (patch.maxToolCalls === undefined && patch.commandTimeoutMs === undefined) throw new DomainError('invalid_input', 'A tool budget baseline requires tool execution settings to save.');
         const expected = object(body.expectedToolBudget, 'Tool budget baseline', ['maxToolCalls', 'commandTimeoutMs']);
         if (expected.maxToolCalls === undefined || expected.commandTimeoutMs === undefined) throw new DomainError('invalid_input', 'Use the complete tool budget baseline before saving.');
@@ -124,7 +124,7 @@ export class WorkerSettings {
       if (body.board) next.board = { ...next.board, ...object(body.board, 'Taskboard', ['paused', 'maxParallel', 'queueCapacity', 'orchestratorQueue', 'order']) };
       if (body.repositories !== undefined) next.repositories = validateRepositoryConfiguration(body.repositories, (path, label) => { if (!isAbsolute(path)) throw new DomainError('invalid_input', `${label} must be absolute on the worker machine.`); return resolve(path); });
       if (body.resources !== undefined) next.resources = { ...next.resources, ...object(body.resources, 'Resources', Object.keys(defaultResourcePolicy())) };
-      if (body.execution !== undefined) next.execution = { ...next.execution, ...object(body.execution, 'Execution', ['maxRuntimeMs', 'maxToolCalls', 'commandTimeoutMs']) };
+      if (body.execution !== undefined) next.execution = { ...next.execution, ...object(body.execution, 'Execution', [...EXECUTION_POLICY_FIELDS]) };
       const validated = this.validate(next); await this.persist(validated); this.value = validated;
       if (body.execution !== undefined) { this.savedExecution = { ...validated.execution, ...(this.executionOverride ? { maxRuntimeMs: this.savedExecution.maxRuntimeMs } : {}) }; this.executionSource = this.executionOverride ? 'environment' : 'saved_settings'; }
     });
@@ -132,10 +132,10 @@ export class WorkerSettings {
   }
   private persist(value: WorkspaceSettings) {
     const execution = { ...value.execution, ...(this.executionOverride ? { maxRuntimeMs: this.savedExecution.maxRuntimeMs } : {}) };
-    // Default tool budgets need no new saved fields; older releases can still read this configuration.
-    const { maxToolCalls, commandTimeoutMs, ...duration } = execution;
+    // Default tool budgets and candidate bounds need no saved fields; the duration limit is always saved.
     const defaults = defaultExecutionPolicy();
-    const document = JSON.stringify({ ...value, execution: { ...duration, ...(maxToolCalls !== defaults.maxToolCalls ? { maxToolCalls } : {}), ...(commandTimeoutMs !== defaults.commandTimeoutMs ? { commandTimeoutMs } : {}) } }) + '\n';
+    const saved = Object.fromEntries(Object.entries(execution).filter(([key, item]) => key === 'maxRuntimeMs' || item !== defaults[key as keyof ExecutionPolicy]));
+    const document = JSON.stringify({ ...value, execution: saved }) + '\n';
     if (Buffer.byteLength(document) > 65536) throw new DomainError('invalid_input', 'Worker settings limit: 64 KiB. Use fewer or shorter repository assignments.');
     return atomicWrite(join(this.directory, 'workspace-settings.json'), document);
   }

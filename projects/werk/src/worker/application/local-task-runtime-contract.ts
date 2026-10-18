@@ -1,5 +1,5 @@
 import type { SerializedOperations } from '../../shared/serialized-operations.js';
-import type { DevelopmentFactory, DevelopmentRuntime } from './development.js';
+import type { DevelopmentFactory, DevelopmentLimits, DevelopmentRuntime } from './development.js';
 import type { LocalTaskboardView, LocalTaskDetailView } from './workspace-view.js';
 import type { ModelFactory, ProviderConnection } from './provider-contract.js';
 import type { WorkerSettingsPort, LocalTaskStorage, ApprovedTaskFiles } from './workspace-ports.js';
@@ -69,7 +69,7 @@ export interface LocalTaskRuntime extends LocalTaskDependencies, LocalTaskState 
   context(task: LocalTask): Record<string, unknown>;
   originalPrompt(task: LocalTask): string;
   preparedRequest(task: LocalTask, turn: InteractionTurn, model: ConversationModel): ModelRequest;
-  developmentRuntime(task: LocalTask, commandTimeoutMs?: number): DevelopmentRuntime | undefined;
+  developmentRuntime(task: LocalTask, limits?: DevelopmentLimits): DevelopmentRuntime | undefined;
   restoredDevelopment(task: LocalTask, turn: InteractionTurn): ValidatedPatch | null;
   assertToolWorkspace(task: LocalTask, signal: AbortSignal, verifyOnly?: boolean): Promise<void>;
   assertAcceptedSnapshots(task: LocalTask): void;

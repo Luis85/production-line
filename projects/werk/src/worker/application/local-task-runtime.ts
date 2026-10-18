@@ -36,7 +36,7 @@ export function createLocalTaskRuntime(settings: WorkerSettingsPort, sessions: W
     completionMessage: (task, summary, reply) => group1.completionMessage(task, summary, reply),
     writePatch: (task, patch) => group1.writePatch(runtime, task, patch),
     input: (task) => group1.input(task),
-    developmentRuntime: (task, commandTimeoutMs) => group2.developmentRuntime(runtime, task, commandTimeoutMs),
+    developmentRuntime: (task, limits) => group2.developmentRuntime(runtime, task, limits),
     assertToolWorkspace: (task, signal, verifyOnly) => group2.assertToolWorkspace(runtime, task, signal, verifyOnly),
     removeTaskWorktree: (task, requested, discardChanges) => group2.removeTaskWorktree(runtime, task, requested, discardChanges),
     get active() { return group3.active(runtime); },

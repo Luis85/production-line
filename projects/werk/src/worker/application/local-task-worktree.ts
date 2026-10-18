@@ -1,5 +1,5 @@
 
-import { assertDevelopmentPolicy, validateDevelopmentState, type DevelopmentRuntime } from './development.js';
+import { assertDevelopmentPolicy, validateDevelopmentState, type DevelopmentLimits, type DevelopmentRuntime } from './development.js';
 
 import type { ToolWorktreeIdentity } from './tool-runtime.js';
 
@@ -8,13 +8,14 @@ import { DomainError } from "../../shared/errors.js";
 import { BACKGROUND_ADMISSION_TIMEOUT_MS, type LocalTask } from './local-task-contracts.js';
 import type { LocalTaskRuntime } from './local-task-runtime-contract.js';
 
-export function developmentRuntime(host: Pick<LocalTaskRuntime, "settings" | "development" | "assertToolWorkspace" | "change">, task: LocalTask, commandTimeoutMs?: number): DevelopmentRuntime | undefined {
+export function developmentRuntime(host: Pick<LocalTaskRuntime, "settings" | "development" | "assertToolWorkspace" | "change">, task: LocalTask, limits: DevelopmentLimits = {}): DevelopmentRuntime | undefined {
     if (!task.implementation) return;
     validateDevelopmentState(task.implementation, task.developmentEvidence);
     assertDevelopmentPolicy(task.implementation, host.settings.toolPolicy());
     if (!host.development || !task.worktree || !task.worktreeIdentity) throw new DomainError('unavailable', 'Implementation tools are unavailable; the accepted worktree is retained.');
     return host.development({ scope: structuredClone(task.implementation), worktree: task.worktree, worktreeIdentity: task.worktreeIdentity, repository: task.repository,
-      initialEvidence: task.developmentEvidence, commandTimeoutMs,
+      initialEvidence: task.developmentEvidence, commandTimeoutMs: limits.commandTimeoutMs,
+      candidateSourceMaxBytes: limits.candidateSourceMaxBytes, candidateSourceMaxFiles: limits.candidateSourceMaxFiles, candidateFileMaxBytes: limits.candidateFileMaxBytes,
       verifyWorkspace: signal => host.assertToolWorkspace(task, signal), currentPolicy: () => host.settings.toolPolicy(),
       checkpoint: async evidence => {
         validateDevelopmentState(task.implementation, evidence);

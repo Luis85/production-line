@@ -10,6 +10,7 @@ import { workspaceModelFactory } from '../../src/worker/dist/worker/infrastructu
 import { consumptionModel } from '../../src/worker/dist/worker/application/consumption-model.js';
 import { defaultToolPolicy } from '../../src/worker/dist/worker/application/tool-policy.js';
 import { prepareModelRequest, requireModelRequest, executeModel } from '../../src/worker/dist/worker/application/model-contract.js';
+import { defaultExecutionPolicy } from '../../src/worker/dist/worker/application/execution-policy.js';
 
 const signal = () => new AbortController().signal;
 /** @type {import('../../src/worker/application/conversation-contracts.js').ChatMessage[]} */
@@ -24,7 +25,7 @@ test('manifest preparation and dispatch use frozen budgets through composition a
   const directory = await mkdtemp(join(tmpdir(), 'werk-manifest-budget-')); t.after(() => rm(directory, { recursive: true, force: true }));
   const state = join(directory, 'not-created-by-metadata'), policy = defaultToolPolicy();
   policy.builtins.commands = [{ id: 'check', name: 'Check', executable: process.execPath, args: ['-e', 'throw Error("Must not execute during metadata inspection")'], enabled: true, timeoutMs: 2500 }];
-  const settings = { value: { execution: { maxToolCalls: 40, maxRuntimeMs: 900000, commandTimeoutMs: 1500 }, repositories: { pollMs: 30000, items: [] } }, toolPolicy: () => policy };
+  const settings = { value: { execution: { ...defaultExecutionPolicy(), maxToolCalls: 40, maxRuntimeMs: 900000, commandTimeoutMs: 1500 }, repositories: { pollMs: 30000, items: [] } }, toolPolicy: () => policy };
   let requests = 0;
   const factory = workspaceModelFactory(state, settings, (saved, path, _transport, options) => modelFor(saved, path, async () => { requests++; return answer(); }, options));
   const model = factory(connection, { sessionId: 'chat' });
@@ -35,7 +36,7 @@ test('manifest preparation and dispatch use frozen budgets through composition a
   assert.deepEqual(request.toolManifest.limits, { maxCalls: 40, windowMs: 4321, callTimeoutMs: { werk_command_run: 1500 }, presetTimeoutMs: { check: 1500 } });
   assert.ok(Object.isFrozen(request.toolManifest.limits.presetTimeoutMs));
   await assert.rejects(access(state), { code: 'ENOENT' });
-  settings.value.execution = { maxToolCalls: 1, maxRuntimeMs: 1000, commandTimeoutMs: 1000 };
+  settings.value.execution = { ...defaultExecutionPolicy(), maxToolCalls: 1, maxRuntimeMs: 1000, commandTimeoutMs: 1000 };
   assert.equal(completedText((await executeModel(model, request, signal()))), 'Complete.');
   assert.equal(requests, 1, 'changing live execution settings cannot widen or invalidate this accepted snapshot');
   await assert.rejects(access(state), { code: 'ENOENT' });
