@@ -1,8 +1,10 @@
 import { open } from "node:fs/promises";
 import { inputError } from "../config.mjs";
-// Git fetch, claim and publication can outlast the default 10 s API wait on slow remotes.
+// Git fetch, claim and publication can outlast the default 30 s API wait on slow remotes. Saving settings can validate
+// repository checkouts and worktree folders, which exceeded 10 s on a large vault, so it waits as long.
 const GIT_REQUEST_TIMEOUT_MS = 120000;
 export function workerCommands(catalog) {
+  catalog["settings set"] = { ...catalog["settings set"], timeoutMs: GIT_REQUEST_TIMEOUT_MS };
   catalog["feature setup"] = { local: true, required: [], options: ["project-dir", "features-dir", "provider", "if-match"], mutating: true, description: "Install a standalone feature authoring kit without starting or installing a worker; preserve existing project files. The authoring script is refreshed only while it matches the content recorded in .werk/authoring/manifest.json; --if-match REVISION replaces an unrecorded script with that revision." };
   for (const action of ["create", "validate", "ready"]) catalog["feature author " + action] = {
     local: true, required: action === "create" ? ["name", "title"] : ["file", ...(action === "ready" ? ["if-match"] : [])],
@@ -755,7 +757,7 @@ async function readMarkdown(path) {
   }
 }
 
-const DEFAULT_POLL_TIMEOUT_MS = 10000;
+const DEFAULT_POLL_TIMEOUT_MS = 30000;
 const POLL_INTERVAL_MS = 1000;
 const TRANSIENT_CODES = ["ECONNRESET", "ECONNREFUSED", "UND_ERR_SOCKET"];
 /** Classify a failed poll: a client timeout or a dropped connection says nothing about the awaited work. */

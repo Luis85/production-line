@@ -22,11 +22,14 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 ### Changed
 
 - Advisory mutation testing now covers the Ready Check protocol, shared review lifecycle and review eligibility alongside the existing accounting and boundary checks. Expanded failure, recovery and concurrency contracts improve the baseline; exact compiled-source, suite and configuration provenance prevents comparing incomplete or stale measurements. Mutation findings continue to warn without blocking releases or running in ordinary development checks.
+- The portable CLI and shared HTTP client wait 30 s by default instead of 10 s for each API call, including each `feature wait` poll and `interaction answer`, which exceeded 10 s on a busy Windows operator host while the operation still succeeded server-side. Git operations and `settings set` keep 120 s; `--request-timeout-ms 1000–600000` still overrides the wait. The `requestTimeout` help text and the runtime CLI reference state the new values.
 
 ### Fixed
 
 - `env init` and `init` append only the `.env` and `!.env.example` ignore rules that `.gitignore` does not already contain as exact lines, write nothing when both exist, never repeat the comment header and report the added lines as `ignoreAdded`.
 - A profile that needs adaptation no longer leaves a request waiting with a generic error. The message names the agent, its unsupported items (an unsupported schema version shows its value and the supported range 0–16) and both remedies: fix the profile and run `definition update`, or set `useInstructionsOnly: true`. `feature validate` and local folder intake now report this, and an unknown `definitionRef`, before the request is reserved; task creation keeps the check as a safety net.
+- Tool Access validation errors for a command preset, CLI tool or MCP connection now name the entry and the field and give the reason, for example `Command preset "git-log": Command executable contains control characters.`, instead of `Use a valid Command executable.` Reasons are `is empty`, `is longer than N characters`, `contains control characters`, `is not text` or `must be empty here`; list items are numbered, and an entry without a usable ID is named by position. Accepted inputs are unchanged.
+- `settings set` waits up to 120 s, like the Git-backed commands, because assigning repositories and changing worktree folders validate checkouts and exceeded 10 s on a large vault.
 
 ## [0.13.0] - 2026-10-18
 
