@@ -79,3 +79,41 @@ test('generated private question, task and gate ignores preserve operator rules 
   await initializeWorker(setup.application, { 'project-dir': cwd });
   assert.equal(await readFile(ignorePath, 'utf8'), first);
 });
+test('init places workflow files under --workflow-dir, skips the root package with --no-npm and keeps the project root clean', async t => {
+  const cwd = await project(t), result = await cli(installer, cwd, 'init', '--workflow-dir', 'Vault/Workflows', '--no-npm');
+  assert.deepEqual(result.npm, { skipped: true });
+  await assert.rejects(readFile(join(cwd, 'package.json')), { code: 'ENOENT' });
+  const workflow = JSON.parse(await readFile(join(cwd, '.werk/feature-workflow.json'), 'utf8'));
+  assert.deepEqual({ base: workflow.base, reviewDirectory: workflow.reviewDirectory, tasksDirectory: workflow.tasksDirectory, readyCheck: workflow.readyCheck, doneCheck: workflow.doneCheck, requestsDirectory: workflow.requestsDirectory },
+    { base: 'Vault/Workflows/Feature Requests.base', reviewDirectory: 'Vault/Workflows/reviews', tasksDirectory: 'Vault/Workflows/tasks', readyCheck: 'Vault/Workflows/checks/fr-ready-check.json', doneCheck: 'Vault/Workflows/checks/fr-done-check.json', requestsDirectory: 'features' });
+  for (const file of ['Feature Requests.base', 'checks/fr-ready-check.json', 'checks/fr-done-check.json']) assert.ok(await readFile(join(cwd, 'Vault/Workflows', file), 'utf8'));
+  const base = parse(await readFile(join(cwd, 'Vault/Workflows/Feature Requests.base'), 'utf8'));
+  assert.deepEqual(base.views[1].filters.and[0], 'file.folder == "Vault/Workflows/tasks"');
+  for (const file of ['Feature Requests.base', 'fr-ready-check.json', 'fr-done-check.json']) await assert.rejects(readFile(join(cwd, file)), { code: 'ENOENT' });
+  assert.deepEqual(result.authoring.warnings, []);
+});
+test('init without layout options keeps the root defaults and reports the project package', async t => {
+  const cwd = await project(t), result = await cli(installer, cwd, 'init');
+  assert.equal(result.npm.created, true);
+  assert.ok(await readFile(join(cwd, 'Feature Requests.base'), 'utf8')); assert.ok(await readFile(join(cwd, 'fr-ready-check.json'), 'utf8'));
+  assert.equal(JSON.parse(await readFile(join(cwd, '.werk/feature-workflow.json'), 'utf8')).reviewDirectory, 'feature-reviews');
+});
+test('an existing workflow wins over a differing --workflow-dir and the warning names both locations', async t => {
+  const cwd = await project(t); await cli(installer, cwd, 'init', '--no-npm');
+  const again = await cli(join(cwd, 'bin/apps/worker/cli.mjs'), cwd, 'init', '--workflow-dir', 'Vault/Workflows', '--no-npm');
+  assert.equal(again.authoring.warnings.length, 1); assert.equal(again.authoring.warnings[0].code, 'workflow_directory_mismatch');
+  assert.match(again.authoring.warnings[0].message, /--workflow-dir Vault\/Workflows/); assert.match(again.authoring.warnings[0].message, /Feature Requests\.base/);
+  assert.equal(JSON.parse(await readFile(join(cwd, '.werk/feature-workflow.json'), 'utf8')).base, 'Feature Requests.base');
+  await assert.rejects(readFile(join(cwd, 'Vault/Workflows/Feature Requests.base')), { code: 'ENOENT' });
+  const same = await cli(join(cwd, 'bin/apps/worker/cli.mjs'), cwd, 'feature', 'setup');
+  assert.deepEqual(same.warnings, []);
+});
+test('feature setup honors --workflow-dir and rejects folders outside the project', async t => {
+  const cwd = await project(t);
+  for (const bad of ['../outside', '.', '.werk/flow']) await assert.rejects(cli(installer, cwd, 'feature', 'setup', '--project-dir', cwd, '--workflow-dir', bad), /--workflow-dir/);
+  await assert.rejects(cli(installer, cwd, 'init', '--workflow-dir', 'features/flow'), /--workflow-dir features\/flow cannot be used/);
+  const result = await cli(installer, cwd, 'feature', 'setup', '--project-dir', cwd, '--workflow-dir', 'Vault/Flow');
+  assert.equal(result.workflow.base, 'Vault/Flow/Feature Requests.base');
+  assert.ok(await readFile(join(cwd, 'Vault/Flow/checks/fr-done-check.json'), 'utf8'));
+  await assert.rejects(readFile(join(cwd, 'Feature Requests.base')), { code: 'ENOENT' });
+});

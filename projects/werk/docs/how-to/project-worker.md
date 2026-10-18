@@ -152,6 +152,31 @@ CA and `SSH_AUTH_SOCK` settings through the native line/system launchers. Set up
 Git authentication for that account before starting; the worker does not prompt
 for credentials. Keep the SSH agent available for the worker's lifetime.
 
+## Keep the project root tidy
+
+By default `init` writes `Feature Requests.base`, `fr-ready-check.json` and
+`fr-done-check.json` to the project root, uses `feature-reviews/` and
+`feature-tasks/` for review and task notes, and creates a root `package.json`
+when none exists. Two options change that for a new setup:
+
+```sh
+node /path/to/werk-release/bin/apps/worker/cli.mjs init --workflow-dir Vault/Workflows --no-npm
+```
+
+- `--workflow-dir DIR` places `DIR/Feature Requests.base`, `DIR/reviews`,
+  `DIR/tasks`, `DIR/checks/fr-ready-check.json` and `DIR/checks/fr-done-check.json`
+  there; the Base's folder filters follow. `DIR` must be a project-relative subfolder
+  outside `.werk`, `.git`, `bin`, `node_modules` and the feature folder. `feature setup
+  --workflow-dir DIR` does the same without installing a worker.
+- `--no-npm` skips the root `package.json`; the result reports `npm: { skipped: true }`.
+  Run commands with `node bin/apps/worker/cli.mjs ...` instead of `npm run worker:...`.
+
+An existing `.werk/feature-workflow.json` always wins. If `--workflow-dir` names other
+locations, setup reports a `workflow_directory_mismatch` warning with both and moves
+nothing; edit the file and move the files yourself. Setup also appends only the
+`.env` and `!.env.example` rules that `.gitignore` lacks, so your own rules are not
+duplicated; the result lists them as `ignoreAdded`.
+
 ## Choose or change the feature folder
 
 Choose the folder during setup with `init --features-dir requests/features`.

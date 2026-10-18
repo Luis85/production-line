@@ -199,12 +199,14 @@ export async function seedEnvironment(kind, directory, { stateDirectory, default
   const next = encoded ? appended(current?.content ?? '', encoded + '\n') : current?.content ?? '';
   const exampleBlock = environmentExample(kind), marker = '# Werk ' + kind + ' environment';
   const nextExample = example?.content.includes(marker) ? example.content : appended(example?.content ?? '', exampleBlock);
-  const ignoreBlock = '# Werk local environment\n.env\n!.env.example\n';
-  const nextIgnore = (ignore?.content ?? '').replaceAll('\r\n', '\n').endsWith(ignoreBlock) ? ignore.content : appended(ignore?.content ?? '', ignoreBlock);
+  // Add only missing rules, matched as trimmed exact lines, so a project's own .env rules are never duplicated.
+  const ignoreLines = ['.env', '!.env.example'], header = '# Werk local environment';
+  const present = (ignore?.content ?? '').split(/\r?\n/).map(line => line.trim()), ignoreAdded = ignoreLines.filter(line => !present.includes(line));
+  const nextIgnore = ignoreAdded.length ? appended(ignore?.content ?? '', (present.includes(header) ? '' : header + '\n') + ignoreAdded.join('\n') + '\n') : ignore?.content ?? '';
   // Preflight every destination before writes. Ignore rules precede generated credentials.
   for (const content of [next, nextExample, nextIgnore]) if (Buffer.byteLength(content) > limit) throw inputError('Environment setup file would exceed 64 KiB.');
   await appendFile(gitignorePath, ignore, nextIgnore);
   await appendFile(examplePath, example, nextExample);
   await appendFile(path, current, next, true);
-  return { path, examplePath, gitignorePath, stateDirectory: state, created: !current, added: Object.keys(additions) };
+  return { path, examplePath, gitignorePath, stateDirectory: state, created: !current, added: Object.keys(additions), ignoreAdded };
 }

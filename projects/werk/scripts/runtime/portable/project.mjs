@@ -16,8 +16,15 @@ async function seed(path, text) {
 async function ignore(path, entries) {
   await plainFile(path);
   const previous = await readFile(path, 'utf8').catch(error => { if (error.code !== 'ENOENT') throw error; return ''; });
-  const missing = entries.filter(value => !previous.split(/\r?\n/).includes(value));
+  const present = previous.split(/\r?\n/).map(line => line.trim()), missing = entries.filter(value => !present.includes(value));
   if (missing.length) { const file = await open(path, 'a', 0o600); try { await file.writeFile((previous && !previous.endsWith('\n') ? '\n' : '') + missing.join('\n') + '\n'); } finally { await file.close(); } }
+}
+/** Normalizes --workflow-dir to a contained, project-relative POSIX path; the workflow layer validates its characters. */
+export function workflowDirectoryOption(project, value) {
+  if (value === undefined) return undefined;
+  const inside = relative(project, resolve(project, String(value)));
+  if (!inside || inside === '..' || inside.startsWith('..' + sep) || isAbsolute(inside) || inside.split(sep).some(part => ['.werk', '.git', 'bin', 'node_modules'].includes(part))) throw inputError('--workflow-dir must name a subfolder inside the project, outside .werk, .git, bin and node_modules. Choose a folder such as Workflows/feature-requests.');
+  return inside.split(sep).join('/');
 }
 async function rejectLinks(path) {
   for (const entry of await readdir(path, { withFileTypes: true })) {
@@ -58,6 +65,7 @@ export async function initializeWorker(root, options) {
   const requested = options['features-dir'] ?? existingConfig?.features?.directory ?? workflow?.requestsDirectory ?? 'features', inside = relative(project, resolve(project, requested));
   if (!inside || inside === '..' || inside.startsWith('..' + sep) || isAbsolute(inside) || inside.split(sep).some(part => ['.werk', '.git', 'bin', 'node_modules'].includes(part))) throw inputError('Choose a feature folder inside the project, outside .werk, .git, bin and node_modules.');
   if (workflow && workflow.requestsDirectory !== inside.split(sep).join('/')) throw inputError('The authoring workflow uses another feature folder. Use its configured folder or migrate the workflow explicitly before initializing a worker.');
+  const workflowDirectory = workflowDirectoryOption(project, options['workflow-dir']);
   const featureDirectory = join(project, inside), app = join(project, 'bin/apps/worker');
   const state = join(project, '.werk/worker');
   const prior = await exists(app), source = await realpath(root);
@@ -69,7 +77,7 @@ export async function initializeWorker(root, options) {
   const port = Number(options.port ?? marker?.port ?? 4100);
   if (marker && marker.port !== port) throw inputError('Existing project port differs. Edit worker-project.json and compose.worker.yaml explicitly, or override the launch port.');
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw inputError('port must be 1–65535.');
-  await planFeatureAuthoring(root, project, { featuresDirectory: inside.split(sep).join('/'), provider: normalized.features.provider });
+  await planFeatureAuthoring(root, project, { featuresDirectory: inside.split(sep).join('/'), ...(workflowDirectory === undefined ? {} : { workflowDirectory }), provider: normalized.features.provider });
   // Validate every existing destination before installing; repeat setup preserves user edits.
   for (const file of ['worker-project.json', 'worker.json', 'compose.worker.yaml', '.gitignore']) await plainFile(join(project, '.werk', file));
   if (!prior) await rejectLinks(root);
@@ -81,7 +89,7 @@ export async function initializeWorker(root, options) {
   if (!prior) { await realDirectory(join(project, 'bin/apps'), true); await cp(root, app, { recursive: true, errorOnExist: true, force: false, filter: source => !relative(root, source).split(sep).some(name => name === '.werk' || name === '.env' || name.startsWith('.env.') && name !== '.env.example') }); }
   if (!existingConfig) await createPrivate(config, { schemaVersion: 1, features: { directory: inside.split(sep).join('/'), provider: options.provider ?? 'codex-cli', pollMs: 1000 } });
   await seed(join(project, '.werk/worker-project.json'), JSON.stringify({ schemaVersion: 1, port }, null, 2) + '\n');
-  const authoring = await setupFeatureAuthoring(app, project, { featuresDirectory: inside.split(sep).join('/'), provider: normalized.features.provider });
+  const authoring = await setupFeatureAuthoring(app, project, { featuresDirectory: inside.split(sep).join('/'), ...(workflowDirectory === undefined ? {} : { workflowDirectory }), provider: normalized.features.provider });
   await ignore(join(project, '.werk/.gitignore'), ['worker/', 'provider-home/', 'agent-integrations.json', 'agent-integrations.pending.json', 'agent-integrations.lock']);
   await ignore(join(featureDirectory, '.gitignore'), ['_worker.lock', '_worker-owner.json', '_worker-status.md', '_results/', '_questions/', '_tasks/', '_gates/']);
   const name = 'werk-worker-' + randomBytes(5).toString('hex');
@@ -119,7 +127,7 @@ services:
       retries: 6
 `;
   await seed(join(project, '.werk/compose.worker.yaml'), compose);
-  const npm = { ...await seedWorkerPackage(project), applicationManifest: join(app, 'package.json'), list: 'npm --prefix bin/apps/worker run', command: 'npm --prefix bin/apps/worker run worker -- COMMAND' };
+  const npm = options['no-npm'] ? { skipped: true } : { ...await seedWorkerPackage(project), applicationManifest: join(app, 'package.json'), list: 'npm --prefix bin/apps/worker run', command: 'npm --prefix bin/apps/worker run worker -- COMMAND' };
   let integrations;
   try {
     const { seedProjectIntegrations } = await import(new URL('../../../src/worker/dist/worker/infrastructure/project-integrations.js', import.meta.url));

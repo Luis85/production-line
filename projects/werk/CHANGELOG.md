@@ -13,10 +13,17 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 - An optional `readyReviewPrompt` enables a model Feature Request Ready Check before deterministic readiness checks. The worker confirms its Git claim, reviews using the request's selected model and existing capacity/allowance (tool-free Codex/Claude/API or Cursor's native read-only ask mode), and publishes findings in the same request. Questions pause work until the team answers in Markdown and commits and pushes `status: ready`; unchanged polling never starts another review.
 - Feature Requests can select provider, model and supported reasoning effort in Markdown and the webview. Editable worker defaults apply to new requests; accepted provider/model/effort selections remain fixed through Ready Check answers, implementation and restart recovery.
 - Cursor CLI integrates account login or a private Cursor API key, exact native session continuation and candidate implementation under Cursor's native permissions, hooks and subagent policy. Supplemental Werk grants retain their own boundaries; required worker checks still gate review. Token and cost usage remain unavailable, including native subagents, and do not bypass consumption holds.
+- An optional `readyReviewPrompt` enables a model Feature Request Ready Check before deterministic readiness checks. The worker confirms its Git claim, reviews without tools using the request's selected model and existing capacity/allowance, and publishes findings in the same request. Questions pause work until the team answers in Markdown and commits and pushes `status: ready`; unchanged polling never starts another review.
+- `init` and `feature setup` accept `--workflow-dir DIR` to place the Feature Requests Base, `reviews`, `tasks` and the ready/done check files under one project folder, such as a structured Obsidian vault, instead of the project root. The Base's folder filters follow. An existing `.werk/feature-workflow.json` still wins; a differing `--workflow-dir` is reported as a warning naming both locations and nothing is moved.
+- `init --no-npm` skips creating the root `package.json` and reports `npm: { skipped: true }`.
 
 ### Changed
 
 - Advisory mutation testing now covers the Ready Check protocol, shared review lifecycle and review eligibility alongside the existing accounting and boundary checks. Expanded failure, recovery and concurrency contracts improve the baseline; exact compiled-source, suite and configuration provenance prevents comparing incomplete or stale measurements. Mutation findings continue to warn without blocking releases or running in ordinary development checks.
+
+### Fixed
+
+- `env init` and `init` append only the `.env` and `!.env.example` ignore rules that `.gitignore` does not already contain as exact lines, write nothing when both exist, never repeat the comment header and report the added lines as `ignoreAdded`.
 
 ## [0.13.0] - 2026-10-18
 

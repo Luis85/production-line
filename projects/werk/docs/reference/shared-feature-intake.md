@@ -50,6 +50,13 @@ The default checked-in workflow is:
 }
 ```
 
+`init --workflow-dir DIR` or `feature setup --workflow-dir DIR` generates a new workflow
+with `reviewDirectory` `DIR/reviews`, `tasksDirectory` `DIR/tasks`, `base`
+`DIR/Feature Requests.base`, and `readyCheck`/`doneCheck` `DIR/checks/fr-ready-check.json`
+and `DIR/checks/fr-done-check.json`; the Base's folder filters use those paths. An
+existing workflow file is never rewritten: a differing `--workflow-dir` yields a
+`workflow_directory_mismatch` warning.
+
 Paths use safe repository-relative POSIX syntax. Request and review folders must
 be separate and cannot contain one another. Workflow files use distinct paths;
 the template must not appear as a normal root-level intake request. Paths cannot

@@ -13,7 +13,10 @@ From a downloaded Werk release, run the portable worker CLI against your project
 node /path/to/werk/bin/apps/worker/cli.mjs feature setup --project-dir /path/to/project
 ```
 
-Use `--features-dir requests/features` to choose a different queue and
+Use `--features-dir requests/features` to choose a different queue,
+`--workflow-dir Vault/Workflows` to keep the Base, reviews, tasks and checks in one
+folder instead of the project root (a new workflow only; an existing
+`.werk/feature-workflow.json` wins and a differing folder is reported as a warning) and
 `--provider claude-cli` to seed a new template for Claude (otherwise `codex-cli`).
 Existing templates are preserved. Setup also
 runs during [project worker initialization](project-worker.md). When a worker

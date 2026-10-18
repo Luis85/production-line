@@ -60,6 +60,9 @@ the app into that project's `bin/apps/worker`, create `.env`/`.env.example`,
 `.werk/worker.json`, a draft
 feature-request template and `.werk/compose.worker.yaml`. Use `--features-dir` to
 choose a project-relative folder and `--provider` to choose its default connection.
+`--workflow-dir DIR` places the Feature Requests Base, reviews, tasks and check files
+under `DIR` (see [keep the project root tidy](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/project-worker.md#keep-the-project-root-tidy));
+`--no-npm` skips the root `package.json` and reports `npm: { skipped: true }`.
 Run or start from the project directory; the installed worker discovers its project
 configuration. `feature template` prints a fresh Markdown template without a running
 worker; `feature list` reads the authenticated watcher state. Template output is

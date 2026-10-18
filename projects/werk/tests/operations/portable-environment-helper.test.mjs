@@ -197,3 +197,18 @@ test('explicit defaults override process options while project fallbacks defer t
   const selected = parseEnvironment('worker', await readFile(join(explicit, '.env'), 'utf8'));
   assert.equal(selected.WERK_WORKER_TOKEN === tokenC, true); assert.equal(selected.WERK_WORKER_STATE_DIR, 'selected-state'); assert.equal(selected.WERK_WORKER_PORT, '4301');
 });
+
+test('ignore setup adds only the rules a project lacks and writes the header once', async t => {
+  const complete = await directory(t), ignorePath = join(complete, '.gitignore'), full = '# mine\r\n  .env  \r\n!.env.example\r\nnode_modules/\r\n';
+  await writeFile(ignorePath, full);
+  assert.deepEqual((await seedEnvironment('worker', complete, { environment: {} })).ignoreAdded, []);
+  assert.equal(await readFile(ignorePath, 'utf8'), full);
+  const partial = await directory(t), partialPath = join(partial, '.gitignore');
+  await writeFile(partialPath, 'dist/\n.env\n');
+  assert.deepEqual((await seedEnvironment('worker', partial, { environment: {} })).ignoreAdded, ['!.env.example']);
+  assert.equal(await readFile(partialPath, 'utf8'), 'dist/\n.env\n# Werk local environment\n!.env.example\n');
+  assert.deepEqual((await seedEnvironment('worker', partial, { environment: {} })).ignoreAdded, []);
+  const fresh = await directory(t);
+  assert.deepEqual((await seedEnvironment('worker', fresh, { environment: {} })).ignoreAdded, ['.env', '!.env.example']);
+  assert.equal(await readFile(join(fresh, '.gitignore'), 'utf8'), '# Werk local environment\n.env\n!.env.example\n');
+});
