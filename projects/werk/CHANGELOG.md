@@ -11,6 +11,10 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 - Verified implementation source bounds are configurable worker execution settings: `candidateSourceMaxBytes` (default 64 MiB), `candidateSourceMaxFiles` (default 20,000) and `candidateFileMaxBytes` (default 8 MiB). Repositories with committed documents and assets can raise them through `settings set`; every tracked and nonignored file is still read and fingerprinted. Each implementation dispatch freezes the values and records them with its tool limit evidence, and inspection errors name the measured value, the limit and the setting.
 
+### Fixed
+
+- `feature wait`, `task wait` and `file-task wait` keep polling until their own `--timeout-ms` deadline when a status poll hits the client request timeout or a transient connection error (ECONNRESET, ECONNREFUSED, socket hang up). Each poll is bounded by the smaller of the request timeout and the remaining wait, API and input errors still end the wait immediately, and a wait that expires reports how many polls timed out.
+
 ## [0.12.0] - 2026-10-18
 
 ### Added

@@ -755,7 +755,25 @@ async function readMarkdown(path) {
   }
 }
 
-export async function waitForWorker(request, kind, timeoutValue = "60000") {
+const DEFAULT_POLL_TIMEOUT_MS = 10000;
+const TRANSIENT_CODES = ["ECONNRESET", "ECONNREFUSED", "UND_ERR_SOCKET"];
+/** Classify a failed poll: a client timeout or a dropped connection says nothing about the awaited work. */
+function retryablePoll(error) {
+  if (error?.code === "timeout") return "timeout";
+  const codes = [error?.code, error?.cause?.code];
+  if (
+    codes.some((code) => TRANSIENT_CODES.includes(code)) ||
+    /socket hang up/i.test(`${error?.message} ${error?.cause?.message}`)
+  )
+    return "connection";
+  return undefined;
+}
+
+/**
+ * Poll until the work settles or the wait deadline passes. `request(pollTimeoutMs)` is bounded by the
+ * smaller of the request timeout and the remaining wait; slow or dropped polls are retried, other errors end the wait.
+ */
+export async function waitForWorker(request, kind, timeoutValue = "60000", requestTimeoutMs = DEFAULT_POLL_TIMEOUT_MS) {
   const timeout = Number(timeoutValue);
   if (
     !/^\d+$/.test(timeoutValue) ||
@@ -765,41 +783,59 @@ export async function waitForWorker(request, kind, timeoutValue = "60000") {
   )
     throw inputError("--timeout-ms must be 1–86400000.");
   const deadline = Date.now() + timeout;
+  const failed = { timeout: 0, connection: 0 };
   for (;;) {
-    const result = await request();
-    const state =
-      kind === "task"
-        ? result.session?.status
-        : kind === "file-task"
-          ? result.status
-          : (result.execution?.status ?? result.record?.status);
-    // A feature result combines a durable execution snapshot with an exported
-    // record. Completion can land between those reads; wait until its projection
-    // also settles before returning a result whose record still says running.
-    const projectionPending = kind === "feature" && result.record &&
-      ["queued", "running", "waiting", "ready", "readiness"].includes(result.record.status);
-    if (!projectionPending &&
-      [
-        "completed",
-        "review",
-        "failed",
-        "cancelled",
-        "unavailable",
-        "waiting_input",
-        "escalated",
-        "needs_rework",
-        "interrupted",
-        "done",
-      ].includes(state)
-    )
-      return result;
-    if (Date.now() >= deadline)
+    let result;
+    try {
+      result = await request(
+        Math.max(1, Math.min(requestTimeoutMs ?? DEFAULT_POLL_TIMEOUT_MS, deadline - Date.now())),
+      );
+    } catch (error) {
+      const retryable = retryablePoll(error);
+      if (!retryable) throw error;
+      failed[retryable]++;
+    }
+    if (result !== undefined) {
+      const state =
+        kind === "task"
+          ? result.session?.status
+          : kind === "file-task"
+            ? result.status
+            : (result.execution?.status ?? result.record?.status);
+      // A feature result combines a durable execution snapshot with an exported
+      // record. Completion can land between those reads; wait until its projection
+      // also settles before returning a result whose record still says running.
+      const projectionPending = kind === "feature" && result.record &&
+        ["queued", "running", "waiting", "ready", "readiness"].includes(result.record.status);
+      if (!projectionPending &&
+        [
+          "completed",
+          "review",
+          "failed",
+          "cancelled",
+          "unavailable",
+          "waiting_input",
+          "escalated",
+          "needs_rework",
+          "interrupted",
+          "done",
+        ].includes(state)
+      )
+        return result;
+    }
+    if (Date.now() >= deadline) {
+      const notes = [
+        failed.timeout && `${failed.timeout} status poll${failed.timeout === 1 ? "" : "s"} timed out`,
+        failed.connection && `${failed.connection} status poll${failed.connection === 1 ? "" : "s"} lost the connection`,
+      ].filter(Boolean);
       throw Object.assign(
         Error(
-          "Wait timed out; task continues. Inspect it or cancel explicitly.",
+          "Wait timed out; task continues. Inspect it or cancel explicitly." +
+            (notes.length ? ` ${notes.join(" and ")}.` : ""),
         ),
         { code: "wait_timeout" },
       );
+    }
     await new Promise((resolve) =>
       setTimeout(resolve, Math.min(1000, deadline - Date.now())),
     );

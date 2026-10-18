@@ -152,8 +152,8 @@ export async function main(kind, argv = process.argv.slice(2)) {
       console.log(JSON.stringify(await setupSharedIntake(body, (method, path, body) => request(base, path, token, method, body, undefined, timeoutMs), { dryRun })));
       return;
     }
-    const call = () => request(base, path, token, method, body, o.key, timeoutMs);
-    const result = command?.wait ? await waitForWorker(call, command.wait, o['timeout-ms']) : await call();
+    const call = (pollTimeoutMs = timeoutMs) => request(base, path, token, method, body, o.key, pollTimeoutMs);
+    const result = command?.wait ? await waitForWorker(call, command.wait, o['timeout-ms'], timeoutMs) : await call();
     console.log(kind === 'worker' ? workerOutput(result, o, command) : JSON.stringify(result));
   } catch (error) {
     const { DomainError } = await import(new URL(`../../../src/${kind}/dist/shared/errors.js`, import.meta.url));

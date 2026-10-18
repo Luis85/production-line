@@ -37,3 +37,28 @@ test('feature wait observes terminal execution only after its generated record s
   const result = await waitForWorker(async () => ++reads === 1 ? {record:{status:'running'},execution:completed.execution} : completed, 'feature', '2000');
   assert.equal(reads,2); assert.equal(result,completed);
 });
+
+const slowPoll = () => Object.assign(Error('No response within 10 s. The request may still be running on the server; inspect its status before retrying.'), { code: 'timeout' });
+test('wait retries a poll that timed out and returns the settled result', async () => {
+  const settled = { session: { status: 'done' } }, timeouts = [];
+  let calls = 0;
+  const result = await waitForWorker(async pollTimeout => { timeouts.push(pollTimeout); if (++calls === 1) throw slowPoll(); return settled; }, 'task', '5000', 10000);
+  assert.equal(result, settled); assert.equal(calls, 2);
+  assert.ok(timeouts.every(ms => ms >= 1 && ms <= 5000), 'each poll is bounded by the remaining wait');
+});
+test('wait retries dropped connections but ends on API and input errors', async () => {
+  const settled = { status: 'done' };
+  for (const error of [Object.assign(Error('fetch failed'), { cause: { code: 'ECONNRESET' } }), Object.assign(Error('fetch failed'), { cause: { code: 'ECONNREFUSED' } }), Error('socket hang up')]) {
+    let calls = 0;
+    assert.equal(await waitForWorker(async () => { if (++calls === 1) throw error; return settled; }, 'file-task', '5000'), settled);
+    assert.equal(calls, 2);
+  }
+  let calls = 0;
+  await assert.rejects(waitForWorker(async () => { calls++; throw Object.assign(Error('Not found'), { status: 404 }); }, 'task', '5000'), error => testErrorStatus(error, 'status') === 404);
+  assert.equal(calls, 1);
+});
+test('repeated slow polls end in wait_timeout at the deadline and say how many timed out', async () => {
+  const started = Date.now(), timeouts = [];
+  await assert.rejects(waitForWorker(async pollTimeout => { timeouts.push(pollTimeout); await new Promise(resolve => setTimeout(resolve, 150)); throw slowPoll(); }, 'feature', '400', 200), error => testErrorCode(error) === 'wait_timeout' && /continues/.test(testErrorMessage(error)) && /\d+ status polls? timed out/.test(testErrorMessage(error)));
+  assert.ok(Date.now() - started < 1800); assert.ok(timeouts.length >= 2); assert.ok(timeouts.every(ms => ms <= 200));
+});
