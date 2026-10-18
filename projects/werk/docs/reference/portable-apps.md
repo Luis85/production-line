@@ -126,6 +126,10 @@ and `execution.commandTimeoutMs` to 300000 (1000–3600000). The total duration
 still bounds each command. Settings → Queue & duration exposes these controls;
 API/CLI saves can include the complete `expectedToolBudget` pair to reject stale
 changes. Each invocation retains the budgets captured when it was prepared.
+Worker help also lists the verified-implementation source limits
+`execution.candidateSourceMaxBytes`, `candidateSourceMaxFiles` and
+`candidateFileMaxBytes` with their defaults and ranges; change them with
+`settings set` and an `execution` body.
 Inspect `settings get` for `executionSource` and `resource status` for admission
 conditions. Resource snapshots measure the worker Node process, not provider
 subprocess totals or subscription balances. Fleet `workers.execution.timeoutMs`

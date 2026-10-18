@@ -202,8 +202,31 @@ retain 10 seconds.
 There is no independent two-minute tool window. The UI exposes these fields under
 **Settings → Queue & duration → Tool execution limits**.
 
+Verified implementation reads and fingerprints every tracked and nonignored file
+of the candidate worktree. Three execution settings bound that source snapshot:
+
+| Setting | Default | Range | Bounds |
+| --- | --- | --- | --- |
+| `candidateSourceMaxBytes` | 67108864 (64 MiB) | 1048576–1073741824 | Total bytes of all inspected source files |
+| `candidateSourceMaxFiles` | 20000 | 1–200000 | Inspected paths, including approved paths |
+| `candidateFileMaxBytes` | 8388608 (8 MiB) | 65536–268435456, at most `candidateSourceMaxBytes` | One source file outside the approved paths |
+
+Raising them never skips a file; it only allows larger repositories, such as a
+vault with committed documents and assets, to be inspected. A save that would
+set `candidateFileMaxBytes` above `candidateSourceMaxBytes` is refused. A failed
+inspection names the measured value, the limit and the setting, for example
+`Candidate source is 91,852,341 bytes; the inspection limit is 67,108,864 bytes
+(execution.candidateSourceMaxBytes).` Change them through the private settings
+API or `settings set --file` with a body such as
+`{"execution":{"candidateSourceMaxBytes":134217728}}`;
+`settings get` shows the effective values. The webview has no editor for them yet.
+The approved-file limits are fixed: 24,000 bytes per approved file, 48,000 bytes
+of approved text in total and a 120,000-byte review patch.
+
 Each prepared dispatch freezes its duration and tool budgets, including while
-queued or when execution uses that saved dispatch. A newly prepared follow-up,
+queued or when execution uses that saved dispatch. An implementation dispatch also
+freezes the three candidate source limits and records them with its tool limit
+evidence (`toolManifest.limits.candidateInspection`). A newly prepared follow-up,
 answer or resume attempt captures current execution settings; it does not rewrite
 the earlier dispatch or inherit its budget indefinitely.
 See [long-running worker operations](../how-to/monitor-long-running-worker.md) for

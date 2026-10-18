@@ -53,7 +53,10 @@ and revocation.
 ## Typed results
 
 New implementation dispatches carry `policy.development: true`; only the private
-accepted task scope authorizes candidate tools. `maxToolCalls` and `commandTimeoutMs`
+accepted task scope authorizes candidate tools. They also freeze the candidate source
+limits `candidateSourceMaxBytes`, `candidateSourceMaxFiles` and `candidateFileMaxBytes`
+in `policy` and record them as `toolManifest.limits.candidateInspection`; other
+dispatches never carry them. `maxToolCalls` and `commandTimeoutMs`
 freeze with the total invocation duration and propagate through API loops and CLI
 bridges. Defaults remain 128 calls, a 300-second command ceiling and six hours
 total. Optional command/CLI/check timeouts can shorten that ceiling; MCP calls

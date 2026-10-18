@@ -7,6 +7,10 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+### Added
+
+- Verified implementation source bounds are configurable worker execution settings: `candidateSourceMaxBytes` (default 64 MiB), `candidateSourceMaxFiles` (default 20,000) and `candidateFileMaxBytes` (default 8 MiB). Repositories with committed documents and assets can raise them through `settings set`; every tracked and nonignored file is still read and fingerprinted. Each implementation dispatch freezes the values and records them with its tool limit evidence, and inspection errors name the measured value, the limit and the setting.
+
 ## [0.12.0] - 2026-10-18
 
 ### Added
