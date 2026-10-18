@@ -8,7 +8,7 @@ import { ProcessRunError } from '../../shared/process/launcher.js';
 import type { DevelopmentFactory, DevelopmentEvidence, DevelopmentCandidate, DevelopmentCheckEvidence } from '../application/development.js';
 import { assertDevelopmentPolicy, validateDevelopmentState } from '../application/development.js';
 import { validateApprovedPaths } from '../application/approved-paths.js';
-import { repositoryGit } from './repositories-git.js';
+import { DEFAULT_GIT_OUTPUT_BYTES, RepositoryGitError, repositoryGit } from './repositories-git.js';
 import { syncDirectory } from './journal/files.js';
 import { resolveCandidateInspectionLimits, resolveCommandTimeoutMs } from '../application/tool-limits.js';
 
@@ -30,6 +30,12 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
   const root = resolve(options.worktree);
   // Frozen with the attempt's dispatch; every tracked and non-ignored file is still read and fingerprinted.
   const limits = resolveCandidateInspectionLimits(options);
+  // File listings scale with the frozen file limit: allow an average of 4 KiB per path, from the default up to 1 GiB.
+  const listingBytes = Math.min(1024 ** 3, Math.max(DEFAULT_GIT_OUTPUT_BYTES, limits.candidateSourceMaxFiles * 4096));
+  const listing = (args: string[], signal: AbortSignal) => repositoryGit(root, args, signal, 30000, listingBytes).then(output => output.split('\0').filter(Boolean), error => {
+    if (error instanceof RepositoryGitError && error.outputLimit) fail(`Candidate file list exceeds ${count(listingBytes)} bytes; raise execution.candidateSourceMaxFiles or reduce tracked files.`);
+    throw error;
+  });
   const sourceBytesError = (size: number) => `Candidate source is ${count(size)} bytes; the inspection limit is ${count(limits.candidateSourceMaxBytes)} bytes (execution.candidateSourceMaxBytes).`;
   let state = structuredClone(options.initialEvidence ?? empty());
   let broken = false;
@@ -107,10 +113,10 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
   async function inspectOnce(signal: AbortSignal): Promise<DevelopmentCandidate> {
     await guard(signal);
     const changed = (await repositoryGit(root, ['diff', '--no-ext-diff', '--no-textconv', '--name-only', '-z', scope.baseCommit, '--'], signal)).split('\0').filter(Boolean);
-    const untracked = (await repositoryGit(root, ['ls-files', '-z', '--others', '--exclude-standard'], signal)).split('\0').filter(Boolean);
+    const untracked = await listing(['ls-files', '-z', '--others', '--exclude-standard'], signal);
     if ([...changed, ...untracked].some(path => !approved.includes(path))) fail('The worktree contains changes outside the approved paths. Inspect them before continuing; they will not be published.');
-    const tracked = (await repositoryGit(root, ['ls-files', '-z', '--cached'], signal)).split('\0').filter(Boolean);
-    const flags = (await repositoryGit(root, ['ls-files', '-v', '-z'], signal)).split('\0').filter(Boolean);
+    const tracked = await listing(['ls-files', '-z', '--cached'], signal);
+    const flags = await listing(['ls-files', '-v', '-z'], signal);
     if (flags.some(entry => !entry.startsWith('H '))) fail('Candidate index flags changed. Hidden or sparse changes cannot be verified.');
     const paths = [...new Set([...tracked, ...untracked, ...approved])].sort();
     if (paths.length > limits.candidateSourceMaxFiles) fail(`Candidate source has ${count(paths.length)} files; the inspection limit is ${count(limits.candidateSourceMaxFiles)} files (execution.candidateSourceMaxFiles).`);

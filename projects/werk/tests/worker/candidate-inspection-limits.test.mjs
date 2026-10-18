@@ -67,7 +67,8 @@ async function fixture(t, files) {
   let policy = defaultToolPolicy();
   policy.builtins.files = true; policy.builtins.commands = [{ id: 'check', name: 'Check', executable: process.execPath, args: ['-e', ''], enabled: true, verification: true }]; policy = validateToolPolicy(policy);
   const scope = freezeDevelopmentScope(prepared.baseCommit, ['notes.txt'], policy);
-  return limits => createDevelopmentRuntime({ scope, worktree: prepared.path, worktreeIdentity, repository, currentPolicy: () => policy, checkpoint: async () => {}, verifyWorkspace: async () => {}, ...limits });
+  const create = limits => createDevelopmentRuntime({ scope, worktree: prepared.path, worktreeIdentity, repository, currentPolicy: () => policy, checkpoint: async () => {}, verifyWorkspace: async () => {}, ...limits });
+  return Object.assign(create, { worktree: prepared.path });
 }
 
 test('a single source file above the default per-file limit fails with its size and passes when the setting is raised', async t => {
@@ -124,4 +125,16 @@ test('implementation dispatches freeze the captured candidate limits and record 
     value => { delete value.toolManifest.limits.candidateInspection.candidateFileMaxBytes; },
   ]) assert.throws(() => requireModelRequest(changed(change), connection.id), { code: 'protocol' });
   assert.throws(() => requireModelRequest({ ...structuredClone(chat), policy: { ...chat.policy, ...captured } }, connection.id), { code: 'protocol' });
+});
+
+test('a file list above the default Git output bound succeeds with a raised file limit and otherwise names the setting', async t => {
+  const create = await fixture(t, { 'readme.md': 'notes\n' });
+  // Index-only entries (no files on disk): about 2.6 MiB of listing, more than the 2 MiB default bound for other Git callers.
+  const blob = git(create.worktree, 'hash-object', '-w', '--stdin');
+  const entries = Array.from({ length: 12000 }, (_, index) => `100644 ${blob}\t${'vault/' + 'deep-folder-name/'.repeat(10) + String(index).padStart(6, '0')}.md`).join('\n');
+  execFileSync('git', ['-C', create.worktree, 'update-index', '--add', '--index-info'], { input: entries + '\n' });
+  assert.ok(execFileSync('git', ['-C', create.worktree, 'ls-files', '-z'], { maxBuffer: 64 * MiB }).length > 2 * MiB, 'the index lists more than the default output bound');
+  const candidate = await create().capture(signal());
+  assert.match(candidate.digest, /^[a-f0-9]{64}$/, 'the default file limit sizes the listing bound, so the whole index is inspected');
+  await assert.rejects(create({ candidateSourceMaxFiles: 1 }).capture(signal()), { message: 'Candidate file list exceeds 2,097,152 bytes; raise execution.candidateSourceMaxFiles or reduce tracked files.' });
 });

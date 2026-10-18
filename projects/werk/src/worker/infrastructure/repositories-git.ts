@@ -10,9 +10,12 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 
 export class RepositoryGitError extends Error {
   readonly reason: 'failed' | 'timeout' | 'cancelled';
-  constructor(reason: 'failed' | 'timeout' | 'cancelled') {
+  /** True when Git was stopped for exceeding the caller's output bound; the public reason stays `failed`. */
+  readonly outputLimit: boolean;
+  constructor(reason: 'failed' | 'timeout' | 'cancelled', outputLimit = false) {
     super(reason === 'cancelled' ? 'Repository operation cancelled.' : reason === 'timeout' ? 'Repository operation timed out.' : 'Git operation failed. Check the repository and host Git authentication.');
     this.reason = reason;
+    this.outputLimit = outputLimit;
   }
 }
 /** Fixed worktree policy failures. Messages never contain paths or Git output, so adapters may show them. */
@@ -20,18 +23,19 @@ export class WorktreeProblem extends Error {
   constructor(message: string) { super(message); this.name = 'WorktreeProblem'; }
 }
 
-/** Bounded, noninteractive Git; credentials and command diagnostics never enter status or evidence. */
-export async function repositoryGit(cwd: string, args: string[], signal: AbortSignal, timeoutMs = 30000): Promise<string> {
+export const DEFAULT_GIT_OUTPUT_BYTES = 2 * 1024 * 1024;
+/** Bounded, noninteractive Git; credentials and command diagnostics never enter status or evidence. Callers listing whole trees may raise the output bound. */
+export async function repositoryGit(cwd: string, args: string[], signal: AbortSignal, timeoutMs = 30000, maxOutputBytes = DEFAULT_GIT_OUTPUT_BYTES): Promise<string> {
   signal.throwIfAborted();
   try {
     const mode = gitLaunchMode(args), env = gitEnvironment(mode === 'plain' ? 'host-local' : 'host');
     const result = await runProcess(await gitExecutable(cwd, env, mode), ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'log.showSignature=false', '-c', 'core.longpaths=true', '-c', 'submodule.recurse=false', '-c', 'protocol.ext.allow=never', ...args], {
-      cwd, env, mode, signal, timeoutMs, maxOutputBytes: 2 * 1024 * 1024,
+      cwd, env, mode, signal, timeoutMs, maxOutputBytes,
     });
     return result.stdout.toString('utf8');
   } catch (error) {
     const reason = error instanceof ProcessRunError ? error.reason : 'spawn';
-    throw new RepositoryGitError(signal.aborted || reason === 'cancelled' ? 'cancelled' : reason === 'timeout' ? 'timeout' : 'failed');
+    throw new RepositoryGitError(signal.aborted || reason === 'cancelled' ? 'cancelled' : reason === 'timeout' ? 'timeout' : 'failed', reason === 'output_limit');
   }
 }
 

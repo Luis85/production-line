@@ -13,6 +13,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Fixed
 
+- Verified implementation inspection no longer fails with a generic Git error when the tracked file list is large: the Git output bound for the candidate file listings now scales with `execution.candidateSourceMaxFiles` (about 4 KiB per file, at least 2 MiB). A listing above that bound reports its size limit and names the setting to raise.
 - `feature wait`, `task wait` and `file-task wait` keep polling until their own `--timeout-ms` deadline when a status poll hits the client request timeout or a transient connection error (ECONNRESET, ECONNREFUSED, socket hang up). Each poll is bounded by the smaller of the request timeout and the remaining wait, API and input errors still end the wait immediately, and a wait that expires reports how many polls timed out.
 
 ## [0.12.0] - 2026-10-18

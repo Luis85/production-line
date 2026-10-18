@@ -761,6 +761,8 @@ const TRANSIENT_CODES = ["ECONNRESET", "ECONNREFUSED", "UND_ERR_SOCKET"];
 /** Classify a failed poll: a client timeout or a dropped connection says nothing about the awaited work. */
 function retryablePoll(error) {
   if (error?.code === "timeout") return "timeout";
+  // An API answer (numeric HTTP status) is final, whatever its message says.
+  if (Number.isInteger(error?.status)) return undefined;
   const codes = [error?.code, error?.cause?.code];
   if (
     codes.some((code) => TRANSIENT_CODES.includes(code)) ||
@@ -786,7 +788,7 @@ export async function waitForWorker(request, kind, timeoutValue = "60000", reque
     throw inputError("--timeout-ms must be 1–86400000.");
   const deadline = Date.now() + timeout;
   const failed = { timeout: 0, connection: 0 };
-  let lastConnectionError;
+  let lastConnectionError, polled = false;
   for (;;) {
     let result;
     try {
@@ -797,9 +799,11 @@ export async function waitForWorker(request, kind, timeoutValue = "60000", reque
       const retryable = retryablePoll(error);
       if (!retryable) throw error;
       failed[retryable]++;
-      if (retryable === "connection") lastConnectionError = error?.cause?.message ?? error?.cause?.code ?? error?.message;
+      // Node reports a refused localhost connection as an AggregateError whose message is empty; its code still names it.
+      if (retryable === "connection") lastConnectionError = error?.cause?.message || error?.cause?.code || error?.code || error?.message;
     }
     if (result !== undefined) {
+      polled = true;
       const state =
         kind === "task"
           ? result.session?.status
@@ -834,7 +838,9 @@ export async function waitForWorker(request, kind, timeoutValue = "60000", reque
       ].filter(Boolean);
       throw Object.assign(
         Error(
-          "Wait timed out; task continues. Inspect it or cancel explicitly." +
+          (polled
+            ? "Wait timed out; task continues. Inspect it or cancel explicitly."
+            : "Wait timed out; the worker state could not be read, so it is unknown whether the task is still running. Check the worker with `status`, then inspect the task or cancel explicitly.") +
             (notes.length ? ` ${notes.join(" and ")}.` : "") +
             (failed.timeout ? " Raise --request-timeout-ms if the worker is busy." : ""),
         ),

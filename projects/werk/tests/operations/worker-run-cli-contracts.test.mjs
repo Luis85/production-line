@@ -59,7 +59,7 @@ test('wait retries dropped connections but ends on API and input errors', async 
 });
 test('repeated slow polls end in wait_timeout at the deadline and say how many timed out', async () => {
   const started = Date.now(), timeouts = [];
-  await assert.rejects(waitForWorker(async pollTimeout => { timeouts.push(pollTimeout); await new Promise(resolve => setTimeout(resolve, 150)); throw slowPoll(); }, 'feature', '400', 200), error => testErrorCode(error) === 'wait_timeout' && /continues/.test(testErrorMessage(error)) && /\d+ status polls? timed out/.test(testErrorMessage(error)) && /--request-timeout-ms/.test(testErrorMessage(error)));
+  await assert.rejects(waitForWorker(async pollTimeout => { timeouts.push(pollTimeout); await new Promise(resolve => setTimeout(resolve, 150)); throw slowPoll(); }, 'feature', '400', 200), error => testErrorCode(error) === 'wait_timeout' && /worker state could not be read/.test(testErrorMessage(error)) && !/continues/.test(testErrorMessage(error)) && /`status`/.test(testErrorMessage(error)) && /\d+ status polls? timed out/.test(testErrorMessage(error)) && /--request-timeout-ms/.test(testErrorMessage(error)));
   assert.ok(Date.now() - started < 1800); assert.ok(timeouts.length >= 2); assert.ok(timeouts.every(ms => ms === 200));
 });
 test('an expired wait with fast polls reports no slow polls and its final poll at the deadline still reads the state', async () => {
@@ -74,4 +74,18 @@ test('an expired wait with fast polls reports no slow polls and its final poll a
 });
 test('connection losses name the last error', async () => {
   await assert.rejects(waitForWorker(async () => { throw Object.assign(Error('fetch failed'), { cause: Object.assign(Error('read ECONNRESET'), { code: 'ECONNRESET' }) }); }, 'task', '30'), error => /lost the connection \(last: read ECONNRESET\)/.test(testErrorMessage(error)));
+});
+test('connection losses fall back to the cause code when Node reports an empty message', async () => {
+  const refused = () => Object.assign(Error('fetch failed'), { cause: Object.assign(new AggregateError([], ''), { code: 'ECONNREFUSED' }) });
+  await assert.rejects(waitForWorker(async () => { throw refused(); }, 'task', '30'), error => /lost the connection \(last: ECONNREFUSED\)/.test(testErrorMessage(error)));
+});
+test('an error carrying an HTTP status ends the wait even when its message looks like a dropped socket', async () => {
+  let calls = 0;
+  await assert.rejects(waitForWorker(async () => { calls++; throw Object.assign(Error('socket hang up'), { status: 502 }); }, 'task', '5000'), error => testErrorStatus(error, 'status') === 502);
+  assert.equal(calls, 1);
+});
+test('a wait that never read the worker does not claim the task continues, and one that did still does', async () => {
+  await assert.rejects(waitForWorker(async () => { throw Object.assign(Error('fetch failed'), { cause: { code: 'ECONNREFUSED' } }); }, 'task', '30'), error => testErrorCode(error) === 'wait_timeout' && /state could not be read/.test(testErrorMessage(error)) && /`status`/.test(testErrorMessage(error)) && !/continues/.test(testErrorMessage(error)));
+  let calls = 0;
+  await assert.rejects(waitForWorker(async () => { if (++calls === 1) return { session: { status: 'running' } }; throw slowPoll(); }, 'task', '30'), error => testErrorCode(error) === 'wait_timeout' && /task continues/.test(testErrorMessage(error)));
 });

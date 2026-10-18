@@ -424,7 +424,10 @@ metadata cannot widen their accepted budget. New manifests must match completely
 
 Before rollback, clear the optional timeouts rather than saving their numeric
 defaults; see the compatibility steps above. Old worker versions do not understand
-these fields. Preserve a stopped-state backup before upgrading.
+these fields. Before rolling back to 0.12.0 or earlier, reset `candidateSourceMaxBytes`,
+`candidateSourceMaxFiles` and `candidateFileMaxBytes` to their defaults (or remove
+them), because older workers refuse unknown execution settings at startup.
+Preserve a stopped-state backup before upgrading.
 
 ### When the tool budget runs out
 
