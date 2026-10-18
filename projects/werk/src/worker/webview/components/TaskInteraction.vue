@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onActivated, onDeactivated, onBeforeUnmount, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import UBadge from '@nuxt/ui/components/Badge.vue';
 import UButton from '@nuxt/ui/components/Button.vue';
 import UIcon from '@nuxt/ui/components/Icon.vue';
@@ -7,10 +8,8 @@ import UInput from '@nuxt/ui/components/Input.vue';
 import UTextarea from '@nuxt/ui/components/Textarea.vue';
 import TaskIntake from './TaskIntake.vue';
 import FeatureRequestNote from './FeatureRequestNote.vue';
-import CandidateEvidence from './CandidateEvidence.vue';
 import MessageContent from './MessageContent.vue';
 import AssistantMessage from './AssistantMessage.vue';
-import RequestGatePanel from './RequestGatePanel.vue';
 import InteractionPanel from './InteractionPanel.vue';
 import type { InteractionTurn, InteractionView } from '../../application/interactions';
 import { state, chatAction, date, request, taskStatus, workspaceAction, getCapacityFreshness } from '../store';
@@ -20,7 +19,7 @@ const capacity = computed(() => buildWorkerCapacityView(state.sessions?.capacity
 const mode = ref<'new' | 'followup'>('new');
 const savedRequest = ref('');
 watch(() => state.unlocked, unlocked => { if (!unlocked) savedRequest.value = ''; }, { flush: 'sync' });
-const controlsOpen = ref(false), evidenceOpen = ref(false), gateDetails = ref<HTMLDetailsElement | null>(null);
+const evidenceOpen = ref(false), router = useRouter();
 const intake = ref<InstanceType<typeof TaskIntake> | null>(null);
 const sending = ref(false), intakeBusy = ref(false), interactionBusy = ref(false), settingsBusy = ref(false);
 const interaction = ref<InteractionView | null>(null);
@@ -31,8 +30,10 @@ onActivated(() => { active.value = true; });
 onDeactivated(() => { active.value = false; modelGeneration++; });
 onBeforeUnmount(() => { active.value = false; modelGeneration++; });
 const current = computed(() => state.sessions?.records.find(item => item.id === state.sessions?.selected));
+const reviewHref = computed(() => '/review?session=' + encodeURIComponent(current.value?.id ?? ''));
 const sharedRequest = computed(() => current.value?.feature?.source === 'shared_git');
 const fileTask = computed(() => state.board?.tasks.find(item => item.sessionId === current.value?.id));
+const reviewLabel = computed(() => ['queued', 'running', 'waiting_input', 'escalated', 'draft'].includes(current.value?.status ?? '') ? 'Inspect request' : fileTask.value ? 'Review changes' : 'Review result');
 const failedAdmission = computed(() => {
   const task = state.board?.tasks.find(item => item.sessionId === current.value?.id);
   return current.value?.continuationBlockedReason || task?.admissionFailure
@@ -54,7 +55,7 @@ const phase = computed(() => state.chat?.phase ?? 'idle');
 watch(busy, value => emit('busy', value));
 watch(() => current.value?.id, (id, previous) => {
   interaction.value = null; savedModel.value = ''; modelError.value = false; modelGeneration++;
-  removing.value = false; settingsError.value = ''; controlsOpen.value = false; evidenceOpen.value = false;
+  removing.value = false; settingsError.value = ''; evidenceOpen.value = false;
   if (id && previous && id !== previous) mode.value = 'followup';
 });
 watch(() => [current.value?.id, current.value?.title].join('|'), () => { rename.value = current.value?.title ?? ''; }, { immediate: true });
@@ -74,14 +75,12 @@ async function openNewTask() {
   mode.value = 'new'; await nextTick(); await intake.value?.focusInstructions();
 }
 async function focusConversation() {
-  mode.value = 'followup'; controlsOpen.value = false;
+  mode.value = 'followup';
   await nextTick(); document.getElementById('chat-task-title')?.focus();
 }
 async function focusControls() {
-  mode.value = 'followup'; controlsOpen.value = true;
-  await nextTick();
-  gateDetails.value?.querySelector('summary')?.focus({ preventScroll: true });
-  gateDetails.value?.scrollIntoView({ block: 'nearest' });
+  mode.value = 'followup';
+  if (current.value) await router.push(reviewHref.value);
 }
 async function focusComposer() { await nextTick(); const composer = document.getElementById('chat-message'); composer?.focus({ preventScroll: true }); composer?.scrollIntoView({ block: 'center' }); }
 function toggleEvidence(event: Event) {
@@ -153,7 +152,7 @@ defineExpose({ openNewTask, focusConversation, focusControls });
           <button v-if="!sharedRequest && !checkpointBlocked && !failedAdmission" type="button" class="composer-jump" :disabled="busy || state.workspaceBusy" @click="focusComposer">{{ firstMessage ? 'Write task instructions' : 'Write a follow-up' }}<UIcon name="i-lucide-arrow-down" /></button>
         </header>
         <FeatureRequestNote v-if="current.id !== 'default' || current.requestId || current.messages" :key="current.id" :session="current" />
-        <CandidateEvidence v-if="fileTask && !failedAdmission" :key="fileTask.id" :task="fileTask" show-review-link />
+        <RouterLink v-if="current.requestId || fileTask || current.messages" class="review-entry" :to="reviewHref"><span><strong>{{ reviewLabel }}</strong><span>Accepted scope, checks and next decision</span></span><UIcon name="i-lucide-arrow-up-right" /></RouterLink>
         <p v-if="fileTask?.error && !failedAdmission" class="interaction-notice error-text" role="status">{{ fileTask.error }}</p>
         <section v-if="failedAdmission" class="interaction-notice admission-recovery" role="status" aria-label="Request recovery">
           <p class="error-text">{{ failedAdmission.error }}</p>
@@ -193,10 +192,6 @@ defineExpose({ openNewTask, focusConversation, focusControls });
           <p v-if="state.actionError" class="error-text" role="alert">{{ state.actionError }}</p>
         </form>
         <p v-if="!failedAdmission && !sharedRequest" class="draft-privacy">Drafts stay with each task in this tab until you reload or lock it.</p>
-        <details v-if="current.requestId && !failedAdmission" ref="gateDetails" class="task-secondary request-controls" :open="controlsOpen" @toggle="controlsOpen = ($event.target as HTMLDetailsElement).open">
-          <summary>Request review &amp; controls</summary>
-          <RequestGatePanel :request-id="current.requestId" :session-id="current.id" />
-        </details>
         <details v-if="current.definition" class="task-secondary">
           <summary>Saved agent · {{ current.definition.name }} / {{ current.definition.agent }}</summary>
           <p>This task keeps the instructions and model selected at creation.{{ current.definition.adapted ? ' Uses instructions-only adaptation.' : '' }}</p>
@@ -262,7 +257,8 @@ h2 { margin: 0; font-size: 1.5rem; line-height: 1.3; font-weight: 650; letter-sp
 .task-checkpoint > summary { cursor: pointer; color: var(--ui-text-muted); min-height: 44px; padding-block: var(--space-3); }
 .task-checkpoint.has-checkpoint > summary { display: none; }
 .task-checkpoint.has-checkpoint :deep(.interaction-panel) { margin-top: 0; padding-top: 0; border-top: 0; }
-.request-controls :deep(.request-gate-panel) { margin-top: 16px; }
+.review-entry { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-4); margin-block: var(--space-4); border: 1px solid var(--ui-primary); border-radius: 8px; min-height: 44px; color: var(--ui-primary); }
+.review-entry strong, .review-entry span > span { display: block; }.review-entry strong { font-size: .9375rem; }.review-entry span > span { margin-top: var(--space-1); font-size: .8125rem; color: var(--ui-text-muted); }
 .task-secondary { border-top: 1px solid var(--ui-border); padding-block: 15px; font-size: .8125rem; }
 .task-secondary summary { min-height: 44px; padding-block: var(--space-3); cursor: pointer; }
 .task-secondary p { margin-block: 12px; color: var(--ui-text-muted); font-size: .75rem; }

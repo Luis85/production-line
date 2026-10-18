@@ -108,7 +108,7 @@ export class FeatureGitIo {
     const mode = gitLaunchMode(args);
     const env = { ...gitEnvironment(mode === 'plain' ? 'host-local' : 'host'), GIT_AUTHOR_NAME: 'Werk Worker', GIT_AUTHOR_EMAIL: 'worker@werk.invalid', GIT_COMMITTER_NAME: 'Werk Worker', GIT_COMMITTER_EMAIL: 'worker@werk.invalid' };
     try {
-      return await runProcess(await gitExecutable(cwd, env, mode), ['--literal-pathspecs', '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'log.showSignature=false', '-c', 'core.longpaths=true', '-c', 'core.autocrlf=false', '-c', 'core.eol=lf', '-c', 'submodule.recurse=false', '-c', 'protocol.ext.allow=never', '-c', 'commit.gpgSign=false', ...args], { cwd, env, mode, signal, input, timeoutMs: 30000, maxOutputBytes: 2 * 1024 * 1024, allowNonZeroExit });
+      return await runProcess(await gitExecutable(cwd, env, mode), ['--literal-pathspecs', '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'log.showSignature=false', '-c', 'core.longpaths=true', '-c', 'core.autocrlf=false', '-c', 'core.eol=lf', '-c', 'submodule.recurse=false', '-c', 'protocol.ext.allow=never', '-c', 'commit.gpgSign=false', ...args], { cwd, env, mode, observation: { kind: 'git', label: 'Git operation' }, signal, input, timeoutMs: 30000, maxOutputBytes: 2 * 1024 * 1024, allowNonZeroExit });
     } catch (error) {
       throw new GitFeatureError(signal.aborted || error instanceof ProcessRunError && error.reason === 'cancelled' ? 'cancelled' : 'unavailable', 'Shared feature Git operation failed. Check connectivity, host Git authentication and repository permissions.');
     }

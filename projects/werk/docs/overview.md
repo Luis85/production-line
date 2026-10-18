@@ -1,0 +1,430 @@
+# Werk
+
+**Turn a shared Feature Request into an implementation your team can review.**
+
+Werk runs a worker on your machine, connects it to your project's Git repository
+and dispatches approved work to a configured model. Your team collaborates through
+Obsidian-compatible Markdown notes; the worker webview offers chat-based request
+creation, progress, metrics and configuration. A person reviews the result before
+merging.
+
+[Documentation](https://luis85.github.io/production-line/) ·
+[Download](https://github.com/Luis85/production-line/releases/latest) ·
+[Changelog](../CHANGELOG.md) · [Source documentation](index.md)
+
+<!-- readme-image: worker-taskboard -->
+
+## Choose your starting point
+
+| You want to… | Start here |
+| --- | --- |
+| Install a worker in your project | [Project-worker quick start](#install-a-project-worker) |
+| Let a team submit requests through Git and Obsidian | [Shared Markdown queue](how-to/shared-feature-intake.md) |
+| Design features by day and implement them overnight | [Evening handoff and morning review](how-to/shared-feature-intake.md#work-during-the-day-implement-overnight) |
+| Create and follow requests in the browser | [Worker webview](how-to/use-worker-webview.md) |
+| Assign your worker to an Orchestrator | [Connect the next building block](#connect-your-worker-to-an-orchestrator) |
+| Bring production lines together in a Factory | [Grow into a Factory](#introduce-a-factory) |
+| Build or extend the frontend | [Storybook and frontend reference](#documentation-and-frontend-reference) |
+
+This overview describes the current source branch. Downloaded applications and the
+hosted documentation reflect their published release; use that release's guides
+when working with an older installation.
+
+## Install a project worker
+
+Native workers require **Node.js 24.x**. The download command also needs `curl`
+and `tar` on PATH. From a directory for downloaded releases:
+
+Linux/macOS (Bash):
+
+```sh
+curl -fsSL https://github.com/Luis85/production-line/releases/latest/download/install.mjs -o werk-install.mjs &&
+  node werk-install.mjs --no-start
+```
+
+Windows (PowerShell):
+
+```powershell
+curl.exe -fsSL https://github.com/Luis85/production-line/releases/latest/download/install.mjs -o werk-install.mjs
+if ($LASTEXITCODE -eq 0) { node werk-install.mjs --no-start }
+```
+
+The installer verifies a version-pinned archive and its extracted files, then
+creates `werk-<version>/`. Existing version directories are preserved. The
+prebuilt runtime needs no npm installation, compiler or administrator privileges.
+You can also download and verify a runtime archive from
+[GitHub Releases](https://github.com/Luis85/production-line/releases); choose the
+runtime asset, rather than GitHub's source-code archive.
+
+Next, **open a terminal in your team's project directory**. Replace the release
+path below with the directory created by the installer. Initialization defaults
+to `codex-cli` (Linux/macOS). For Claude Code, including native Windows, use
+`init --provider claude-cli` instead. This selection also sets the provider in the
+new request template; changing the connection later does not rewrite that template.
+
+```sh
+node /path/to/werk-release/bin/apps/worker/cli.mjs init
+node bin/apps/worker/cli.mjs run
+```
+
+Initialization installs `bin/apps/worker`, a private `.env`, a shareable
+`.env.example`, configuration, a Feature Request template, readiness/completion
+rules, an Obsidian Base and the offline **Create Feature Request** authoring kit.
+Choose a request folder with `init --features-dir requests/features`; the default
+is `features`. Keep `.env`, provider credentials and private state out of Git.
+
+The worker prints its local URL. To use the webview, unlock it with
+`WERK_WORKER_TOKEN` from your project's `.env`. The token is never put in a browser
+URL. `run` stays in the terminal; Ctrl+C stops it. Use `start`, `status` and `stop`
+for background operation.
+
+Before submitting shared work:
+
+1. Sign in to Claude Code or Codex CLI on the worker machine, or configure an API
+   provider. Check the connection in **Settings → Providers & accounts**.
+2. Review the detected project repository and explicitly accept it. Configure
+   the repository, remote and shared intake branch.
+3. Review the model's file, command and MCP permissions and the required project
+   checks. A provider login does not grant tool access.
+4. Commit and push the shared template, authoring kit and ready/done rules, then
+   connect shared intake using the [setup guide](how-to/shared-feature-intake.md#connect-the-worker).
+
+All setup controls are also available through the CLI. The
+[project-worker guide](how-to/project-worker.md) covers browser-free setup,
+Docker without host Node, existing repositories, upgrades and environment files.
+Portable apps include an npm-compatible `package.json`; run
+`npm --prefix bin/apps/worker run` to list the available scripts. No npm install
+is needed.
+
+## One Feature Request throughout the workflow
+
+The **Feature Request is the central workflow entity**. Markdown, chat and CLI
+intake all target it. Conversations, execution attempts, progress, questions and
+review evidence keep the same request identity.
+
+1. **Describe the outcome.** Start from the project's template, in your editor,
+   with the Create Feature Request skill, or in the worker's chat interface.
+2. **Make it ready.** Complete the goal, context, acceptance criteria,
+   verification plan and approved paths. Validate against `fr-ready-check.json`.
+3. **Publish to the shared queue.** Mark it ready, commit and push to the watched
+   branch. A local save or local commit alone does not start shared work.
+4. **Let the worker implement it.** The worker validates and claims the request,
+   then uses its configured model and approved tools in an isolated Git worktree.
+   It publishes lifecycle updates to the original request.
+5. **Answer when needed.** Pull updates and follow the linked Task note. Write
+   under `## Answer`, set `status: ready`, then commit and push. The worker resumes
+   the same request. You can also answer through its webview conversation.
+6. **Review the result.** After the configured `fr-done-check.json` checks, the worker publishes
+   a feature branch and a PullRequest Markdown note with evidence. A human
+   reviews the changes and decides whether to merge.
+
+| Artifact | What the team uses it for |
+| --- | --- |
+| Feature Request | The accepted scope, owner, lifecycle and progress |
+| Task note | A question, supported continuation, or operator action needed to proceed |
+| PullRequest note | The review handoff: implementation branch, results and verification evidence |
+
+A **PullRequest note is a Markdown file**, not an automatically opened GitHub or
+GitLab pull request. A blocked Task may require a configuration change; answering
+it does not grant new permissions. The developer checkout stays untouched by
+shared implementation and publication. See the
+[shared workflow guide](how-to/shared-feature-intake.md) for ownership,
+retries, conflicts and human review.
+
+## Create requests through Markdown or chat
+
+### From any team member's clone
+
+The committed authoring kit works without a worker connection or provider
+credentials. Use the **Create Feature Request** skill in your own environment,
+or create a draft from the terminal:
+
+```sh
+node .werk/authoring/feature-request.mjs create --name search.md --title "Find matching requests"
+```
+
+Fill in the template, including approved paths, then validate it. With the default
+request folder:
+
+```sh
+node .werk/authoring/feature-request.mjs validate --file features/search.md
+node .werk/authoring/feature-request.mjs ready --file features/search.md --if-match REVISION
+```
+
+Replace `REVISION` with the successful validation's revision. Commit and push the
+ready note to the watched branch. Pull the worker's updates to see progress,
+questions and review notes in Markdown or the Obsidian Base. Folder names,
+templates and rules are configurable; see [team authoring](how-to/team-feature-authoring.md).
+
+### From the worker webview
+
+Open **Taskboard → New request**, describe the outcome and choose **Prepare
+request**. This prepares the committed template without invoking a model. Fill
+in the request details and use **Check readiness**, then **Save draft to Git** or
+**Mark ready and publish**. Shared intake picks up that same note.
+
+<!-- readme-image: worker-create-request -->
+
+Once the worker owns the request, open its conversation to follow execution and
+answer pending questions. Webview answers publish the same Task response that a
+teammate can edit in Markdown. Accepted scope changes require a successor Feature
+Request. See the [webview guide](how-to/use-worker-webview.md).
+
+Open **Review** to inspect a request’s accepted scope, changed files and current
+verification evidence together. The next-step summary explains whether the team
+needs to answer a question, inspect changes, record required acceptance or resolve
+a hold. Acceptance applies only where the saved request policy asks for it; it
+does not merge the feature branch.
+
+<!-- readme-image: worker-review -->
+
+## Inspect and configure the worker
+
+The **Taskboard** shows current work, queue and capacity. **Metrics** explains
+measured consumption and execution activity; **History** keeps previous runs and
+their evidence. **Settings** holds the worker's operating configuration.
+
+<!-- readme-image: worker-metrics -->
+
+For development servers and other long-running project services, configure named
+service presets explicitly. The worker supervises them in the request’s pinned
+worktree, with bounded lifetime and restart limits. **Metrics → Processes** shows
+owned services, observed resource use and stop/restart controls; missing operating
+system measurements stay visible as unavailable. See
+[manage worker processes](how-to/manage-worker-processes.md).
+
+<!-- readme-image: worker-settings -->
+
+| Configure | Where to learn more |
+| --- | --- |
+| Model providers and available CLI account details | [Provider connections](how-to/use-worker-webview.md#connect-claude-or-codex) |
+| Request, Task and review folders; template and rules | [Team workflow configuration](how-to/team-feature-authoring.md) |
+| Assigned repositories, watching and worktrees | [Repository setup](how-to/project-worker.md#assign-git-repositories) |
+| Built-in file/web tools, approved commands and MCP connections | [Model tool access](how-to/manage-model-tools.md) |
+| Daily/monthly allowance and the worker's share | [Consumption limits](how-to/worker-consumption-limits.md) |
+| Queue, capacity and execution duration | [Queue configuration](how-to/use-worker-webview.md#configure-the-taskboard-and-orchestrator-queue) |
+| Execution profiles and agent definitions | [Profile editing](how-to/use-worker-webview.md#edit-execution-profiles) |
+| Launch defaults and the local access token | [Project environment files](reference/configuration.md#project-environment-files) |
+
+Consumption limits allocate a share of a **configured allowance**; they do not
+measure your everyday usage elsewhere in the provider account. Provider usage
+availability varies. For implementation work, review
+[required checks and evidence](how-to/implement-feature.md) before relying
+on a model's completion message.
+
+## Grow from a worker into a production system
+
+Start with the worker you have already installed and add the next building block
+when your team needs it. An **Orchestrator** coordinates a production line's
+workers and assignments. A **Factory** brings multiple lines together for
+portfolio visibility and routing. A production line consists of one Orchestrator
+and its enrolled workers; it can operate before a Factory is introduced.
+
+```mermaid
+flowchart TD
+    F[Factory: portfolio and line routing]
+    F --> A[Production line A: Orchestrator]
+    F --> B[Production line B: Orchestrator]
+    A --> W1[Your existing worker]
+    A --> W2[Additional worker]
+    B --> W3[Another team's worker]
+```
+
+| Building block | What it adds | What you manage there |
+| --- | --- | --- |
+| Worker | Implements a request using its model and approved tools | Repositories, model accounts, request progress, verification and consumption |
+| Orchestrator | Coordinates one line and routes assignments to eligible workers | Line intake, worker registration, routing, task leases and execution evidence |
+| Factory | Organizes lines, including optional logical subfactories | Line registrations, portfolio summaries and routing of new intake between lines |
+
+Only workers invoke models. Each application has its own webview, private state
+and credentials. Start additional workers with distinct state directories and
+ports when separate requests need to execute in parallel.
+
+### Connect your worker to an Orchestrator
+
+Keep your existing project worker running. From the project directory, start the
+Orchestrator app from the same extracted release, using an unused port and a
+separate state directory:
+
+```sh
+node /path/to/werk-release/bin/apps/orchestrator/cli.mjs start --state-dir .werk/line --port 3001 --project demo
+```
+
+Replace `demo` with the line's project ID before its first start. Use that same
+state directory on subsequent starts. You may also copy the complete
+`bin/apps/orchestrator` folder into your project; the app needs no sibling
+application or npm install.
+
+1. Open the URL returned by the command. Sign in using the Orchestrator's admin
+   token from the private credential file named in its startup result.
+2. Open your worker's **Settings → Orchestrator**. Enter the Orchestrator address
+   and its separate **enrollment token**, then select **Save & connect**.
+3. Confirm registration in the worker and the Orchestrator's worker list. Review
+   **Settings → Execution profiles**. To edit them, pause and drain the worker,
+   save the profiles, wait for the Orchestrator's acknowledgment, then resume
+   new starts on Taskboard.
+4. In the Orchestrator, choose automatic routing to eligible workers or a manual
+   worker destination. Submit a small **simulation** using the line's project ID
+   and an advertised provider/profile. Inspect its evidence and expect the
+   terminal state `simulated`.
+
+Enrollment adds line assignments to the worker's existing execution capacity.
+Its shared Git requests retain their intake and identity; connecting an
+Orchestrator does not reimport those notes into the line queue. A configured
+Claude/Codex chat connection also does not select the line's execution mode:
+**orchestrated assignments default to simulation**. Review the
+[supported execution modes](explanation/modes.md) before submitting live
+implementation work.
+
+For another worker, repeat enrollment with its own state and identity. See
+[assemble independent components](how-to/assemble-independent-components.md#start-an-orchestrator-and-enroll-the-worker)
+for the full native/Docker journey and
+[execution profiles](how-to/use-worker-webview.md#edit-execution-profiles)
+for compatibility and configuration acknowledgment.
+
+### Introduce a Factory
+
+Once one or more lines are running, start a Factory and register them. Each
+registration points to an existing Orchestrator; its enrolled workers remain
+owned by that line.
+
+1. Export a private environment variable for each line into the process that
+   starts Factory, such as `WERK_LINE_DEMO_TOKEN`, containing that Orchestrator's
+   **admin token**. Use your shell's private environment setup or secret manager;
+   keep token values out of command arguments and Git. Adding this line variable
+   to project `.env` alone does not load it. Follow the
+   [private credential example](how-to/assemble-independent-components.md#start-factory-with-a-private-line-credential).
+   Restart Factory with the updated environment after adding or rotating a line
+   credential.
+2. Start the Factory from the project directory with its own state and port:
+
+   ```sh
+   node /path/to/werk-release/bin/apps/factory/cli.mjs start --state-dir .werk/factory --port 3100
+   ```
+
+3. Open the returned URL and sign in with the Factory's own admin token. Create
+   a root Factory, then register your running Orchestrator as a production line.
+4. Provide the line name, owning Factory, Orchestrator URL, browser webview URL
+   and the **environment-variable name** `WERK_LINE_DEMO_TOKEN`. The registration
+   stores the name, not the secret value.
+5. Confirm the line is available in the Factory dashboard. Open it to inspect
+   its workers and tasks. Add further lines, group them into logical
+   subfactories if useful, and configure automatic or manual intake routing.
+
+The Factory aggregates available line observations and makes unavailable or
+stale lines visible. A line keeps its accepted tasks, worker leases and evidence;
+Factory routing chooses a destination for new intake. Registering a line does
+not start its processes. Existing lines and workers can continue when the
+Factory is stopped.
+
+These local examples use loopback addresses. Across machines or containers,
+configure addresses reachable by each caller and trusted HTTPS/access settings.
+Follow [Factory registration and credentials](how-to/assemble-independent-components.md#start-factory-with-a-private-line-credential)
+and [access configuration](how-to/manage-access.md) for that setup. The
+[portable apps reference](reference/portable-apps.md#project-environment-and-local-access)
+explains how each app's `env init` adds its settings to the project's private
+`.env` and shareable `.env.example`.
+
+<a id="run-a-factory-and-production-lines"></a>
+
+### Start a complete system from YAML
+
+For a new multi-line installation, the system launcher can start all building
+blocks from one definition. Keep its managed state separate from the independent
+apps above; it does not automatically adopt your existing worker or line state.
+
+The supplied [system definition](../examples/system.yaml) declares
+a Factory, a logical subfactory and two isolated production lines.
+
+From the extracted runtime, start the supplied system with Node 24:
+
+```sh
+node werk.mjs system plan --file examples/system.yaml --json
+node werk.mjs system up --file examples/system.yaml
+```
+
+Or use Docker Engine 26+ and Compose 2.35+ without host Node/npm:
+
+```sh
+bash werk-docker.sh system up --file examples/system.yaml --environment docker
+```
+
+On Windows, use `./werk-docker.ps1 system up --file examples/system.yaml --environment docker`.
+The system opens the Factory once healthy. Follow the
+[system tutorial](tutorials/system-from-yaml.md) for credentials, your first
+assignment and shutdown. For one line, use the
+[native](tutorials/local-first-task.md) or [Docker](tutorials/docker-first-task.md)
+first-task tutorial. Running the installer without `--no-start` starts the default
+Factory demonstration directly.
+
+**Default Factory/orchestrator assignments are simulated.** Trusted operators can
+opt into [native Linux Codex execution](how-to/run-codex-task.md). Supplied
+orchestrator Docker and managed VM profiles remain simulated. Standalone workers
+use their configured Claude/Codex CLI or API provider; Docker workers need an API
+provider or a prepared image with its own CLI authentication. See
+[execution modes](explanation/modes.md) for platform limits.
+
+Each application has its own webview, CLI and private state. Use one runtime per
+state directory. Operational guides cover [monitoring](how-to/monitor-runtime.md),
+[access and TLS](how-to/manage-access.md), [maintenance](how-to/maintain-runtime.md),
+[updates](reference/updates.md), and [backup/recovery](how-to/upgrade-backup.md).
+
+## Documentation and frontend reference
+
+The [public Storybook](https://luis85.github.io/production-line/) is the system's
+documentation entry point: **Start here → Set up your workspace → Work with
+requests → Operate the system → Frontend reference → Architecture and contracts**.
+
+- [Handbook](https://luis85.github.io/production-line/handbook/): searchable setup,
+  operating guides and reference documentation.
+- [Illustrated UI reference](https://luis85.github.io/production-line/storymap/):
+  real Vue components, workflows and desktop/mobile screenshots with sample data.
+- [Source documentation hub](index.md): tutorials, how-to guides, reference
+  contracts and architectural explanation for this branch.
+- [Frontend architecture](reference/webview-architecture.md) and
+  [system architecture](explanation/architecture.md): component reuse,
+  shared interfaces and application boundaries.
+
+Each release also includes a versioned Storybook ZIP. See
+[generate and host Storybook](how-to/generate-storybook.md) for local preview,
+qualification and publishing. Historical evidence is kept in
+[review reports](reports/index.md); the [concept index](CONCEPT.md)
+identifies the original requirements.
+
+## Develop from source
+
+From `projects/werk`, with Node 24 and npm:
+
+```sh
+npm ci
+npm run check
+npm run dev:factory
+```
+
+`dev:factory` starts a simulated development fleet. Use `npm run dev:fleet` for
+one line or `npm run storybook` for component/documentation development.
+
+| Application | Responsibility |
+| --- | --- |
+| Factory | Hierarchy, line registry and portfolio summaries |
+| Orchestrator | Line intake, routing, leases, context and evidence |
+| Worker | Provider execution, shared Markdown lifecycle, worktrees and review evidence |
+| Shared | Contracts and reusable primitives across applications |
+
+`npm run check` runs LOC checks, Oxlint, Fallow, architecture rules, source and
+test typechecking, builds and tests. Source files are limited to 400 code-bearing
+lines and test/support files to 450, excluding blank and comment-only lines.
+Source checks also require Python 3 on every platform, including Windows, to
+count Python code and run supported infrastructure tests. Downloaded runtimes
+do not require it.
+
+Stryker mutation testing runs as an **advisory release check**: findings warn
+without blocking development or release. `npm run mutation` runs it explicitly.
+`npm run release:build` validates the changelog, builds applications, qualifies
+Storybook and packages the runtime and documentation. See
+[development](how-to/development.md), [tests](../tests/README.md), and
+[release procedure](reference/releases.md) for the maintained checks.
+
+To update this introduction, edit the [maintained overview](overview.md) and run
+`npm run readme:generate`. See [README generation](how-to/generate-readme.md) for
+screenshot selection, qualification and release artifacts.

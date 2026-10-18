@@ -8,6 +8,7 @@ import type { ConsumptionStatus } from '../src/worker/application/consumption';
 import { workerCapacitySnapshot } from '../src/worker/application/worker-capacity';
 import { state } from '../src/worker/webview/store';
 import { installWorkerFixture } from './worker-fixtures';
+import { processExample } from './worker-process-fixtures';
 
 export type MetricsScenario = 'active' | 'exhausted' | 'uncertain' | 'empty' | 'stale' | 'accounting-unavailable' | 'limits-off' | 'pressure';
 interface ExampleAttempt { acceptedAt: string; outcome: RunOutcome; durationMs: number | null; inputTokens: number | null; outputTokens: number | null; cost: number | null; }
@@ -116,6 +117,7 @@ function installMetricsFixture(scenario: MetricsScenario = 'active') {
       if (hold) await new Promise<void>(resolve => pending.push(resolve));
       return offline ? Response.json({ error: 'Example resource refresh failed. Last reported sample is retained.' }, { status: 503 }) : Response.json(resource);
     }
+    if (path === '/api/processes') return offline ? Response.json({ error: 'Example process status is unavailable.' }, { status: 503 }) : Response.json(processExample(empty));
     if (offline && ['/status', '/api/environment', '/api/consumption'].includes(path)) return Response.json({ error: 'Example worker is offline.' }, { status: 503 });
     if (path === '/api/consumption') return Response.json(consumption);
     if (path === '/status') return Response.json(state.status);

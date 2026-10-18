@@ -9,6 +9,9 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Added
 
+- A dedicated Feature Request review page brings accepted scope, navigable diffs, current verification, human acceptance and shared handoff together with an explicit next action.
+- Explicit service presets let requests run bounded development services in their owned worktree. The worker supervises lifetime, readiness, restarts, logs and cleanup; Metrics exposes service controls and separately scoped finite-process observations.
+- Generated README documentation uses maintained content and qualified Storybook screenshots. Release verification produces a versioned README bundle with screenshot provenance and checksums, while drift checks keep source text in sync.
 - Durable model sessions belong to each Feature Request, with explicit Claude CLI continuation, worker-managed replay for Codex/API adapters, bounded active context and private history retrieval. An optional committed project-context manifest shares reviewed knowledge without mixing conversations.
 - Tool Access can grant bounded model subagents. Children retain the parent request, provider/profile, approved tools and execution budget, with separate consumption and linked run evidence.
 - An overnight team guide explains evening Git handoff, unattended implementation, Markdown answers and morning human review.
@@ -22,6 +25,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Fixed
 
+- Review links preserve the exact request through section navigation; inconsistent ownership and stale checks cannot be presented as current approval evidence. Background refresh preserves controls and readable Markdown summaries.
 - Shared intake observes actual worker admission capacity before claiming ready requests. Temporary holds and preparation failures publish accurate informational Task notes and retain safe retry/publication behavior.
 - Restart recovery preserves a prepared queued dispatch only when all retained authorities prove it never started; running, contradictory or incomplete attempts remain fenced for explicit recovery.
 - Metrics reads track freshness independently, retain stale values on failed refreshes and keep background updates from animating action buttons. Query changes, locking and page lifecycle changes reject obsolete responses; displayed age continues to advance while browser updates are paused.

@@ -1,4 +1,6 @@
 import test from 'node:test';
+import { createProcessObservation } from '../../src/worker/dist/worker/infrastructure/process-observation.js';
+import { runProcess } from '../../src/worker/dist/shared/process/launcher.js';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -225,4 +227,18 @@ test('an ended parent cannot dispatch a child even after its child run was admit
   assert.equal(f.consumption.status().chargedTokens, 0);
   assert.equal(f.consumption.status().uncertainInvocations, 0);
   assert.equal(f.runs.list().rows[1].outcome, 'failed');
+});
+
+
+test('delegated subprocesses use the child session and run while keeping the parent FR and task', async t => {
+  const observations = createProcessObservation();
+  const f = await fixture(t, factory(async (_request, signal) => {
+    await runProcess(process.execPath, ['-e', ''], { env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot }, signal, maxOutputBytes: 1024 });
+    return { type: 'completed', text: 'Observed child fixture.' };
+  }));
+  const run = createDelegationChildRunner({ ...f.options, observations });
+  const result = await observations.run({ featureRequestKey: f.options.featureRequestKey, sessionId: f.parent.sessionId, runId: f.parent.id }, () => run(input()));
+  const record = (await observations.status()).processes[0], child = f.runs.list().rows.find(row => row.sessionId === result.sessionId);
+  assert.ok(child); assert.equal(record.sessionId, result.sessionId); assert.equal(record.runId, child.id);
+  assert.notEqual(record.runId, f.parent.id); assert.equal(record.featureRequestKey, f.options.featureRequestKey); assert.equal(record.taskId, f.parent.taskId);
 });

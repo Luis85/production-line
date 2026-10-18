@@ -107,6 +107,8 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run check
       - run: npm run audit:dependencies
+      - name: Verify generated project README before candidate packaging
+        run: npm run readme:check
       - run: npm run release:package
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -236,6 +238,8 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Install the locked browser version and system libraries
         run: npm exec -- playwright install --with-deps chromium
+      - name: Verify generated README before building documentation
+        run: npm run readme:check
       - name: Build the code-derived stories and qualify every component screenshot
         run: npm run storybook:ci
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -244,6 +248,16 @@ jobs:
           name: werk-storybook-release-evidence
           path: ${{ env.FORGE_PROJECT_PATH }}/storybook-static/storymap/
           if-no-files-found: warn
+          retention-days: 7
+      - name: Generate the release README and selected screenshots from qualified evidence
+        run: npm run release:readme
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: werk-readme-candidate
+          path: |
+            ${{ env.FORGE_PROJECT_PATH }}/release/werk-readme-*.zip
+            ${{ env.FORGE_PROJECT_PATH }}/release/README-SHA256SUMS
+          if-no-files-found: error
           retention-days: 7
       - name: Package only the qualified Storybook from this source revision
         run: npm run release:storybook
@@ -278,6 +292,10 @@ jobs:
         with:
           name: werk-storybook-candidate
           path: release
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: werk-readme-candidate
+          path: release
       - name: Publish all verified assets before making the release visible
         working-directory: /
         env:
@@ -306,6 +324,8 @@ jobs:
           For this exact version, use the installer from /releases/download/v$RELEASE_VERSION/install.mjs instead of /releases/latest/download/install.mjs. Prereleases do not change latest.
 
           Download \`werk-storybook-$RELEASE_VERSION.zip\` and \`STORYBOOK-SHA256SUMS\` for the system handbook, component API, interactive examples and desktop/mobile screenshots from this exact source revision. After checksum verification and extraction, open \`handbook/index.html\` for workspace setup, team workflows and operation. Open \`storymap/index.html\` for the frontend component catalog and illustrated journeys. The interactive Storybook can be served from the extracted directory with a local static HTTP server. All examples use simulated fixtures; screenshots are not live-provider qualification.
+
+          Download \`werk-readme-$RELEASE_VERSION.zip\` and \`README-SHA256SUMS\` for the generated project overview with current, unretouched screenshots from the same qualified source. Its links point to this source commit and its provenance labels all screenshots as sample data. The release workflow never commits README or image changes to main.
           EOF
           # Failed uploads leave a draft; reruns may repair only that unpublished draft.
           if gh release view "v$RELEASE_VERSION" --json isDraft > existing-release.json 2>/dev/null; then
@@ -313,7 +333,7 @@ jobs:
           else
             gh release create "v$RELEASE_VERSION" --verify-tag --draft --title "Werk $RELEASE_VERSION" --notes-file release-notes.md
           fi
-          gh release upload "v$RELEASE_VERSION" "release/werk-$RELEASE_VERSION.tar.gz" "release/werk-$RELEASE_VERSION.zip" release/install.mjs release/SHA256SUMS "release/werk-storybook-$RELEASE_VERSION.zip" release/STORYBOOK-SHA256SUMS --clobber
+          gh release upload "v$RELEASE_VERSION" "release/werk-$RELEASE_VERSION.tar.gz" "release/werk-$RELEASE_VERSION.zip" release/install.mjs release/SHA256SUMS "release/werk-storybook-$RELEASE_VERSION.zip" release/STORYBOOK-SHA256SUMS "release/werk-readme-$RELEASE_VERSION.zip" release/README-SHA256SUMS --clobber
           if [[ "$RELEASE_VERSION" == *-* ]]; then
             gh release edit "v$RELEASE_VERSION" --draft=false --prerelease --latest=false --notes-file release-notes.md
           else

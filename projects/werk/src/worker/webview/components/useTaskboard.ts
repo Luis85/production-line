@@ -28,7 +28,7 @@ export function useTaskboard() {
     detailError = ref(""),
     actionError = ref("");
   let inspectTrigger: HTMLElement | null = null,
-    detailRevision = 0;
+    detailRevision = 0, readingId = "";
   const statusOptions = [
     { label: "All file tasks", value: "all" },
     { label: "Needs rework", value: "needs_rework" },
@@ -52,7 +52,7 @@ export function useTaskboard() {
     { immediate: true },
   );
   async function closeDetail() {
-    detailRevision++;
+    detailRevision++; readingId = "";
     selectedId.value = "";
     detail.value = null;
     detailLoading.value = false;
@@ -149,9 +149,9 @@ export function useTaskboard() {
     archived.value = true;
   }
   async function readDetail(id: string, focus = false) {
-    const revision = ++detailRevision;
-    detailLoading.value = true;
-    detailError.value = "";
+    if (!state.unlocked || readingId === id) return;
+    const revision = ++detailRevision; readingId = id;
+    detailLoading.value = focus || detail.value?.id !== id;
     try {
       const result = await request("/api/taskboard/detail", "POST", { id });
       if (
@@ -160,7 +160,7 @@ export function useTaskboard() {
         selectedId.value !== id
       )
         return;
-      detail.value = result;
+      detail.value = result; detailError.value = "";
       if (focus) {
         await nextTick();
         if (revision === detailRevision)
@@ -177,25 +177,18 @@ export function useTaskboard() {
             ? error.message
             : "Task evidence could not be loaded. Retry to inspect this task.";
     } finally {
-      if (revision === detailRevision) detailLoading.value = false;
+      if (revision === detailRevision) { detailLoading.value = false; readingId = ""; }
     }
   }
-  watch(
-    () =>
-      [
-        selectedId.value,
-        state.board?.tasks.find((task) => task.id === selectedId.value)?.status,
-      ] as const,
-    ([id, value], [previousId, previous]) => {
-      if (id === previousId && value && previous && value !== previous)
-        void readDetail(id);
-    },
-  );
+  // Same-status polls may carry new receipts, findings or publication evidence.
+  watch(() => state.refreshRevision, () => {
+    if (active.value && selectedId.value && !busy.value) void readDetail(selectedId.value);
+  });
   watch(
     () => state.unlocked,
     (value) => {
       if (!value) {
-        detailRevision++;
+        detailRevision++; readingId = "";
         selectedId.value = "";
         detail.value = null;
         detailLoading.value = false;
@@ -208,7 +201,7 @@ export function useTaskboard() {
   );
   onDeactivated(() => {
     active.value = false;
-    detailRevision++;
+    detailRevision++; readingId = "";
     if (detailLoading.value && selectedId.value)
       detailError.value =
         "Evidence loading was paused when you left History. Retry to load this task.";
@@ -226,9 +219,12 @@ export function useTaskboard() {
     }
     finally { busy.value = false; }
   }
+  const canRetry = computed(() => !!detail.value && !detailError.value && !detail.value.admissionFailure && detail.value.feature?.source !== 'shared_git' && ['failed', 'cancelled'].includes(detail.value.status));
+  const canManage = computed(() => !!detail.value && !detailError.value && !['queued', 'running', 'waiting_input', 'escalated'].includes(detail.value.status) && !state.sessions?.records.find(item => item.id === detail.value?.sessionId)?.busy);
   async function action(body: { id: string; action: string; priority?: number; removeWorktree?: boolean }) {
-    if (busy.value || !state.unlocked) return;
-    const epoch = state.draftEpoch, revision = detailRevision;
+    if (busy.value || !state.unlocked || detailError.value) return;
+    if (body.action === "retry" && !canRetry.value || ["archive", "restore", "delete"].includes(body.action) && !canManage.value) return;
+    const epoch = state.draftEpoch, revision = ++detailRevision; readingId = ""; detailLoading.value = false;
     const failedAdmission = state.board?.tasks.find(item => item.id === body.id)?.admissionFailure || (detail.value?.id === body.id && detail.value.admissionFailure);
     if (body.action === "retry" && failedAdmission) return;
     busy.value = true;
@@ -279,17 +275,6 @@ export function useTaskboard() {
       busy.value = false;
     }
   }
-  function download() {
-    if (!detail.value?.patch) return;
-    const url = URL.createObjectURL(
-      new Blob([detail.value.patch], { type: "text/plain" }),
-    );
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "werk-" + detail.value.id + ".patch";
-    anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
 
   return {
     action,
@@ -299,6 +284,8 @@ export function useTaskboard() {
     beginRemoval,
     busy,
     clearFilters,
+    canRetry,
+    canManage,
     closeDetail,
     columns,
     date,
@@ -306,7 +293,6 @@ export function useTaskboard() {
     detailError,
     detailLoading,
     dismissPreparation,
-    download,
     inspect,
     kanbanTasks,
     openConversation,

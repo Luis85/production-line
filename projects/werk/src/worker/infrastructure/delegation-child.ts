@@ -1,3 +1,4 @@
+import type { ProcessObservation } from '../application/process-observation.js';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import type { ConversationModel } from '../application/conversation.js';
@@ -21,6 +22,7 @@ export interface DelegationChildOptions {
   parent(): WorkerRun | undefined;
   runs: RunEvidence;
   consumption?: ConsumptionRuntime;
+  observations?: ProcessObservation;
   model?: ChildModelFactory;
   sessionStore?: ModelSessionPort;
 }
@@ -58,7 +60,9 @@ export function createDelegationChildRunner(options: DelegationChildOptions): De
         toolManifest: input.tools.manifest.tools.length ? input.tools.manifest : undefined,
         executionPolicy: input.tools.limits ? { maxToolCalls: input.tools.limits.maxCalls, commandTimeoutMs: input.tools.limits.commandTimeoutMs } : undefined,
         reply: (...args) => legacyModelReply(model, ...args),
-        execute: (...args) => executeModel(instance, ...args),
+        execute: (...args) => options.observations
+          ? options.observations.run({ featureRequestKey: options.featureRequestKey, sessionId, taskId: parent.taskId ?? null, runId: run.id }, () => executeModel(instance, ...args))
+          : executeModel(instance, ...args),
       };
       const operation = input.tools.manifest.tools.some(tool => tool.name === 'werk_candidate_apply') ? 'patch' : 'chat';
       const request = prepareModelRequest(model, [{ id: randomUUID(), role: 'user', text: input.prompt, at: new Date().toISOString(), state: 'complete' }], operation, input.tools.limits?.maxRuntimeMs ?? DEFAULT_MAX_RUNTIME_MS);

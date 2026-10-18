@@ -15,6 +15,7 @@ Open **Metrics** to inspect one worker. Its sections have different time scopes:
 | Current activity | The shared execution slot, occupied local places and separate accepted-assignment buffer; includes preparation reservations |
 | Token allowance | Reported input/output tokens, outstanding reservations and remaining share in the configured daily or monthly UTC window |
 | Worker & host | Latest worker-process CPU, resident memory and heap; state-volume free space and whole-machine memory |
+| Services & execution processes | Granted development-service groups and observed finite local execution groups; current readings with explicit coverage |
 | Execution activity | Retained attempts accepted in the last 24 hours, 7 days, 30 days or all retained time; defaults to 7 days |
 
 The execution-window selector affects **Execution activity** only. Its bounds are
@@ -50,6 +51,50 @@ settings** to change configuration, and **Explore all retained attempts** to ope
 History's detailed records and export controls. **Runtime & connection details**
 keeps machine identifiers and diagnostics out of the primary reading path. See
 [the webview guide](../how-to/use-worker-webview.md) for workspace navigation.
+
+## Services and finite execution observations
+
+Authenticated `GET /api/processes` returns `WorkerProcessesView` with
+`schemaVersion: 1`, `capturedAt`, `services` and `executions`. This view is
+independent of durable attempt evidence and of the Execution activity window.
+
+| Group | Scope and retention |
+| --- | --- |
+| `services` | `worker_owned_services`: up to 50 private service records, with grants, lifetime, readiness, restart allowance and projected stop/restart availability |
+| `executions` | `worker_launched_finite_processes`: 100 completed entries plus active launches; `retention.scope: current_worker_process` means restart clears this in-memory list |
+
+Finite entries have an opaque ID, safe purpose label, kind, nullable Feature
+Request/session/task/run identities, lifecycle timestamps, exit code and nullable
+measurement. Their public DTO has no PID, command arguments, environment, paths
+or output. A delegated call keeps the same Feature Request/task but uses its own
+session and run. Instrumented local task scopes also include final candidate
+capture after the model returns. Worker-owned maintenance may have null
+identities. This is not a machine-wide inventory: provider discovery probes and
+unrelated machine processes are excluded. Separate orchestrator adapters are not
+covered by this local execution instrumentation.
+
+Measurements use `owned_service_process_group` or
+`owned_execution_process_group`. Linux sampling reads the visible live group's
+CPU counters and RSS; services include the supervision host. Other platforms or
+inaccessible counters report unavailable. Each summary exposes `measuredGroups`,
+`activeGroups` and `coverage` (`complete`, `partial` or `unavailable`); a partial
+sum covers only measured groups. Empty or unmeasured values must be interpreted
+with those counts, not as whole-machine totals.
+
+These CPU counters can decrease when a group member exits. They are not
+utilization percentages, final lifetime totals or an addition to token/cost
+usage. RSS can count shared pages more than once. Finite entries retain their
+last live sample after completion; service measurements are cleared when the
+service ends. Neither is a historical resource time series. Normal sampling
+intervals are 5 seconds for services and 1 second for active finite executions.
+
+Authenticated `POST /api/processes` accepts `status`, bounded `logs`, `stop` and
+`restart`. Stop/restart require `id`, `expectedRevision` and `operationId`; an
+uncertain response must be retried with exactly the same command. Logs return
+`id`, `revision`, `entries`, `nextAfter` and `gap`. Model service tools are
+separately granted and restricted to their owning Feature Request/worktree.
+See [manage worker processes](../how-to/manage-worker-processes.md) for setup,
+controls, retention and operating-system interruption boundaries.
 
 ## Storage and identity
 

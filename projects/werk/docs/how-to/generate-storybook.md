@@ -95,8 +95,10 @@ npm run release:build
 ```
 
 This builds runtime applications, generates and qualifies the Storybook, then
-packages both deliverables. Commit the intended source revision before final
-qualification. `npm run release:storybook` refuses a stale commit, source digest,
+packages the runtime, Storybook and generated README artifacts. See
+[README generation](generate-readme.md) for the maintained overview and screenshot
+selection; release generation never rewrites the qualified Storybook directory.
+Commit the intended source revision before final qualification. `npm run release:storybook` refuses a stale commit, source digest,
 failed coverage report, missing image or altered generated file. A source edit
 requires regeneration; a commit requires a new qualification tied to that HEAD.
 

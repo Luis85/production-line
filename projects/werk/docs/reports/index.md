@@ -8,6 +8,7 @@ separately under `docs/handoff`; original source provenance is recorded in the
 
 | Record | Scope |
 | --- | --- |
+| [Worker review experience research](worker-review-experience-research.md) | Primary-source review patterns, product perspectives, next-step clarity and preserved workflow authority |
 | [Durable Feature Request sessions and delegation](worker-durable-sessions-review.md) | Overnight handoff, provider/API/subscription research, session/context boundaries and controlled subagents |
 | [Project worker retrospective 0.9–0.11](project-worker-retrospective-0.9-0.11.md) | Upgrades, external task worktrees and verified implementation on a Windows vault project; CLI friction and fixes |
 | [0.11 architecture, mutation baseline and documentation](architecture-review-0.11.md) | Shared service and adapter mechanics, assignment contracts, advisory mutation testing and documentation-first Storybook |

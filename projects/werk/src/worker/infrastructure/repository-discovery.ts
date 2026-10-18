@@ -25,7 +25,7 @@ async function inspect(path: string, signal: AbortSignal): Promise<Candidate | n
     if (metadata.isSymbolicLink() || (!metadata.isFile() && !metadata.isDirectory())) return null;
     // Do not allow ambient GIT_DIR/GIT_WORK_TREE/config injection to redirect this inspection.
     const env = gitEnvironment('immutable');
-    const git = async (...args: string[]) => (await runProcess('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', ...args], { cwd: root, env: { ...env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never', GIT_OPTIONAL_LOCKS: '0' }, maxOutputBytes: 65536, timeoutMs: Math.min(timeoutMs, 5000), graceMs: 0, signal: bounded })).stdout.toString('utf8').trim();
+    const git = async (...args: string[]) => (await runProcess('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', ...args], { cwd: root, observation: 'ignore', env: { ...env, GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never', GIT_OPTIONAL_LOCKS: '0' }, maxOutputBytes: 65536, timeoutMs: Math.min(timeoutMs, 5000), graceMs: 0, signal: bounded })).stdout.toString('utf8').trim();
     if (await realpath(await git('rev-parse', '--show-toplevel')) !== root) return null;
     const commonDirectory = await realpath(await git('rev-parse', '--path-format=absolute', '--git-common-dir'));
     const common = await lstat(commonDirectory);

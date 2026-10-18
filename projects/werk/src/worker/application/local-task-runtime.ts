@@ -63,7 +63,12 @@ export function createLocalTaskRuntime(settings: WorkerSettingsPort, sessions: W
     continueTask: (body) => group6.continueTask(runtime, body),
     action: (input, expectedInteractionRevision) => group7.action(runtime, input, expectedInteractionRevision),
     tick: () => group8.tick(runtime),
-    execute: (id, controller) => group8.execute(runtime, id, controller),
+    execute: (id, controller) => {
+      const task = runtime.tasks.find(item => item.id === id);
+      return task && runtime.observations
+        ? runtime.observations.run({ featureRequestKey: task.feature?.key ?? null, sessionId: task.sessionId, taskId: task.id, runId: task.runId ?? null }, () => group8.execute(runtime, id, controller))
+        : group8.execute(runtime, id, controller);
+    },
   };
   return runtime;
 }

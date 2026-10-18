@@ -1,5 +1,6 @@
 import { trackingSharedRecord, trackingWorkflow } from './tracking-fixtures.mjs';
 import test from 'node:test';
+import { createProcessObservation } from '../../src/worker/dist/worker/infrastructure/process-observation.js';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -35,7 +36,7 @@ async function edit(runtime, signal, content = 'after\n') {
 }
 const check = (runtime, signal, allowFailure = false) => call(runtime, 'werk_candidate_check', { preset: 'source-check' }, signal, allowFailure);
 
-async function fixture(t, execute, { verification = true } = {}) {
+async function fixture(t, execute, { verification = true, observations = /** @type {import('../../src/worker/application/process-observation.ts').ProcessObservation | undefined} */ (undefined) } = {}) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'werk-development-task-')));
   const repository = join(root, 'repo'), state = join(root, 'state');
   let sessions, board;
@@ -74,8 +75,9 @@ async function fixture(t, execute, { verification = true } = {}) {
   });
   const workspaces = { prepareWorktree: (selector, key, signal, commit) => prepareRepositoryWorktree(selector, key, signal, commit) };
   async function open() {
-    sessions = createWorkerSessions(state, settings, factory); await sessions.init();
-    board = createLocalTaskboard(state, settings, sessions, factory, workspaces); await board.init();
+    const processes = observations ? { observations, supervisor: () => undefined } : undefined;
+    sessions = createWorkerSessions(state, settings, factory, undefined, () => 0, undefined, undefined, processes); await sessions.init();
+    board = createLocalTaskboard(state, settings, sessions, factory, workspaces, undefined, processes); await board.init();
   }
   await open();
   return {
@@ -301,4 +303,22 @@ test('legacy proposal completion remains compatible with a custom policy when ve
   assert.equal(request.phase, 'done');
   assert.equal(request.evaluations.filter(item => item.stage === 'done').at(-1).passed, true);
   assert.equal(await readFile(join(task.worktree, 'approved.txt'), 'utf8'), 'before\n');
+});
+
+
+test('task observation includes candidate capture after model execution with the same FR and run', { timeout: testTimeoutMs }, async t => {
+  const observations = createProcessObservation();
+  let atProviderEnd = new Set();
+  const f = await fixture(t, async ({ runtime, signal }) => {
+    await edit(runtime, signal); await check(runtime, signal);
+    atProviderEnd = new Set((await observations.status()).processes.map(record => record.id));
+    return complete('Edited and verified the candidate.');
+  }, { observations });
+  const id = await f.create(), task = await f.settle(id, 'review');
+  const afterModel = (await observations.status()).processes.filter(record => !atProviderEnd.has(record.id));
+  assert.ok(afterModel.some(record => record.kind === 'git'), 'final candidate capture remains visible after the provider returns');
+  for (const record of afterModel) {
+    assert.equal(record.featureRequestKey, task.feature.key); assert.equal(record.taskId, id);
+    assert.equal(record.sessionId, task.sessionId); assert.equal(record.runId, task.runId);
+  }
 });

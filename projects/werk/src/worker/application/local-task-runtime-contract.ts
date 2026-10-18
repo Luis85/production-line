@@ -1,3 +1,4 @@
+import type { ProcessObservation } from './process-observation.js';
 import type { SerializedOperations } from '../../shared/serialized-operations.js';
 import type { DevelopmentFactory, DevelopmentRuntime } from './development.js';
 import type { LocalTaskboardView, LocalTaskDetailView } from './workspace-view.js';
@@ -19,6 +20,7 @@ export interface LocalTaskDependencies {
   files: ApprovedTaskFiles;
   workspaces?: LocalTaskWorkspaces;
   development?: DevelopmentFactory;
+  observations?: ProcessObservation;
 }
 export interface LocalTaskState {
   tasks: LocalTask[];

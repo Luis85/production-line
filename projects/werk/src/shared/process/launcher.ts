@@ -1,4 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { observeProcessFailure, observeProcessLaunch, type ProcessPurpose } from './observation.js';
 import { windowsContainment } from './windows-containment.js';
 
 /**
@@ -8,14 +9,23 @@ import { windowsContainment } from './windows-containment.js';
  * - receives exactly the environment the caller built, never an implicit inheritance.
  * `contained` additionally runs the executable inside a kill-on-close Windows job.
  */
+export type LaunchedProcess = ChildProcessWithoutNullStreams;
 export type LaunchMode = 'plain' | 'contained';
-export interface LaunchOptions { cwd?: string; env: NodeJS.ProcessEnv; mode?: LaunchMode; }
+export interface LaunchOptions {
+  cwd?: string; env: NodeJS.ProcessEnv; mode?: LaunchMode;
+  /** Inherit is reserved for trusted service-host payloads whose host already owns containment. */
+  processGroup?: 'new' | 'inherit';
+  /** Probes and service internals opt out. Display metadata must never include command details. */
+  observation?: 'ignore' | ProcessPurpose;
+}
 
 export function launchProcess(executable: string, args: string[], options: LaunchOptions): ChildProcessWithoutNullStreams {
   if (executable.includes('\0') || args.some(arg => arg.includes('\0'))) throw new TypeError('Process executable and arguments cannot contain NUL');
   const windows = process.platform === 'win32';
   const plan = windows && options.mode === 'contained' ? windowsContainment(executable, args, options.env) : { executable, args, env: options.env };
-  return spawn(plan.executable, plan.args, { cwd: options.cwd, env: plan.env, detached: !windows, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = spawn(plan.executable, plan.args, { cwd: options.cwd, env: plan.env, detached: !windows && options.processGroup !== 'inherit', windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  if (options.observation !== 'ignore') observeProcessLaunch(child, !windows && options.processGroup !== 'inherit', options.observation);
+  return child;
 }
 
 /**
@@ -61,6 +71,7 @@ export function runProcess(executable: string, args: string[], options: RunOptio
     let bytes = 0, failure: ProcessFailure | undefined, killTimer: ReturnType<typeof setTimeout> | undefined;
     const stop = (reason: ProcessFailure) => {
       failure ??= reason;
+      observeProcessFailure(child);
       if (graceMs <= 0) { terminateProcess(child, 'SIGKILL'); return; }
       terminateProcess(child, 'SIGTERM');
       killTimer ??= setTimeout(() => terminateProcess(child, 'SIGKILL'), graceMs);

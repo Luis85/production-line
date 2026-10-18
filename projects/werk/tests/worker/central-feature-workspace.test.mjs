@@ -30,12 +30,13 @@ async function fixture(t, withFolder = false) {
   git(project, 'add', '.'); git(project, 'commit', '-m', 'Team workflow'); git(project, 'push', 'origin', 'main');
   const originalHead = git(project, 'rev-parse', 'HEAD');
   const config = { stateDir: state, projectDir: project, ...(withFolder ? { features: { directory: join(project, 'legacy-features'), provider: 'openai-api', pollMs: 1000 } } : {}), repositories: { pollMs: 300000, items: [{ id: 'project', path: project, remote: 'origin', branch: 'main', watch: false }] }, pollMs: 1000, timeoutMs: 60000 };
-  let workspace, journal, server;
+  let workspace, journal, server, configured = false;
   async function close() { if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); server = undefined; } if (workspace) { await workspace.close(); workspace = undefined; } journal?.close(); }
   async function open() {
     journal = new SnapshotJournal(state, 'a'.repeat(64), 'b'.repeat(64)); await journal.init();
     workspace = new WorkerWorkspace(config, journal, workerStatus); await workspace.init();
-    await workspace.updateSettings({ board: { paused: true }, provider: { id: 'openai-api', apiKey: 'fixture-private-provider-key', model: 'fixture-never-dispatched' } });
+    await workspace.updateSettings({ board: { paused: true }, ...(!configured ? { provider: { id: 'openai-api', apiKey: 'fixture-private-provider-key', model: 'fixture-never-dispatched' } } : {}) });
+    configured = true;
     server = await statusServer(workerStatus, '127.0.0.1', 0, undefined, workspace);
   }
   t.after(async () => { await close(); await rm(directory, { recursive: true, force: true }); });
@@ -100,6 +101,7 @@ test('chat publication and Markdown intake share one feature identity, policy, e
   ]) { const failure = await f.api(path, body, 409); assert.match(failure.error, /Feature Request|checkpoint|Task/); }
   assert.equal(git(f.project, 'rev-parse', 'HEAD'), f.originalHead);
   await f.restart();
+  assert.equal(f.workspace.board.detail(task.id).status, 'queued', 'A prepared shared request survives restart without requiring a new attempt.');
   const restored = await f.api('/api/tasks', { action: 'get', id: task.sessionId });
   assert.equal(restored.session.feature.key, feature.key); await f.api('/api/features', command);
   assert.equal(f.workspace.board.view().tasks.length, 1); assert.equal(f.workspace.sessions.runs.list().total, 1);

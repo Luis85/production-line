@@ -23,9 +23,9 @@ test('running worker keeps accepted chats queued and automatically resumes exact
     this.consumption.now = () => clock;
     await this.updateSettings({ consumption: { enabled: true, period: 'daily', allowance: 100, workerPercent: 50, perRunReservation: 40 }, provider: { id: 'openai-api', model: 'protocol-fixture', apiKey: 'fixture-only' } });
     // @ts-expect-error Replace the private provider factory with a deterministic paid-call fixture.
-    this.sessions.model = workspaceModelFactory(directory, this.settings, (connection, state) => modelFor(connection, state, async () => {
+    this.sessions.model = workspaceModelFactory(directory, this.settings, (connection, state, _transport, options) => modelFor(connection, state, async () => {
       requests++; return Response.json({ status: 'completed', usage: { input_tokens: 3, output_tokens: 2 }, output: [{ type: 'message', content: [{ type: 'output_text', text: 'Fixture reply after reset.' }] }] });
-    }), this.consumption);
+    }, options), this.consumption, this.sessions.runs);
     const prior = this.consumption.begin('openai-api');
     this.consumption.finish(prior.id, { inputTokens: 30, outputTokens: 20, cacheReadTokens: null, cacheWriteTokens: null, providerReportedCostUsd: null, costBasis: 'unavailable', source: 'provider_reported', reason: null });
     workspace = this;

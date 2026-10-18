@@ -99,3 +99,28 @@ pre {
     justify-content: center;
   }
 }
+.request-next-step,
+.request-attestation,
+.request-attestation-recorded {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-bg-elevated);
+  margin: 0;
+}
+.request-next-step h3,
+.request-attestation h3,
+.request-attestation-recorded h3 { margin: 0; }
+.request-next-label { font-size: 13px; font-weight: 600; }
+.request-gate-note { font-size: 13px; }
+.request-gate-notice { border-left: 3px solid var(--ui-primary); padding-left: 12px; }
+.request-advanced > .request-gate-actions { margin-block: 16px; }
+.request-gate-panel :deep(button) { min-height: 44px; white-space: normal; }
+.request-gate-panel :deep(button:focus-visible),
+.request-gate-panel summary:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 3px; }
+@media (max-width: 600px) {
+  .request-next-step, .request-attestation, .request-attestation-recorded { padding: 16px; }
+  .request-attestation > button { width: 100%; justify-content: center; }
+}

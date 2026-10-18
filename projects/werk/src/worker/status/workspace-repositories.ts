@@ -1,3 +1,4 @@
+import { stopSessionProcesses } from './workspace-processes.js';
 import type { WorkspaceContext } from './workspace-context.js';
 import { prepareRepositoryWorktree, RepositoryGitError, WorktreeProblem, WORKTREE_CHECKOUT_TIMEOUT_MS } from '../infrastructure/repositories.js';
 import { removeRepositoryWorktree, repositoryRoot, worktreeName } from '../infrastructure/repositories-git.js';
@@ -93,6 +94,8 @@ export async function removeTaskWorkspace(workspace: WorkspaceContext, selector:
   if (!workspace.acceptingTasks || workspace.repositoriesUpdating || workspace.configurationUpdating)
     throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
   signal = AbortSignal.any([signal, workspace.repositoryStop.signal]);
+  const task = workspace.board.view().tasks.find(item => item.worktreeKey === key && item.worktree === expected.path);
+  if (task) await stopSessionProcesses(workspace, task.sessionId);
   const options = { expect: { taskKey: key, path: expected.path, baseCommit: expected.baseCommit }, discardChanges: expected.discardChanges, checkoutTimeoutMs: WORKTREE_CHECKOUT_TIMEOUT_MS };
   workspace.repositoryPreparations++;
   try {

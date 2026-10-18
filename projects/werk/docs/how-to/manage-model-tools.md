@@ -23,6 +23,7 @@ cannot retain a grant that appears revoked in the editor.
 | Repository files | List, read and search files in an approved task's Git worktree. New implementation requests can also edit their explicitly approved paths when a required feature check is enabled. Requests without an approved task worktree have no repository file tools. |
 | Command presets | Run the exact executable and arguments you configure. The model chooses a preset; it cannot supply an arbitrary shell command. |
 | CLI tools | Run a project command-line tool in the task worktree with arguments the model chooses, within the commands, flags and refusals you allow. See [Give the model a project CLI](#give-the-model-a-project-cli). |
+| Development services | Start and manage explicitly granted fixed service presets in a Feature Request’s pinned worktree, within its lifetime and restart allowance. This is separate from finite command presets. |
 | Web origins | Fetch HTTP(S) content from the origins you allow. This is page fetching, not a search-engine connection. |
 
 List, read and search tools remain read-only. They exclude Git metadata, reject
@@ -257,6 +258,30 @@ save duration settings; those global defaults are omitted from saved settings.
 Restore the stopped-state backup from before the upgrade when retained task state is incompatible, using the
 [portable update workflow](../reference/portable-apps.md#update-a-copied-app).
 
+## Grant development services
+
+For a preview server or watcher that should remain available after a model turn,
+configure **Development services** in this editor. Enable the service capability
+and each named preset separately. The preset fixes its absolute executable,
+arguments, maximum lifetime, readiness signal and bounded restart policy. The
+model cannot supply a shell command, environment or different working directory.
+A canonical Feature Request with a still-valid pinned task worktree is required;
+a repository checkout selected only for Chat does not grant service access.
+
+The model receives `werk_service_start`, `werk_service_status`,
+`werk_service_logs`, `werk_service_stop` and `werk_service_restart` only when this
+capability is granted for its worktree. These calls use the invocation's normal
+tool-call allowance. The service itself has a separate maximum lifetime, so it
+can remain for human review after the invocation finishes. Services and their
+logs remain scoped to their owning Feature Request/session/task. Service output
+is private project data that the selected model may receive through its tools.
+
+Manage active services in **Metrics → Services & execution processes**. Changes
+to grants reconcile existing services; revocation or a changed preset stops the
+old service instead of silently changing its executable. The
+[worker process guide](manage-worker-processes.md) explains the setup, limits,
+confirmation/retry controls and platform cleanup boundaries.
+
 ## Connect an MCP server
 
 Add a connection with a recognizable name and choose its transport:
@@ -381,8 +406,10 @@ Command presets, project CLI tools and required feature checks use the smaller
 of their optional timeout and the invocation's captured global command ceiling.
 A larger per-grant value cannot raise that ceiling. MCP calls use their own
 connection timeout, independently of the command ceiling; it includes session
-startup, schema revalidation and the tool call. Every operation also stops when
-the total invocation deadline or cancellation signal ends it. API providers can
+startup, schema revalidation and the tool call. Every finite operation also stops when
+the total invocation deadline or cancellation signal ends it. Granted development
+services have their own bounded lifetime; their start/control calls still follow
+the invocation deadline and cancellation policy. API providers can
 return a final answer after the last permitted tool call.
 
 An already prepared dispatch keeps its captured budgets while queued or when

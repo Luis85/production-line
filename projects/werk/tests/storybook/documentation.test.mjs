@@ -55,3 +55,14 @@ test('the documentation catalog starts with role guidance and gives every mainta
   for (const source of ['docs/tutorials', 'docs/how-to', 'docs/reference', 'docs/explanation']) assert.ok(catalog.some(page => page.source.startsWith(source)), source);
   for (const page of catalog) assert.ok(!page.source.includes('/reports/'), 'Historical reports are not current setup instructions');
 });
+
+
+test('the generated README resolves to its one maintained handbook overview', async () => {
+  const root = fileURLToPath(new URL('../../', import.meta.url));
+  const catalog = await documentationCatalog(root);
+  const overview = catalog.filter(page => page.id === 'project-overview');
+  assert.equal(overview.length, 1);
+  assert.equal(overview[0].source, 'docs/overview.md');
+  assert.ok(!overview[0].markdown.includes('<!-- readme-image:'));
+  assert.equal(documentationLink('../../README.md#install-a-project-worker', 'docs/how-to/setup.md', catalog, commit), 'project-overview.html#install-a-project-worker');
+});

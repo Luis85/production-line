@@ -11,7 +11,7 @@ const reply = computed(() => readableReply(props.text, { fileTask: props.fileTas
 <template>
   <div class="assistant-message">
     <MessageContent :text="reply.text" />
-    <RouterLink v-if="patchTaskId" class="patch-review-link" :to="{ path: '/history', query: { fileId: patchTaskId } }">Review saved patch<UIcon name="i-lucide-arrow-up-right" /></RouterLink>
+    <RouterLink v-if="patchTaskId" class="patch-review-link" :to="{ path: '/review', query: { fileId: patchTaskId } }">Review saved patch<UIcon name="i-lucide-arrow-up-right" /></RouterLink>
     <details v-if="reply.raw" class="raw-output">
       <summary>Raw model output</summary>
       <p class="page-note">Stored reply text; older entries may be shortened. Inspect the current retained patch in its review view.</p>

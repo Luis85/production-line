@@ -1,3 +1,4 @@
+import { workspaceProcessTools, type WorkspaceProcessTools } from './workspace-process-tools.js';
 import { workspaceDelegation } from './workspace-delegation.js';
 import type { RunJournal } from '../application/journal-ports.js';
 import type { ToolRuntime } from '../application/tool-runtime.js';
@@ -33,20 +34,22 @@ type ModelSettings = Pick<WorkerSettingsPort, 'toolPolicy'> & { readonly value: 
 export type WorkspaceProviderFactory = (...args: Parameters<typeof modelFor>) => (ConversationModel & Partial<StructuredModel>) | undefined;
 
 /** Concrete provider/tool construction stays at the worker edge. Each call observes current grants. */
-export function workspaceModelFactory(directory: string, settings: ModelSettings, model: WorkspaceProviderFactory = modelFor, consumption?: ConsumptionRuntime, runs?: RunJournal): ModelFactory {
+export function workspaceModelFactory(directory: string, settings: ModelSettings, model: WorkspaceProviderFactory = modelFor, consumption?: ConsumptionRuntime, runs?: RunJournal, processes?: WorkspaceProcessTools): ModelFactory {
   return (connection, scope) => {
     const executionDirectory = !scope?.sessionId || scope.sessionId === 'default' ? directory : join(directory, 'sessions', scope.sessionId);
     const binding: ModelSessionBinding | undefined = scope?.sessionId && scope.feature ? { schemaVersion: 1, logicalSessionId: scope.sessionId, featureRequestKey: validateFeatureRequestReference(scope.feature).key, providerId: connection.id, generation: 1 } : undefined;
     if (binding) validateModelSessionBinding(binding);
+    const processTools = workspaceProcessTools(processes, scope, runs);
     let dispatch: ModelRequest | undefined;
     const instance = model(connection, executionDirectory, undefined, scope ? {
       ...(binding ? { session: { binding, store: new FileModelSessionStore(directory) } } : {}),
       tools: policy => {
         let runtime: ToolRuntime;
         const additionalOperations = binding && policy?.sessionContext ? [sessionHistoryTool(directory, binding)] : [];
+        additionalOperations.push(...processTools.tools(settings.toolPolicy()));
         const grant = settings.toolPolicy().delegation;
         if (binding && policy?.sessionContext && grant?.enabled && runs) {
-          const delegated = workspaceDelegation({ directory, binding, connection: { ...connection, ...(dispatch ? { model: dispatch.provider.model, instruction: dispatch.provider.instruction } : {}) }, grant, acceptedScope: dispatch?.messages[0]?.text, runtime: () => runtime, runs, consumption, model });
+          const delegated = workspaceDelegation({ directory, binding, connection: { ...connection, ...(dispatch ? { model: dispatch.provider.model, instruction: dispatch.provider.instruction } : {}) }, grant, acceptedScope: dispatch?.messages[0]?.text, runtime: () => runtime, runs, consumption, model, observations: processes?.observations });
           if (delegated) additionalOperations.push(delegated);
         }
         runtime = createToolRuntime({
@@ -69,17 +72,17 @@ export function workspaceModelFactory(directory: string, settings: ModelSettings
       toolManifestFor(policy) { return instance.toolManifestFor ? instance.toolManifestFor(policy) : instance.toolManifest; },
       get executionPolicy() { return { maxToolCalls: settings.value.execution.maxToolCalls, commandTimeoutMs: settings.value.execution.commandTimeoutMs }; },
       reply: (...args) => legacyModelReply(budgeted!, ...args),
-      execute: (...args) => { dispatch = args[0]; return executeModel(instance, ...args); },
+      execute: (...args) => { dispatch = args[0]; return processTools.execute(() => executeModel(instance, ...args), args[1]); },
     } : undefined;
     return consumption ? consumptionModel(budgeted, consumption) : budgeted;
   };
 }
 export function createWorkerDefinitions(directory: string) { return new WorkerDefinitions(definitionStorage(directory)); }
-export function createWorkerSessions(directory: string, settings: WorkerSettingsPort, model: WorkspaceProviderFactory = modelFor, requests?: RequestJournal, activeOutsideChat: () => number = () => 0, consumption?: ConsumptionRuntime, capacity?: Pick<WorkerCapacityContext, 'remote'>) {
+export function createWorkerSessions(directory: string, settings: WorkerSettingsPort, model: WorkspaceProviderFactory = modelFor, requests?: RequestJournal, activeOutsideChat: () => number = () => 0, consumption?: ConsumptionRuntime, capacity?: Pick<WorkerCapacityContext, 'remote'>, processes?: WorkspaceProcessTools) {
   const requestJournal = requests ?? new WorkerRequestJournal(directory);
   const interactions = new WorkerInteractionJournal(directory), runs = new WorkerRunJournal(directory);
   return new WorkerSessions(settings, {
-    model: workspaceModelFactory(directory, settings, model, consumption, runs), storage: sessionCatalogStorage(directory),
+    model: workspaceModelFactory(directory, settings, model, consumption, runs, processes), storage: sessionCatalogStorage(directory),
     consumptionBlocked: consumption ? () => consumption.status().blocked : undefined,
     capacity: capacity ? { remote: capacity.remote, consumption: () => consumption?.status() ?? null } : undefined,
     requests: requestJournal, interactions, runs,
@@ -87,10 +90,10 @@ export function createWorkerSessions(directory: string, settings: WorkerSettings
     definitions: createWorkerDefinitions(directory), activeOutsideChat,
   });
 }
-export function createLocalTaskboard(directory: string, settings: WorkerSettingsPort, sessions: WorkerSessions, modelOrWorkspaces: WorkspaceProviderFactory | LocalTaskWorkspaces = modelFor, workspaces?: LocalTaskWorkspaces, consumption?: ConsumptionRuntime) {
+export function createLocalTaskboard(directory: string, settings: WorkerSettingsPort, sessions: WorkerSessions, modelOrWorkspaces: WorkspaceProviderFactory | LocalTaskWorkspaces = modelFor, workspaces?: LocalTaskWorkspaces, consumption?: ConsumptionRuntime, processes?: WorkspaceProcessTools) {
   const model = typeof modelOrWorkspaces === 'function' ? modelOrWorkspaces : modelFor;
   return new LocalTaskboard(settings, sessions, {
-    model: workspaceModelFactory(directory, settings, model, consumption, sessions.runs), storage: localTaskStorage(directory), files: approvedTaskFiles, development: createDevelopmentRuntime,
+    model: workspaceModelFactory(directory, settings, model, consumption, sessions.runs, processes), storage: localTaskStorage(directory), files: approvedTaskFiles, development: createDevelopmentRuntime, observations: processes?.observations,
     workspaces: typeof modelOrWorkspaces === 'function' ? workspaces : modelOrWorkspaces,
   });
 }

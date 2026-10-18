@@ -1,3 +1,5 @@
+import { servicePolicyDraft, servicePolicyFromDraft, serviceDraftError, newServicePreset } from './service-presets-draft';
+import { serviceLimits } from '../application/service-policy';
 import { toolTimeLimits } from '../application/tool-limits';
 import { defaultDelegationPolicy, delegationLimits } from '../application/delegation-policy';
 import { validateMcpAddress } from '../application/mcp-endpoint';
@@ -73,13 +75,15 @@ const destination = (value: { transport: string; command: string; args?: string[
 
 /** Tool grants stay drafts until the paused, drained worker acknowledges a revision. */
 export function createToolAccessEditor(ports: EditorPorts) {
-  const draft = reactive({ delegation: defaultDelegationPolicy() as { enabled: boolean; maxChildren: number | string; maxConcurrent: number | string }, files: false, commands: [] as CommandDraft[], cliTools: [] as CliToolDraft[], webOrigins: '', mcp: [] as McpDraft[], revision: -1, baseline: '', busy: false, discovering: '', checking: false, error: '', notice: '', uncertain: null as ToolAccessUpdate | null });
+  const draft = reactive({ services: servicePolicyDraft(), delegation: defaultDelegationPolicy() as { enabled: boolean; maxChildren: number | string; maxConcurrent: number | string }, files: false, commands: [] as CommandDraft[], cliTools: [] as CliToolDraft[], webOrigins: '', mcp: [] as McpDraft[], revision: -1, baseline: '', busy: false, discovering: '', checking: false, error: '', notice: '', uncertain: null as ToolAccessUpdate | null });
   const delegation = () => ({ enabled: draft.delegation.enabled, maxChildren: Number(draft.delegation.maxChildren), maxConcurrent: Number(draft.delegation.maxConcurrent) });
-  const values = () => ({ delegation: delegation(), files: draft.files, commands: draft.commands.map(timeoutDraft), cliTools: draft.cliTools.map(timeoutDraft), webOrigins: draft.webOrigins, mcp: draft.mcp.map(timeoutDraft) });
+  const values = () => ({ services: draft.services, delegation: delegation(), files: draft.files, commands: draft.commands.map(timeoutDraft), cliTools: draft.cliTools.map(timeoutDraft), webOrigins: draft.webOrigins, mcp: draft.mcp.map(timeoutDraft) });
   const dirty = computed(() => json(values()) !== draft.baseline);
   const stale = computed(() => draft.revision >= 0 && !!ports.view() && draft.revision !== ports.view()!.revision);
   const locked = computed(() => !ports.unlocked() || draft.busy || draft.checking || !!draft.uncertain);
   const validation = computed(() => {
+    const serviceError = serviceDraftError(draft.services);
+    if (serviceError) return serviceError;
     const grant = delegation();
     if (!Number.isSafeInteger(grant.maxChildren) || grant.maxChildren < 1 || grant.maxChildren > delegationLimits.maxChildren) return 'Use a whole number from 1–4 for the subagent limit per attempt.';
     if (!Number.isSafeInteger(grant.maxConcurrent) || grant.maxConcurrent < 1 || grant.maxConcurrent > delegationLimits.maxConcurrent) return 'Use a whole number from 1–2 for concurrent subagents.';
@@ -146,6 +150,7 @@ export function createToolAccessEditor(ports: EditorPorts) {
     return destinationChanged(item) || !!saved && chatDirectoryOf(saved) !== (item.transport === 'stdio' ? item.chatDirectory : privateWorkspace);
   }
   function accept(view: ToolAccessView, notice = '') {
+    draft.services = servicePolicyDraft(view.services);
     draft.delegation = { ...(view.delegation ?? defaultDelegationPolicy()) };
     draft.files = view.builtins.files;
     draft.commands = view.builtins.commands.map(item => ({ id: item.id, name: item.name, executable: item.executable, arguments: json(item.args), enabled: item.enabled, verification: item.verification === true, timeoutSeconds: seconds(item.timeoutMs), chatDirectory: chatDirectoryOf(item) }));
@@ -161,8 +166,13 @@ export function createToolAccessEditor(ports: EditorPorts) {
   }
   const stopView = watch(() => [ports.unlocked(), json(ports.view())], observe, { immediate: true });
   const stopAccess = watch(ports.unlocked, unlocked => { if (!unlocked) { for (const item of draft.mcp) item.secret = ''; draft.uncertain = null; } }, { flush: 'sync' });
-  const stopEpoch = watch(ports.epoch, () => Object.assign(draft, { delegation: defaultDelegationPolicy(), files: false, commands: [], cliTools: [], webOrigins: '', mcp: [], revision: -1, baseline: '', busy: false, discovering: '', checking: false, error: '', notice: '', uncertain: null }), { flush: 'sync' });
+  const stopEpoch = watch(ports.epoch, () => Object.assign(draft, { services: servicePolicyDraft(), delegation: defaultDelegationPolicy(), files: false, commands: [], cliTools: [], webOrigins: '', mcp: [], revision: -1, baseline: '', busy: false, discovering: '', checking: false, error: '', notice: '', uncertain: null }), { flush: 'sync' });
   function reload() { if (!locked.value && ports.view()) accept(ports.view()!); }
+  function addService() {
+    if (locked.value || draft.services.presets.length >= serviceLimits.maximumPresets) return;
+    draft.services.presets.push(newServicePreset(draft.services.presets, ports.view()?.workerNode ?? ''));
+    draft.notice = '';
+  }
   function addCommand() {
     if (locked.value || draft.commands.length >= 16) return;
     let n = 1; while ([...draft.commands, ...draft.cliTools, ...draft.mcp].some(item => item.id === `command-${n}`)) n++;
@@ -179,7 +189,7 @@ export function createToolAccessEditor(ports: EditorPorts) {
     draft.mcp.push({ id: `mcp-${n}`, name: '', transport: 'stdio', enabled: false, command: '', arguments: '[]', url: '', secretEnv: 'MCP_AUTH_TOKEN', secret: '', clearSecret: false, allowedTools: [], chatDirectory: privateWorkspace, timeoutSeconds: '' }); draft.notice = '';
   }
   function command(): ToolAccessUpdate {
-    return { expectedRevision: draft.revision, delegation: delegation(), builtins: { files: draft.files, commands: draft.commands.map(item => ({ id: item.id, name: item.name.trim(), executable: item.executable.trim(), args: argumentsOf(item.arguments), enabled: item.enabled, verification: item.verification, ...savedChatDirectory(item.chatDirectory), timeoutMs: toolTimeoutMs(item.timeoutSeconds) })), cliTools: draft.cliTools.map(item => ({ id: item.id, name: item.name.trim(), description: item.description.trim(), enabled: item.enabled, executable: item.executable.trim(), args: argumentsOf(item.arguments), commands: parseCliRules(item.commands), refusedOptions: words(item.refusedOptions), maxArgs: item.maxArgs, maxArgLength: item.maxArgLength, outputKiB: item.outputKiB, truncationHint: item.truncationHint.trim(), timeoutMs: toolTimeoutMs(item.timeoutSeconds) })), webOrigins: lines(draft.webOrigins).map(value => new URL(value).origin) }, mcp: draft.mcp.map(item => ({ id: item.id, name: item.name.trim(), transport: item.transport, enabled: item.enabled, command: item.transport === 'stdio' ? item.command.trim() : '', args: item.transport === 'stdio' ? argumentsOf(item.arguments) : [], url: item.transport === 'http' ? item.url.trim() : '', secretEnv: item.transport === 'stdio' ? item.secretEnv : '', allowedTools: catalogChanged(item) ? [] : [...item.allowedTools], timeoutMs: toolTimeoutMs(item.timeoutSeconds), ...(item.secret ? { secret: item.secret } : {}), ...(item.clearSecret ? { clearSecret: true } : {}), ...(item.transport === 'stdio' ? savedChatDirectory(item.chatDirectory) : {}) })) };
+    return { expectedRevision: draft.revision, services: servicePolicyFromDraft(draft.services), delegation: delegation(), builtins: { files: draft.files, commands: draft.commands.map(item => ({ id: item.id, name: item.name.trim(), executable: item.executable.trim(), args: argumentsOf(item.arguments), enabled: item.enabled, verification: item.verification, ...savedChatDirectory(item.chatDirectory), timeoutMs: toolTimeoutMs(item.timeoutSeconds) })), cliTools: draft.cliTools.map(item => ({ id: item.id, name: item.name.trim(), description: item.description.trim(), enabled: item.enabled, executable: item.executable.trim(), args: argumentsOf(item.arguments), commands: parseCliRules(item.commands), refusedOptions: words(item.refusedOptions), maxArgs: item.maxArgs, maxArgLength: item.maxArgLength, outputKiB: item.outputKiB, truncationHint: item.truncationHint.trim(), timeoutMs: toolTimeoutMs(item.timeoutSeconds) })), webOrigins: lines(draft.webOrigins).map(value => new URL(value).origin) }, mcp: draft.mcp.map(item => ({ id: item.id, name: item.name.trim(), transport: item.transport, enabled: item.enabled, command: item.transport === 'stdio' ? item.command.trim() : '', args: item.transport === 'stdio' ? argumentsOf(item.arguments) : [], url: item.transport === 'http' ? item.url.trim() : '', secretEnv: item.transport === 'stdio' ? item.secretEnv : '', allowedTools: catalogChanged(item) ? [] : [...item.allowedTools], timeoutMs: toolTimeoutMs(item.timeoutSeconds), ...(item.secret ? { secret: item.secret } : {}), ...(item.clearSecret ? { clearSecret: true } : {}), ...(item.transport === 'stdio' ? savedChatDirectory(item.chatDirectory) : {}) })) };
   }
   async function send(submitted: ToolAccessUpdate) {
     if (!ports.unlocked() || draft.busy || draft.checking) return;
@@ -222,6 +232,6 @@ export function createToolAccessEditor(ports: EditorPorts) {
     return items.some(item => item.value === current) ? items : [...items, { label: `Repository “${current.slice('repository:'.length)}” · no longer assigned`, value: current }];
   }
   const workerNode = () => ports.view()?.workerNode ?? '';
-  return { draft, dirty, chatDirectories, stale, locked, workerNode, validation, timeoutNote, canSave, canDiscover, savedConnection, destinationChanged, catalogChanged, reload, addCommand, addCliTool, addMcp, save, retry, check, resolveUncertain, discover, dispose: () => { stopView(); stopAccess(); stopEpoch(); } };
+  return { draft, dirty, chatDirectories, stale, locked, workerNode, validation, timeoutNote, canSave, canDiscover, savedConnection, destinationChanged, catalogChanged, reload, addService, addCommand, addCliTool, addMcp, save, retry, check, resolveUncertain, discover, dispose: () => { stopView(); stopAccess(); stopEpoch(); } };
 }
 export type ToolAccessEditor = ReturnType<typeof createToolAccessEditor>;

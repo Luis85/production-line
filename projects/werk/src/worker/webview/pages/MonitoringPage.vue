@@ -5,6 +5,7 @@ import UAlert from '@nuxt/ui/components/Alert.vue';
 import MetricsConsumptionPanel from '../components/MetricsConsumptionPanel.vue';
 import MetricsResourcesPanel from '../components/MetricsResourcesPanel.vue';
 import MetricsExecutionPanel from '../components/MetricsExecutionPanel.vue';
+import MetricsProcessesPanel from '../components/MetricsProcessesPanel.vue';
 import { state, date, getCapacityFreshness } from '../store';
 import { buildWorkerCapacityView } from '../worker-capacity';
 import { useWorkerClock } from '../useWorkerSnapshot';
@@ -58,6 +59,7 @@ const uptime = computed(() => {
         <MetricsConsumptionPanel />
         <MetricsResourcesPanel />
       </div>
+      <MetricsProcessesPanel />
       <MetricsExecutionPanel />
 
       <details class="metrics-diagnostics">

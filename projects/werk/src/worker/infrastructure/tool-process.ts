@@ -9,5 +9,5 @@ export interface ApprovedToolProcessOptions {
 export function runApprovedToolProcess(executable: string, args: string[], options: ApprovedToolProcessOptions): Promise<RunResult> {
   const env: NodeJS.ProcessEnv = Object.fromEntries(['PATH', 'SystemRoot', 'WINDIR', 'TEMP', 'TMP', 'TMPDIR', 'LANG', 'LC_ALL'].flatMap(key => process.env[key] === undefined ? [] : [[key, process.env[key]]]));
   if (options.disableColor) Object.assign(env, { NO_COLOR: '1', FORCE_COLOR: '0', TERM: 'dumb' });
-  return runProcess(executable, args, { cwd: options.cwd, env, mode: 'contained', signal: options.signal, timeoutMs: options.timeoutMs, maxOutputBytes: options.maxOutputBytes, captureStderr: true, allowNonZeroExit: true });
+  return runProcess(executable, args, { cwd: options.cwd, env, mode: 'contained', observation: { kind: 'tool', label: 'Approved command' }, signal: options.signal, timeoutMs: options.timeoutMs, maxOutputBytes: options.maxOutputBytes, captureStderr: true, allowNonZeroExit: true });
 }

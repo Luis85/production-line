@@ -1,3 +1,4 @@
+import { stopSessionProcesses } from './workspace-processes.js';
 import { admitFeatureRequest } from '../application/feature-admission.js';
 import { interactionFeatureRequest, sessionFeatureRequest, type FeatureRequestReference } from '../application/feature-request-reference.js';
 import { assertDirectFeatureCreation, isSharedFeatureSession } from './workspace-feature-authoring.js';
@@ -66,7 +67,7 @@ export async function task(workspace: WorkspaceContext, input: unknown, referenc
         if (!admitted) assertDirectFeatureCreation(workspace);
       }
       if (body.action === "get") return workspace.sessions.detail(id);
-      if (body.action === "cancel") return workspace.sessions.cancelTask(id);
+      if (body.action === "cancel") { const result = await workspace.sessions.cancelTask(id); await stopSessionProcesses(workspace, id); return result; }
       if (workspace.configurationUpdating || workspace.executionProfiles?.pending())
         throw new DomainError("conflict", "Finish the execution profile change before starting new work.");
       if (body.action !== 'create') {

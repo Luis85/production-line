@@ -26,12 +26,13 @@ async function fixture(t, configuredFolder = false) {
   await mkdir(state); await mkdir(project); if (configuredFolder) await mkdir(features);
   await writeFile(join(project, 'approved.txt'), 'PRIVATE APPROVED SNAPSHOT\n');
   const config = { stateDir: state, projectDir: project, pollMs: 1000, timeoutMs: 60000, ...(configuredFolder ? { features: { directory: features, provider: 'openai-api', pollMs: 1000 } } : {}) };
-  let workspace, journal, server;
+  let workspace, journal, server, configured = false;
   async function close() { if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); server = undefined; } if (workspace) { await workspace.close(); workspace = undefined; } journal?.close(); journal = undefined; }
   async function open() {
     journal = new SnapshotJournal(state, 'a'.repeat(64), 'b'.repeat(64)); await journal.init();
     workspace = new WorkerWorkspace(config, journal, () => workerStatus({ queuedTasks: [] })); await workspace.init();
-    await workspace.updateSettings({ board: { paused: true }, provider: { id: 'openai-api', apiKey: 'fixture-secret-api-key', model: 'fixture-model' } });
+    await workspace.updateSettings({ board: { paused: true }, ...(!configured ? { provider: { id: 'openai-api', apiKey: 'fixture-secret-api-key', model: 'fixture-model' } } : {}) });
+    configured = true;
   }
   t.after(async () => { await close(); await rm(directory, { recursive: true, force: true }); });
   await open();
@@ -88,6 +89,7 @@ test('unified file creation replays the exact session and rejects identity or ap
   const note = await f.workspace.featureTrackingCommand({ action: 'get', sessionId: first.session.id });
   assert.match(note.markdown, /approved.txt/); assert.doesNotMatch(note.markdown, /PRIVATE APPROVED SNAPSHOT|fixture-secret-api-key/);
   await f.close(); await f.open();
+  assert.equal(f.workspace.board.detail('file-one').status, 'queued', 'The original prepared attempt remains queued after restart.');
   const restored = await f.workspace.task(input); assert.equal(restored.session.id, first.session.id); assert.equal(restored.session.featureRequest.path, note.path);
   assert.equal(f.workspace.board.view().tasks.length, 1); assert.equal(f.workspace.sessions.runs.list().total, 1);
 });

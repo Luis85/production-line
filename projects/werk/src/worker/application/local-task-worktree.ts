@@ -31,7 +31,7 @@ export function developmentRuntime(host: Pick<LocalTaskRuntime, "settings" | "de
 
 export async function assertToolWorkspace(host: Pick<LocalTaskRuntime, "settings" | "workspaces" | "files">, task: LocalTask, signal: AbortSignal, verifyOnly = false) {
     const policy = host.settings.toolPolicy();
-    const granted = policy.builtins.files || policy.builtins.commands.some(item => item.enabled) || policy.builtins.cliTools.some(item => item.enabled) || policy.builtins.webOrigins.length || policy.mcp.some(item => item.enabled && item.allowedTools.length);
+    const granted = policy.services?.enabled && policy.services.presets.some(item => item.enabled) || policy.builtins.files || policy.builtins.commands.some(item => item.enabled) || policy.builtins.cliTools.some(item => item.enabled) || policy.builtins.webOrigins.length || policy.mcp.some(item => item.enabled && item.allowedTools.length);
     if (!granted || !task.worktree) return;
     const fail = () => new DomainError('conflict', 'The retained task worktree could not be verified. Create a new task before using tools; accepted file snapshots remain saved.');
     if (!task.worktreeIdentity || !task.baseCommit || !host.workspaces) throw fail();

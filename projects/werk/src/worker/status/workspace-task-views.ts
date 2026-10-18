@@ -1,3 +1,4 @@
+import { stopSessionProcesses } from './workspace-processes.js';
 import type { WorkspaceContext } from './workspace-context.js';
 import { publicTaskConversation } from '../application/public-task-transcript.js';
 import { object, identifier } from "../../shared/contracts.js";
@@ -22,6 +23,7 @@ export function chatSnapshot(workspace: WorkspaceContext, id = workspace.session
 export async function cancelChat(workspace: WorkspaceContext){
   const id = workspace.sessions.current.id;
   await withFeatureTracking(workspace, () => workspace.chat.cancel());
+  await stopSessionProcesses(workspace, id);
   return chatSnapshot(workspace, id);
 }
 
@@ -51,7 +53,9 @@ export async function taskboardAction(workspace: WorkspaceContext, input: unknow
       throw new DomainError('conflict', 'Continue this shared Feature Request through its current Task checkpoint in the interaction controls or Markdown note.');
     return withRepositoryAdmission(workspace, () => workspace.board.action(input));
   }
-  return workspace.board.action(input);
+  const result = await workspace.board.action(input);
+  await workspace.processes?.reconcileGrants();
+  return result;
 }
 
 export function assertTaskCanContinue(workspace: WorkspaceContext, sessionId: string){

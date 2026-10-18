@@ -92,6 +92,29 @@ model prompt. The worker is the only component that prompts an LLM; Factory and
 orchestrator own routing, not model execution. Repository-file approval lives in
 the same task interaction; generated patches still require human review.
 
+## Feature Request Review
+
+Review is a request-scoped page reached from the Taskboard, conversation or History.
+Accepted scope, changes, current checks, human decisions and shared publication
+appear together with one next valid action. It projects existing request authority;
+it never creates a parallel lifecycle. Inconsistent ownership or stale evidence
+blocks decisions. Read-only inspection does not select another conversation.
+Acceptance, implementation completion and a Git merge are distinct events.
+
+## Worker-owned Processes
+
+Development services require explicit fixed presets, a bounded lifetime and restart
+budget. They belong to one Feature Request and its pinned worktree. Successful model
+turns may leave them running for review; cancellation, failed work, revoked grants,
+archive, lifetime expiry and shutdown stop the owned service. Model and UI controls
+use opaque service identities, never arbitrary process IDs or command arguments.
+
+Metrics shows owned services and finite process observations with separate scope,
+resource coverage and retention. Service logs are bounded. An unavailable sample is
+not zero usage, a live process is not a health check, and services do not add task
+execution slots. The webview provides explicit stop/restart decisions with conflict
+and uncertain-response recovery.
+
 ## Worker Settings
 
 Settings sections save independently and retain unsaved edits while navigating
@@ -108,8 +131,9 @@ observations together for this worker. Reported tokens, reservations and remaini
 allowance stay distinct; the budget is not a provider subscription balance and
 excludes everyday usage outside the worker. Resource meters distinguish worker
 Node-process CPU/RSS/heap from whole-host memory and state-volume free space.
-Model subprocesses are not measured, and no historical resource time series is
-implied.
+The process section separately observes finite model/tool/MCP/Git groups and
+explicitly granted development services. Resource coverage remains visible; no
+historical resource time series or complete provider-account consumption is implied.
 
 Execution activity offers acceptance-time windows of 24 hours, 7 days, 30 days or
 all retained attempts. It shows outcomes, average measured duration, reported

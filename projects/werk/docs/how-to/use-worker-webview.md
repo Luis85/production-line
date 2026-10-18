@@ -16,13 +16,14 @@ approved-file implementations and remote assignments. For parallel work, start
 separate workers; see the
 [native and Docker examples](assemble-independent-components.md#scale-with-separate-workers).
 
-The header separates four needs:
+Four primary pages organize the workspace; a request opens its own review page:
 
 | Page | Use it to |
 | --- | --- |
 | Taskboard · `/taskboard` | Give instructions, follow current work and answer questions. |
 | Metrics · `/dashboard` | Inspect consumption, execution evidence and worker health. |
-| History · `/history` | Find saved tasks, review patches and inspect execution evidence. |
+| History · `/history` | Find saved tasks and retained execution evidence. |
+| Feature Request review · `/review?session=…` | Inspect one request’s accepted goal, changes, checks, decision and handoff. |
 | Settings · `/settings` | Configure providers, queues, tools, repositories and intake. |
 
 Taskboard opens after unlock. Its interaction panel sits beside the board on wide
@@ -116,7 +117,9 @@ terminated before output is drained and the result is returned.
 Use a current Codex CLI supporting `exec --json --ignore-user-config`,
 `--ephemeral`, the read-only sandbox and disabled tool feature flags. Claude
 Code must support `--safe-mode`, `--restricted`, `--tools`, `--strict-mcp-config`
-and `--no-session-persistence` (adapter flags checked against 2.1.296).
+and explicit `--session-id`/`--resume` continuation (adapter flags checked against 2.1.296).
+Durable sessions refresh the worker’s current instructions and tool grants; legacy
+one-shot calls retain `--no-session-persistence`.
 CLI Chat starts in a private workspace. All adapters default to tools disabled;
 **Settings → Tools & MCP** manages explicit built-in grants and MCP connections.
 Granted CLI tools use the worker’s private MCP bridge with native tools disabled
@@ -346,15 +349,33 @@ explains available setup; the saved task records its accepted mode. Commands and
 MCP tools retain their separate saved grants. All work shares one execution slot.
 See [implement a feature](implement-feature.md) for setup and review.
 
-In **History → File tasks**, choose **Review patch**, inspect the result and
-choose **Download patch**. **Open conversation** opens its dedicated transcript.
-For proposal completions, the main reply shows the model's summary and changed
-files with added and removed line counts. Large edits use explicitly labelled
-approximate counts. Full file contents remain available in patch review and
-retained raw evidence. Implemented candidates keep their plain-text summary and
-verification evidence. **Review saved patch** under the latest reply opens the
-current retained patch; human review is still required.
-A failed evidence read offers Retry without removing the task list.
+Choose **Review changes** or **Review result** on a request card to open its
+Feature Request review page. Its deep link preserves the exact request without
+selecting a different chat. Work through the accepted goal, changed files,
+verification, decision and shared handoff in that order. The next-action card
+explains what is currently required.
+
+The file navigator shows added/removed lines and line numbers. Large or malformed
+patches have explicitly bounded previews; **Download full patch** retains the
+complete saved bytes. Markdown summaries and criteria remain readable. Required
+checks show whether their evidence belongs to the current candidate; unavailable,
+failed and outdated checks never imply successful implementation.
+
+When configured policy requires human acceptance, inspect the evidence and record
+an acceptance note. Acceptance applies to the saved output revision; changing the
+scope or output requires fresh evaluation. Completing a model turn, passing checks,
+recording acceptance and merging Git changes remain separate actions. Shared
+requests show publication and the PullRequest Markdown review note. That note does
+not mean a Git-hosting pull request has been created or merged.
+
+**Open conversation** returns to the same request to answer or resume a checkpoint.
+For new scope, create a new Feature Request. Request-text rework proposes revised
+instructions and consumes model allowance; it does not repair files. Other-worker
+ownership or inconsistent request identity keeps decisions unavailable.
+
+History’s retained file detail uses the same patch and check components and links
+to the complete review page. A reply’s **Review saved patch** opens that same
+request context. A failed evidence read offers Retry without removing the task list.
 Review it, then check and apply it from the repository:
 
 ```sh
@@ -509,6 +530,13 @@ Metrics shows the configured token allowance, resource observations, retained
 execution evidence and operational health. Measurement age and missing readings remain
 visible. Settings links open the corresponding editor without mixing forms into
 the measurements. Standalone mode is healthy without an orchestrator.
+
+The **Services & execution processes** section reports owned development services
+and observed model, tool, MCP and Git processes separately from the worker Node
+process. It links each attributed process to its Feature Request, shows sampling
+coverage and exposes granted service stop/restart controls and bounded logs. See
+[manage worker processes](manage-worker-processes.md) for lifetime, restart and
+platform behavior.
 
 Worker Node CPU/RSS excludes provider subprocesses; host memory/load includes
 other machine activity and does not prove container quota. Execution evidence

@@ -26,7 +26,7 @@ export async function repositoryGit(cwd: string, args: string[], signal: AbortSi
   try {
     const mode = gitLaunchMode(args), env = gitEnvironment(mode === 'plain' ? 'host-local' : 'host');
     const result = await runProcess(await gitExecutable(cwd, env, mode), ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'log.showSignature=false', '-c', 'core.longpaths=true', '-c', 'submodule.recurse=false', '-c', 'protocol.ext.allow=never', ...args], {
-      cwd, env, mode, signal, timeoutMs, maxOutputBytes: 2 * 1024 * 1024,
+      cwd, env, mode, observation: { kind: 'git', label: 'Git operation' }, signal, timeoutMs, maxOutputBytes: 2 * 1024 * 1024,
     });
     return result.stdout.toString('utf8');
   } catch (error) {

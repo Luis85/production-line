@@ -1,7 +1,7 @@
 import { classifyDevelopmentEvidence } from '../application/development-verification';
 import type { DevelopmentScopeView, DevelopmentEvidence } from '../application/development';
 export interface DevelopmentTaskView {
-  id: string; status: string; files: Array<{ path: string }>; hasPatch?: boolean; patch?: string | null; worktree?: string;
+  id: string; sessionId?: string; status: string; files: Array<{ path: string }>; hasPatch?: boolean; patch?: string | null; worktree?: string;
   implementation?: DevelopmentScopeView; developmentEvidence?: DevelopmentEvidence;
 }
 /** Present retained worker receipts; never infer an existing task's authority from current settings. */

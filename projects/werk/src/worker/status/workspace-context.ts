@@ -1,3 +1,5 @@
+import type { ProcessSupervisor } from '../application/process-supervisor.js';
+import { createProcessObservation } from '../infrastructure/process-observation.js';
 import { FeatureTracking } from '../application/feature-tracking.js';
 import { MarkdownFeatureTracking } from '../infrastructure/features/tracking.js';
 import { WorkerConsumption } from '../application/consumption.js';
@@ -68,6 +70,9 @@ export class WorkspaceContext {
   repositoriesUpdating = false;
   repositoryStop = new AbortController();
   readonly resources: WorkerResourceMonitor;
+  processes?: ProcessSupervisor;
+  readonly processObservations = createProcessObservation();
+  processReconciliation?: ReturnType<typeof setInterval>;
   readonly consumption: WorkerConsumption;
   readonly reviews: RequestReviewManager;
   readonly settings: WorkerSettings;
@@ -122,6 +127,7 @@ export class WorkspaceContext {
     this.sessions = createWorkerSessions(
       config.stateDir, this.settings, modelFor, undefined, () => this.board.active, this.consumption,
       { remote: () => { const status = this.get(); return { waiting: status.queuedTasks?.length ?? null, running: status.activeTasks.length }; } },
+      { supervisor: () => this.processes, observations: this.processObservations },
     );
     this.sessions.featureSource = record => {
       const shared = record.kind === 'local' && record.id.startsWith('local-')
@@ -137,7 +143,7 @@ export class WorkspaceContext {
         verifyWorktree: (selector, key, signal, commit) => prepareTaskWorkspace(this, selector, key, signal, commit, true),
         removeWorktree: (selector, key, signal, expected) => removeTaskWorkspace(this, selector, key, signal, expected),
       },
-      undefined, this.consumption,
+      undefined, this.consumption, { supervisor: () => this.processes, observations: this.processObservations },
     );
     this.featureTracking = new FeatureTracking(new MarkdownFeatureTracking(
       config.features ? join(config.features.directory, '_tasks') : join(config.stateDir, 'feature-requests'), config.stateDir,

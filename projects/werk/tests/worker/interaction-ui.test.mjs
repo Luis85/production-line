@@ -12,7 +12,7 @@ async function fixture(t, request) {
   const state = reactive({ unlocked: true, draftEpoch: 0, sessions: { selected: 'task-A' }, lastRead: '', refreshRevision: 0 });
   const changes = [], scope = effectScope(); let operation = 0; t.after(() => scope.stop());
   const ports = { reactive, ref, computed, watch, watchPrivateDrafts: watch, nextTick, workerState: state, state, request, refresh: async () => {}, defineProps: () => ({}), defineEmits: () => (name, value) => changes.push({ name, value }), onMounted() {}, onActivated() {}, onDeactivated() {}, document: { getElementById: () => ({ focus() {} }) }, crypto: { randomUUID: () => 'operation-' + ++operation } };
-  const f = scope.run(() => new Function(...Object.keys(ports), ts.transpile(script, { target: ts.ScriptTarget.ES2022 }) + '\nreturn { view, draft, submit, retryCommand, answerDrafts, operations, retry, load, lastTurn, error, readError, earlierDrafts, loading, reading, busy, mutationBlocked, resumable, responsePending, phaseLabel, notice, publishedResponses };')(...Object.values(ports)));
+  const f = scope.run(() => new Function(...Object.keys(ports), ts.transpile(script, { target: ts.ScriptTarget.ES2022 }) + '\nreturn { view, draft, submit, retryCommand, answerDrafts, operations, retry, load, lastTurn, error, readError, earlierDrafts, loading, reading, busy, mutationBlocked, resumable, responsePending, phaseLabel, notice, publishedResponses, nativeContinuation, continuationLabel };')(...Object.values(ports)));
   f.view.value = checkpoint(); return { ...f, state, changes };
 }
 test('transport retry reuses the exact answer, checkpoint revision and operation ID', async t => {
@@ -137,4 +137,17 @@ test('a shared checkpoint remains readable while shared intake status has not lo
   const f = await fixture(t, async () => checkpoint()); sharedSession(f); f.state.environment = {};
   assert.equal(f.responsePending.value, false); assert.equal(f.mutationBlocked.value, false);
   assert.match(f.phaseLabel.value, /Waiting/);
+});
+
+
+test('continuation description follows the saved dispatch rather than current provider settings', async t => {
+  const f = await fixture(t, async () => checkpoint());
+  f.lastTurn.value = { dispatch: { schemaVersion: 2, session: { logicalSessionId: 'retained-fr' }, capabilities: { nativeResume: true }, policy: { continuation: 'provider_session' } } };
+  assert.equal(f.nativeContinuation.value, true);
+  assert.equal(f.continuationLabel.value, 'Native session continuation');
+  f.lastTurn.value = { dispatch: { schemaVersion: 2, session: { logicalSessionId: 'retained-fr' }, capabilities: { nativeResume: false }, policy: { continuation: 'worker_context_replay' } } };
+  assert.equal(f.nativeContinuation.value, false);
+  assert.equal(f.continuationLabel.value, 'Saved context replay');
+  f.lastTurn.value = { dispatch: { schemaVersion: 1, capabilities: { nativeResume: false }, policy: { continuation: 'worker_context_replay' } } };
+  assert.equal(f.nativeContinuation.value, false);
 });

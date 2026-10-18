@@ -12,6 +12,7 @@ import UBadge from '@nuxt/ui/components/Badge.vue';
 import USelect from '@nuxt/ui/components/Select.vue';
 import McpConnectionsEditor from './McpConnectionsEditor.vue';
 import CliToolsEditor from './CliToolsEditor.vue';
+import ServicePresetsEditor from './ServicePresetsEditor.vue';
 import { state, workspaceAction } from '../store';
 import { toolLimitSeconds } from '../tool-access-editor';
 import { delegationLimits } from '../../application/delegation-policy';
@@ -20,7 +21,7 @@ const view = computed(() => state.toolAccess), pausing = ref(false);
 const effective = computed(() => {
   const value = view.value;
   if (!value) return 'Loading saved access';
-  const count = (value.delegation?.enabled ? 1 : 0) + (value.builtins.files ? 1 : 0) + value.builtins.commands.filter(item => item.enabled).length + (value.builtins.cliTools ?? []).filter(item => item.enabled).length + (value.builtins.webOrigins.length ? 1 : 0) + value.mcp.filter(item => item.enabled).reduce((total, item) => total + item.allowedTools.length, 0);
+  const count = (value.services?.enabled ? 1 : 0) + (value.delegation?.enabled ? 1 : 0) + (value.builtins.files ? 1 : 0) + value.builtins.commands.filter(item => item.enabled).length + (value.builtins.cliTools ?? []).filter(item => item.enabled).length + (value.builtins.webOrigins.length ? 1 : 0) + value.mcp.filter(item => item.enabled).reduce((total, item) => total + item.allowedTools.length, 0);
   return count ? 'Tool access configured' : 'All tools off';
 });
 async function pause() {
@@ -76,6 +77,7 @@ async function pause() {
               <p :id="`tool-command-check-help-${index}`" class="page-note">When enabled, this check must pass on the current changes before a new implementation request is ready for review. Use a test, lint or build command that exits when finished. Disabling the command excludes it from new requests.</p>
             </div>
           </section>
+          <ServicePresetsEditor :editor="editor" />
           <CliToolsEditor :editor="editor" />
           <McpConnectionsEditor :editor="editor" />
           <div class="tool-save-actions"><UButton type="submit" :loading="draft.busy && !draft.discovering" :disabled="!canSave">Save tool access</UButton><UButton v-if="dirty || stale" type="button" color="neutral" variant="ghost" @click="editor.reload">Discard edits and reload</UButton></div>

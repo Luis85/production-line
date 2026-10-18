@@ -28,7 +28,7 @@ export interface TaskOverviewFilter {
   includeArchived?: boolean;
 }
 export interface TaskOverviewAction {
-  kind: 'session' | 'file' | 'feature' | 'history';
+  kind: 'session' | 'review' | 'file' | 'feature' | 'history';
   label: string;
   href: string;
   sessionId?: string;
@@ -137,6 +137,12 @@ function summarize(evidence: Evidence, status: string): string {
   return labels[status] ?? status.replaceAll('_', ' ');
 }
 function primaryAction(item: Pick<TaskOverviewItem, 'sessionId' | 'localTaskId' | 'featureName' | 'status'>): TaskOverviewAction {
+  if ((item.sessionId || item.localTaskId) && ['review', 'needs_rework', 'readiness', 'gate_blocked', 'completed', 'done', 'failed', 'interrupted', 'incomplete'].includes(item.status)) {
+    const query = new URLSearchParams();
+    if (item.sessionId) query.set('session', item.sessionId);
+    if (item.localTaskId) query.set('fileId', item.localTaskId);
+    return { kind: 'review', label: item.localTaskId ? 'Review changes' : 'Review result', sessionId: item.sessionId, href: '/review?' + query };
+  }
   if (item.sessionId) return { kind: 'session', label: ['waiting_input', 'escalated'].includes(item.status) ? 'Answer task' : 'Open task', sessionId: item.sessionId, href: '/taskboard?session=' + encodeURIComponent(item.sessionId) };
   if (item.localTaskId) return { kind: 'file', label: 'Inspect file task', href: '/history' + (['review', 'failed'].includes(item.status) ? '?fileState=' + item.status : '') };
   if (item.featureName) return { kind: 'feature', label: 'Inspect request', href: '/history?view=features' };

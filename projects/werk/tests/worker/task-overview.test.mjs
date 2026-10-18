@@ -23,7 +23,7 @@ function freeze(value) {
   return value;
 }
 
-test('file task and session are one review item with their retained identities and a taskboard action', () => {
+test('file task and session are one review item with their retained identities and a dedicated review action', () => {
   const input = freeze({ sessions: sessions([session('local-patch', { kind: 'local' })]), board: board(file('patch')) });
   const result = buildTaskOverview(input);
   assert.equal(result.items.length, 1);
@@ -33,7 +33,7 @@ test('file task and session are one review item with their retained identities a
   assert.equal(item.sessionId, 'local-patch'); assert.equal(item.sourceLabel, 'Local request');
   assert.equal(item.group, 'attention'); assert.equal(item.status, 'review');
   assert.match(item.summary, /not been applied/);
-  assert.deepEqual(item.primaryAction, { kind: 'session', label: 'Open task', sessionId: 'local-patch', href: '/taskboard?session=local-patch' });
+  assert.deepEqual(item.primaryAction, { kind: 'review', label: 'Review changes', sessionId: 'local-patch', href: '/review?session=local-patch&fileId=patch' });
   assert.equal(input.sessions.records[0].status, 'completed');
 });
 
@@ -194,4 +194,18 @@ test('a passed request gate keeps an unapplied file patch in attention for revie
   assert.equal(result.items[0].statusLabel, 'Review required');
   assert.equal(result.items[0].localTaskId, 'patch');
   assert.match(result.items[0].summary, /not been applied/);
+});
+
+
+test('review routes escape exact identities while answer and active work keep conversation actions', () => {
+  const result = buildTaskOverview({ sessions: sessions([
+    session('review /?&', { requestPhase: 'review' }), session('question', { status: 'waiting_input' }),
+    session('active', { status: 'running' }), session('done', { requestPhase: 'done' }),
+  ], 'active') });
+  const items = new Map(result.items.map(item => [item.sessionId, item]));
+  assert.equal(items.get('review /?&').primaryAction.href, '/review?session=review+%2F%3F%26');
+  assert.equal(items.get('done').primaryAction.label, 'Review result');
+  assert.equal(items.get('question').primaryAction.kind, 'session');
+  assert.equal(items.get('question').primaryAction.label, 'Answer task');
+  assert.equal(items.get('active').primaryAction.href, '/taskboard?session=active');
 });

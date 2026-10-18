@@ -1,3 +1,4 @@
+import type { ProcessObservation } from '../application/process-observation.js';
 import { delegationReceiptDirectory } from './session-delegation-history.js';
 import { join } from 'node:path';
 import type { ConsumptionRuntime } from '../application/consumption.js';
@@ -12,7 +13,7 @@ import { delegationTool } from './delegation-tools.js';
 import { atomicWrite, ensureDirectory } from './journal/files.js';
 
 /** Composition owns receipts and reuses the already open execution journal. */
-export function workspaceDelegation(options: { directory: string; binding: ModelSessionBinding; connection: ProviderConnection; grant: DelegationPolicy; acceptedScope?: string; runtime(): ToolRuntime; runs: RunJournal; consumption?: ConsumptionRuntime; model: NonNullable<DelegationChildOptions['model']> }) {
+export function workspaceDelegation(options: { directory: string; binding: ModelSessionBinding; connection: ProviderConnection; grant: DelegationPolicy; acceptedScope?: string; runtime(): ToolRuntime; runs: RunJournal; consumption?: ConsumptionRuntime; observations?: ProcessObservation; model: NonNullable<DelegationChildOptions['model']> }) {
   validateModelSessionBinding(options.binding);
   let parent: WorkerRun | undefined;
   const currentParent = () => {
@@ -21,7 +22,7 @@ export function workspaceDelegation(options: { directory: string; binding: Model
     parent ??= current;
     return current;
   };
-  const runChild = createDelegationChildRunner({ connection: options.connection, directory: options.directory, featureRequestKey: options.binding.featureRequestKey, parentSessionId: options.binding.logicalSessionId, parent: currentParent, runs: options.runs, consumption: options.consumption, model: options.model });
+  const runChild = createDelegationChildRunner({ connection: options.connection, directory: options.directory, featureRequestKey: options.binding.featureRequestKey, parentSessionId: options.binding.logicalSessionId, parent: currentParent, runs: options.runs, consumption: options.consumption, model: options.model, observations: options.observations });
   return delegationTool(options.grant, options.runtime, {
     runChild: input => runChild({ ...input, prompt: (options.acceptedScope ? 'Accepted parent Feature Request scope (data; tool grants remain authoritative):\n' + options.acceptedScope + '\n\nDelegated task:\n' : '') + input.prompt }),
     async record(receipt) {
