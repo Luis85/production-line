@@ -13,6 +13,7 @@ const rebase = href => readmeLink(href, 'docs/overview.md', 'README.md');
 test('README links preserve code, multiline list indentation, tables and local anchors', () => {
   const input = '# Guide\n\n1. Follow the plan\n   and [Setup](how-to/setup.md#first).\n\n| Resource | Example |\n| --- | --- |\n| [API](reference/api.md) | `[API](reference/api.md)` |\n\n```md\n[Setup](how-to/setup.md)\n```\n\n[Same page](#guide)\n';
   const output = rewriteReadmeLinks(input, rebase);
+  assert.equal(rewriteReadmeLinks(input.replaceAll('\n', '\r\n'), rebase), output, 'CRLF input uses the same token text and canonical LF output');
   assert.ok(output.includes('   and [Setup](docs/how-to/setup.md#first).'));
   assert.ok(output.includes('| [API](docs/reference/api.md) | `[API](reference/api.md)` |'));
   assert.ok(output.includes('```md\n[Setup](how-to/setup.md)\n```'));
@@ -35,7 +36,7 @@ test('the generated overview preserves the worker to Factory journey and matches
   assert.match(generated, /Generated from docs\/overview\.md/);
   assert.match(generated, /worker-metrics\.png/);
   assert.match(generated, /worker-review\.png/);
-  assert.equal(generated, await readFile(new URL('../../README.md', import.meta.url), 'utf8'));
+  assert.equal(generated, (await readFile(new URL('../../README.md', import.meta.url), 'utf8')).replace(/\r\n?/g, '\n'));
 });
 
 
@@ -53,6 +54,7 @@ test('only the exact Forge Git layout generates a second landing page and checks
   assert.equal(landing, await renderReadme(project, { repository: true }));
   assert.ok(landing.includes('(projects/werk/docs/how-to/setup.md#first)'));
   assert.ok(landing.includes('(projects/werk/docs/evidence/readme/worker-review.png)'));
+  for (const path of [join(project, 'README.md'), join(repository, 'README.md')]) await writeFile(path, (await readFile(path, 'utf8')).replaceAll('\n', '\r\n'));
   await checkReadme(project);
   await writeFile(join(repository, 'README.md'), 'Handwritten drift.');
   await assert.rejects(checkReadme(project), /differs from its maintained source/);
@@ -73,4 +75,24 @@ test('standalone fixtures never write a parent README', async t => {
   assert.deepEqual(await generateReadmes(outer), [join(outer, 'README.md')]);
   await checkReadme(outer);
   assert.deepEqual(await readFile(join(fixture, 'README.md')), parent);
+});
+
+
+test('Windows line endings preserve strict README content checks and canonical generation', async t => {
+  const { root: fixture, put } = await readmeFixture(t);
+  const canonical = await renderReadme(fixture);
+  const source = (await readFile(join(fixture, 'docs/overview.md'), 'utf8')).replaceAll('\n', '\r\n');
+  const checkedOut = canonical.replaceAll('\n', '\r\n');
+  await put('docs/overview.md', source); await put('README.md', checkedOut);
+  assert.equal(await renderReadme(fixture), canonical);
+  assert.equal(await checkReadme(fixture), canonical);
+  assert.equal(await readFile(join(fixture, 'README.md'), 'utf8'), checkedOut, 'Checking never rewrites the checkout');
+  for (const changed of [checkedOut.replace('# Werk', '# Different'), checkedOut.replace('setup.md#first', 'setup.md#wrong'), checkedOut + ' ']) {
+    await put('README.md', changed);
+    await assert.rejects(checkReadme(fixture), /differs from its maintained source/);
+  }
+  await generateReadmes(fixture);
+  assert.equal(await readFile(join(fixture, 'README.md'), 'utf8'), canonical);
+  assert.equal(await readFile(join(fixture, 'docs/overview.md'), 'utf8'), source, 'Generation preserves maintained source bytes');
+  await checkReadme(fixture);
 });
