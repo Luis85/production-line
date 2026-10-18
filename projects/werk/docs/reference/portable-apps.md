@@ -374,7 +374,7 @@ for native permissions, model selection and unavailable usage counters.
 ```sh
 node bin/apps/worker/cli.mjs provider check --id codex-cli
 node bin/apps/worker/cli.mjs definition preview --file .werk/agents/project-reviewer.yaml
-node bin/apps/worker/cli.mjs definition import --file .werk/agents/project-reviewer.yaml --name "Project reviewer"
+node bin/apps/worker/cli.mjs definition import --file .werk/agents/project-reviewer.yaml --name "Project reviewer" --ref project-reviewer
 node bin/apps/worker/cli.mjs definition list
 node bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-reviewer
 node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --dry-run
@@ -388,7 +388,9 @@ stay JSON. JSON preview input is `{"yaml":"YAML_TEXT"}`; JSON import adds
 `"name":"Project reviewer"` and optionally a stable `"ref":"project-reviewer"`.
 `--name NAME` (import and update) sets the name for YAML and JSON input alike and
 is required when importing a YAML file; give the name either as `--name` or in
-the JSON, not both. `definition update` replaces the profile behind a reference in
+the JSON, not both. `--ref REF` on import sets the stable reference in the same
+step (as `--ref` or JSON `"ref"`, not both); a reference another definition holds
+is refused with exit 2, and `definition ref` moves it instead. `definition update` replaces the profile behind a reference in
 place: its ID and reference stay, and without a name the stored name is kept. `--dry-run` writes nothing and returns the current `revision`, the
 name and digest change, and added, removed and changed agents. Apply with
 `--if-match` set to the `revision` from the dry run or `definition list`; a changed
@@ -401,8 +403,12 @@ immutable instruction/model snapshot. Supported OpenAI/Anthropic model reference
 require a matching worker provider; the definition never silently changes billing.
 
 This is an instruction-profile integration. Preview lists unsupported Docker
-runtime features. Only after reviewing them, add `"useInstructionsOnly":true`
-to explicitly omit them for the task. Tools, hooks, harnesses, sub-agents, remote
+runtime features, and preview, import and update responses add a `warnings`
+array naming each agent that needs adaptation and its unsupported items. Only
+after reviewing them, add `"useInstructionsOnly":true` to explicitly omit them
+for the task. `feature validate` and local folder intake report a request that
+selects such a profile without it, or an unknown `definitionRef`, before the
+request is reserved. Tools, hooks, harnesses, sub-agents, remote
 resources and parallel execution are not started. Imports do not expand variables
 or load credentials. Each complete JSON request must fit 64 KiB. Definitions stay
 in private worker state and persist across restart; all task execution stays serial.

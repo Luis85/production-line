@@ -425,7 +425,7 @@ Markdown. In Docker, prefix commands with `docker compose -f
 | `feature list` | Includes tracked `records`, current `files` (including drafts), watcher errors and faults. Optional `--status STATUS`, `--archived true\|false`. |
 | `feature create` | `--name NAME.md --markdown PATH\|-`. Imports a validated draft; refuses an existing or retained filename. |
 | `feature get` | `--name NAME.md`. Returns original Markdown, SHA-256 `revision`, and the linked record when accepted. Invalid files remain readable for repair. |
-| `feature validate` | `--name NAME.md`. Validates stored frontmatter/body without submitting. |
+| `feature validate` | `--name NAME.md`. Validates stored frontmatter/body without submitting. For a request that is not yet accepted, it also resolves `definitionRef`/`definitionId` on this worker and fails with `invalid_input` when the reference is unknown, the agent is missing, the profile needs `useInstructionsOnly: true` or its provider does not match. |
 | `feature edit` | `--name NAME.md --markdown PATH\|- --if-match REVISION`. Replaces an unaccepted draft, preserving supplied Markdown bytes. Can repair malformed files. |
 | `feature submit` | `--name NAME.md --if-match REVISION`. Marks the validated draft ready; the watcher reserves and admits it. Inspect `waiting` errors if capacity/provider setup prevents admission. |
 | `feature cancel` | `--name NAME.md --if-match REVISION`. Cancels a waiting reservation or its local chat/patch task. Running cancellation is asynchronous. |

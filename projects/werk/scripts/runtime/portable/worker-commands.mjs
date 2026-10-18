@@ -85,18 +85,18 @@ export function workerCommands(catalog) {
   catalog["definition preview"] = {
     ...catalog["definition preview"],
     input: yamlInput,
-    description: "Validate a Docker Agent instruction profile without saving it. Example: definition preview --file .werk/agents/lacforce.yaml",
+    description: "Validate a Docker Agent instruction profile without saving it. Example: definition preview --file .werk/agents/lacforce.yaml. warnings names each agent that needs adaptation and its unsupported items.",
   };
   catalog["definition import"] = {
-    ...catalog["definition import"], options: ["name"],
-    input: yamlInput + " --name NAME sets the profile name and is required with a YAML file; a JSON file carries name itself (giving both is rejected).",
-    description: "Save an instruction profile. Example: definition import --file .werk/agents/lacforce.yaml --name lacforce. Then give it a reference with definition ref.",
+    ...catalog["definition import"], options: ["name", "ref"],
+    input: yamlInput + " --name NAME sets the profile name and is required with a YAML file; a JSON file carries name itself (giving both is rejected). --ref REF sets the stable reference in the same step; a JSON file may carry ref instead, not both.",
+    description: "Save an instruction profile. Example: definition import --file .werk/agents/lacforce.yaml --name lacforce --ref lacforce. A reference another definition holds is refused; move it with definition ref instead. The response lists warnings for agents that need useInstructionsOnly: true.",
   };
   catalog["definition update"] = {
     method: "POST", path: "/api/definitions", body: true, required: ["ref"], options: ["if-match", "dry-run", "name"], mutating: true,
     input: yamlInput + " --name NAME renames the profile; without it the stored name is kept (a JSON file may carry name instead, not both).",
     example: { name: "Project reviewer", yaml: "agents:\n  root:\n    model: openai/gpt-4.1\n    instruction: Review the task and list the risks first.\n" },
-    description: "Replace the instruction profile behind a stable reference in place; its id and reference stay. Example: definition update --ref lacforce --file .werk/agents/lacforce.yaml --dry-run. --dry-run previews name, content and per-agent changes without writing. Apply with --if-match REVISION from definition list or the dry run. Existing tasks keep their accepted snapshot.",
+    description: "Replace the instruction profile behind a stable reference in place; its id and reference stay. Example: definition update --ref lacforce --file .werk/agents/lacforce.yaml --dry-run. --dry-run previews name, content and per-agent changes without writing. Apply with --if-match REVISION from definition list or the dry run. Existing tasks keep their accepted snapshot. The response lists warnings for agents that need useInstructionsOnly: true.",
   };
   catalog["repository status"] = {
     method: "GET", path: "/api/repositories",

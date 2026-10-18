@@ -12,3 +12,9 @@ export function definitionName(cmd, body, options, yamlProfile) {
   if (cmd === 'definition import' && yamlProfile) throw inputError('--name required when importing a YAML profile.');
   return body;
 }
+/** Apply --ref to import input so the stable reference is set in the same operation as the import. */
+export function definitionImportReference(cmd, body, options) {
+  if (cmd !== 'definition import' || options.ref === undefined) return body;
+  if (body && Object.hasOwn(body, 'ref')) throw inputError('Reference given twice: --ref and "ref" in the --file JSON. Remove one of them.');
+  return { ...body, ref: options.ref };
+}

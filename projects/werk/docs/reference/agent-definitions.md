@@ -72,8 +72,9 @@ agent: root
 A reference is a name of 1–80 lowercase letters, digits or hyphens, starting with
 a letter or digit. The worker operator assigns it to one imported definition on
 each worker. References are unique per worker. Give a reference when importing
-(`"ref":"project-reviewer"` in the import JSON or the **Shared reference** field
-in the webview), or assign it to an existing definition:
+(`definition import --ref project-reviewer`, `"ref":"project-reviewer"` in the
+import JSON or the **Shared reference** field in the webview), or assign it to an
+existing definition:
 
 ```sh
 node bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-reviewer
@@ -116,10 +117,22 @@ snapshot as an ID selection. The snapshot records the resolved `definitionId`, t
 reference and the source digest, so you can tell later which YAML a task used. A
 request that names both `definitionRef` and `definitionId` is rejected. When no
 definition on the receiving worker holds the reference, task creation fails with
-`not_found` and nothing is queued. Local folder intake keeps such a request
-waiting with that error and retries it; shared Git intake does not claim it. The adaptation acknowledgement still applies:
+`not_found` and nothing is queued. The adaptation acknowledgement still applies:
 a profile with unsupported features also needs `useInstructionsOnly: true`.
 Existing `definitionId` requests continue to work unchanged.
+
+Feature requests report these problems before any work waits. `feature validate`
+fails with `invalid_input` for an unaccepted request whose `definitionRef` or
+`definitionId` does not resolve on this worker, whose agent is missing, or whose
+profile needs adaptation without `useInstructionsOnly: true`. Local folder intake
+lists such a ready request under its intake errors instead of reserving it, and
+admits it on a later scan once the selection resolves. Shared Git intake does not
+claim it. Task creation keeps the same check as a safety net. The message names
+the agent, its unsupported items and both remedies, for example:
+
+```text
+Agent root includes unsupported features: document.version "17" (supported: 0–16). Fix the profile and run definition update --ref project-reviewer, or set useInstructionsOnly: true in the request (Use instructions only) to run only its instructions.
+```
 
 The reference is a name, not a content pin. Each worker resolves it to the
 definition its operator has assigned, so a team using several workers must import
@@ -135,7 +148,12 @@ recognized; unsupported versions require explicit adaptation. YAML must contain
 one document. HCL, aliases, anchors and custom tags are not supported.
 
 Preview identifies unsupported fields such as toolsets, hooks, harnesses,
-sub-agents, background agents, model parameters and external resources. To use
+sub-agents, background agents, model parameters and external resources. An
+unsupported schema version is listed with its value and the supported range, such
+as `document.version "17" (supported: 0–16)`. `definition preview`, `import` and
+`update` (including `--dry-run`) responses add a top-level `warnings` array when
+any agent requires adaptation, with one entry per agent naming its unsupported
+items; the field is absent otherwise. To use
 such a profile, explicitly acknowledge **Use instructions only** after reviewing
 the omitted fields. Those features will not run. In particular, this does not
 start Docker, MCP servers, shell hooks, remote agents or concurrent sub-agents.
@@ -171,17 +189,19 @@ The portable worker exposes the same workflow to users, CI and AI agents:
 
 ```sh
 node bin/apps/worker/cli.mjs definition preview --file .werk/agents/project-reviewer.yaml
-node bin/apps/worker/cli.mjs definition import --file .werk/agents/project-reviewer.yaml --name "Project reviewer"
+node bin/apps/worker/cli.mjs definition import --file .werk/agents/project-reviewer.yaml --name "Project reviewer" --ref project-reviewer
 node bin/apps/worker/cli.mjs definition list
 node bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-reviewer
 node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --dry-run
 node bin/apps/worker/cli.mjs definition delete --id DEFINITION_ID
 ```
 
-A `.yaml` or `.yml` file is the profile itself; import requires `--name` with it,
-and `definition ref` assigns the reference afterwards. The JSON form
-`{"name":"Project reviewer","ref":"project-reviewer","yaml":"YAML_TEXT"}` (from another `--file` path or stdin) can also set the optional `ref` in one step; preview
-takes `{"yaml":"YAML_TEXT"}`.
+A `.yaml` or `.yml` file is the profile itself; import requires `--name` with it.
+`--ref REF` sets the stable reference in the same import; a reference another
+definition already holds is refused with `conflict`, so move it with
+`definition ref` instead. The JSON form
+`{"name":"Project reviewer","ref":"project-reviewer","yaml":"YAML_TEXT"}` (from another `--file` path or stdin) can also set the optional `ref`; give the reference
+as `--ref` or in the JSON, not both. Preview takes `{"yaml":"YAML_TEXT"}`.
 
 For a shared project, prepare the canonical Feature Request with a stable
 operation ID and profile reference, for example in `prepare.json`:

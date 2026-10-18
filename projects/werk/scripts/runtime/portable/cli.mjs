@@ -4,7 +4,7 @@ import { join, resolve, relative } from 'node:path';
 import { assertNode, inputError, readPrivate } from '../config.mjs';
 import { initializeWorker, projectDefaults, workflowDirectoryOption } from './project.mjs';
 import { setupFeatureAuthoring, runFeatureAuthoring } from './feature-authoring.mjs';
-import { isYamlProfile, definitionName } from './definition-input.mjs';
+import { isYamlProfile, definitionName, definitionImportReference } from './definition-input.mjs';
 import { workerBody, workerOutput, waitForWorker } from './worker-commands.mjs';
 import { commands } from './commands.mjs';
 import { loadEnvironment, environmentDefaults, seedEnvironment } from './environment.mjs';
@@ -128,7 +128,7 @@ export async function main(kind, argv = process.argv.slice(2)) {
     if (kind === 'worker' && cmd.startsWith('definition ')) {
       if (body !== undefined && (!body || typeof body !== 'object' || Array.isArray(body))) throw inputError('Definition input must be a JSON object.');
       if (body && (Object.hasOwn(body, 'action') || (['definition delete', 'definition ref', 'definition update'].includes(cmd) && ['id', 'ref', 'revision', 'dryRun'].some(key => Object.hasOwn(body, key))))) throw inputError('Definition action, target, revision and dry run come from the command.');
-      body = definitionName(cmd, body, o, yamlProfile);
+      body = definitionImportReference(cmd, definitionName(cmd, body, o, yamlProfile), o);
       if (cmd === 'definition update' && !dryRun && !o['if-match']) throw inputError('--if-match REVISION required; read it with definition list or definition update --dry-run.');
       if (cmd !== 'definition list') body = { ...body, action: cmd.split(' ')[1], ...(o.id ? { id: o.id } : {}), ...(['definition ref', 'definition update'].includes(cmd) ? { ref: o.ref } : {}), ...(o['if-match'] ? { revision: o['if-match'] } : {}), ...(cmd === 'definition update' && dryRun ? { dryRun: true } : {}) };
     }

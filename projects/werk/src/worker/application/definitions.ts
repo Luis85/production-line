@@ -28,7 +28,8 @@ function definitionChanges(before: AgentDefinition, after: Pick<AgentDefinition,
 }
 export type DefinitionChanges = ReturnType<typeof definitionChanges>;
 export interface DefinitionUpdateReceipt { id: string; ref?: string; revision: string; changes: DefinitionChanges; }
-export interface DefinitionPreview { compatibility: 'instruction-profile'; agents: DefinitionAgent[]; }
+/** `warnings` is present only when an agent requires adaptation, so the caller sees it before any task waits. */
+export interface DefinitionPreview { compatibility: 'instruction-profile'; agents: DefinitionAgent[]; warnings?: string[]; }
 export interface DefinitionUpdatePreview extends DefinitionPreview {
   dryRun: true;
   definition: { id: string; ref: string; name: string; revision: string; nextRevision: string };
@@ -37,8 +38,22 @@ export interface DefinitionUpdatePreview extends DefinitionPreview {
 export interface DefinitionCatalog {
   compatibility: 'instruction-profile';
   definitions: (AgentDefinition & { revision: string })[];
+  warnings?: string[];
 }
 export type DefinitionActionResult = DefinitionPreview | DefinitionUpdatePreview | DefinitionCatalog | (DefinitionCatalog & { updated: DefinitionUpdateReceipt });
+/** Bounded so the remedies that follow survive the 500-character request error limit. */
+function unsupportedList(items: string[]) {
+  const shown: string[] = []; let length = 0;
+  for (const item of items) { if (shown.length && length + item.length > 180) break; shown.push(item.slice(0, 160)); length += item.length + 2; }
+  return shown.join(', ') + (items.length > shown.length ? ` and ${items.length - shown.length} more` : '');
+}
+function adaptationWarnings(agents: DefinitionAgent[]): string[] {
+  return agents.filter(agent => agent.requiresAdaptation).map(agent => `Agent ${agent.name} requires adaptation: ${unsupportedList(agent.unsupported)}. Requests that select it need useInstructionsOnly: true, or fix the profile and run definition update.`);
+}
+function withWarnings<T extends object>(result: T, agents: DefinitionAgent[]): T & { warnings?: string[] } {
+  const warnings = adaptationWarnings(agents);
+  return warnings.length ? { ...result, warnings } : result;
+}
 export interface DefinitionSnapshot { definitionId: string; ref?: string; name: string; digest: string; agent: string; instruction: string; model: string; provider: DefinitionAgent['provider']; unsupported: string[]; adapted: boolean; }
 function invalid(message: string): never { throw new DomainError('invalid_input', message); }
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -73,7 +88,7 @@ export function previewDefinition(source: unknown) {
   let value: unknown; try { value = document.toJS({ maxAliasCount: 0 }); } catch { invalid('Invalid Docker Agent YAML.'); }
   if (!record(value) || !record(value.agents) || !Object.keys(value.agents).length || Object.keys(value.agents).length > 24) invalid('A Docker Agent definition needs an agents mapping with 1–24 named agents.');
   const topUnsupported = Object.keys(value).filter(key => !['agents', 'models', 'version'].includes(key)).map(key => `document.${key}`);
-  if (value.version !== undefined && !Array.from({ length: 17 }, (_, index) => String(index)).includes(String(value.version))) topUnsupported.push('document.version');
+  if (value.version !== undefined && !Array.from({ length: 17 }, (_, index) => String(index)).includes(String(value.version))) topUnsupported.push(`document.version "${String(value.version).replace(/[^a-zA-Z0-9_.+-]/g, '').slice(0, 40)}" (supported: 0–16)`);
   if (value.models !== undefined && !record(value.models)) invalid('models must be a mapping of names to model configurations.');
   const models = record(value.models) ? value.models : {};
   const agents: DefinitionAgent[] = [];
@@ -147,19 +162,19 @@ export class WorkerDefinitions {
     const definition = selection.definitionRef
       ? this.definitions.find(item => item.ref === selection.definitionRef)
       : this.definitions.find(item => item.id === selection.definitionId);
-    if (!definition) throw new DomainError('not_found', selection.definitionRef ? `No agent definition on this worker uses the reference ${String(input.definitionRef)}. Import the shared profile and assign it with definition ref.` : 'Agent definition not found.');
+    if (!definition) throw new DomainError('not_found', selection.definitionRef ? `No agent definition on this worker uses the reference ${String(input.definitionRef)}. Import the shared profile with definition import --ref ${String(input.definitionRef)}, or assign it to an imported definition with definition ref.` : `Agent definition not found: no definition on this worker has the id ${String(selection.definitionId)}. Read current ids with definition list, or select a shared profile with definitionRef.`);
     const agent = definition.agents.find(item => item.name === (input.agent ?? 'root'));
     if (!agent) invalid('Choose an agent from the selected definition.');
-    if (agent.requiresAdaptation && input.useInstructionsOnly !== true) invalid('This definition includes unsupported features. Review them and explicitly choose Use instructions only before creating the task.');
+    if (agent.requiresAdaptation && input.useInstructionsOnly !== true) invalid(`Agent ${agent.name} includes unsupported features: ${unsupportedList(agent.unsupported)}. Fix the profile and run definition update${definition.ref ? ' --ref ' + definition.ref : ''}, or set useInstructionsOnly: true in the request (Use instructions only) to run only its instructions.`);
     return { definitionId: definition.id, ...(definition.ref ? { ref: definition.ref } : {}), name: definition.name, digest: definition.digest, agent: agent.name, instruction: agent.instruction, model: agent.model, provider: agent.provider, unsupported: [...agent.unsupported], adapted: agent.requiresAdaptation };
   }
   async action(input: unknown): Promise<DefinitionActionResult> {
     const body = object(input, 'Agent definition', ['action', 'yaml', 'name', 'id', 'ref', 'revision', 'dryRun']);
-    if (body.action === 'preview') return previewDefinition(body.yaml);
-    if (body.action === 'update' && body.dryRun === true) return this.update(this.definitions, body).preview;
+    if (body.action === 'preview') { const preview = previewDefinition(body.yaml); return withWarnings(preview, preview.agents); }
+    if (body.action === 'update' && body.dryRun === true) { const { preview } = this.update(this.definitions, body); return withWarnings(preview, preview.agents); }
     if (body.dryRun !== undefined && (body.action !== 'update' || body.dryRun !== false)) invalid('dryRun is supported only by definition update and must be true or false.');
     if (body.revision !== undefined && body.action !== 'update') invalid('A definition revision guards only definition update.');
-    let updated: DefinitionUpdateReceipt | undefined;
+    let updated: DefinitionUpdateReceipt | undefined, written: DefinitionAgent[] = [];
     const operation = this.writes.run(async () => {
       let next = structuredClone(this.definitions);
       if (body.action === 'import') {
@@ -168,6 +183,7 @@ export class WorkerDefinitions {
         const ref = body.ref === undefined || body.ref === '' ? undefined : reference(body.ref, 'Definition reference');
         const holder = ref && next.find(item => item.ref === ref);
         if (holder) throw new DomainError('conflict', `Definition reference ${ref} already selects ${holder.name}. Import without a reference, then move it with definition ref.`);
+        written = parsed.agents;
         next.push({ id: randomUUID(), ...(ref ? { ref } : {}), name, digest: createHash('sha256').update(String(body.yaml)).digest('hex'), createdAt: new Date().toISOString(), agents: parsed.agents });
       } else if (body.action === 'ref') {
         // Moving a reference only affects tasks created afterwards; existing tasks keep their snapshots.
@@ -181,6 +197,7 @@ export class WorkerDefinitions {
         }
       } else if (body.action === 'update') {
         const { target, replacement, preview } = this.update(next, body);
+        written = preview.agents;
         updated = { id: target.id, ref: preview.definition.ref, revision: preview.changes.unchanged ? preview.definition.revision : preview.definition.nextRevision, changes: preview.changes };
         if (preview.changes.unchanged) return;
         Object.assign(target, replacement);
@@ -191,7 +208,7 @@ export class WorkerDefinitions {
       const saved = JSON.stringify(next); if (Buffer.byteLength(saved) > 2097152) throw new DomainError('conflict', 'Definition storage is full. Delete an unused definition.');
       await this.storage.write(saved); this.definitions = next;
     });
-    await operation; return updated ? { ...this.view(), updated } : this.view();
+    await operation; return withWarnings(updated ? { ...this.view(), updated } : this.view(), written);
   }
   /**
    * Replace the content behind a stable reference while keeping its id and reference.

@@ -23,7 +23,7 @@ import { WorkerResourceMonitor } from "../application/resource-monitor.js";
 import { WorkerResourceJournal } from "../infrastructure/journal/resource-events.js";
 import { resourceSampler } from "../infrastructure/resource-sampler.js";
 import { serviceEvent } from "../../shared/http/observability.js";
-import { FeatureRequests } from "../application/feature-requests.js";
+import { FeatureRequests, type FeatureInput } from "../application/feature-requests.js";
 import { MarkdownFeatureFolder } from "../infrastructure/features/folder.js";
 import { definitionConnection } from "../application/definitions.js";
 import { WorkerSettings } from "../infrastructure/settings.js";
@@ -57,6 +57,12 @@ export interface WorkspaceConfiguration {
     pollMs: number;
     timeoutMs: number;
   }
+
+/** Admission refuses these selections; folder and shared intake report them before reserving or claiming a request. */
+function definitionIssue(workspace: WorkspaceContext, input: Pick<FeatureInput, 'provider' | 'definitionId' | 'definitionRef' | 'agent' | 'useInstructionsOnly'>) {
+  try { definitionConnection(workspace.settings.provider(input.provider), workspace.definitions.select({ definitionId: input.definitionId, definitionRef: input.definitionRef, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly })); return undefined; }
+  catch (error) { return error instanceof Error ? error.message : 'The selected agent definition is unavailable.'; }
+}
 
 /** Composition-owned services and coordination state; command modules retain their own policies. */
 export class WorkspaceContext {
@@ -221,10 +227,7 @@ export class WorkspaceContext {
       defaultProvider: () => this.settings.value.defaultProvider,
       resolveSelection: input => modelSelection(this.settings.provider(input.provider), input, this.definitions.select({ ...input })),
       continue: (record, command) => continueFeatureInteraction(this, this.board.executionDetail(record.taskId!).sessionId, command),
-      admissionIssue: input => {
-        try { definitionConnection(this.settings.provider(input.provider), this.definitions.select({ definitionId: input.definitionId, definitionRef: input.definitionRef, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly })); return undefined; }
-        catch (error) { return error instanceof Error ? error.message : 'The selected agent definition is unavailable.'; }
-      },
+      admissionIssue: input => definitionIssue(this, input),
       inspect: id => inspectSharedFeature(this, id),
     });
     if (config.features)
@@ -238,6 +241,7 @@ export class WorkspaceContext {
         {
           selection: input => modelSelection(this.settings.provider(input.provider), input, this.definitions.select({ ...input })),
           submit: (record) => submitFeature(this, record),
+          admissionIssue: input => definitionIssue(this, input),
           inspect: (record) => inspectFeature(this, record),
           reference: id => this.sessions.view().records.find(record => record.id === id)?.feature,
           interact: (record, command) => continueFeatureInteraction(this, record.sessionId, command),

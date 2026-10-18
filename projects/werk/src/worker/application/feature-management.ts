@@ -50,7 +50,13 @@ export async function manageFeature(input: unknown, context: FeatureManagementCo
     if (id) atName = index.records.find(record => record.id === id);
   }
   if (action === 'get') return { ...file, record: atName ?? null };
-  if (action === 'validate') return { name, revision: file.revision, valid: true, ...documents.validate(file.markdown) };
+  if (action === 'validate') {
+    const parsed = documents.validate(file.markdown);
+    // Accepted input keeps its frozen definition snapshot; only unaccepted requests are checked against current definitions.
+    const issue = atName ? undefined : queue.admissionIssue?.(parsed.input);
+    if (issue) throw new DomainError('invalid_input', issue);
+    return { name, revision: file.revision, valid: true, ...parsed };
+  }
   if (action === 'result') {
     if (!atName) return { name, record: null, execution: { status: documents.validate(file.markdown).status ?? 'ready' } };
     return { name, record: atName, execution: queue.inspect(atName) ?? null };

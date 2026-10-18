@@ -16,6 +16,8 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 - An optional `readyReviewPrompt` enables a model Feature Request Ready Check before deterministic readiness checks. The worker confirms its Git claim, reviews without tools using the request's selected model and existing capacity/allowance, and publishes findings in the same request. Questions pause work until the team answers in Markdown and commits and pushes `status: ready`; unchanged polling never starts another review.
 - `init` and `feature setup` accept `--workflow-dir DIR` to place the Feature Requests Base, `reviews`, `tasks` and the ready/done check files under one project folder, such as a structured Obsidian vault, instead of the project root. The Base's folder filters follow. An existing `.werk/feature-workflow.json` still wins; a differing `--workflow-dir` is reported as a warning naming both locations and nothing is moved.
 - `init --no-npm` skips creating the root `package.json` and reports `npm: { skipped: true }`.
+- `definition import --ref REF` sets the stable reference in the same operation; a reference another definition holds is refused with the existing conflict message.
+- `definition preview`, `import` and `update` responses include a top-level `warnings` array naming each agent that requires adaptation and its unsupported items.
 
 ### Changed
 
@@ -24,6 +26,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 ### Fixed
 
 - `env init` and `init` append only the `.env` and `!.env.example` ignore rules that `.gitignore` does not already contain as exact lines, write nothing when both exist, never repeat the comment header and report the added lines as `ignoreAdded`.
+- A profile that needs adaptation no longer leaves a request waiting with a generic error. The message names the agent, its unsupported items (an unsupported schema version shows its value and the supported range 0–16) and both remedies: fix the profile and run `definition update`, or set `useInstructionsOnly: true`. `feature validate` and local folder intake now report this, and an unknown `definitionRef`, before the request is reserved; task creation keeps the check as a safety net.
 
 ## [0.13.0] - 2026-10-18
 

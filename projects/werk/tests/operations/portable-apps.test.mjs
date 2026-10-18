@@ -77,10 +77,14 @@ test('copied apps operate independently with agent tasks, durable state and late
   await ok('worker', 'settings set', [], { provider: queuedProvider, board: { paused: true, queueCapacity: 4 } });
   const definitionInput = { name: 'Project reviewer', yaml: 'version: "15"\nagents:\n  root:\n    model: openai/fixture-model\n    instruction: Review acceptance criteria before proposing work.\n' };
   const preview = await ok('worker', 'definition preview', [], { yaml: definitionInput.yaml });
-  assert.equal(preview.agents[0].name, 'root');
-  const imported = await ok('worker', 'definition import', [], definitionInput);
+  assert.equal(preview.agents[0].name, 'root'); assert.equal(preview.warnings, undefined);
+  const future = await ok('worker', 'definition preview', [], { yaml: definitionInput.yaml.replace('"15"', '"17"') });
+  assert.match(future.warnings?.[0] ?? '', /^Agent root requires adaptation: document\.version "17" \(supported: 0–16\)/);
+  const imported = await ok('worker', 'definition import', ['--ref', 'project-reviewer'], definitionInput);
   const definition = imported.definitions.find(item => item.name === definitionInput.name);
-  assert.ok(definition?.id); assert.match(definition.digest, /^[a-f0-9]{64}$/);
+  assert.ok(definition?.id); assert.match(definition.digest, /^[a-f0-9]{64}$/); assert.equal(definition.ref, 'project-reviewer');
+  const taken = await invokeApp('worker', 'definition import', ['--ref', 'project-reviewer'], { ...definitionInput, name: 'Other reviewer' });
+  assert.equal(taken.code, 2); assert.match(taken.stderr, /already selects Project reviewer/);
   assert.equal((await ok('worker', 'definition list')).definitions.length, 1);
   assert.equal((await ok('worker', 'definition ref', ['--id', definition.id, '--ref', 'project-reviewer'])).definitions[0].ref, 'project-reviewer');
   assert.equal((await invokeApp('worker', 'definition ref', ['--id', definition.id, '--ref', 'Not Valid'])).code, 2);
