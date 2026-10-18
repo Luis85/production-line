@@ -3,7 +3,7 @@
 The public Storybook starts with **Documentation**, ordered by the reader’s task:
 Start here, Set up your workspace, Work with requests, Operate the system,
 Frontend reference, and Architecture and contracts.
-[Start here](https://github.com/Luis85/production-line/blob/v0.11.0/projects/werk/docs/handbook.md) routes local worker users, distributed teams, system
+[Start here](https://github.com/Luis85/production-line/blob/v0.12.0/projects/werk/docs/handbook.md) routes local worker users, distributed teams, system
 operators and frontend contributors to the right setup journey.
 
 The same maintained Markdown under `docs/tutorials`, `docs/how-to`,
