@@ -8,9 +8,9 @@ import { ProcessRunError } from '../../shared/process/launcher.js';
 import type { DevelopmentFactory, DevelopmentEvidence, DevelopmentCandidate, DevelopmentCheckEvidence } from '../application/development.js';
 import { assertDevelopmentPolicy, validateDevelopmentState } from '../application/development.js';
 import { validateApprovedPaths } from '../application/approved-paths.js';
-import { repositoryGit } from './repositories-git.js';
+import { candidateGitOutputBytes, RepositoryGitError, repositoryGit } from './repositories-git.js';
 import { syncDirectory } from './journal/files.js';
-import { resolveCommandTimeoutMs } from '../application/tool-limits.js';
+import { resolveCandidateInspectionLimits, resolveCommandTimeoutMs } from '../application/tool-limits.js';
 
 export class CandidateToolError extends Error {}
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
@@ -19,6 +19,7 @@ function fail(message: string): never { throw new CandidateToolError(message); }
 const below = (root: string, target: string) => { const path = relative(root, target); return path === '' || !isAbsolute(path) && path !== '..' && !path.startsWith('..' + sep); };
 const missing = (error: unknown) => (error as NodeJS.ErrnoException).code === 'ENOENT';
 const safeRelative = (path: string) => !!path && !isAbsolute(path) && !path.includes('\\') && !path.includes(':') && !path.includes('\0') && path.split('/').every(part => !!part && part !== '..' && part !== '.' && part.toLowerCase() !== '.git');
+const count = (value: number) => value.toLocaleString('en-US');
 const cleanOutput = (bytes: Buffer) => bytes.toString('utf8').replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '').slice(0, 4096);
 
 /** Lazy, private worktree adapter. The application supplies retained ownership verification and durable evidence storage. */
@@ -27,6 +28,15 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
   const scope = structuredClone(options.scope);
   const approved = validateApprovedPaths(scope.approvedPaths);
   const root = resolve(options.worktree);
+  // Frozen with the attempt's dispatch; every tracked and non-ignored file is still read and fingerprinted.
+  const limits = resolveCandidateInspectionLimits(options);
+  // File listings scale with the frozen file limit: allow an average of 4 KiB per path, from the default up to 1 GiB.
+  const listingBytes = candidateGitOutputBytes(limits);
+  const listing = (args: string[], signal: AbortSignal) => repositoryGit(root, args, signal, 30000, listingBytes).then(output => output.split('\0').filter(Boolean), error => {
+    if (error instanceof RepositoryGitError && error.outputLimit) fail(`Candidate file list exceeds ${count(listingBytes)} bytes; raise execution.candidateSourceMaxFiles or reduce tracked files.`);
+    throw error;
+  });
+  const sourceBytesError = (size: number) => `Candidate source is ${count(size)} bytes; the inspection limit is ${count(limits.candidateSourceMaxBytes)} bytes (execution.candidateSourceMaxBytes).`;
   let state = structuredClone(options.initialEvidence ?? empty());
   let broken = false;
   let previous: Promise<unknown> = Promise.resolve();
@@ -67,12 +77,15 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
     if (await realpath(target) !== target) fail('Candidate path changed during inspection.');
     return target;
   }
+  /** Approved text keeps its fixed review bound; other source files use the frozen per-file limit. */
+  const tooLarge = (path: string, size: number, limit: number) => approved.includes(path) ? 'Candidate source exceeds the bounded file inspection limit.'
+    : `Candidate file ${JSON.stringify(path)} is ${count(size)} bytes; the per-file inspection limit is ${count(limit)} bytes (execution.candidateFileMaxBytes).`;
   async function bytes(path: string, limit: number): Promise<{ body: Buffer; mode: number } | null> {
     const target = await pathFor(path, true);
     const before = await lstat(target).catch(error => { if (missing(error)) return null; throw error; });
     if (!before) return null;
     if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1) fail('Candidate files must be ordinary files without symbolic or hard links.');
-    if (before.size > limit) fail('Candidate source exceeds the bounded file inspection limit.');
+    if (before.size > limit) fail(tooLarge(path, before.size, limit));
     const handle = await open(target, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     try {
       const opened = await handle.stat();
@@ -81,11 +94,25 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
       const buffer = Buffer.alloc(Math.min(limit + 1, opened.size + 1));
       let size = 0;
       while (size < buffer.length) { const part = await handle.read(buffer, size, buffer.length - size, null); if (!part.bytesRead) break; size += part.bytesRead; }
-      if (size > limit) fail('Candidate source exceeds the bounded file inspection limit.');
+      if (size > limit) fail(tooLarge(path, Math.max(size, opened.size), limit));
       const after = await handle.stat();
       if (after.size !== size || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs) fail('Candidate file changed during inspection.');
       return { body: buffer.subarray(0, size), mode: opened.mode & 0o777 };
     } finally { await handle.close(); }
+  }
+  /** Reports the whole source size once the limit is exceeded, so one settings change suffices; unread files are measured, not read. */
+  async function sizeOnDisk(rest: string[], signal: AbortSignal) {
+    let size = 0;
+    for (const path of rest) {
+      signal.throwIfAborted();
+      const target = await pathFor(path, true);
+      const info = await lstat(target).catch(error => { if (missing(error)) return null; throw error; });
+      signal.throwIfAborted();
+      if (info && (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1)) fail('Candidate files must be ordinary files without symbolic or hard links.');
+      size += info?.size ?? 0;
+    }
+    await rootIdentity(); authorize(signal);
+    return size;
   }
   function text(body: Buffer) {
     if (body.includes(0)) fail('Approved candidate files must contain UTF-8 text.');
@@ -94,22 +121,22 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
   async function inspectOnce(signal: AbortSignal): Promise<DevelopmentCandidate> {
     await guard(signal);
     const changed = (await repositoryGit(root, ['diff', '--no-ext-diff', '--no-textconv', '--name-only', '-z', scope.baseCommit, '--'], signal)).split('\0').filter(Boolean);
-    const untracked = (await repositoryGit(root, ['ls-files', '-z', '--others', '--exclude-standard'], signal)).split('\0').filter(Boolean);
+    const untracked = await listing(['ls-files', '-z', '--others', '--exclude-standard'], signal);
     if ([...changed, ...untracked].some(path => !approved.includes(path))) fail('The worktree contains changes outside the approved paths. Inspect them before continuing; they will not be published.');
-    const tracked = (await repositoryGit(root, ['ls-files', '-z', '--cached'], signal)).split('\0').filter(Boolean);
-    const flags = (await repositoryGit(root, ['ls-files', '-v', '-z'], signal)).split('\0').filter(Boolean);
+    const tracked = await listing(['ls-files', '-z', '--cached'], signal);
+    const flags = await listing(['ls-files', '-v', '-z'], signal);
     if (flags.some(entry => !entry.startsWith('H '))) fail('Candidate index flags changed. Hidden or sparse changes cannot be verified.');
     const paths = [...new Set([...tracked, ...untracked, ...approved])].sort();
-    if (paths.length > 20000) fail('Candidate source exceeds the 20,000-file inspection limit.');
+    if (paths.length > limits.candidateSourceMaxFiles) fail(`Candidate source has ${count(paths.length)} files; the inspection limit is ${count(limits.candidateSourceMaxFiles)} files (execution.candidateSourceMaxFiles).`);
     const digest = createHash('sha256').update(JSON.stringify(['werk-candidate-v1', scope.baseCommit]));
     const files: { path: string; hash: string | null }[] = [];
     const additions: { path: string; content: string; mode: number }[] = [];
     let total = 0, approvedTotal = 0;
-    for (const path of paths) {
+    for (const [index, path] of paths.entries()) {
       signal.throwIfAborted();
-      const value = await bytes(path, approved.includes(path) ? 24000 : 8 * 1024 * 1024);
+      const value = await bytes(path, approved.includes(path) ? 24000 : limits.candidateFileMaxBytes);
       total += value?.body.length ?? 0;
-      if (total > 64 * 1024 * 1024) fail('Candidate source exceeds the 64 MiB inspection limit.');
+      if (total > limits.candidateSourceMaxBytes) fail(sourceBytesError(total + await sizeOnDisk(paths.slice(index + 1), signal)));
       const fileHash = value ? hash(value.body) : null;
       digest.update(JSON.stringify([path, value?.mode ?? null, fileHash]));
       if (approved.includes(path)) {

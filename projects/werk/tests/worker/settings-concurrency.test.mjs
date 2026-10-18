@@ -131,3 +131,39 @@ test('tool budgets reject stale atomic saves and remain editable under a duratio
   const reset = JSON.parse(await readFile(join(directory, 'workspace-settings.json'), 'utf8')).execution;
   assert.equal(reset.maxToolCalls, undefined); assert.equal(reset.commandTimeoutMs, undefined);
 });
+
+
+const inspection = settings => { const { candidateSourceMaxBytes, candidateSourceMaxFiles, candidateFileMaxBytes } = settings.value.execution; return { candidateSourceMaxBytes, candidateSourceMaxFiles, candidateFileMaxBytes }; };
+test('repository inspection editors compare complete baselines inside the serialized save without partial writes', async t => {
+  const { directory, settings } = await fixture(t), expectedCandidateInspection = inspection(settings), expectedDuration = duration(settings);
+  const outcomes = await Promise.allSettled([
+    settings.update({ execution: { candidateSourceMaxFiles: 30000 }, expectedCandidateInspection }),
+    settings.update({ execution: { candidateSourceMaxBytes: 128 * 1048576, maxToolCalls: 64 }, resources: { longRunningMs: 1000 }, expectedCandidateInspection }),
+  ]);
+  assert.equal(outcomes[0].status, 'fulfilled'); assert.equal(outcomes[1].status, 'rejected'); assert.equal(outcomes[1].reason.code, 'conflict');
+  assert.deepEqual(inspection(settings), { ...expectedCandidateInspection, candidateSourceMaxFiles: 30000 });
+  assert.deepEqual(duration(settings), expectedDuration); assert.equal(settings.value.execution.maxToolCalls, 128);
+  const restarted = new WorkerSettings(directory); await restarted.init(); assert.deepEqual(inspection(restarted), inspection(settings));
+  for (const body of [
+    { expectedCandidateInspection: inspection(settings) },
+    { execution: { maxToolCalls: 64 }, expectedCandidateInspection: inspection(settings) },
+    { execution: { candidateSourceMaxFiles: 40000 }, expectedCandidateInspection: { candidateSourceMaxFiles: 30000 } },
+    { execution: { candidateSourceMaxFiles: 40000 }, expectedCandidateInspection: { ...inspection(settings), candidateFileMaxBytes: 128 * 1048576 } },
+    { execution: { candidateFileMaxBytes: 128 * 1048576 }, expectedCandidateInspection: inspection(settings) },
+  ]) await assert.rejects(settings.update(body), error => testErrorCode(error) === 'invalid_input');
+  assert.deepEqual(inspection(settings), { ...expectedCandidateInspection, candidateSourceMaxFiles: 30000 });
+  await settings.update({ execution: { candidateSourceMaxFiles: 40000 } }); assert.equal(settings.value.execution.candidateSourceMaxFiles, 40000, 'Existing clients can still send partial execution patches.');
+});
+
+test('guarded inspection saves remain editable under environment duration without changing unrelated limits or grants', async t => {
+  const { directory, settings } = await fixture(t);
+  await settings.update({ execution: { maxRuntimeMs: 7200000, maxToolCalls: 64, commandTimeoutMs: 600000 } });
+  const tools = settings.toolAccess(); process.env.WERK_WORKER_MAX_RUNTIME_MS = '10800000';
+  const overridden = new WorkerSettings(directory); await overridden.init();
+  await overridden.update({ execution: { candidateSourceMaxBytes: 128 * 1048576, candidateSourceMaxFiles: 40000, candidateFileMaxBytes: 16 * 1048576 }, expectedCandidateInspection: inspection(overridden) });
+  assert.equal(overridden.value.execution.maxRuntimeMs, 10800000); assert.equal(overridden.value.execution.maxToolCalls, 64); assert.equal(overridden.value.execution.commandTimeoutMs, 600000);
+  assert.deepEqual(overridden.toolAccess(), tools);
+  const saved = JSON.parse(await readFile(join(directory, 'workspace-settings.json'), 'utf8')).execution;
+  assert.equal(saved.maxRuntimeMs, 7200000); assert.equal(saved.candidateSourceMaxBytes, 128 * 1048576);
+  const restarted = new WorkerSettings(directory); await restarted.init(); assert.deepEqual(inspection(restarted), inspection(overridden));
+});

@@ -265,7 +265,7 @@ try {
   await queuePanel.getByRole('button', { name: 'Save queue settings', exact: true }).click();
   await until(async () => (await api('/api/settings')).board.queueCapacity === 16, 'queue settings saved');
   await page.locator('#resource-warning-hours').fill('2');
-  await page.getByRole('button', { name: 'Save duration settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Save execution limits', exact: true }).click();
   await until(async () => (await api('/api/settings')).resources.longRunningMs === 7200000, 'duration saved');
   await screenshot('settings-queue-desktop');
   await page.setViewportSize({ width: 390, height: 844 }); await screenshot('settings-queue-mobile');

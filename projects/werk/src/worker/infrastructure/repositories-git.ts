@@ -1,3 +1,5 @@
+import type { CandidateInspectionLimits } from '../application/execution-policy.js';
+import { resolveCandidateInspectionLimits } from '../application/tool-limits.js';
 import { gitExecutable } from '../../shared/git/executable.js';
 import { gitLaunchMode } from '../../shared/git/launch-mode.js';
 import { gitEnvironment } from '../../shared/git/environment.js';
@@ -10,9 +12,12 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 
 export class RepositoryGitError extends Error {
   readonly reason: 'failed' | 'timeout' | 'cancelled';
-  constructor(reason: 'failed' | 'timeout' | 'cancelled') {
+  /** True when Git was stopped for exceeding the caller's output bound; the public reason stays `failed`. */
+  readonly outputLimit: boolean;
+  constructor(reason: 'failed' | 'timeout' | 'cancelled', outputLimit = false) {
     super(reason === 'cancelled' ? 'Repository operation cancelled.' : reason === 'timeout' ? 'Repository operation timed out.' : 'Git operation failed. Check the repository and host Git authentication.');
     this.reason = reason;
+    this.outputLimit = outputLimit;
   }
 }
 /** Fixed worktree policy failures. Messages never contain paths or Git output, so adapters may show them. */
@@ -20,18 +25,23 @@ export class WorktreeProblem extends Error {
   constructor(message: string) { super(message); this.name = 'WorktreeProblem'; }
 }
 
-/** Bounded, noninteractive Git; credentials and command diagnostics never enter status or evidence. */
-export async function repositoryGit(cwd: string, args: string[], signal: AbortSignal, timeoutMs = 30000): Promise<string> {
+const DEFAULT_GIT_OUTPUT_BYTES = 2 * 1024 * 1024;
+/** One bounded listing budget for candidate inspection and retained-worktree verification. */
+export function candidateGitOutputBytes(inspection: Partial<CandidateInspectionLimits> = {}): number {
+  return Math.min(1024 ** 3, Math.max(DEFAULT_GIT_OUTPUT_BYTES, resolveCandidateInspectionLimits(inspection).candidateSourceMaxFiles * 4096));
+}
+/** Bounded, noninteractive Git; credentials and command diagnostics never enter status or evidence. Callers listing whole trees may raise the output bound. */
+export async function repositoryGit(cwd: string, args: string[], signal: AbortSignal, timeoutMs = 30000, maxOutputBytes = DEFAULT_GIT_OUTPUT_BYTES): Promise<string> {
   signal.throwIfAborted();
   try {
     const mode = gitLaunchMode(args), env = gitEnvironment(mode === 'plain' ? 'host-local' : 'host');
     const result = await runProcess(await gitExecutable(cwd, env, mode), ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'log.showSignature=false', '-c', 'core.longpaths=true', '-c', 'submodule.recurse=false', '-c', 'protocol.ext.allow=never', ...args], {
-      cwd, env, mode, observation: { kind: 'git', label: 'Git operation' }, signal, timeoutMs, maxOutputBytes: 2 * 1024 * 1024,
+      cwd, env, mode, observation: { kind: 'git', label: 'Git operation' }, signal, timeoutMs, maxOutputBytes,
     });
     return result.stdout.toString('utf8');
   } catch (error) {
     const reason = error instanceof ProcessRunError ? error.reason : 'spawn';
-    throw new RepositoryGitError(signal.aborted || reason === 'cancelled' ? 'cancelled' : reason === 'timeout' ? 'timeout' : 'failed');
+    throw new RepositoryGitError(signal.aborted || reason === 'cancelled' ? 'cancelled' : reason === 'timeout' ? 'timeout' : 'failed', reason === 'output_limit');
   }
 }
 
@@ -44,7 +54,7 @@ export interface RepositoryWorktree {
   reused: boolean;
   pristine?: boolean;
 }
-export interface WorktreeOptions {
+export interface WorktreeOptions extends Partial<CandidateInspectionLimits> {
   /** Absolute operator-selected parent for new task worktrees. Default: `<repository>/.werk/worktrees`. */
   directory?: string;
   /** Other assigned checkouts and known Git metadata are excluded from external storage. */
@@ -187,9 +197,14 @@ export async function createRepositoryWorktree(root: RepositoryRoot, repositoryI
     await ownedWorktree(path, owner, root, signal, timeoutMs);
     // Include ignored and untracked files: either can change approved snapshots.
     // Refuse index flags that could hide changes from Git's worktree comparison.
-    const index = await repositoryGit(path, ['ls-files', '-v', '-z'], signal, timeoutMs);
+    const listingBytes = candidateGitOutputBytes(options);
+    const listing = (args: string[]) => repositoryGit(path, args, signal, timeoutMs, listingBytes).catch(error => {
+      if (error instanceof RepositoryGitError && error.outputLimit) throw new WorktreeProblem(`Task worktree file list exceeds ${listingBytes.toLocaleString('en-US')} bytes; raise execution.candidateSourceMaxFiles or reduce files.`);
+      throw error;
+    });
+    const index = await listing(['ls-files', '-v', '-z']);
     const ordinaryIndex = index.split('\0').filter(Boolean).every(entry => entry.startsWith('H '));
-    const pristine = ordinaryIndex && !(await repositoryGit(path, ['status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignored'], signal, timeoutMs)).length;
+    const pristine = ordinaryIndex && !(await listing(['status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignored'])).length;
     return { repositoryId, repository: root.path, path, baseCommit: owner.baseCommit, reused: true, pristine };
   }
   if (options.reuseOnly) throw new WorktreeProblem('The retained task worktree is missing.');

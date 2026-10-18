@@ -53,18 +53,19 @@ export function createDelegationChildRunner(options: DelegationChildOptions): De
       await options.runs.start(run.id);
       const instance = (options.model ?? modelFor)(connection, join(options.directory, 'sessions', sessionId), undefined, { tools: () => input.tools, session: { binding, store } });
       if (!instance) throw new ProviderModelError('unavailable');
+      const implementsCandidate = input.tools.manifest.tools.some(tool => tool.name === 'werk_candidate_apply');
       const model: StructuredModel = {
         sessionBinding: binding,
         configuration: { id: connection.id, model: connection.model, instruction: connection.instruction ?? '' },
         capabilities: instance.capabilities ?? modelCapabilities,
         toolManifest: input.tools.manifest.tools.length ? input.tools.manifest : undefined,
-        executionPolicy: input.tools.limits ? { maxToolCalls: input.tools.limits.maxCalls, commandTimeoutMs: input.tools.limits.commandTimeoutMs } : undefined,
+        executionPolicy: input.tools.limits ? { maxToolCalls: input.tools.limits.maxCalls, commandTimeoutMs: input.tools.limits.commandTimeoutMs, ...(implementsCandidate ? input.tools.manifest.limits?.candidateInspection : {}) } : undefined,
         reply: (...args) => legacyModelReply(model, ...args),
         execute: (...args) => options.observations
           ? options.observations.run({ featureRequestKey: options.featureRequestKey, sessionId, taskId: parent.taskId ?? null, runId: run.id }, () => executeModel(instance, ...args))
           : executeModel(instance, ...args),
       };
-      const operation = input.tools.manifest.tools.some(tool => tool.name === 'werk_candidate_apply') ? 'patch' : 'chat';
+      const operation = implementsCandidate ? 'patch' : 'chat';
       const request = prepareModelRequest(model, [{ id: randomUUID(), role: 'user', text: input.prompt, at: new Date().toISOString(), state: 'complete' }], operation, input.tools.limits?.maxRuntimeMs ?? DEFAULT_MAX_RUNTIME_MS);
       result = await withConsumption(options.consumption, connection.id, signal, (bounded, observe, control) => executeModel(model, request, bounded, observe, {
         beforeCall() {

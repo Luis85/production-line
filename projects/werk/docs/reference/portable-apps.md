@@ -126,6 +126,14 @@ and `execution.commandTimeoutMs` to 300000 (1000–3600000). The total duration
 still bounds each command. Settings → Queue & duration exposes these controls;
 API/CLI saves can include the complete `expectedToolBudget` pair to reject stale
 changes. Each invocation retains the budgets captured when it was prepared.
+Worker help also lists the verified-implementation source limits
+`execution.candidateSourceMaxBytes`, `candidateSourceMaxFiles` and
+`candidateFileMaxBytes` with their defaults and ranges. Change them in **Settings →
+Queue & duration → Repository inspection limits**, or use `settings set` with an
+`execution` body. CLI/API sizes are whole bytes; the webview displays MiB. Include
+the complete `expectedCandidateInspection` baseline from `settings get` to reject
+concurrent edits. These bounds affect source inspection, not approved edit scope;
+see [execution settings](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/configuration.md#local-worker-execution-policy).
 Inspect `settings get` for `executionSource` and `resource status` for admission
 conditions. Resource snapshots measure the worker Node process, not provider
 subprocess totals or subscription balances. Fleet `workers.execution.timeoutMs`
@@ -638,9 +646,17 @@ draft. `submit` also requires that revision. On a conflict, reread and reconcile
 do not replace another actor's changes. Accepted input is immutable. A successful
 `wait` means a stopped or operator-action status was observed, including failure,
 cancellation, questions or escalation; inspect the returned status and result before treating it as work
-success. A deadline exits 1 with stderr JSON `code: "wait_timeout"` and leaves the
-task running. API/input rejection exits 2. Polling requests remain bounded by the
-normal HTTP timeout; a slow in-flight request may outlast a short polling deadline.
+success. A deadline exits 1 with stderr JSON `code: "wait_timeout"`; the CLI sends
+no cancellation request. A lost status connection cannot establish whether work
+is still running. Inspect `status` and the request's current result before deciding
+to continue or cancel. API/input rejection exits 2.
+
+`--timeout-ms` bounds the complete wait; `--request-timeout-ms` bounds each status
+read. Each read uses the smaller of the configured request timeout and the remaining
+wait, and no new poll starts after the wait deadline. Client request timeouts and
+transient connection failures are retried within that deadline; API/input errors
+end the wait immediately. Timeout diagnostics count failed polls. These polling
+limits do not change the worker's captured model-invocation budget.
 
 For failed/cancelled features, inspect `feature result`, then use `feature retry
 --name NAME --if-match REVISION` with a freshly read revision. Use `run list

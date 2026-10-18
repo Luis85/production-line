@@ -139,8 +139,8 @@ export class WorkspaceContext {
       this.settings,
       this.sessions,
       {
-        prepareWorktree: (selector, key, signal, commit) => prepareTaskWorkspace(this, selector, key, signal, commit),
-        verifyWorktree: (selector, key, signal, commit) => prepareTaskWorkspace(this, selector, key, signal, commit, true),
+        prepareWorktree: (selector, key, signal, commit, inspection) => prepareTaskWorkspace(this, selector, key, signal, commit, false, inspection),
+        verifyWorktree: (selector, key, signal, commit, inspection) => prepareTaskWorkspace(this, selector, key, signal, commit, true, inspection),
         removeWorktree: (selector, key, signal, expected) => removeTaskWorkspace(this, selector, key, signal, expected),
       },
       undefined, this.consumption, { supervisor: () => this.processes, observations: this.processObservations },

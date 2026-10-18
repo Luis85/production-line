@@ -144,6 +144,9 @@ test('the shipped documentation links resolve against the real curated release f
     const path = `scripts/release/templates/${template}`;
     await put(path, await readFile(new URL(`../../${path}`, import.meta.url), 'utf8'));
   }
+  // packageApp copies this guide verbatim; links must also work from each standalone README.
+  const portableReadme = await readFile(new URL('../../docs/reference/portable-apps.md', import.meta.url), 'utf8');
+  for (const app of ['factory', 'orchestrator', 'worker']) await put(`bin/apps/${app}/README.md`, portableReadme);
   await packageRelease(root);
   const files = unzipSync(await readFile(join(root, 'release/werk-0.1.0.zip')));
   const guide = files['werk-0.1.0/docs/how-to/generate-storybook.md'];

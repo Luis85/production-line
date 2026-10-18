@@ -1,3 +1,4 @@
+import { defaultExecutionPolicy } from '../../src/worker/dist/worker/application/execution-policy.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
@@ -20,7 +21,7 @@ const output = text => Response.json({ status: 'completed', usage: { input_token
 async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(), 'werk-session-integration-')); const runs = new WorkerRunJournal(directory), interactions = new WorkerInteractionJournal(directory);
   await runs.init(); await interactions.init(); t.after(async () => { runs.close(); interactions.close(); await rm(directory, { recursive: true, force: true }); });
-  const policy = defaultToolPolicy(), settings = { toolPolicy: () => policy, value: { execution: { maxRuntimeMs: 30000, maxToolCalls: 32, commandTimeoutMs: 1000 }, repositories: { pollMs: 30000, items: [] } } };
+  const policy = defaultToolPolicy(), settings = { toolPolicy: () => policy, value: { execution: { ...defaultExecutionPolicy(), maxRuntimeMs: 30000, maxToolCalls: 32, commandTimeoutMs: 1000 }, repositories: { pollMs: 30000, items: [] } } };
   const scope = { sessionId: 'same-fr', feature: interactionFeatureRequest('same-fr') };
   return { directory, runs, interactions, policy, settings, scope };
 }

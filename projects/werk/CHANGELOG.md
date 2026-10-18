@@ -9,6 +9,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Added
 
+- Verified implementation source bounds are configurable in **Settings → Queue & duration → Repository inspection limits** and through the settings API/CLI: 64 MiB total source, 20,000 paths and 8 MiB per file outside the approved edit list by default. Guarded saves detect concurrent changes; each prepared implementation dispatch freezes the bounds and records them with tool-limit evidence. Larger repositories still receive complete inspection without widening approved edit scope.
 - A dedicated Feature Request review page brings accepted scope, navigable diffs, current verification, human acceptance and shared handoff together with an explicit next action.
 - Explicit service presets let requests run bounded development services in their owned worktree. The worker supervises lifetime, readiness, restarts, logs and cleanup; Metrics exposes service controls and separately scoped finite-process observations.
 - Generated README documentation uses maintained content and qualified Storybook screenshots. Release verification produces a versioned README bundle with screenshot provenance and checksums, while drift checks keep source text in sync.
@@ -31,6 +32,8 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 - Shared intake observes actual worker admission capacity before claiming ready requests. Temporary holds and preparation failures publish accurate informational Task notes and retain safe retry/publication behavior.
 - Restart recovery preserves a prepared queued dispatch only when all retained authorities prove it never started; running, contradictory or incomplete attempts remain fenced for explicit recovery.
 - Metrics reads track freshness independently, retain stale values on failed refreshes and keep background updates from animating action buttons. Query changes, locking and page lifecycle changes reject obsolete responses; displayed age continues to advance while browser updates are paused.
+- Verified implementation inspection no longer fails with a generic Git error when the tracked file list is large: the Git output bound for the candidate file listings now scales with `execution.candidateSourceMaxFiles` (about 4 KiB per file, at least 2 MiB). A listing above that bound reports its size limit and names the setting to raise.
+- `feature wait`, `task wait` and `file-task wait` retry client status-read timeouts and transient connection failures within their `--timeout-ms` deadline. Each poll is bounded by the remaining wait, with no extra poll after expiry; API and input errors still end the wait immediately. Timeout diagnostics report failed polls and explain that no cancellation was sent, without claiming the task is still running when its current state is unknown.
 
 ## [0.12.0] - 2026-10-18
 

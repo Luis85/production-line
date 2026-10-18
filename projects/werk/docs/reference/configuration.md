@@ -202,8 +202,43 @@ retain 10 seconds.
 There is no independent two-minute tool window. The UI exposes these fields under
 **Settings → Queue & duration → Tool execution limits**.
 
+A successful verified-implementation snapshot reads and fingerprints every
+tracked file and every nonignored untracked file in the candidate worktree. Three
+execution settings bound that inspection:
+
+| Setting | Default | Range | Bounds |
+| --- | --- | --- | --- |
+| `candidateSourceMaxBytes` | 67108864 (64 MiB) | 1048576–1073741824 | Total bytes of all inspected source files |
+| `candidateSourceMaxFiles` | 20000 | 1–200000 | Inspected paths, including approved paths |
+| `candidateFileMaxBytes` | 8388608 (8 MiB) | 65536–268435456, at most `candidateSourceMaxBytes` | One source file outside the approved paths |
+
+Open **Settings → Queue & duration**, then expand **Repository inspection limits**
+in the task-duration form. The size controls display MiB (1 MiB = 1,048,576 bytes);
+**Maximum files** is a count. **Save execution limits** saves these values together
+with duration and tool budgets. The environment duration override leaves inspection
+limits editable. A per-file limit above the total source limit is refused.
+
+Use the measured size or count in an inspection error to choose bounds that cover
+the repository's committed documents and assets. A failed total-size inspection names its measured
+size, limit and setting, for example `Candidate source is 91,852,341 bytes; the
+inspection limit is 67,108,864 bytes (execution.candidateSourceMaxBytes).` A larger
+bound permits more source to be inspected; it never skips files, widens approved
+edit paths or sends the entire snapshot to the model. Untracked ignored outputs
+are excluded; tracked files remain included even when an ignore rule matches them.
+The approved-file limits stay fixed: 24,000 bytes per approved file, 48,000 bytes
+of approved text in total and a 120,000-byte review patch.
+
+The private settings API and `settings set --file` use whole bytes, for example
+`{"execution":{"candidateSourceMaxBytes":134217728}}`. `settings get` shows the
+effective values. For a guarded save, include the complete
+`expectedCandidateInspection` object from the latest settings response's
+`execution` fields; see the baseline contract below. Omitting a field in a partial
+update preserves its saved value.
+
 Each prepared dispatch freezes its duration and tool budgets, including while
-queued or when execution uses that saved dispatch. A newly prepared follow-up,
+queued or when execution uses that saved dispatch. An implementation dispatch also
+freezes the three candidate source limits and records them with its tool limit
+evidence (`toolManifest.limits.candidateInspection`). A newly prepared follow-up,
 answer or resume attempt captures current execution settings; it does not rewrite
 the earlier dispatch or inherit its budget indefinitely.
 See [long-running worker operations](../how-to/monitor-long-running-worker.md) for
@@ -220,6 +255,7 @@ so a concurrent policy change returns a conflict before anything is written:
 | Queue | `expectedBoard` | `queueCapacity`, `orchestratorQueue`, `order` |
 | Queue & duration | `expectedDuration` | `maxRuntimeMs`, `longRunningMs` |
 | Tool execution limits | `expectedToolBudget` | `maxToolCalls`, `commandTimeoutMs` |
+| Repository inspection limits | `expectedCandidateInspection` | `candidateSourceMaxBytes`, `candidateSourceMaxFiles`, `candidateFileMaxBytes` |
 | Consumption | `expectedConsumption` | The complete saved consumption policy |
 
 A guarded queue edit sends only queue limits/order in `board`; pause is an
@@ -227,9 +263,12 @@ independent `{board: {paused: boolean}}` action and cannot be overwritten by tha
 editor's stale draft. Duration edits patch `execution.maxRuntimeMs` and/or
 `resources.longRunningMs`, preserving other resource thresholds. Tool-budget
 edits patch `execution.maxToolCalls` and/or `execution.commandTimeoutMs` and use
-the complete `expectedToolBudget` pair. A combined duration/budget save validates
-both baselines before writing any fields. Legacy clients
-may omit these guards. Save acknowledgements and follow-up reads are separate:
+the complete `expectedToolBudget` pair. Repository-inspection edits patch one or
+more of their three execution fields and use the complete
+`expectedCandidateInspection` baseline. The combined **Save execution limits**
+action validates all supplied baselines before writing any fields. A conflict
+retains the editor's draft so the operator can reload, reconcile and save again.
+Legacy clients may omit these guards. Save acknowledgements and follow-up reads are separate:
 a failed refresh does not undo an acknowledged save.
 
 The session view includes an optional `capacity` snapshot (schema version 1),

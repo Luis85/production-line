@@ -5,7 +5,7 @@ import { installWorkerFixture } from './worker-fixtures';
 /** In-memory examples. They never execute a tool, contact a model or change a checkout. */
 export function installToolDirectoryFixture(directory: 'private' | 'live' | 'missing', savedSecret = false) {
   const base = installWorkerFixture('settings-ready');
-  state.settings!.execution = { maxRuntimeMs: 21_600_000, maxToolCalls: 128, commandTimeoutMs: 300_000 };
+  state.settings!.execution = { maxRuntimeMs: 21_600_000, maxToolCalls: 128, commandTimeoutMs: 300_000, candidateSourceMaxBytes: 67_108_864, candidateSourceMaxFiles: 20_000, candidateFileMaxBytes: 8_388_608 };
   state.settings!.repositories.items = [{ id: 'web', path: '/example/projects/web', remote: 'origin', branch: 'main', watch: true }];
   const chatDirectory = directory === 'private' ? {} : { chatDirectory: 'repository:' + (directory === 'live' ? 'web' : 'removed-project') };
   state.toolAccess = {
@@ -24,7 +24,7 @@ export function installToolDirectoryFixture(directory: 'private' | 'live' | 'mis
 
 export function installToolBudgetFixture(reason: ToolBudgetEvidence['reason']) {
   const base = installWorkerFixture('populated');
-  state.settings!.execution = { maxRuntimeMs: 21_600_000, maxToolCalls: 128, commandTimeoutMs: 300_000 };
+  state.settings!.execution = { maxRuntimeMs: 21_600_000, maxToolCalls: 128, commandTimeoutMs: 300_000, candidateSourceMaxBytes: 67_108_864, candidateSourceMaxFiles: 20_000, candidateFileMaxBytes: 8_388_608 };
   const toolBudget: ToolBudgetEvidence = { reason, maxCalls: 128, windowMs: 21_600_000, callsUsed: reason === 'calls' ? 128 : 9, refusedCalls: reason === 'calls' ? 2 : 1 };
   const fetchFixture: typeof fetch = async (input, init) => {
     const response = await base.fetchFixture(input, init);

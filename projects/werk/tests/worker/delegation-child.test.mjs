@@ -1,3 +1,4 @@
+import { delegationTool } from '../../src/worker/dist/worker/infrastructure/delegation-tools.js';
 import test from 'node:test';
 import { createProcessObservation } from '../../src/worker/dist/worker/infrastructure/process-observation.js';
 import { runProcess } from '../../src/worker/dist/shared/process/launcher.js';
@@ -241,4 +242,28 @@ test('delegated subprocesses use the child session and run while keeping the par
   const record = (await observations.status()).processes[0], child = f.runs.list().rows.find(row => row.sessionId === result.sessionId);
   assert.ok(child); assert.equal(record.sessionId, result.sessionId); assert.equal(record.runId, child.id);
   assert.notEqual(record.runId, f.parent.id); assert.equal(record.featureRequestKey, f.options.featureRequestKey); assert.equal(record.taskId, f.parent.taskId);
+});
+
+
+for (const tool of ['werk_file_read', 'werk_candidate_status', 'werk_candidate_apply', 'werk_candidate_check']) test(`candidate parent delegation retains only relevant frozen inspection evidence for ${tool}`, async t => {
+  const captured = { candidateSourceMaxBytes: 134217728, candidateSourceMaxFiles: 40000, candidateFileMaxBytes: 16777216 };
+  let requests = 0;
+  const f = await fixture(t, factory(async request => {
+    requests++;
+    assert.deepEqual(request.toolManifest.tools.map(item => item.name), [tool]);
+    assert.deepEqual(request.toolManifest.limits.candidateInspection, tool === 'werk_file_read' ? undefined : captured);
+    for (const field of Object.keys(captured)) assert.equal(request.policy[field], tool === 'werk_candidate_apply' ? captured[field] : undefined);
+    assert.equal(request.policy.development, tool === 'werk_candidate_apply' ? true : undefined);
+    assert.equal(request.operation, tool === 'werk_candidate_apply' ? 'patch' : 'chat');
+    return { type: 'completed', text: 'Same accepted candidate; narrowed child authority.' };
+  }));
+  const parent = tools();
+  parent.manifest.tools = ['werk_file_read', 'werk_candidate_status', 'werk_candidate_apply', 'werk_candidate_check', 'werk_delegate'].map(name => ({ name, description: 'Approved fixture tool', inputSchema: { type: 'object' } }));
+  parent.manifest.limits = { maxCalls: 8, windowMs: 10000, callTimeoutMs: {}, candidateInspection: captured };
+  const broker = delegationTool({ enabled: true, maxChildren: 4, maxConcurrent: 2 }, () => parent, { runChild: f.run, record: async () => {} });
+  assert.ok(broker);
+  const response = await broker.call({ tasks: [{ id: 'narrowed', prompt: 'Inspect the same Feature Request.', tools: [tool] }] }, new AbortController().signal);
+  const result = JSON.parse(response.content[0].text).children[0];
+  assert.equal(result.state, 'completed', result.error); assert.equal(requests, 1);
+  assert.deepEqual(parent.manifest.limits.candidateInspection, captured, 'narrowing never mutates the parent evidence');
 });

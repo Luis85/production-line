@@ -1,3 +1,4 @@
+import type { CandidateInspectionLimits } from './execution-policy.js';
 import type { ProjectModelContext } from './model-context.js';
 import { validateFeatureRequestReference, type FeatureRequestReference } from './feature-request-reference.js';
 
@@ -22,6 +23,7 @@ export interface LocalTaskWorkspaces {
     taskKey: string,
     signal: AbortSignal,
     baseCommit?: string,
+    inspection?: Partial<CandidateInspectionLimits>,
   ): Promise<{
     repositoryId?: string;
     repository: string;

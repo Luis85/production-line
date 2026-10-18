@@ -73,7 +73,8 @@ async function fixture(t, execute, { verification = true, observations = /** @ty
       finally { await runtime.close(); }
     },
   });
-  const workspaces = { prepareWorktree: (selector, key, signal, commit) => prepareRepositoryWorktree(selector, key, signal, commit) };
+  const worktreeInspections = [];
+  const workspaces = { prepareWorktree: (selector, key, signal, commit, inspection) => { worktreeInspections.push(inspection); return prepareRepositoryWorktree(selector, key, signal, commit, inspection); } };
   async function open() {
     const processes = observations ? { observations, supervisor: () => undefined } : undefined;
     sessions = createWorkerSessions(state, settings, factory, undefined, () => 0, undefined, undefined, processes); await sessions.init();
@@ -81,7 +82,7 @@ async function fixture(t, execute, { verification = true, observations = /** @ty
   }
   await open();
   return {
-    root, state, repository, baseCommit, settings, requests, grant,
+    root, state, repository, baseCommit, settings, requests, grant, worktreeInspections,
     get board() { return board; }, get sessions() { return sessions; }, get invocations() { return invocations; },
     request(id) { return sessions.requests.get(board.executionDetail(id).requestId); },
     async create() {
@@ -146,6 +147,24 @@ test('a new implementation edits, fails a real check, repairs and verifies withi
   assert.equal(facts['output.requiredCheckCount'], 1);
   assert.equal(facts['output.candidateDigest'], receipts[1].candidateDigest);
   assert.equal(await readFile(join(f.state, 'local-review', id + '.patch'), 'utf8'), task.patch);
+});
+
+test('candidate inspection uses the limits frozen with the accepted dispatch, not a later settings change', { timeout: testTimeoutMs }, async t => {
+  const f = await fixture(t, async ({ runtime, request, signal }) => {
+    assert.equal(request.policy.candidateFileMaxBytes, 8388608); assert.equal(request.toolManifest.limits.candidateInspection.candidateFileMaxBytes, 8388608);
+    await edit(runtime, signal); await check(runtime, signal);
+    return complete('Verified with the accepted inspection limits.');
+  });
+  await writeFile(join(f.repository, 'asset.bin'), Buffer.alloc(70 * 1024, 1));
+  await git(f.repository, 'add', 'asset.bin'); await git(f.repository, 'commit', '-m', 'Committed asset above the later per-file limit');
+  const id = await f.create();
+  f.worktreeInspections.length = 0;
+  await f.settings.update({ execution: { candidateFileMaxBytes: 65536, candidateSourceMaxFiles: 1 } });
+  const task = await f.settle(id, 'review');
+  assert.equal(task.developmentCompletion.verified, true);
+  assert.ok(f.worktreeInspections.length > 1);
+  assert.ok(f.worktreeInspections.every(value => value.candidateSourceMaxFiles === 20000), 'initial execution and later candidate guards use accepted limits, not live settings');
+  assert.equal(f.settings.publicView().execution.candidateFileMaxBytes, 65536, 'the later change applies to new attempts only');
 });
 
 const incomplete = {

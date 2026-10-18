@@ -401,6 +401,7 @@ and checks all count as tool calls.
 | Stdio MCP call timeout | 30 seconds | 1–900 seconds | Each connection; optional `timeoutMs` |
 | HTTP MCP call timeout | 30 seconds | 1–300 seconds | Each connection; optional `timeoutMs` |
 | Web fetch deadline | 10 seconds | Fixed | — |
+| Candidate source inspection | 64 MiB, 20,000 paths, 8 MiB per file outside the approved edit list | See [configuration](../reference/configuration.md#local-worker-execution-policy) | **Queue & duration → Repository inspection limits**; the three `execution.candidate*` settings |
 
 Command presets, project CLI tools and required feature checks use the smaller
 of their optional timeout and the invocation's captured global command ceiling.
@@ -473,6 +474,12 @@ ceiling can record:
 when the first tool starts. It is not a field in `tool-access.json`.
 `callTimeoutMs` records resolved tool deadlines; the command-run entry uses the
 longest preset deadline and `presetTimeoutMs` records individual presets.
+An implementation dispatch with candidate tools also records `candidateInspection`
+with the frozen `candidateSourceMaxBytes`, `candidateSourceMaxFiles` and
+`candidateFileMaxBytes`; the same values are in its `policy` and bound candidate
+inspection for that attempt. Delegated candidate tools inherit the same frozen
+bounds; a child granted only status/check tools keeps that evidence without
+gaining candidate-edit authority.
 Metadata is evidence, not authority: the accepted execution budget and current
 matching grants govern calls. Legacy dispatches without `limits` remain supported
 when their policy revision and exact tool definitions still match; missing
@@ -480,7 +487,15 @@ metadata cannot widen their accepted budget. New manifests must match completely
 
 Before rollback, clear the optional timeouts rather than saving their numeric
 defaults; see the compatibility steps above. Old worker versions do not understand
-these fields. Preserve a stopped-state backup before upgrading.
+these fields. Before rolling back to 0.12.0 or earlier, use the current worker to
+save all three repository-inspection defaults together: 64 MiB total, 20,000 paths
+and 8 MiB per file. Equivalently, send
+`{"execution":{"candidateSourceMaxBytes":67108864,"candidateSourceMaxFiles":20000,"candidateFileMaxBytes":8388608}}`
+through `settings set`. Saving defaults removes these keys from persisted settings;
+omitting them in a partial update does not reset them. Older workers refuse the
+new keys at startup. This settings reset does not migrate retained dispatches:
+restore the stopped-state backup from before the upgrade when retained task state
+is incompatible, using the [portable update workflow](../reference/portable-apps.md#update-a-copied-app).
 
 ### When the tool budget runs out
 

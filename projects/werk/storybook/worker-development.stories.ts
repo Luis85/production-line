@@ -42,3 +42,16 @@ export const StaleBudgetDraft: Story = { name: 'Concurrent budget save retains t
   await budgetPlay(context); const input = context.canvasElement.querySelector<HTMLInputElement>('#execution-tool-calls')!; input.value = '64'; input.dispatchEvent(new Event('input', { bubbles: true })); await nextTick(); fixture.changeSavedBudget(256); await nextTick();
   if (input.value !== '64' || !context.canvasElement.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled) throw Error('Concurrent changes must retain and block the stale draft'); await ready(context.canvasElement);
 } };
+
+
+const inspectionPlay = async ({ canvasElement }: { canvasElement: HTMLElement }) => {
+  await nextTick(); const details = canvasElement.querySelector<HTMLDetailsElement>('.repository-inspection-options');
+  if (!details) throw Error('Repository inspection limits missing'); details.open = true; await ready(canvasElement);
+};
+export const RepositoryInspectionLimits: Story = { name: 'Bound verified repository inspection', parameters: { storymap: storymap('Repository byte and file limits use readable units, preserve every inspected file and apply to new attempts. These bounds do not grant access to additional paths.', ['DurationSettingsPanel'], '/settings#queue') }, render: render(DurationSettingsPanel, 'budget'), play: inspectionPlay };
+export const StaleInspectionDraft: Story = { name: 'Concurrent repository limit changes retain the draft', parameters: { storymap: storymap('A changed inspection baseline blocks a stale combined execution save until the operator explicitly reloads.', ['DurationSettingsPanel'], '/settings#queue') }, render: render(DurationSettingsPanel, 'budget'), play: async context => {
+  await inspectionPlay(context); const input = context.canvasElement.querySelector<HTMLInputElement>('#execution-source-mib')!; input.value = '96'; input.dispatchEvent(new Event('input', { bubbles: true })); await nextTick();
+  fixture.changeSavedInspection(128 * 1048576); await nextTick();
+  if (input.value !== '96' || !context.canvasElement.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled) throw Error('Concurrent repository limits must retain and block the stale draft');
+  await ready(context.canvasElement);
+} };

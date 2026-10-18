@@ -1,7 +1,7 @@
 import { validateDelegationPolicy, type DelegationPolicy } from '../application/delegation-policy.js';
 import type { DelegationPorts, DelegationReceipt } from '../application/delegation.js';
 import { parseModelResult, ProviderModelError, type ModelResult } from '../application/model-contract.js';
-import { ToolAccessError, type ToolManifest, type ToolResult, type ToolRuntime } from '../application/tool-runtime.js';
+import { candidateToolNames, ToolAccessError, type ToolManifest, type ToolResult, type ToolRuntime } from '../application/tool-runtime.js';
 import { BuiltinToolError, type ToolOperation } from './builtin-tools.js';
 
 const name = 'werk_delegate';
@@ -30,6 +30,7 @@ function borrowed(parent: ToolRuntime, names: string[], signal: AbortSignal): To
   manifest.tools = manifest.tools.filter(tool => allowed.has(tool.name) && tool.name !== name);
   if (manifest.limits) {
     manifest.limits.callTimeoutMs = Object.fromEntries(Object.entries(manifest.limits.callTimeoutMs).filter(([tool]) => allowed.has(tool)));
+    if (!candidateToolNames.some(tool => allowed.has(tool))) delete manifest.limits.candidateInspection;
     if (!allowed.has('werk_command_run') && !allowed.has('werk_candidate_check')) delete manifest.limits.presetTimeoutMs;
   }
   const authorize = (input: AbortSignal) => {
