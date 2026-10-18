@@ -58,6 +58,7 @@ export class WorkerSessions {
   private changingProviders = false;
   private activeOutsideChat: () => number;
   private capacityContext?: WorkerCapacityContext;
+  private initializeEvidence?: () => Promise<void>;
   constructor(settings: WorkerSettingsPort, dependencies: {
     model: ModelFactory;
     storage: SessionCatalogStorage;
@@ -68,9 +69,11 @@ export class WorkerSessions {
     activeOutsideChat?: () => number;
     consumptionBlocked?: () => boolean;
     capacity?: WorkerCapacityContext;
+    initializeEvidence?: () => Promise<void>;
   }) {
     this.activeOutsideChat = dependencies.activeOutsideChat ?? (() => 0);
     this.capacityContext = dependencies.capacity;
+    this.initializeEvidence = dependencies.initializeEvidence;
     this.requests = dependencies.requests;
     this.interactions = dependencies.interactions;
     this.runs = dependencies.runs;
@@ -81,9 +84,12 @@ export class WorkerSessions {
     this.executor = new SerialExecutor(() => settings.value.board.paused || !!dependencies.consumptionBlocked?.());
   }
   async init() {
-    await this.requests.init();
-    await this.interactions.init();
-    await this.runs.init((id) => this.interactions.resultForRun(id));
+    if (this.initializeEvidence) await this.initializeEvidence();
+    else {
+      await this.requests.init();
+      await this.interactions.init();
+      await this.runs.init((id) => this.interactions.resultForRun(id));
+    }
     await this.definitions.init();
     const saved = await this.storage.read();
     this.catalog = restoreSessionCatalog(saved, this.settings);

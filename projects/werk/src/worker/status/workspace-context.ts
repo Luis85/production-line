@@ -29,6 +29,7 @@ import { join } from "node:path";
 import type { SnapshotJournal } from "../infrastructure/journal/snapshots.js";
 import type { Status } from "./server.js";
 import { task } from './workspace-tasks.js';
+import { sharedFeatureAdmissionHold } from './workspace-feature-admission.js';
 import { taskboardAction } from './workspace-task-views.js';
 import { featureTrackingSnapshot, inspectSharedFeature, submitSharedFeature, submitFeature, inspectFeature, continueFeatureInteraction } from './workspace-features.js';
 import { prepareTaskWorkspace, removeTaskWorkspace } from './workspace-repositories.js';
@@ -187,7 +188,8 @@ export class WorkspaceContext {
       stateDirectory: config.stateDir,
       resolve: id => this.repositories.resolve(id),
       allowed: path => this.repositoryDiscovery.assertAllowed(path),
-      canAdmit: () => this.acceptingTasks && !this.settings.value.board.paused && !this.consumption.status().blocked && !this.configurationUpdating && !this.repositoriesUpdating && !this.executionProfiles?.pending(),
+      canAdmit: () => !sharedFeatureAdmissionHold(this),
+      admissionHold: () => sharedFeatureAdmissionHold(this),
       submit: record => submitSharedFeature(this, record),
       continue: (record, command) => continueFeatureInteraction(this, this.board.executionDetail(record.taskId!).sessionId, command),
       admissionIssue: input => {

@@ -1,3 +1,5 @@
+import { conversationProjection } from './model-context.js';
+import type { StructuredModel } from './model-contract.js';
 import { interactionFeatureRequest } from './feature-request-reference.js';
 import type { WorkerRequest } from "./request-gates.js";
 import type { ModelProvider } from "./model-contract.js";
@@ -225,11 +227,11 @@ export async function launchConversation(host: ConversationRuntime, text: string
     if (
       host.changing ||
       !host.model ||
-      host.value.messages.length >= 60 ||
+      (!(host.model as Partial<StructuredModel>).sessionBinding && (host.value.messages.length >= 60 ||
       host.value.messages.reduce(
         (size, item) => size + item.text.length,
         text.length,
-      ) > 48000
+      ) > 48000))
     ) {
       if (turn)
         interactions!.fail(
@@ -268,6 +270,7 @@ export async function launchConversation(host: ConversationRuntime, text: string
     const { request, maxRuntimeMs } = prepareConversationRequest(host, host.model, { turn, command, text, user, next, gateRequest });
     host.changing = true;
     host.phase = "queued";
+    if (turn && (host.model as Partial<StructuredModel>).sessionBinding) next.messages = conversationProjection(next.messages);
     host.value = next;
     host.controller = new AbortController();
     const controller = host.controller;

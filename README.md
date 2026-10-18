@@ -46,7 +46,7 @@ limits. [See the illustrated worker guide](projects/werk/README.md).
 | Worker owner | [Install a project worker](projects/werk/README.md#install-a-project-worker), then [connect the model and shared Git queue](projects/werk/docs/how-to/shared-feature-intake.md#connect-the-worker) |
 | Team member | [Create Feature Requests from any clone](projects/werk/docs/how-to/team-feature-authoring.md); no worker connection is needed |
 | Webview user | [Create requests, follow progress and configure the worker](projects/werk/docs/how-to/use-worker-webview.md) |
-| System operator | [Deploy a Factory and production lines from YAML](projects/werk/docs/tutorials/system-from-yaml.md) |
+| System operator | [Connect a worker to an Orchestrator, then introduce a Factory](projects/werk/README.md#grow-from-a-worker-into-a-production-system) |
 | Frontend contributor | [Public Storybook](https://luis85.github.io/production-line/) and [frontend architecture](projects/werk/docs/reference/webview-architecture.md) |
 
 Prebuilt native apps require **Node.js 24.x** and no npm install or compiler.
@@ -64,6 +64,29 @@ Supplied orchestrator Docker/VM profiles remain simulated. See
 This README describes the current branch. Downloads and hosted documentation
 reflect their published release; use the matching release guides for older
 installations.
+
+## Grow with your team
+
+The installed worker is the first building block. Add the others as your team
+needs coordination across workers and projects:
+
+1. **Worker:** connect the model and repository, then implement and review Feature
+   Requests through Markdown or the webview.
+2. **Orchestrator:** start a line service and enroll your existing worker through
+   **Settings → Orchestrator**. Add workers with their own state and identities;
+   the Orchestrator manages eligible assignment routing and execution evidence.
+3. **Factory:** register running Orchestrators as production lines. A Factory
+   organizes those lines and their workers, shows portfolio summaries and routes
+   new intake to a suitable line. Optional subfactories group related lines.
+
+A production line is one Orchestrator with its enrolled workers. It can operate
+independently before a Factory is added. Workers retain their model accounts and
+execution authority; only they invoke models. Factory registration connects
+existing services and does not start or relocate them.
+
+Follow the [step-by-step expansion journey](projects/werk/README.md#grow-from-a-worker-into-a-production-system)
+for commands, enrollment, credentials and line registration. For a fresh complete
+installation, use the [system-YAML tutorial](projects/werk/docs/tutorials/system-from-yaml.md).
 
 ## Documentation
 

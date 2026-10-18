@@ -1,3 +1,4 @@
+import { interactionFeatureRequest } from './feature-request-reference.js';
 
 import { developmentVerified, validateDevelopmentState } from './development.js';
 
@@ -79,7 +80,7 @@ export async function execute(host: Pick<LocalTaskRuntime, "change" | "execution
       if (!!task.implementation !== (turn.dispatch.policy.development === true)) throw Error('Prepared implementation mode differs from accepted authority.');
       const model = host.model(
         definitionConnection(connection, task.definition),
-        { worktree: task.worktree, worktreeIdentity: task.worktreeIdentity, development },
+        { sessionId: task.sessionId, feature: task.feature ?? interactionFeatureRequest(task.id), baseCommit: task.baseCommit, worktree: task.worktree, worktreeIdentity: task.worktreeIdentity, development },
       );
       if (!model) throw Error("Provider not configured");
       signal = AbortSignal.any([

@@ -1,4 +1,6 @@
 import { interactionFeatureRequest } from './feature-request-reference.js';
+import { isPreparedLocalTask } from './queued-task-recovery.js';
+import { DomainError } from '../../shared/errors.js';
 import { validateFeatureRequestReference } from './feature-request-reference.js';
 
 import { validateDevelopmentState } from './development.js';
@@ -83,7 +85,21 @@ export async function init(host: Pick<LocalTaskRuntime, "storage" | "tasks" | "r
         await host.sessions.setTaskState(record.id, "failed");
   }
 
-export async function recoverTask(host: Pick<LocalTaskRuntime, "sessions" | "outputFacts" | "restoredDevelopment" | "validatedPatch" | "writePatch">, task: LocalTask) {
+type RecoveryHost = Pick<LocalTaskRuntime, "sessions" | "outputFacts" | "restoredDevelopment" | "validatedPatch" | "writePatch">;
+export async function recoverTask(host: RecoveryHost, task: LocalTask) {
+  try { await recoverRetainedTask(host, task); }
+  catch (error) {
+    if (!(error instanceof DomainError) || error.code !== 'not_found') throw error;
+    // A missing canonical entity is corruption, not permission to invent another Feature Request.
+    if (task.requestId) host.sessions.requests.get(task.requestId);
+    task.status = 'failed';
+    task.finishedAt ??= new Date().toISOString();
+    task.error = 'Saved execution evidence is missing. Inspect this Feature Request before creating an explicit successor; no model call was replayed.';
+  }
+}
+
+async function recoverRetainedTask(host: RecoveryHost, task: LocalTask) {
+    if (isPreparedLocalTask(task, host.sessions, host.sessions.view().records)) return;
     if (task.admissionFailure) {
       task.status = "failed";
       return;

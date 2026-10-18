@@ -80,12 +80,28 @@ export class SharedFeatureLifecycle {
       await this.flush(record, repository, signal);
       if (!record.claimed) await this.publish(record, repository, signal);
       if (!record.submitted) {
+        const hold = this.ports.admissionHold?.();
+        if (hold && !this.ports.inspect(record.taskId!)) {
+          await this.admissionDiagnostic(record, repository, signal, hold.message, true);
+          return;
+        }
         if (!this.ports.canAdmit()) return;
         const head = await repository.head(signal);
         const current = await repository.readBlob(head, record.sourcePath, signal);
         if (current === null || sharedHash(current) !== record.remoteRevision) throw Error('The remotely claimed request changed before admission. Restore its claimed content or resolve the change before execution.');
-        await this.ports.submit(record);
+        try { await this.ports.submit(record); }
+        catch (error) {
+          signal.throwIfAborted();
+          // A lost acknowledgement may already own an execution. Replay its exact
+          // submission on the next sync rather than publishing a false failure.
+          if (this.ports.inspect(record.taskId!)) throw error;
+          const hold = this.ports.admissionHold?.();
+          const reason = hold?.message ?? (error instanceof Error ? error.message.slice(0, 500) : 'Request preparation could not be confirmed.');
+          await this.admissionDiagnostic(record, repository, signal, reason, !!hold);
+          return;
+        }
         record.submitted = true;
+        if (!record.task && record.diagnostic && record.taskNote === record.diagnostic.path) record.taskNote = null;
         this.change(record, 'queued');
         await this.save();
       }
@@ -98,6 +114,25 @@ export class SharedFeatureLifecycle {
       record.error = error instanceof Error ? error.message.slice(0, 500) : 'Shared progress could not be published.';
       await this.save();
     }
+  }
+  private async admissionDiagnostic(record: SharedFeatureRecord, repository: SharedRepositoryPort, signal: AbortSignal, reason: string, held: boolean) {
+    this.change(record, held ? 'queued' : 'blocked', reason);
+    record.progress = (held ? 'Request admission is waiting.' : 'Request preparation needs attention.')
+      + ' Follow the diagnostic Task; the worker will retry admission using this same request identity.';
+    const artifacts = this.blocker(record, reason);
+    const guarded = [];
+    const head = artifacts.length ? await repository.head(signal) : null;
+    for (const artifact of artifacts) {
+      const existing = await repository.readBlob(head!, artifact.path, signal);
+      if (existing !== null && existing !== artifact.content) throw new DomainError('conflict', 'A teammate changed the admission diagnostic. Their note was preserved; restore its worker-generated content before synchronization.');
+      // A recurring hold may reuse an older immutable note. Guard the exact content
+      // instead of treating its deterministic path as a new file.
+      guarded.push({ ...artifact, expectedRevision: existing === null ? null : sharedHash(existing) });
+    }
+    await this.save();
+    // Compare the claimed source and retain publication receipts when an acknowledgement
+    // is lost. A concurrent teammate edit must never be replaced by this notice.
+    await this.publish(record, repository, signal, guarded);
   }
   private blocker(record: SharedFeatureRecord, reason: string) {
     const markdown = renderSharedBlocker(record, reason), digest = sharedHash(markdown);

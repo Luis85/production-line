@@ -1,3 +1,5 @@
+import { claudeSessionReply } from './claude-session.js';
+import { withReplaySession } from './native-session.js';
 import { apiReply } from './provider-api.js';
 import { currentToolManifest, withProviderTools, type ProviderOptions } from './provider-tool-session.js';
 import { withCliToolBridge, type CliToolBridge } from './cli-tool-bridge.js';
@@ -29,18 +31,21 @@ export function modelFor(saved: ProviderConnection, directory: string, transport
   // Codex CLI conversations remain POSIX-only; Claude Code CLI also runs on native Windows.
   if (!providerReady(saved) || (process.platform === 'win32' && saved.id === 'codex-cli')) return;
   const connection = { ...saved };
-  if (connection.id === 'codex-cli') return new CodexConversationModel(connection.executable, directory, connection.instruction, connection.model, options.tools);
+  if (connection.id === 'codex-cli') return new CodexConversationModel(connection.executable, directory, connection.instruction, connection.model, options.tools, options.session);
   const model: StructuredModel = {
+    ...(options.session ? { sessionBinding: structuredClone(options.session.binding) } : {}),
     configuration: Object.freeze({ id: connection.id, model: connection.model, instruction: connection.instruction ?? '' }),
     get toolManifest() { return currentToolManifest(options.tools); },
     toolManifestFor(policy) { return currentToolManifest(options.tools, policy); },
-    get capabilities() { return { ...modelCapabilities, tools: currentToolManifest(options.tools) ? 'granted' as const : 'none' as const }; },
+    get capabilities() { return { ...modelCapabilities, ...(options.session && connection.id === 'claude-cli' ? { continuation: 'provider_session' as const, nativeResume: true } : {}), tools: currentToolManifest(options.tools) ? 'granted' as const : 'none' as const }; },
     reply(messages: ChatMessage[], signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void) { return legacyModelReply(model, messages, signal, onUsage); },
     async execute(request: ModelRequest, signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void, control?: ModelInvocationControl): Promise<ModelResult> {
       requireModelRequest(request, connection.id);
       return observeModelInvocation(signal, onUsage, observe => withProviderTools(request, signal, options.tools, (runtime, bounded) => connection.id === 'claude-cli'
-        ? claudeReply(connection, directory, request, bounded, observe, runtime, control)
-        : apiReply(connection, request, bounded, transport, observe, runtime, control), control));
+        ? request.schemaVersion === 2
+          ? claudeSessionReply(connection, directory, request, bounded, options.session!, claudeArguments, observe, runtime, control)
+          : claudeReply(connection, directory, request, bounded, observe, runtime, control)
+        : withReplaySession(request, options.session, '', bounded, control, guarded => apiReply(connection, request, bounded, transport, observe, runtime, guarded)), control));
     }
   };
   return model;
@@ -49,7 +54,7 @@ export function modelFor(saved: ProviderConnection, directory: string, transport
 export const claudeToolEnvironment = (bridge?: Pick<CliToolBridge, 'toolTimeoutMs'>): ProviderToolEnvironment => bridge ? { MCP_TOOL_TIMEOUT: String(bridge.toolTimeoutMs) } : {};
 /** Native tools stay disabled. Explicit MCP grants use separate hook, memory and configuration controls. */
 export function claudeArguments(model: string, promptFile: string, bridge?: CliToolBridge) {
-  return ['--print', '--output-format', 'json', ...(!bridge ? ['--safe-mode'] : ['--settings', JSON.stringify({ disableAllHooks: true, autoMemoryEnabled: false, enabledPlugins: {} })]), '--restricted', '--tools', '', '--strict-mcp-config', '--mcp-config', bridge?.configFile ?? '{"mcpServers":{}}', ...(bridge ? ['--allowedTools', ...bridge.toolNames.map(name => 'mcp__werk__' + name)] : []), '--setting-sources', '', '--no-session-persistence', '--disable-slash-commands', ...(model ? ['--model', model] : []), '--system-prompt-file', promptFile];
+  return ['--print', '--output-format', 'json', ...(!bridge ? ['--safe-mode'] : []), '--settings', JSON.stringify({ disableAllHooks: true, autoMemoryEnabled: false, enabledPlugins: {} }), '--restricted', '--tools', '', '--strict-mcp-config', '--mcp-config', bridge?.configFile ?? '{"mcpServers":{}}', ...(bridge ? ['--allowedTools', ...bridge.toolNames.map(name => 'mcp__werk__' + name)] : []), '--setting-sources', '', '--no-session-persistence', '--disable-slash-commands', ...(model ? ['--model', model] : []), '--system-prompt-file', promptFile];
 }
 async function claudeReply(connection: ProviderConnection, directory: string, request: ModelRequest, signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void, runtime?: ToolRuntime, control?: ModelInvocationControl) {
   const workspace = join(directory, 'chat-workspace'); await ensureDirectory(workspace);

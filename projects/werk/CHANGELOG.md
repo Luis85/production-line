@@ -7,13 +7,23 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+### Added
+
+- Durable model sessions belong to each Feature Request, with explicit Claude CLI continuation, worker-managed replay for Codex/API adapters, bounded active context and private history retrieval. An optional committed project-context manifest shares reviewed knowledge without mixing conversations.
+- Tool Access can grant bounded model subagents. Children retain the parent request, provider/profile, approved tools and execution budget, with separate consumption and linked run evidence.
+- An overnight team guide explains evening Git handoff, unattended implementation, Markdown answers and morning human review.
+
 ### Changed
 
+- The README follows the setup journey from a project worker through Orchestrator enrollment to Factory line registration, with a hierarchy diagram and current execution-mode boundaries.
+- Claude Code readiness now requires version 2.1.257 or later for explicit session continuation with refreshed instructions.
 - Worker Metrics visualizes current execution/admission capacity, configured token allowance, process/host resources and retained attempt outcomes. Execution summaries offer acceptance-time windows with measured duration and token/cost coverage, while settings and detailed evidence remain linked to their own pages.
 - Allowance and resource displays distinguish reported usage, reservations, unverified balances, worker-process measurements and host/volume context. Runtime diagnostics and alert history disclose beneath the overview.
 
 ### Fixed
 
+- Shared intake observes actual worker admission capacity before claiming ready requests. Temporary holds and preparation failures publish accurate informational Task notes and retain safe retry/publication behavior.
+- Restart recovery preserves a prepared queued dispatch only when all retained authorities prove it never started; running, contradictory or incomplete attempts remain fenced for explicit recovery.
 - Metrics reads track freshness independently, retain stale values on failed refreshes and keep background updates from animating action buttons. Query changes, locking and page lifecycle changes reject obsolete responses; displayed age continues to advance while browser updates are paused.
 
 ## [0.12.0] - 2026-10-18

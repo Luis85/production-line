@@ -126,6 +126,76 @@ and may need restoration before the worker can publish its acknowledgement.
 Other independent requests can continue. A competing worker cannot silently
 replace a confirmed owner.
 
+## Work during the day, implement overnight
+
+The team's handoff is a batch of **ready requests pushed to the shared branch**.
+No separate night queue or browser session is required. The worker continues to
+use the same Feature Request, readiness rules, serial execution and review flow.
+There is no scheduled start time: a pushed ready request becomes eligible at the
+next successful poll. Keep requests as drafts until the team wants work to start.
+
+### Before the first overnight run
+
+- Configure the provider, repository, shared intake and reviewed tool grants as
+  described above. Keep the worker machine awake, running and connected to Git
+  and the provider. The native `start` command backgrounds the process; it does
+  not prevent sleep or install a reboot/crash supervisor.
+- Enable worktree file access and at least one meaningful **required feature
+  check**. Put `output.verificationPassed == true` in the configured done rules
+  when the handoff must contain tested implementation. Default done rules also
+  permit reviewable proposals. Follow [implementation setup](implement-feature.md).
+- Ensure required checks install their dependencies in the clean worktree.
+  Check provider sign-in, Git push permissions, worker allowance, task duration
+  and command deadlines. `shared setup` checks configuration and CLI availability;
+  it does not prove model quota, successful verification or overnight host uptime.
+- Run a small, explicitly authorized smoke Feature Request through to its review
+  note before relying on the worker for a large batch.
+
+### End of day
+
+1. Finish the goal, context, acceptance criteria, verification plan and approved
+   paths for each selected request. Validate against the committed template and
+   ready rules. Resolve questions the team can answer before handing work over.
+2. Select independent requests. Each implementation starts from its own accepted
+   shared-branch commit; one feature branch is not automatically merged into the
+   next. Merge and review prerequisites before making dependent work ready.
+3. Mark the selected requests ready, commit and push them together. Local saves
+   and local commits alone do not dispatch work. Leave unfinished requests draft.
+4. Confirm shared intake is enabled and new execution is resumed. Queue pause
+   holds starts even when the notes are ready; the worker's read-only status and
+   Metrics view can help inspect capacity and allowance before leaving.
+
+### Overnight
+
+The worker claims requests as local admission capacity becomes available and
+executes one request at a time. Excess ready requests remain in shared Git until
+there is room. A request waiting for a human releases the execution slot, allowing
+other independent requests to continue. Informational Task notes explain admission
+holds or preparation problems; actionable Task notes request an answer or explicit
+continuation. A successful model response is still subject to the frozen done
+rules and required verification before a review handoff is published.
+
+Retain the private worker state. After a restart, only work proven never to have
+started across the saved task, request, turn and run records can return to the
+queue. An interrupted or uncertain invocation needs inspection and an explicit
+continuation; restarting is not permission to repeat it. Git publication retries
+use the retained result and receipts rather than another model call.
+
+### Next morning
+
+Pull the shared branch and inspect each Feature Request. Follow its PullRequest
+note to the feature branch and verification evidence, or its Task note to the
+decision or configuration needed. Review and merge through the team's normal
+process. Answer actionable Tasks in Markdown and push them ready to continue the
+same request. A waiting or blocked note is a handoff requiring attention, not a
+claim that the requested feature was completed.
+
+The current shared-intake journal retains at most **100 owned requests**, including
+completed requests. At that limit, new requests remain ready with an informational
+hold. Preserve the existing state and ownership receipts; do not delete them to
+reset the counter. Assign further unclaimed work to another appropriately
+configured worker until an explicit archival workflow is available.
+
 ## Submit through the worker webview
 
 Open **Taskboard → New request** and describe the outcome in **Request instructions**.

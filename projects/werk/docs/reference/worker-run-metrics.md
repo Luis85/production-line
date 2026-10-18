@@ -114,6 +114,22 @@ failure. Missing, malformed or unreported usage stays unknown. Analysis exposes
 per-field coverage counts so a token total and cost total can have different
 coverage. A partial measured total is not the account's total bill.
 
+### Delegated attempts
+
+A child model invocation keeps the same Feature Request/task identity and adds
+`parentRunId`, `parentSessionId` and `delegationId` to its numeric run record.
+Its token usage and reported cost count separately toward totals and the worker
+allowance. Attempt counts therefore include child calls; they are not counts of
+delivered features. A parent session filter selects that session's own runs;
+use the task filter to include its linked children.
+
+Child execution intervals overlap the parent. Aggregate worker-process CPU
+therefore excludes child intervals to avoid counting the same CPU time twice;
+individual child snapshots remain inspectable. Duration totals sum invocation
+durations and are not elapsed wall time when children overlap. Peak RSS remains
+an observed worker-process gauge. These measurements exclude model subprocess
+CPU and memory.
+
 ## HTTP and CLI
 
 Execution evidence uses authenticated `POST /api/runs`; the public health/Prometheus

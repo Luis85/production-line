@@ -7,11 +7,12 @@ import { installWorkerFixture } from './worker-fixtures';
 const meta = { title: 'Worker/Tool access', parameters: { layout: 'fullscreen' } } satisfies Meta;
 export default meta;
 type Story = StoryObj;
-function render(configured = false, blocked = false) {
+function render(configured = false, blocked = false, delegation = false) {
   return () => ({ setup() {
     const fixture = installWorkerFixture('empty');
     state.settings!.board.paused = !blocked;
     state.toolAccess = { schemaVersion: 1, revision: configured ? 3 : 0, builtins: { files: configured, commands: configured ? [{ id: 'check-types', name: 'Check project types', executable: '/example/bin/npm', args: ['run', 'typecheck'], enabled: true, verification: true, timeoutMs: 300000 }] : [], cliTools: configured ? [{ id: 'harness', name: 'Project harness', description: 'Reads the project backlog and runs project checks.', enabled: true, executable: '/example/bin/node', args: ['bin/harness.mjs'], commands: [{ command: 'help', requireOneOf: [], refusedOptions: [] }, { command: 'backlog context', requireOneOf: [], refusedOptions: [] }, { command: 'backlog set', requireOneOf: ['--dry-run'], refusedOptions: [] }, { command: 'eol', requireOneOf: [], refusedOptions: ['--fix'] }], refusedOptions: ['--root', '--config', '--out'], maxArgs: 24, maxArgLength: 500, outputKiB: 48, truncationHint: 'Narrow the command with --limit or --format summary.', timeoutMs: 600000 }] : [], webOrigins: configured ? ['https://docs.example.com'] : [] }, mcp: configured ? [{ id: 'documentation', name: 'Project documentation', transport: 'http', enabled: true, command: '', args: [], url: 'https://tools.example.com/mcp', secretEnv: '', hasSecret: true, timeoutMs: 30000, allowedTools: ['search_docs'], discoveredTools: [{ name: 'search_docs', description: 'Search the project documentation available to this server.', inputSchema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } }, { name: 'publish_note', description: 'Publish a note to the documentation server. This tool is not granted.', inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } }] }] : [], canEdit: !blocked, saveBlockedReason: blocked ? 'Pause new starts and finish or stop queued and running work before changing tool access.' : null, workerNode: '/example/bin/node' };
+    if (delegation) state.toolAccess.delegation = { enabled: true, maxChildren: 4, maxConcurrent: 2 };
     const fetchFixture: typeof fetch = (input, init) => {
       const path = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, window.location.href).pathname;
       if (path.startsWith('/api/tool-access')) return Promise.resolve(init?.method === 'POST' ? Response.json({ error: 'Illustrative fixture. Runtime changes are disabled.' }, { status: 409 }) : Response.json(state.toolAccess));
@@ -23,9 +24,25 @@ function render(configured = false, blocked = false) {
 }
 const storymap = (summary: string) => ({ app: 'Worker', summary, covers: ['src/worker/webview/components/ToolAccessPanel.vue', 'src/worker/webview/components/McpConnectionsEditor.vue', 'src/worker/webview/components/CliToolsEditor.vue'], route: '/settings#tool-access', ready: '[data-worker-tools-ready]' });
 const ready = async ({ canvasElement }: { canvasElement: HTMLElement }) => { await nextTick(); canvasElement.setAttribute('data-worker-tools-ready', 'true'); };
-export const DefaultOff: Story = { name: 'All tools disabled by default', parameters: { storymap: storymap('Default-off file, command, CLI, web and MCP grants stay explicit and separate from provider sign-in.') }, render: render(), play: ready };
+export const DefaultOff: Story = { name: 'All tools disabled by default', parameters: { storymap: storymap('Default-off file, command, CLI, web and MCP grants stay explicit and separate from provider sign-in.') }, render: render(), play: async ({ canvasElement }) => {
+  const enabled = await element(canvasElement, '#tool-delegation-enabled') as HTMLInputElement;
+  const children = await element(canvasElement, '#tool-delegation-children') as HTMLInputElement;
+  const concurrent = await element(canvasElement, '#tool-delegation-concurrent') as HTMLInputElement;
+  if (enabled.checked || children.value !== '4' || concurrent.value !== '2') throw Error('Legacy grants must show delegation disabled with bounded defaults.');
+  if (!canvasElement.querySelector<HTMLButtonElement>('.tool-save-actions button[type="submit"]')?.disabled) throw Error('Loading an omitted delegation grant must not manufacture an edit.');
+  await ready({ canvasElement });
+} };
 export const GrantedTools: Story = { name: 'Manage built-in and MCP grants', parameters: { storymap: storymap('Individual tool grants, fixed command presets, a project CLI with an argument policy, secret preservation, server discovery and model data flow are visible before saving.') }, render: render(true), play: ready };
-export const DrainBeforeSaving: Story = { name: 'Pause and drain guidance', parameters: { storymap: storymap('Operators can draft tool changes while the worker runs, then pause and drain before saving or revoking access.') }, render: render(false, true), play: ready };
+export const DrainBeforeSaving: Story = { name: 'Pause and drain guidance', parameters: { storymap: storymap('Operators can draft tool changes while the worker runs, then pause and drain before saving or revoking access.') }, render: render(false, true), play: async ({ canvasElement }) => {
+  const enabled = await element(canvasElement, '#tool-delegation-enabled') as HTMLInputElement;
+  enabled.focus(); enabled.click(); await nextTick();
+  const save = await element(canvasElement, '.tool-save-actions button[type="submit"]') as HTMLButtonElement;
+  const label = save.textContent;
+  state.toolAccess = { ...state.toolAccess! }; await nextTick();
+  if (!enabled.checked || enabled.disabled || document.activeElement !== enabled || !save.disabled) throw Error('Delegation remains a draft until paused and drained, without losing focus during polling.');
+  if (save.textContent !== label || canvasElement.querySelector('form')?.getAttribute('aria-busy') === 'true' || state.toolAccess.delegation?.enabled) throw Error('Background reads cannot save a delegation grant or flicker its action.');
+  await ready({ canvasElement });
+} };
 
 async function element(canvas: HTMLElement, selector: string) {
   for (let attempt = 0; attempt < 100; attempt++) {
@@ -112,6 +129,33 @@ export const InvalidMcpTimeout: Story = {
     await nextTick();
     const error = await element(canvasElement, '.tool-access .error-text[role="status"]');
     if (!error.textContent?.includes('1–300 seconds') || !canvasElement.querySelector<HTMLButtonElement>('.tool-save-actions button[type="submit"]')?.disabled || field.value !== '301') throw Error('An invalid MCP timeout must keep its draft and prevent saving.');
+    await ready({ canvasElement });
+  },
+};
+
+export const GrantedDelegation: Story = {
+  name: 'Grant bounded model delegation',
+  parameters: { storymap: storymap('Explicit delegation lets the model request up to four subagents, with at most two running together. The parent model, profile, Feature Request, tool permissions and attempt budget remain authoritative; child consumption counts toward the worker allowance.') },
+  render: render(false, false, true),
+  play: async ({ canvasElement }) => {
+    const enabled = await element(canvasElement, '#tool-delegation-enabled') as HTMLInputElement;
+    if (!enabled.checked || !canvasElement.textContent?.includes('Tool access configured')) throw Error('Saved delegation must be visible as granted access even when other tools are off.');
+    if (!(await element(canvasElement, '#tool-delegation-help')).textContent?.includes('Subagents cannot delegate further')) throw Error('The delegation boundary must be explained.');
+    await ready({ canvasElement });
+  },
+};
+export const InvalidDelegationLimits: Story = {
+  name: 'Correct invalid subagent limits',
+  parameters: { storymap: storymap('Delegation limits remain explicit drafts. Concurrent children cannot exceed the attempt total, and values outside the hard bounds remain visible with saving disabled.') },
+  render: render(),
+  play: async ({ canvasElement }) => {
+    const children = await element(canvasElement, '#tool-delegation-children') as HTMLInputElement;
+    children.value = '1'; children.dispatchEvent(new Event('input', { bubbles: true })); await nextTick();
+    const error = await element(canvasElement, '.tool-access .error-text[role="status"]');
+    const save = await element(canvasElement, '.tool-save-actions button[type="submit"]') as HTMLButtonElement;
+    if (!error.textContent?.includes('cannot exceed') || !save.disabled || children.value !== '1') throw Error('Concurrent delegation must stay within the attempt total.');
+    children.value = '5'; children.dispatchEvent(new Event('input', { bubbles: true })); await nextTick();
+    if (!error.textContent?.includes('1–4') || !save.disabled || children.value !== '5') throw Error('An excessive delegation limit must remain visible for correction.');
     await ready({ canvasElement });
   },
 };

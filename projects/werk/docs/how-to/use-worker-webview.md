@@ -96,7 +96,8 @@ Claude Code CLI runs on Linux, macOS and native Windows; the worker discovers
 the webview run everywhere. Use **Check sign-in** after saving a CLI connection. The worker runs only
 `codex login status` or `claude auth status`, plus a bounded Claude version
 probe. Each subprocess has a five-second deadline. Known Claude versions older
-than 2.1.248 require an upgrade; an unknown version is not confirmed compatible. The result distinguishes signed-in, signed-out, unavailable and unknown;
+than 2.1.257 require an upgrade for durable sessions; an unknown version is not
+confirmed compatible. The result distinguishes signed-in, signed-out, unavailable and unknown;
 it never exposes raw account diagnostics. No model prompt or paid API call is
 made. For API connections, the check confirms saved configuration only: it does
 not verify credentials, quota, billing or model availability. There is no automatic

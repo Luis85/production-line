@@ -14,7 +14,7 @@ import { CandidateToolError } from './candidate-tools.js';
 import type { ToolResult, ToolWorktreeIdentity } from '../application/tool-runtime.js';
 
 export class BuiltinToolError extends Error {}
-export interface ToolOperation { definition: ToolDefinition; call(args: unknown, signal: AbortSignal): Promise<ToolResult>; }
+export interface ToolOperation { definition: ToolDefinition; /** Only the worker delegation broker may wait outside the shared side-effect queue. */ concurrent?: true; call(args: unknown, signal: AbortSignal): Promise<ToolResult>; }
 export interface BuiltinToolOptions { policy: ToolPolicy; directory: string; worktree?: string; worktreeIdentity?: ToolWorktreeIdentity; development?: DevelopmentRuntime; commandTimeoutMs?: number; limits?: ResolvedToolLimits; fetch?: typeof globalThis.fetch; repositories?: () => readonly ToolRepository[]; }
 /** A current worker repository assignment (settings `repositories.items`), never a path supplied by the model. */
 export interface ToolRepository { id: string; path: string; }

@@ -1,0 +1,34 @@
+                                                           
+                                                                 
+                                                                 
+                                                             
+                                                   
+                                                              
+                                                 
+
+/** Read-only configuration needed by session and approved-file workflows. */
+                                     
+                   
+                                          
+                               
+                                                                                                                                  
+    
+                                           
+                           
+ 
+/** Serialized catalog limits and schema validation belong to the corresponding application. */
+                                                                                                                     
+                                        
+                                      
+                                           
+                                                              
+ 
+                                   
+                                      
+                                           
+                                                           
+ 
+                                    
+                                                        
+                                                                                                                                                                            
+ 

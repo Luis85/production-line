@@ -18,7 +18,21 @@ Mark only meaningful verification commands as required. A help command that exit
 
 ## Submit one feature request
 
-In **Taskboard → New request**, describe the requested behavior and acceptance criteria. Expand **Repository files · optional**, enable **Allow changes to approved repository files**, choose the repository and list the files the implementation may change. Include intended new paths and any files to be deleted. A request cannot widen its own approved scope.
+For a worker bound to shared Git intake, create a draft from the committed project
+template in your editor or through **Taskboard → New request → Prepare request**.
+Complete its approved paths and acceptance criteria, check readiness, then mark
+it ready and commit/push it. In the webview, **Mark ready and publish** performs
+that publication. The shared watcher claims the same Feature Request; the chat
+interface does not bypass Git or create a second implementation workflow.
+
+For a standalone local worker without a shared binding, describe the behavior in
+**Taskboard → New request**. Expand **Repository files · optional**, enable
+**Allow changes to approved repository files**, choose the repository and list
+the files the implementation may change. Both paths use the same execution and
+verification contracts. Include intended new files and deletions; a request
+cannot widen its own approved scope.
+
+For a team batch, follow the [evening handoff and morning review](shared-feature-intake.md#work-during-the-day-implement-overnight).
 
 For example:
 

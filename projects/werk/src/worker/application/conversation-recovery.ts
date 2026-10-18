@@ -1,3 +1,4 @@
+import { conversationProjection } from './model-context.js';
 
 
 import type { InteractionTurn } from "./interactions.js";
@@ -8,6 +9,7 @@ export async function restoreConversation(host: Pick<ConversationRuntime, 'value
     host.value = await host.store.read();
     const interactions = host.evidence?.interactions;
     const latest = interactions?.view(host.sessionId).latestTurn;
+    const versioned = latest && interactions!.turn(host.sessionId, latest.id).dispatch?.schemaVersion === 2;
     if (latest) {
       const turn = interactions!.turn(host.sessionId, latest.id);
       const context = turn.context as Partial<ChatContext> | null;
@@ -21,7 +23,8 @@ export async function restoreConversation(host: Pick<ConversationRuntime, 'value
           (message) => message.id === context.assistantId,
         );
         if (answer) materialize(turn, answer);
-        await host.store.write(host.value);
+        if (versioned) host.value.messages = conversationProjection(host.value.messages);
+      await host.store.write(host.value);
       }
     }
     const requests = host.evidence?.requests;
@@ -66,6 +69,7 @@ export async function restoreConversation(host: Pick<ConversationRuntime, 'value
           );
         }
       }
+      if (versioned) host.value.messages = conversationProjection(host.value.messages);
       await host.store.write(host.value);
     }
     if (host.value.messages.some((message) => message.state === "pending")) {
@@ -75,6 +79,7 @@ export async function restoreConversation(host: Pick<ConversationRuntime, 'value
           message.text =
             "The worker stopped before this reply finished. Resume the stopped attempt to try again.";
         }
+      if (versioned) host.value.messages = conversationProjection(host.value.messages);
       await host.store.write(host.value);
     }
   }

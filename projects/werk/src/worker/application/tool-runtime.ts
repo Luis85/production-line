@@ -25,6 +25,8 @@ export interface ToolRuntime {
   /** Invocation-frozen execution ceilings; omitted by legacy adapter fixtures. */
   readonly limits?: Readonly<{ maxCalls: number; maxRuntimeMs: number; commandTimeoutMs: number }>;
   call(name: string, args: unknown, signal: AbortSignal): Promise<ToolResult>;
+  /** Check the same current grants before a brokered child dispatch, without consuming another tool call. */
+  assertAvailable?(signal: AbortSignal): void;
   /** Current budget accounting for this invocation. Optional so injected test runtimes stay valid. */
   budget?(): ToolBudget;
   /** Idempotently cancel and await in-flight calls before releasing execution capacity. */

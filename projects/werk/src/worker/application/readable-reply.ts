@@ -1,5 +1,5 @@
 import { Lexer, Tokenizer, type Token } from 'marked';
-import { parseModelResult } from './model-contract.js';
+import { parseModelResult } from './model-result.js';
 import { PatchProtocolError, parsePatchReply } from './patch-protocol.js';
 // Pure transcript formatting shared by the worker runtime and its webview.
 // Model protocol replies stay unchanged in interaction evidence; the conversation shows a readable view.

@@ -30,8 +30,10 @@ export function renderSharedReview(record: SharedFeatureRecord, execution: Share
 
 /** A configuration or gate blocker is informative only; it never fabricates an executable interaction. */
 export function renderSharedBlocker(record: SharedFeatureRecord, reason: string): string {
-  const metadata = { schemaVersion: 1, type: 'Task', status: 'blocked', featureId: record.id, featureRequestKey: sharedFeatureRequestReference(record).key, owner: record.owner, title: record.title, sourceCommit: record.sourceCommit, inputHash: record.inputHash };
-  const next = record.status === 'needs_rework'
+  const metadata = { schemaVersion: 1, type: 'Task', status: !record.submitted && record.status === 'queued' ? 'waiting' : 'blocked', featureId: record.id, featureRequestKey: sharedFeatureRequestReference(record).key, owner: record.owner, title: record.title, sourceCommit: record.sourceCommit, inputHash: record.inputHash };
+  const next = !record.submitted
+    ? 'The worker has claimed this feature request but has not started an execution. Resolve the reported worker configuration or access issue, or wait for the stated hold to clear. The worker checks again automatically and retries admission using this same request identity. No answer or status change in this Task is needed.'
+    : record.status === 'needs_rework'
     ? 'Create a corrected successor feature request from the project template, complete the readiness requirements, then commit and push it. The accepted request and its approved scope remain frozen.'
     : record.status === 'blocked'
       ? 'Restore the worker state or resolve its configuration and access issue. The worker will retry publication and inspect existing execution; it will not silently repeat a missing attempt.'

@@ -32,6 +32,9 @@ export class WorkerRequestJournal implements RequestGatePort, FeatureIdentityJou
   async init() {
     return this.store.init();
   }
+  async open() { return this.store.open(); }
+  recover(retained: ReadonlySet<string> = new Set()) { return this.store.recover(retained); }
+  preparedForRecovery(id: string) { return this.store.preparedForRecovery(id); }
   close() {
     return this.store.close();
   }

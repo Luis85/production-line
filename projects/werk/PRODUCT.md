@@ -61,12 +61,18 @@ time across Chat, explicit local file tasks and remote orchestrator assignments.
 Local admission counts queued/running chat and file work, including preparation
 reservations. Accepted remote assignments use a separate buffer; ready notes not
 yet admitted are not occupied places. These counts never add execution slots.
-Stale observations do not establish availability. Parallel work
-requires separate worker instances, each with its own native state directory or
-Docker volume and webview port.
+Stale observations do not establish availability. Separate Feature Requests need
+separate worker instances for parallel execution, each with its own state and
+webview port. Within one attempt, an explicitly granted parent model can use
+bounded child sessions. Those children keep the same request and grants, share
+its tool-call/time budget, and count toward the worker allowance.
 
 Every task owns a dedicated worker-managed session and an automatically maintained
 Markdown feature-request record. Follow-ups, answers and retries keep that record.
+A request retains its logical model session across invocations; native resume and
+worker context replay are distinct adapter capabilities. Shared project context
+comes from an explicit committed manifest, while private conversation history
+remains request-specific.
 The unified interaction starts with instructions; approved repository-file work is
 an optional permission, never an opt-in to persistence. Source notes retain their
 own intake authority; the generated record reports progress without replacing them.

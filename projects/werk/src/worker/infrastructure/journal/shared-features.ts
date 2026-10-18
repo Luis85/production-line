@@ -52,7 +52,7 @@ export class SharedFeatureJournal {
           const diagnostic = record.diagnostic;
           if (typeof diagnostic.markdown !== 'string' || Buffer.byteLength(diagnostic.markdown) > 65536 || diagnostic.path !== taskDirectory + '/blocked-' + sharedHash(record.taskId! + sharedHash(diagnostic.markdown)).slice(0, 40) + '.md' || diagnostic.published !== undefined && diagnostic.published !== sharedHash(diagnostic.markdown)) throw Error('Invalid shared diagnostic checkpoint.');
           const note = parseFeature(diagnostic.markdown).data;
-          if (note.type !== 'Task' || note.status !== 'blocked' || note.featureId !== record.id || note.owner !== state.workerId || note.sourceCommit !== record.sourceCommit || note.inputHash !== record.inputHash) throw Error('Invalid shared diagnostic identity.');
+          if (note.type !== 'Task' || (note.status !== 'blocked' && note.status !== 'waiting') || note.featureId !== record.id || note.owner !== state.workerId || note.sourceCommit !== record.sourceCommit || note.inputHash !== record.inputHash) throw Error('Invalid shared diagnostic identity.');
         }
         if (record.taskNote != null && record.taskNote !== task?.path && record.taskNote !== record.diagnostic?.path || record.progress !== undefined && (typeof record.progress !== 'string' || record.progress.length > 2000)) throw Error('Invalid shared progress projection.');
         if (record.pending) {
@@ -66,7 +66,7 @@ export class SharedFeatureJournal {
             if (!artifact || typeof artifact.content !== 'string' || Buffer.byteLength(artifact.content) > 524288) throw Error('Invalid shared artifact outbox.');
             const review = artifact.path === record.reviewNote && artifact.expectedRevision === null && artifact.content === record.reviewMarkdown;
             const action = task && artifact.path === task.path && artifact.expectedRevision === task.revision && artifact.content === task.markdown;
-            const diagnostic = record.diagnostic && artifact.path === record.diagnostic.path && artifact.expectedRevision === null && artifact.content === record.diagnostic.markdown;
+            const diagnostic = record.diagnostic && artifact.path === record.diagnostic.path && (artifact.expectedRevision === null || artifact.expectedRevision === sharedHash(record.diagnostic.markdown)) && artifact.content === record.diagnostic.markdown;
             if (!review && !action && !diagnostic) throw Error('Invalid shared artifact outbox.');
           }
         }

@@ -18,6 +18,8 @@ export interface ToolRuntimeOptions {
   worktree?: string;
   worktreeIdentity?: ToolWorktreeIdentity;
   development?: DevelopmentRuntime;
+  /** Trusted worker operations, such as FR history and bounded delegation. */
+  additionalOperations?: ToolOperation[];
   maxCalls?: number;
   maxRuntimeMs?: number;
   commandTimeoutMs?: number;
@@ -77,7 +79,8 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
   const pinnedWorktree = options.worktreeIdentity ? { ...options.worktreeIdentity } : undefined;
   const resolved = resolveToolLimits(policy, options);
   const { maxCalls, maxRuntimeMs, commandTimeoutMs } = resolved;
-  const operations: ToolOperation[] = builtinToolOperations({ ...options, policy, commandTimeoutMs, limits: resolved });
+  const operations: ToolOperation[] = [...builtinToolOperations({ ...options, policy, commandTimeoutMs, limits: resolved }), ...(options.additionalOperations ?? [])];
+  if (operations.some(operation => operation.concurrent && operation.definition.name !== 'werk_delegate')) throw new ToolAccessError('Only worker delegation may wait outside the shared tool queue.');
   const mcpTimeouts = new Map<string, number>();
   const directoryFor = chatToolDirectory(options);
   // Names that receive the chat-workspace hint when they fail; task invocations and HTTP servers have no such hint.
@@ -101,7 +104,7 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
       });
     }
   }
-  if (operations.length > 64) throw new ToolAccessError('At most 64 tools may be granted for one invocation.');
+  if (operations.length > 64) throw new ToolAccessError('At most 64 tools may be offered in one invocation, including candidate tools, delegation and session history. Reduce enabled grants to leave room for worker tools.');
   const catalog = new Map(operations.map(operation => [operation.definition.name, operation]));
   if (catalog.size !== operations.length) throw new ToolAccessError('Tool names are not unique.');
   const manifest: ToolManifest = freeze({ revision: policy.revision, tools: structuredClone(operations.map(operation => operation.definition)), limits: manifestLimits(policy, operations.map(operation => operation.definition.name), mcpTimeouts, resolved) });
@@ -137,6 +140,7 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
   return {
     manifest,
     limits: Object.freeze({ maxCalls, maxRuntimeMs, commandTimeoutMs }),
+    assertAvailable: authorize,
     budget: () => ({ maxCalls, windowMs: maxRuntimeMs, callsUsed: calls, refusedCalls: refused, exhausted: exhausted ? { reason: exhausted, maxCalls, windowMs: maxRuntimeMs, callsUsed: calls, refusedCalls: refused } : null }),
     call(name, args, signal) {
       let input: unknown;
@@ -152,7 +156,8 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
       if (!deadline) { startedAt = Date.now(); deadline = AbortSignal.timeout(maxRuntimeMs); }
       const combined = AbortSignal.any([signal, lifetime.signal, deadline]);
       // Serialize calls so command side effects and file reads have a defined order.
-      const operation = previous.then(async (): Promise<ToolResult> => {
+      const concurrent = catalog.get(name)!.concurrent === true;
+      const operation = (concurrent ? Promise.resolve() : previous).then(async (): Promise<ToolResult> => {
         if (windowEnded(signal)) { grants(); return refuse('window'); }
         authorize(combined);
         try {
@@ -168,7 +173,7 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
           return noted({ content: [{ type: 'text', text }], isError: true });
         }
       });
-      previous = operation.catch(() => {});
+      if (!concurrent) previous = operation.catch(() => {});
       pending.add(operation);
       void operation.then(() => pending.delete(operation), () => pending.delete(operation));
       return operation;

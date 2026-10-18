@@ -1,0 +1,96 @@
+import { workspaceDelegation } from './workspace-delegation.js';
+                                                                  
+                                                                  
+                                                                     
+import { validateFeatureRequestReference } from '../application/feature-request-reference.js';
+import { validateModelSessionBinding,                          } from '../application/model-session.js';
+import { FileModelSessionStore } from './model-session-store.js';
+import { sessionHistoryTool } from './session-history-tool.js';
+import { loadProjectModelContext } from './project-model-context.js';
+                                                                        
+                                                                               
+                                                                        
+import { consumptionModel } from '../application/consumption-model.js';
+import { join } from 'node:path';
+import { WorkerSessions } from '../application/sessions.js';
+import { LocalTaskboard,                          } from '../application/local-tasks.js';
+import { WorkerDefinitions } from '../application/definitions.js';
+                                                                            
+                                                                        
+                                                                      
+import { WorkerRequestJournal } from './journal/requests.js';
+import { WorkerInteractionJournal } from './journal/interactions.js';
+import { WorkerRunJournal } from './journal/local-runs.js';
+import { initializeLocalEvidence } from './journal/startup.js';
+import { modelFor } from './providers.js';
+import { createToolRuntime } from './tool-runtime.js';
+import { createDevelopmentRuntime } from './candidate-tools.js';
+import { executeModel, legacyModelReply, modelCapabilities,                      } from '../application/model-contract.js';
+import { DEFAULT_MAX_RUNTIME_MS, DEFAULT_MAX_TOOL_CALLS, DEFAULT_COMMAND_TIMEOUT_MS } from '../application/execution-policy.js';
+import { definitionStorage, sessionCatalogStorage, localTaskStorage, approvedTaskFiles } from './journal/workspace-files.js';
+
+                                                                                                                                                  
+                                                                                                                                            
+
+/** Concrete provider/tool construction stays at the worker edge. Each call observes current grants. */
+export function workspaceModelFactory(directory        , settings               , model                           = modelFor, consumption                     , runs             )               {
+  return (connection, scope) => {
+    const executionDirectory = !scope?.sessionId || scope.sessionId === 'default' ? directory : join(directory, 'sessions', scope.sessionId);
+    const binding                                  = scope?.sessionId && scope.feature ? { schemaVersion: 1, logicalSessionId: scope.sessionId, featureRequestKey: validateFeatureRequestReference(scope.feature).key, providerId: connection.id, generation: 1 } : undefined;
+    if (binding) validateModelSessionBinding(binding);
+    let dispatch                          ;
+    const instance = model(connection, executionDirectory, undefined, scope ? {
+      ...(binding ? { session: { binding, store: new FileModelSessionStore(directory) } } : {}),
+      tools: policy => {
+        let runtime             ;
+        const additionalOperations = binding && policy?.sessionContext ? [sessionHistoryTool(directory, binding)] : [];
+        const grant = settings.toolPolicy().delegation;
+        if (binding && policy?.sessionContext && grant?.enabled && runs) {
+          const delegated = workspaceDelegation({ directory, binding, connection: { ...connection, ...(dispatch ? { model: dispatch.provider.model, instruction: dispatch.provider.instruction } : {}) }, grant, acceptedScope: dispatch?.messages[0]?.text, runtime: () => runtime, runs, consumption, model });
+          if (delegated) additionalOperations.push(delegated);
+        }
+        runtime = createToolRuntime({
+        additionalOperations,
+        policy: settings.toolPolicy(), currentRevision: () => settings.toolPolicy().revision,
+        directory: executionDirectory, worktree: scope.worktree, worktreeIdentity: scope.worktreeIdentity, development: scope.development, repositories: () => settings.value.repositories.items,
+        maxCalls: policy ? policy.maxToolCalls ?? DEFAULT_MAX_TOOL_CALLS : settings.value.execution.maxToolCalls,
+        maxRuntimeMs: policy ? policy.maxRuntimeMs ?? DEFAULT_MAX_RUNTIME_MS : settings.value.execution.maxRuntimeMs,
+        commandTimeoutMs: policy ? policy.commandTimeoutMs ?? DEFAULT_COMMAND_TIMEOUT_MS : settings.value.execution.commandTimeoutMs,
+        });
+        return runtime;
+      },
+    } : undefined);
+    const budgeted                              = instance ? {
+      get sessionBinding() { return instance.configuration?.id === binding?.providerId ? binding : undefined; },
+      loadProjectContext(signal) { return scope?.worktree && scope.baseCommit ? loadProjectModelContext(scope.worktree, scope.baseCommit, signal) : Promise.resolve(null); },
+      get configuration() { return instance.configuration ?? { id: 'legacy', model: '', instruction: '' }; },
+      get capabilities() { return instance.capabilities ?? modelCapabilities; },
+      get toolManifest() { return instance.toolManifest; },
+      toolManifestFor(policy) { return instance.toolManifestFor ? instance.toolManifestFor(policy) : instance.toolManifest; },
+      get executionPolicy() { return { maxToolCalls: settings.value.execution.maxToolCalls, commandTimeoutMs: settings.value.execution.commandTimeoutMs }; },
+      reply: (...args) => legacyModelReply(budgeted , ...args),
+      execute: (...args) => { dispatch = args[0]; return executeModel(instance, ...args); },
+    } : undefined;
+    return consumption ? consumptionModel(budgeted, consumption) : budgeted;
+  };
+}
+export function createWorkerDefinitions(directory        ) { return new WorkerDefinitions(definitionStorage(directory)); }
+export function createWorkerSessions(directory        , settings                    , model                           = modelFor, requests                 , activeOutsideChat               = () => 0, consumption                     , capacity                                        ) {
+  const requestJournal = requests ?? new WorkerRequestJournal(directory);
+  const interactions = new WorkerInteractionJournal(directory), runs = new WorkerRunJournal(directory);
+  return new WorkerSessions(settings, {
+    model: workspaceModelFactory(directory, settings, model, consumption, runs), storage: sessionCatalogStorage(directory),
+    consumptionBlocked: consumption ? () => consumption.status().blocked : undefined,
+    capacity: capacity ? { remote: capacity.remote, consumption: () => consumption?.status() ?? null } : undefined,
+    requests: requestJournal, interactions, runs,
+    initializeEvidence: requestJournal instanceof WorkerRequestJournal ? () => initializeLocalEvidence(directory, settings, requestJournal, interactions, runs) : undefined,
+    definitions: createWorkerDefinitions(directory), activeOutsideChat,
+  });
+}
+export function createLocalTaskboard(directory        , settings                    , sessions                , modelOrWorkspaces                                                 = modelFor, workspaces                      , consumption                     ) {
+  const model = typeof modelOrWorkspaces === 'function' ? modelOrWorkspaces : modelFor;
+  return new LocalTaskboard(settings, sessions, {
+    model: workspaceModelFactory(directory, settings, model, consumption, sessions.runs), storage: localTaskStorage(directory), files: approvedTaskFiles, development: createDevelopmentRuntime,
+    workspaces: typeof modelOrWorkspaces === 'function' ? workspaces : modelOrWorkspaces,
+  });
+}

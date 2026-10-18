@@ -111,7 +111,8 @@ test('accepted file answer survives a full queue before prepare, restart and exp
   assert.equal(f.board.detail(id).runId, undefined, 'A pre-prepare failure must not point at the earlier question run.');
   assert.match(f.board.detail(id).error, /saved|Resume/);
   await f.restart(); assert.equal(calls, 1); assert.equal(f.board.detail(id).status, 'failed');
-  assert.equal(f.board.detail(blocker).status, 'failed');
+  assert.equal(f.board.detail(blocker).status, 'queued');
+  await f.board.action({ id: blocker, action: 'cancel' });
   view = f.sessions.interactions.view(sessionId); await f.board.interact(resume(view));
   await f.settings.update({ board: { paused: false } }); await f.settle(id, 'review'); assert.equal(calls, 2);
 });

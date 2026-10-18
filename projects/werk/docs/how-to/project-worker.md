@@ -339,6 +339,9 @@ accepts `{"provider":{"id":"codex-cli","executable":"/absolute/path/to/codex"}}`
 Authenticate that CLI on the worker machine, then run `provider check --id codex-cli`.
 API connections use their provider ID, model and `apiKey` in a private JSON input
 file or stdin; keep credentials out of command arguments and project commits.
+For shared team work, connect the [Markdown queue](shared-feature-intake.md) and
+follow its [overnight handoff](shared-feature-intake.md#work-during-the-day-implement-overnight).
+
 Inspect `settings get` for redacted configuration. `queue pause` stops new
 execution and orchestrator claims while running tasks finish; `queue resume` resumes it. Use
 `queue configure --file queue.json` for capacity and routing intake settings.

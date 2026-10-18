@@ -46,6 +46,29 @@ it verifies the release, backs up state and keeps the previous folder for
 `update rollback`. See [portable apps](docs/reference/portable-apps.md) and
 [environment configuration](docs/reference/configuration.md#project-environment-files).
 
+## Grow from your worker into a Factory
+
+Add the building blocks as your team needs them:
+
+1. **Worker:** connect your model and repository, then implement and review
+   Feature Requests. See the [overnight handoff](docs/how-to/shared-feature-intake.md#work-during-the-day-implement-overnight)
+   for daytime planning and unattended execution.
+2. **Orchestrator:** start a separate Orchestrator and enroll the existing worker
+   through **Settings → Orchestrator**, using its enrollment token. One
+   Orchestrator and its enrolled workers form a production line.
+3. **Factory:** start a Factory with private line credentials, then register
+   running Orchestrators as lines. Organize lines into logical subfactories,
+   inspect portfolio summaries and route new intake to a suitable line.
+
+Only workers invoke models. Each component keeps its own state, credentials and
+webview. Line assignments default to simulation; enrollment does not change the
+worker's shared Git intake or automatically enable live execution. Follow
+[assemble independent components](docs/how-to/assemble-independent-components.md)
+for startup, enrollment, profile acknowledgment, credentials and registration.
+
+The managed YAML system below is another setup path for a fresh installation.
+Keep its state separate from independently installed components.
+
 ## A complete system from one YAML file
 
 The supplied [system definition](examples/system.yaml) declares a Factory, one

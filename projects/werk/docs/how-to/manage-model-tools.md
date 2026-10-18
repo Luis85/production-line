@@ -60,6 +60,40 @@ Web grants use exact origins, including any non-default port, such as
 `https://docs.example.com`. A grant covers that origin's paths. Redirects must
 remain within granted origins. URLs with embedded credentials are rejected.
 
+## Allow the model to delegate
+
+In **Settings → Tools & MCP → Model delegation**, enable **Allow models to
+delegate work to subagents**. As with other grants, pause new starts and drain
+queued/running work before saving, then resume the worker. Existing policies
+without this grant keep delegation disabled.
+
+Set **Subagent limit per attempt** to 1–4 and **Concurrent subagents** to 1–2,
+no greater than the total. The parent model receives `werk_delegate` and decides
+whether a child would help. It can narrow each child's tools or give a child no
+tools. Children use the same provider, model, execution profile and Feature
+Request; they do not create another request in the team's intake folder.
+
+Children share the attempt's time limit and tool-call allowance. Each model call
+also counts toward the worker's configured consumption allowance. They cannot
+delegate again. Stopping the parent stops its children. Repository operations
+remain serialized through the same approved worktree and required verification
+checks; ask for independent work and let the parent reconcile the reports.
+
+This capability uses Werk's controlled delegation tool. It does not enable
+unrestricted native provider agents. Child reports are inputs to the parent,
+not human approval or proof that project checks passed. A blocked child returns
+its question to the parent, which decides whether the Feature Request needs a
+Task note for the team.
+
+The portable CLI edits the same optional `delegation` policy field:
+
+```json
+{"enabled": true, "maxChildren": 4, "maxConcurrent": 2}
+```
+
+Read `tool-access get`, edit its `delegation` value and save the complete guarded
+payload with `tool-access set --file`, following the CLI procedure below.
+
 ## Give the model a project CLI
 
 Use a **CLI tool** when the model needs to pass arguments to a project command,

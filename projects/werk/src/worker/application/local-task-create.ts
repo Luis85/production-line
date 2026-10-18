@@ -1,3 +1,4 @@
+import { loadTaskProjectContext } from './local-task-preparation.js';
 import { interactionFeatureRequest } from './feature-request-reference.js';
 
 import { freezeDevelopmentScope } from './development.js';
@@ -10,7 +11,7 @@ import { DomainError } from "../../shared/errors.js";
 import { ADMISSION_TIMEOUT_MS, submissionContextHash, type LocalTask, type LocalTaskWorkspaces, type LocalTaskPreparation, type LocalTaskSubmission } from './local-task-contracts.js';
 import type { LocalTaskRuntime } from './local-task-runtime-contract.js';
 
-export async function createTask(host: Pick<LocalTaskRuntime, "closed" | "tasks" | "view" | "admissionInput" | "assertAdmissionCapacity" | "admissionReserved" | "admissionTaskId" | "workspaceController" | "workspaces" | "files" | "development" | "settings" | "change" | "sessions" | "input" | "ensureRequest" | "context" | "prepareTurn" | "persistenceError">, input: unknown, submission?: LocalTaskSubmission, options: { id?: string; budgetMs?: number; preparation?: LocalTaskPreparation; signal?: AbortSignal; definition?: DefinitionSnapshot | null } = {}) {
+export async function createTask(host: Pick<LocalTaskRuntime, "model" | "closed" | "tasks" | "view" | "admissionInput" | "assertAdmissionCapacity" | "admissionReserved" | "admissionTaskId" | "workspaceController" | "workspaces" | "files" | "development" | "settings" | "change" | "sessions" | "input" | "ensureRequest" | "context" | "prepareTurn" | "persistenceError">, input: unknown, submission?: LocalTaskSubmission, options: { id?: string; budgetMs?: number; preparation?: LocalTaskPreparation; signal?: AbortSignal; definition?: DefinitionSnapshot | null } = {}) {
     if (host.closed) throw new DomainError("unavailable", "Worker is stopping");
     if (submission) {
       const existing = host.tasks.find((task) => task.id === submission.id);
@@ -121,6 +122,7 @@ export async function createTask(host: Pick<LocalTaskRuntime, "closed" | "tasks"
       archived: false,
     };
     try {
+      if (!task.admissionFailure) await loadTaskProjectContext(host, task, admission);
       await host.change(async (tasks) => {
         // Check within the serialized write as concurrent submissions may pass the initial fast path.
         const existing = tasks.find((item) => item.id === id);

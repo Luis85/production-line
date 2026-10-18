@@ -1,3 +1,4 @@
+import { withSessionRecovery } from './model-session-recovery.js';
 import type { WorkerRequest } from "./request-gates.js";
 import type { StructuredModel } from "./model-contract.js";
 
@@ -44,6 +45,8 @@ export function prepareConversationRequest(host: Pick<ConversationRuntime, 'time
             {
               ...model,
               configuration: prior.dispatch.provider,
+              sessionBinding: (model as Partial<StructuredModel>).sessionBinding,
+              capabilities: (model as Partial<StructuredModel>).capabilities,
               toolManifest: (model as Partial<StructuredModel>).toolManifest,
               toolManifestFor: (model as Partial<StructuredModel>).toolManifestFor?.bind(model),
               executionPolicy: (model as Partial<StructuredModel>).executionPolicy,
@@ -81,7 +84,9 @@ export function prepareConversationRequest(host: Pick<ConversationRuntime, 'time
             ? ({
                 ...model,
                 configuration: ancestor.dispatch.provider,
-                toolManifest: (model as Partial<StructuredModel>).toolManifest,
+                sessionBinding: (model as Partial<StructuredModel>).sessionBinding,
+              capabilities: (model as Partial<StructuredModel>).capabilities,
+              toolManifest: (model as Partial<StructuredModel>).toolManifest,
                 toolManifestFor: (model as Partial<StructuredModel>).toolManifestFor?.bind(model),
               executionPolicy: (model as Partial<StructuredModel>).executionPolicy,
               } as ConversationModel)
@@ -94,7 +99,9 @@ export function prepareConversationRequest(host: Pick<ConversationRuntime, 'time
             ? ({
                 ...model,
                 configuration: gateRequest.provider,
-                toolManifest: (model as Partial<StructuredModel>).toolManifest,
+                sessionBinding: (model as Partial<StructuredModel>).sessionBinding,
+              capabilities: (model as Partial<StructuredModel>).capabilities,
+              toolManifest: (model as Partial<StructuredModel>).toolManifest,
                 toolManifestFor: (model as Partial<StructuredModel>).toolManifestFor?.bind(model),
               executionPolicy: (model as Partial<StructuredModel>).executionPolicy,
               } as ConversationModel)
@@ -113,5 +120,8 @@ export function prepareConversationRequest(host: Pick<ConversationRuntime, 'time
         );
       throw error;
     }
+  let prior = turn?.priorTurnId ? interactions?.turn(host.sessionId, turn.priorTurnId) : undefined;
+  for (let depth = 0; prior && !prior.dispatch && prior.priorTurnId && depth < 128; depth++) prior = interactions!.turn(host.sessionId, prior.priorTurnId);
+  request = withSessionRecovery(request, turn, prior, command?.operationId);
   return { request, maxRuntimeMs };
 }

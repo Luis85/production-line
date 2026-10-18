@@ -35,6 +35,7 @@ This organization follows [Diátaxis](https://diataxis.fr/).
 - [Assemble independent workers, orchestrators and Factories](how-to/assemble-independent-components.md)
 - [Install a project worker](how-to/project-worker.md): app, private environment, provider and team authoring kit.
 - [Connect the shared Markdown queue](how-to/shared-feature-intake.md): CLI setup, committed requests, Task answers and PullRequest review handoffs.
+- [Hand off an overnight batch](how-to/shared-feature-intake.md#work-during-the-day-implement-overnight): daytime drafting, unattended implementation and morning review.
 - [Operate a project worker](how-to/operate-project-worker.md): checklist, Windows PowerShell 5.1 JSON files, task worktrees, tool limits and answers.
 - [Author feature requests with your team](how-to/team-feature-authoring.md): portable skill, editable template, shared checks and Obsidian queue; no worker connection required.
 - [Integrate with Claude and Codex](how-to/project-agent-integrations.md): reviewed project skills and guarded synchronization.

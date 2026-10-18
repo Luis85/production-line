@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "toolVersion": "3.33.1",
-  "reviewedAt": "2026-10-17",
+  "reviewedAt": "2026-10-18",
   "configSha256": "0bac7ec8d31b572f48cc61057c353ea00d5c9990219bb1c2df27e756049ee4b6",
-  "baselineSha256": "c4d77449332aa7563bc0ef4b42593124e320960fddc7355f84e55949eb81673a",
+  "baselineSha256": "b95a1d92efd6aa0fd20d1864c7df5e2a82e5929aae20c476188ada8c6d8b9764",
   "scope": "Maintained application, CLI, build, runtime, documentation and test entrypoints. Final source-tree scan after architecture and typed-fixture refactors; service boundaries run separately without a baseline.",
   "counts": {
     "unused_files": 0,
-    "unused_exports": 75,
+    "unused_exports": 74,
     "unused_types": 27,
     "private_type_leaks": 0,
     "deprecated_exports_in_use": 0,
@@ -18,7 +18,7 @@
     "package_cycles": 0,
     "unused_optional_dependencies": 0,
     "unused_enum_members": 0,
-    "unused_class_members": 65,
+    "unused_class_members": 62,
     "unused_store_members": 0,
     "unprovided_injects": 0,
     "unrendered_components": 0,
@@ -232,12 +232,6 @@
       "identity": "unused-export:src/worker/application/consumption.ts:consumptionWindow",
       "classification": "compiled-test-consumer",
       "rationale": "Named imports in tests/worker/consumption.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
-    },
-    {
-      "category": "unused_exports",
-      "identity": "unused-export:src/worker/application/consumption.ts:observeConsumption",
-      "classification": "retained-api-debt",
-      "rationale": "Existing exported observeConsumption in src/worker/application/consumption.ts is retained as API/fixture surface debt. The final pass removed verified internal-only exports; this remaining source or fixture contract requires a separate consumer compatibility review, so it is not described as a detector false positive."
     },
     {
       "category": "unused_exports",
@@ -877,12 +871,6 @@
     },
     {
       "category": "unused_class_members",
-      "identity": "unused-class-member:src/worker/infrastructure/journal/interactions.ts:WorkerInteractionJournal:resultForRun",
-      "classification": "interface-dispatch",
-      "rationale": "src/worker/infrastructure/journal/interactions.ts retains WorkerInteractionJournal:resultForRun on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
-    },
-    {
-      "category": "unused_class_members",
       "identity": "unused-class-member:src/worker/infrastructure/journal/interactions.ts:WorkerInteractionJournal:retainSessions",
       "classification": "interface-dispatch",
       "rationale": "src/worker/infrastructure/journal/interactions.ts retains WorkerInteractionJournal:retainSessions on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
@@ -898,12 +886,6 @@
       "identity": "unused-class-member:src/worker/infrastructure/journal/local-runs.ts:WorkerRunJournal:begin",
       "classification": "interface-dispatch",
       "rationale": "src/worker/infrastructure/journal/local-runs.ts retains WorkerRunJournal:begin on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
-    },
-    {
-      "category": "unused_class_members",
-      "identity": "unused-class-member:src/worker/infrastructure/journal/local-runs.ts:WorkerRunJournal:close",
-      "classification": "interface-dispatch",
-      "rationale": "src/worker/infrastructure/journal/local-runs.ts retains WorkerRunJournal:close on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
     },
     {
       "category": "unused_class_members",
@@ -940,12 +922,6 @@
       "identity": "unused-class-member:src/worker/infrastructure/journal/local-runs.ts:WorkerRunJournal:start",
       "classification": "interface-dispatch",
       "rationale": "src/worker/infrastructure/journal/local-runs.ts retains WorkerRunJournal:start on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
-    },
-    {
-      "category": "unused_class_members",
-      "identity": "unused-class-member:src/worker/infrastructure/journal/requests.ts:WorkerRequestJournal:close",
-      "classification": "interface-dispatch",
-      "rationale": "src/worker/infrastructure/journal/requests.ts retains WorkerRequestJournal:close on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
     },
     {
       "category": "unused_class_members",

@@ -1,3 +1,4 @@
+import { conversationProjection } from './model-context.js';
 import type { WorkerRequest } from "./request-gates.js";
 
 import { unknownUsage } from "./run-evidence.js";
@@ -178,6 +179,7 @@ export async function executeConversation(host: Pick<ConversationRuntime, 'evide
         }
       }
       try {
+        if (turn && request.schemaVersion === 2) host.value.messages = conversationProjection(host.value.messages);
         await host.store.write(host.value);
         host.persistenceError = evidenceError;
       } catch {

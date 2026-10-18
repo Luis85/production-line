@@ -1,3 +1,4 @@
+import type { ProjectModelContext } from './model-context.js';
 import { validateFeatureRequestReference, type FeatureRequestReference } from './feature-request-reference.js';
 
 import { type DevelopmentCompletion, type DevelopmentScope, type DevelopmentEvidence } from './development.js';
@@ -94,6 +95,7 @@ export interface TaskFile {
   existed: boolean;
 }
 export interface LocalTask {
+  projectContext?: ProjectModelContext | null;
   feature?: FeatureRequestReference;
   implementation?: DevelopmentScope;
   developmentEvidence?: DevelopmentEvidence;

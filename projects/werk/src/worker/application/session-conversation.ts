@@ -32,7 +32,7 @@ export async function loadSessionConversation(context: SessionConversationContex
         context.settings.provider(record.provider),
         record.definition,
       ),
-      { sessionId: record.id },
+      { sessionId: record.id, feature: sessionFeatureRequest(record) },
     );
     const conversation = new WorkerConversation(
       store,

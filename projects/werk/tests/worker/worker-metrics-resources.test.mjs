@@ -66,9 +66,9 @@ test('paused, partial and failed refreshes explain retained values without a hea
   assert.equal(resourceSampleState(null, captured, false, '').label, 'No sample yet');
 });
 
-async function alertPanel(t, props, request) {
+async function alertPanel(t, props, request, lineEnding) {
   const source = await readFile(new URL('../../src/worker/webview/components/ResourceMonitorPanel.vue', import.meta.url), 'utf8');
-  const script = source.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1].replace(/^import .*;\n/gm, '');
+  const script = source.replace(/\r?\n/g, lineEnding).match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1].replace(/^import .*;\r?\n/gm, '');
   const state = reactive({ unlocked: true, refreshRevision: 0, sessions: null });
   const scope = effectScope(); t.after(() => scope.stop());
   const ports = { ref, computed, watch, state, request, defineProps: () => props, onMounted() {}, onActivated() {}, onDeactivated() {}, useRouter: () => ({ push: async () => {} }), workspaceAction: async () => true };
@@ -76,10 +76,11 @@ async function alertPanel(t, props, request) {
   return { ...panel, state };
 }
 
-test('nested alert disclosure never duplicates resource GET reads, including parent loading', async t => {
+for (const [label, ending] of [['LF', '\n'], ['CRLF', '\r\n']]) {
+test(`nested alert disclosure never duplicates resource GET reads, including parent loading (${label})`, async t => {
   const calls = [];
   const props = reactive({ resourceReport: null, alertsOnly: true });
-  const panel = await alertPanel(t, props, async (path, method) => { calls.push(method ?? 'GET'); return { events: [], nextAfter: 0, hasMore: false, gap: false }; });
+  const panel = await alertPanel(t, props, async (path, method) => { calls.push(method ?? 'GET'); return { events: [], nextAfter: 0, hasMore: false, gap: false }; }, ending);
   await panel.load(); panel.state.refreshRevision++; await nextTick();
   assert.deepEqual(calls, []);
   props.resourceReport = report(); await panel.load();
@@ -87,8 +88,9 @@ test('nested alert disclosure never duplicates resource GET reads, including par
   await panel.loadEvents(); assert.deepEqual(calls, ['POST'], 'history is fetched only on demand');
 });
 
-test('standalone alert consumers retain their own resource reading and clear after access expiry', async t => {
-  const panel = await alertPanel(t, { compact: true }, async () => report());
+test(`standalone alert consumers retain their own resource reading and clear after access expiry (${label})`, async t => {
+  const panel = await alertPanel(t, { compact: true }, async () => report(), ending);
   await panel.load(); assert.equal(panel.report.value.snapshot.cpuPercent, 25);
   panel.state.unlocked = false; await nextTick(); assert.equal(panel.report.value, null);
 });
+}

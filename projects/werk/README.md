@@ -24,8 +24,10 @@ configure the worker. [Screenshot details](docs/evidence/readme/README.md).*
 | --- | --- |
 | Install a worker in your project | [Project-worker quick start](#install-a-project-worker) |
 | Let a team submit requests through Git and Obsidian | [Shared Markdown queue](docs/how-to/shared-feature-intake.md) |
+| Design features by day and implement them overnight | [Evening handoff and morning review](docs/how-to/shared-feature-intake.md#work-during-the-day-implement-overnight) |
 | Create and follow requests in the browser | [Worker webview](docs/how-to/use-worker-webview.md) |
-| Run a Factory with multiple production lines | [System deployment](#run-a-factory-and-production-lines) |
+| Assign your worker to an Orchestrator | [Connect the next building block](#connect-your-worker-to-an-orchestrator) |
+| Bring production lines together in a Factory | [Grow into a Factory](#introduce-a-factory) |
 | Build or extend the frontend | [Storybook and frontend reference](#documentation-and-frontend-reference) |
 
 This README describes the current source branch. Downloaded applications and the
@@ -203,10 +205,128 @@ availability varies. For implementation work, review
 [required checks and evidence](docs/how-to/implement-feature.md) before relying
 on a model's completion message.
 
-## Run a Factory and production lines
+## Grow from a worker into a production system
 
-Werk also provides independent Factory and orchestrator applications for teams
-operating multiple lines. The [system definition](examples/system.yaml) declares
+Start with the worker you have already installed and add the next building block
+when your team needs it. An **Orchestrator** coordinates a production line's
+workers and assignments. A **Factory** brings multiple lines together for
+portfolio visibility and routing. A production line consists of one Orchestrator
+and its enrolled workers; it can operate before a Factory is introduced.
+
+```mermaid
+flowchart TD
+    F[Factory: portfolio and line routing]
+    F --> A[Production line A: Orchestrator]
+    F --> B[Production line B: Orchestrator]
+    A --> W1[Your existing worker]
+    A --> W2[Additional worker]
+    B --> W3[Another team's worker]
+```
+
+| Building block | What it adds | What you manage there |
+| --- | --- | --- |
+| Worker | Implements a request using its model and approved tools | Repositories, model accounts, request progress, verification and consumption |
+| Orchestrator | Coordinates one line and routes assignments to eligible workers | Line intake, worker registration, routing, task leases and execution evidence |
+| Factory | Organizes lines, including optional logical subfactories | Line registrations, portfolio summaries and routing of new intake between lines |
+
+Only workers invoke models. Each application has its own webview, private state
+and credentials. Start additional workers with distinct state directories and
+ports when separate requests need to execute in parallel.
+
+### Connect your worker to an Orchestrator
+
+Keep your existing project worker running. From the project directory, start the
+Orchestrator app from the same extracted release, using an unused port and a
+separate state directory:
+
+```sh
+node /path/to/werk-release/bin/apps/orchestrator/cli.mjs start --state-dir .werk/line --port 3001 --project demo
+```
+
+Replace `demo` with the line's project ID before its first start. Use that same
+state directory on subsequent starts. You may also copy the complete
+`bin/apps/orchestrator` folder into your project; the app needs no sibling
+application or npm install.
+
+1. Open the URL returned by the command. Sign in using the Orchestrator's admin
+   token from the private credential file named in its startup result.
+2. Open your worker's **Settings → Orchestrator**. Enter the Orchestrator address
+   and its separate **enrollment token**, then select **Save & connect**.
+3. Confirm registration in the worker and the Orchestrator's worker list. Review
+   **Settings → Execution profiles**. To edit them, pause and drain the worker,
+   save the profiles, wait for the Orchestrator's acknowledgment, then resume
+   new starts on Taskboard.
+4. In the Orchestrator, choose automatic routing to eligible workers or a manual
+   worker destination. Submit a small **simulation** using the line's project ID
+   and an advertised provider/profile. Inspect its evidence and expect the
+   terminal state `simulated`.
+
+Enrollment adds line assignments to the worker's existing execution capacity.
+Its shared Git requests retain their intake and identity; connecting an
+Orchestrator does not reimport those notes into the line queue. A configured
+Claude/Codex chat connection also does not select the line's execution mode:
+**orchestrated assignments default to simulation**. Review the
+[supported execution modes](docs/explanation/modes.md) before submitting live
+implementation work.
+
+For another worker, repeat enrollment with its own state and identity. See
+[assemble independent components](docs/how-to/assemble-independent-components.md#start-an-orchestrator-and-enroll-the-worker)
+for the full native/Docker journey and
+[execution profiles](docs/how-to/use-worker-webview.md#edit-execution-profiles)
+for compatibility and configuration acknowledgment.
+
+### Introduce a Factory
+
+Once one or more lines are running, start a Factory and register them. Each
+registration points to an existing Orchestrator; its enrolled workers remain
+owned by that line.
+
+1. Export a private environment variable for each line into the process that
+   starts Factory, such as `WERK_LINE_DEMO_TOKEN`, containing that Orchestrator's
+   **admin token**. Use your shell's private environment setup or secret manager;
+   keep token values out of command arguments and Git. Adding this line variable
+   to project `.env` alone does not load it. Follow the
+   [private credential example](docs/how-to/assemble-independent-components.md#start-factory-with-a-private-line-credential).
+   Restart Factory with the updated environment after adding or rotating a line
+   credential.
+2. Start the Factory from the project directory with its own state and port:
+
+   ```sh
+   node /path/to/werk-release/bin/apps/factory/cli.mjs start --state-dir .werk/factory --port 3100
+   ```
+
+3. Open the returned URL and sign in with the Factory's own admin token. Create
+   a root Factory, then register your running Orchestrator as a production line.
+4. Provide the line name, owning Factory, Orchestrator URL, browser webview URL
+   and the **environment-variable name** `WERK_LINE_DEMO_TOKEN`. The registration
+   stores the name, not the secret value.
+5. Confirm the line is available in the Factory dashboard. Open it to inspect
+   its workers and tasks. Add further lines, group them into logical
+   subfactories if useful, and configure automatic or manual intake routing.
+
+The Factory aggregates available line observations and makes unavailable or
+stale lines visible. A line keeps its accepted tasks, worker leases and evidence;
+Factory routing chooses a destination for new intake. Registering a line does
+not start its processes. Existing lines and workers can continue when the
+Factory is stopped.
+
+These local examples use loopback addresses. Across machines or containers,
+configure addresses reachable by each caller and trusted HTTPS/access settings.
+Follow [Factory registration and credentials](docs/how-to/assemble-independent-components.md#start-factory-with-a-private-line-credential)
+and [access configuration](docs/how-to/manage-access.md) for that setup. The
+[portable apps reference](docs/reference/portable-apps.md#project-environment-and-local-access)
+explains how each app's `env init` adds its settings to the project's private
+`.env` and shareable `.env.example`.
+
+<a id="run-a-factory-and-production-lines"></a>
+
+### Start a complete system from YAML
+
+For a new multi-line installation, the system launcher can start all building
+blocks from one definition. Keep its managed state separate from the independent
+apps above; it does not automatically adopt your existing worker or line state.
+
+The supplied [system definition](examples/system.yaml) declares
 a Factory, a logical subfactory and two isolated production lines.
 
 From the extracted runtime, start the supplied system with Node 24:

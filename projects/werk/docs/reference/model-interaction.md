@@ -11,11 +11,20 @@ or the private journal. See [automatic task tracking](feature-requests.md#automa
 
 ## Capabilities and dispatch
 
-Use `capabilities` in the portable worker CLI to inspect the active wrapper
-contract. The current adapters expose structured questions through Werk protocol
-version 1 and report usage when the provider supplies it. They declare
-`continuation: worker_context_replay`, `nativeResume: false`, `streaming: false`
-and default to `tools: none`. An invocation with an operator-granted catalog
+Use `capabilities` in the portable worker CLI to inspect the wrapper contract.
+Its original `capabilities` field remains the version 1 baseline; additive
+`modelSessions` metadata describes version 2 profiles, recovery and delegation.
+Inspect a saved dispatch for the actual invocation profile. The current adapters
+expose structured questions through Werk protocol
+version 1 and report usage when the provider supplies it. New Feature Request
+sessions use dispatch schema version 2; retained version 1 dispatches remain
+supported. Claude CLI sessions declare `continuation: provider_session` and
+`nativeResume: true`. Codex CLI and direct API sessions declare
+`continuation: worker_context_replay` and `nativeResume: false`. All currently
+report `streaming: false`; durable interaction events remain available.
+Capabilities describe the configured invocation, including its tool manifest.
+The read-only `werk_session_history` tool is bound to the current Feature
+Request. Other tools require operator grants. An invocation with a catalog
 records `tools: granted` and its public tool manifest. Optional `limits` metadata
 records the accepted call count, total invocation duration (`windowMs`) and
 resolved tool/preset deadlines. This is execution evidence, not a separate
@@ -162,9 +171,13 @@ its own usage and before/after evidence with a waiting/escalated outcome; an ans
 starts a new invocation in the same session.
 
 Accepted request input remains immutable. A question is projected on its owning
-feature request through worker-managed metadata/companion content. Editing that
-projection or the original Markdown body is not an authenticated answer. Use the
-CLI/UI interaction operation so the question identity and revision are checked.
+Feature Request through worker-managed metadata and companion content. For
+shared Git intake, answer the generated Task note and mark it ready, then commit
+and push to the configured shared branch. The worker validates the saved question
+identity and revision before resuming. CLI and webview answers use the same
+owning workflow. Editing the original Feature Request body or a progress
+projection is not an answer to a pending question. See
+[answer and resume](../how-to/answer-and-resume-worker.md).
 
 ## Private interaction API and CLI
 
@@ -275,22 +288,78 @@ bill or model quality is inferred from these records.
 ## Storage and limits
 
 Private semantic prompts/results live in `worker-interactions.sqlite` beside the
-content-free `worker-runs.sqlite` journal. Back up the complete stopped worker
-state, including any SQLite WAL files. Treat dispatch inspection as access to
-project content. Numeric run exports do not include these prompt/response bodies.
+content-free `worker-runs.sqlite` journal. Private provider checkpoints live under
+`model-sessions/` in the worker state directory, with prior revisions under
+`model-sessions/history/` and scoped child receipts under
+`model-sessions/delegation/`. Back up the complete stopped worker state, including
+any SQLite WAL files and native CLI state needed for resumption. Treat dispatch
+and receipt inspection as access to project content. Numeric run exports do not include these prompt/response bodies.
 
-Saved context is bounded; exceeding its limit returns an actionable error rather
-than silently dropping unresolved questions or accepted input. Session deletion
-removes its private interaction records while numeric run history keeps its
-existing retention contract. This is logical deletion, not secure erasure of
-backups or storage media.
+Active model context is bounded. Older content is replaced by an explicit archive
+checkpoint while the original accepted scope and recent question/answer remain
+available. The model can retrieve retained private turns with
+`werk_session_history`, which cannot select another Feature Request. This is
+context selection, not a model-generated summary. The webview also bounds its
+transcript projection; the private turn journal remains authoritative. Legacy
+unbound sessions retain their original bounds. Logical deletion does not securely
+erase backups or storage media.
 
-Current adapters default to no tools, use ephemeral CLI invocations and await
-API completion. Granted tools use the worker-owned catalog: API adapters exchange
-function calls and results, while CLI adapters receive a private MCP bridge.
-Provider-native tools remain disabled. Tool calls and output are bounded; a
-revoked policy or ungranted tool fails closed. Tool output is untrusted data and
-cannot authorize additional tools.
+Claude CLI uses an explicit native session identifier for continuation. Codex
+keeps isolated exec invocations and worker context replay; direct APIs also await
+a bounded invocation using worker-managed context. Native handles are private and
+never grant tools. An uncertain provider turn is fenced until an explicit
+recovery operation; a restart does not silently retry it.
+
+Granted tools use the worker-owned catalog: API adapters exchange function calls
+and results, while CLI adapters receive a private MCP bridge. Provider-native
+tools remain disabled. Tool calls and output are bounded; a revoked policy or
+ungranted tool fails closed. Tool output is untrusted data and cannot authorize
+additional tools.
+
+### Shared project context
+
+For repository-backed implementation requests, commit a
+`.werk/model-context.json` manifest with the project documents each request
+should receive:
+
+```json
+{
+  "schemaVersion": 1,
+  "paths": ["README.md", "docs/architecture.md", "docs/conventions.md"]
+}
+```
+
+Use 1–32 unique safe relative paths to ordinary UTF-8 `.md`, `.txt` or `.json`
+files. Hidden paths, secret/key names, symlinks and path aliases are refused.
+Each file must fit within 32 KiB; selected content must fit within 128 KiB total.
+The worker reads the manifest and content from the request's accepted source
+commit, then records their hashes. Uncommitted edits do not alter an accepted
+dispatch. Omitting the manifest adds no shared context. These documents provide
+knowledge; they cannot expand repository scope, change tools or replace required
+checks.
+
+### Subagent ownership
+
+An enabled delegation grant adds `werk_delegate` to the parent catalog. Child
+sessions share the Feature Request, accepted provider/model/profile, current
+scope, deadline and tool-call budget. A child may receive fewer tools and cannot
+delegate further. Its invocation has separate consumption and run evidence with
+parent linkage; the numeric journal remains content-free. A child question is
+returned to the parent rather than creating a competing Task workflow. See
+[enable delegation](../how-to/manage-model-tools.md#allow-the-model-to-delegate)
+for limits and the operator setup.
+
+The bound history tool lists retained turns with `{}` or an `after` sequence
+cursor. Read a turn with `{ "turnId": "ID", "offset": 0 }`. It returns at most
+16,000 characters per chunk and a continuation offset. Use `{ "receipts": true }`
+to list child receipts, `afterReceipt` to page the list, and
+`{ "receiptId": "ID", "offset": 0 }` to inspect one. Lists contain at most 20
+entries. Receipt content is bounded; a shortened child response tells the parent
+to request narrower work. Neither history mode can select another request's
+session or change its execution state.
+
+The [dated integration review](../reports/worker-durable-sessions-review.md)
+compares SDKs, app-server, ACP, MCP and subscription authentication paths.
 
 ### Tool budget
 
@@ -336,9 +405,13 @@ stopped by the window. The record contains counts and durations only: no tool
 names, arguments, results or paths. Using exactly the whole budget without a
 further call is not exhaustion. Turns saved by earlier workers have no
 `toolBudget`. The worker task view shows it with the latest turn's consumption.
-Claude Code restriction flags require version 2.1.248 or newer. The saved
-connection check reports a known older version with upgrade guidance; an unknown
-version remains unverified. Execution never drops required flags. Provider
-features such as native resume, live streaming, compaction, background response
-retrieval require separately implemented capabilities; they are not implied by
-this interface. Explicit tool grants do not enable these features.
+Claude Code sessions require version 2.1.257 or newer. The saved connection check
+reports known older versions with upgrade guidance; an unknown version remains
+unverified. Native execution checks the version before inference and never drops
+required isolation or system-prompt refresh flags. Usage normalization distinguishes
+per-invocation cost in versions 2.1.257–2.1.276 from cumulative native-session cost
+in 2.1.277 and newer. An unprovable cost delta remains unknown.
+
+Native resume is available only through the advertised session profile. Live
+streaming, provider compaction and background-response retrieval remain separate
+capabilities; granting tools does not enable them.
