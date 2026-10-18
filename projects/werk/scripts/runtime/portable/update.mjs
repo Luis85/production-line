@@ -248,7 +248,10 @@ async function replaceAndRecord(paths, incoming, retained, entry) {
 async function activate(paths, incoming, retained, entry, inPlace) {
   if (!inPlace) { await replaceAndRecord(paths, incoming.root, retained, entry); return null; }
   const history = await prepareHistory(paths, { ...entry, method: 'in-place' });
-  try { return await replaceInPlace(paths.app, join(paths.home, retained), incoming.root, incoming.files, history); }
+  // apply only moves forward; a rollback alternates, and an unparsable (pre-release) pair is treated as a downgrade.
+  let upgrade = entry.operation === 'apply';
+  if (!upgrade) try { upgrade = newer(entry.to, entry.from); } catch { /* Keep downgrade ordering. */ }
+  try { return await replaceInPlace(paths.app, join(paths.home, retained), incoming.root, incoming.files, history, upgrade); }
   finally { await history.discard(); }
 }
 /** A folder another process holds open cannot be renamed; name the explicit alternative. */

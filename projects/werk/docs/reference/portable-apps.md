@@ -232,7 +232,10 @@ byte for byte, and extra or missing files fail the update. On any failure the
 retained copy is written back the same way and verified, the copy is removed, and
 the error says the previous files were restored; the updater then restarts the
 previous version as below. If that restore also fails, the app stays stopped and the
-error names the retained copy to copy back by hand. The result reports
+error names the retained copy to copy back by hand. `package.json` and `cli.mjs`,
+which identify the installed version, are written last when updating and first
+when restoring an older version, so an interrupted in-place update still reports
+the previous version; run `update apply --stop --in-place` again to repair the folder. The result reports
 `method: "in-place"` (otherwise `"swap"`) and `inPlace` with `written`, `removed`
 and `emptyDirectoriesLeft` (otherwise `null`); the history entry records
 `method: "in-place"`.

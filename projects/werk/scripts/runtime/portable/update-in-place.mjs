@@ -12,7 +12,12 @@ import { inputError } from '../config.mjs';
  * changed and added files are written, files outside the expected inventory are
  * deleted and the result is verified byte for byte. Any failure restores the
  * retained files the same way.
+ *
+ * The files that identify the installed version are written last when moving to a
+ * newer version and first when moving to an older one, so a run killed midway still
+ * reports the older version: update apply sees the release as newer and repairs the tree.
  */
+const MARKERS = ['cli.mjs', 'package.json'];
 const native = path => path.split('/');
 const locked = error => process.platform === 'win32' && ['EPERM', 'EBUSY', 'EACCES'].includes(error.code);
 async function retry(operation, attempts) {
@@ -73,8 +78,9 @@ export async function inventory(directory) {
 /**
  * Make `target` contain exactly the `expected` files from `source`. Directories that
  * remain empty but cannot be removed (an open handle) are reported, not fatal.
+ * `markers` ('first' | 'last') places the version-identifying files in the write order.
  */
-async function syncTree(target, source, expected) {
+async function syncTree(target, source, expected, markers) {
   const wanted = new Map(expected.map(file => [file.path, file.sha256])), needed = new Set();
   for (const path of wanted.keys()) native(path).slice(0, -1).forEach((_, index, parts) => needed.add(parts.slice(0, index + 1).join('/')));
   const report = { written: 0, removed: 0, emptyDirectoriesLeft: [] };
@@ -97,7 +103,8 @@ async function syncTree(target, source, expected) {
     }
   }
   await prune('');
-  const paths = [...wanted.keys()], present = await digests(target, paths, true);
+  const marked = MARKERS.filter(path => wanted.has(path)), others = [...wanted.keys()].filter(path => !MARKERS.includes(path));
+  const paths = markers === 'first' ? [...marked.toReversed(), ...others] : [...others, ...marked], present = await digests(target, paths, true);
   for (const [index, path] of paths.entries()) {
     const destination = join(target, ...native(path));
     if (present[index] === wanted.get(path)) continue;
@@ -111,8 +118,11 @@ async function syncTree(target, source, expected) {
 /** Copy the app to the retained location and verify the copy; returns the copied inventory. */
 async function retain(app, retained) {
   const files = await inventory(app);
+  // Created exclusively: an existing folder may be another rollback target and is never merged into or removed.
+  await mkdir(retained).catch(error => { throw Object.assign(Error(`Could not create the retained folder ${retained} (${error.code}). Nothing was replaced; check update status and retry.`), { code: error.code }); });
   try {
-    await cp(app, retained, { recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true });
+    // Into the empty folder created above; the copy is verified next.
+    await cp(app, retained, { recursive: true, verbatimSymlinks: true });
     await verifyTree(retained, files, 'Retained copy');
   } catch (error) {
     await rm(retained, { recursive: true, force: true }).catch(() => {});
@@ -125,17 +135,18 @@ async function retain(app, retained) {
 /**
  * Replace the app's files with `expected` from `source`, retaining the previous files at
  * `retained`; `history.commit()` records the operation once the new tree is verified.
+ * `upgrade` is true when `expected` is the newer version.
  */
-export async function replaceInPlace(app, retained, source, expected, history) {
+export async function replaceInPlace(app, retained, source, expected, history, upgrade) {
   const previous = await retain(app, retained);
   try {
-    const report = await syncTree(app, source, expected);
+    const report = await syncTree(app, source, expected, upgrade ? 'last' : 'first');
     await verifyTree(app, expected, 'Updated app');
     await history.commit();
     return report;
   } catch (error) {
     try {
-      await syncTree(app, retained, previous);
+      await syncTree(app, retained, previous, upgrade ? 'first' : 'last');
       await verifyTree(app, previous, 'Restored app');
     } catch (restore) {
       throw Object.assign(Error(`The in-place replacement failed (${error.message}) and restoring the previous files failed (${restore.message}). The app remains stopped. The previous files are retained at ${retained}: once no process holds files in ${app}, copy them back over it and delete files the retained folder does not contain.`), { recoveryUnsafe: true });
