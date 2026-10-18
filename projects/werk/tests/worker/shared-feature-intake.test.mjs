@@ -88,7 +88,10 @@ test('lost feature publication acknowledgment retries the same publication after
   assert.equal(f.featureCommits, 1); assert.equal(f.primaryExecutions, 1); assert.ok(f.patchAttempts.every(write => write.operationId === operation));
   const row = f.intake.view().requests[0]; assert.equal(row.status, 'ready_for_review'); assert.equal(row.publication, 'synced');
   const note = await f.intake.note(row.id); assert.match(note.markdown, /\[\[\.\.\/features\/navigation\]\]/);
-  assert.match(note.markdown, /Original source commit/); assert.match(note.markdown, /human review/i);
+  const record = (await f.state()).records[0];
+  assert.ok(note.markdown.includes('Implementation source commit: `' + record.sourceCommit + '`'));
+  assert.ok(note.markdown.includes('Workflow source commit: `' + record.workflow.commit + '`'));
+  assert.match(note.markdown, /human review/i);
 });
 
 test('lost review-note acknowledgment replays the exact outbox without recreating an already published artifact', async t => {
