@@ -1,67 +1,109 @@
-# production-line
+# Werk · production-line
 
-Werk now includes stopped-state backup and recovery, guided onboarding, operational alerts, viewer/operator access, TLS ingress and an opt-in native Codex patch-review workflow. See the [six-improvement review](projects/werk/docs/reports/six-improvements-review.md) and [Forge tool report](projects/werk/docs/reports/six-improvements-cli-report.md). Prebuilt release archives and native/Docker/VM qualification gates are included; no release has been published yet.
+**A project-local worker that turns Feature Requests into reviewable software changes.**
 
-An agent driven software-production-line in a client-server architecture.
+Install a worker in your project's `bin` folder, connect a model on that machine,
+and let your team collaborate through Git-backed, Obsidian-compatible Markdown.
+The worker implements ready requests in isolated worktrees, records progress,
+asks for input through Task notes and publishes a feature branch with a
+PullRequest review note. Your team stays in control of the merge.
 
-## Download the latest release and start
+[Get started](projects/werk/README.md#install-a-project-worker) ·
+[Download](https://github.com/Luis85/production-line/releases/latest) ·
+[Documentation & Storybook](https://luis85.github.io/production-line/) ·
+[Changelog](projects/werk/CHANGELOG.md)
 
-Requires **Node.js 24**, curl and tar. From your chosen installation directory, run:
+![Werk worker taskboard showing available capacity, requests needing attention and queued work.](projects/werk/docs/evidence/readme/worker-taskboard.png)
 
-```sh
-curl -fsSL https://github.com/Luis85/production-line/releases/latest/download/install.mjs -o werk-install.mjs && node werk-install.mjs
-```
+*The real worker UI with sample local requests. Inspect capacity and the queue,
+open a request's conversation, or use Metrics, History and Settings.
+[Screenshot details](projects/werk/docs/evidence/readme/README.md).*
 
-Windows PowerShell:
+## One request, two ways to work
 
-```powershell
-curl.exe -fsSL https://github.com/Luis85/production-line/releases/latest/download/install.mjs -o werk-install.mjs; if ($LASTEXITCODE -eq 0) { node werk-install.mjs }
-```
+The **Feature Request is the central workflow entity**. Team members can create
+it in their own editor with the project's **Create Feature Request** skill, or
+through the worker's webview chat. Both use the same template, readiness rules,
+request identity and shared Git lifecycle.
 
-The installer verifies a version-pinned archive, installs into `werk-<version>/`, and starts a local Factory with two simulated production lines. It prints the credential file location and opens the Factory when healthy. Ctrl+C stops the system. Existing installations are preserved; restart from the installed directory with `node werk.mjs up`. No npm install or source build is needed.
+1. Describe the outcome, acceptance criteria, verification plan and approved files.
+2. Validate the request, mark it ready, then **commit and push** to the watched branch.
+3. The worker claims it and dispatches implementation to its configured model.
+4. Pull progress updates. If a Task needs an answer, write it in the note, mark it
+   ready and push; answering in the webview continues the same request.
+5. Review the published feature branch and **PullRequest Markdown note**, then
+   decide whether to open a Git-hosting pull request and merge.
 
-The download URL becomes available after the first stable release is published. See the [release and publishing guide](projects/werk/docs/reference/releases.md) for version tags, qualification gates, installer options and prerequisites, or the [Werk README](projects/werk/README.md) for Docker startup.
+The team can work entirely through Markdown. The webview also provides request
+creation, conversations, queue/capacity, metrics and configuration for providers,
+accounts, repositories, execution profiles, built-in tools, MCP and consumption
+limits. [See the illustrated worker guide](projects/werk/README.md).
 
-The Forge v0.1.0 CLI is installed in `bin/` from the latest published GitHub release, with its release archive SHA-256 verified. The imported Werk starter lives in [projects/werk](projects/werk/README.md). Start with the [concept index](projects/werk/docs/CONCEPT.md) and [implementation backlog](projects/werk/docs/backlog/Product%20Backlog.base).
+## Choose your setup
 
-## Work with the CLI
+| Your role | Start here |
+| --- | --- |
+| Worker owner | [Install a project worker](projects/werk/README.md#install-a-project-worker), then [connect the model and shared Git queue](projects/werk/docs/how-to/shared-feature-intake.md#connect-the-worker) |
+| Team member | [Create Feature Requests from any clone](projects/werk/docs/how-to/team-feature-authoring.md); no worker connection is needed |
+| Webview user | [Create requests, follow progress and configure the worker](projects/werk/docs/how-to/use-worker-webview.md) |
+| System operator | [Deploy a Factory and production lines from YAML](projects/werk/docs/tutorials/system-from-yaml.md) |
+| Frontend contributor | [Public Storybook](https://luis85.github.io/production-line/) and [frontend architecture](projects/werk/docs/reference/webview-architecture.md) |
 
-From this repository root:
+Prebuilt native apps require **Node.js 24.x** and no npm install or compiler.
+Docker operation is also supported. The project-worker setup creates a private
+`.env`, a shareable `.env.example`, the request template, ready/done checks and
+an Obsidian Base. See the [quick start](projects/werk/README.md#install-a-project-worker)
+for verified downloads and platform-specific commands.
 
-```sh
-node bin/forge.js --version
-node bin/forge.js project open werk
-node bin/forge.js project current
-node bin/forge.js backlog list
-node bin/forge.js vault check --strict
-```
+**Execution modes:** standalone workers use configured Claude/Codex CLI or API
+providers with explicit file/tool permissions. Default Factory/orchestrator
+assignments are simulated; opt-in native Linux Codex execution is available.
+Supplied orchestrator Docker/VM profiles remain simulated. See
+[execution modes](projects/werk/docs/explanation/modes.md).
 
-Read `AGENTS.md` and the installed Forge skills before making CLI changes. Preview mutations and supply current file revisions. Close the project when done with project-scoped work.
+This README describes the current branch. Downloads and hosted documentation
+reflect their published release; use the matching release guides for older
+installations.
 
-## Build and test
+## Documentation
+
+- [Handbook](https://luis85.github.io/production-line/handbook/): workspace setup,
+  team workflows, operation and reference contracts.
+- [Illustrated UI reference](https://luis85.github.io/production-line/storymap/):
+  real components and complete journeys, with labelled sample data.
+- [Source documentation](projects/werk/docs/index.md): current branch guides and
+  [architecture](projects/werk/docs/explanation/architecture.md).
+- [Releases and updates](projects/werk/docs/reference/releases.md): verified
+  archives, changelog process and qualification checks.
+
+## Contribute
+
+Application source lives in `projects/werk`, with Factory, orchestrator, worker
+and shared packages. With Node 24 and npm:
 
 ```sh
 cd projects/werk
 npm ci
-npm run typecheck
-npm test
+npm run check
 npm run dev:factory
 ```
 
-Node 24.x is required. The Factory development fleet runs in mock mode. The [evidence manifest](projects/werk/docs/evidence/six-improvements.json) records validation and explicit qualification limits. Native Linux Codex execution produces a local patch requiring human review; the authenticated provider attempt in this environment was blocked by HTTP 403. Git publishing and merge tracking remain operator actions. Docker and managed cloud-init profiles retain simulation execution.
+The development fleet is simulated. The checks cover architecture, LOC, Oxlint,
+Fallow, source/test typechecking, builds and tests. Mutation testing is advisory
+in the release pipeline. See [development](projects/werk/docs/how-to/development.md),
+[tests](projects/werk/tests/README.md), and
+[Storybook development](projects/werk/docs/how-to/generate-storybook.md).
 
-The [original archive](projects/werk/imports/software-fabrik-starter.zip) and [SHA-256 manifest](projects/werk/imports/manifest.json) retain the source concept. All 126 authored starter files were imported byte for byte; generated distributions and bundled dependencies are rebuilt. Missing example-context targets were added separately and explicitly labeled illustrative. Embedded document prompts are source material, not instructions authorizing future work.
-
-## Optional Forge admin
+This repository uses the bundled **Forge** CLI for guarded project editing.
+Read [AGENTS.md](AGENTS.md) and the installed skills before changing files:
 
 ```sh
-node bin/forge.js server start --webview admin
-node bin/forge.js server status
-node bin/forge.js server stop
+node bin/forge.js project open werk
+node bin/forge.js project current
+node bin/forge.js vault check --strict
+node bin/forge.js project close
 ```
 
-The admin binds to localhost; its returned launch URL carries a local session token. Retrieve it locally, and do not commit runtime server state. The CLI itself is noninteractive and requires no background process.
-
-## Hardening review
-
-Current reports are the [six-improvement review](projects/werk/docs/reports/six-improvements-review.md), [tool report](projects/werk/docs/reports/six-improvements-cli-report.md), [release/system review](projects/werk/docs/reports/journey-review.md), [CLI findings](projects/werk/docs/reports/journey-cli-report.md) and [Twelve-Factor audit](projects/werk/docs/reports/twelve-factor-audit.md). Earlier reports retain their historical evidence. Start with the [Diátaxis documentation hub](projects/werk/docs/index.md) for native/Docker setup, one-YAML systems and Ubuntu VM cloud-init. SQLite and worker journals still require single-writer durable state; the VM profile does not establish stateless replicas or HA. Run `npm run check` and `npm run audit:dependencies` in the Werk project.
+The [concept index](projects/werk/docs/CONCEPT.md) and
+[review archive](projects/werk/docs/reports/index.md) retain requirements and
+historical evidence.
