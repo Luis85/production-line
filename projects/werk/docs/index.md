@@ -37,7 +37,7 @@ This organization follows [Diátaxis](https://diataxis.fr/).
 - [Connect the shared Markdown queue](how-to/shared-feature-intake.md): CLI setup, committed requests, Task answers and PullRequest review handoffs.
 - [Hand off an overnight batch](how-to/shared-feature-intake.md#work-during-the-day-implement-overnight): daytime drafting, unattended implementation and morning review.
 - [Operate a project worker](how-to/operate-project-worker.md): checklist, Windows PowerShell 5.1 JSON files, task worktrees, tool limits and answers.
-- [Author feature requests with your team](how-to/team-feature-authoring.md): portable skill, editable template, shared checks and Obsidian queue; no worker connection required.
+- [Author feature requests with your team](how-to/team-feature-authoring.md): portable skill, editable template, shared checks, optional model Ready Checks, definition prompts and Obsidian queue; no worker connection required.
 - [Integrate with Claude and Codex](how-to/project-agent-integrations.md): reviewed project skills and guarded synchronization.
 - [Monitor long-running workers](how-to/monitor-long-running-worker.md): duration budgets, resource warnings and durable alert history.
 - [Define readiness, completion and rework](how-to/rework-worker-requests.md): deterministic rules, human findings and bounded model review.
@@ -68,7 +68,7 @@ This organization follows [Diátaxis](https://diataxis.fr/).
 
 ## Reference — look up a contract
 
-- [Shared Git feature intake](reference/shared-feature-intake.md): checked-in workflow and check files, ownership, publication, recovery and authenticated API.
+- [Shared Git feature intake](reference/shared-feature-intake.md): checked-in workflow, optional model Ready Checks, definition prompts, ownership, publication, recovery and authenticated API.
 
 - [Shared Vue webview architecture](reference/webview-architecture.md): reusable Nuxt UI layouts/components, state boundaries and independent builds.
 

@@ -1,3 +1,4 @@
+import { sharedReviewCheckpoint } from './shared-ready-review.js';
 import { sharedFeatureRequestReference } from './feature-request-reference.js';
 import { publishSharedFeatureResponse } from './shared-feature-response.js';
 import type { InteractionCommand } from './interactions.js';
@@ -41,6 +42,7 @@ export class SharedFeatureIntake {
     const reference = sharedFeatureRequestReference(record);
     return record.submitted || reference.key === existingKey ? reference : undefined;
   }
+  readyReviewSessionIds(): string[] { return [...new Set(this.state.records.flatMap(record => record.readyReviewState?.sessionIds ?? []))]; }
   get binding() { return this.initialized ? structuredClone(this.state.config) : undefined; }
   async init() { this.state = await this.ports.load(); this.refreshPublications(); this.initialized = true; }
   start() { if (!this.timer && !this.stopping.signal.aborted) this.schedule(); }
@@ -60,13 +62,21 @@ export class SharedFeatureIntake {
       canEdit: !blockedReason && !this.busy, blockedReason: blockedReason ?? (this.busy ? 'Wait for shared synchronization to finish.' : null),
       state: !this.enabled ? 'disabled' : this.syncing || this.responses ? 'syncing' : this.fault ? 'error' : 'idle', error: this.fault,
       lastSyncedAt: this.syncedAt, sourceCommit: workflow?.commit ?? null,
-      workflow: workflow ? { ...workflow.configuration, tasksDirectory: featureTaskDirectory(workflow.configuration), readyDigest: workflow.files.readyCheck.sha256, doneDigest: workflow.files.doneCheck.sha256 } : null,
+      workflow: workflow ? { ...workflow.configuration, tasksDirectory: featureTaskDirectory(workflow.configuration), readyDigest: workflow.files.readyCheck.sha256, doneDigest: workflow.files.doneCheck.sha256,
+        ...(workflow.files.readyPrompt ? { readyPromptDigest: workflow.files.readyPrompt.sha256 } : {}),
+        ...(workflow.files.donePrompt ? { donePromptDigest: workflow.files.donePrompt.sha256 } : {}),
+        ...(workflow.files.readyReviewPrompt ? { readyReviewPromptDigest: workflow.files.readyReviewPrompt.sha256 } : {}),
+      } : null,
       requests: [...locals, ...this.discovered.filter(r => !known.has(r.id)).map(record => ({ ...record, feature: sharedFeatureRequestReference({ id: record.id, sourcePath: (workflow?.configuration.requestsDirectory ?? 'features') + '/' + record.name, binding: this.state.config }) }))],
     };
   }
   private publicRecord(record: SharedFeatureRecord): SharedFeatureView {
     const { id, name, title, status, owner, sourceCommit, updatedAt, ready, done, featureBranch, reviewNote, taskNote, error, taskId } = record;
     const publication = this.lifecycle.publication(record);
+    const review = record.readyReviewState;
+    const readyReview = review ? { status: review.status, attempt: review.generation, promptPath: review.input.prompt.path, promptDigest: review.input.prompt.sha256, findings: review.result?.findings ?? [],
+      ...(review.attempt ? { sessionId: review.attempt.sessionId, ...(review.attempt.runId ? { runId: review.attempt.runId } : {}) } : {}),
+    } : undefined;
     const task = record.task;
     const responseStatus = task?.response?.status;
     const taskResponse: SharedFeatureView['taskResponse'] = task && (task.uiResponse || task.response) ? {
@@ -74,7 +84,7 @@ export class SharedFeatureIntake {
       status: responseStatus === 'pending' ? 'ready' : responseStatus ?? (record.pending ? 'publication_pending' : 'ready'),
       error: (task.response?.error ?? record.error)?.slice(0, 500) ?? null,
     } : undefined;
-    return structuredClone({ feature: sharedFeatureRequestReference(record), id, name, title, status, owner, isLocal: true, sourceCommit, updatedAt, ready, done, featureBranch, reviewNote, taskNote, publication, error, taskId, ...(taskResponse ? { taskResponse } : {}) });
+    return structuredClone({ feature: sharedFeatureRequestReference(record), id, name, title, status, owner, isLocal: true, sourceCommit, updatedAt, ready, done, featureBranch, reviewNote, taskNote, publication, error, taskId: record.submitted ? taskId : null, ...(readyReview ? { readyReview } : {}), ...(taskResponse ? { taskResponse } : {}) });
   }
   async configure(value: unknown, expectedRevision: number) {
     const config = validateSharedIntakeConfig(value);
@@ -159,7 +169,9 @@ export class SharedFeatureIntake {
       const existing = this.state.records.find(record => record.id === source.id && bindingKey(record.binding) === bindingKey(config));
       if (existing) continue;
       if (source.status !== 'ready') { this.discovered.push(this.unclaimed(file.name, source.id ?? '', source.title, source.status, commit)); continue; }
-      const ready = this.ports.ready(file.content, snapshot);
+      const ready = snapshot.readyReview
+        ? this.ports.readyReviewEligible?.(file.content, snapshot) ?? { valid: false, errors: [{ code: 'ready_review_unavailable', message: 'Update the worker to support the configured Feature Request Ready Check.' }] }
+        : this.ports.ready(file.content, snapshot);
       if (!ready.valid || !ready.input || !ready.inputHash) { const issues = ready.errors.map(e => e.message); const taskNote = await diagnostic(file, issues); this.discovered.push({ ...this.unclaimed(file.name, source.id ?? '', source.title, 'needs_rework', commit, issues), taskNote }); continue; }
       const issue = this.ports.admissionIssue?.(ready.input);
       if (issue) { const taskNote = await diagnostic(file, [issue]); this.discovered.push({ ...this.unclaimed(file.name, ready.input.id, ready.input.title, 'ready', commit, []), error: issue.slice(0, 500), taskNote }); continue; }
@@ -175,12 +187,13 @@ export class SharedFeatureIntake {
       if (changedHold) { await waiting(changedHold); continue; }
       const at = new Date().toISOString();
       const record: SharedFeatureRecord = {
-        id: ready.input.id, name: file.name, title: ready.input.title, status: 'queued', owner: this.state.workerId, isLocal: true, sourceCommit: commit, updatedAt: at,
-        ready: { passed: true, issues: [] }, done: null, featureBranch: null, reviewNote: null, publication: 'pending', error: null,
+        id: ready.input.id, name: file.name, title: ready.input.title, status: snapshot.readyReview ? 'reviewing_ready' : 'queued', owner: this.state.workerId, isLocal: true, sourceCommit: commit, updatedAt: at,
+        ready: snapshot.readyReview ? null : { passed: true, issues: [] }, done: null, featureBranch: null, reviewNote: null, publication: 'pending', error: null,
         taskId: 'shared-feature-' + sharedHash(ready.input.id + bindingKey(config)).slice(0, 32),
         binding: config, sourcePath: file.path, sourceMarkdown: file.content, remoteRevision: file.revision,
         accepted: ready.input, inputHash: sharedHash(ready.inputHash + snapshot.policyDigest + commit + file.revision), workflow: structuredClone(snapshot), claimed: false, submitted: false,
       };
+      if (snapshot.readyReview) { record.readyReviewState = sharedReviewCheckpoint(record); record.progress = 'Feature Request Ready Check is queued before Definition of Ready.'; }
       this.state.records.push(record);
       await this.save();
       await this.lifecycle.reconcile(record, signal);

@@ -87,6 +87,7 @@ export async function createTask(host: Pick<LocalTaskRuntime, "model" | "closed"
     if (host.closed) throw new DomainError("unavailable", "Worker is stopping");
     const task: LocalTask = {
       ...(submission ? { submissionHash: submission.hash, submissionContextHash: submissionContextHash(submission) } : {}),
+      ...(submission?.definitionPrompts ? { definitionPrompts: structuredClone(submission.definitionPrompts) } : {}),
       ...(submission?.policy ? { gatePolicy: structuredClone(submission.policy) } : {}),
       ...(submission?.criteria === undefined ? {} : { criteria: structuredClone(submission.criteria) }),
       ...(definition ? { definition } : {}),

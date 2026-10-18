@@ -20,6 +20,7 @@ import MessageContent from './MessageContent.vue';
 import FeatureRequestDetails from './FeatureRequestDetails.vue';
 import { state, request, refresh } from '../store';
 import { createFeatureAuthoringEditor } from '../feature-authoring-editor';
+import { sharedReadyReviewView } from '../shared-ready-review-view';
 import { splitFeatureRequestMarkdown } from '../feature-request-note';
 import type { FeatureAuthoringResult } from '../../application/feature-authoring-contracts';
 const emit = defineEmits<{ created: [sessionId: string, previousSessionId: string]; busy: [boolean] }>();
@@ -33,6 +34,8 @@ const editable = computed(() => editor.editable());
 const changed = computed(() => editorState.markdown !== editorState.checkedMarkdown);
 const unsaved = computed(() => !!editorState.result && (!editorState.result.revision || editorState.markdown !== editorState.savedMarkdown));
 const ready = computed(() => editable.value && !locked.value && !changed.value && editorState.result?.readiness.valid);
+const reviewRequired = computed(() => editorState.result?.readiness.reviewRequired === true);
+const selectedReview = computed(() => selected.value?.readyReview && !selected.value.taskId ? sharedReadyReviewView(selected.value) : null);
 const preview = computed(() => splitFeatureRequestMarkdown(editorState.markdown).body);
 const requests = computed(() => view.value?.requests ?? []);
 const selected = computed(() => requests.value.find(item => item.id === editorState.result?.featureId));
@@ -90,18 +93,19 @@ defineExpose({ focusInstructions });
       <template v-if="editable">
         <FeatureRequestDetails v-model="editorState.markdown" :disabled="locked" />
         <section class="readiness" aria-labelledby="shared-readiness-title" aria-live="polite">
-          <h4 id="shared-readiness-title">{{ changed ? 'Details changed · check readiness again' : editorState.result.readiness.valid ? 'Ready checks passed' : 'Details needed before work can start' }}</h4>
+          <h4 id="shared-readiness-title">{{ changed ? 'Details changed · check again' : editorState.result.readiness.valid ? reviewRequired ? 'Ready for request review' : 'Ready checks passed' : reviewRequired ? 'Details needed before review' : 'Details needed before work can start' }}</h4>
           <ul v-if="!changed && editorState.result.readiness.errors.length"><li v-for="(issue, index) in editorState.result.readiness.errors" :key="index">{{ issue.message }}</li></ul>
-          <UButton color="neutral" variant="outline" :disabled="locked" @click="editor.check">Check readiness</UButton>
+          <UButton color="neutral" variant="outline" :disabled="locked" @click="editor.check">{{ reviewRequired ? 'Check request details' : 'Check readiness' }}</UButton>
         </section>
+        <p v-if="reviewRequired" class="help">This check validates the request structure. After publication, a model reviewer examines the Feature Request and may ask for answers in its Markdown note. Implementation waits for that review and the Definition of Ready checks.</p>
         <div class="publish-actions">
           <UButton color="neutral" variant="outline" :disabled="locked" @click="publish('draft')">Save draft to Git</UButton>
           <UButton :disabled="!ready" @click="publish('ready')">Mark ready and publish</UButton>
         </div>
-        <p class="help">Publishing commits and pushes this note to {{ editorState.result.binding.branch }}. Only a ready request can be claimed for implementation.</p>
+        <p class="help">Publishing commits and pushes this note to {{ editorState.result.binding.branch }}. {{ reviewRequired ? 'A ready request enters the Ready Check review before implementation.' : 'Only a ready request can be claimed for implementation.' }}</p>
       </template>
       <template v-else-if="current">
-        <p class="notice">{{ selected?.owner ? selected.isLocal ? 'This worker owns the request. Continue in its conversation or answer its Task note.' : 'Another worker owns this request. Follow its progress in the shared Markdown notes.' : 'Your request is in the shared queue. It starts after validation, ownership and capacity checks.' }}</p>
+        <p class="notice">{{ selectedReview ? selectedReview.description : selected?.owner ? selected.isLocal ? 'This worker owns the request. Continue in its conversation or answer its Task note.' : 'Another worker owns this request. Follow its progress in the shared Markdown notes.' : 'Your request is in the shared queue. It starts after validation, ownership and capacity checks.' }}</p>
         <UButton v-if="selected && sessionId(selected.taskId)" :disabled="locked" @click="openConversation(selected.taskId)">Open conversation</UButton>
         <RouterLink v-else to="/settings#shared-intake">Inspect shared progress</RouterLink>
       </template>

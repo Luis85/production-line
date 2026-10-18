@@ -87,7 +87,7 @@ export function assertAdmissionCapacity(host: Pick<LocalTaskRuntime, "waitingPre
       );
     if (
       tasks.filter((item) => ["queued", "running"].includes(item.status)).length +
-        host.sessions.chatActive + host.continuationReservations + host.waitingPreparations + reserved >=
+        (host.sessions.admissionActive ?? host.sessions.chatActive) + host.continuationReservations + host.waitingPreparations + reserved >=
       host.settings.value.board.queueCapacity
     )
       throw new DomainError("conflict", "Local task queue is full.");

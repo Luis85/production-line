@@ -1,9 +1,9 @@
 import { open, unlink } from 'node:fs/promises';
 import { providerIds } from '../application/provider-contract.js';
 import { parseFeature } from './features/document.js';
-import { defaultFeatureWorkflow, defaultFeatureCheck, validateFeatureWorkflow, validateFeatureCheck, featureWorkflowPolicy, type FeatureWorkflowConfiguration } from '../application/feature-workflow.js';
+import { defaultFeatureWorkflow, defaultFeatureCheck, validateFeatureWorkflow, validateFeatureCheck, featureWorkflowPolicy, validateFeaturePromptContent, type FeatureWorkflowConfiguration } from '../application/feature-workflow.js';
 import { validateFeatureTemplate } from './features/workflow.js';
-import { authoringBase, authoringSkill, authoringTemplateFor } from './feature-authoring-assets.js';
+import { authoringBase, authoringDefinitionPrompt, authoringReadyReviewPrompt, authoringSkill, authoringTemplateFor } from './feature-authoring-assets.js';
 import { authoringRoot, authoringPath, authoringRevision, readAuthoringFile, replaceAuthoringFile, seedAuthoringFile } from './feature-authoring-files.js';
 
 export const featureWorkflowPath = '.werk/feature-workflow.json';
@@ -65,7 +65,18 @@ async function prepareFeatureAuthoring(directory: string, options: AuthoringSetu
     const directory = options.featuresDirectory ?? worker?.features?.directory ?? defaults.requestsDirectory;
     config = validateFeatureWorkflow({ ...defaults, requestsDirectory: directory, template: `${directory}/_templates/feature-request.md` });
   }
-  if ([config.template, config.base, config.readyCheck, config.doneCheck].some(path => [featureWorkflowPath, authoringScriptPath, authoringManifestPath].includes(path.toLowerCase()))) throw Error('Workflow files must not replace the workflow configuration or authoring kit.');
+  const prompts: Record<string, string> = {};
+  for (const stage of ['ready', 'done'] as const) {
+    const path = config[stage === 'ready' ? 'readyPrompt' : 'donePrompt'];
+    if (path === undefined) continue;
+    const existing = await readAuthoringFile(root, path);
+    prompts[path] = validateFeaturePromptContent(existing ?? authoringDefinitionPrompt(stage), path);
+  }
+  if (config.readyReviewPrompt !== undefined) {
+    const existing = await readAuthoringFile(root, config.readyReviewPrompt);
+    prompts[config.readyReviewPrompt] = validateFeaturePromptContent(existing ?? authoringReadyReviewPrompt(), config.readyReviewPrompt);
+  }
+  if ([config.template, config.base, config.readyCheck, config.doneCheck, ...Object.keys(prompts)].some(path => [featureWorkflowPath, authoringScriptPath, authoringManifestPath].includes(path.toLowerCase()))) throw Error('Workflow files must not replace the workflow configuration or authoring kit.');
   const template = await readAuthoringFile(root, config.template);
   const warnings: AuthoringWarning[] = [];
   if (template !== undefined) {
@@ -92,6 +103,7 @@ async function prepareFeatureAuthoring(directory: string, options: AuthoringSetu
     [featureWorkflowPath]: json(config),
     [config.readyCheck]: json(defaultFeatureCheck('ready')),
     [config.doneCheck]: json(defaultFeatureCheck('done')),
+    ...prompts,
     [config.template]: authoringTemplateFor(provider),
     [config.base]: authoringBase(config),
     [authoringScriptPath]: options.script,

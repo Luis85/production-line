@@ -7,6 +7,11 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+### Added
+
+- Shared Feature Requests support optional `readyPrompt` and `donePrompt` paths in `.werk/feature-workflow.json`. Teams commit Markdown or text definitions of ready and done; the worker pins their content and digests before claim and supplies them on dispatch and continuation. The shared-workflow view exposes their paths and digests. These prompts supplement deterministic readiness/completion checks and retain existing tool, edit-scope and human-review boundaries.
+- An optional `readyReviewPrompt` enables a model Feature Request Ready Check before deterministic readiness checks. The worker confirms its Git claim, reviews without tools using the request's selected model and existing capacity/allowance, and publishes findings in the same request. Questions pause work until the team answers in Markdown and commits and pushes `status: ready`; unchanged polling never starts another review.
+
 ## [0.13.0] - 2026-10-18
 
 ### Added

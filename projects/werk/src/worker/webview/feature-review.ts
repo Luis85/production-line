@@ -2,6 +2,7 @@ import type { GateEvaluation, GateStage, WorkerRequest } from '../application/re
 import type { InteractionView } from '../application/interactions';
 import type { LocalTaskDetailView, LocalTaskSummaryView, SessionView } from '../application/workspace-view';
 import type { SharedFeatureView } from '../application/shared-intake-contract';
+import { sharedReadyReviewView } from './shared-ready-review-view';
 import { candidateEvidenceView } from './candidate-evidence';
 
 export interface FeatureReviewInput {
@@ -86,7 +87,9 @@ export function buildFeatureReviewView(input: FeatureReviewInput) {
     response.turnId === (pending?.turnId ?? interaction.latestTurn?.id) && ['publication_pending', 'ready'].includes(response.status);
   const title = request?.input.title || session?.title || task?.title || shared?.title || 'Feature Request';
   const readiness = gateStage('readiness', 'Readiness', ready);
+  const preReady = shared && !shared.taskId ? sharedReadyReviewView(shared) : null;
   if (!ready && shared?.ready) Object.assign(readiness, { state: shared.ready.passed ? 'complete' : 'blocked', detail: shared.ready.passed ? 'The shared readiness check passed.' : shared.ready.issues.join(' ') || 'The shared readiness check has not passed.' });
+  if (preReady) Object.assign(readiness, { state: preReady.actor === 'operator' ? 'blocked' : shared?.readyReview?.status === 'passed' ? 'pending' : 'active', detail: preReady.description });
   const execution: FeatureReviewStage = { id: 'execution', label: 'Execution', state: 'unknown', detail: 'No execution result is recorded.' };
   if (pending) Object.assign(execution, { state: 'blocked', detail: pending.kind === 'escalation' ? 'A decision is required before continuation.' : 'An answer is required before continuation.' });
   else if (activeExecution) Object.assign(execution, { state: 'active', detail: status === 'queued' || request?.execution?.status === 'prepared' ? 'An invocation is queued or prepared.' : 'The saved invocation is running.' });
@@ -94,6 +97,7 @@ export function buildFeatureReviewView(input: FeatureReviewInput) {
   else if (request?.execution?.result?.type === 'completed' || ['completed', 'review', 'done', 'ready_for_review', 'publishing'].includes(status)) Object.assign(execution, { state: 'complete', detail: 'A completed result is recorded. Verification and human review are separate.' });
   else if (status === 'simulated') Object.assign(execution, { state: 'complete', detail: 'Simulation finished. No implemented change is claimed.' });
   else if (['ready', 'draft', 'readiness'].includes(status)) Object.assign(execution, { state: 'pending', detail: 'No execution is confirmed for this request yet.' });
+  if (preReady) Object.assign(execution, { state: 'pending', detail: 'Implementation waits for the Ready Check review and Definition of Ready checks.' });
   const verification = gateStage('verification', 'Completion checks', done);
   if (candidate?.implementation) {
     if (!candidate.verified) Object.assign(verification, { state: 'blocked', detail: candidate.description });
@@ -116,6 +120,9 @@ export function buildFeatureReviewView(input: FeatureReviewInput) {
   let nextStep: FeatureReviewNextStep;
   if (stale) nextStep = next('operator', 'Refresh the request evidence', conflict ? 'These snapshots identify different requests or executions. Refresh before making a decision.' : input.freshness?.error || 'Current request evidence is unavailable or may be stale. Retained results do not authorize an action.', 'refresh', 'Refresh evidence');
   else if (otherOwner) nextStep = next('owning_worker', 'Follow the owning worker', 'This worker can inspect the shared record. Continue through its Task note or the owning worker.', shared?.taskNote || shared?.reviewNote ? 'review_shared' : 'open_source', 'Read shared notes');
+  else if (preReady && shared?.publication === 'error') nextStep = next('operator', 'Inspect the review publication failure', shared.error || 'The review is retained locally. Resolve the Git publication failure before answering in the shared Feature Request.', 'open_source', 'Read the Feature Request');
+  else if (preReady && shared?.publication === 'pending') nextStep = next('worker', 'Wait for review publication', 'The worker is confirming this review in Git. Wait for its findings to appear in the Feature Request before answering.');
+  else if (preReady) nextStep = next(preReady.actor, preReady.label, preReady.description, preReady.actor === 'operator' ? 'open_source' : undefined, 'Read the Feature Request');
   else if (continuationBlocked) nextStep = next('operator', 'Inspect the retained evidence', continuationBlocked + ' Use a new Feature Request if the accepted execution cannot be recovered.', 'inspect_history', 'Inspect execution evidence');
   else if (responsePending) nextStep = next('worker', response?.status === 'publication_pending' ? 'Confirm the saved response publication' : 'Wait for the worker to continue', response?.status === 'publication_pending' ? 'The answer is retained while Git publication is confirmed. Do not submit another answer.' : 'The answer is saved in the shared Task note. Continuation waits for capacity and limits.');
   else if (pending) nextStep = next('operator', pending.kind === 'escalation' ? 'Give the worker a decision' : 'Answer the worker’s question', pending.message, 'answer', 'Answer and continue');

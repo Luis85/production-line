@@ -168,14 +168,14 @@ export async function task(workspace: WorkspaceContext, input: unknown, referenc
           if (detail.chat.messages.length > 0) return detail;
         }
         if (
-          workspace.sessions.chatActive + workspace.board.active >=
+          (workspace.sessions.admissionActive ?? workspace.sessions.chatActive) + workspace.board.active >=
           workspace.settings.value.board.queueCapacity
         )
           throw new DomainError("conflict", "Worker task queue is full.");
         await admit();
       }
       if (
-        workspace.sessions.chatActive + workspace.board.active >=
+        (workspace.sessions.admissionActive ?? workspace.sessions.chatActive) + workspace.board.active >=
         workspace.settings.value.board.queueCapacity
       )
         throw new DomainError("conflict", "Worker task queue is full.");

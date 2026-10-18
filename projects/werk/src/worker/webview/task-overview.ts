@@ -1,3 +1,4 @@
+import type { SharedFeatureView } from '../application/shared-intake-contract';
 import type { SessionView, LocalTaskboardView } from '../application/workspace-view';
 import type { FeatureRequests } from '../application/feature-requests';
 import type { WorkerRun } from '../application/run-evidence';
@@ -21,6 +22,7 @@ export interface TaskOverviewInput {
   features?: Features | { enabled: false } | null;
   history?: History | null;
   runs?: readonly WorkerRun[] | null;
+  sharedRequests?: readonly SharedFeatureView[] | null;
 }
 export interface TaskOverviewFilter {
   search?: string;
@@ -179,6 +181,30 @@ function project(evidence: Evidence, currentSessionId: string | null, runs: read
     evidenceHref: sessionId ? '/history?view=runs&runSession=' + encodeURIComponent(sessionId) : '/history',
   };
 }
+function projectReadyReview(request: SharedFeatureView, currentSessionId: string | null, runs: readonly WorkerRun[]): TaskOverviewItem {
+  const review = request.readyReview!;
+  const run = runs.find(value => value.sessionId === currentSessionId && value.sessionId === review.sessionId && value.id === review.runId && value.purpose === 'gate_review' && value.outcome === 'running' && !!value.startedAt && !value.after);
+  const publicationFailed = request.publication === 'error';
+  const blocked = request.status === 'waiting_ready_input' && request.ready?.passed === false;
+  const status = publicationFailed ? 'failed' : run ? 'running' : blocked || review.status === 'waiting_input' ? 'waiting_input' : review.status === 'failed' ? 'failed' : review.status === 'running' ? 'unconfirmed' : 'queued';
+  const statusLabel = publicationFailed ? 'Publication needs attention' : run ? 'Ready Check running' : blocked ? 'Ready checks need changes' : review.status === 'waiting_input' ? 'Ready Check answers needed' : review.status === 'failed' ? 'Ready Check failed' : review.status === 'running' ? labels.unconfirmed : review.status === 'passed' ? 'Waiting for implementation' : 'Ready Check queued';
+  const summary = publicationFailed ? 'The Feature Request update could not be published. Inspect shared intake and resolve the Git publication error before continuing.'
+    : status === 'waiting_input' ? 'Answer and update the Feature Request in Markdown, mark it ready, then commit and push for another review.'
+    : status === 'failed' ? request.error || 'Inspect the review error before requesting another attempt in the Feature Request.'
+    : status === 'unconfirmed' ? 'The retained review and execution slot differ. Refresh to confirm the current state.'
+    : status === 'running' ? 'Reviewing the Feature Request before its Definition of Ready check. Implementation has not started.'
+    : review.status === 'passed' ? 'The review and Definition of Ready checks passed. Waiting for implementation admission, capacity, and start conditions.'
+    : 'Waiting for the worker’s shared execution slot and start conditions. Implementation has not started.';
+  return {
+    id: 'shared-feature:' + (request.feature?.key ?? request.id), taskId: '', featureName: request.name,
+    title: request.title, summary, source: 'project', sourceLabel: 'Project request', status, statusLabel, group: groupFor(status),
+    provider: run?.provider ?? null, model: run?.model || null, modelBasis: run ? 'recorded' : 'unavailable',
+    modelSnapshot: run ? { provider: run.provider, model: run.model, runId: run.id, recordedAt: run.acceptedAt, purpose: run.purpose } : null,
+    createdAt: null, updatedAt: request.updatedAt, archived: false, remote: false,
+    primaryAction: { kind: 'feature', label: 'Inspect Ready Check', href: '/settings#shared-intake' },
+    evidenceHref: run ? '/history?view=runs&runSession=' + encodeURIComponent(run.sessionId) : '/settings#shared-intake',
+  };
+}
 /** Pure projection: never dispatches work, mutates snapshots, or treats configuration as execution evidence. */
 export function buildTaskOverview(input: TaskOverviewInput, filter: TaskOverviewFilter = {}): TaskOverview {
   const evidence: Evidence[] = (input.sessions?.records ?? []).map(session => ({ session }));
@@ -211,7 +237,8 @@ export function buildTaskOverview(input: TaskOverviewInput, filter: TaskOverview
   }
   const currentSessionId = input.sessions?.execution.currentSessionId ?? null;
   const search = filter.search?.trim().toLocaleLowerCase() ?? '';
-  const items = evidence.map(item => project(item, currentSessionId, input.runs ?? [])).filter(item =>
+  const reviews = (input.sharedRequests ?? []).filter(request => request.isLocal && request.readyReview && !request.taskId).map(request => projectReadyReview(request, currentSessionId, input.runs ?? []));
+  const items = [...evidence.map(item => project(item, currentSessionId, input.runs ?? [])), ...reviews].filter(item =>
     (filter.includeArchived || !item.archived) && (!filter.source || filter.source === 'all' || item.source === filter.source) &&
     (!search || [item.title, item.taskId, item.sessionId, item.localTaskId, item.requestId, item.featureName, item.sourceLabel, item.statusLabel, item.provider, item.model].join(' ').toLocaleLowerCase().includes(search)),
   );

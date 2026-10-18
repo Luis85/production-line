@@ -72,7 +72,7 @@ export async function startChat(workspace: WorkspaceContext, message: unknown){
   if (!workspace.acceptingTasks)
     throw new DomainError("unavailable", "Worker is stopping.");
   if (
-    workspace.sessions.chatActive + workspace.board.active >=
+    (workspace.sessions.admissionActive ?? workspace.sessions.chatActive) + workspace.board.active >=
     workspace.settings.value.board.queueCapacity
   )
     throw new DomainError("conflict", "Worker task queue is full.");

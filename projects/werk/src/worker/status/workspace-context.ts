@@ -1,3 +1,6 @@
+import { DomainError } from '../../shared/errors.js';
+import { ReadyReviewManager } from '../application/ready-review.js';
+import { readyReviewModels } from '../infrastructure/ready-review-model.js';
 import type { ProcessSupervisor } from '../application/process-supervisor.js';
 import { createProcessObservation } from '../infrastructure/process-observation.js';
 import { FeatureTracking } from '../application/feature-tracking.js';
@@ -75,6 +78,7 @@ export class WorkspaceContext {
   processReconciliation?: ReturnType<typeof setInterval>;
   readonly consumption: WorkerConsumption;
   readonly reviews: RequestReviewManager;
+  readonly readyReviews: ReadyReviewManager;
   readonly settings: WorkerSettings;
   readonly sessions: WorkerSessions;
   readonly board: LocalTaskboard;
@@ -128,6 +132,7 @@ export class WorkspaceContext {
       config.stateDir, this.settings, modelFor, undefined, () => this.board.active, this.consumption,
       { remote: () => { const status = this.get(); return { waiting: status.queuedTasks?.length ?? null, running: status.activeTasks.length }; } },
       { supervisor: () => this.processes, observations: this.processObservations },
+      { active: () => this.readyReviews?.active ?? 0, retainedSessionIds: () => this.sharedRuntime?.intake.readyReviewSessionIds() ?? [] },
     );
     this.sessions.featureSource = record => {
       const shared = record.kind === 'local' && record.id.startsWith('local-')
@@ -164,6 +169,16 @@ export class WorkspaceContext {
           config.stateDir,
         ), this.consumption),
     });
+    this.readyReviews = new ReadyReviewManager({
+      interactions: this.sessions.interactions, runs: this.sessions.runs, executor: this.executor,
+      maxRuntimeMs: () => this.settings.value.execution.maxRuntimeMs,
+      assertCanAdmit: () => { const hold = sharedFeatureAdmissionHold(this); if (hold) throw new DomainError('unavailable', hold.message); },
+      profile: input => {
+        const connection = definitionConnection(this.settings.provider(input.provider), this.definitions.select({ definitionId: input.definitionId, definitionRef: input.definitionRef, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly }));
+        return { id: connection.id, model: connection.model, instruction: connection.instruction ?? '' };
+      },
+      model: readyReviewModels(config.stateDir, this.settings, this.consumption, this.sessions.runs, this.processObservations),
+    });
     this.sessions.onRequestChanged = (id) => {
       if (this.sessions.requests.get(id).phase === "cancelled")
         this.reviews.cancel(id);
@@ -197,6 +212,7 @@ export class WorkspaceContext {
       canAdmit: () => !sharedFeatureAdmissionHold(this),
       admissionHold: () => sharedFeatureAdmissionHold(this),
       submit: record => submitSharedFeature(this, record),
+      readyReview: this.readyReviews,
       continue: (record, command) => continueFeatureInteraction(this, this.board.executionDetail(record.taskId!).sessionId, command),
       admissionIssue: input => {
         try { definitionConnection(this.settings.provider(input.provider), this.definitions.select({ definitionId: input.definitionId, definitionRef: input.definitionRef, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly })); return undefined; }

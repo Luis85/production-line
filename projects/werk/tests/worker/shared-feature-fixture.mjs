@@ -8,6 +8,8 @@ import { SharedFeatureJournal } from '../../src/worker/dist/worker/infrastructur
 import { WorkerRequestJournal } from '../../src/worker/dist/worker/infrastructure/journal/requests.js';
 import { defaultFeatureWorkflow, defaultFeatureCheck, featureGateInput } from '../../src/worker/dist/worker/application/feature-workflow.js';
 import { validateFeatureReadiness, loadFeatureWorkflowSnapshot } from '../../src/worker/dist/worker/infrastructure/features/workflow.js';
+import { validateFeatureReviewEligibility } from '../../src/worker/dist/worker/infrastructure/features/review-eligibility.js';
+import { readReadyReviewResponse } from '../../src/worker/dist/worker/infrastructure/features/ready-review-document.js';
 import { sharedSource, renderSharedSource } from '../../src/worker/dist/worker/infrastructure/features/shared-source.js';
 
 const template = `---
@@ -61,7 +63,9 @@ export async function fixture(t, options = {}) {
   function addRepository(id = 'shared', content = source) {
     const configuration = defaultFeatureWorkflow(), done = defaultFeatureCheck('done');
     done.rules.patch = options.doneRules ?? [];
+    if (options.readyReview) configuration.readyReviewPrompt = 'prompts/ready-review.md';
     const files = new Map(Object.entries({ '.werk/feature-workflow.json': JSON.stringify(configuration), [configuration.readyCheck]: JSON.stringify(defaultFeatureCheck('ready')), [configuration.doneCheck]: JSON.stringify(done), [configuration.template]: template, [configuration.base]: 'views:\n  - type: table\n    name: Features\n', [sourcePath]: content }));
+    if (options.readyReview) files.set(configuration.readyReviewPrompt, 'Challenge ambiguous goals and ask the team for missing details.');
     const head = nextCommit(), repo = { head, files, versions: new Map([[head, new Map(files)]]), lifecycle: new Map(), features: new Map() };
     repositories.set(id, repo); return repo;
   }
@@ -78,10 +82,11 @@ export async function fixture(t, options = {}) {
       async readBlob(commit, path) { if (diagnosticGate && /\/intake-/.test(path)) { const gate = diagnosticGate; diagnosticGate = undefined; gate.enter(); await gate.wait; } assert.ok(repo.versions.has(commit), 'Reads must use a known immutable commit.'); return repo.versions.get(commit).get(path) ?? null; },
       async listRequests(commit) { return [...repo.versions.get(commit)].filter(([path]) => /^features\/[^/_][^/]*\.md$/.test(path)).map(([path, content]) => ({ path, name: path.slice('features/'.length), content, revision: sharedHash(content) })); },
       async publishLifecycle(write) {
+        await controls.beforeLifecycle?.(write);
         lifecycleAttempts.push(structuredClone(write)); events.push('lifecycle-attempt');
         let result = repo.lifecycle.get(write.operationId);
         if (!result) {
-          assert.equal(sharedHash(repo.files.get(write.request.path)), write.request.expectedRevision, 'Lifecycle writes use compare-and-swap.');
+          if (sharedHash(repo.files.get(write.request.path)) !== write.request.expectedRevision) throw Object.assign(Error('Lifecycle writes use compare-and-swap.'), { code: 'conflict' });
           const edits = { [write.request.path]: write.request.content };
           for (const artifact of write.artifacts) { assert.equal(repo.files.has(artifact.path) ? sharedHash(repo.files.get(artifact.path)) : null, artifact.expectedRevision); edits[artifact.path] = artifact.content; }
           const commit = commitFiles(binding.repositoryId, edits); result = { commit, head: commit }; repo.lifecycle.set(write.operationId, result);
@@ -110,7 +115,10 @@ export async function fixture(t, options = {}) {
     },
     repository,
     loadWorkflow: (repo, commit, configPath) => loadFeatureWorkflowSnapshot({ commit, configPath, readBlob: (at, path) => repo.readBlob(at, path) }),
-    ready: (markdown, snapshot) => validateFeatureReadiness(markdown, snapshot.readyCheck, undefined, snapshot.template),
+    readyReview: options.readyReview,
+    readyReviewEligible: (markdown, snapshot) => validateFeatureReviewEligibility(markdown, snapshot),
+    readyReviewResponse: readReadyReviewResponse,
+    ready: (markdown, snapshot) => { options.onReady?.(); return validateFeatureReadiness(markdown, snapshot.readyCheck, undefined, snapshot.template); },
     source: sharedSource,
     renderSource: renderSharedSource,
     async submit(record) {

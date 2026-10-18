@@ -57,6 +57,7 @@ export class WorkerSessions {
   private instances = new Map<string, WorkerConversation>();
   private changingProviders = false;
   private activeOutsideChat: () => number;
+  private auxiliary: { active(): number; retainedSessionIds(): string[] };
   private capacityContext?: WorkerCapacityContext;
   private initializeEvidence?: () => Promise<void>;
   constructor(settings: WorkerSettingsPort, dependencies: {
@@ -67,10 +68,12 @@ export class WorkerSessions {
     runs: RunJournal;
     definitions: WorkerDefinitions;
     activeOutsideChat?: () => number;
+    auxiliary?: { active(): number; retainedSessionIds(): string[] };
     consumptionBlocked?: () => boolean;
     capacity?: WorkerCapacityContext;
     initializeEvidence?: () => Promise<void>;
   }) {
+    this.auxiliary = dependencies.auxiliary ?? { active: () => 0, retainedSessionIds: () => [] };
     this.activeOutsideChat = dependencies.activeOutsideChat ?? (() => 0);
     this.capacityContext = dependencies.capacity;
     this.initializeEvidence = dependencies.initializeEvidence;
@@ -95,7 +98,7 @@ export class WorkerSessions {
     this.catalog = restoreSessionCatalog(saved, this.settings);
     const migrated = restoreFeatureRequestReferences(this.catalog.records, this.requests, this.featureSource);
     if (migrated || saved === undefined) await this.persist();
-    this.interactions.retainSessions(this.catalog.records.map((record) => record.id));
+    this.interactions.retainSessions([...this.catalog.records.map((record) => record.id), ...this.auxiliary.retainedSessionIds()]);
     for (const record of this.catalog.records) await this.load(record);
   }
   private async load(record: SessionRecord) {
@@ -103,7 +106,7 @@ export class WorkerSessions {
       storage: this.storage, settings: this.settings, model: this.model, executor: this.executor,
       runs: this.runs, interactions: this.interactions, requests: this.requests, instances: this.instances,
       requestPolicy: () => this.requestPolicy?.(), notifyRequest: id => this.notifyRequest(id),
-      assertCanContinue: id => this.assertCanContinue(id), chatActive: () => this.chatActive,
+      assertCanContinue: id => this.assertCanContinue(id), chatActive: () => this.admissionActive,
       activeOutsideChat: () => this.activeOutsideChat(),
     }, record);
   }
@@ -124,9 +127,10 @@ export class WorkerSessions {
     return [...this.instances.values()].filter((item) => item.snapshot().busy)
       .length;
   }
+  get admissionActive() { return this.chatActive + this.auxiliary.active(); }
   get busy() {
     return (
-      this.executor.busy ||
+      this.executor.busy || this.auxiliary.active() > 0 ||
       this.catalog.records.some((record) =>
         ["queued", "running"].includes(record.taskState ?? ""),
       ) ||
@@ -137,7 +141,7 @@ export class WorkerSessions {
     return sessionView({
       catalog: this.catalog, featureTracking: this.featureTracking, capacityContext: this.capacityContext,
       settings: this.settings, instances: this.instances, requests: this.requests,
-      interactions: this.interactions, executor: this.executor, chatActive: this.chatActive,
+      interactions: this.interactions, executor: this.executor, chatActive: this.admissionActive,
       activeOutsideChat: () => this.activeOutsideChat(),
     });
   }

@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';
 import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
 import { statusServer } from '../../src/worker/dist/worker/status/server.js';
-import { defaultFeatureWorkflow, defaultFeatureCheck } from '../../src/worker/dist/worker/application/feature-workflow.js';
+import { defaultFeatureWorkflow, defaultFeatureCheck, featureContentHash } from '../../src/worker/dist/worker/application/feature-workflow.js';
 import { authoringTemplateFor, authoringBase } from '../../src/worker/dist/worker/infrastructure/feature-authoring-assets.js';
 import { parseFeature } from '../../src/worker/dist/worker/infrastructure/features/document.js';
 import { workerStatus } from '../helpers/worker-status.mjs';
@@ -20,12 +20,13 @@ const complete = markdown => markdown
   .replace('<!-- Add one or more concrete, verifiable checklist items. -->', '- The CSV contains all selected orders.\n- Dates use UTC ISO 8601 strings.')
   .replace('<!-- Explain how each outcome will be checked and what evidence reviewers need. -->', 'Run the CSV unit tests and inspect the exported headers.');
 
-async function fixture(t, withFolder = false) {
+async function fixture(t, withFolder = false, prompts) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-fr-workspace-'))), remote = join(directory, 'remote.git'), project = join(directory, 'project'), state = join(directory, 'state');
   git(directory, 'init', '--bare', '--initial-branch=main', remote); git(directory, 'clone', '--', remote, project);
-  const workflow = defaultFeatureWorkflow(), ready = defaultFeatureCheck('ready');
+  const workflow = { ...defaultFeatureWorkflow(), ...(prompts ? { readyPrompt: 'team/definition-of-ready.md', donePrompt: 'team/definition-of-done.txt' } : {}) }, ready = defaultFeatureCheck('ready');
   ready.rules.patch.push({ id: 'two-team-criteria', fact: 'input.criteriaCount', op: 'gte', value: 2 });
   const files = { '.werk/feature-workflow.json': JSON.stringify(workflow), [workflow.template]: authoringTemplateFor('openai-api'), [workflow.base]: authoringBase(workflow), [workflow.readyCheck]: JSON.stringify(ready), [workflow.doneCheck]: JSON.stringify(defaultFeatureCheck('done')), 'orders.ts': 'export const orders = [];\n' };
+  if (prompts) Object.assign(files, { [workflow.readyPrompt]: prompts.ready, [workflow.donePrompt]: prompts.done });
   for (const [path, content] of Object.entries(files)) { await mkdir(dirname(join(project, path)), { recursive: true }); await writeFile(join(project, path), content); }
   git(project, 'add', '.'); git(project, 'commit', '-m', 'Team workflow'); git(project, 'push', 'origin', 'main');
   const originalHead = git(project, 'rev-parse', 'HEAD');
@@ -47,7 +48,7 @@ async function fixture(t, withFolder = false) {
     const result = await response.json(); assert.equal(response.status, expected, JSON.stringify(result)); return result;
   }
   const publish = (draft, operationId, status = 'draft', markdown = draft.markdown) => api('/api/features', { action: 'publish', operationId, name: draft.name, markdown, status, expectedRevision: draft.revision, expectedWorkflowDigest: draft.workflowDigest, expectedBinding: draft.binding });
-  return { directory, remote, project, state, originalHead, api, publish, get workspace() { return workspace; }, async restart() { await close(); await open(); } };
+  return { directory, remote, project, state, originalHead, workflow, api, publish, get workspace() { return workspace; }, async restart() { await close(); await open(); } };
 }
 
 test('shared binding closes every legacy new-work route without requiring a legacy feature folder', { timeout: 120000 }, async t => {
@@ -69,8 +70,9 @@ test('shared binding closes every legacy new-work route without requiring a lega
   assert.equal(git(f.project, 'rev-parse', 'HEAD'), f.originalHead);
 });
 
-test('chat publication and Markdown intake share one feature identity, policy, execution and progress projection', { timeout: 120000 }, async t => {
-  const f = await fixture(t); await f.workspace.sharedIntakeCommand({ action: 'configure', expectedRevision: 0, config: binding });
+test('chat publication and Markdown intake share one feature identity, definitions, policy, execution and progress projection', { timeout: 120000 }, async t => {
+  const prompts = { ready: 'Confirm the CSV consumers and their timezone expectations before implementation.', done: 'Report CSV regression evidence and document any unresolved compatibility limitations.' };
+  const f = await fixture(t, false, prompts); await f.workspace.sharedIntakeCommand({ action: 'configure', expectedRevision: 0, config: binding });
   const draft = await f.api('/api/features', { action: 'prepare', operationId: 'browser-one', seed });
   const saved = await f.publish(draft, 'draft-one');
   const reopened = await f.api('/api/features', { action: 'prepare', operationId: 'reopen', name: saved.name });
@@ -87,6 +89,21 @@ test('chat publication and Markdown intake share one feature identity, policy, e
   assert.equal(shared.feature.key, feature.key); assert.equal(task.feature.key, feature.key);
   const request = f.workspace.sessions.requests.get(task.requestId); assert.equal(request.owner.featureId, feature.key);
   assert.ok(request.policy.ready.patch.some(rule => rule.id === 'two-team-criteria'));
+  const definitions = { schemaVersion: 1, commit: shared.sourceCommit,
+    ready: { path: f.workflow.readyPrompt, sha256: featureContentHash(prompts.ready), content: prompts.ready },
+    done: { path: f.workflow.donePrompt, sha256: featureContentHash(prompts.done), content: prompts.done },
+  };
+  assert.deepEqual(task.definitionPrompts, definitions, 'Shared intake passes the source-pinned snapshot through the workspace coordinator.');
+  const dispatch = f.workspace.sessions.interactions.turn(task.sessionId, task.currentTurnId).dispatch;
+  assert.ok(dispatch, 'The actual model request is durably prepared by the composed worker.');
+  const lines = dispatch.messages[0].text.split('\n');
+  for (const [label, expected] of [['Ready', definitions.ready], ['Done', definitions.done]]) {
+    const headings = lines.flatMap((line, index) => line.startsWith('Definition of ' + label + ' —') ? [index] : []);
+    assert.equal(headings.length, 1, 'Each definition appears once in the prepared dispatch.');
+    assert.deepEqual(JSON.parse(lines[headings[0] + 1]), expected);
+  }
+  await writeFile(join(f.project, f.workflow.readyPrompt), 'A local edit is not accepted team guidance.');
+  await writeFile(join(f.project, f.workflow.donePrompt), 'A local edit cannot change this request completion guidance.');
   const tracking = await f.workspace.featureTrackingCommand({ action: 'get', sessionId: task.sessionId });
   assert.equal(parseFeature(tracking.markdown).data.type, 'FeatureRequestProgress');
   assert.match(tracking.markdown, new RegExp(feature.key)); assert.doesNotMatch(tracking.markdown, /fixture-private-provider-key|export const orders/);
@@ -102,6 +119,8 @@ test('chat publication and Markdown intake share one feature identity, policy, e
   assert.equal(git(f.project, 'rev-parse', 'HEAD'), f.originalHead);
   await f.restart();
   assert.equal(f.workspace.board.detail(task.id).status, 'queued', 'A prepared shared request survives restart without requiring a new attempt.');
+  assert.deepEqual(f.workspace.board.executionDetail(task.id).definitionPrompts, definitions);
+  assert.deepEqual(f.workspace.sessions.interactions.turn(task.sessionId, task.currentTurnId).dispatch, dispatch, 'Restart preserves the same prepared model request despite later local prompt edits.');
   const restored = await f.api('/api/tasks', { action: 'get', id: task.sessionId });
   assert.equal(restored.session.feature.key, feature.key); await f.api('/api/features', command);
   assert.equal(f.workspace.board.view().tasks.length, 1); assert.equal(f.workspace.sessions.runs.list().total, 1);

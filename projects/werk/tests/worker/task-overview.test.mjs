@@ -209,3 +209,70 @@ test('review routes escape exact identities while answer and active work keep co
   assert.equal(items.get('question').primaryAction.label, 'Answer task');
   assert.equal(items.get('active').primaryAction.href, '/taskboard?session=active');
 });
+
+
+const shared = (extra = {}) => ({ id: 'fr-one', name: 'requests/one.md', title: 'Improve search', status: 'reviewing_ready', owner: 'worker-one', isLocal: true, sourceCommit: 'abc', updatedAt: later,
+  ready: null, done: null, featureBranch: null, reviewNote: null, publication: 'synced', error: null, taskId: null,
+  readyReview: { status: 'queued', attempt: 1, promptPath: 'prompts/ready-review.md', promptDigest: 'hash', findings: [] }, ...extra });
+
+test('pre-admission shared reviews appear in the queue without inventing an implementation or conversation', () => {
+  const result = buildTaskOverview({ sharedRequests: [shared()] });
+  assert.equal(result.counts.queued, 1);
+  const item = result.items[0];
+  assert.equal(item.title, 'Improve search'); assert.equal(item.source, 'project');
+  assert.equal(item.statusLabel, 'Ready Check queued'); assert.match(item.summary, /Implementation has not started/);
+  assert.equal(item.taskId, ''); assert.equal(item.sessionId, undefined); assert.equal(item.modelSnapshot, null);
+  assert.deepEqual(item.primaryAction, { kind: 'feature', label: 'Inspect Ready Check', href: '/settings#shared-intake' });
+});
+
+test('Ready Check answers and failed reviews remain attention with the Markdown continuation route', () => {
+  const waiting = shared(); Object.assign(waiting.readyReview, { status: 'waiting_input', findings: [{ kind: 'question', message: 'What is the migration window?', blocking: true }] });
+  let item = buildTaskOverview({ sharedRequests: [waiting] }).items[0];
+  assert.equal(item.group, 'attention'); assert.equal(item.statusLabel, 'Ready Check answers needed');
+  assert.match(item.summary, /Markdown.*ready.*commit and push/);
+  Object.assign(waiting.readyReview, { status: 'failed' }); waiting.error = 'Review interrupted before its result was retained.';
+  item = buildTaskOverview({ sharedRequests: [waiting] }).items[0];
+  assert.equal(item.group, 'attention'); assert.equal(item.statusLabel, 'Ready Check failed'); assert.equal(item.summary, waiting.error);
+});
+
+test('only the exact current Ready Check attempt establishes active model evidence without a catalog session', () => {
+  const request = shared(); Object.assign(request.readyReview, { status: 'running', sessionId: 'review-one', runId: 'review-run' });
+  const input = { sessions: sessions([], 'review-one'), sharedRequests: [request], runs: [run('review-one', { id: 'review-run', purpose: 'gate_review', outcome: 'running', startedAt: at, after: null })] };
+  let item = buildTaskOverview(input).items[0];
+  assert.equal(item.group, 'running'); assert.equal(item.statusLabel, 'Ready Check running'); assert.equal(item.model, 'recorded-model');
+  assert.equal(item.sessionId, undefined); assert.equal(item.evidenceHref, '/history?view=runs&runSession=review-one');
+  input.runs[0].id = 'previous-attempt';
+  item = buildTaskOverview(input).items[0];
+  assert.equal(item.status, 'unconfirmed'); assert.equal(item.model, null);
+  input.runs[0].id = 'review-run'; input.sessions.execution.currentSessionId = 'another-review';
+  assert.equal(buildTaskOverview(input).items[0].status, 'unconfirmed');
+});
+
+test('passed readiness waits for implementation admission while readiness failures still need attention', () => {
+  const request = shared(); request.readyReview.status = 'passed';
+  let item = buildTaskOverview({ sharedRequests: [request] }).items[0];
+  assert.equal(item.group, 'queued'); assert.equal(item.statusLabel, 'Waiting for implementation');
+  assert.match(item.summary, /review and Definition of Ready checks passed.*admission, capacity, and start conditions/);
+  Object.assign(request, { status: 'waiting_ready_input', ready: { passed: false, issues: ['Acceptance criteria missing'] } });
+  item = buildTaskOverview({ sharedRequests: [request] }).items[0];
+  assert.equal(item.group, 'attention'); assert.equal(item.statusLabel, 'Ready checks need changes');
+});
+
+test('admitted and remotely owned shared reviews never duplicate local work or inflate this worker queue', () => {
+  const input = { sessions: sessions([session('local-one', { kind: 'local', status: 'queued' })]), board: board(file('one', { status: 'queued' })),
+    sharedRequests: [shared({ taskId: 'one' }), shared({ id: 'remote', isLocal: false }), { ...shared({ id: 'legacy' }), readyReview: undefined }] };
+  const result = buildTaskOverview(input);
+  assert.equal(result.counts.total, 1); assert.equal(result.counts.queued, 1); assert.equal(result.items[0].localTaskId, 'one');
+  assert.equal(buildTaskOverview({ sharedRequests: [shared()] }, { search: 'requests/one.md' }).counts.total, 1);
+  assert.equal(buildTaskOverview({ sharedRequests: [shared()] }, { source: 'chat' }).counts.total, 0);
+});
+
+
+test('a shared review publication error needs attention instead of appearing as a normal queued start', () => {
+  const request = shared({ publication: 'error', error: 'Git push was rejected.' });
+  request.readyReview.status = 'passed';
+  const item = buildTaskOverview({ sharedRequests: [request] }).items[0];
+  assert.equal(item.group, 'attention'); assert.equal(item.statusLabel, 'Publication needs attention');
+  assert.match(item.summary, /could not be published.*resolve the Git publication error/);
+  assert.equal(item.primaryAction.href, '/settings#shared-intake');
+});

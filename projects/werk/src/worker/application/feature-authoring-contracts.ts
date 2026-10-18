@@ -12,7 +12,7 @@ export interface FeatureAuthoringCommand {
   seed?: FeatureAuthoringSeed; expectedRevision?: string | null;
   expectedWorkflowDigest?: string; expectedBinding?: FeatureAuthoringBinding;
 }
-export interface FeatureAuthoringReadiness { valid: boolean; errors: { code: string; message: string }[]; }
+export interface FeatureAuthoringReadiness { reviewRequired?: boolean; valid: boolean; errors: { code: string; message: string }[]; }
 export interface FeatureAuthoringResult {
   featureId: string; name: string; path: string; markdown: string; revision: string | null;
   status: 'draft' | 'ready'; readiness: FeatureAuthoringReadiness;

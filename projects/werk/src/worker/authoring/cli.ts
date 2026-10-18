@@ -3,8 +3,9 @@ import { realpathSync } from 'node:fs';
 import { open, rename, unlink } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { validateFeatureWorkflow, validateFeatureCheck, featureWorkflowPolicy, featureWorkflowPath as validatePath } from '../application/feature-workflow.js';
+import { validateFeatureWorkflow, validateFeatureCheck, featureWorkflowPolicy, featureWorkflowPath as validatePath, validateFeaturePromptContent } from '../application/feature-workflow.js';
 import { validateFeatureReadiness, validateFeatureTemplate } from '../infrastructure/features/workflow.js';
+import { validateFeatureReviewEligibility } from '../infrastructure/features/review-eligibility.js';
 import { digest, parseFeature, requestName, type FeatureDocument } from '../infrastructure/features/document.js';
 import { authoringPath, authoringRoot, readAuthoringFile, seedAuthoringFile } from '../infrastructure/feature-authoring-files.js';
 import { featureWorkflowPath } from '../infrastructure/feature-authoring.js';
@@ -36,7 +37,19 @@ async function load(root: string) {
   const policy = featureWorkflowPolicy(readyCheck, doneCheck, config.id);
   const base = await readAuthoringFile(root, config.base);
   if (!base?.trim()) throw Error('The configured feature-request Base is missing or empty.');
-  return { config, template, policy, ready: readyCheck, done: doneCheck, revision: digest(raw + '\n' + ready + '\n' + done + '\n' + template + '\n' + base) };
+  const prompts: string[] = [];
+  for (const path of [config.readyReviewPrompt, config.readyPrompt, config.donePrompt]) {
+    if (path === undefined) continue;
+    const content = await readAuthoringFile(root, path);
+    if (content === undefined) throw Error(`Configured definition prompt is missing: ${path}`);
+    prompts.push(validateFeaturePromptContent(content, path));
+  }
+  return { config, template, policy, ready: readyCheck, done: doneCheck, revision: digest(raw + '\n' + ready + '\n' + done + '\n' + template + '\n' + base + (prompts.length ? '\n' + JSON.stringify(prompts) : '')) };
+}
+function readiness(markdown: string, workflow: Awaited<ReturnType<typeof load>>) {
+  return workflow.config.readyReviewPrompt
+    ? validateFeatureReviewEligibility(markdown, { configuration: workflow.config, template: workflow.template })
+    : validateFeatureReadiness(markdown, workflow.ready, 'codex-cli', workflow.template, { configuration: workflow.config, workflowPath: featureWorkflowPath });
 }
 async function document(root: string, path: string | undefined, directory: string) {
   if (!path || dirname(path) !== directory || !requestName(basename(path))) throw Error('Choose a Markdown request directly inside the configured queue directory.');
@@ -83,7 +96,7 @@ export async function runFeatureAuthoring(args: string[], directory = process.cw
   });
   if (command === 'validate') {
     const file = await document(root, opts.file, workflow.config.requestsDirectory);
-    return { schemaVersion: 1, path: file.path, revision: file.revision, workflowRevision: workflow.revision, ...validateFeatureReadiness(file.raw, workflow.ready, 'codex-cli', workflow.template, { configuration: workflow.config, workflowPath: featureWorkflowPath }), policy: workflow.policy };
+    return { schemaVersion: 1, path: file.path, revision: file.revision, workflowRevision: workflow.revision, ...readiness(file.raw, workflow), policy: workflow.policy };
   }
   if (!/^[a-f0-9]{64}$/.test(opts['if-match'] ?? '')) throw Error('Read and validate the draft, then supply its SHA-256 revision using --if-match.');
   return locked(root, async () => {
@@ -92,7 +105,7 @@ export async function runFeatureAuthoring(args: string[], directory = process.cw
     const file = await document(root, opts.file, current.config.requestsDirectory);
     if (file.revision !== opts['if-match']) throw Error('The request changed. Read and validate its current revision before submitting.');
     const parsed = parseFeature(file.raw); draft(parsed);
-    const validation = validateFeatureReadiness(file.raw, current.ready, 'codex-cli', current.template, { configuration: current.config, workflowPath: featureWorkflowPath });
+    const validation = readiness(file.raw, current);
     if (!validation.valid) return { schemaVersion: 1, path: file.path, revision: file.revision, status: 'draft', ...validation, policy: current.policy };
     parsed.document.set('status', 'ready');
     const markdown = render(parsed), target = await authoringPath(root, file.path);

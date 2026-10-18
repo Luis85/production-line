@@ -1,3 +1,4 @@
+import { readyReviewSection, readyReviewProjection } from '../../application/ready-review-notes.js';
 import type { SharedBlob, SharedFeatureRecord } from '../../application/shared-feature-state.js';
 import type { SharedFeatureView } from '../../application/shared-intake-contract.js';
 import { sharedHash } from '../../application/shared-feature-notes.js';
@@ -28,5 +29,6 @@ export function renderSharedSource(record: SharedFeatureRecord) {
   parsed.document.set('werkOwner', record.owner);
   parsed.document.set('werkTask', record.taskNote ? `[[${record.taskNote.replace(/\.md$/, '')}]]` : null);
   parsed.document.set('werkPullRequest', record.reviewNote ? `[[${record.reviewNote.replace(/\.md$/, '')}]]` : null);
-  return renderFeature(parsed, record.id, record.status, { shared: { schemaVersion: 1, owner: record.owner, sourceCommit: record.sourceCommit, sourceHash: record.inputHash, taskId: record.taskId, updatedAt: record.updatedAt, ready: record.ready, done: record.done, featureBranch: record.featureBranch, featureCommit: record.featureCommit ?? null, reviewNote: record.reviewNote, taskNote: record.taskNote ?? null, progress, policyDigest: record.workflow.policyDigest, readyCheck: record.workflow.files.readyCheck, doneCheck: record.workflow.files.doneCheck, error: record.error } }) + sharedProgressSection(progress);
+  if (record.readyReviewState) parsed.body += readyReviewSection(record.readyReviewState);
+  return renderFeature(parsed, record.id, record.status, { shared: { schemaVersion: 1, ...(record.readyReviewState ? { readyReview: readyReviewProjection(record.readyReviewState) } : {}), owner: record.owner, sourceCommit: record.sourceCommit, sourceHash: record.inputHash, taskId: record.taskId, updatedAt: record.updatedAt, ready: record.ready, done: record.done, featureBranch: record.featureBranch, featureCommit: record.featureCommit ?? null, reviewNote: record.reviewNote, taskNote: record.taskNote ?? null, progress, policyDigest: record.workflow.policyDigest, readyCheck: record.workflow.files.readyCheck, doneCheck: record.workflow.files.doneCheck, ...(record.workflow.files.readyPrompt ? { readyPrompt: record.workflow.files.readyPrompt } : {}), ...(record.workflow.files.donePrompt ? { donePrompt: record.workflow.files.donePrompt } : {}), error: record.error } }) + sharedProgressSection(progress);
 }

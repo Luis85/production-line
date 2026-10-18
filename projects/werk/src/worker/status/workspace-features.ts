@@ -90,7 +90,7 @@ export async function continueFeatureInteraction(workspace: WorkspaceContext, se
   if (!workspace.acceptingTasks || workspace.configurationUpdating || workspace.repositoriesUpdating || workspace.executionProfiles?.pending()) throw new DomainError('unavailable', 'Task response is saved. It will resume after the worker is available.');
   if (workspace.settings.value.board.paused) throw new DomainError('unavailable', 'Task response is saved. Resume the worker queue to continue.');
   if (workspace.consumption.status().blocked) throw new DomainError('unavailable', 'Task response is saved. The worker consumption limit currently prevents execution.');
-  if (workspace.sessions.chatActive + workspace.board.active >= workspace.settings.value.board.queueCapacity) throw new DomainError('unavailable', 'Task response is saved. It will resume when queue capacity is available.');
+  if ((workspace.sessions.admissionActive ?? workspace.sessions.chatActive) + workspace.board.active >= workspace.settings.value.board.queueCapacity) throw new DomainError('unavailable', 'Task response is saved. It will resume when queue capacity is available.');
   return interaction(workspace, command, { fromFeatureNote: true });
 }
 
@@ -107,7 +107,7 @@ export async function submitSharedFeature(workspace: WorkspaceContext, record: S
     await admitFeatureRequest(featureAdmissionPorts(workspace), {
       input: record.accepted, taskId: record.taskId!, submissionHash: record.inputHash, repository: assignment.path,
       reference: sharedFeatureRequestReference(record),
-      submission: { policy: record.workflow.policy, criteria: record.accepted.criteria, repositoryId: record.binding.repositoryId, baseCommit: record.sourceCommit },
+      submission: { policy: record.workflow.policy, ...(record.workflow.definitionPrompts ? { definitionPrompts: record.workflow.definitionPrompts } : {}), criteria: record.accepted.criteria, repositoryId: record.binding.repositoryId, baseCommit: record.sourceCommit },
     });
     await workspace.featureTracking.sync();
   });

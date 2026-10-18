@@ -25,7 +25,13 @@ export async function planFeatureAuthoringMove(project, from, to, checkpoint, mo
   const previous = validateFeatureWorkflow(JSON.parse(original));
   if (previous.requestsDirectory !== from) throw inputError('The authoring workflow uses another request folder. Align .werk/feature-workflow.json with the worker folder before moving it.');
   const relocate = path => path === from ? to : path.startsWith(from + '/') ? to + path.slice(from.length) : path;
-  const next = validateFeatureWorkflow({ ...previous, requestsDirectory: to, template: relocate(previous.template), base: relocate(previous.base), readyCheck: relocate(previous.readyCheck), doneCheck: relocate(previous.doneCheck) });
+  const next = validateFeatureWorkflow({
+    ...previous, requestsDirectory: to, template: relocate(previous.template), base: relocate(previous.base),
+    readyCheck: relocate(previous.readyCheck), doneCheck: relocate(previous.doneCheck),
+    ...(previous.readyPrompt === undefined ? {} : { readyPrompt: relocate(previous.readyPrompt) }),
+    ...(previous.donePrompt === undefined ? {} : { donePrompt: relocate(previous.donePrompt) }),
+    ...(previous.readyReviewPrompt === undefined ? {} : { readyReviewPrompt: relocate(previous.readyReviewPrompt) }),
+  });
   const updated = JSON.stringify(next, null, 2) + '\n';
   if (current !== original && !(moved && current === updated)) throw inputError('The authoring workflow changed during the folder move. Restore the inspected workflow before recovering.');
   const generatedBefore = authoringBase(previous), generatedAfter = authoringBase(next);

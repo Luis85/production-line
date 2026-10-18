@@ -117,11 +117,18 @@ Validate the draft:
 node .werk/authoring/feature-request.mjs validate --file features/search.md
 ```
 
-The JSON result includes `valid`, errors, deterministic rule results, and the
-file's `revision`. Invalid requests return exit code 2. Resolve missing sections,
-approved paths, template requirements, and configured rule failures, then validate
-again. Validation reads the current template and both check files; it does not
-contact a worker or change the request.
+The JSON result includes `valid`, errors and the file's `revision`. Invalid
+requests return exit code 2. Without a Ready Check, it also includes deterministic
+rule results: resolve missing sections, approved paths, template requirements
+and configured rule failures, then validate again.
+
+With a [Ready Check](#review-requests-before-implementation) configured, `valid`
+means structurally eligible for model review, not ready for implementation. This
+stage does not evaluate the definition of ready. The returned `policy` describes
+the configured rules; it does not prove they passed. Incomplete input can be
+submitted for clarification while identity, bounded-input and safe-path checks
+remain enforced. Validation reads the current template, check files and configured
+prompts; it does not run the model, contact a worker or change the request.
 
 ## Explicitly queue the request
 
@@ -132,18 +139,22 @@ validation into this command:
 node .werk/authoring/feature-request.mjs ready --file features/search.md --if-match REVISION
 ```
 
-Readiness checks run again against the current file and rules before `draft`
-changes to `ready`. A stale revision requires reading and validating the changed
-file. Commit the ready request and use your normal Git review and push workflow.
+Submission checks run again against the current file and rules before `draft`
+changes to `ready`. A configured Ready Check accepts structurally valid input for
+review; otherwise full readiness is required. A stale revision requires reading
+and validating the changed file. Commit the ready request and use your normal
+Git review and push workflow.
 Creating or validating a draft does not queue it. Neither a local save nor a
 local commit dispatches shared work. A connected worker can claim the ready
 request only after its commit is pushed to the watched remote branch.
 
-Once a worker owns a request, leave its lifecycle metadata and original input
-alone. The authoring script rejects readiness mutations of worker-owned or already
-queued files. Use a successor draft for changed work and retain the original ID
-with its history. Human review is still required before merging implementation
-changes; a worker publication or completion check is not a merge approval.
+Once a worker owns a request, preserve its generated lifecycle metadata. If its
+Ready Check is waiting for the team, follow the [same-note response procedure](#review-requests-before-implementation)
+below. Otherwise leave accepted input unchanged. The authoring script rejects
+readiness mutations of worker-owned or already queued files; edit the generated
+Ready Check response in your editor. Use a successor draft for changed work after
+implementation admission and retain the original ID with its history. Human review
+is still required before merging implementation changes; a worker publication or completion check is not a merge approval.
 
 If you also have a project worker, its CLI exposes the same implementation through
 `feature author create`, `feature author validate`, and `feature author ready`.
@@ -167,8 +178,10 @@ package manifest, so the standalone Node commands remain the portable option.
 ## Follow progress and answer the worker
 
 Pull the shared branch to update the original request's progress and linked notes.
-Keep its accepted body and worker-owned fields unchanged. A linked **Task** with
-`action: answer` or `action: resume` is the supported response channel:
+If it is waiting at the optional [Ready Check](#review-requests-before-implementation),
+respond in that Feature Request. After implementation admission, keep its accepted
+body and worker-owned fields unchanged. A linked **Task** with `action: answer` or
+`action: resume` is the supported response channel:
 
 1. Read the question, choices or failure reason and obtain the actual human
    decision where required.
@@ -291,7 +304,157 @@ fail closed: requiring `tests.passed` does not let a model statement or a checke
 Markdown box stand in for trusted test evidence. The done check is evaluated from
 worker-recorded evidence; the offline authoring script does not claim completion.
 
-A worker freezes the request, template, checks, and workflow configuration from
-the accepted Git revision. Later edits to defaults do not rewrite an in-flight
-request's rules or accepted input. Review the retained evidence for that specific
-request before deciding whether its feature branch should merge.
+A worker freezes the request, template, checks, optional definition prompts and
+workflow configuration from the accepted Git revision. Later edits to defaults do
+not rewrite an in-flight request's rules or accepted input. Review the retained
+evidence for that specific request before deciding whether its feature branch
+should merge.
+
+### Add definition-of-ready and done prompts
+
+Use optional prompt files for the team's qualitative guidance when the worker
+dispatches a Feature Request to its model. Keep machine-evaluated readiness and
+completion requirements in `fr-ready-check.json` and `fr-done-check.json`.
+
+1. Create the two files, for example
+   `docs/worker/definition-of-ready.md` and
+   `docs/worker/definition-of-done.md`.
+2. Merge the following fields into the existing `.werk/feature-workflow.json`,
+   keeping its required fields and your current folder settings:
+
+   ```json
+   {
+     "readyPrompt": "docs/worker/definition-of-ready.md",
+     "donePrompt": "docs/worker/definition-of-done.md"
+   }
+   ```
+
+3. Review, commit and push the workflow and prompt files to the worker's watched
+   branch before handing off ready requests. The shared-workflow view in the
+   webview displays configured paths and digests; changes are made through Git.
+
+Each path is relative to the repository root and must name a distinct ordinary
+`.md` or `.txt` file containing nonempty UTF-8 text, at most 64 KiB. Keep prompt
+files outside the request, review and Task folders. See the
+[prompt contract](../reference/shared-feature-intake.md#optional-definition-prompts)
+for path and validation rules. You may configure only one prompt. To stop adding
+a definition to future requests, remove its field from the workflow and commit
+and push that change; an empty or missing configured file blocks new intake.
+
+A small definition of ready could say:
+
+```markdown
+# Definition of ready
+
+Before implementing, check that the accepted request explains the user problem,
+expected behavior, approved files and observable acceptance criteria.
+If a necessary product decision is missing or contradictory, ask for clarification
+through the worker's supported interaction before making that decision yourself.
+Stay within the accepted request and the worker's granted capabilities.
+```
+
+A definition of done could say:
+
+```markdown
+# Definition of done
+
+Implement the accepted criteria and review the changes for edge cases.
+Use the configured verification checks available through approved tools.
+Summarize changed behavior, observed check results and remaining limitations.
+Identify checks that could not run; never describe them as passing.
+Request clarification when completion depends on a missing team decision.
+Prepare the evidence for human review; completion is not approval to merge.
+```
+
+`feature setup` preserves configured prompt files. When a prompt path is already
+configured but its file does not yet exist, setup can create an editable starter
+there. Setup does not enable definition prompts by default. Review any generated
+text before committing it, and refresh the authoring script after a worker upgrade
+so offline authors can use the new workflow fields.
+
+The worker pins both configured definitions before claiming a request and supplies
+their exact text to the model. The same definitions remain in force when that
+request answers a Task, retries, continues its model session or recovers after a
+restart. Later prompt edits apply to newly accepted requests. This works for
+shared requests authored through Markdown or the webview chat; standalone local
+intake without a shared repository binding does not load the workflow file.
+Prompts guide the model; deterministic gates and recorded verification still
+determine whether the result can advance to review.
+
+### Review requests before implementation
+
+To let the model identify missing decisions before implementation, configure an
+optional **Feature Request Ready Check**. This is separate from the `readyPrompt`
+and `donePrompt` guidance passed to the implementation model.
+
+Create `docs/worker/feature-request-ready-check.md` with a team review prompt, for
+example:
+
+```markdown
+# Feature Request Ready Check
+
+Review the request for a clear user problem, expected behavior, approved scope,
+observable acceptance criteria and a realistic verification plan.
+Identify ambiguous decisions, contradictions and missing information.
+Ask focused questions the team can answer; do not invent product decisions.
+Do not implement changes or claim that tests passed.
+```
+
+Merge this field into your existing `.werk/feature-workflow.json`:
+
+```json
+{
+  "readyReviewPrompt": "docs/worker/feature-request-ready-check.md"
+}
+```
+
+Commit and push both files to the watched branch. The prompt must satisfy the
+[same bounded file rules](../reference/shared-feature-intake.md#optional-feature-request-ready-check)
+as other definition prompts. Setup can create a starter only when the path is
+explicitly configured, and preserves existing content. Omitting the field keeps
+the Ready Check disabled; removing it affects future claims only.
+
+The worker confirms ownership in shared Git, then reviews the Feature Request
+with its selected model and no tools. Review consumes the worker's normal
+allowance and execution capacity. Structurally valid notes can reach this review
+before they satisfy semantic completeness and the JSON definition of ready.
+A passing review is followed by those deterministic checks before implementation.
+The same claimed Feature Request and frozen prompt are used for follow-up rounds;
+there is no separate review queue to maintain.
+
+Keep authored Markdown, including frontmatter, YAML comments and team answers,
+within 32 KiB of UTF-8 text. Generated progress and reviewer output do not count
+toward that authored-input limit when responding. The effective request and
+answers must also fit the 8,000-character input budget below. Prompt files have
+their own 64 KiB limit. If a long review report is shortened to keep the complete
+note publishable, it includes a notice; inspect the full findings in the worker's
+shared-request review details. Your answer area is never shortened.
+
+When the worker needs input, continue in the same note:
+
+1. Pull the watched branch and open the original Feature Request. Read the
+   generated `## Feature Request Ready Check` findings and questions. Its status
+   is `waiting_ready_input` when a team decision is needed.
+2. Write the team's responses in the existing `### Answers` area. Revise original
+   request details where necessary. Before implementation, this can include
+   scope or provider/profile selections, subject to the normal validation rules.
+   Preserve the request ID, template identity, all worker-owned frontmatter and
+   generated findings/questions. Keep answers concise: the request, rendered
+   metadata and answers together must fit the 8,000-character input budget.
+3. Set the note's top-level `status: ready`, commit and push it. A local edit or
+   commit alone does not resume the worker. Use your editor for this response;
+   the authoring `ready` command does not rewrite worker-owned requests.
+4. Pull again to follow `reviewing_ready`. The worker re-reviews substantive
+   request or answer changes and either asks for further clarification or checks
+   the definition of ready before admitting implementation.
+
+Changing only the status, pushing the same answer again or leaving an unchanged
+note in the queue does not start another review. A failed or interrupted review
+holds instead of automatically spending allowance on retries. Read the reported
+blocker, restore the needed worker configuration or access, and add a substantive
+answer or recovery clarification before marking it ready and pushing again.
+
+Once review and deterministic readiness pass, implementation uses frozen input
+and the usual progress, Task-answer and PullRequest handoff flow. The Ready Check
+cannot grant tools, establish verification facts, skip completion checks or
+approve a merge. Human review remains the final decision on the feature branch.

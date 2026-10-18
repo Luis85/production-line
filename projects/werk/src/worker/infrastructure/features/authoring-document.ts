@@ -4,6 +4,7 @@ import type { FeatureWorkflowSnapshot } from '../../application/feature-workflow
 import { providerIds } from '../../application/provider-contract.js';
 import { parseFeature } from './document.js';
 import { validateFeatureReadiness, replaceFeatureSection } from './workflow.js';
+import { validateFeatureReviewEligibility } from './review-eligibility.js';
 
 function invalid(message: string): never { throw new DomainError('invalid_input', message); }
 function parse(markdown: string) {
@@ -50,7 +51,9 @@ export const featureAuthoringDocuments: FeatureAuthoringDocuments = {
     return '---\n' + parsed.document.toString({ lineWidth: 0 }) + '---\n' + parsed.body;
   },
   ready(markdown, snapshot) {
-    const result = validateFeatureReadiness(markdown, snapshot.readyCheck, undefined, snapshot.template, { configuration: snapshot.configuration, workflowPath: snapshot.files.configuration.path });
-    return { valid: result.valid, errors: result.errors };
+    const result = snapshot.configuration.readyReviewPrompt
+      ? validateFeatureReviewEligibility(markdown, snapshot)
+      : validateFeatureReadiness(markdown, snapshot.readyCheck, undefined, snapshot.template, { configuration: snapshot.configuration, workflowPath: snapshot.files.configuration.path });
+    return { valid: result.valid, errors: result.errors, ...(snapshot.configuration.readyReviewPrompt ? { reviewRequired: true } : {}) };
   },
 };

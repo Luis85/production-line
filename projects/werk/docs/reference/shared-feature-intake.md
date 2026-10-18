@@ -66,6 +66,118 @@ limited to 64 KiB. Missing or invalid required files block new intake instead of
 falling back to private worker defaults. Already owned requests retain their valid
 frozen workflow and can finish publication independently of changed defaults.
 
+### Optional definition prompts
+
+The workflow also accepts `readyPrompt` and `donePrompt`. Each names a team-owned
+Markdown (`.md`) or plain-text (`.txt`) file relative to the repository root. Both
+are optional; either can be configured independently. Omitting them preserves the
+existing workflow without additional definition prompts. For example, merge these
+fields into the complete workflow object above:
+
+```json
+{
+  "readyPrompt": "docs/worker/definition-of-ready.md",
+  "donePrompt": "docs/worker/definition-of-done.md"
+}
+```
+
+Each configured file must contain nonempty, valid UTF-8 text within 64 KiB. Safe
+workflow path rules apply; binary files, symlinks, submodules and paths outside the
+repository are refused. Prompt files use distinct paths from each other and other
+workflow files, and cannot be approved implementation-edit paths. Missing or
+invalid configured prompts block new intake before a claim or model dispatch.
+
+The worker reads both prompts from the same immutable source commit as the
+request's workflow. It retains their paths, SHA-256 digests and exact content with
+the accepted request, then supplies that content as model guidance when dispatching
+it. Authorized answers, retries, continuations and restart recovery keep the
+accepted definitions. Editing or deleting a prompt on the shared branch does not
+replace an owned request's definitions; use a successor request for changed
+requirements.
+
+These prompts complement the deterministic `readyCheck` and `doneCheck` files.
+They do not run an additional readiness evaluator, grant tools or edit scope,
+establish verification evidence, or authorize approval and merge. The model must
+still satisfy the existing request gates using the evidence those gates require.
+Both Markdown intake and webview-authored shared requests use this contract.
+Unbound local intake does not load `.werk/feature-workflow.json` or these prompts.
+
+The shared-workflow view discloses configured paths and digests. Edit the files
+and workflow in the project, review them, then commit and push them to the watched
+branch. See [configure team definition prompts](../how-to/team-feature-authoring.md#add-definition-of-ready-and-done-prompts)
+for examples and setup behavior.
+
+### Optional Feature Request Ready Check
+
+Set `readyReviewPrompt` to a separate repository-relative `.md` or `.txt` file to
+ask the model to review a Feature Request before its deterministic readiness
+checks. Omission disables this stage. The file follows the same size, text and
+path rules as the definition prompts, and cannot share their paths. Merge this
+field into the existing workflow object:
+
+```json
+{
+  "readyReviewPrompt": "docs/worker/feature-request-ready-check.md"
+}
+```
+
+| Optional field | Purpose | When the model uses it |
+| --- | --- | --- |
+| `readyReviewPrompt` | Review request clarity and identify missing team decisions | Before deterministic readiness checks and implementation |
+| `readyPrompt` | Team definition of ready as implementation guidance | Implementation dispatch and its continuations |
+| `donePrompt` | Team definition of done as implementation guidance | Implementation dispatch and its continuations |
+
+The Ready Check uses the Feature Request's selected model without tools. It shares
+the worker's execution capacity and consumption allowance. The worker confirms
+its shared Git claim before dispatching the review and freezes the review prompt
+for that owned request. Changing the configured file affects future claims,
+not an existing review or its follow-up rounds.
+
+A configured Ready Check admits structurally valid requests for review before
+semantic completeness and the JSON definition of ready pass. Identity, ownership,
+format, bounded input and approved-scope protections still apply. A model pass
+allows the worker to evaluate the existing deterministic readiness checks; it cannot bypass those checks, completion checks, verified evidence
+requirements or human merge.
+
+Findings and questions are published in the original Feature Request under the
+generated `## Feature Request Ready Check` section. Its `### Answers` area is the
+team's response channel. Public status is `reviewing_ready` during review,
+`waiting_ready_input` when clarification is needed, or `blocked` when review cannot
+proceed. Review does not create a separate Task note or implementation request.
+
+While the Ready Check waits, the team may edit Answers and the original authored
+request details, including approved scope and provider/profile selections. The
+stable request ID, template identity, worker-owned frontmatter and generated
+findings/questions must stay intact. Set the top-level `status: ready`, commit and
+push to request another review. Changed input must still satisfy the structural,
+provider and safe-path checks. Answers are at most 8,000 characters, and the
+combined authored request, rendered metadata and answers must fit the existing
+8,000-character input budget. In addition, the authored Markdown submitted to a
+Ready Check is limited to 32 KiB (32,768 UTF-8 bytes), including frontmatter,
+YAML comments and team answers. On a response, generated progress and reviewer
+output are excluded from this authored-input limit. These limits apply alongside
+the existing 64 KiB complete Feature Request note limit; prompt files retain
+their separate 64 KiB limit. Workflows without a Ready Check keep their existing
+input limits.
+
+The generated review report is bounded to 20 KiB to leave room for the authored
+request and worker metadata. A visible notice identifies a shortened report;
+complete findings remain in the worker's shared-request review details and are
+supplied to the next reviewer. The answer area is never truncated.
+
+Only a substantive request or answer change authorizes a new review generation.
+An unchanged note, a status-only toggle, repeated polling or a lost publication
+response does not repeat model execution. Failed or interrupted reviews hold for
+explicit recovery: resolve the reported blocker, then add a substantive answer or
+recovery clarification, or revise the original request details, and commit and
+push `status: ready`. The worker does not automatically repeat model review.
+
+After a passing review and deterministic readiness checks, the accepted input is
+frozen for implementation. Later questions use the existing Task-note workflow;
+changed implementation requirements need a successor request. See the
+[Ready Check guide](../how-to/team-feature-authoring.md#review-requests-before-implementation)
+for the author journey.
+
 ## Request and template contract
 
 Shared mode accepts approved-file patch requests only. It retains the existing
@@ -74,31 +186,37 @@ Shared mode accepts approved-file patch requests only. It retains the existing
 - `schemaVersion: 1`, a stable lowercase `id`, matching `templateId`, nonempty
   bounded title, explicit `status: ready` and `mode: patch` are required for intake.
   Offline validation also accepts `draft` without submitting it.
-- `paths` supplies 1–32 unique approved relative files. They follow the
-  [approved file path rule](feature-requests.md#approved-file-paths), which is
-  checked before a remote claim. Names may use Unicode letters, such as umlauts,
+- Before implementation, `paths` supplies 1–32 unique approved relative files.
+  A Ready Check may begin with no approved files; any supplied paths must follow
+  the [approved file path rule](feature-requests.md#approved-file-paths), checked
+  before a remote claim. Names may use Unicode letters, such as umlauts,
   and common punctuation. Paths are compared in NFC form. A path is bounded to
   240 characters, and each segment to 255 UTF-8 bytes. Dot-prefixed path
   components, traversal, Windows-reserved characters and device names,
   credential/secret filenames and private key extensions are rejected. New
   ordinary files are allowed, but a new file cannot differ from a tracked file
-  only by letter case or Unicode normalization. Workflow configuration/checks/template/Base files and request/review
-  and Task namespaces cannot be changed by the feature patch.
-- Goal, Context, Acceptance criteria and Verification plan headings are required.
-  Core text must be substantive after HTML comments and fenced examples are
-  excluded. Acceptance criteria contain 1–32 nonempty list items, each at most
-  1,000 characters. Duplicate headings are rejected.
+  only by letter case or Unicode normalization. Workflow configuration, checks,
+  template, Base and prompt files, and request/review and Task namespaces cannot
+  be changed by the feature patch.
+- Before implementation, Goal, Context, Acceptance criteria and Verification
+  plan headings are required, with substantive core text after HTML comments and
+  fenced examples are excluded. Acceptance criteria contain 1–32 nonempty list
+  items, each at most 1,000 characters. Duplicate headings are rejected. With a
+  Ready Check configured, structurally valid input with missing sections or
+  criteria may enter review; implementation still requires the completed content
+  and passing ready rules.
 - Additional headings and frontmatter fields in the configured template become
-  required input. The template itself uses draft patch mode and a stable
-  `templateId`. Setup preserves team changes.
+  required input before implementation. The template itself uses draft patch
+  mode and a stable `templateId`. Setup preserves team changes.
 - Custom request metadata is retained and rendered into an explicit context block
   for the model. Body plus rendered metadata must fit 8,000 characters. Metadata
   cannot grant tools, change execution policy or establish verification evidence.
 - New requests contain no worker-owned `werk` or `source` metadata. After claim,
   `status`, `werk.shared`, `werkOwner`, `werkTask`, `werkPullRequest` and the
   generated progress section are worker-owned lifecycle projections. Original
-  accepted author content is retained; the links identify the current Task and
-  review handoff.
+  author content may be revised through the waiting Ready Check contract above;
+  implementation retains the finally accepted content. The links identify the
+  current Task and review handoff.
 
 Only Markdown files directly inside `requestsDirectory` are scanned;
 underscore-prefixed filenames and nested folders are excluded. Duplicate IDs in
@@ -193,23 +311,27 @@ checks record their own worker verification evidence, including
 the required-check results and retained digests rather than assuming that the
 presence of a patch establishes passing tests.
 
-The worker freezes the normalized policy, template, source commit, accepted input
-and SHA-256 hashes of workflow files before admission. Subsequent defaults do not
-change that generation. Shared requests disable automatic advisory review and
-model rework; changed input or policy needs a successor request.
+The worker freezes the normalized policy, template, optional definition prompts,
+source commit, accepted input and SHA-256 hashes of workflow files before
+admission. Subsequent defaults do not change that generation. The generic
+automatic advisory-review and model-rework loop remains disabled for shared
+requests. The optional Ready Check is a stage of the same Feature Request, with
+the response contract above; it does not create a second intake workflow. Once
+implementation is admitted, changed input or policy needs a successor request.
 
 ## Markdown communication contract
 
 | Note | Location | Human edits |
 | --- | --- | --- |
-| Feature request | `requestsDirectory`, original accepted filename | Author draft/ready input before claim; after claim use a successor for changed requirements |
+| Feature request | `requestsDirectory`, original accepted filename | Author draft/ready input; answer or revise details while the Ready Check waits; use a successor for changed implementation requirements |
 | Actionable `type: Task` | Configured Task directory | Its single `## Answer` section and `status: ready` |
 | Diagnostic `type: Task`, `status: blocked` | Configured Task directory | Informational; follow the stated authorized operator action |
 | `type: PullRequest` | `reviewDirectory`, immutable publication filename | Review evidence; it is not an execution or merge command |
 
-Shared ingestion reads only remote committed objects. Both a ready request and a
-ready Task response must be committed and pushed to the watched branch. Pulling
-updates the author's local Obsidian view; saving locally is not a remote response.
+Shared ingestion reads only remote committed objects. A ready request, Ready
+Check answer or ready Task response must be committed and pushed to the watched
+branch. Pulling updates the author's local Obsidian view; saving locally is not a
+remote response.
 
 Actionable Task frontmatter uses `schemaVersion: 1`, `type: Task`, `title`, `status`
 and the immutable fields `id`, `featureId`, `owner`, `sessionId`, `action`,
@@ -277,7 +399,9 @@ Execution completion, completion-gate acceptance, publication and human merge ar
 separate states. Typical projections are `ready`, `queued`, `running`,
 `waiting_input`, `needs_rework`, `checking`, `publishing` and `ready_for_review`;
 failures can appear as `failed`, `cancelled`, `interrupted` or `blocked`. Read the
-gate findings and `publication` field alongside the status.
+gate findings and `publication` field alongside the status. The optional Ready
+Check adds `reviewing_ready` and `waiting_ready_input` before implementation;
+`status: ready` submits a changed answer for another review.
 Publication is `synced` only when the current lifecycle and its review artifact
 have confirmed publication receipts. Preparing a review note keeps publication
 pending until the shared Git push is confirmed; recovery cannot treat an older
@@ -315,10 +439,10 @@ local token and a JSON request file.
 
 `GET /api/shared-intake` returns the current view without starting synchronization:
 configuration `revision`, `workerId`, `config`, `canEdit`, `blockedReason`, `state`,
-`error`, `lastSyncedAt`, observed `sourceCommit`, workflow paths/check digests and
-`requests`. State is `disabled`, `idle`, `syncing` or `error`. A request includes
-identity, owner, `isLocal`, status, source commit, update time, ready/done findings,
-feature branch, review-note path, Task-note path, local task ID and publication state
+`error`, `lastSyncedAt`, observed `sourceCommit`, workflow paths, check and prompt
+digests, and `requests`. State is `disabled`, `idle`, `syncing` or `error`. A request
+includes identity, owner, `isLocal`, status, source commit, update time, ready/done
+findings, feature branch, review-note path, Task-note path, local task ID and publication state
 (`pending`, `synced` or `error`). Read timestamps because observations may be stale.
 
 `POST /api/shared-intake` accepts one of these bodies:

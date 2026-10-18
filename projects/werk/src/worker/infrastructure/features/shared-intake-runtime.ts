@@ -1,3 +1,6 @@
+import { validateFeatureReviewEligibility } from './review-eligibility.js';
+import { readReadyReviewResponse } from './ready-review-document.js';
+import type { ReadyReviewPort } from '../../application/ready-review-contracts.js';
 import { join } from 'node:path';
 import { SharedFeatureAuthoring } from '../../application/feature-authoring.js';
 import type { FeatureAuthoringBinding } from '../../application/feature-authoring-contracts.js';
@@ -23,13 +26,14 @@ export class SharedIntakeRuntime {
   private stateDirectory: string;
   private resolve: (id: string) => { path: string };
   private allowed: (path: string) => Promise<void>;
-  constructor(options: { stateDirectory: string; resolve: (id: string) => { path: string }; allowed: (path: string) => Promise<void>; submit: SharedIntakePorts['submit']; inspect: SharedIntakePorts['inspect']; canAdmit: SharedIntakePorts['canAdmit']; admissionHold?: SharedIntakePorts['admissionHold']; admissionIssue?: SharedIntakePorts['admissionIssue']; continue?: SharedIntakePorts['continue'] }) {
+  constructor(options: { stateDirectory: string; resolve: (id: string) => { path: string }; allowed: (path: string) => Promise<void>; submit: SharedIntakePorts['submit']; inspect: SharedIntakePorts['inspect']; canAdmit: SharedIntakePorts['canAdmit']; admissionHold?: SharedIntakePorts['admissionHold']; admissionIssue?: SharedIntakePorts['admissionIssue']; continue?: SharedIntakePorts['continue']; readyReview?: ReadyReviewPort }) {
     this.stateDirectory = options.stateDirectory; this.resolve = options.resolve; this.allowed = options.allowed;
     const journal = new SharedFeatureJournal(options.stateDirectory);
     this.intake = new SharedFeatureIntake({
       load: () => journal.load(), save: state => journal.save(state), repository: (binding, workflow) => this.repository(binding, workflow),
       loadWorkflow: (repository, commit, configPath, signal) => loadFeatureWorkflowSnapshot({ commit, configPath, readBlob: (sha, path) => repository.readBlob(sha, path, signal) }),
       ready: (markdown, snapshot) => validateFeatureReadiness(markdown, snapshot.readyCheck, undefined, snapshot.template, { configuration: snapshot.configuration, workflowPath: snapshot.files.configuration.path }),
+      readyReview: options.readyReview, readyReviewEligible: validateFeatureReviewEligibility, readyReviewResponse: readReadyReviewResponse,
       source: sharedSource, renderSource: renderSharedSource, submit: options.submit, inspect: options.inspect, canAdmit: options.canAdmit, admissionHold: options.admissionHold, admissionIssue: options.admissionIssue, continue: options.continue,
     });
     this.authoring = new SharedFeatureAuthoring({
