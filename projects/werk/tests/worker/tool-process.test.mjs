@@ -33,7 +33,7 @@ test('approved tool processes retain the shared launcher failure type and result
 test('approved tool processes receive the worker PATHEXT and ComSpec but no other host variables', { timeout: 60000 }, async t => {
   const saved = { PATHEXT: process.env.PATHEXT, ComSpec: process.env.ComSpec };
   t.after(() => { for (const [key, value] of Object.entries(saved)) if (value === undefined) delete process.env[key]; else process.env[key] = value; });
-  process.env.PATHEXT = '.EXE;.CMD'; process.env.ComSpec = process.platform === 'win32' ? saved.ComSpec ?? 'C:\Windows\System32\cmd.exe' : '/bin/sh';
+  process.env.PATHEXT = '.EXE;.CMD'; process.env.ComSpec = process.platform === 'win32' ? saved.ComSpec ?? 'C:\\Windows\\System32\\cmd.exe' : '/bin/sh';
   const script = 'process.stdout.write(JSON.stringify(Object.fromEntries(Object.entries(process.env).filter(([k])=>/^(pathext|comspec)$/i.test(k)).map(([k,v])=>[k.toLowerCase(),v]))))';
   const result = await runApprovedToolProcess(process.execPath, ['-e', script], { cwd: process.cwd(), signal: new AbortController().signal, timeoutMs: 30000, maxOutputBytes: 4096 });
   assert.deepEqual(JSON.parse(result.stdout.toString('utf8')), { pathext: '.EXE;.CMD', comspec: process.env.ComSpec });

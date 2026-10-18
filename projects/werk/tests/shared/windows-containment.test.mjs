@@ -12,11 +12,11 @@ const printPathext = `process.stdout.write(JSON.stringify(Object.entries(process
 
 function restoreList(env) {
   const previous = process.env.SystemRoot;
-  if (!windows) process.env.SystemRoot = 'C:\Windows';
+  process.env.SystemRoot = 'C:\\Windows'; // the plan only needs an absolute win32 path, never the host's real one
   try {
-    const plan = windowsContainment('C:\tool.exe', [], env);
+    const plan = windowsContainment('C:\\tool.exe', [], env);
     return JSON.parse(Buffer.from(plan.env.WERK_PROVIDER_LAUNCH, 'base64').toString('utf8')).restoreEnvironment;
-  } finally { if (!windows) { if (previous === undefined) delete process.env.SystemRoot; else process.env.SystemRoot = previous; } }
+  } finally { if (previous === undefined) delete process.env.SystemRoot; else process.env.SystemRoot = previous; }
 }
 
 test('windowsContainment records the caller PATHEXT, case-insensitively, or null when absent', () => {
