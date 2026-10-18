@@ -26,6 +26,8 @@ export interface ToolBudgetEvidence { reason: 'calls' | 'window'; maxCalls: numb
 export interface ToolBudget { maxCalls: number; windowMs: number; callsUsed: number; refusedCalls: number; exhausted: ToolBudgetEvidence | null; }
 export interface ToolRuntime {
   readonly manifest: ToolManifest;
+  /** Private, revalidated implementation workspace for an explicitly selected native provider. */
+  nativeWorkspace?(signal: AbortSignal): Promise<string>;
   /** Invocation-frozen execution ceilings; omitted by legacy adapter fixtures. */
   readonly limits?: Readonly<{ maxCalls: number; maxRuntimeMs: number; commandTimeoutMs: number }>;
   call(name: string, args: unknown, signal: AbortSignal): Promise<ToolResult>;

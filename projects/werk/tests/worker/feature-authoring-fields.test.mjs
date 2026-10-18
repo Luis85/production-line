@@ -31,7 +31,7 @@ Run the export tests.
 Keep the finance review requirement.
 `;
 test('plain request details read the configured Markdown without exposing metadata as form content', () => {
-  assert.deepEqual(readFeatureDetails(markdown), { fields: { goal: 'Export orders.', context: 'Existing order management.', 'acceptance criteria': 'A CSV download is available.', 'verification plan': 'Run the export tests.' }, title: 'Export orders', paths: 'src/export.ts' });
+  assert.deepEqual(readFeatureDetails(markdown), { selection: { provider: undefined, model: '', effort: '' }, fields: { goal: 'Export orders.', context: 'Existing order management.', 'acceptance criteria': 'A CSV download is available.', 'verification plan': 'Run the export tests.' }, title: 'Export orders', paths: 'src/export.ts' });
 });
 test('editing a standard field preserves canonical identity, custom fields and unrelated template sections', () => {
   const changed = writeFeatureDetail(markdown, 'context', 'Finance needs a monthly export.');
@@ -60,4 +60,28 @@ test('template guidance comments stay in Markdown and do not appear in ordinary 
   assert.equal(details.fields.context, ''); assert.equal(details.fields['acceptance criteria'], '');
   const changed = writeFeatureDetail(guided, 'goal', 'Export approved orders.');
   assert.match(changed, /<!-- Add relevant context. -->/); assert.match(changed, /<!-- List observable outcomes. -->/);
+});
+
+
+test('request model fields round-trip in Markdown and blank overrides restore inheritance', () => {
+  let changed = writeFeatureDetail(markdown, 'provider', 'codex-cli');
+  changed = writeFeatureDetail(changed, 'model', 'chosen-model'); changed = writeFeatureDetail(changed, 'effort', 'high');
+  assert.deepEqual(readFeatureDetails(changed).selection, { provider: 'codex-cli', model: 'chosen-model', effort: 'high' });
+  assert.match(changed, /risk: reviewed/); assert.match(changed, /id: stable-fr/);
+  changed = writeFeatureDetail(changed, 'model', ''); changed = writeFeatureDetail(changed, 'effort', '');
+  assert.deepEqual(readFeatureDetails(changed).selection, { provider: 'codex-cli', model: '', effort: '' });
+  assert.doesNotMatch(changed, /^model:|^effort:/m);
+});
+test('an unsupported effort remains a visible Markdown recovery error instead of silently changing its meaning', () => {
+  const cursor = writeFeatureDetail(writeFeatureDetail(markdown, 'provider', 'cursor-cli'), 'effort', 'high');
+  assert.throws(() => readFeatureDetails(cursor), /Correct the provider or effort/);
+});
+
+
+test('a request inheriting its provider retains a valid explicit effort in structured editing', () => {
+  const inherited = writeFeatureDetail(markdown, 'effort', 'high');
+  assert.deepEqual(readFeatureDetails(inherited).selection, { provider: undefined, model: '', effort: 'high' });
+  const edited = writeFeatureDetail(inherited, 'goal', 'Export approved orders.');
+  assert.equal(readFeatureDetails(edited).fields.goal, 'Export approved orders.'); assert.doesNotMatch(edited, /^provider:/m);
+  assert.throws(() => readFeatureDetails(writeFeatureDetail(markdown, 'effort', 'invented')), /Correct the provider or effort/);
 });

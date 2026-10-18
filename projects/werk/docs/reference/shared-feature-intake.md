@@ -127,8 +127,11 @@ field into the existing workflow object:
 | `readyPrompt` | Team definition of ready as implementation guidance | Implementation dispatch and its continuations |
 | `donePrompt` | Team definition of done as implementation guidance | Implementation dispatch and its continuations |
 
-The Ready Check uses the Feature Request's selected model without tools. It shares
-the worker's execution capacity and consumption allowance. The worker confirms
+The Ready Check uses the Feature Request's selected model and shares the worker's
+execution capacity and consumption allowance. Codex, Claude and API reviewers
+have no tools; Cursor uses native read-only ask mode under the operator's Cursor
+permissions and hooks, without Werk's no-tools isolation guarantee. See the
+[Cursor boundary](model-interaction.md#cursor-native-execution). The worker confirms
 its shared Git claim before dispatching the review and freezes the review prompt
 for that owned request. Changing the configured file affects future claims,
 not an existing review or its follow-up rounds.
@@ -146,8 +149,13 @@ team's response channel. Public status is `reviewing_ready` during review,
 proceed. Review does not create a separate Task note or implementation request.
 
 While the Ready Check waits, the team may edit Answers and the original authored
-request details, including approved scope and provider/profile selections. The
-stable request ID, template identity, worker-owned frontmatter and generated
+request details, approved scope and compatible instruction-profile fields.
+The accepted provider, model and effort stay fixed. Changing the provider value
+or adding, removing or changing a model/effort override requires a successor
+request. Adding or removing the provider field is allowed only when it still
+resolves to the accepted provider. A changed profile's model default cannot
+replace that frozen selection. The stable request ID, template
+identity, worker-owned frontmatter and generated
 findings/questions must stay intact. Set the top-level `status: ready`, commit and
 push to request another review. Changed input must still satisfy the structural,
 provider and safe-path checks. Answers are at most 8,000 characters, and the
@@ -224,11 +232,17 @@ a scanned queue are reported. Accepted identity is scoped to the repository
 binding and retained privately; renaming or editing a claimed source is not a new
 execution request. Use a new ID for successor work.
 
-An omitted provider selects `codex-cli` for backward compatibility. Newly generated
-templates explicitly record the initialization provider; setup preserves existing
-templates. Requests can select
-`codex-cli`, `claude-cli`, `openai-api` or `anthropic-api`. Credentials, model
-configuration and supported instruction profiles come from the local worker.
+An omitted provider uses the worker's saved `defaultProvider`; an unconfigured
+legacy worker starts with Codex CLI unless its startup feature-provider seed says
+otherwise. Newly generated templates explicitly record the initialization provider;
+setup preserves existing templates. Requests can select `codex-cli`, `claude-cli`,
+`openai-api`, `anthropic-api` or `cursor-cli`, plus optional `model` and `effort`.
+An explicit request model takes precedence over a compatible instruction-profile
+model and then the provider's default. Omitted effort inherits that provider's
+worker default; explicit `default` uses provider behavior. The accepted selection
+is frozen at claim, including through Ready Check clarifications and restarts.
+See [selection rules](model-interaction.md#provider-model-and-effort-selection).
+Credentials and supported instruction profiles come from the local worker.
 Select a profile in committed requests and templates with `definitionRef`, a
 stable name the worker operator assigns to an imported definition, rather than a
 worker-generated `definitionId`. The claiming worker resolves the reference when
@@ -238,9 +252,9 @@ an unknown agent, or a profile that needs `useInstructionsOnly: true`) does not
 claim the request. It stays ready and unclaimed, with the reason in the request
 view, until that worker can run it or another worker claims it. See
 [agent definitions](agent-definitions.md#stable-references-for-committed-requests).
-Accepted execution preserves its provider configuration. Locally granted model
-tools remain subject to current worker policy and per-call revocation checks;
-repository rules never grant permissions.
+Accepted execution preserves its provider configuration. Werk-granted model tools remain subject to current worker policy and per-call
+revocation checks; repository rules never grant Werk permissions. Cursor's native
+tools and hooks follow the separate operator-managed Cursor policy.
 
 ## Ready and done JSON
 

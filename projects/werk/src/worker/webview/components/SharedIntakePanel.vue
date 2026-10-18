@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AcceptedModelSelection from './AcceptedModelSelection.vue';
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue';
 import UButton from '@nuxt/ui/components/Button.vue';
 import UInput from '@nuxt/ui/components/Input.vue';
@@ -106,6 +107,7 @@ watch(() => selected.value?.reviewNote, (next, previous) => { if (next !== previ
             <p class="page-note break-anywhere">Review {{ selected.readyReview.attempt }} · Prompt <code>{{ selected.readyReview.promptPath }}</code></p>
           </section>
           <div class="shared-gate-results"><section v-for="stage in ['ready', 'done'] as const" :key="stage"><h4>{{ stage === 'ready' ? 'Ready checks' : 'Done checks' }} · {{ gate(selected[stage]) }}</h4><ul v-if="selected[stage]?.issues.length"><li v-for="(issue, index) in selected[stage]!.issues" :key="index">{{ issue }}</li></ul><p v-else class="page-note">{{ selected[stage] === null ? 'No check result has been published.' : selected[stage]?.passed ? 'The recorded checks passed.' : 'Inspect the review note for the recorded findings.' }}</p></section></div>
+          <AcceptedModelSelection v-if="selected.owner" :selection="selected.selection" />
           <dl class="shared-request-facts"><div><dt>Request</dt><dd>{{ selected.id }}</dd></div><div><dt>Source commit</dt><dd>{{ selected.sourceCommit }}</dd></div><div v-if="selected.featureBranch"><dt>Feature branch</dt><dd>{{ selected.featureBranch }}</dd></div><div v-if="selected.reviewNote"><dt>Review note</dt><dd>{{ selected.reviewNote }}</dd></div><div v-if="selected.taskId"><dt>Local task</dt><dd>{{ selected.taskId }}</dd></div></dl>
           <div class="actions"><UButton v-if="selected.isLocal && selected.taskId" to="/taskboard" color="neutral" variant="outline">Open taskboard</UButton><UButton v-if="selected.reviewNote" color="neutral" variant="outline" :loading="draft.noteLoading" @click="editor.openNote(selected.id)">Read review note</UButton></div>
           <p class="page-note">Execution completion, passing checks and Git publication are separate from human review and merge.</p>

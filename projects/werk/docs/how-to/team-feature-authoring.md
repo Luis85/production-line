@@ -201,6 +201,39 @@ is a review handoff, not an automatically created hosting-service pull request o
 merge approval. See [shared intake](shared-feature-intake.md) for setup, recovery
 and the distinction between execution, publication and human merge.
 
+## Select a provider, model and effort
+
+Set these optional fields in the template or an unclaimed draft when the team
+needs a particular execution selection:
+
+```yaml
+provider: codex-cli
+model: YOUR_MODEL_ID
+effort: high
+```
+
+The offline authoring command also accepts `--provider ID`, `--model NAME` and
+`--effort LEVEL` when creating a request. Omitted flags preserve template values.
+An offline author cannot inspect the worker's defaults, so provider-specific effort
+validation waits until intake when no provider is specified.
+
+Replace `YOUR_MODEL_ID` with a model available to the selected connection. Omit
+`model` to inherit a compatible instruction-profile model, otherwise the
+provider's worker default. Omit `effort` to inherit the worker's default effort;
+set `effort: default` for the provider's own behavior. Supported effort values
+vary by provider and model; Cursor CLI accepts only `default`.
+
+For Cursor, select `provider: cursor-cli` after the operator configures its native
+CLI connection. For portable team defaults, the operator can edit **Settings →
+Providers & accounts**; an omitted provider uses that worker's default. Explicit
+provider values already in committed templates remain explicit.
+
+Once claimed, provider, model and effort remain fixed through Ready Check answers,
+implementation and restart recovery. Update an unclaimed draft or create a new
+Feature Request to change them. See the
+[selection contract](../reference/model-interaction.md#provider-model-and-effort-selection)
+and [provider setup](use-worker-webview.md#connect-claude-codex-or-cursor).
+
 ## Select an instruction profile for the team
 
 To run team requests with a [Docker Agent instruction profile](../reference/agent-definitions.md),
@@ -415,7 +448,8 @@ explicitly configured, and preserves existing content. Omitting the field keeps
 the Ready Check disabled; removing it affects future claims only.
 
 The worker confirms ownership in shared Git, then reviews the Feature Request
-with its selected model and no tools. Review consumes the worker's normal
+with its selected model. Codex, Claude and API reviews have no tools; Cursor uses
+its native read-only ask mode and operator-managed permissions/hooks. Review consumes the worker's normal
 allowance and execution capacity. Structurally valid notes can reach this review
 before they satisfy semantic completeness and the JSON definition of ready.
 A passing review is followed by those deterministic checks before implementation.
@@ -436,9 +470,11 @@ When the worker needs input, continue in the same note:
    generated `## Feature Request Ready Check` findings and questions. Its status
    is `waiting_ready_input` when a team decision is needed.
 2. Write the team's responses in the existing `### Answers` area. Revise original
-   request details where necessary. Before implementation, this can include
-   scope or provider/profile selections, subject to the normal validation rules.
-   Preserve the request ID, template identity, all worker-owned frontmatter and
+   request details, approved scope or compatible instruction-profile fields where
+   necessary, subject to normal validation. Keep the accepted provider, model and
+   effort. A different provider or a changed, added or removed model/effort
+   override needs a successor request. Adding or removing the provider field is
+   allowed only when it still resolves to the accepted provider. Preserve the request ID, template identity, all worker-owned frontmatter and
    generated findings/questions. Keep answers concise: the request, rendered
    metadata and answers together must fit the 8,000-character input budget.
 3. Set the note's top-level `status: ready`, commit and push it. A local edit or

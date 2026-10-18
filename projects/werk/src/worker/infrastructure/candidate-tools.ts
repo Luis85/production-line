@@ -175,6 +175,11 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
   }
   return {
     evidence: () => structuredClone(state),
+    prepareNative: signal => serial(async () => {
+      const candidate = await inspect(signal);
+      await checkpoint(updated(candidate, []));
+      await guard(signal);
+    }),
     capture: signal => serial(() => capture(signal)),
     apply: (input, signal) => serial(async () => {
       await guard(signal);

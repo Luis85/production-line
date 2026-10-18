@@ -28,7 +28,7 @@ onBeforeUnmount(account.dispose);
       <p class="page-note">{{ observation.value.message }}</p>
       <p v-if="observation.value.signedIn === true && !observation.value.subscription" class="page-note">Subscription details are unavailable from this CLI.</p>
     </template>
-    <p class="page-note">Uses the worker process owner’s saved login. This read-only check sends no model task and does not sign in, sign out or change accounts.</p>
+    <p class="page-note">{{ providerId === 'cursor-cli' ? 'Uses the configured Cursor key or the worker process owner’s saved login.' : 'Uses the worker process owner’s saved login.' }} This read-only check sends no model task and does not sign in, sign out or change accounts.</p>
   </section>
 </template>
 <style scoped>

@@ -3,7 +3,7 @@ import { userEvent, within } from 'storybook/test';
 import { h, nextTick } from 'vue';
 import TaskIntake from '../src/worker/webview/components/TaskIntake.vue';
 import { state } from '../src/worker/webview/store';
-import { readFeatureDetails } from '../src/worker/webview/feature-authoring-fields';
+import { readFeatureDetails, writeFeatureDetail } from '../src/worker/webview/feature-authoring-fields';
 import type { FeatureAuthoringCommand, FeatureAuthoringResult } from '../src/worker/application/feature-authoring-contracts';
 import { installWorkerFixture } from './worker-fixtures';
 
@@ -22,7 +22,8 @@ function installAuthoringFixture(reviewRequired = false) {
     if (path !== '/api/features' || init?.method !== 'POST') return base.fetchFixture(input, init);
     const command: FeatureAuthoringCommand = JSON.parse(String(init.body));
     if (command.action !== 'prepare') throw Error('This example only prepares a draft.');
-    const markdown = command.markdown ?? initialMarkdown;
+    let markdown = command.markdown ?? initialMarkdown;
+    if (command.seed) for (const field of ['provider', 'model', 'effort'] as const) if (command.seed[field]) markdown = writeFeatureDetail(markdown, field, command.seed[field]!);
     const details = readFeatureDetails(markdown);
     const valid = reviewRequired || Object.values(details.fields).every(value => value.trim()) && !!details.paths.trim();
     const result: FeatureAuthoringResult = { featureId: 'fr-csv-export', name: 'fr-csv-export.md', path: 'features/fr-csv-export.md', markdown, revision: null, status: 'draft', readiness: { ...(reviewRequired ? { reviewRequired: true } : {}), valid, errors: valid ? [] : [{ code: 'missing_details', message: 'Complete context, acceptance criteria, verification plan and approved paths.' }] }, workflowDigest: 'illustrative-workflow', binding };
@@ -88,6 +89,52 @@ export const SubmitForReadyCheck: Story = {
     if (query.queryByRole('heading', { name: 'Ready checks passed' })) throw Error('Review eligibility must not claim DoR passed.');
     if ((query.getByRole('button', { name: 'Mark ready and publish' }) as HTMLButtonElement).disabled) throw Error('An eligible review request should offer explicit publication.');
     if (!canvasElement.textContent?.includes('Implementation waits for that review and the Definition of Ready checks.')) throw Error('The review boundary must be clear.');
+    await ready(canvasElement);
+  },
+};
+
+
+export const SelectRequestModel: Story = {
+  name: 'Choose a model and keep its selection in the shared draft',
+  parameters: { storymap: { ...storymap('Provider and model overrides are stored on the same Markdown Feature Request and remain editable before publication.', true), covers: [...storymap('', true).covers, 'src/worker/webview/components/ModelSelectionFields.vue'] } },
+  render,
+  play: async ({ canvasElement }) => {
+    const query = within(canvasElement);
+    await userEvent.type(query.getByLabelText('Request instructions', { exact: true }), 'Add CSV export to orders.');
+    await userEvent.click(query.getByText('Request options', { exact: true }));
+    await userEvent.type(query.getByLabelText('Model · optional', { exact: true }), 'team-selected-model');
+    await userEvent.click(query.getByRole('button', { name: 'Prepare request' }));
+    await query.findByLabelText('Context', { exact: true });
+    await userEvent.click(query.getByText('Provider, model & effort', { exact: true }));
+    const model = query.getByLabelText('Model · optional', { exact: true }) as HTMLInputElement;
+    if (model.value !== 'team-selected-model') throw Error('Prepared Markdown lost its explicit model selection.');
+    await userEvent.clear(model); await userEvent.type(model, 'reviewed-model');
+    if (!canvasElement.textContent?.includes('Details changed · check again')) throw Error('Model edits must require readiness validation again.');
+    await ready(canvasElement);
+  },
+};
+
+
+export const NewRequestUsesUpdatedDefaults: Story = {
+  name: 'A new shared request uses current worker defaults',
+  parameters: { storymap: storymap('Current defaults apply to a fresh request while an active draft keeps its selected model and provider.', true) },
+  render,
+  play: async ({ canvasElement }) => {
+    const query = within(canvasElement);
+    await userEvent.click(query.getByText('Request options', { exact: true }));
+    state.settings!.defaultProvider = 'claude-cli'; await nextTick();
+    if (!query.getByLabelText('Provider', { exact: true }).textContent?.includes('Claude')) throw Error('Untouched draft did not adopt current default.');
+    await userEvent.type(query.getByLabelText('Request instructions', { exact: true }), 'Add CSV export.');
+    await userEvent.type(query.getByLabelText('Model · optional', { exact: true }), 'draft-model');
+    state.settings!.defaultProvider = 'codex-cli'; await nextTick();
+    if (!query.getByLabelText('Provider', { exact: true }).textContent?.includes('Claude')) throw Error('Refresh changed an active draft.');
+    await userEvent.click(query.getByRole('button', { name: 'Prepare request' }));
+    await query.findByLabelText('Context', { exact: true });
+    await userEvent.click(query.getByRole('button', { name: 'Discard unpublished edits' }));
+    await userEvent.click(query.getByText('Request options', { exact: true }));
+    if (!query.getByLabelText('Provider', { exact: true }).textContent?.includes('Codex')) throw Error('New request retained the previous provider.');
+    if ((query.getByLabelText('Model · optional', { exact: true }) as HTMLInputElement).value) throw Error('New request retained a previous model override.');
+    if (!query.getByLabelText('Effort', { exact: true }).textContent?.includes('Inherit')) throw Error('New request retained a previous effort.');
     await ready(canvasElement);
   },
 };

@@ -3,10 +3,10 @@ import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { summarizeReport, formatSummary, annotationText } from '../../scripts/mutation/summary.mjs';
 const source = 'export const boundary = true;', sourceDigest = createHash('sha256').update(source).digest('hex');
-const metadata = { scope: { id: 'example', targets: ['source.ts'] }, sources: { files: { 'source.ts': sourceDigest } }, commit: '123', nodeVersion: 'v24', strykerVersion: '10.0.0' };
+const metadata = { scope: { id: 'example', targets: ['source.ts'] }, sources: { files: { 'source.ts': sourceDigest } }, commit: '123', nodeVersion: 'v24', strykerVersion: '10.0.0', configuration: { digest: 'a'.repeat(64) } };
 const execution = { exitCode: 0, timedOut: false };
 const report = (...statuses) => ({ files: { 'source.ts': { source, mutants: statuses.map((status, index) => ({ id: String(index), status, mutatorName: 'ConditionalExpression', location: { start: { line: index + 1 } }, replacement: 'false' })) } } });
-const baseline = { scope: metadata.scope, strykerVersion: metadata.strykerVersion, score: 80 };
+const baseline = { status: 'completed', scope: metadata.scope, strykerVersion: metadata.strykerVersion, configuration: metadata.configuration, score: 80 };
 
 test('mutation summaries use the Stryker denominator and disclose findings and exclusions', () => {
   const summary = summarizeReport(report('Killed', 'Timeout', 'Survived', 'NoCoverage', 'CompileError', 'Ignored'), metadata, baseline, execution);
@@ -26,10 +26,12 @@ test('partial, invalid, crashed and timed-out experiments never report a success
 test('baseline comparisons require the same explicit scope and never manufacture a baseline', () => {
   const good = summarizeReport(report('Killed'), metadata, { ...baseline, score: 100 }, execution);
   assert.equal(good.score, 100); assert.equal(good.baselineDelta, 0); assert.deepEqual(good.warnings, []);
-  for (const value of [null, {}, { scope: { ...metadata.scope, targets: ['other.ts'] }, score: 100 }]) {
+  for (const value of [null, {}, { ...baseline, scope: { ...metadata.scope, targets: ['other.ts'] }, score: 100 }]) {
     const summary = summarizeReport(report('Killed'), metadata, value, execution);
     assert.equal(summary.status, 'completed'); assert.equal(summary.baselineDelta, null); assert.equal(summary.warnings.length, 1);
   }
+  const differentScope = summarizeReport(report('Killed'), metadata, { ...baseline, scope: { ...metadata.scope, targets: ['other.ts'] } }, execution);
+  assert.ok(differentScope.warnings.some(value => /Baseline scope differs/.test(value)));
   const outside = report('Killed'); outside.files['unknown.ts'] = { mutants: [] };
   assert.equal(summarizeReport(outside, metadata, baseline, execution).status, 'incomplete');
 });
@@ -38,7 +40,7 @@ test('annotation output escapes workflow control characters', () => {
 });
 
 test('tool and configuration changes are disclosed instead of treated as score regressions', () => {
-  for (const value of [{ ...baseline, strykerVersion: '9.0.0' }, { ...baseline, configuration: { digest: 'different' } }]) {
+  for (const value of [{ ...baseline, strykerVersion: '9.0.0' }, { ...baseline, configuration: { digest: 'b'.repeat(64) } }]) {
     const summary = summarizeReport(report('Survived'), metadata, value, execution);
     assert.equal(summary.status, 'completed'); assert.equal(summary.baselineDelta, null);
     assert.ok(summary.warnings.some(value => /comparability/.test(value)));
@@ -50,4 +52,34 @@ test('reported source must match the recorded immutable provenance', () => {
   const summary = summarizeReport(changed, metadata, baseline, execution);
   assert.equal(summary.status, 'incomplete'); assert.equal(summary.score, null);
   assert.ok(summary.warnings.some(value => /provenance/.test(value)));
+});
+
+test('duplicate or missing mutant identities cannot inflate completed evidence', () => {
+  for (const id of ['0', '']) {
+    const changed = report('Killed', 'Killed'); changed.files['source.ts'].mutants[1].id = id;
+    const summary = summarizeReport(changed, metadata, baseline, execution);
+    assert.equal(summary.status, 'incomplete'); assert.equal(summary.score, null);
+    assert.equal(summary.baselineDelta, null);
+    assert.ok(summary.warnings.some(value => /mutant identity/.test(value)));
+  }
+});
+
+test('incomplete or out-of-range baselines cannot create a misleading score delta', () => {
+  for (const value of [{ ...baseline, status: 'incomplete' }, ...[-1, 101, Infinity, NaN].map(score => ({ ...baseline, score }))]) {
+    const summary = summarizeReport(report('Killed'), metadata, value, execution);
+    assert.equal(summary.status, 'completed'); assert.equal(summary.score, 100);
+    assert.equal(summary.baselineDelta, null);
+    assert.ok(summary.warnings.some(value => /baseline is incomplete or has an invalid score/.test(value)));
+  }
+  const zero = summarizeReport(report('Killed'), metadata, { ...baseline, score: 0 }, execution);
+  assert.equal(zero.baselineDelta, 100);
+});
+
+test('matching absent or malformed configuration provenance is not a comparable baseline', () => {
+  for (const configuration of [undefined, { digest: '' }, { digest: 'unknown' }]) {
+    const summary = summarizeReport(report('Killed'), { ...metadata, configuration }, { ...baseline, configuration }, execution);
+    assert.equal(summary.status, 'completed'); assert.equal(summary.score, 100);
+    assert.equal(summary.baselineDelta, null);
+    assert.ok(summary.warnings.some(value => /lacks provenance/.test(value)));
+  }
 });

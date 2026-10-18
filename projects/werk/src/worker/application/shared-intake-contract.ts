@@ -1,3 +1,4 @@
+import type { ModelSelection } from './model-selection.js';
 import type { FeatureRequestReference } from './feature-request-reference.js';
 /** Public worker UI contract. Git credentials and private runtime state are never returned. */
 export interface SharedIntakeConfig {
@@ -19,6 +20,7 @@ export interface SharedFeatureReadyReviewView {
   findings: { kind: 'question' | 'issue' | 'gap'; message: string; blocking: boolean }[];
 }
 export interface SharedFeatureView {
+  selection?: ModelSelection;
   readyReview?: SharedFeatureReadyReviewView;
   feature?: FeatureRequestReference;
   id: string;

@@ -1,3 +1,4 @@
+import { validateModelSelection } from '../../application/model-selection.js';
 import { validateFeatureRequestReference } from '../../application/feature-request-reference.js';
 import { MarkdownFeatureTaskNotes } from './task-documents.js';
 import { validateFeatureTaskProjection } from '../../application/feature-task-notes.js';
@@ -29,8 +30,9 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
   readonly documents: FeatureDocuments;
   readonly taskNotes: MarkdownFeatureTaskNotes;
   private state: string; private lock?: Awaited<ReturnType<typeof open>>;
-  private defaultProvider: string;
-  constructor(directory: string, state: string, defaultProvider: string, project: string) {
+  private defaultProvider: string | (() => string);
+  private acceptedProviders = new Map<string, string>();
+  constructor(directory: string, state: string, defaultProvider: string | (() => string), project: string) {
     this.defaultProvider = defaultProvider;
     this.directory = resolve(directory); this.state = resolve(state);
     this.taskNotes = new MarkdownFeatureTaskNotes(this.directory, path => realDirectory(path, true));
@@ -44,11 +46,17 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
       for (const record of index.records) if (!record || !featureId.test(record.id) || !requestName(record.name) || !['folder', 'orchestrator'].includes(record.source) || typeof record.submitted !== 'boolean' || typeof record.inputHash !== 'string' || typeof record.taskId !== 'string' || typeof record.sessionId !== 'string' || !record.submitted && !record.input) throw Error('Invalid feature index record.');
       for (const record of index.records) {
         if (record.feature) { const reference = validateFeatureRequestReference(record.feature); if (record.source === 'folder' && (reference.source !== 'folder' || reference.id !== record.id)) throw Error('Invalid feature parent identity.'); }
+        if (record.selection !== undefined) {
+          const selection = validateModelSelection(record.selection), input = record.input;
+          if (input && (selection.provider !== input.provider || input.model !== undefined && input.model !== '' && selection.model !== input.model || input.effort !== undefined && selection.effort !== input.effort))
+            throw Error('Feature model selection differs from accepted input.');
+        }
         validateFeatureTaskProjection(record, index.owner);
         validateFeatureExecution(record);
         validateFeatureGates(record);
         if (record.interaction && (!Number.isSafeInteger(record.interaction.revision) || record.interaction.revision < 0 || typeof record.interaction.phase !== 'string' || (record.interaction.pendingId && !featureId.test(record.interaction.pendingId)) || (record.interaction.link && record.interaction.link !== `_questions/${record.id}/${record.interaction.pendingId}.md`))) throw Error('Invalid feature interaction projection.');
       }
+      this.acceptedProviders = new Map(index.records.filter((record: FeatureRecord) => record.input).map((record: FeatureRecord) => [record.id, record.input!.provider] as const));
       return index;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
@@ -59,6 +67,7 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
     const text = JSON.stringify(index);
     if (Buffer.byteLength(text) > 16777216) throw Error('Feature index storage limit reached.');
     await atomicWrite(join(this.state, 'feature-index.json'), text);
+    this.acceptedProviders = new Map(index.records.filter(record => record.input).map(record => [record.id, record.input!.provider] as const));
   }
   async open(owner: string) {
     await realDirectory(this.directory, true);
@@ -84,7 +93,7 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
     for (const name of names) {
       try {
         const raw = await readBoundedFile(join(this.directory, name), 65536), parsed = parseFeature(raw), d = parsed.data, shared = Object.hasOwn(d, 'templateId');
-        files.push({ name, revision: digest(raw), ...(typeof d.id === 'string' ? { id: d.id } : {}), status: d.status === undefined ? undefined : String(d.status), source: String(d.source ?? 'folder'), shared, ...(shared || d.source === 'orchestrator' ? {} : { input: featureInput(parsed, this.defaultProvider) }) });
+        files.push({ name, revision: digest(raw), ...(typeof d.id === 'string' ? { id: d.id } : {}), status: d.status === undefined ? undefined : String(d.status), source: String(d.source ?? 'folder'), shared, ...(shared || d.source === 'orchestrator' ? {} : { input: featureInput(parsed, typeof d.id === 'string' && this.acceptedProviders.get(d.id) || (typeof this.defaultProvider === 'function' ? this.defaultProvider() : this.defaultProvider)) }) });
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
         // Parse/validation messages contain no source contents or YAML parser diagnostics.

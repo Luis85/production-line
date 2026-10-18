@@ -1,5 +1,6 @@
+import { parseProviderAccount } from './provider-account.js';
 import { claudeVersion, minimumClaudeVersion } from './provider-version.js';
-import { runProviderProbe } from './provider-process.js';
+import { providerProbeKey, runProviderProbe } from './provider-process.js';
 import { constants } from 'node:fs';
 import { access } from 'node:fs/promises';
 import { providerReady, type ProviderConnection, type ProviderId } from '../application/provider-contract.js';
@@ -9,11 +10,11 @@ export interface ProviderStatus {
   message: string; checkedAt: string;
   minimumVersion?: string; version?: string; compatibility?: 'minimum_met' | 'unsupported' | 'unknown';
 }
-async function statusCommand(connection: ProviderConnection, signal: AbortSignal, args = connection.id === 'codex-cli' ? ['login', 'status'] : ['auth', 'status']): Promise<{ code: number | null; output: string }> {
+async function statusCommand(connection: ProviderConnection, signal: AbortSignal, args = connection.id === 'codex-cli' ? ['login', 'status'] : connection.id === 'cursor-cli' ? ['status'] : ['auth', 'status']): Promise<{ code: number | null; output: string }> {
   // Claude's machine-readable stdout must remain separate from startup diagnostics.
   // Codex reports login status on stderr; both streams always count toward the limit.
   try {
-    const result = await runProviderProbe(connection.executable, connection.id === 'codex-cli' ? 'codex' : 'claude', args, { signal, timeoutMs: 5000, maxOutputBytes: 65536 });
+    const result = await runProviderProbe(connection.executable, connection.id === 'codex-cli' ? 'codex' : connection.id === 'cursor-cli' ? 'cursor' : 'claude', args, { signal, timeoutMs: 5000, maxOutputBytes: 65536 }, connection.id === 'cursor-cli' && connection.apiKey ? { CURSOR_API_KEY: connection.apiKey } : {});
     return { code: result.exitCode, output: Buffer.concat([result.stdout, result.stderr]).toString('utf8') };
   } catch { throw Error('Provider status unavailable'); }
 }
@@ -24,7 +25,7 @@ export class ProviderStatusChecks {
   private cached = new Map<ProviderId, { key: string; until: number; value: ProviderStatus }>();
   async check(connection: ProviderConnection): Promise<ProviderStatus> {
     if (this.controller.signal.aborted) return { id: connection.id, configured: providerReady(connection), available: false, authentication: 'unavailable', checkedAt: new Date().toISOString(), message: 'The worker is stopping.' };
-    const key = JSON.stringify([connection.executable, connection.model, !!connection.apiKey]);
+    const key = providerProbeKey(connection);
     const cached = this.cached.get(connection.id);
     if (cached && cached.key === key && cached.until > Date.now()) return cached.value;
     const pending = this.pending.get(connection.id);
@@ -46,7 +47,17 @@ export class ProviderStatusChecks {
         available = { ...available, minimumVersion: minimumClaudeVersion, ...(parsed.version ? { version: parsed.version } : {}), compatibility: parsed.compatibility };
         if (parsed.compatibility !== 'minimum_met') return { ...available, available: false, authentication: 'unknown', message: 'Claude Code ' + minimumClaudeVersion + ' or later is required. Update the CLI and check again so this worker can verify isolated feature-request sessions. No model request was made.' };
       }
+      if (connection.id === 'cursor-cli') {
+        const version = await statusCommand(connection, this.controller.signal, ['--version']);
+        const parsed = version.code === 0 ? /\b(\d{4}\.\d{2}\.\d{2}(?:-[a-zA-Z0-9]+)?|\d+\.\d+\.\d+)\b/.exec(version.output)?.[1] : undefined;
+        if (parsed) available = { ...available, version: parsed };
+      }
       const result = await statusCommand(connection, this.controller.signal);
+      if (connection.id === 'cursor-cli') {
+        const account = parseProviderAccount('cursor-cli', result.code, result.output);
+        return { ...available, authentication: account.signedIn === true ? 'authenticated' : account.signedIn === false ? 'signed-out' : 'unknown',
+          message: account.message + ' Cursor owns native permissions, hooks and subagents; Werk tool grants do not restrict them.' };
+      }
       if (connection.id === 'codex-cli') {
         if (/not logged in|not authenticated/i.test(result.output)) return { ...available, authentication: 'signed-out', message: 'Run codex login in a terminal as the worker account, then check again.' };
         if (result.code === 0 && /^Logged in(?: using\b|$)/im.test(result.output)) return { ...available, authentication: 'authenticated', message: 'Codex reports a signed-in account. No model request was made.' };

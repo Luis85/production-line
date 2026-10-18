@@ -1,3 +1,4 @@
+import { validateModelEffort } from '../../../application/model-effort.js';
 import { randomUUID } from "node:crypto";
 import { DomainError } from "../../../../shared/errors.js";
 import type {
@@ -102,10 +103,11 @@ export function provider(value: ModelProvider): ModelProvider {
     typeof value.instruction !== "string" ||
     value.instruction.length > 64000 ||
     Object.keys(value).some(
-      (key) => !["id", "model", "instruction"].includes(key),
+      (key) => !["id", "model", "instruction", "effort"].includes(key),
     )
   )
     invalid("Invalid request provider metadata.");
+  if (value.effort !== undefined) validateModelEffort(value.effort, value.id);
   return clone(value);
 }
 

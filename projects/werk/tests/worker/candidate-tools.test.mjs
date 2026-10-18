@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { verifyNativeCandidate } from '../../src/worker/dist/worker/application/native-development.js';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, writeFile, realpath, rm, lstat, rename, symlink, link, unlink } from 'node:fs/promises';
@@ -209,4 +210,53 @@ test('both required-check tool names enforce the frozen preset deadline and reta
   }
   f.policy.builtins.commands[0].timeoutMs = 2000;
   await assert.rejects(f.candidate.check('test', signal()), /verification grants changed/);
+});
+
+
+test('native provider workspace invalidates previous receipts before direct edits and independently verifies the final candidate', async t => {
+  const f = await fixture(t);
+  await apply(f, 'sum.mjs', 'export const sum = (a, b) => a + b;\n');
+  await f.candidate.check('test', signal());
+  assert.equal(f.saved.checks[0].status, 'passed');
+  assert.equal(await f.broker.nativeWorkspace(signal()), f.worktree);
+  assert.deepEqual(f.saved.checks, [], 'old success is durably invalid before native execution');
+  await writeFile(join(f.worktree, 'sum.mjs'), 'export const sum = (a, b) => a + b + 1;\n');
+  await verifyNativeCandidate(f.candidate, f.scope, signal());
+  assert.equal(f.saved.checks[0].status, 'failed');
+  assert.equal(developmentVerified(f.scope, await f.candidate.capture(signal()), f.saved), false);
+  await writeFile(join(f.worktree, 'sum.mjs'), 'export const sum = (a, b) => a + b;\n');
+  await verifyNativeCandidate(f.candidate, f.scope, signal());
+  const candidate = await f.candidate.capture(signal());
+  assert.equal(developmentVerified(f.scope, candidate, f.saved), true);
+  assert.match(candidate.patch, /\+export const sum/);
+  assert.equal(git(f.repository, 'status', '--porcelain'), '', 'native edits remain in the retained worker worktree');
+});
+
+test('native execution cannot obtain a workspace after failed checkpoint, revocation or replaced identity', async t => {
+  const disk = await fixture(t); disk.failWrites();
+  await assert.rejects(disk.broker.nativeWorkspace(signal()), /evidence could not be saved/);
+  const revoked = await fixture(t); revoked.revoke();
+  await assert.rejects(revoked.broker.nativeWorkspace(signal()), /permissions changed/);
+  const replaced = await fixture(t); await rename(replaced.worktree, replaced.worktree + '-retained'); await mkdir(replaced.worktree);
+  await assert.rejects(replaced.broker.nativeWorkspace(signal()), /worktree changed/);
+  const stopped = await fixture(t); const controller = new AbortController(); controller.abort();
+  await assert.rejects(stopped.broker.nativeWorkspace(controller.signal));
+  assert.equal(stopped.checkpoints.length, 0);
+});
+
+test('native out-of-scope edits stop before verification and cannot be published', async t => {
+  const f = await fixture(t, { script: "import {mkdirSync,writeFileSync} from 'node:fs'; mkdirSync('generated',{recursive:true}); writeFileSync('generated/check-ran','yes');\n" });
+  await f.broker.nativeWorkspace(signal());
+  await writeFile(join(f.worktree, 'unapproved.txt'), 'native change');
+  await assert.rejects(verifyNativeCandidate(f.candidate, f.scope, signal()), /outside the approved paths/);
+  await assert.rejects(readFile(join(f.worktree, 'generated/check-ran')), { code: 'ENOENT' });
+  assert.deepEqual(f.saved.checks, []);
+});
+
+test('chat tools and incomplete task scopes do not expose a native implementation workspace', async t => {
+  const f = await fixture(t);
+  for (const extra of [{}, { worktree: f.worktree, worktreeIdentity: f.identity }, { worktree: f.worktree, development: f.candidate }]) {
+    const runtime = createToolRuntime({ policy: f.policy, currentRevision: () => f.policy.revision, directory: f.directory, ...extra });
+    try { assert.equal(runtime.nativeWorkspace, undefined); } finally { await runtime.close(); }
+  }
 });

@@ -59,7 +59,7 @@ export function validateFeatureTemplate(markdown: string, allowLegacyProgressMet
   if (data.status !== 'draft' || data.mode !== 'patch' || data.source !== undefined || data.werk !== undefined) invalid('Shared feature templates require draft patch mode without worker-owned metadata.');
   if (typeof data.templateId !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(data.templateId)) invalid('Feature templates require a stable templateId.');
   featureRequestSections(parsed.body);
-  const optional = ['schemaVersion', 'id', 'title', 'status', 'mode', 'paths', 'provider', 'priority', 'definitionId', 'definitionRef', 'agent', 'useInstructionsOnly', 'templateId'];
+  const optional = ['schemaVersion', 'id', 'title', 'status', 'mode', 'paths', 'provider', 'model', 'effort', 'priority', 'definitionId', 'definitionRef', 'agent', 'useInstructionsOnly', 'templateId'];
   return { templateId: data.templateId, headings: [...featureMarkdownSections(parsed.body).keys()], fields: Object.keys(data).filter(key => !optional.includes(key)) };
 }
 function meaningful(value: unknown): boolean {

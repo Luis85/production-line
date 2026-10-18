@@ -28,9 +28,11 @@ never `done` or `review`; provider usage and unrun checks remain unknown.
 For real local work, follow [project-worker setup](project-worker.md),
 [provider and execution-profile configuration](use-worker-webview.md), and
 [implementing a feature](implement-feature.md). A configured local worker can
-use supported API providers or installed Claude/Codex CLIs, edit approved
-candidate worktrees through granted tools, run configured checks and retain
-review evidence. [Shared intake](shared-feature-intake.md) can publish configured
+use supported API providers or installed Claude, Codex or Cursor CLIs, implement
+in retained candidate worktrees, run configured checks and retain review evidence.
+Codex/Claude use Werk-granted tools; Cursor uses native permissions/hooks with
+worker verification after execution. See the
+[provider boundary](../reference/model-interaction.md#cursor-native-execution). [Shared intake](shared-feature-intake.md) can publish configured
 feature branches and Obsidian review notes. Human review and merge remain
 separate. Orchestrator assignments have a different opt-in
 [native Linux Codex adapter](run-codex-task.md); the complete automatic PR/merge

@@ -5,11 +5,31 @@ shortcut opens the editor directly. Tool access is separate from provider sign-i
 execution profiles and agent definitions. All grants start disabled, including
 after upgrading an existing worker.
 
-Grants apply to local requests using the worker's configured
+Grants apply to Werk tools used by local requests through the worker's configured
 model connections. Results from granted tools are sent to the task's selected
-model provider. Grant only the content and operations that provider may receive.
+model provider. Cursor's native tools, hooks, MCP connections and subagents follow
+Cursor's own permissions; these grants constrain only its supplemental Werk tools. Grant only the content and operations that provider may receive.
 The separate orchestrator execution adapter retains its own execution policy;
 these controls do not change simulated tasks into live executions.
+
+## Cursor native permissions
+
+Selecting Cursor CLI enables its native execution policy. Configure that policy
+for the worker's OS account and execution workspace through
+[Cursor permissions](https://cursor.com/docs/cli/reference/permissions) and
+[hooks](https://cursor.com/docs/hooks). Disabling a Werk grant does not disable a
+native Cursor tool, hook, MCP connection or subagent. Werk does not add force,
+automatic MCP approval, workspace-trust or sandbox-override flags, and does not
+rewrite Cursor configuration.
+
+Chat and Ready Check use Cursor's read-only ask mode; implementation uses the
+worker's retained candidate worktree. Optional Werk MCP tools enforce their own
+grants, budgets and revocation, while Cursor's approval policy also applies to
+that bridge. Cursor does not receive `werk_delegate`; its native subagents follow
+Cursor policy only. Their tools and usage are not bounded or measured by Werk's
+delegation grant. The worker still owns the overall process/deadline and
+validates the candidate and required checks before review. See the
+[execution contract](../reference/model-interaction.md#cursor-native-execution).
 
 ## Grant built-in tools
 
@@ -63,8 +83,9 @@ remain within granted origins. URLs with embedded credentials are rejected.
 
 ## Allow the model to delegate
 
-In **Settings → Tools & MCP → Model delegation**, enable **Allow models to
-delegate work to subagents**. As with other grants, pause new starts and drain
+For Codex, Claude and direct API adapters, open **Settings → Tools & MCP → Model
+delegation** and enable **Allow models to delegate work to subagents**. Cursor
+uses native subagents and does not receive this controlled delegation tool. As with other grants, pause new starts and drain
 queued/running work before saving, then resume the worker. Existing policies
 without this grant keep delegation disabled.
 
@@ -382,8 +403,9 @@ If another operator saves first, the editor retains your draft and reports a
 conflict. Reload the current policy, reconcile your changes and save again.
 Locking the webview does not revoke tools or stop work.
 
-Automated request reviewers remain tool-free. For provider requirements and
-continuation behavior, see the [model interaction contract](../reference/model-interaction.md).
+Codex, Claude and API request reviewers remain tool-free. Cursor reviews use its
+native read-only ask mode and operator-managed permissions/hooks. For provider
+requirements and continuation behavior, see the [model interaction contract](../reference/model-interaction.md).
 
 ## Execution limits
 

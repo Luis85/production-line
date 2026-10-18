@@ -38,11 +38,12 @@ export class ReadyReviewManager implements ReadyReviewPort {
     const context = turn.context as Partial<Context> | null;
     if (context?.kind !== 'feature_ready_review' || gateDigest(context.input) !== gateDigest(input)
       || !context.provider || context.provider.id !== input.provider
+      || input.selection && (context.provider.model !== input.selection.model || context.provider.effort !== input.selection.effort)
       || typeof context.provider.model !== 'string' || typeof context.provider.instruction !== 'string')
       throw new DomainError('conflict', 'Ready Check evidence does not match the accepted source and provider.');
     if (turn.dispatch && (gateDigest(turn.dispatch.provider) !== gateDigest(context.provider)
       || gateDigest(turn.dispatch.session) !== gateDigest(bindingFor(input))
-      || turn.dispatch.policy.tools !== 'none' || turn.dispatch.policy.filesystem !== 'read_only' || turn.dispatch.toolManifest
+      || turn.dispatch.policy.tools !== (input.provider === 'cursor-cli' ? 'provider_native' : 'none') || turn.dispatch.policy.filesystem !== (input.provider === 'cursor-cli' ? 'provider_permissions' : 'read_only') || turn.dispatch.toolManifest || turn.dispatch.operation !== 'chat'
       || turn.dispatch.messages.length !== 1 || turn.dispatch.messages[0]?.text !== readyReviewMessage(input, turn.createdAt).text))
       throw new DomainError('conflict', 'Ready Check dispatch does not match its frozen review scope.');
     const attempt = attemptFor(input, turn);
@@ -88,15 +89,16 @@ export class ReadyReviewManager implements ReadyReviewPort {
     try {
       signal.throwIfAborted();
       const provider = structuredClone(this.options.profile(input));
-      if (provider.id !== input.provider) throw new DomainError('conflict', 'Ready Check provider does not match the selected profile.');
+      if (provider.id !== input.provider || input.selection && (provider.model !== input.selection.model || provider.effort !== input.selection.effort))
+        throw new DomainError('conflict', 'Ready Check provider, model and effort do not match the accepted selection.');
       const context: Context = { kind: 'feature_ready_review', input, provider };
       turn = this.options.interactions.accept({ sessionId, operationId: input.operationId, kind: 'message',
         input: `Ready Check for ${input.feature.id} at ${input.source.commit}`, context }).turn;
       const binding = bindingFor(input), model = this.options.model(provider, binding);
       if (!model) throw new ProviderModelError('unavailable');
-      // Deliberately strip every manifest and native tool capability before preparing reviewer context.
+      // Strip supplemental tools. Cursor retains its disclosed native permissions and runs this chat in ask mode.
       const frozen = { reply: model.reply.bind(model), configuration: provider, sessionBinding: binding,
-        capabilities: { ...((model as Partial<StructuredModel>).capabilities ?? modelCapabilities), tools: 'none' } } as ConversationModel;
+        capabilities: { ...((model as Partial<StructuredModel>).capabilities ?? modelCapabilities), tools: provider.id === 'cursor-cli' ? 'provider_native' : 'none' } } as ConversationModel;
       const dispatch = prepareModelRequest(frozen, [readyReviewMessage(input, turn.createdAt)], 'chat', this.options.maxRuntimeMs?.() ?? DEFAULT_MAX_RUNTIME_MS);
       runId = (await this.options.runs.begin({ sessionId, taskId: sessionId, kind: 'local', purpose: 'gate_review', title: 'Ready Check: ' + input.title,
         provider: provider.id, model: provider.model })).id;

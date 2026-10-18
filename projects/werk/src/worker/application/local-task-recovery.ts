@@ -1,3 +1,4 @@
+import { localTaskSelection, validateTaskSelection } from './local-task-selection.js';
 import { validateFeatureDefinitionPrompts } from './feature-workflow.js';
 import { interactionFeatureRequest } from './feature-request-reference.js';
 import { isPreparedLocalTask } from './queued-task-recovery.js';
@@ -38,12 +39,14 @@ export async function init(host: Pick<LocalTaskRuntime, "storage" | "tasks" | "r
       )
         throw Error("Invalid taskboard");
       for (const task of value) {
-        const context = task.requestId ? host.sessions.requests.get(task.requestId).input.context : undefined;
+        const request = task.requestId ? host.sessions.requests.get(task.requestId) : undefined;
+        validateTaskSelection(task, request);
+        const context = request?.input.context;
         const acceptedPrompts = context && typeof context === 'object' && 'definitionPrompts' in context ? context.definitionPrompts : undefined;
         if (task.definitionPrompts !== undefined || acceptedPrompts !== undefined) {
           task.definitionPrompts = validateFeatureDefinitionPrompts(task.definitionPrompts);
           if (!task.repositoryId || !task.baseCommit || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(task.baseCommit)) throw Error('Saved definition prompts require an accepted repository and source commit.');
-          const reservation = { id: task.id, hash: task.submissionHash, policy: task.gatePolicy, criteria: task.criteria, repositoryId: task.repositoryId, baseCommit: task.baseCommit, definitionPrompts: task.definitionPrompts };
+          const reservation = { id: task.id, hash: task.submissionHash, policy: task.gatePolicy, criteria: task.criteria, repositoryId: task.repositoryId, baseCommit: task.baseCommit, definitionPrompts: task.definitionPrompts, ...(task.selectionReserved ? { selection: task.selection } : {}) };
           if (!task.submissionHash || task.submissionContextHash !== submissionContextHash(reservation)) throw Error('Saved definition prompts differ from their accepted reservation.');
           if (task.requestId && (acceptedPrompts === undefined || gateDigest(acceptedPrompts) !== gateDigest(task.definitionPrompts))) throw Error('Saved definition prompts differ from the accepted request context.');
         }
@@ -71,6 +74,7 @@ export async function init(host: Pick<LocalTaskRuntime, "storage" | "tasks" | "r
           task.submissionHash,
           task.definition,
           task.feature,
+          localTaskSelection(task),
         );
         if (task.admissionFailure) await host.sessions.blockContinuation(task.sessionId, task.error ?? 'This interrupted request has no accepted file snapshots. Inspect its retained worktree and create a new request.');
         host.sessions.protectTask(task.sessionId, true);

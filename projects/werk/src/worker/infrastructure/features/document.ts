@@ -1,3 +1,5 @@
+import { parseModelEffort, validateModelEffort, validateModelName } from '../../application/model-effort.js';
+import { providerIds, type ProviderId } from '../../application/provider-contract.js';
 import { parseDocument, isAlias, isMap, isSeq, visit, type Document } from 'yaml';
 import { createHash } from 'node:crypto';
 import type { FeatureInput } from '../../application/feature-requests.js';
@@ -62,7 +64,9 @@ export function featureInput(parsed: FeatureDocument, defaultProvider: string, o
   if (typeof title !== 'string' || !title.trim() || title.length > 120) throw Error('title must contain 1–120 characters.');
   if ((!options.reviewOnly && !parsed.body.trim()) || parsed.body.length > 8000) throw Error('Request Markdown must contain 1–8,000 characters.');
   if (!['chat', 'patch'].includes(String(mode))) throw Error('mode must be chat or patch.');
-  if (!['codex-cli', 'claude-cli', 'openai-api', 'anthropic-api'].includes(String(provider))) throw Error('Choose a supported provider connection.');
+  if (!providerIds.includes(provider as ProviderId)) throw Error('Choose a supported provider connection.');
+  if (d.model !== undefined) validateModelName(d.model);
+  const effort = d.effort === undefined ? undefined : d.provider === undefined ? parseModelEffort(d.effort) : validateModelEffort(d.effort, String(provider));
   if (d.paths !== undefined && (!Array.isArray(d.paths) || d.paths.some(path => typeof path !== 'string' || !path || path.length > 1024) || d.paths.length > 32)) throw Error('paths must list at most 32 project-relative files.');
   if (!options.reviewOnly && mode === 'patch' && (!Array.isArray(d.paths) || !d.paths.length)) throw Error('Patch requests require an explicit paths list.');
   if (mode === 'chat' && d.paths !== undefined) throw Error('Use mode: patch to supply approved files. Chat does not read paths.');
@@ -72,11 +76,11 @@ export function featureInput(parsed: FeatureDocument, defaultProvider: string, o
   if (d.agent !== undefined && (typeof d.agent !== 'string' || d.agent.length > 100)) throw Error('Invalid agent name.');
   if (d.useInstructionsOnly !== undefined && typeof d.useInstructionsOnly !== 'boolean') throw Error('useInstructionsOnly must be true or false.');
   if (d.priority !== undefined && d.priority !== 1 && d.priority !== 2) throw Error('priority must be 1 or 2.');
-  return { title: title.trim(), mode: mode as 'chat' | 'patch', provider: String(provider), message: parsed.body.trim(), ...(d.paths ? { paths: (d.paths as string[]).map(path => path.normalize('NFC')) } : {}), priority: Number(d.priority ?? 1), ...(d.definitionId ? { definitionId: String(d.definitionId) } : {}), ...(d.definitionRef ? { definitionRef: String(d.definitionRef) } : {}), ...(d.agent ? { agent: String(d.agent) } : {}), ...(d.useInstructionsOnly !== undefined ? { useInstructionsOnly: d.useInstructionsOnly } : {}) };
+  return { title: title.trim(), mode: mode as 'chat' | 'patch', provider: String(provider), ...(d.model === undefined ? {} : { model: d.model as string }), ...(effort === undefined ? {} : { effort }), message: parsed.body.trim(), ...(d.paths ? { paths: (d.paths as string[]).map(path => path.normalize('NFC')) } : {}), priority: Number(d.priority ?? 1), ...(d.definitionId ? { definitionId: String(d.definitionId) } : {}), ...(d.definitionRef ? { definitionRef: String(d.definitionRef) } : {}), ...(d.agent ? { agent: String(d.agent) } : {}), ...(d.useInstructionsOnly !== undefined ? { useInstructionsOnly: d.useInstructionsOnly } : {}) };
 }
 /** Additional template fields are author data; rendering never promotes them into policy. */
 export function featureRequestContext(data: Record<string, unknown>, base: FeatureInput) {
-  const standard = ['schemaVersion', 'id', 'templateId', 'title', 'status', 'mode', 'paths', 'provider', 'priority', 'definitionId', 'definitionRef', 'agent', 'useInstructionsOnly'];
+  const standard = ['schemaVersion', 'id', 'templateId', 'title', 'status', 'mode', 'paths', 'provider', 'model', 'effort', 'priority', 'definitionId', 'definitionRef', 'agent', 'useInstructionsOnly'];
   const metadata = Object.fromEntries(Object.entries(data).filter(([key]) => !standard.includes(key)));
   function finite(value: unknown): boolean { return typeof value === 'number' ? Number.isFinite(value) : Array.isArray(value) ? value.every(finite) : value && typeof value === 'object' ? Object.values(value).every(finite) : true; }
   if (!finite(metadata)) throw Error('Feature metadata must contain finite JSON values.');

@@ -1,3 +1,4 @@
+import type { ModelSelection } from './model-selection.js';
 import type { ReadyReviewInput, ReadyReviewResult, ReadyReviewAttempt, ReadyReviewExecutionView } from './ready-review-contracts.js';
 import type { FeatureWorkflowSnapshot, SharedFeatureInput } from './feature-workflow.js';
 import type { InteractionCommand, InteractionView } from './interactions.js';
@@ -111,14 +112,15 @@ export interface SharedAdmissionHold {
   resumesAt?: string;
 }
 export interface SharedIntakePorts {
+  resolveSelection?(input: SharedFeatureInput): ModelSelection;
   readyReview?: { schedule(input: ReadyReviewInput): Promise<ReadyReviewAttempt>; inspect(input: ReadyReviewInput): ReadyReviewExecutionView | undefined };
-  readyReviewEligible?(markdown: string, snapshot: FeatureWorkflowSnapshot): { valid: boolean; input?: SharedFeatureInput; inputHash?: string; errors: { code: string; message: string }[] };
+  readyReviewEligible?(markdown: string, snapshot: FeatureWorkflowSnapshot, provider?: string): { valid: boolean; input?: SharedFeatureInput; inputHash?: string; errors: { code: string; message: string }[] };
   readyReviewResponse?(markdown: string, record: SharedFeatureRecord): { sourceMarkdown: string; answer: string; status: string };
   load(): Promise<SharedFeatureState>;
   save(state: SharedFeatureState): Promise<void>;
   repository(binding: SharedIntakeConfig, workflow?: FeatureWorkflowSnapshot): SharedRepositoryPort;
   loadWorkflow(repository: SharedRepositoryPort, commit: string, path: string, signal: AbortSignal): Promise<FeatureWorkflowSnapshot>;
-  ready(markdown: string, snapshot: FeatureWorkflowSnapshot): { valid: boolean; input?: SharedFeatureInput; inputHash?: string; errors: { code: string; message: string }[] };
+  ready(markdown: string, snapshot: FeatureWorkflowSnapshot, provider?: string): { valid: boolean; input?: SharedFeatureInput; inputHash?: string; errors: { code: string; message: string }[] };
   source(blob: SharedBlob): { id?: string; title: string; status: string; shared?: SharedFeatureView };
   renderSource(record: SharedFeatureRecord): string;
   submit(record: SharedFeatureRecord): Promise<void>;

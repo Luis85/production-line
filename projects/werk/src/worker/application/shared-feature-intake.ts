@@ -1,3 +1,4 @@
+import { sharedFeatureInputHash, assertSharedFeatureSelection } from './shared-feature-selection.js';
 import { sharedReviewCheckpoint } from './shared-ready-review.js';
 import { sharedFeatureRequestReference } from './feature-request-reference.js';
 import { publishSharedFeatureResponse } from './shared-feature-response.js';
@@ -71,7 +72,7 @@ export class SharedFeatureIntake {
     };
   }
   private publicRecord(record: SharedFeatureRecord): SharedFeatureView {
-    const { id, name, title, status, owner, sourceCommit, updatedAt, ready, done, featureBranch, reviewNote, taskNote, error, taskId } = record;
+    const { id, name, title, status, owner, sourceCommit, updatedAt, ready, done, featureBranch, reviewNote, taskNote, error, taskId, selection } = record;
     const publication = this.lifecycle.publication(record);
     const review = record.readyReviewState;
     const readyReview = review ? { status: review.status, attempt: review.generation, promptPath: review.input.prompt.path, promptDigest: review.input.prompt.sha256, findings: review.result?.findings ?? [],
@@ -84,7 +85,7 @@ export class SharedFeatureIntake {
       status: responseStatus === 'pending' ? 'ready' : responseStatus ?? (record.pending ? 'publication_pending' : 'ready'),
       error: (task.response?.error ?? record.error)?.slice(0, 500) ?? null,
     } : undefined;
-    return structuredClone({ feature: sharedFeatureRequestReference(record), id, name, title, status, owner, isLocal: true, sourceCommit, updatedAt, ready, done, featureBranch, reviewNote, taskNote, publication, error, taskId: record.submitted ? taskId : null, ...(readyReview ? { readyReview } : {}), ...(taskResponse ? { taskResponse } : {}) });
+    return structuredClone({ ...(selection ? { selection } : {}), feature: sharedFeatureRequestReference(record), id, name, title, status, owner, isLocal: true, sourceCommit, updatedAt, ready, done, featureBranch, reviewNote, taskNote, publication, error, taskId: record.submitted ? taskId : null, ...(readyReview ? { readyReview } : {}), ...(taskResponse ? { taskResponse } : {}) });
   }
   async configure(value: unknown, expectedRevision: number) {
     const config = validateSharedIntakeConfig(value);
@@ -173,7 +174,10 @@ export class SharedFeatureIntake {
         ? this.ports.readyReviewEligible?.(file.content, snapshot) ?? { valid: false, errors: [{ code: 'ready_review_unavailable', message: 'Update the worker to support the configured Feature Request Ready Check.' }] }
         : this.ports.ready(file.content, snapshot);
       if (!ready.valid || !ready.input || !ready.inputHash) { const issues = ready.errors.map(e => e.message); const taskNote = await diagnostic(file, issues); this.discovered.push({ ...this.unclaimed(file.name, source.id ?? '', source.title, 'needs_rework', commit, issues), taskNote }); continue; }
-      const issue = this.ports.admissionIssue?.(ready.input);
+      let issue = this.ports.admissionIssue?.(ready.input);
+      let selection: SharedFeatureRecord['selection'];
+      try { selection = this.ports.resolveSelection?.(ready.input); assertSharedFeatureSelection({ accepted: ready.input, selection }); }
+      catch (error) { issue = error instanceof Error ? error.message : 'The selected model configuration is unavailable.'; }
       if (issue) { const taskNote = await diagnostic(file, [issue]); this.discovered.push({ ...this.unclaimed(file.name, ready.input.id, ready.input.title, 'ready', commit, []), error: issue.slice(0, 500), taskNote }); continue; }
       const waiting = async (hold: SharedAdmissionHold) => {
         const taskNote = await diagnostic(file, [], hold);
@@ -191,8 +195,9 @@ export class SharedFeatureIntake {
         ready: snapshot.readyReview ? null : { passed: true, issues: [] }, done: null, featureBranch: null, reviewNote: null, publication: 'pending', error: null,
         taskId: 'shared-feature-' + sharedHash(ready.input.id + bindingKey(config)).slice(0, 32),
         binding: config, sourcePath: file.path, sourceMarkdown: file.content, remoteRevision: file.revision,
-        accepted: ready.input, inputHash: sharedHash(ready.inputHash + snapshot.policyDigest + commit + file.revision), workflow: structuredClone(snapshot), claimed: false, submitted: false,
+        accepted: ready.input, ...(selection ? { selection: structuredClone(selection) } : {}), inputHash: '', workflow: structuredClone(snapshot), claimed: false, submitted: false,
       };
+      record.inputHash = sharedFeatureInputHash(record);
       if (snapshot.readyReview) { record.readyReviewState = sharedReviewCheckpoint(record); record.progress = 'Feature Request Ready Check is queued before Definition of Ready.'; }
       this.state.records.push(record);
       await this.save();

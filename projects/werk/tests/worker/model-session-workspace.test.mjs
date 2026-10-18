@@ -16,7 +16,7 @@ import { prepareModelRequest, executeModel } from '../../src/worker/dist/worker/
 import { sessionHistoryTool } from '../../src/worker/dist/worker/infrastructure/session-history-tool.js';
 import { sessionDigest } from '../../src/worker/dist/worker/application/model-session.js';
 /** @type {import('../../src/worker/application/provider-contract.ts').ProviderConnection} */
-const connection = { id: 'openai-api', model: 'fixture', instruction: 'Frozen original profile', executable: '', apiKey: 'fixture-only' };
+const connection = { id: 'openai-api', model: 'fixture', effort: 'high', instruction: 'Frozen original profile', executable: '', apiKey: 'fixture-only' };
 const output = text => Response.json({ status: 'completed', usage: { input_tokens: 5, output_tokens: 2 }, output: [{ type: 'message', content: [{ type: 'output_text', text }] }] });
 async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(), 'werk-session-integration-')); const runs = new WorkerRunJournal(directory), interactions = new WorkerInteractionJournal(directory);
@@ -57,9 +57,9 @@ test('composition delegates from the frozen parent profile, links numeric child 
   }, undefined, f.runs);
   const preparedModel = factory(connection, f.scope), request = prepareModelRequest(preparedModel, [{ id: 'original', role: 'user', state: 'complete', at: '2026-10-19T00:00:00Z', text: 'Inspect this feature' }]);
   const parent = await f.runs.begin({ sessionId: f.scope.sessionId, taskId: 'same-fr', title: 'One FR', kind: 'local', provider: connection.id, model: connection.model }); await f.runs.start(parent.id);
-  const currentModel = factory({ ...connection, instruction: 'Later changed global profile' }, f.scope);
+  const currentModel = factory({ ...connection, effort: 'low', instruction: 'Later changed global profile' }, f.scope);
   assert.equal((await executeModel(currentModel, request, new AbortController().signal)).type, 'completed');
-  assert.equal(childProfiles.length, 1); assert.equal(childProfiles[0].instruction, connection.instruction);
+  assert.equal(childProfiles.length, 1); assert.equal(childProfiles[0].instruction, connection.instruction); assert.equal(childProfiles[0].effort, 'high');
   const child = f.runs.list().rows.find(row => row.parentRunId === parent.id); assert.ok(child); assert.equal(child.outcome, 'completed'); assert.equal(child.parentSessionId, f.scope.sessionId);
   const receiptDirectory = join(f.directory, 'model-sessions', 'delegation', sessionDigest(request.session)), files = await readdir(receiptDirectory);
   assert.equal(files.length, 1); const receipt = JSON.parse(await readFile(join(receiptDirectory, files[0]), 'utf8'));
@@ -70,4 +70,17 @@ test('composition delegates from the frozen parent profile, links numeric child 
   const saved = JSON.parse((await history.call({ receiptId: listing.receipts[0].receiptId }, new AbortController().signal)).content[0].text);
   assert.match(saved.text, /Child result/);
   await assert.rejects(history.call({ receiptId: '../private' }, new AbortController().signal));
+});
+
+
+test('Cursor retains history access without advertising worker-bounded native delegation', async t => {
+  const f = await fixture(t); f.policy.delegation = { enabled: true, maxChildren: 4, maxConcurrent: 2 };
+  const factory = workspaceModelFactory(f.directory, f.settings, modelFor, undefined, f.runs);
+  const model = factory({ id: 'cursor-cli', model: 'auto', effort: 'default', executable: '/fixture/agent', apiKey: '' }, f.scope);
+  const request = prepareModelRequest(model, [{ id: 'original', role: 'user', state: 'complete', at: '2026-10-18T00:00:00Z', text: 'Inspect this feature' }]);
+  assert.equal(request.policy.tools, 'provider_native');
+  assert.ok(request.toolManifest.tools.some(tool => tool.name === 'werk_session_history'));
+  assert.ok(!request.toolManifest.tools.some(tool => tool.name === 'werk_delegate'));
+  assert.match(request.protocolInstructions, /Cursor permissions/);
+  assert.equal(f.runs.list().rows.length, 0, 'metadata inspection cannot launch a provider or native child');
 });

@@ -3,6 +3,7 @@ import { DEFAULT_MAX_RUNTIME_MS } from "./execution-policy.js";
 import type { ConversationModel, ChatMessage } from "./conversation.js";
 import {
   executeModel,
+  modelCapabilities,
   prepareModelRequest,
   ProviderModelError,
   parseModelResult,
@@ -181,11 +182,12 @@ function reviewMessage(
   const data = JSON.stringify(payload);
   if (Buffer.byteLength(data) > 262144)
     throw new DomainError("too_large", "Advisory context exceeds its bound.");
-  const instruction =
+  let instruction =
     'Review only the supplied request and deterministic gate observations. You have no tools, commands or live environment access. Never claim tests, builds, operator acceptance or policy facts. Do not change policy, kind, approved paths, criteria or context. Findings are advisory; only deterministic evaluation and explicit operator decisions authorize execution. Return ONLY JSON {"schemaVersion":1,"findings":[{"kind":"question|issue|gap","message":"bounded actionable observation","blocking":true}],"candidate":{"message":"optional revised request text"}}. Maximum 32 findings; each message at most 4000 characters; candidate.message at most 8000 characters. No other fields. An empty findings array is valid. ' +
     (intent.kind === "rework"
       ? "This is an explicit rework request: propose revised text without inventing answers to unresolved questions."
       : "You may propose improved text but must not treat it as accepted input.");
+  if (intent.provider.id === 'cursor-cli') instruction = instruction.replace('You have no tools, commands or live environment access.', 'This review runs in Cursor ask mode. Native tools and hooks remain governed by the operator’s Cursor permissions; restrict your review to the supplied evidence and do not execute changes.');
   return {
     id: intent.id,
     role: "user",
@@ -284,6 +286,7 @@ export class RequestReviewManager {
       const frozen = {
         reply: model.reply.bind(model),
         configuration: structuredClone(intent.provider),
+        ...(intent.provider.id === 'cursor-cli' ? { capabilities: { ...modelCapabilities, tools: 'provider_native' } } : {}),
       } as ConversationModel;
       const dispatch = prepareModelRequest(
         frozen,

@@ -2,7 +2,8 @@ import { interactionFeatureRequest } from './feature-request-reference.js';
 import { randomUUID } from 'node:crypto';
 import { object, text } from '../../shared/contracts.js';
 import { DomainError } from '../../shared/errors.js';
-import { definitionConnection, type WorkerDefinitions } from './definitions.js';
+import { type WorkerDefinitions } from './definitions.js';
+import { draftSessionSelection } from './session-model-selection.js';
 import type { SessionCatalog, SessionRecord } from './session-catalog.js';
 import type { WorkerSettingsPort } from './workspace-ports.js';
 import type { WorkerConversation } from './conversation.js';
@@ -40,6 +41,8 @@ export async function sessionAction(context: SessionActionContext, input: unknow
         "id",
         "title",
         "provider",
+        "model",
+        "effort",
         "definitionId",
         "definitionRef",
         "agent",
@@ -51,11 +54,12 @@ export async function sessionAction(context: SessionActionContext, input: unknow
             "conflict",
             "Session limit reached (100). Delete an unused session first.",
           );
-        const provider = context.settings.provider(String(body.provider));
+        const provider = context.settings.provider(String(body.provider ?? context.settings.value.defaultProvider ?? "codex-cli"));
         const definition = context.definitions.select(body);
-        definitionConnection(provider, definition);
+        const selection = draftSessionSelection(provider, body, definition);
         const id = randomUUID();
         const record: SessionRecord = {
+          ...(selection ? { selection } : {}),
           ...(definition ? { definition } : {}),
           id,
           taskId: id,
@@ -71,6 +75,7 @@ export async function sessionAction(context: SessionActionContext, input: unknow
         context.catalog.selected = record.id;
       } else {
         if (
+          body.provider !== undefined || body.model !== undefined || body.effort !== undefined ||
           body.definitionId !== undefined ||
           body.definitionRef !== undefined ||
           body.agent !== undefined ||
@@ -78,7 +83,7 @@ export async function sessionAction(context: SessionActionContext, input: unknow
         )
           throw new DomainError(
             "invalid_input",
-            "An agent definition is fixed when a task is created. Create a new task to change it.",
+            "Model selection and agent instructions are fixed when a task is created. Create a new task to change them.",
           );
         const record = context.catalog.records.find((item) => item.id === body.id);
         if (!record) throw new DomainError("not_found", "Session not found");

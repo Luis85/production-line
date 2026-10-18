@@ -1,3 +1,4 @@
+import { providerIds, type ProviderId } from './application/provider-contract.js';
 import { validateRepositoryConfiguration } from './application/repositories.js';
 import { DEFAULT_MAX_RUNTIME_MS, MAX_MAX_RUNTIME_MS } from './application/execution-policy.js';
 import { chatConfiguration } from './status/workspace.js';
@@ -34,7 +35,7 @@ export async function configuration(options: Record<string, string>, document?: 
   const directory = options['features-dir'] ?? featuresRaw.directory;
   if (directory !== undefined && (typeof directory !== 'string' || !directory.trim() || directory.length > 4096 || /[\x00-\x1f]/.test(directory))) throw new ValidationError('features.directory must be a folder path.');
   const provider = featuresRaw.provider ?? 'codex-cli';
-  if (!['codex-cli', 'claude-cli', 'openai-api', 'anthropic-api'].includes(String(provider))) throw new ValidationError('Invalid features.provider.');
+  if (!providerIds.includes(provider as ProviderId)) throw new ValidationError('Invalid features.provider.');
   const features = directory === undefined ? undefined : { directory: resolve(options['project-dir'] ?? process.cwd(), directory as string), provider: String(provider), pollMs: integer(String(featuresRaw.pollMs ?? 1000), 'features.pollMs', 250, 30000) };
   const scheduler = section(raw, 'scheduler', ['maxParallel', 'order', 'pollMs', 'maxAttempts']);
   const execution = section(raw, 'execution', ['mode', 'timeoutMs', 'mockMs', 'codex']);

@@ -36,7 +36,7 @@ async function edit(runtime, signal, content = 'after\n') {
 }
 const check = (runtime, signal, allowFailure = false) => call(runtime, 'werk_candidate_check', { preset: 'source-check' }, signal, allowFailure);
 
-async function fixture(t, execute, { verification = true, observations = /** @type {import('../../src/worker/application/process-observation.ts').ProcessObservation | undefined} */ (undefined) } = {}) {
+async function fixture(t, execute, { verification = true, native = false, observations = /** @type {import('../../src/worker/application/process-observation.ts').ProcessObservation | undefined} */ (undefined) } = {}) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'werk-development-task-')));
   const repository = join(root, 'repo'), state = join(root, 'state');
   let sessions, board;
@@ -51,7 +51,7 @@ async function fixture(t, execute, { verification = true, observations = /** @ty
   await git(repository, 'commit', '-m', 'Fixture baseline');
   const baseCommit = await git(repository, 'rev-parse', 'HEAD');
   const settings = new WorkerSettings(state); await settings.init();
-  await settings.update({ provider: { id: 'openai-api', model: 'fixture', apiKey: 'fixture-never-sent' }, board: { paused: false } });
+  await settings.update({ provider: { id: native ? 'cursor-cli' : 'openai-api', model: 'fixture', apiKey: 'fixture-never-sent' }, board: { paused: false } });
   const grant = async required => {
     const policy = settings.toolPolicy();
     await settings.updateToolAccess({ expectedRevision: policy.revision, builtins: { ...policy.builtins, files: true, commands: [{ id: 'source-check', name: 'Check edited source', executable: process.execPath, args: ['--input-type=module', '-e', checkSource], enabled: true, verification: required }] }, mcp: [] });
@@ -61,7 +61,7 @@ async function fixture(t, execute, { verification = true, observations = /** @ty
   const failures = [], requests = [];
   const factory = (connection, _directory, _transport, options) => ({
     configuration: { id: connection.id, model: connection.model, instruction: 'Controlled development fixture; no provider connection.' },
-    capabilities: modelCapabilities,
+    capabilities: { ...modelCapabilities, ...(native ? { tools: /** @type {const} */ ('provider_native') } : {}) },
     get toolManifest() { return options?.tools().manifest; },
     async reply() { throw Error('Structured execution required.'); },
     async execute(request, signal) {
@@ -86,7 +86,7 @@ async function fixture(t, execute, { verification = true, observations = /** @ty
     get board() { return board; }, get sessions() { return sessions; }, get invocations() { return invocations; },
     request(id) { return sessions.requests.get(board.executionDetail(id).requestId); },
     async create() {
-      await board.create({ title: 'Implement the approved fixture change', instruction: 'Change approved.txt to after and verify the actual source.', repository, paths: ['approved.txt'], provider: 'openai-api' });
+      await board.create({ title: 'Implement the approved fixture change', instruction: 'Change approved.txt to after and verify the actual source.', repository, paths: ['approved.txt'], provider: native ? 'cursor-cli' : 'openai-api' });
       return board.view().tasks.at(-1).id;
     },
     async settle(id, expected) {
@@ -340,4 +340,24 @@ test('task observation includes candidate capture after model execution with the
     assert.equal(record.featureRequestKey, task.feature.key); assert.equal(record.taskId, id);
     assert.equal(record.sessionId, task.sessionId); assert.equal(record.runId, task.runId);
   }
+});
+
+
+test('native provider edits are verified by the worker before the same Feature Request reaches review', { timeout: testTimeoutMs }, async t => {
+  const f = await fixture(t, async ({ request, task }) => {
+    assert.equal(request.policy.tools, 'provider_native');
+    assert.equal(request.policy.filesystem, 'provider_permissions');
+    assert.equal(request.policy.development, true);
+    await writeFile(join(task.worktree, 'approved.txt'), 'after\n');
+    return complete('Implemented through native tools; awaiting worker verification.');
+  }, { native: true });
+  const id = await f.create(), task = await f.settle(id, 'review');
+  assert.equal(f.invocations, 1); assert.equal(task.developmentCompletion.verified, true);
+  assert.equal(task.developmentEvidence.checks.length, 1);
+  assert.equal(task.developmentEvidence.checks[0].status, 'passed');
+  assert.match(task.developmentEvidence.checks[0].stdout, /actual edited source/);
+  assert.equal(f.request(id).execution.facts['output.verificationPassed'], true);
+  assert.equal(f.request(id).owner.featureId, task.feature.key);
+  assert.equal(await readFile(join(f.repository, 'approved.txt'), 'utf8'), 'before\n');
+  await f.restart(); await f.board.tick(); assert.equal(f.invocations, 1);
 });

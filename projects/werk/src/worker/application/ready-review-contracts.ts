@@ -1,3 +1,4 @@
+import { validateModelSelection, type ModelSelection } from './model-selection.js';
 import { parseReadyReviewResult } from './ready-review-protocol.js';
 import { createHash } from 'node:crypto';
 import { DomainError } from '../../shared/errors.js';
@@ -13,6 +14,7 @@ export interface ReadyReviewInput {
   source: { commit: string; path: string; sha256: string; markdown: string };
   prompt: FeatureDefinitionPrompt; title: string; provider: ProviderId; generation: number;
   previousAssessment?: ReadyReviewResult;
+  selection?: ModelSelection;
   definitionId?: string; definitionRef?: string; agent?: string; useInstructionsOnly?: boolean;
 }
 export interface ReadyReviewResult {
@@ -30,7 +32,7 @@ export interface ReadyReviewPort {
 }
 export const readyReviewSessionId = (input: Pick<ReadyReviewInput, 'feature' | 'provider'>) => 'ready-review-' + gateDigest([input.feature.key, input.provider]).slice(0, 40);
 export function validateReadyReviewInput(value: unknown): ReadyReviewInput {
-  const raw = object(value, 'Ready Check input', ['operationId', 'feature', 'source', 'prompt', 'title', 'provider', 'generation', 'previousAssessment', 'definitionId', 'definitionRef', 'agent', 'useInstructionsOnly']);
+  const raw = object(value, 'Ready Check input', ['operationId', 'feature', 'source', 'prompt', 'title', 'provider', 'generation', 'previousAssessment', 'selection', 'definitionId', 'definitionRef', 'agent', 'useInstructionsOnly']);
   const source = object(raw.source, 'Ready Check source', ['commit', 'path', 'sha256', 'markdown']);
   if (typeof source.commit !== 'string' || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(source.commit)
     || typeof source.markdown !== 'string' || !source.markdown.trim() || source.markdown.includes('\0') || Buffer.byteLength(source.markdown) > 65536
@@ -44,6 +46,10 @@ export function validateReadyReviewInput(value: unknown): ReadyReviewInput {
     source: { commit: source.commit, path: featureWorkflowPath(source.path), sha256: source.sha256 as string, markdown: source.markdown },
     prompt, title: text(raw.title, 'Ready Check title', 120), provider: raw.provider as ProviderId, generation: Number(raw.generation),
   };
+  if (raw.selection !== undefined) {
+    result.selection = validateModelSelection(raw.selection);
+    if (result.selection.provider !== result.provider) throw new DomainError('conflict', 'Ready Check model selection belongs to a different provider.');
+  }
   if (raw.previousAssessment !== undefined) result.previousAssessment = parseReadyReviewResult({ ...object(raw.previousAssessment, 'Previous Ready Check assessment', ['passed', 'summary', 'findings']), schemaVersion: 1 });
   for (const field of ['definitionId', 'definitionRef', 'agent'] as const) if (raw[field] !== undefined) result[field] = text(raw[field], field, 512);
   if (raw.useInstructionsOnly !== undefined) {

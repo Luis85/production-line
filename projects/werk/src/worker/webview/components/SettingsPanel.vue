@@ -1,28 +1,42 @@
 <script setup lang="ts">
 import type { ProviderId } from '../../application/provider-contract';
+import type { ModelEffort } from '../../application/model-effort';
 import { computed, ref, watch } from 'vue';
 import UButton from '@nuxt/ui/components/Button.vue';
 import UInput from '@nuxt/ui/components/Input.vue';
 import USelect from '@nuxt/ui/components/Select.vue';
+import ModelSelectionFields from './ModelSelectionFields.vue';
 import ProviderAccountPanel from './ProviderAccountPanel.vue';
 import { state, workspaceAction, request, date } from '../store';
 defineProps<{ providerOnly?: boolean; connectionOnly?: boolean }>();
 let connectionGeneration = 0;
 const check = ref<{ message: string; authentication: string; checkedAt: string } | null>(null), checking = ref(false), copied = ref(false);
 const provider = ref<ProviderId>('codex-cli'), executable = ref(''), model = ref(''), key = ref(''), clearKey = ref(false), url = ref(''), enrollment = ref(''), busy = ref(false), message = ref('');
-const providerNotice = ref(''), connectionNotice = ref('');
-const providerBaseline = ref({ executable: '', model: '' }), connectionBaseline = ref('');
+const providerNotice = ref(''), connectionNotice = ref(''), defaultNotice = ref('');
+const effort = ref<ModelEffort | ''>('default'), defaultProvider = ref<ProviderId>('codex-cli'), defaultBaseline = ref<ProviderId>('codex-cli');
+const defaultDirty = computed(() => defaultProvider.value !== defaultBaseline.value);
+const loginCommand = computed(() => provider.value === 'codex-cli' ? 'codex login' : provider.value === 'cursor-cli' ? 'agent login' : 'claude auth login');
+const providerBaseline = ref({ executable: '', model: '', effort: 'default' as ModelEffort | '' }), connectionBaseline = ref('');
 const selected = computed(() => state.settings?.providers.find(item => item.id === provider.value));
+const accountRevision = ref(0);
+const accountConnectionKey = computed(() => JSON.stringify([selected.value?.executable ?? '', !!selected.value?.hasApiKey, accountRevision.value]));
+const providerCommand = () => ({ provider: { id: provider.value, executable: executable.value, model: model.value, effort: effort.value || 'default', apiKey: key.value, clearApiKey: clearKey.value } });
 const editingLocked = computed(() => busy.value || checking.value);
-const dirty = computed(() => executable.value !== providerBaseline.value.executable || model.value !== providerBaseline.value.model || !!key.value || clearKey.value);
+const dirty = computed(() => executable.value !== providerBaseline.value.executable || model.value !== providerBaseline.value.model || effort.value !== providerBaseline.value.effort || !!key.value || clearKey.value);
 const connectionDirty = computed(() => url.value !== connectionBaseline.value || !!enrollment.value);
 function fillProvider() {
-  executable.value = selected.value?.executable ?? ''; model.value = selected.value?.model ?? '';
-  providerBaseline.value = { executable: executable.value, model: model.value };
+  executable.value = selected.value?.executable ?? ''; model.value = selected.value?.model ?? ''; effort.value = selected.value?.effort ?? 'default';
+  providerBaseline.value = { executable: executable.value, model: model.value, effort: effort.value };
   key.value = ''; clearKey.value = false; providerNotice.value = ''; check.value = null;
 }
+function fillDefault() { defaultProvider.value = state.settings?.defaultProvider ?? 'codex-cli'; defaultBaseline.value = defaultProvider.value; defaultNotice.value = ''; }
+watch(() => state.settings?.defaultProvider, (value, previous) => {
+  if (!state.unlocked || value === previous) return;
+  if (defaultDirty.value) defaultNotice.value = 'The saved default changed elsewhere. Your choice is kept. Reload before saving.';
+  else fillDefault();
+}, { immediate: true });
 function fillConnection() { url.value = state.settings?.connection.url ?? ''; connectionBaseline.value = url.value; enrollment.value = ''; connectionNotice.value = ''; }
-watch([executable, model, key, clearKey], () => { connectionGeneration++; check.value = null; }, { flush: 'sync' });
+watch([executable, model, effort, key, clearKey], () => { connectionGeneration++; check.value = null; }, { flush: 'sync' });
 watch(provider, () => { connectionGeneration++; fillProvider(); copied.value = false; }, { flush: 'sync' });
 watch(() => JSON.stringify(selected.value), (value, previous) => {
   if (!state.unlocked || value === previous) return;
@@ -42,24 +56,25 @@ async function checkConnection() {
   catch (error) { if (selectedProvider === provider.value && generation === connectionGeneration) check.value = { authentication: 'unknown', message: (error as Error).message, checkedAt: new Date().toISOString() }; }
   finally { checking.value = false; }
 }
-async function copyLogin() { try { await navigator.clipboard.writeText(provider.value === 'codex-cli' ? 'codex login' : 'claude auth login'); copied.value = true; } catch { message.value = 'Select the command below to copy it.'; } }
+async function copyLogin() { try { await navigator.clipboard.writeText(loginCommand.value); copied.value = true; } catch { message.value = 'Select the command below to copy it.'; } }
 watch(() => state.unlocked, value => {
-  if (value) { fillProvider(); fillConnection(); }
-  else { connectionGeneration++; key.value = ''; enrollment.value = ''; executable.value = ''; model.value = ''; url.value = ''; message.value = ''; providerNotice.value = ''; connectionNotice.value = ''; check.value = null; }
+  if (value) { fillProvider(); fillConnection(); fillDefault(); }
+  else { connectionGeneration++; key.value = ''; enrollment.value = ''; executable.value = ''; model.value = ''; effort.value = 'default'; defaultNotice.value = ''; url.value = ''; message.value = ''; providerNotice.value = ''; connectionNotice.value = ''; check.value = null; }
 }, { immediate: true });
-const providerInput = () => JSON.stringify([provider.value, executable.value, model.value, key.value, clearKey.value]);
+const providerInput = () => JSON.stringify([provider.value, executable.value, model.value, effort.value, key.value, clearKey.value]);
 const connectionInput = () => JSON.stringify([url.value, enrollment.value]);
 async function save(body: unknown) {
   if (editingLocked.value || !state.unlocked) return;
-  const submitted = structuredClone(body) as { provider?: unknown; connection?: unknown };
-  const providerSnapshot = providerInput(), connectionSnapshot = connectionInput();
+  const submitted = structuredClone(body) as { provider?: unknown; connection?: unknown; defaultProvider?: ProviderId };
+  const providerSnapshot = providerInput(), connectionSnapshot = connectionInput(), submittedDefault = defaultProvider.value;
   busy.value = true; message.value = '';
   try {
     if (await workspaceAction('/api/settings', submitted) && state.unlocked) {
       connectionGeneration++; check.value = null;
       // Only clear the credentials in the acknowledged form; preserve any subsequent edits.
-      if (submitted.provider && providerInput() === providerSnapshot) fillProvider();
+      if (submitted.provider) { accountRevision.value++; if (providerInput() === providerSnapshot) fillProvider(); }
       if (submitted.connection && connectionInput() === connectionSnapshot) fillConnection();
+      if (submitted.defaultProvider && defaultProvider.value === submittedDefault) fillDefault();
       message.value = 'Settings saved.';
     }
   } finally { busy.value = false; }
@@ -70,8 +85,16 @@ async function save(body: unknown) {
     <h2 v-if="!providerOnly && !connectionOnly">
       Connections
     </h2>
+    <form v-if="!connectionOnly" class="settings-form request-defaults" @submit.prevent="save({ defaultProvider, expectedDefaultProvider: defaultBaseline })">
+      <h2>New request defaults</h2>
+      <label for="worker-default-provider">Default provider for new requests</label>
+      <USelect id="worker-default-provider" v-model="defaultProvider" :items="state.settings?.providers.map(item => ({ label: item.label + (item.configured ? '' : ' · needs setup'), value: item.id })) ?? []" :disabled="editingLocked" class="w-full" />
+      <p class="page-note">New requests start with this provider. Each provider’s model and effort defaults are set below. Accepted requests retain their saved selection.</p>
+      <p v-if="defaultNotice" role="status" class="page-note">{{ defaultNotice }}</p>
+      <div class="actions"><UButton type="submit" :loading="busy" :disabled="editingLocked || !defaultDirty">Save default provider</UButton><UButton v-if="defaultNotice" color="neutral" variant="outline" :disabled="editingLocked" @click="fillDefault">Reload saved default</UButton></div>
+    </form>
     <div class="settings-grid" :class="{ 'provider-only': providerOnly || connectionOnly }">
-      <form v-if="!connectionOnly" class="settings-form" @submit.prevent="save({ provider: { id: provider, executable, model, apiKey: key, clearApiKey: clearKey } })">
+      <form v-if="!connectionOnly" class="settings-form" @submit.prevent="save(providerCommand())">
         <h2>Provider connections &amp; accounts</h2>
         <div v-if="providerNotice" role="status">
           <p class="page-note">
@@ -91,7 +114,7 @@ async function save(body: unknown) {
           </label>
           <UInput id="provider-path" v-model="executable" placeholder="/absolute/path/to/codex" class="w-full" :disabled="editingLocked" />
           <p class="page-note">
-            Uses the worker process owner’s existing CLI login. Sign in on the machine first. After saving, check sign-in below. Subscription quota and model access are not verified by this check. Claude Code CLI supports Linux, macOS and Windows; Codex CLI requires Linux or macOS. See the <a href="https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/use-worker-webview.md#connect-claude-or-codex" target="_blank" rel="noopener noreferrer">Windows Claude requirements</a>.
+            {{ provider === 'cursor-cli' ? 'Uses a saved Cursor API key, then CURSOR_API_KEY from the worker environment, then the worker process owner’s CLI login.' : 'Uses the worker process owner’s existing CLI login.' }} For CLI login, sign in on the machine first. After saving, check sign-in below. Subscription quota and model access are not verified by this check. Claude Code CLI supports Linux, macOS and Windows; Codex CLI requires Linux or macOS. See the <a href="https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/use-worker-webview.md#connect-claude-or-codex" target="_blank" rel="noopener noreferrer">Windows Claude requirements</a>.
           </p>
           <div class="provider-login">
             <strong>
@@ -102,7 +125,7 @@ async function save(body: unknown) {
             </p>
             <div class="actions">
               <code>
-                {{ provider === 'codex-cli' ? 'codex login' : 'claude auth login' }}
+                {{ loginCommand }}
               </code>
               <UButton color="neutral" variant="ghost" icon="i-lucide-copy" @click="copyLogin">
                 {{ copied ? 'Copied' : 'Copy command' }}
@@ -113,13 +136,9 @@ async function save(body: unknown) {
             </p>
           </div>
         </template>
-        <template v-else>
-          <label for="provider-model">
-            Model ID
-          </label>
-          <UInput id="provider-model" v-model="model" required placeholder="An available model from your provider" class="w-full" :disabled="editingLocked" />
+        <template v-if="!provider.endsWith('-cli') || provider === 'cursor-cli'">
           <label for="provider-key">
-            API key
+            {{ provider === 'cursor-cli' ? 'API key · optional' : 'API key' }}
           </label>
           <UInput id="provider-key" v-model="key" type="password" autocomplete="off" :placeholder="selected?.hasApiKey ? 'Key saved · leave blank to keep' : 'Paste provider API key'" class="w-full" :disabled="editingLocked" />
           <label class="check-label">
@@ -127,9 +146,11 @@ async function save(body: unknown) {
             Remove saved API key
           </label>
           <p class="page-note">
-            Keys are stored privately on the worker machine and are never returned to the browser. API calls use your provider billing.
+            Keys are stored privately on the worker machine and are never returned to the browser. {{ provider === 'cursor-cli' ? 'Leave blank to keep a saved key. Removing it falls back to CURSOR_API_KEY from the worker environment, then the local Cursor login.' : 'API calls use your provider billing.' }}
           </p>
         </template>
+        <ModelSelectionFields id="provider-default" :provider="provider" v-model:model="model" v-model:effort="effort" :providers="state.settings?.providers ?? []" :disabled="editingLocked" :show-provider="false" defaults />
+        <p v-if="provider === 'cursor-cli'" class="page-note">Cursor CLI does not provide documented token or cost counts. Usage remains unknown; enabled consumption limits can hold later work until you reconcile that usage.</p>
         <div class="actions">
           <UButton type="submit" :loading="busy" :disabled="editingLocked">
             Save provider
@@ -144,7 +165,7 @@ async function save(body: unknown) {
         <p v-if="check" role="status" class="provider-result" :class="{ 'error-text': ['signed-out', 'unavailable'].includes(check.authentication) }">
           {{ selected?.label }} · {{ date(check.checkedAt) }} · {{ check.message }}
         </p>
-        <ProviderAccountPanel v-if="provider.endsWith('-cli')" :provider-id="provider" :connection-key="selected?.executable || ''" :enabled="!dirty && !!selected?.configured" />
+        <ProviderAccountPanel v-if="provider.endsWith('-cli')" :provider-id="provider" :connection-key="accountConnectionKey" :enabled="!dirty && !!selected?.configured" />
       </form>
       <form v-if="!providerOnly" class="settings-form" @submit.prevent="save({ connection: { enabled: true, url, enrollmentToken: enrollment } })">
         <h2>Optional orchestrator</h2>
@@ -188,3 +209,9 @@ async function save(body: unknown) {
     </p>
   </section>
 </template>
+
+<style scoped>
+.request-defaults { margin-bottom: 28px; max-width: 760px; }
+.settings-grid.provider-only { grid-template-columns: minmax(0, 1fr); }
+.request-defaults :deep(button[role="combobox"]) { min-height: 44px; }
+</style>

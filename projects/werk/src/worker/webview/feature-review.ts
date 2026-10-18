@@ -144,5 +144,6 @@ export function buildFeatureReviewView(input: FeatureReviewInput) {
   return { identity: { featureKey: feature?.key ?? null, featureId: feature?.id ?? request?.owner.featureId ?? null, sessionId: session?.id ?? task?.sessionId ?? request?.owner.sessionId ?? null,
     taskId: task?.id ?? session?.taskId ?? shared?.taskId ?? null, requestId: request?.id ?? task?.requestId ?? session?.requestId ?? null,
     source: feature?.source ?? (sharedSource ? 'shared_git' : remote ? 'orchestrator' : 'interaction'), sourcePath: feature?.sourcePath ?? shared?.name ?? null },
+    selection: shared?.selection ?? task?.selection ?? session?.selection ?? null,
     title, summary: nextStep.description, stale, ownership, stages: [readiness, execution, verification, handoff], nextStep, evidence };
 }

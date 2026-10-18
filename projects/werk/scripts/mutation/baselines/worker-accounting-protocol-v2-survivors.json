@@ -1,0 +1,190 @@
+{
+  "schemaVersion": 1,
+  "scopeId": "worker-accounting-protocol-v2",
+  "reportDigest": "cbd0499bf3ddf42cc1d947c0ec7cbfebacfa16e5d8602241a2c9a4d49ea0386d",
+  "sourceDigest": "c926f0265c2ca3dee9315b0879f509c9eac7a1f8ad723e9a4ad977de881970e2",
+  "reviewedAt": "2026-10-17T12:56:38.381Z",
+  "policy": "Candidates remain surviving in the raw report and mutation score. No mutator exclusions or score adjustments are applied.",
+  "findings": [
+    {
+      "file": "src/shared/request-gate.ts",
+      "id": "59",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 33,
+      "replacement": "false",
+      "classification": "equivalent_candidate",
+      "rationale": "Strict enum membership already rejects every non-string stage; removing the separate typeof guard does not admit another value."
+    },
+    {
+      "file": "src/shared/request-gate.ts",
+      "id": "66",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 35,
+      "replacement": "false",
+      "classification": "equivalent_candidate",
+      "rationale": "Strict enum membership already rejects every non-string status; removing the separate typeof guard does not admit another value."
+    },
+    {
+      "file": "src/shared/request-gate.ts",
+      "id": "100",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 47,
+      "replacement": "false",
+      "classification": "equivalent_candidate",
+      "rationale": "Both rule counts are nonnegative safe integers and their sum is bounded by 33, which already bounds each count by 33."
+    },
+    {
+      "file": "src/shared/webview/bounded-polling.ts",
+      "id": "172",
+      "status": "Survived",
+      "mutator": "UpdateOperator",
+      "line": 26,
+      "replacement": "generation--",
+      "classification": "equivalent_candidate",
+      "rationale": "Generation is an opaque equality token. Incrementing and decrementing both distinguish obsolete asynchronous completions from the current activation."
+    },
+    {
+      "file": "src/worker/application/consumption.ts",
+      "id": "242",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 19,
+      "replacement": "false",
+      "classification": "equivalent_candidate",
+      "rationale": "Other checks require a positive reservation no larger than the worker allowance and a positive worker percentage; zero or negative allowance cannot satisfy them."
+    },
+    {
+      "file": "src/worker/application/consumption.ts",
+      "id": "246",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 19,
+      "replacement": "false",
+      "classification": "equivalent_candidate",
+      "rationale": "Other checks require a positive reservation no larger than the worker allowance and a positive allowance; zero or negative worker percentage cannot satisfy them."
+    },
+    {
+      "file": "src/worker/application/consumption.ts",
+      "id": "291",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 74,
+      "replacement": "true",
+      "classification": "equivalent_candidate",
+      "rationale": "Number.isSafeInteger already requires a number and does not coerce strings or other input types."
+    },
+    {
+      "file": "src/worker/application/consumption.ts",
+      "id": "315",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 82,
+      "replacement": "false",
+      "classification": "equivalent_candidate",
+      "rationale": "With bounded nonnegative counters, Math.max(null, b) equals b; when both counters are null the retained b-null branch returns null."
+    },
+    {
+      "file": "src/worker/application/consumption.ts",
+      "id": "318",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 82,
+      "replacement": "false",
+      "classification": "equivalent_candidate",
+      "rationale": "With bounded nonnegative counters, Math.max(a, null) equals a; when a is null the retained a-null branch returns b unchanged."
+    },
+    {
+      "file": "src/worker/application/consumption.ts",
+      "id": "327",
+      "status": "Survived",
+      "mutator": "LogicalOperator",
+      "line": 85,
+      "replacement": "typeof cost === 'number' || Number.isFinite(cost)",
+      "classification": "equivalent_candidate",
+      "rationale": "The remaining inclusive numeric bounds reject NaN and infinities; Number.isFinite cannot admit a non-number. Replacing this conjunction leaves the accepted values unchanged."
+    },
+    {
+      "file": "src/worker/application/consumption.ts",
+      "id": "328",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 85,
+      "replacement": "true",
+      "classification": "equivalent_candidate",
+      "rationale": "Number.isFinite already requires a numeric value, so the preceding typeof check is redundant."
+    },
+    {
+      "file": "src/worker/infrastructure/responses.ts",
+      "id": "663",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 28,
+      "replacement": "\"\"",
+      "classification": "equivalent_candidate",
+      "rationale": "The thrown diagnostic is inside a catch boundary that always replaces it with the same fixed public assignment error."
+    },
+    {
+      "file": "src/worker/infrastructure/responses.ts",
+      "id": "671",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 30,
+      "replacement": "\"\"",
+      "classification": "equivalent_candidate",
+      "rationale": "The identifier field label only changes an internal error message; the assignment catch boundary replaces that message with its fixed public error."
+    },
+    {
+      "file": "src/worker/infrastructure/responses.ts",
+      "id": "672",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 30,
+      "replacement": "\"\"",
+      "classification": "equivalent_candidate",
+      "rationale": "The thrown diagnostic is inside a catch boundary that always replaces it with the same fixed public assignment error."
+    },
+    {
+      "file": "src/worker/infrastructure/responses.ts",
+      "id": "686",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 35,
+      "replacement": "\"\"",
+      "classification": "equivalent_candidate",
+      "rationale": "The thrown diagnostic is inside a catch boundary that always replaces it with the same fixed public assignment error."
+    },
+    {
+      "file": "src/worker/infrastructure/responses.ts",
+      "id": "689",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 36,
+      "replacement": "\"\"",
+      "classification": "equivalent_candidate",
+      "rationale": "Optional repository input has already passed canonical identifier validation before the task-input projection; omitting this repeated validation admits no additional repository."
+    },
+    {
+      "file": "src/worker/infrastructure/responses.ts",
+      "id": "699",
+      "status": "Survived",
+      "mutator": "MethodExpression",
+      "line": 37,
+      "replacement": "keys",
+      "classification": "equivalent_candidate",
+      "rationale": "The intake validator treats absent optional fields and present fields with value undefined identically; required fields are checked before projection."
+    },
+    {
+      "file": "src/worker/infrastructure/responses.ts",
+      "id": "701",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 37,
+      "replacement": "true",
+      "classification": "equivalent_candidate",
+      "rationale": "The intake validator treats absent optional fields and present fields with value undefined identically; required fields are checked before projection."
+    }
+  ]
+}

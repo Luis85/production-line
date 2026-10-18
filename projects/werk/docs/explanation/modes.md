@@ -37,9 +37,9 @@ check measurements remain unavailable in these leased snapshots.
 ## Local worker chat and approved-file tasks
 
 The authenticated Taskboard can use configured OpenAI/Anthropic API connections
-or host-installed provider CLIs. Local Codex CLI requires POSIX; Claude Code CLI
-supports Linux, macOS and native Windows. Windows Claude execution uses supervised
-Job Object descendant cleanup. A supported process path is not proof that a
+or host-installed provider CLIs. Local Codex CLI requires POSIX; Claude Code and
+Cursor CLIs support Linux, macOS and native Windows. Windows CLI execution uses
+supervised Job Object descendant cleanup. A supported process path is not proof that a
 particular account, endpoint or CLI installation is available.
 
 Local execution shares the worker's one slot with parent assignments. Chat gets
@@ -50,10 +50,14 @@ checkout. Legacy unassigned non-Git directories retain the bounded read-only
 snapshot path. Installed-repository discovery requires an explicit saved choice
 before that checkout can be used or watched.
 
-Provider-native tools remain disabled for this local conversation path; Werk
-mediates approved built-in/MCP tools and preserves grants, revocation and typed
-interaction events. A model cannot authorize its own tool access. CLI
-restrictions and supported versions are in the
+Codex and Claude provider-native tools remain disabled for this local conversation
+path; Werk mediates their approved built-in/MCP tools and preserves grants,
+revocation and typed interaction events. Cursor instead follows the operator's
+native Cursor permissions, hooks, MCP and subagent policy. Its Chat/Ready Check
+path uses ask mode; implementation runs in the retained candidate worktree with
+worker verification afterward. Werk grants constrain supplemental Werk tools
+only, and Cursor usage remains unknown when no documented counters are available.
+A model cannot authorize its own Werk tool access. CLI restrictions are in the
 [model interaction contract](../reference/model-interaction.md).
 
 Local run evidence records reported usage and its source where available.

@@ -76,17 +76,20 @@ removing only `webview-token` while stopped generates a new token on restart.
 Deleting that file cannot override a configured environment token. See
 [environment configuration](../reference/configuration.md#project-environment-files).
 
-## Connect Claude or Codex
+<a id="connect-claude-or-codex"></a>
+
+## Connect Claude, Codex or Cursor
 
 Use **Settings → Providers & accounts**.
 The task interaction panel links to this editor when a connection needs setup.
 Worker access and model sign-in are separate: unlocking the webview never signs
-you into a provider. Four connections are supported:
+you into a provider. Five connections are supported:
 
 | Connection | Authentication | Configuration |
 | --- | --- | --- |
 | Codex CLI | Existing Codex CLI login of the worker OS account | Absolute executable path |
 | Claude Code CLI | Existing Claude Code CLI login of the worker OS account | Absolute executable path |
+| Cursor CLI | Cursor account login or private Cursor API key | Absolute `agent` executable path; native Cursor permissions/hooks |
 | OpenAI API | API key and provider billing | Available model ID and API key |
 | Claude API | Anthropic API key and provider billing | Available model ID and API key |
 
@@ -94,8 +97,9 @@ The worker discovers CLI executables on PATH at first startup. Sign in using
 `codex login` or `claude auth login` as the same OS account that runs the worker.
 Claude Code CLI runs on Linux, macOS and native Windows; the worker discovers
 `claude.exe` on PATH. Codex CLI still requires Linux or macOS. API connections and
-the webview run everywhere. Use **Check sign-in** after saving a CLI connection. The worker runs only
-`codex login status` or `claude auth status`, plus a bounded Claude version
+the webview run everywhere. Use **Check sign-in** after saving a CLI connection.
+For Codex and Claude, the worker runs only `codex login status` or
+`claude auth status`, plus a bounded Claude version
 probe. Each subprocess has a five-second deadline. Known Claude versions older
 than 2.1.257 require an upgrade for durable sessions; an unknown version is not
 confirmed compatible. The result distinguishes signed-in, signed-out, unavailable and unknown;
@@ -120,9 +124,10 @@ Code must support `--safe-mode`, `--restricted`, `--tools`, `--strict-mcp-config
 and explicit `--session-id`/`--resume` continuation (adapter flags checked against 2.1.296).
 Durable sessions refresh the worker’s current instructions and tool grants; legacy
 one-shot calls retain `--no-session-persistence`.
-CLI Chat starts in a private workspace. All adapters default to tools disabled;
-**Settings → Tools & MCP** manages explicit built-in grants and MCP connections.
-Granted CLI tools use the worker’s private MCP bridge with native tools disabled
+CLI Chat starts in a private workspace. Codex, Claude Code and direct API adapters
+default to tools disabled; **Settings → Tools & MCP** manages their explicit
+built-in grants and MCP connections. Cursor uses the native policy described
+below. Granted Codex/Claude CLI tools use the worker’s private MCP bridge with native tools disabled
 and a fresh private working directory. Claude’s tool-enabled path omits
 `--safe-mode` because that flag disables MCP; it retains `--restricted`, an empty
 native tool list, strict MCP configuration, disabled hooks/plugins/memory and
@@ -146,13 +151,85 @@ Orchestrator task profiles are edited separately under **Execution profiles**:
 connecting a chat/API provider does not change the worker’s orchestration mode
 or advertised profiles.
 
+### Connect Cursor CLI
+
+Install a current [Cursor CLI](https://cursor.com/docs/cli/installation) on the
+worker machine. Werk discovers `agent` on PATH (`agent.exe` on Windows); you may
+also configure the absolute path to a legacy `cursor-agent` installation. No
+minimum version is assumed from an unknown version result.
+
+Authenticate as the OS account that runs the worker:
+
+```sh
+agent login
+agent status
+agent models
+```
+
+Cursor also accepts `CURSOR_API_KEY` in the worker process environment. A saved
+Cursor API key in the provider editor is passed privately to the subprocess;
+keep it out of request notes and command arguments. An arbitrary key in the
+project `.env` is not automatically loaded: that file reads only its documented
+Werk launch keys. See [Cursor authentication](https://cursor.com/docs/cli/reference/authentication).
+
+Select **Cursor CLI** in **Settings → Providers & accounts**, save its executable,
+default model and optional key, then use **Check sign-in**. The bounded status and
+version probes do not prompt a model. **Account on the worker machine** displays
+recognized identity information; it does not establish subscription quota or remaining usage.
+Choose a model listed for your account; Cursor exposes model selection through
+its [CLI parameters](https://cursor.com/docs/cli/reference/parameters).
+
+Cursor's native tools, hooks, MCP connections and subagents follow the operator's
+Cursor configuration. Review [Cursor permissions](https://cursor.com/docs/cli/reference/permissions)
+and [hooks](https://cursor.com/docs/hooks) for the account and execution workspace.
+Werk does not add force, automatic MCP approval, workspace-trust or sandbox
+bypass flags. Its **Tools & MCP** grants constrain supplemental Werk tools only;
+they do not restrict Cursor's native tools or hooks.
+
+Chat and Ready Check use Cursor's read-only **ask** mode in a private worker
+workspace. This is Cursor behavior, not a Werk no-tools isolation guarantee.
+Implementation uses the worker's pinned candidate worktree; Werk validates the
+result and runs required verification after Cursor returns. Native command output
+alone does not establish a passing check. See the
+[Cursor execution boundary](../reference/model-interaction.md#cursor-native-execution).
+
+Cursor supports **Provider default** effort only. Token and cost counters,
+including native subagent usage, are unavailable in this adapter. Metrics show
+unknown usage; an enabled consumption limiter can hold subsequent work until
+unverified usage is resolved through the existing controls. An account login or
+successful reply does not establish a remaining allowance.
+
+## Choose provider, model and effort
+
+In **Settings → Providers & accounts**, save **Default provider for new requests**
+to choose the connection offered for new intake. Each connection also has
+**Default model** and **Default effort**. Save the connection after changing
+those defaults. Existing provider-save restrictions still apply while work is
+queued or running.
+
+In **New request → Task options**, or **Request options** for a shared draft,
+choose **Provider**, an optional **Model**, and **Effort**. A reopened shared draft
+exposes the same selection in its request details. Leave Model blank to use a
+compatible instruction-profile model, then the selected provider's default.
+Choose **Inherit worker default** for effort inheritance, or **Provider default**
+to request the provider's own behavior explicitly. Cursor CLI supports only
+Provider default effort; other choices depend on the selected provider and model.
+
+The worker freezes the effective selection when it accepts the Feature Request.
+New defaults do not alter an owned request's Ready Check, implementation, answers
+or resumed session. Use a successor request to change that execution selection.
+The [selection contract](../reference/model-interaction.md#provider-model-and-effort-selection)
+lists precedence, allowed values and the distinction between a configured model
+and an observed provider model.
+
 ## Create and follow up on a task
 
 For a connected shared repository, **New request** starts in the chat interaction
 panel and creates the same project Feature Request as the team's authoring skill:
 
 1. Describe the outcome under **Request instructions**. **Request options** lets
-   you choose a model connection, name the request and list approved file paths.
+   you choose a provider, optional model and effort, name the request and list
+   approved file paths.
 2. Choose **Prepare request**. This loads the committed project template and
    places your instructions in the draft; it does not invoke a model or start work.
 3. Complete **Goal**, **Context**, **Acceptance criteria**, **Verification plan**

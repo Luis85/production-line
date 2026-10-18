@@ -13,7 +13,7 @@ import { modelFor } from './providers.js';
 export function readyReviewModels(directory: string, settings: WorkerSettingsPort, consumption: ConsumptionRuntime, runs: RunJournal, observations: ProcessObservation): ReadyReviewOptions['model'] {
   const store = new FileModelSessionStore(directory);
   return (profile, binding) => {
-    const model = modelFor({ ...settings.provider(binding.providerId), model: profile.model, instruction: profile.instruction },
+    const model = modelFor({ ...settings.provider(binding.providerId), model: profile.model, effort: profile.effort ?? 'default', instruction: profile.instruction },
       join(directory, 'sessions', binding.logicalSessionId), undefined, { session: { binding, store } });
     if (!model) return undefined;
     const observed: StructuredModel = {

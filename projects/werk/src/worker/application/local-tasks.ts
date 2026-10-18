@@ -22,6 +22,7 @@ export class LocalTaskboard {
   preparationDefinition(id: string) {
     return this.runtime.preparationDefinition(id);
   }
+  preparationSelection(id: string) { return this.runtime.preparationSelection(id); }
   view() {
     return this.runtime.view();
   }

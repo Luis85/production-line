@@ -1,6 +1,7 @@
 import { validateFeatureRequestReference, type FeatureRequestReference } from './feature-request-reference.js';
 import type { DefinitionSnapshot } from './definitions.js';
-import { definitionConnection, validateSnapshot } from './definitions.js';
+import { validateSnapshot } from './definitions.js';
+import { validateModelSelection, type ModelSelection } from './model-selection.js';
 import type { ProviderId } from './provider-contract.js';
 import type { WorkerSettingsPort } from './workspace-ports.js';
 import { identifier, text } from '../../shared/contracts.js';
@@ -15,6 +16,7 @@ export type TaskState =
   | "escalated"
   | "needs_rework";
 export interface SessionRecord {
+  selection?: ModelSelection;
   feature?: FeatureRequestReference;
   definition?: DefinitionSnapshot;
   submissionHash?: string;
@@ -57,10 +59,10 @@ export function restoreSessionCatalog(saved: string | undefined, settings: Worke
         if (record.continuationBlockedReason !== undefined) text(record.continuationBlockedReason, 'Continuation block reason', 1000);
         if (record.definition) {
           validateSnapshot(record.definition);
-          definitionConnection(
-            settings.provider(record.provider),
-            record.definition,
-          );
+        }
+        if (record.selection) {
+          const selection = validateModelSelection(record.selection);
+          if (selection.provider !== record.provider) throw Error('Invalid saved session model selection.');
         }
         if (
           typeof record.archived !== "boolean" ||
@@ -93,7 +95,7 @@ export function restoreSessionCatalog(saved: string | undefined, settings: Worke
           taskId: "default",
           kind: "chat",
           title: "New task",
-          provider: "codex-cli",
+          provider: settings.value.defaultProvider ?? "codex-cli",
           createdAt: new Date().toISOString(),
           archived: false,
         },

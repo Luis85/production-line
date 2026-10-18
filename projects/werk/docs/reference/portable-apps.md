@@ -5,8 +5,8 @@ The runtime release contains `bin/apps/factory`, `bin/apps/orchestrator` and
 Each includes its compiled application, webview, CLI and runtime dependencies.
 Only **Node.js 24.x** is required. No npm install, source checkout, Docker or sibling
 application is needed. CLI subscription providers additionally need their installed,
-authenticated executable on the worker machine. Claude Code CLI runs on Linux,
-macOS and Windows; Codex CLI requires Linux or macOS. API providers need a configured key and selected model.
+authenticated executable on the worker machine. Claude Code and Cursor CLIs run
+on Linux, macOS and Windows; Codex CLI requires Linux or macOS. API providers need a configured key and selected model.
 
 From the destination project directory:
 
@@ -282,8 +282,9 @@ provider's CLI on the host. An example settings document is:
 ```
 
 On Windows, configure Claude Code CLI with its absolute `claude.exe` path and use
-`"provider":"claude-cli"` in task input. See the
-[Windows Claude requirements](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/use-worker-webview.md#connect-claude-or-codex)
+`"provider":"claude-cli"` in task input, or configure Cursor's `agent.exe` with
+`"provider":"cursor-cli"`. See the
+[Windows CLI requirements](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/use-worker-webview.md#connect-claude-codex-or-cursor)
 for PowerShell, .NET and process-containment prerequisites. Alternatively, configure
 an API connection, for example
 `{"provider":{"id":"openai-api","model":"YOUR_SELECTED_MODEL","apiKey":"PRIVATE_API_KEY"}}`,
@@ -363,6 +364,9 @@ CLI sign-in check without prompting a model. API connections report configured
 or missing configuration; no paid API request is made. Raw account output is not
 returned. Browser access uses its own protected session and is separate from
 provider sign-in; bearer-based automation continues to read the private token.
+Cursor uses the worker OS account's `agent login` or a private API key; see
+[Cursor setup](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/use-worker-webview.md#connect-cursor-cli)
+for native permissions, model selection and unavailable usage counters.
 
 ```sh
 node bin/apps/worker/cli.mjs provider check --id codex-cli

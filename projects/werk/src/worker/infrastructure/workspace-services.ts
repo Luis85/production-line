@@ -50,8 +50,8 @@ export function workspaceModelFactory(directory: string, settings: ModelSettings
         const additionalOperations = binding && policy?.sessionContext ? [sessionHistoryTool(directory, binding)] : [];
         additionalOperations.push(...processTools.tools(settings.toolPolicy()));
         const grant = settings.toolPolicy().delegation;
-        if (binding && policy?.sessionContext && grant?.enabled && runs) {
-          const delegated = workspaceDelegation({ directory, binding, connection: { ...connection, ...(dispatch ? { model: dispatch.provider.model, instruction: dispatch.provider.instruction } : {}) }, grant, acceptedScope: dispatch?.messages[0]?.text, runtime: () => runtime, runs, consumption, model, observations: processes?.observations });
+        if (binding && policy?.sessionContext && grant?.enabled && runs && connection.id !== 'cursor-cli') {
+          const delegated = workspaceDelegation({ directory, binding, connection: { ...connection, ...(dispatch ? { model: dispatch.provider.model, instruction: dispatch.provider.instruction, effort: dispatch.provider.effort ?? 'default' } : {}) }, grant, acceptedScope: dispatch?.messages[0]?.text, runtime: () => runtime, runs, consumption, model, observations: processes?.observations });
           if (delegated) additionalOperations.push(delegated);
         }
         runtime = createToolRuntime({

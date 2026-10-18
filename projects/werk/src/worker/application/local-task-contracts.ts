@@ -1,3 +1,4 @@
+import { validateModelSelection, type ModelSelection } from './model-selection.js';
 import { validateFeatureDefinitionPrompts, type FeatureDefinitionPrompts } from './feature-workflow.js';
 import type { CandidateInspectionLimits } from './execution-policy.js';
 import type { ProjectModelContext } from './model-context.js';
@@ -61,6 +62,7 @@ export interface LocalTaskPreparation {
 }
 /** Trusted coordinator reservation; these fields are never accepted from a task HTTP body. */
 export interface LocalTaskSubmission {
+  selection?: ModelSelection;
   feature?: FeatureRequestReference;
   id: string;
   hash: string;
@@ -71,7 +73,7 @@ export interface LocalTaskSubmission {
   baseCommit?: string;
 }
 export function freezeSubmission(input: LocalTaskSubmission): LocalTaskSubmission {
-  const value = object(input, "Task reservation", ["id", "hash", "policy", "criteria", "repositoryId", "baseCommit", "feature", "definitionPrompts"]);
+  const value = object(input, "Task reservation", ["id", "hash", "policy", "criteria", "repositoryId", "baseCommit", "feature", "definitionPrompts", "selection"]);
   if (typeof value.id !== "string" || !/^[a-z0-9-]{1,90}$/.test(value.id) ||
       typeof value.hash !== "string" || !/^[a-f0-9]{64}$/.test(value.hash))
     throw new DomainError("invalid_input", "Invalid feature task identity.");
@@ -88,6 +90,7 @@ export function freezeSubmission(input: LocalTaskSubmission): LocalTaskSubmissio
   return {
     id: value.id,
     hash: value.hash,
+    ...(value.selection === undefined ? {} : { selection: validateModelSelection(value.selection) }),
     ...(value.feature === undefined ? {} : { feature: validateFeatureRequestReference(value.feature) }),
     ...(definitionPrompts === undefined ? {} : { definitionPrompts }),
     ...(value.policy === undefined ? {} : { policy: validateGatePolicy(value.policy) }),
@@ -97,7 +100,7 @@ export function freezeSubmission(input: LocalTaskSubmission): LocalTaskSubmissio
   };
 }
 export function submissionContextHash(submission?: LocalTaskSubmission) {
-  const context = { policy: submission?.policy, criteria: submission?.criteria, repositoryId: submission?.repositoryId, baseCommit: submission?.baseCommit, definitionPrompts: submission?.definitionPrompts };
+  const context = { policy: submission?.policy, criteria: submission?.criteria, repositoryId: submission?.repositoryId, baseCommit: submission?.baseCommit, definitionPrompts: submission?.definitionPrompts, selection: submission?.selection };
   return Object.values(context).some(value => value !== undefined) ? gateDigest(context) : undefined;
 }
 export interface TaskFile {
@@ -106,6 +109,10 @@ export interface TaskFile {
   existed: boolean;
 }
 export interface LocalTask {
+  /** Resolved once at admission; absent only on legacy records. */
+  selection?: ModelSelection;
+  /** Whether the trusted submission also bound the selection into its context hash. */
+  selectionReserved?: true;
   projectContext?: ProjectModelContext | null;
   definitionPrompts?: FeatureDefinitionPrompts;
   feature?: FeatureRequestReference;

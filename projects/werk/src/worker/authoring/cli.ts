@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { validateFeatureWorkflow, validateFeatureCheck, featureWorkflowPolicy, featureWorkflowPath as validatePath, validateFeaturePromptContent } from '../application/feature-workflow.js';
 import { validateFeatureReadiness, validateFeatureTemplate } from '../infrastructure/features/workflow.js';
 import { validateFeatureReviewEligibility } from '../infrastructure/features/review-eligibility.js';
-import { digest, parseFeature, requestName, type FeatureDocument } from '../infrastructure/features/document.js';
+import { digest, parseFeature, featureInput, requestName, type FeatureDocument } from '../infrastructure/features/document.js';
 import { authoringPath, authoringRoot, readAuthoringFile, seedAuthoringFile } from '../infrastructure/feature-authoring-files.js';
 import { featureWorkflowPath } from '../infrastructure/feature-authoring.js';
 export { initializeFeatureAuthoring, planFeatureAuthoring } from '../infrastructure/feature-authoring.js';
@@ -74,9 +74,9 @@ async function locked<T>(root: string, action: () => Promise<T>): Promise<T> {
 export async function runFeatureAuthoring(args: string[], directory = process.cwd()) {
   if (!process.versions.node.startsWith('24.')) throw Error('Feature authoring requires Node 24.x.');
   const [command, ...rest] = args;
-  if (!command || ['help', '--help'].includes(command)) return { schemaVersion: 1, commands: { create: '--name NAME.md --title TITLE', validate: '--file QUEUE/NAME.md', ready: '--file QUEUE/NAME.md --if-match REVISION' }, behavior: 'Offline authoring; explicit readiness does not start a worker or merge changes.' };
+  if (!command || ['help', '--help'].includes(command)) return { schemaVersion: 1, commands: { create: '--name NAME.md --title TITLE [--provider ID] [--model NAME] [--effort LEVEL]', validate: '--file QUEUE/NAME.md', ready: '--file QUEUE/NAME.md --if-match REVISION' }, behavior: 'Offline authoring; explicit readiness does not start a worker or merge changes.' };
   if (!['create', 'validate', 'ready', 'submit'].includes(command)) throw Error('Choose create, validate, or ready.');
-  const opts = options(rest, command === 'create' ? ['name', 'title'] : command === 'validate' ? ['file'] : ['file', 'if-match']);
+  const opts = options(rest, command === 'create' ? ['name', 'title', 'provider', 'model', 'effort'] : command === 'validate' ? ['file'] : ['file', 'if-match']);
   const root = await authoringRoot(directory);
   const workflow = await load(root);
   if (command === 'create') return locked(root, async () => {
@@ -88,8 +88,9 @@ export async function runFeatureAuthoring(args: string[], directory = process.cw
     if (parsed.data.werk !== undefined || parsed.data.source !== undefined) throw Error('The authoring template must not contain worker-owned metadata.');
     const id = 'fr-' + randomUUID();
     parsed.document.set('id', id); parsed.document.set('title', opts.title.trim()); parsed.document.set('status', 'draft');
+    for (const key of ['provider', 'model', 'effort']) if (opts[key] !== undefined) parsed.document.set(key, opts[key]);
     const markdown = render(parsed);
-    parseFeature(markdown);
+    featureInput(parseFeature(markdown), 'codex-cli', { reviewOnly: true });
     const path = workflow.config.requestsDirectory + '/' + opts.name;
     if (await seedAuthoringFile(root, path, markdown) !== 'created') throw Error('A request already exists at that name. Choose a new name; existing requests are never overwritten.');
     return { schemaVersion: 1, path, id, status: 'draft', revision: digest(markdown), next: 'Fill in the template, then validate this request.' };

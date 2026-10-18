@@ -1,6 +1,7 @@
+import { discoverMutationSources } from './provenance.mjs';
 import { stripTypeScriptTypes } from 'node:module';
-import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
-import { join, basename } from 'node:path';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { join, basename, dirname } from 'node:path';
 import { scope } from './scope.mjs';
 import { fileURLToPath } from 'node:url';
 
@@ -9,23 +10,17 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const output = join(root, '.mutation-build');
 await rm(output, { recursive: true, force: true });
-async function compile(source, destination) {
-  await mkdir(destination, { recursive: true });
-  for (const entry of await readdir(source, { withFileTypes: true })) {
-    if (['dist', 'node_modules', 'public'].includes(entry.name) || join(source, entry.name) === join(root, 'src/worker/webview')) continue;
-    const input = join(source, entry.name), target = join(destination, entry.name);
-    if (entry.isDirectory()) await compile(input, target);
-    else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.d.ts')) {
-      const code = stripTypeScriptTypes(await readFile(input, 'utf8'), { mode: 'strip' });
-      await writeFile(target.replace(/\.ts$/, '.js'), code);
-    }
-  }
+for (const path of await discoverMutationSources(root)) {
+  const target = join(output, path.slice('src/'.length).replace(/\.ts$/, '.js'));
+  await mkdir(dirname(target), { recursive: true });
+  const code = stripTypeScriptTypes(await readFile(join(root, path), 'utf8'), { mode: 'strip' });
+  await writeFile(target, code);
 }
-await compile(join(root, 'src/shared'), join(output, 'shared'));
-await compile(join(root, 'src/worker'), join(output, 'worker'));
-// Run the ordinary queue and real SQLite accounting suites against the instrumented source.
+// Run ordinary queue, SQLite accounting and Ready Check lifecycle contracts against the instrumented source.
 await mkdir(join(output, 'tests'), { recursive: true });
-for (const path of scope.reusedTests) {
+const reused = [...scope.reusedTests, ...scope.reusedFixtures];
+if (new Set(reused.map(path => basename(path))).size !== reused.length) throw Error('Mutation reused source names must be unique.');
+for (const path of reused) {
   const original = await readFile(join(root, path), 'utf8');
   const rewritten = original.replaceAll('../../src/worker/dist/', '../');
   if (rewritten === original) throw Error('Reused test import changed; review mutation mapping: ' + path);

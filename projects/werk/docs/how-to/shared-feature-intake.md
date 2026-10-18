@@ -76,7 +76,7 @@ provider executable with the values for your machine:
 Use `repositoryId` instead of `discoveryId` for a repository already assigned to
 the worker. Keep local setup files private; do not commit machine-specific paths
 or credentials. On Windows use the installed `claude.exe` path and follow the
-[Claude requirements](use-worker-webview.md#connect-claude-or-codex).
+[Claude requirements](use-worker-webview.md#connect-claude-codex-or-cursor).
 
 ```sh
 node bin/apps/worker/cli.mjs shared setup --file setup.json --dry-run

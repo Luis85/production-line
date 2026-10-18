@@ -197,7 +197,7 @@ system measurements stay visible as unavailable. See
 
 | Configure | Where to learn more |
 | --- | --- |
-| Model providers and available CLI account details | [Provider connections](how-to/use-worker-webview.md#connect-claude-or-codex) |
+| Model providers and available CLI account details | [Provider connections](how-to/use-worker-webview.md#connect-claude-codex-or-cursor) |
 | Request, Task and review folders; template and rules | [Team workflow configuration](how-to/team-feature-authoring.md) |
 | Assigned repositories, watching and worktrees | [Repository setup](how-to/project-worker.md#assign-git-repositories) |
 | Built-in file/web tools, approved commands and MCP connections | [Model tool access](how-to/manage-model-tools.md) |
@@ -360,7 +360,7 @@ Factory demonstration directly.
 **Default Factory/orchestrator assignments are simulated.** Trusted operators can
 opt into [native Linux Codex execution](how-to/run-codex-task.md). Supplied
 orchestrator Docker and managed VM profiles remain simulated. Standalone workers
-use their configured Claude/Codex CLI or API provider; Docker workers need an API
+use their configured Claude, Codex or Cursor CLI or API provider; Docker workers need an API
 provider or a prepared image with its own CLI authentication. See
 [execution modes](explanation/modes.md) for platform limits.
 

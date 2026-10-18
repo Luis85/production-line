@@ -4,7 +4,9 @@ import { interactionFeatureRequest, sessionFeatureRequest, type FeatureRequestRe
 import { assertDirectFeatureCreation, isSharedFeatureSession } from './workspace-feature-authoring.js';
 import type { WorkspaceContext } from './workspace-context.js';
 import { validateApprovedPaths } from '../application/approved-paths.js';
-import { definitionConnection, definitionSelection } from "../application/definitions.js";
+import { modelSelection, validateModelSelection, type ModelSelection } from "../application/model-selection.js";
+import { validateModelName, validateModelEffort } from "../application/model-effort.js";
+import { definitionSelection } from "../application/definitions.js";
 import { object, text, identifier } from "../../shared/contracts.js";
 import { createHash, randomUUID } from "node:crypto";
 import { DomainError } from "../../shared/errors.js";
@@ -12,7 +14,7 @@ import { withFeatureTracking, taskDetail, assertTaskCanContinue } from './worksp
 import { withRepositoryAdmission } from './workspace-settings.js';
 
 /** Address sessions directly; automation never changes the browser's selected task. */
-export async function task(workspace: WorkspaceContext, input: unknown, reference?: FeatureRequestReference){
+export async function task(workspace: WorkspaceContext, input: unknown, reference?: FeatureRequestReference, trustedSelection?: ModelSelection){
   const operation = workspace.taskRequests
     .catch(() => {})
     .then(async () => {
@@ -23,6 +25,8 @@ export async function task(workspace: WorkspaceContext, input: unknown, referenc
         "id",
         "title",
         "provider",
+        "model",
+        "effort",
         "message",
         "definitionId",
         "definitionRef",
@@ -44,14 +48,14 @@ export async function task(workspace: WorkspaceContext, input: unknown, referenc
         );
       if (
         body.action !== "create" &&
-        (body.files !== undefined || body.definitionId !== undefined ||
+        (body.provider !== undefined || body.model !== undefined || body.effort !== undefined || body.files !== undefined || body.definitionId !== undefined ||
           body.definitionRef !== undefined ||
           body.agent !== undefined ||
           body.useInstructionsOnly !== undefined)
       )
         throw new DomainError(
           "invalid_input",
-          "An agent definition is fixed when a task is created.",
+          "Model selection and agent instructions are fixed when a task is created.",
         );
       const id =
         body.action === "create" && body.id === undefined
@@ -106,11 +110,12 @@ export async function task(workspace: WorkspaceContext, input: unknown, referenc
           throw new DomainError("conflict", "Task id already belongs to another approved-file request.");
         if (approved && !/^[a-z0-9-]{1,90}$/.test(id)) throw new DomainError('invalid_input', 'File task IDs use 1–90 lowercase letters, digits or hyphens.');
         const selection = definitionSelection(body);
-        const title = text(body.title, "title", 120),
-          provider = workspace.settings.provider(String(body.provider));
+        const title = text(body.title, "title", 120);
         const existing = workspace.sessions
           .view()
           .records.find((item) => item.id === (approved ? "local-" + id : id));
+        const retainedSelection = existing?.selection ?? (approved ? workspace.board.preparationSelection(id) : undefined);
+        const provider = workspace.settings.provider(String(body.provider ?? trustedSelection?.provider ?? retainedSelection?.provider ?? workspace.settings.value.defaultProvider ?? 'codex-cli'));
         if (reference && existing && sessionFeatureRequest(existing).key !== reference.key)
           throw new DomainError('conflict', 'Task id already belongs to another Feature Request.');
         const savedDefinition = existing?.definition ?? (approved ? workspace.board.preparationDefinition(id) : undefined);
@@ -123,12 +128,18 @@ export async function task(workspace: WorkspaceContext, input: unknown, referenc
           (!savedDefinition.adapted || body.useInstructionsOnly === true)
             ? savedDefinition
             : workspace.definitions.select(body);
-        definitionConnection(provider, definition);
+        if (body.model !== undefined) validateModelName(body.model);
+        if (body.effort !== undefined) validateModelEffort(body.effort, provider.id);
+        const acceptedSelection = trustedSelection ? validateModelSelection(trustedSelection) : retainedSelection ?? modelSelection(provider, body, definition);
+        if (acceptedSelection.provider !== provider.id || trustedSelection && retainedSelection && (acceptedSelection.provider !== retainedSelection.provider || acceptedSelection.model !== retainedSelection.model || acceptedSelection.effort !== retainedSelection.effort))
+          throw new DomainError('conflict', 'Task id belongs to a different accepted model selection.');
         const submissionHash = createHash("sha256")
           .update(
             JSON.stringify({
               title,
               provider: provider.id,
+              ...(body.model === undefined ? {} : { model: body.model }),
+              ...(body.effort === undefined ? {} : { effort: body.effort }),
               message,
               ...(approved ? { files: approved } : {}),
               ...(definition ? { definition } : {}),
@@ -139,12 +150,13 @@ export async function task(workspace: WorkspaceContext, input: unknown, referenc
         const feature = reference ?? existing?.feature ?? interactionFeatureRequest(id);
         const admit = () => admitFeatureRequest({
           patch: (command, submission) => withRepositoryAdmission(workspace, () => workspace.board.create(command, submission)),
-          chat: () => withRepositoryAdmission(workspace, () => workspace.sessions.ensureTask(id, 'chat', title, provider.id, submissionHash, definition, feature)),
+          chat: () => withRepositoryAdmission(workspace, () => workspace.sessions.ensureTask(id, 'chat', title, provider.id, submissionHash, definition, feature, acceptedSelection)),
         }, {
-          input: { title, message, provider: provider.id, mode: approved ? 'patch' : 'chat', priority: 1,
+          input: { title, message, provider: provider.id, model: body.model as string | undefined, effort: body.effort as typeof acceptedSelection.effort | undefined, mode: approved ? 'patch' : 'chat', priority: 1,
             ...(approved ? { paths: approved.paths } : {}), ...selection, agent: body.agent as string | undefined, useInstructionsOnly: body.useInstructionsOnly as boolean | undefined },
           reference: feature, taskId: id, submissionHash, repository: approved?.repository,
           background: body.background === true,
+          submission: !fileTask || fileTask.selection ? { selection: acceptedSelection } : {},
         });
         if (approved) {
           if (workspace.sessions.view().records.some(session => session.id === id) || existing && (existing.kind !== 'local' || !fileTask && existing.submissionHash !== submissionHash))

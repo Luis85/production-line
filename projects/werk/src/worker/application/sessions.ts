@@ -1,3 +1,5 @@
+import { restoreSessionSelections, ensureSessionSelection, draftSessionSelection, freezeSessionSelection } from './session-model-selection.js';
+import { modelSelection, validateModelSelection, type ModelSelection } from './model-selection.js';
 import { restoreFeatureRequestReferences } from './feature-request-migration.js';
 import { sessionFeatureRequest, validateFeatureRequestReference, type FeatureRequestReference } from './feature-request-reference.js';
 import { restoreSessionCatalog, type SessionCatalog, type SessionRecord, type TaskState } from './session-catalog.js';
@@ -16,7 +18,6 @@ import type { GatePolicy } from "./request-gates.js";
 import type { InteractionCommand } from "./interactions.js";
 import {
   WorkerDefinitions,
-  definitionConnection,
   type DefinitionSnapshot,
 } from "./definitions.js";
 import { SerialExecutor } from "./serial-executor.js";
@@ -97,7 +98,8 @@ export class WorkerSessions {
     const saved = await this.storage.read();
     this.catalog = restoreSessionCatalog(saved, this.settings);
     const migrated = restoreFeatureRequestReferences(this.catalog.records, this.requests, this.featureSource);
-    if (migrated || saved === undefined) await this.persist();
+    const selectionsMigrated = restoreSessionSelections(this.catalog.records, this.requests);
+    if (migrated || selectionsMigrated || saved === undefined) await this.persist();
     this.interactions.retainSessions([...this.catalog.records.map((record) => record.id), ...this.auxiliary.retainedSessionIds()]);
     for (const record of this.catalog.records) await this.load(record);
   }
@@ -198,8 +200,7 @@ export class WorkerSessions {
     this.assertProvidersStable();
     this.assertCanContinue(id);
     this.detail(id);
-    const record = this.catalog.records.find((item) => item.id === id)!,
-      chat = this.instances.get(id)!;
+    const record = this.catalog.records.find((item) => item.id === id)!;
     if (
       record.kind !== "chat" &&
       (["queued", "running"].includes(record.taskState ?? "") ||
@@ -209,7 +210,11 @@ export class WorkerSessions {
         "conflict",
         "Wait for this task to finish before sending a follow-up.",
       );
-    const result = await chat.start(message);
+    const input = text(message, 'message', 8000);
+    await freezeSessionSelection({ catalog: this.catalog, settings: this.settings, instances: this.instances, load: record => this.load(record), persist: () => this.persist() }, record);
+    this.assertProvidersStable();
+    if (this.catalog.changing) throw new DomainError('conflict', 'Session change in progress. Retry the message when saving finishes.');
+    const result = await this.instances.get(id)!.start(input);
     if (record.kind !== "chat") {
       delete record.taskState;
       await this.persist();
@@ -232,6 +237,7 @@ export class WorkerSessions {
     submissionHash?: string,
     definition?: DefinitionSnapshot,
     feature?: FeatureRequestReference,
+    selection?: ModelSelection,
   ) {
     this.assertProvidersStable();
     const reference = feature && validateFeatureRequestReference(feature);
@@ -239,6 +245,7 @@ export class WorkerSessions {
     if (found) {
       if (reference && found.feature && found.feature.key !== reference.key)
         throw new DomainError('conflict', 'This session belongs to another feature request.');
+      if (selection && ensureSessionSelection(found, selection)) { await this.persist(); const previous = this.instances.get(found.id); await this.load(found); await previous?.close(); }
       if (reference && !found.feature) {
         found.feature = reference;
         try { await this.persist(); } catch (error) { delete found.feature; throw error; }
@@ -258,9 +265,9 @@ export class WorkerSessions {
       );
     this.catalog.changing = true;
     try {
-      if (definition)
-        definitionConnection(this.settings.provider(provider), definition);
+      const accepted = selection ? validateModelSelection(selection) : (submissionHash ? modelSelection : draftSessionSelection)(this.settings.provider(provider), {}, definition);
       const record: SessionRecord = {
+        ...(accepted ? { selection: accepted } : {}),
         ...(definition ? { definition: structuredClone(definition) } : {}),
         ...(submissionHash ? { submissionHash } : {}),
         id: identifier(id, "task session"),

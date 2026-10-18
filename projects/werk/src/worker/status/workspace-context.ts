@@ -1,3 +1,4 @@
+import { modelSelection, selectedConnection } from '../application/model-selection.js';
 import { DomainError } from '../../shared/errors.js';
 import { ReadyReviewManager } from '../application/ready-review.js';
 import { readyReviewModels } from '../infrastructure/ready-review-model.js';
@@ -124,6 +125,7 @@ export class WorkspaceContext {
       config.enrollmentToken,
       config.chatExecutable,
       config.repositories,
+      config.features?.provider,
     );
     this.consumption = new WorkerConsumption(new WorkerConsumptionJournal(config.stateDir), () => this.settings.value.consumption);
     this.repositories = new RepositoryManager(this.settings.value.repositories, { beforeRepositoryUse: item => this.repositoryDiscovery.assertAllowed(item.path), preserveCheckout: item => this.sharedRuntime?.intake.binding?.repositoryId === item.id || (this.sharedRuntime?.intake.requiredRepositoryIds().includes(item.id) ?? false) });
@@ -164,6 +166,7 @@ export class WorkspaceContext {
           {
             ...this.settings.provider(profile.id),
             model: profile.model,
+            effort: profile.effort ?? 'default',
             instruction: profile.instruction,
           },
           config.stateDir,
@@ -174,8 +177,10 @@ export class WorkspaceContext {
       maxRuntimeMs: () => this.settings.value.execution.maxRuntimeMs,
       assertCanAdmit: () => { const hold = sharedFeatureAdmissionHold(this); if (hold) throw new DomainError('unavailable', hold.message); },
       profile: input => {
-        const connection = definitionConnection(this.settings.provider(input.provider), this.definitions.select({ definitionId: input.definitionId, definitionRef: input.definitionRef, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly }));
-        return { id: connection.id, model: connection.model, instruction: connection.instruction ?? '' };
+        const definition = this.definitions.select({ definitionId: input.definitionId, definitionRef: input.definitionRef, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly });
+        const current = this.settings.provider(input.provider);
+        const connection = input.selection ? selectedConnection(current, input.selection, definition) : definitionConnection(current, definition);
+        return { id: connection.id, model: connection.model, instruction: connection.instruction ?? '', ...(connection.effort === undefined ? {} : { effort: connection.effort }) };
       },
       model: readyReviewModels(config.stateDir, this.settings, this.consumption, this.sessions.runs, this.processObservations),
     });
@@ -213,6 +218,8 @@ export class WorkspaceContext {
       admissionHold: () => sharedFeatureAdmissionHold(this),
       submit: record => submitSharedFeature(this, record),
       readyReview: this.readyReviews,
+      defaultProvider: () => this.settings.value.defaultProvider,
+      resolveSelection: input => modelSelection(this.settings.provider(input.provider), input, this.definitions.select({ ...input })),
       continue: (record, command) => continueFeatureInteraction(this, this.board.executionDetail(record.taskId!).sessionId, command),
       admissionIssue: input => {
         try { definitionConnection(this.settings.provider(input.provider), this.definitions.select({ definitionId: input.definitionId, definitionRef: input.definitionRef, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly })); return undefined; }
@@ -225,10 +232,11 @@ export class WorkspaceContext {
         new MarkdownFeatureFolder(
           config.features.directory,
           config.stateDir,
-          config.features.provider,
+          () => this.settings.value.defaultProvider,
           config.projectDir ?? process.cwd(),
         ),
         {
+          selection: input => modelSelection(this.settings.provider(input.provider), input, this.definitions.select({ ...input })),
           submit: (record) => submitFeature(this, record),
           inspect: (record) => inspectFeature(this, record),
           reference: id => this.sessions.view().records.find(record => record.id === id)?.feature,

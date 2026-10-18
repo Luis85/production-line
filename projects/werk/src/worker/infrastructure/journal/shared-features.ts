@@ -1,3 +1,4 @@
+import { sharedFeatureInputHash, assertSharedFeatureSelection } from '../../application/shared-feature-selection.js';
 import { validateFeatureReviewEligibility } from '../features/review-eligibility.js';
 import { validateReadyReviewInput, readyReviewSessionId } from '../../application/ready-review-contracts.js';
 import { parseReadyReviewResult } from '../../application/ready-review-protocol.js';
@@ -40,9 +41,10 @@ export class SharedFeatureJournal {
         const readiness = review && !review.implementationReady
           ? validateFeatureReviewEligibility(markdown, snapshot, record.accepted.provider)
           : validateFeatureReadiness(markdown, snapshot.readyCheck, record.accepted.provider, snapshot.template, { configuration: snapshot.configuration, workflowPath: snapshot.files.configuration.path, allowLegacyProgressMetadata: true });
+        assertSharedFeatureSelection(record);
         if (review) validateSharedReadyReview(record);
         if (!readiness.valid || !readiness.input || record.id !== readiness.input.id || canonicalJson(record.accepted) !== canonicalJson(readiness.input) || record.owner !== state.workerId || record.taskId !== 'shared-feature-' + sharedHash(record.id + bindingKey(record.binding)).slice(0, 32)) throw Error('Invalid accepted shared feature.');
-        if (record.inputHash !== sharedHash(readiness.inputHash! + snapshot.policyDigest + record.sourceCommit + sharedHash(record.sourceMarkdown)) || typeof record.claimed !== 'boolean' || typeof record.submitted !== 'boolean' || record.submitted && !record.claimed || !/^[a-f0-9]{64}$/.test(record.remoteRevision)) throw Error('Invalid shared feature reservation.');
+        if (record.inputHash !== sharedFeatureInputHash(record) || typeof record.claimed !== 'boolean' || typeof record.submitted !== 'boolean' || record.submitted && !record.claimed || !/^[a-f0-9]{64}$/.test(record.remoteRevision)) throw Error('Invalid shared feature reservation.');
         if (record.sourcePath !== snapshot.configuration.requestsDirectory + '/' + record.name || !/^[^/\\]+\.md$/.test(record.name) || record.name.startsWith('_')) throw Error('Invalid shared feature source path.');
         if (record.publishedSource !== undefined && (typeof record.publishedSource !== 'string' || sharedHash(record.publishedSource) !== record.publishedState)) throw Error('Invalid acknowledged shared source.');
         if (record.featureCommit !== undefined && !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(record.featureCommit) || record.outputDigest !== undefined && !/^[a-f0-9]{64}$/.test(record.outputDigest) || record.publishedState !== undefined && !/^[a-f0-9]{64}$/.test(record.publishedState) || record.publishedReview !== undefined && (typeof record.publishedReview !== 'string' || !record.publishedReview.startsWith(snapshot.configuration.reviewDirectory + '/') || !/^[^:]+:[a-f0-9]{64}$/.test(record.publishedReview))) throw Error('Invalid shared publication checkpoint.');

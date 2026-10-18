@@ -115,24 +115,30 @@ test('missing numeric completion evidence blocks promotion while restart reconci
   assert.equal(f.manager.inspect(accepted).result.passed, true); assert.equal(f.calls.length, 1);
 });
 
-test('restart detects changed retained source context even when the operation fingerprint still matches', async t => {
-  const f = await fixture(t), accepted = input();
-  const attempt = await f.schedule(accepted); await f.settle();
-  const db = new DatabaseSync(join(f.directory, 'worker-interactions.sqlite'));
-  try {
-    const row = db.prepare('SELECT payload FROM interaction_turns WHERE id=?').get(attempt.turnId), saved = JSON.parse(String(row.payload));
-    saved.context.input.prompt.content = 'Swapped reviewer instructions.';
-    saved.context.input.prompt.sha256 = featureContentHash(saved.context.input.prompt.content);
-    db.prepare('UPDATE interaction_turns SET payload=? WHERE id=?').run(JSON.stringify(saved), attempt.turnId);
-  } finally { db.close(); }
-  await f.restart();
-  assert.throws(() => f.manager.inspect(accepted), /accepted source/);
-  await assert.rejects(f.schedule(accepted), /accepted source/); assert.equal(f.calls.length, 1);
+test('restart rejects changed retained source, dispatch permissions and prompt text without repeating inference', async t => {
+  for (const corruption of ['source', 'tools', 'message']) {
+    const f = await fixture(t), accepted = input(corruption);
+    const attempt = await f.schedule(accepted); await f.settle();
+    const db = new DatabaseSync(join(f.directory, 'worker-interactions.sqlite'));
+    try {
+      const row = db.prepare('SELECT payload FROM interaction_turns WHERE id=?').get(attempt.turnId), saved = JSON.parse(String(row.payload));
+      if (corruption === 'source') {
+        saved.context.input.prompt.content = 'Swapped reviewer instructions.';
+        saved.context.input.prompt.sha256 = featureContentHash(saved.context.input.prompt.content);
+      } else if (corruption === 'tools') saved.dispatch.policy.tools = 'granted';
+      else saved.dispatch.messages[0].text = 'Different accepted review scope.';
+      db.prepare('UPDATE interaction_turns SET payload=? WHERE id=?').run(JSON.stringify(saved), attempt.turnId);
+    } finally { db.close(); }
+    await f.restart();
+    assert.throws(() => f.manager.inspect(accepted), /accepted source|frozen review scope/);
+    await assert.rejects(f.schedule(accepted), /accepted source|frozen review scope/); assert.equal(f.calls.length, 1);
+  }
 });
 
 test('malformed, contradictory and oversized results fail once, retain usage, and cannot authorize implementation', async t => {
   const invalid = [
     { schemaVersion: 1, passed: true, summary: 'Claimed pass', findings: [{ kind: 'question', message: 'Who owns this?', blocking: false }] },
+    ...[false, true].map(passed => ({ schemaVersion: 1, passed, summary: 'Array kind must fail closed', findings: [{ kind: ['question'], message: 'Who owns this?', blocking: false }] })),
     { schemaVersion: 1, passed: true, summary: 'Claimed pass', findings: [], facts: { 'tests.passed': true } },
     { schemaVersion: 1, passed: true, summary: 'Huge response', findings: Array.from({ length: 8 }, () => ({ kind: 'issue', message: 'a'.repeat(4000), blocking: false })) },
   ];
@@ -156,4 +162,22 @@ test('Ready Check usage consumes the same configured allowance and blocks the ne
   assert.equal(f.consumption.status().reason, 'insufficient_reservation');
   await assert.rejects(f.schedule(input('next-review')), /allowance/);
   assert.equal(f.calls.length, 1); assert.equal(f.manager.active, 0);
+});
+
+test('non-cooperative provider cannot promote late success after cancellation or release its permit before cleanup', async t => {
+  /** @type {{finish?: () => void}} */
+  const deferred = {};
+  const cleanup = new Promise(resolve => { deferred.finish = () => resolve(undefined); });
+  const f = await fixture(t, { respond: async () => { await cleanup; return passed(); } }), accepted = input();
+  const attempt = await f.schedule(accepted); await wait(() => f.calls.length === 1);
+  const closing = f.manager.close();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.sessions.executor.current, attempt.sessionId);
+  assert.equal(f.manager.active, 1);
+  assert.ok(deferred.finish); deferred.finish(); await closing;
+  assert.equal(f.manager.inspect(accepted).state, 'interrupted');
+  assert.equal(f.manager.inspect(accepted).result, undefined);
+  assert.equal(f.sessions.runs.get(attempt.runId).outcome, 'interrupted');
+  assert.equal(f.sessions.executor.current, null);
+  await f.restart(); await f.schedule(accepted); assert.equal(f.calls.length, 1);
 });

@@ -56,7 +56,7 @@ export function createDelegationChildRunner(options: DelegationChildOptions): De
       const implementsCandidate = input.tools.manifest.tools.some(tool => tool.name === 'werk_candidate_apply');
       const model: StructuredModel = {
         sessionBinding: binding,
-        configuration: { id: connection.id, model: connection.model, instruction: connection.instruction ?? '' },
+        configuration: { id: connection.id, model: connection.model, instruction: connection.instruction ?? '', ...(connection.effort === undefined ? {} : { effort: connection.effort }) },
         capabilities: instance.capabilities ?? modelCapabilities,
         toolManifest: input.tools.manifest.tools.length ? input.tools.manifest : undefined,
         executionPolicy: input.tools.limits ? { maxToolCalls: input.tools.limits.maxCalls, commandTimeoutMs: input.tools.limits.commandTimeoutMs, ...(implementsCandidate ? input.tools.manifest.limits?.candidateInspection : {}) } : undefined,

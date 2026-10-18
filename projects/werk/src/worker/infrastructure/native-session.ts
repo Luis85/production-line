@@ -12,9 +12,13 @@ export async function openProviderSession(access: ModelSessionAccess | undefined
   const recovering = recovery !== undefined && recovery.priorDispatchDigest === previous.lastDispatchDigest;
   if (recovery && !recovering && previous.status !== 'idle') throw new ProviderModelError('session_conflict');
   let state: ModelSessionState = recovering ? { ...previous, status: 'idle', checkpoint: undefined } : previous;
-  const contextDigest = sessionDigest({ provider: request.provider, executable }), dispatchDigest = sessionDigest(request);
+  // Omitted effort and explicit default send the same provider request. Keep their identity stable across upgrades.
+  const provider = { ...request.provider }, defaultEffort = provider.effort === undefined || provider.effort === 'default';
+  if (defaultEffort) delete provider.effort;
+  const contextDigest = sessionDigest({ provider, executable }), dispatchDigest = sessionDigest(request);
+  const explicitDefaultDigest = defaultEffort ? sessionDigest({ provider: { ...provider, effort: 'default' }, executable }) : undefined;
   if (sessionDigest(state.binding) !== sessionDigest(access.binding) || state.status !== 'idle' || state.lastDispatchDigest === dispatchDigest
-    || state.checkpoint?.providerContextDigest && state.checkpoint.providerContextDigest !== contextDigest) throw new ProviderModelError('session_conflict');
+    || state.checkpoint?.providerContextDigest && state.checkpoint.providerContextDigest !== contextDigest && state.checkpoint.providerContextDigest !== explicitDefaultDigest) throw new ProviderModelError('session_conflict');
   const known = new Set(state.checkpoint?.historyDigests ?? []);
   const messages = request.messages.filter(message => !known.has(sessionDigest(message))
     && !(message.role === 'assistant' && sessionDigest(message.text) === state.checkpoint?.resultDigest));

@@ -18,13 +18,16 @@ Inspect a saved dispatch for the actual invocation profile. The current adapters
 expose structured questions through Werk protocol
 version 1 and report usage when the provider supplies it. New Feature Request
 sessions use dispatch schema version 2; retained version 1 dispatches remain
-supported. Claude CLI sessions declare `continuation: provider_session` and
-`nativeResume: true`. Codex CLI and direct API sessions declare
+supported. Claude CLI and Cursor CLI sessions declare
+`continuation: provider_session` and `nativeResume: true`.
+Codex CLI and direct API sessions declare
 `continuation: worker_context_replay` and `nativeResume: false`. All currently
 report `streaming: false`; durable interaction events remain available.
 Capabilities describe the configured invocation, including its tool manifest.
 The read-only `werk_session_history` tool is bound to the current Feature
-Request. Other tools require operator grants. An invocation with a catalog
+Request. Other Werk tools require operator grants. Cursor declares
+`tools: provider_native` and `filesystem: provider_permissions`; its native policy
+is described [below](#cursor-native-execution). An invocation with a catalog
 records `tools: granted` and its public tool manifest. Optional `limits` metadata
 records the accepted call count, total invocation duration (`windowMs`) and
 resolved tool/preset deadlines. This is execution evidence, not a separate
@@ -54,10 +57,92 @@ developer checkout is not edited. Continuations use current tool grants; old dis
 cannot restore revoked access. New limit metadata must match the resolved
 catalog and accepted execution budget. Legacy dispatches without this metadata
 remain supported only when their policy revision and exact definitions still
-match; absence cannot restore a larger budget. Automated request reviewers
-remain tool-free.
+match; absence cannot restore a larger budget. Codex, Claude and API request
+reviewers have no tools. Cursor reviews use native read-only ask mode and retain
+Cursor's permission/hook boundary.
 See [manage model tools](../how-to/manage-model-tools.md) for scope, MCP connections
 and revocation.
+
+## Provider, model and effort selection
+
+New Feature Requests may select `provider`, `model` and `effort` through Markdown,
+the webview or the corresponding authoring/task command. Omitted `provider` uses
+the worker's saved `defaultProvider`. An explicit provider is never silently
+replaced by another connection when authentication or model selection fails.
+
+The effective model is selected in this order:
+
+1. The request's nonempty `model` override.
+2. The selected compatible instruction profile's model.
+3. That provider connection's configured default model.
+
+A blank model inherits before acceptance. For CLI providers, an empty resolved
+model means the CLI chooses its default; it is not evidence of a specific observed
+model name. Model names are at most 200 characters, without surrounding whitespace
+or control characters. A supported provider selection does not establish that its
+account can use the requested model.
+
+Effort uses the request's explicit `effort`, otherwise the selected provider's
+saved default effort. Explicit `default` asks the provider to choose its own
+behavior instead of inheriting a non-default worker setting. The wrapper accepts:
+
+| Provider | Effort values |
+| --- | --- |
+| Codex CLI | `default`, `low`, `medium`, `high`, `xhigh`, `max`, `ultra` |
+| Claude Code CLI, Anthropic API | `default`, `low`, `medium`, `high`, `xhigh`, `max` |
+| OpenAI API | `default`, `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max` |
+| Cursor CLI | `default` only |
+
+These are provider-level choices. A selected model can support fewer values;
+provider errors remain visible rather than being silently retried at another
+model or effort. Cursor's adapter does not invent a reasoning-effort flag.
+
+Provider, effective model and effort freeze when the worker accepts the request,
+including before a configured Ready Check. Answers, follow-up review generations,
+implementation, continuations and restart recovery retain that selection.
+Changing worker defaults affects new requests only. Use a new Feature Request to
+change an owned request's provider, model or effort. Credentials can still be
+resolved privately without replacing the accepted execution identity.
+
+See [choose request defaults](../how-to/use-worker-webview.md#choose-provider-model-and-effort)
+for the UI and [settings fields](configuration.md#worker-provider-defaults)
+for their configuration location.
+
+### Cursor native execution
+
+The `cursor-cli` adapter invokes the installed Cursor CLI and its native policy.
+It does not use the Cursor SDK. Native tools, hooks, MCP connections and subagents
+are controlled by the operator's Cursor configuration, not Werk's tool catalog.
+Werk supplies no force, auto-approval, workspace-trust or sandbox-override flag
+and does not rewrite user or repository Cursor configuration.
+
+Chat, proposal and Ready Check invocations use `--mode ask` in a private worker
+workspace. This is Cursor's read-only mode; it does not promise that native tools
+or hooks are disabled. An implementation invocation uses the worker's retained
+candidate worktree. Werk inspects the resulting candidate and runs its configured
+required checks after Cursor returns; native test claims alone supply no verified
+completion evidence. The approved published patch and human-review boundary still
+apply, while native access during execution follows Cursor's policy.
+
+Granted Werk tools and scoped history can be offered through an invocation-local
+private plugin/MCP bridge. Cursor does not receive `werk_delegate`; its subagents
+use Cursor's native policy only. Cursor's own MCP approval rules still apply. Worker
+grants, revocation and call/command limits govern those supplemental tools only;
+they do not bound Cursor native tool calls, hooks or native subagents. The overall
+worker execution deadline and managed process ownership remain in force.
+
+The worker creates a native chat, persists its exact identifier before model
+execution and resumes only that chat for the accepted Feature Request. An uncertain
+result fences replay until explicit recovery. Cursor's configured model is passed
+through `--model`; only default effort is supported. The adapter reports usage as
+unknown, including native subagents, and does not interpret undocumented counters
+as verified tokens or cost. Consumption limits retain the normal unverified-usage
+hold rather than treating missing measurements as zero.
+
+See [Cursor setup](../how-to/use-worker-webview.md#connect-cursor-cli) and the
+official [permissions](https://cursor.com/docs/cli/reference/permissions),
+[hooks](https://cursor.com/docs/hooks) and
+[CLI parameters](https://cursor.com/docs/cli/reference/parameters).
 
 ## Typed results
 
@@ -75,8 +160,9 @@ total. Optional command/CLI/check timeouts can shorten that ceiling; MCP calls
 default to 30 seconds with separate per-connection limits. Remaining invocation
 time and cancellation cap every call. Required-check fingerprints bind explicit
 timeout overrides. The CLI bridge derives provider MCP waits from the trusted
-accepted duration, not mutable manifest metadata. Provider-native editing and
-shell tools remain disabled. See
+accepted duration, not mutable manifest metadata. Codex and Claude provider-native
+editing and shell tools remain disabled. Cursor follows the native boundary
+above. See
 [implement a feature](../how-to/implement-feature.md) for configuration.
 
 A model invocation returns completed content or a blocking input request. Legacy
@@ -310,16 +396,17 @@ transcript projection; the private turn journal remains authoritative. Legacy
 unbound sessions retain their original bounds. Logical deletion does not securely
 erase backups or storage media.
 
-Claude CLI uses an explicit native session identifier for continuation. Codex
-keeps isolated exec invocations and worker context replay; direct APIs also await
+Claude and Cursor CLIs use explicit native session identifiers for continuation.
+Codex keeps isolated exec invocations and worker context replay; direct APIs also await
 a bounded invocation using worker-managed context. Native handles are private and
 never grant tools. An uncertain provider turn is fenced until an explicit
 recovery operation; a restart does not silently retry it.
 
 Granted tools use the worker-owned catalog: API adapters exchange function calls
-and results, while CLI adapters receive a private MCP bridge. Provider-native
-tools remain disabled. Tool calls and output are bounded; a revoked policy or
-ungranted tool fails closed. Tool output is untrusted data and cannot authorize
+and results, while CLI adapters receive a private MCP bridge. Codex and Claude
+provider-native tools remain disabled; Cursor native tools follow its separate
+operator policy. Werk tool calls and output are bounded; a revoked worker policy
+or ungranted Werk tool fails closed. Tool output is untrusted data and cannot authorize
 additional tools.
 
 ### Shared project context
@@ -346,8 +433,10 @@ checks.
 
 ### Subagent ownership
 
-An enabled delegation grant adds `werk_delegate` to the parent catalog. Child
-sessions share the Feature Request, accepted provider/model/profile, current
+For Codex, Claude and direct API adapters, an enabled delegation grant adds
+`werk_delegate` to the parent catalog. Cursor does not receive this tool; its
+native subagents follow Cursor policy and have unavailable usage rather than
+Werk's bounded child receipts. Worker-managed child sessions share the Feature Request, accepted provider/model/profile, current
 scope, deadline and tool-call budget. A child may receive fewer tools and cannot
 delegate further. Its invocation has separate consumption and run evidence with
 parent linkage; the numeric journal remains content-free. A child question is

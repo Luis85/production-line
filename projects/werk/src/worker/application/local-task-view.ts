@@ -15,6 +15,7 @@ function publicFields(task: LocalTask): LocalTaskView {
     sessionId: task.sessionId,
     provider: task.provider,
     model: task.model,
+    ...(task.selection ? { selection: structuredClone(task.selection) } : {}),
     repository: task.repository,
     status: task.status,
     priority: task.priority,

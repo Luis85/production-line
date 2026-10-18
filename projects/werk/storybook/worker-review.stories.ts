@@ -11,7 +11,7 @@ const meta = { title: 'Worker/Review', parameters: { layout: 'fullscreen' } } sa
 export default meta;
 type Story = StoryObj;
 let fixture: ReturnType<typeof installReviewFixture>;
-const storymap = (summary: string) => ({ app: 'Worker', summary, covers: ['pages/ReviewPage', 'components/PatchReview', 'components/CandidateEvidence', 'components/RequestGatePanel'].map(name => 'src/worker/webview/' + name + '.vue'), route: '/review?session=file&fileId=file-review', ready: '[data-review-ready]' });
+const storymap = (summary: string) => ({ app: 'Worker', summary, covers: ['pages/ReviewPage', 'components/PatchReview', 'components/CandidateEvidence', 'components/RequestGatePanel', 'components/AcceptedModelSelection'].map(name => 'src/worker/webview/' + name + '.vue'), route: '/review?session=file&fileId=file-review', ready: '[data-review-ready]' });
 function render(variant: ReviewFixture = 'verified') {
   return () => ({ setup() {
     fixture = installReviewFixture(variant);

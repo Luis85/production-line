@@ -8,7 +8,8 @@ import { executeModel, ProviderModelError } from "./model-contract.js";
 
 import { unknownUsage } from "./run-evidence.js";
 
-import { definitionConnection } from "./definitions.js";
+import { verifyNativeCandidate } from './native-development.js';
+import { localTaskConnection, validateTaskSelection } from "./local-task-selection.js";
 
 
 import { PatchProtocolError } from "./patch-protocol.js";
@@ -72,16 +73,14 @@ export async function execute(host: Pick<LocalTaskRuntime, "change" | "execution
       const turn = host.sessions.interactions.turn(task.sessionId, turnId);
       if (!turn.dispatch) throw Error("Task request was not durably prepared.");
       await host.assertToolWorkspace(task, AbortSignal.any([controller.signal, host.workspaceController.signal, AbortSignal.timeout(30000)]), false, turn.dispatch.policy);
-      const connection = {
-        ...host.settings.provider(task.provider),
-        model: task.model,
-      };
+      validateTaskSelection(task, task.requestId ? host.sessions.requests.get(task.requestId) : undefined);
+      const connection = localTaskConnection(host.settings.provider(task.provider), task);
       // Implementation limits come from the accepted dispatch, never from settings changed later.
       const { commandTimeoutMs, candidateSourceMaxBytes, candidateSourceMaxFiles, candidateFileMaxBytes } = turn.dispatch.policy;
       const development = host.developmentRuntime(task, { commandTimeoutMs, candidateSourceMaxBytes, candidateSourceMaxFiles, candidateFileMaxBytes });
       if (!!task.implementation !== (turn.dispatch.policy.development === true)) throw Error('Prepared implementation mode differs from accepted authority.');
       const model = host.model(
-        definitionConnection(connection, task.definition),
+        connection,
         { sessionId: task.sessionId, feature: task.feature ?? interactionFeatureRequest(task.id), baseCommit: task.baseCommit, worktree: task.worktree, worktreeIdentity: task.worktreeIdentity, development },
       );
       if (!model) throw Error("Provider not configured");
@@ -132,6 +131,7 @@ export async function execute(host: Pick<LocalTaskRuntime, "change" | "execution
       let valid: { summary: string; patch: string; changedFileCount: number } | null = null;
       if (result.type === 'completed') {
         if (development && task.implementation) {
+          if (turn.dispatch.policy.tools === 'provider_native') await verifyNativeCandidate(development, task.implementation, signal);
           const candidate = await development.capture(signal), evidence = development.evidence();
           validateDevelopmentState(task.implementation, evidence);
           const verified = developmentVerified(task.implementation, candidate, evidence);

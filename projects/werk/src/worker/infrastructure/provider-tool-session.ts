@@ -19,8 +19,8 @@ export async function withProviderTools<T>(request: ModelRequest, signal: AbortS
   const runtime = factory?.(request.policy);
   const bounded = request.policy.maxRuntimeMs ? AbortSignal.any([signal, AbortSignal.timeout(request.policy.maxRuntimeMs)]) : signal;
   try {
-    if (request.policy.tools === 'granted' && (!runtime || !sameManifest(request.toolManifest, runtime.manifest))) throw new ProviderModelError('tool_access');
-    const result = await run(request.policy.tools === 'granted' ? runtime : undefined, bounded);
+    if ((request.policy.tools === 'granted' || request.policy.tools === 'provider_native' && request.toolManifest !== undefined) && (!runtime || !sameManifest(request.toolManifest, runtime.manifest))) throw new ProviderModelError('tool_access');
+    const result = await run(request.policy.tools !== 'none' ? runtime : undefined, bounded);
     if (bounded.aborted) throw new ProviderModelError('cancelled');
     return result;
   } finally {

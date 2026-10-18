@@ -12,6 +12,7 @@ export function installReviewFixture(variant: ReviewFixture = 'verified') {
   const task = base.task;
   task.patch += 'diff --git a/test/requests.test.ts b/test/requests.test.ts\n--- a/test/requests.test.ts\n+++ b/test/requests.test.ts\n@@ -1 +1,2 @@\n test("orders requests", verifyOldestFirst);\n+test("preserves equal dates", verifyStableOrder);\n';
   const session = state.sessions!.records.find(item => item.id === task.sessionId)!;
+  session.selection = { provider: 'codex-cli', model: 'gpt-fixture', effort: 'high' };
   const feature: FeatureRequestReference = { key: 'example-request-ordering', id: 'FR-42', source: variant === 'publishing' || variant === 'published' ? 'shared_git' : 'interaction', scope: 'storybook', sourcePath: 'features/FR-42-request-ordering.md', repositoryId: 'web' };
   const request: WorkerRequest = {
     schemaVersion: 1, id: 'review-ordering', owner: { sessionId: session.id, taskId: task.id, rootTurnId: 'turn-file', featureId: feature.key },

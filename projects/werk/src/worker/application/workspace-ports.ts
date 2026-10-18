@@ -1,5 +1,5 @@
 import type { ConversationStore } from './conversation.js';
-import type { ProviderConnection } from './provider-contract.js';
+import type { ProviderConnection, ProviderId } from './provider-contract.js';
 import type { RepositoryConfiguration } from './repositories.js';
 import type { ExecutionPolicy } from './execution-policy.js';
 import type { ToolPolicy } from './tool-policy.js';
@@ -9,6 +9,7 @@ import type { TaskFile } from './local-tasks.js';
 /** Read-only configuration needed by session and approved-file workflows. */
 export interface WorkerSettingsPort {
   readonly value: {
+    defaultProvider?: ProviderId;
     repositories: RepositoryConfiguration;
     execution: ExecutionPolicy;
     board: { paused: boolean; maxParallel: number; queueCapacity: number; orchestratorQueue: number; order: 'fifo' | 'priority' };

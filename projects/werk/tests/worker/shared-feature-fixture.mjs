@@ -55,8 +55,8 @@ export async function fixture(t, options = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-shared-coordinator-')));
   const controls = { claimAckBlocked: false, submitAckBlocked: false, patchAckBlocked: false, changeAfterClaim: false, saveBlocked: false, admit: true, inspect: null, repositoryFailures: 0 };
   const events = [], repositories = new Map(), tasks = new Map();
-  const lifecycleAttempts = [], patchAttempts = [], submits = [];
-  let counter = 0, primaryExecutions = 0, featureCommits = 0, journal, requests, headGate, diagnosticGate, reviewSaveGate;
+  const lifecycleAttempts = [], patchAttempts = [], submits = [], submittedRecords = [];
+  let counter = 0, primaryExecutions = 0, featureCommits = 0, journal, requests, headGate, diagnosticGate, reviewSaveGate, reviewConflictGate;
   /** @type {SharedFeatureIntake} */
   let intake;
   const nextCommit = () => (++counter).toString(16).padStart(40, '0');
@@ -109,22 +109,25 @@ export async function fixture(t, options = {}) {
     async save(state) {
       if (controls.saveBlocked) throw Error('Fixture state write failure');
       await journal.save(state);
+      if (reviewConflictGate && state.records.some(record => record.readyReviewState?.status === 'passed' && !record.readyReviewState.implementationReady && record.claimed && !record.pending)) {
+        const gate = reviewConflictGate; reviewConflictGate = undefined; gate.enter(); await gate.wait;
+      }
       if (reviewSaveGate && state.records.some(record => record.status === 'ready_for_review' && record.reviewNote && !record.pending && !record.publishedReview)) {
         const gate = reviewSaveGate; reviewSaveGate = undefined; gate.enter(); await gate.wait;
       }
     },
     repository,
     loadWorkflow: (repo, commit, configPath) => loadFeatureWorkflowSnapshot({ commit, configPath, readBlob: (at, path) => repo.readBlob(at, path) }),
-    readyReview: options.readyReview,
-    readyReviewEligible: (markdown, snapshot) => validateFeatureReviewEligibility(markdown, snapshot),
+    readyReview: options.readyReview, resolveSelection: options.resolveSelection,
+    readyReviewEligible: (markdown, snapshot, provider) => validateFeatureReviewEligibility(markdown, snapshot, provider ?? options.defaultProvider?.()),
     readyReviewResponse: readReadyReviewResponse,
-    ready: (markdown, snapshot) => { options.onReady?.(); return validateFeatureReadiness(markdown, snapshot.readyCheck, undefined, snapshot.template); },
+    ready: (markdown, snapshot, provider) => { options.onReady?.(); return validateFeatureReadiness(markdown, snapshot.readyCheck, provider ?? options.defaultProvider?.(), snapshot.template); },
     source: sharedSource,
     renderSource: renderSharedSource,
     async submit(record) {
       assert.equal(record.claimed, true, 'Dispatch needs a remotely confirmed claim.'); assert.equal(record.pending, undefined);
       if (!tasks.has(record.taskId)) assert.equal(events.at(-1), 'lifecycle-confirmed', 'Claim acknowledgment precedes initial submission.');
-      submits.push(record.taskId); events.push('submit');
+      submits.push(record.taskId); submittedRecords.push(structuredClone(record)); events.push('submit');
       if (!tasks.has(record.taskId)) {
         const request = requests.ensure({ owner: { sessionId: 'local-' + record.taskId, rootTurnId: record.taskId, taskId: record.taskId }, input: featureGateInput(record.accepted), provider: { id: 'fixture', model: 'fixture-only', instruction: 'No external calls' }, policy: record.workflow.policy });
         tasks.set(record.taskId, { status: 'queued', requestId: request.id, summary: null, patch: null, currentTurnId: 'turn-' + record.taskId, runId: 'run-' + record.taskId });
@@ -143,7 +146,7 @@ export async function fixture(t, options = {}) {
   await intake.configure(config, 0);
   t.after(async () => { await intake.close(); requests.close(); await rm(directory, { recursive: true, force: true }); });
   return {
-    directory, config, controls, events, repositories, tasks, lifecycleAttempts, patchAttempts, submits, addRepository, commitFiles,
+    directory, config, controls, events, repositories, tasks, lifecycleAttempts, patchAttempts, submits, submittedRecords, addRepository, commitFiles,
     get intake() { return intake; }, get requests() { return requests; }, get primaryExecutions() { return primaryExecutions; }, get featureCommits() { return featureCommits; },
     async state() { return JSON.parse(await readFile(join(directory, 'shared-intake.json'), 'utf8')); },
     async restart() { await intake.close(); requests.close(); await open(); },
@@ -153,6 +156,7 @@ export async function fixture(t, options = {}) {
       requests.recordResult(request.id, task.currentTurnId, task.runId, { type: 'completed', text: JSON.stringify({ summary: 'Fixture change; tests are not independently verified.', files: [{ path: 'src/navigation.ts', content: 'after\n' }] }) }, { 'output.protocolValid': true, 'output.patchPresent': true, 'output.changedFileCount': 1 });
       Object.assign(task, { status: 'review', patch, summary: 'Fixture proposed navigation change.' });
     },
+    blockNextReadyReviewConflictSave() { const entered = Promise.withResolvers(), wait = Promise.withResolvers(); reviewConflictGate = { enter: () => entered.resolve(undefined), wait: wait.promise }; return { entered: entered.promise, release: () => wait.resolve(undefined) }; },
     blockNextReviewSave() { const entered = Promise.withResolvers(), wait = Promise.withResolvers(); reviewSaveGate = { enter: () => entered.resolve(undefined), wait: wait.promise }; return { entered: entered.promise, release: () => wait.resolve(undefined) }; },
     blockNextDiagnosticRead() { const entered = Promise.withResolvers(), wait = Promise.withResolvers(); diagnosticGate = { enter: () => entered.resolve(undefined), wait: wait.promise }; return { entered: entered.promise, release: () => wait.resolve(undefined) }; },
     blockNextHead() { const entered = Promise.withResolvers(), wait = Promise.withResolvers(); headGate = { enter: () => entered.resolve(undefined), wait: wait.promise }; return { entered: entered.promise, release: () => wait.resolve(undefined) }; },

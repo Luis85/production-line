@@ -191,7 +191,7 @@ test('a repository replacement during acceptance cannot inherit the previously s
 });
 
 test('ready patch features remain waiting for consent then enter the queue after acceptance', async t => {
-  const f = await workspace(t, { features: true }); await f.worker.updateSettings({ board: { paused: true }, provider: { id: 'openai-api', apiKey: 'fixture-key' } });
+  const f = await workspace(t, { features: true }); await f.worker.updateSettings({ board: { paused: true }, provider: { id: 'openai-api', model: 'fixture-model', apiKey: 'fixture-key' } });
   await writeFile(join(f.repository, 'features/change.md'), '---\nschemaVersion: 1\ntitle: Await repository permission\nstatus: ready\nmode: patch\npaths: [hello.txt]\n---\nChange the approved file.\n');
   await f.worker.features.tick(true); await f.worker.features.tick(true);
   let record = f.worker.features.view().records[0]; assert.equal(record.submitted, false); assert.equal(record.status, 'waiting'); assert.match(record.error, /Approve the detected/); assert.equal(await exists(join(f.repository, '.werk/worktrees')), false);

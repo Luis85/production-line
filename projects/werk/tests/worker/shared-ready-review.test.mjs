@@ -3,25 +3,34 @@ import test from 'node:test';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fixture, source, sourcePath } from './shared-feature-fixture.mjs';
-import { readyReviewSessionId } from '../../src/worker/dist/worker/application/ready-review-contracts.js';
+import { readyReviewSessionId, validateReadyReviewInput } from '../../src/worker/dist/worker/application/ready-review-contracts.js';
 const readyReviewAnswerStart = '<!-- werk:ready-review:answer -->\n', readyReviewAnswerEnd = '\n<!-- /werk:ready-review:answer -->';
 import { SharedFeatureJournal } from '../../src/worker/dist/worker/infrastructure/journal/shared-features.js';
 
+/** @type {import('../../src/worker/application/ready-review-contracts.js').ReadyReviewResult} */
 const questions = { passed: false, summary: 'Clarify the expected keyboard behavior.', findings: [{ kind: 'question', blocking: true, message: 'Should navigation wrap at the final item?' }] };
+/** @type {import('../../src/worker/application/ready-review-contracts.js').ReadyReviewResult} */
 const passed = { passed: true, summary: 'The request is actionable.', findings: [] };
 async function reviewedFixture(t, options = {}) {
-  const inputs = [], executions = new Map(), controls = { lostScheduleAck: false };
+  /** @type {import('../../src/worker/application/ready-review-contracts.js').ReadyReviewInput[]} */
+  const inputs = [];
+  /** @type {Map<string, import('../../src/worker/application/ready-review-contracts.js').ReadyReviewExecutionView>} */
+  const executions = new Map();
+  const controls = { lostScheduleAck: false };
   let f, gates = 0;
+  /** @type {import('../../src/worker/application/ready-review-contracts.js').ReadyReviewPort} */
   const port = {
-    async schedule(input) {
+    async schedule(value) {
+      const input = validateReadyReviewInput(value);
       const existing = executions.get(input.operationId);
       if (existing) return existing;
       const record = (await f.state()).records[0];
       assert.equal(record.claimed, true);
       assert.equal(record.pending, undefined);
       assert.deepEqual(record.readyReviewState.input, input, 'Immutable reviewer input is durable before admission.');
-      assert.equal(f.events.at(-1), 'lifecycle-confirmed', 'Remote claim acknowledgment precedes a paid review.');
+      assert.equal(f.repositories.get('shared').files.get(record.sourcePath), record.publishedSource, 'The exact acknowledged claim must be present remotely before a paid review.');
       inputs.push(structuredClone(input)); f.events.push('review-start');
+      /** @type {import('../../src/worker/application/ready-review-contracts.js').ReadyReviewExecutionView} */
       const execution = { operationId: input.operationId, sessionId: readyReviewSessionId(input), turnId: 'turn-' + input.generation, runId: 'run-' + input.generation, state: 'running' };
       executions.set(input.operationId, execution);
       if (controls.lostScheduleAck) throw Error('Fixture lost review admission acknowledgment');
@@ -165,7 +174,13 @@ test('a concurrent pushed answer supersedes an unpublished review result without
     if (raced) return;
     raced = true; f.answer('Clarification committed during review publication.', markdown => markdown.replace('Preserve pointer interactions.', 'Preserve pointer and touch interactions.'));
   };
-  await f.intake.sync(); await f.intake.sync();
+  const checkpoint = f.blockNextReadyReviewConflictSave(), synchronizing = f.intake.sync();
+  await checkpoint.entered;
+  const persisted = (await new SharedFeatureJournal(f.directory).load()).records[0];
+  assert.equal(persisted.readyReviewState.status, 'passed'); assert.equal(persisted.readyReviewState.implementationReady, undefined);
+  const restarting = f.restart(); checkpoint.release(); await Promise.all([synchronizing, restarting]);
+  assert.equal(f.inputs.length, 1); assert.equal(f.submits.length, 0);
+  await f.intake.sync();
   assert.equal(raced, true); assert.equal(f.submits.length, 0); assert.equal(f.inputs.length, 2);
   assert.match(f.repositories.get('shared').files.get(sourcePath), /pointer and touch/);
   assert.deepEqual(f.inputs[1].previousAssessment, passed);
@@ -177,6 +192,7 @@ test('large Unicode input and expanded findings keep the public note bounded and
   const largeSource = source.replace('Preserve pointer interactions.', '界'.repeat(6000));
   const f = await reviewedFixture(t, { source: largeSource });
   await f.intake.sync();
+  /** @type {import('../../src/worker/application/ready-review-contracts.js').ReadyReviewResult['findings']} */
   const findings = Array.from({ length: 5 }, () => ({ kind: 'question', blocking: true, message: '<!--'.repeat(900) }));
   f.finish({ passed: false, summary: 'Clarify the reserved comment examples.', findings }); await f.intake.sync();
   const markdown = f.repositories.get('shared').files.get(sourcePath);
@@ -195,4 +211,98 @@ test('oversized custom-template readiness diagnostics remain publishable and res
   assert.ok(record.readyReviewState.gateIssues.every(issue => Buffer.byteLength(issue) <= 259));
   assert.ok(Buffer.byteLength(f.repositories.get('shared').files.get(sourcePath)) < 65536);
   await f.restart(); await f.intake.sync(); assert.equal(f.inputs.length, 1); assert.equal(f.submits.length, 0);
+});
+
+test('known reviewer admission without execution evidence fails closed across restart', async t => {
+  const f = await reviewedFixture(t);
+  await f.intake.sync(); f.executions.clear(); await f.restart(); await f.intake.sync();
+  const blocked = f.intake.view().requests[0];
+  assert.equal(blocked.status, 'blocked'); assert.equal(blocked.readyReview.status, 'failed');
+  assert.match(blocked.error, /execution evidence is unavailable/); assert.match(blocked.error, /commit and push/);
+  await f.intake.sync(); assert.equal(f.inputs.length, 1); assert.equal(f.submits.length, 0);
+});
+
+test('committed edits during an active review wait for it to settle and cannot use its stale pass', async t => {
+  const f = await reviewedFixture(t);
+  await f.intake.sync();
+  const commit = f.answer('Include touch interactions.', markdown => markdown.replace('Preserve pointer interactions.', 'Preserve pointer and touch interactions.'));
+  const edited = f.repositories.get('shared').files.get(sourcePath);
+  await f.intake.sync(); assert.equal(f.inputs.length, 1); assert.equal(f.submits.length, 0);
+  assert.equal(f.repositories.get('shared').files.get(sourcePath), edited);
+  f.finish(passed); await f.intake.sync();
+  assert.equal(f.inputs.length, 2); assert.equal(f.submits.length, 0);
+  assert.equal(f.inputs[1].source.commit, commit); assert.match(f.inputs[1].source.markdown, /pointer and touch/);
+  f.finish(passed); await f.intake.sync(); assert.equal(f.submits.length, 1);
+});
+
+test('capacity lost after claim holds the same reviewer reservation and lost result acknowledgment does not re-review', async t => {
+  const f = await reviewedFixture(t);
+  f.controls.beforeLifecycle = () => { f.controls.admit = false; };
+  await f.intake.sync(); assert.equal(f.inputs.length, 0);
+  const reservation = (await f.state()).records[0].readyReviewState.input.operationId;
+  assert.equal(f.intake.view().requests[0].readyReview.status, 'queued');
+  await f.restart(); await f.intake.sync(); assert.equal(f.inputs.length, 0);
+  delete f.controls.beforeLifecycle; f.controls.admit = true; await f.intake.sync();
+  assert.equal(f.inputs.length, 1); assert.equal(f.inputs[0].operationId, reservation);
+  f.finish(); f.controls.claimAckBlocked = true; await f.intake.sync();
+  assert.ok((await f.state()).records[0].pending);
+  await f.restart(); f.controls.claimAckBlocked = false; await f.intake.sync();
+  assert.equal(f.inputs.length, 1); assert.equal(f.intake.view().requests[0].status, 'waiting_ready_input');
+});
+
+
+test('accepted shared provider/model/effort survive settings changes, restart, answers and implementation', async t => {
+  const defaults = { provider: 'claude-cli', model: 'initial-model', effort: 'high' };
+  const f = await reviewedFixture(t, { defaultProvider: () => defaults.provider,
+    resolveSelection: input => ({ provider: input.provider, model: input.model ?? defaults.model, effort: input.effort ?? defaults.effort }) });
+  await f.intake.sync();
+  const selection = { provider: 'claude-cli', model: 'initial-model', effort: 'high' };
+  assert.deepEqual(f.inputs[0].selection, selection);
+  assert.deepEqual(f.intake.view().requests[0].selection, selection);
+  assert.match(f.repositories.get('shared').files.get(sourcePath), /selection:\n\s+provider: claude-cli/);
+  Object.assign(defaults, { provider: 'codex-cli', model: 'later-model', effort: 'low' });
+  f.finish(); await f.intake.sync(); await f.restart();
+  f.answer('Yes, wrap to the first item.'); await f.intake.sync();
+  assert.equal(f.inputs.length, 2); assert.equal(f.inputs[1].provider, 'claude-cli');
+  assert.deepEqual(f.inputs[1].selection, selection);
+  f.finish(passed); await f.intake.sync();
+  assert.equal(f.submittedRecords.length, 1); assert.deepEqual(f.submittedRecords[0].selection, selection);
+  assert.equal(f.submittedRecords[0].accepted.provider, 'claude-cli');
+  await f.restart(); await f.intake.sync(); assert.equal(f.inputs.length, 2); assert.equal(f.submittedRecords.length, 1);
+});
+
+test('Ready Check replies cannot change or remove authored model selection after claim', async t => {
+  const selected = source.replace('mode: patch', 'provider: codex-cli\nmodel: chosen-model\neffort: high\nmode: patch');
+  const f = await reviewedFixture(t, { source: selected,
+    resolveSelection: input => ({ provider: input.provider, model: input.model, effort: input.effort }) });
+  await f.intake.sync(); f.finish(); await f.intake.sync();
+  const original = f.repositories.get('shared').files.get(sourcePath), before = (await f.state()).records[0];
+  for (const change of [markdown => markdown.replace('provider: codex-cli', 'provider: claude-cli'), markdown => markdown.replace('model: chosen-model', 'model: changed-model'),
+    markdown => markdown.replace('effort: high', 'effort: low'), markdown => markdown.replace('model: chosen-model\n', ''), markdown => markdown.replace('effort: high\n', '')]) {
+    f.commitFiles('shared', { [sourcePath]: original });
+    f.answer('Yes, wrap to the first item.', change); const edited = f.repositories.get('shared').files.get(sourcePath);
+    await f.intake.sync(); assert.equal(f.inputs.length, 1); assert.equal(f.submits.length, 0);
+    assert.equal(f.repositories.get('shared').files.get(sourcePath), edited, 'Rejected selection edits remain available for the team to repair.');
+    const record = (await f.state()).records[0]; assert.deepEqual(record.selection, before.selection); assert.deepEqual(record.accepted, before.accepted);
+    assert.match(record.error, /accepted provider, model and effort unchanged/); await f.restart();
+  }
+  f.commitFiles('shared', { [sourcePath]: original }); f.answer('Yes, keep the selected model and wrap.');
+  await f.intake.sync(); assert.equal(f.inputs.length, 2); assert.deepEqual(f.inputs[1].selection, before.selection);
+});
+
+test('shared recovery rejects omitted, changed or mismatched accepted model snapshots', async t => {
+  const f = await reviewedFixture(t, { resolveSelection: input => ({ provider: input.provider, model: 'accepted', effort: 'default' }) });
+  await f.intake.sync(); const path = join(f.directory, 'shared-intake.json'), original = await readFile(path, 'utf8');
+  for (const change of [record => { delete record.selection; }, record => { record.selection.model = 'changed'; },
+    record => { record.selection.effort = 'high'; }, record => { record.selection.provider = 'claude-cli'; }, record => { delete record.readyReviewState.input.selection; }]) {
+    const state = JSON.parse(original); change(state.records[0]); await writeFile(path, JSON.stringify(state));
+    await assert.rejects(new SharedFeatureJournal(f.directory).load(), /selection|reservation|Ready Check input/);
+  }
+  await writeFile(path, original); await f.restart(); assert.equal(f.inputs.length, 1);
+});
+
+test('an invalid resolved model leaves shared work unclaimed without a reviewer dispatch', async t => {
+  const f = await reviewedFixture(t, { resolveSelection: () => ({ provider: 'cursor-cli', model: 'auto', effort: 'high' }) });
+  await f.intake.sync(); assert.equal(f.inputs.length, 0); assert.equal((await f.state()).records.length, 0);
+  assert.match(f.intake.view().requests[0].error, /supported effort/);
 });

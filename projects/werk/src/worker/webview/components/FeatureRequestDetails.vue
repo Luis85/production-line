@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import UInput from '@nuxt/ui/components/Input.vue';
+import ModelSelectionFields from './ModelSelectionFields.vue';
+import { state } from '../store';
 import UTextarea from '@nuxt/ui/components/Textarea.vue';
-import { featureDetailFields, readFeatureDetails, writeFeatureDetail, type FeatureDetailField } from '../feature-authoring-fields';
+import { featureDetailFields, readFeatureDetails, writeFeatureDetail, type FeatureDetailField, type FeatureModelField } from '../feature-authoring-fields';
 const markdown = defineModel<string>({ required: true });
 defineProps<{ disabled: boolean }>();
 const error = ref('');
@@ -10,7 +12,7 @@ const details = computed(() => {
   try { return { value: readFeatureDetails(markdown.value), error: '' }; }
   catch (cause) { return { value: null, error: (cause as Error).message }; }
 });
-function update(key: FeatureDetailField | 'paths' | 'title', value: string | number) {
+function update(key: FeatureDetailField | FeatureModelField | 'paths' | 'title', value: string | number) {
   try { markdown.value = writeFeatureDetail(markdown.value, key, String(value)); error.value = ''; }
   catch (cause) { error.value = (cause as Error).message; }
 }
@@ -20,6 +22,7 @@ function update(key: FeatureDetailField | 'paths' | 'title', value: string | num
     <legend>Request details</legend>
     <template v-if="details.value">
       <div class="feature-field"><label for="feature-detail-title">Request name</label><UInput id="feature-detail-title" :model-value="details.value.title" :maxlength="120" class="w-full" @update:model-value="update('title', $event)" /></div>
+      <details class="request-model-options"><summary>Provider, model &amp; effort</summary><ModelSelectionFields id="feature-detail" :provider="details.value.selection.provider ?? state.settings?.defaultProvider" :model="details.value.selection.model" :effort="details.value.selection.effort" :providers="state.settings?.providers ?? []" :disabled="disabled" @update:provider="update('provider', $event)" @update:model="update('model', $event)" @update:effort="update('effort', $event)" /></details>
       <div v-for="field in featureDetailFields" :key="field.key" class="feature-field">
         <label :for="'feature-detail-' + field.key.replaceAll(' ', '-')">{{ field.label }}</label>
         <UTextarea :id="'feature-detail-' + field.key.replaceAll(' ', '-')" :model-value="details.value.fields[field.key]" :rows="field.rows" :maxrows="12" autoresize :maxlength="8000" class="w-full" :aria-describedby="'feature-help-' + field.key.replaceAll(' ', '-')" @update:model-value="update(field.key, $event)" />

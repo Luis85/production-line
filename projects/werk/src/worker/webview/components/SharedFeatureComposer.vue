@@ -2,19 +2,21 @@
 import { reactive, watch as watchPrivateDraft } from 'vue';
 import { state as workerState } from '../store';
 import type { ProviderId } from '../../application/provider-contract';
+import type { ModelEffort } from '../../application/model-effort';
 import { emptyFeatureAuthoringEditor } from '../feature-authoring-editor';
 const editorState = reactive(emptyFeatureAuthoringEditor());
-const seed = reactive({ title: '', message: '', provider: undefined as ProviderId | undefined, paths: '' });
+const emptySeed = () => ({ title: '', message: '', provider: undefined as ProviderId | undefined, model: '', effort: '' as ModelEffort | '', paths: '', selectionEdited: false });
+const seed = reactive(emptySeed());
 watchPrivateDraft(() => workerState.draftEpoch, () => {
   Object.assign(editorState, emptyFeatureAuthoringEditor());
-  Object.assign(seed, { title: '', message: '', provider: undefined as ProviderId | undefined, paths: '' });
+  Object.assign(seed, emptySeed());
 }, { flush: 'sync' });
 </script>
 <script setup lang="ts">
 import { computed, nextTick, watch } from 'vue';
 import UButton from '@nuxt/ui/components/Button.vue';
 import UInput from '@nuxt/ui/components/Input.vue';
-import USelect from '@nuxt/ui/components/Select.vue';
+import ModelSelectionFields from './ModelSelectionFields.vue';
 import UTextarea from '@nuxt/ui/components/Textarea.vue';
 import MessageContent from './MessageContent.vue';
 import FeatureRequestDetails from './FeatureRequestDetails.vue';
@@ -42,11 +44,16 @@ const selected = computed(() => requests.value.find(item => item.id === editorSt
 function sessionId(taskId: string | null) { return taskId ? state.board?.tasks.find(task => task.id === taskId)?.sessionId : undefined; }
 function openConversation(taskId: string | null) { const id = sessionId(taskId); if (id) emit('created', id, state.sessions?.selected ?? ''); }
 watch(() => editorState.busy, value => emit('busy', value));
-watch(() => state.settings?.providers, providers => { if (!seed.provider) seed.provider = providers?.find(item => item.configured)?.id ?? providers?.[0]?.id; }, { immediate: true });
+const defaultProvider = computed(() => state.settings?.defaultProvider ?? state.settings?.providers.find(item => item.configured)?.id ?? state.settings?.providers[0]?.id);
+watch([() => state.settings?.providers, defaultProvider], () => {
+  const untouched = !seed.selectionEdited && !seed.title && !seed.message && !seed.model && !seed.effort && !seed.paths && !editorState.result && !editorState.pending;
+  if (!seed.provider || untouched) seed.provider = defaultProvider.value;
+}, { immediate: true });
 async function focusInstructions() { await nextTick(); document.getElementById(editorState.result ? 'feature-detail-goal' : 'new-task-instructions')?.focus(); }
 async function prepare() {
   if (locked.value || !seed.message.trim() || !seed.provider) return;
   await editor.prepare({ title: seed.title.trim() || seed.message.trim().slice(0, 80), message: seed.message, provider: seed.provider,
+    ...(seed.model.trim() ? { model: seed.model.trim() } : {}), ...(seed.effort ? { effort: seed.effort } : {}),
     paths: seed.paths.split('\n').map(path => path.trim()).filter(Boolean) });
   await focusInstructions();
 }
@@ -55,7 +62,7 @@ async function retry() { if ((await editor.retry())?.publication) await refresh(
 async function reopen(name: string) { if (await editor.reopen(name)) await focusInstructions(); }
 function newRequest() {
   if (locked.value) return;
-  editor.reset(); Object.assign(seed, { title: '', message: '', paths: '' }); void focusInstructions();
+  editor.reset(); Object.assign(seed, emptySeed(), { provider: defaultProvider.value }); void focusInstructions();
 }
 function keydown(event: KeyboardEvent) {
   if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing && !editorState.result) { event.preventDefault(); void prepare(); }
@@ -77,8 +84,7 @@ defineExpose({ focusInstructions });
           <summary>Request options</summary>
           <label for="shared-request-title">Request name · optional</label>
           <UInput id="shared-request-title" v-model="seed.title" :maxlength="120" placeholder="Named from your instructions" class="w-full" />
-          <label for="shared-request-provider">Model connection</label>
-          <USelect id="shared-request-provider" v-model="seed.provider" :items="state.settings?.providers.map(item => ({ label: item.label + (item.configured ? '' : ' · needs setup'), value: item.id })) ?? []" class="w-full" />
+          <ModelSelectionFields id="shared-request" @update:provider="seed.selectionEdited = true" @update:model="seed.selectionEdited = true" @update:effort="seed.selectionEdited = true" v-model:provider="seed.provider" v-model:model="seed.model" v-model:effort="seed.effort" :providers="state.settings?.providers ?? []" :disabled="locked" />
           <label for="shared-request-paths">Approved repository paths · one per line</label>
           <UTextarea id="shared-request-paths" v-model="seed.paths" :rows="3" placeholder="src/orders/export.ts" class="w-full" />
           <p class="help">Only approve files this feature may change. You can complete these details in the draft.</p>

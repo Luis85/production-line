@@ -231,3 +231,16 @@ test('pre-DoR reviewer findings direct answers to the same Markdown request with
   record.taskId = 'task-1'; record.readyReview.status = 'passed'; record.status = 'ready_for_review';
   assert.doesNotMatch(buildFeatureReviewView({ shared: record }).nextStep.description, /Implementation has not started/);
 });
+
+
+test('review model information uses retained acceptance and never reconstructs it from current defaults', () => {
+  const local = task();
+  assert.equal(buildFeatureReviewView({ task: local }).selection, null, 'legacy model text does not invent an accepted effort');
+  local.selection = { provider: 'codex-cli', model: 'accepted-model', effort: 'high' };
+  local.model = 'different-observation';
+  assert.deepEqual(buildFeatureReviewView({ task: local }).selection, local.selection);
+  const remote = shared(); remote.selection = { provider: 'cursor-cli', model: 'team-cursor-model', effort: 'default' };
+  assert.deepEqual(buildFeatureReviewView({ shared: remote }).selection, remote.selection);
+  remote.taskId = 'another-task';
+  assert.equal(buildFeatureReviewView({ task: local, shared: remote }).selection, null, 'inconsistent identities hide selection with other mismatched evidence');
+});

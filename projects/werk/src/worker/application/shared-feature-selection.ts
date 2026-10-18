@@ -1,0 +1,23 @@
+import { DomainError } from '../../shared/errors.js';
+import { featureInputHash, type SharedFeatureInput } from './feature-workflow.js';
+import { gateDigest } from './request-gates.js';
+import { sharedHash } from './shared-feature-notes.js';
+import { validateModelSelection } from './model-selection.js';
+import type { SharedFeatureRecord } from './shared-feature-state.js';
+
+/** Legacy reservations retain their exact digest; new claims bind the resolved model selection. */
+export function sharedFeatureInputHash(record: Pick<SharedFeatureRecord, 'accepted' | 'workflow' | 'sourceCommit' | 'sourceMarkdown' | 'selection'>): string {
+  return sharedHash(featureInputHash(record.accepted) + record.workflow.policyDigest + record.sourceCommit + sharedHash(record.sourceMarkdown)
+    + (record.selection ? gateDigest(record.selection) : ''));
+}
+export function assertSharedFeatureSelection(record: Pick<SharedFeatureRecord, 'accepted' | 'selection'>): void {
+  if (!record.selection) return;
+  const selection = validateModelSelection(record.selection), input = record.accepted;
+  if (selection.provider !== input.provider || input.model !== undefined && input.model !== '' && input.model !== selection.model || input.effort !== undefined && input.effort !== selection.effort)
+    throw new DomainError('conflict', 'The accepted model selection does not match this Feature Request.');
+}
+/** Replies may clarify work, but may not silently replace the already accepted provider/model/effort. */
+export function assertSharedFeatureReplySelection(record: SharedFeatureRecord, input: SharedFeatureInput): void {
+  if (record.selection && (input.provider !== record.accepted.provider || input.model !== record.accepted.model || input.effort !== record.accepted.effort))
+    throw new DomainError('conflict', 'Keep the accepted provider, model and effort unchanged when answering. Create a new Feature Request to use a different model selection.');
+}

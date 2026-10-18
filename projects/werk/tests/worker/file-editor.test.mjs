@@ -7,6 +7,7 @@ import { normalizeSource } from '../helpers/source-text.mjs';
 import { reactive, ref, computed, watch, nextTick, defineComponent } from 'vue';
 import { parse, compileScript } from '@vue/compiler-sfc';
 import { frontend, deferred } from '../ui/helpers/frontend-loader.mjs';
+const { providerSupportsDefinition } = await frontend('src/worker/application/provider-contract.ts');
 const { validateApprovedPaths } = await frontend('src/worker/application/approved-paths.ts');
 const { buildWorkerCapacityView } = await frontend('src/worker/webview/worker-capacity.ts');
 // Compile the actual unified composer; keep its production validation and worker port under test.
@@ -17,7 +18,7 @@ async function editorFixture(action, sourceTransform = source => source) {
   const state = reactive({ draftEpoch: 0, unlocked: true, workspaceBusy: false, environment: {}, draft: 'Existing follow-up draft', actionError: '', settings: { repositories: { items: [] }, providers: [{ id: 'codex-cli', configured: true }, { id: 'claude-cli', configured: true }] }, sessions: { selected: 'one', records: [{ id: 'one', provider: 'codex-cli' }, { id: 'two', provider: 'claude-cli' }] }, definitions: [], toolAccess: null });
   const javascript = ts.transpile(scripts, { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS });
   const focused = [], events = [];
-  const ports = { _defineComponent: defineComponent, reactive, ref, computed, watch, watchPrivateDraft: watch, nextTick, state, workerState: state, createFeatureRequest: action, validateApprovedPaths, buildWorkerCapacityView, getCapacityFreshness: () => 'fresh', document: { getElementById: id => ({ focus: () => focused.push(id) }) }, UButton: null, UInput: null, USelect: null, UTextarea: null, RunTask: null, SharedFeatureComposer: null };
+  const ports = { _defineComponent: defineComponent, reactive, ref, computed, watch, watchPrivateDraft: watch, nextTick, state, workerState: state, createFeatureRequest: action, providerSupportsDefinition, validateApprovedPaths, buildWorkerCapacityView, getCapacityFreshness: () => 'fresh', document: { getElementById: id => ({ focus: () => focused.push(id) }) }, UButton: null, UInput: null, USelect: null, UTextarea: null, RunTask: null, SharedFeatureComposer: null, ModelSelectionFields: null };
   // The emit closure is deliberately injected as part of the component's real setup context.
   const result = new Function(...Object.keys(ports), 'events', `${javascript}\nreturn EditorComponent.setup({}, { expose() {}, emit(...args) { events.push(args); } });`)(...Object.values(ports), events);
   Object.assign(result.intake, { message: 'Clarify the navigation.', title: 'Change', repository: '/project', paths: 'src/a.ts' });
@@ -154,4 +155,40 @@ test('preparation progress retains instructions and operation until the durable 
   requiredValue(progress.value)({ ...preparing, phase: 'admission', state: 'preparing' }); assert.match(f.preparationNote.value, /Saving approved files/);
   pending.resolve({ session: { id: 'local-' + id }, chat: {} }); await creating;
   assert.equal(f.intake.pending, null); assert.equal(f.preparation.value, null); assert.equal(f.intake.message, '');
+});
+
+
+test('new FR model and effort choices are frozen in the same retry command', async () => {
+  const commands = []; let fail = true;
+  const f = await editorFixture(async command => { commands.push(structuredClone(command)); if (fail) throw Error('Lost acknowledgement'); return { session: { id: 'accepted' }, chat: {} }; });
+  f.intake.model = 'chosen-model'; f.intake.effort = 'high'; await f.create();
+  assert.equal(commands[0].model, 'chosen-model'); assert.equal(commands[0].effort, 'high');
+  f.intake.model = 'later-edit'; f.intake.effort = 'low'; fail = false; await f.create();
+  assert.deepEqual(commands[1], commands[0]);
+});
+test('inherited model and effort stay omitted while later default refresh keeps an operator choice', async () => {
+  const commands = [];
+  const f = await editorFixture(async command => { commands.push(command); return { session: { id: 'accepted' }, chat: {} }; });
+  f.intake.provider = undefined;
+  Object.assign(f.state.settings, { defaultProvider: 'claude-cli' });
+  f.state.settings.providers = [...f.state.settings.providers]; await nextTick();
+  assert.equal(f.intake.provider, 'claude-cli');
+  f.intake.provider = 'codex-cli'; f.state.settings.providers = [...f.state.settings.providers]; await nextTick();
+  assert.equal(f.intake.provider, 'codex-cli'); await f.create();
+  assert.equal(commands[0].model, undefined); assert.equal(commands[0].effort, undefined);
+});
+
+
+test('new requests reset selection while active and explicitly chosen drafts survive default changes', async () => {
+  const pending = deferred(); const f = await editorFixture(() => pending.promise);
+  Object.assign(f.state.settings, { defaultProvider: 'codex-cli' });
+  Object.assign(f.intake, { model: 'first-model', effort: 'high', selectionEdited: true });
+  const creating = f.create(); Object.assign(f.state.settings, { defaultProvider: 'claude-cli' }); await nextTick();
+  assert.equal(f.intake.provider, 'codex-cli'); assert.equal(f.intake.model, 'first-model'); assert.equal(f.intake.pending.effort, 'high');
+  pending.resolve({ session: { id: 'accepted' }, chat: {} }); await creating;
+  assert.equal(f.intake.provider, 'claude-cli'); assert.equal(f.intake.model, ''); assert.equal(f.intake.effort, '');
+  Object.assign(f.state.settings, { defaultProvider: 'codex-cli' }); await nextTick(); assert.equal(f.intake.provider, 'codex-cli');
+  f.intake.message = 'A started draft'; Object.assign(f.state.settings, { defaultProvider: 'claude-cli' }); await nextTick(); assert.equal(f.intake.provider, 'codex-cli');
+  f.intake.message = ''; f.intake.selectionEdited = true; Object.assign(f.state.settings, { defaultProvider: 'codex-cli' }); await nextTick();
+  Object.assign(f.state.settings, { defaultProvider: 'claude-cli' }); await nextTick(); assert.equal(f.intake.provider, 'codex-cli');
 });

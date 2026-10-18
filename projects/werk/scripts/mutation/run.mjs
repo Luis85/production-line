@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
-import { appendFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { finished } from 'node:stream/promises';
 import { scope } from './scope.mjs';
+import { discoverMutationTests, discoverMutationSources, digestMutationFiles } from './provenance.mjs';
 import { runOwnedProcess } from './process.mjs';
 import { annotationText, formatSummary, summarizeReport } from './summary.mjs';
 
@@ -13,11 +14,6 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const output = join(root, 'reports/mutation');
 const advisory = process.argv.includes('--advisory');
 const sha256 = text => createHash('sha256').update(text).digest('hex');
-async function digestFiles(paths) {
-  const files = {};
-  for (const path of [...paths].sort()) files[path] = sha256(await readFile(join(root, path)));
-  return { digest: sha256(JSON.stringify(files)), files };
-}
 async function optionalJson(path) { try { return JSON.parse(await readFile(path, 'utf8')); } catch { return null; } }
 function git(...args) { const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' }); return result.status === 0 ? result.stdout.trim() : null; }
 
@@ -48,17 +44,19 @@ async function main() {
   if (process.argv.slice(2).some(value => value !== '--advisory')) throw Error('Usage: npm run mutation [-- --advisory]');
   const started = Date.now(), packageInfo = await optionalJson(join(root, 'package.json'));
   const tool = await optionalJson(join(root, 'node_modules/@stryker-mutator/core/package.json'));
-  const testPaths = (await readdir(join(root, 'scripts/mutation/suites'))).filter(name => name.endsWith('.test.mjs')).map(name => `scripts/mutation/suites/${name}`);
+  const testPaths = await discoverMutationTests(root);
   const metadata = {
     createdAt: new Date().toISOString(), packageVersion: packageInfo?.version ?? 'unknown',
     commit: git('rev-parse', 'HEAD'), workingTreeDirty: Boolean(git('status', '--porcelain', '--untracked-files=normal')),
     nodeVersion: process.version, platform: `${process.platform}-${process.arch}`, strykerVersion: tool?.version ?? 'unavailable',
-    scope, sources: await digestFiles(scope.targets), tests: await digestFiles([...testPaths, ...scope.reusedTests, ...scope.supportFiles]),
-    configuration: await digestFiles(['stryker.config.mjs', 'scripts/mutation/build.mjs', 'scripts/mutation/scope.mjs']),
+    scope, sources: await digestMutationFiles(root, scope.targets), compiledSources: await digestMutationFiles(root, await discoverMutationSources(root)), tests: await digestMutationFiles(root, [...testPaths, ...scope.reusedTests, ...scope.reusedFixtures, ...scope.supportFiles]),
+    configuration: await digestMutationFiles(root, ['stryker.config.mjs', 'scripts/mutation/build.mjs', 'scripts/mutation/scope.mjs', 'scripts/mutation/run.mjs', 'scripts/mutation/summary.mjs', 'scripts/mutation/process.mjs', 'scripts/mutation/provenance.mjs']),
   };
   const execution = await executeStryker(); execution.durationMs = Date.now() - started;
-  const afterTests = await digestFiles([...testPaths, ...scope.reusedTests, ...scope.supportFiles]);
-  const afterConfig = await digestFiles(Object.keys(metadata.configuration.files));
+  const afterTests = await digestMutationFiles(root, [...await discoverMutationTests(root), ...scope.reusedTests, ...scope.reusedFixtures, ...scope.supportFiles]);
+  const afterSources = await digestMutationFiles(root, await discoverMutationSources(root));
+  const afterConfig = await digestMutationFiles(root, Object.keys(metadata.configuration.files));
+  if (afterSources.digest !== metadata.compiledSources.digest) execution.error = 'Compiled TypeScript source files changed during analysis; rerun on a stable tree.';
   if (afterTests.digest !== metadata.tests.digest || afterConfig.digest !== metadata.configuration.digest) execution.error = 'Mutation test or configuration files changed during analysis; rerun on a stable tree.';
   const report = await optionalJson(join(output, 'mutation.json'));
   const baseline = await optionalJson(join(root, 'scripts/mutation/baseline.json'));
