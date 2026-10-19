@@ -372,3 +372,59 @@ follow its [overnight handoff](shared-feature-intake.md#work-during-the-day-impl
 Inspect `settings get` for redacted configuration. `queue pause` stops new
 execution and orchestrator claims while running tasks finish; `queue resume` resumes it. Use
 `queue configure --file queue.json` for capacity and routing intake settings.
+
+## Remove a project worker
+
+Run every step from the project directory, not from inside `bin/apps/worker`.
+First list what the worker owns or created. `footprint` is read-only and works
+while the worker runs or is stopped:
+
+```sh
+node bin/apps/worker/cli.mjs footprint
+```
+
+It groups paths as `app` (`bin/apps/worker`), `retained` (`bin/apps/.worker-update`
+and `.werk/worker.updates` from updates), `state` (`.werk/worker`, `.werk/provider-home`
+and the worker's owner and status files in the feature folder), `configuration`,
+`authoring` (workflow, Base, checks, prompts, template and `.werk/authoring`),
+`requests` (feature, review and task folders), `integrations` (agent skills, the
+Codex guide, their ownership record and a generated `package.json`), `environment`
+(`.env` key names, the `.env.example` block, `.gitignore` rules) and `worktrees`.
+Each entry shows its path, whether it exists, its size and whether Git tracks it.
+Task worktrees come from the same ownership records as `worktrees list`, with
+their state, including those under **Task worktree folder** outside the checkout.
+The output never contains file contents or credentials.
+
+Preview the removal, then apply exactly that plan:
+
+```sh
+node bin/apps/worker/cli.mjs uninstall --dry-run
+node bin/apps/worker/cli.mjs uninstall --confirm
+```
+
+Without `--dry-run` or `--confirm` the command refuses. `--confirm` requires a
+stopped worker; pass `--stop` to stop a native worker gracefully first, or stop a
+Docker worker with `docker compose --env-file .env -f .werk/compose.worker.yaml down`.
+It removes clean task worktrees this worker owns through the same checks as
+`worktrees prune`, then integration files, authoring files, configuration, state,
+retained folders and finally the app folder.
+
+What stays:
+
+- Every Git-tracked file. Commit their removal separately if the team no longer
+  needs the kit.
+- Request folders. `--include-requests` removes their untracked files, including
+  local drafts and results.
+- `.env` and the `.env.example` block. `--include-environment` removes only the
+  worker keys and block; other lines stay and `.gitignore` is never changed.
+- Files you edited, such as a changed skill, Base or check, and integration files
+  Werk does not own.
+- Task worktrees with uncommitted or untracked changes, commits, an operator lock,
+  links or junctions, an invalid record or another assignment. The result lists
+  each with its reason; review them before `git worktree remove PATH`.
+- Links, junctions and anything outside the project directory.
+
+The CLI removes its own app folder last. If another process, such as a shell,
+editor or `npm --prefix bin/apps/worker`, holds it open, the result reports
+`ok: false` and names the manual step, for example
+`Remove-Item -Recurse -Force bin\apps\worker` on Windows.

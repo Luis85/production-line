@@ -7,6 +7,10 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+### Added
+
+- The portable worker CLI adds `footprint` and `uninstall` for removing a project worker. `footprint` is a read-only inventory, whether the worker runs or not, of everything the worker owns or created, grouped as `app`, `retained`, `state`, `configuration`, `authoring`, `requests`, `integrations`, `environment` and `worktrees`, with path, existence, size and Git tracking; task worktrees come from the worker's ownership records with their state. It prints `.env` key names, never values or file contents. `uninstall --dry-run` lists what would be removed and kept with reasons; `uninstall --confirm` requires a stopped worker (or `--stop`) and the project directory, removes clean owned task worktrees through the existing owned-worktree removal (changed, committed, locked, linked, invalid and unowned ones are kept and reported), then untracked integration, authoring, configuration, state and retained files and the app folder last. Git-tracked files are never removed; edited generated files, request folders and `.env` entries stay unless `--include-requests` or `--include-environment` is given. Without either mode the command refuses. See [Remove a project worker](docs/how-to/project-worker.md#remove-a-project-worker).
+
 ### Fixed
 
 - Implementation requests from shared intake learn the shared Git publication bounds during implementation, before a full model run ends in a blocked publication. Admission freezes the publisher's limits (a patch of at most 131,072 UTF-8 bytes and at most 32 changed files) into the implementation scope; `werk_candidate_status` and `werk_candidate_apply` report them as `sharedPublication` with the candidate's `patchBytes` and `changedFileCount`, and while a candidate exceeds either bound every required check fails before running, with the same measurement and message that block publication after verification, prefixed `Shared publication limit:`. The post-verification block remains the backstop. Local requests and requests admitted before this change are unaffected.
