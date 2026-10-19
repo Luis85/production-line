@@ -20,12 +20,13 @@ export function repositoryStatus(workspace: WorkspaceContext){
 }
 
 export async function repositoryCommand(workspace: WorkspaceContext, input: unknown){
-  const body = object(input, "Repository command", ["action", "id", "discoveryId"]);
+  const body = object(input, "Repository command", ["action", "id", "discoveryId", "watch"]);
   if (body.action === "accept" || body.action === "decline") {
     if (body.id !== undefined) throw new DomainError("invalid_input", "Use discoveryId for the detected installation repository.");
-    return chooseDiscoveredRepository(workspace, body.action, body.discoveryId);
+    if (body.watch !== undefined && (body.action !== "accept" || typeof body.watch !== "boolean")) throw new DomainError("invalid_input", "watch must be true or false and only applies when accepting a repository.");
+    return chooseDiscoveredRepository(workspace, body.action, body.discoveryId, body.watch);
   }
-  if (body.discoveryId !== undefined) throw new DomainError("invalid_input", "Use discoveryId only when accepting or declining a detected repository.");
+  if (body.discoveryId !== undefined || body.watch !== undefined) throw new DomainError("invalid_input", "Use discoveryId only when accepting or declining a detected repository.");
   if (body.action === "status" && body.id === undefined) return repositoryStatus(workspace);
   if (body.action !== "sync" || (body.id !== undefined && typeof body.id !== "string"))
     throw new DomainError("invalid_input", "Use status or sync with an optional repository id.");
@@ -43,7 +44,7 @@ export function assertRepositoryChangeAllowed(workspace: WorkspaceContext){
     throw new DomainError("conflict", "Finish or cancel queued and active tasks before changing repository assignments.");
 }
 
-async function chooseDiscoveredRepository(workspace: WorkspaceContext, action: "accept" | "decline", id: unknown){
+async function chooseDiscoveredRepository(workspace: WorkspaceContext, action: "accept" | "decline", id: unknown, watch?: boolean){
   if (action === "accept") assertRepositoryChangeAllowed(workspace);
   else if (!workspace.acceptingTasks || workspace.repositoriesUpdating || workspace.configurationUpdating)
     throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
@@ -59,7 +60,7 @@ async function chooseDiscoveredRepository(workspace: WorkspaceContext, action: "
     } else {
       if (!candidate.repositoryId) {
         const configuration = workspace.settings.value.repositories;
-        await workspace.settings.update({ repositories: { ...configuration, items: [...configuration.items, workspace.repositoryDiscovery.assignment(configuration.items)] } });
+        await workspace.settings.update({ repositories: { ...configuration, items: [...configuration.items, workspace.repositoryDiscovery.assignment(configuration.items, watch)] } });
       }
       const assignment = workspace.settings.value.repositories.items.find(item => item.path === candidate.path || item.id === candidate.repositoryId);
       await workspace.repositoryDiscovery.record("accepted", assignment?.id);

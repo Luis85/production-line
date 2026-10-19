@@ -97,7 +97,7 @@ same choice is **Use this Git repository?** → **Use repository** or **Don’t 
 a skipped repository can be accepted later in **Settings → Repositories**.
 
 Accepting adds a saved assignment. A checkout with a branch and remote starts
-watching; without a remote, or with detached HEAD, watching starts off. Committed
+watching (unless the worker was initialized with `--intake local` or you pass `--watch false`); without a remote, or with detached HEAD, watching starts off. Committed
 files remain usable for worktree tasks. Configure a remote/current branch before
 enabling watching. Finish queued/running work before accepting. A Git checkout
 in a parent directory is not automatically offered, and linked worktrees with a
@@ -256,6 +256,48 @@ See the [local proposal tutorial](../tutorials/worker-feature-lifecycle.md) and
 [request contract](../reference/feature-requests.md) for this alternative.
 For day-to-day operation, including Windows input files and tool limits, use the
 [project worker checklist](operate-project-worker.md).
+
+## Set up an operator-only worker
+
+If you only want a local worker that reads requests from its feature folder, with no
+shared Git repository or team, initialize it with `--intake local`:
+
+```bash
+node /path/to/werk-release/bin/apps/worker/cli.mjs init --intake local
+```
+
+The default is `--intake shared`, which changes nothing. With `local`, `init` still
+installs the offline authoring kit, and it also:
+
+- writes `features/_templates/local-request.md`: a local request template without
+  `templateId`, with `status: draft`, `mode: patch`, your provider, and commented
+  `paths` (including a folder entry ending in `/`) and `definitionRef` examples;
+- records `features.intake: "local"` in `.werk/worker.json`. A repeated `init` keeps
+  it; `init --intake shared` against a local worker stops and names that file, so edit
+  or remove the key yourself to switch;
+- reports `intake: { mode: "local", template, commands, next }` instead of the shared
+  connection steps.
+
+`mode: patch` needs an explicit `paths` list, so copy the template outside the
+feature folder and uncomment and edit `paths` first. Then create, check and queue it:
+
+```bash
+cp features/_templates/local-request.md request-draft.md   # edit title, paths and body
+node bin/apps/worker/cli.mjs feature create --name request.md --markdown request-draft.md
+node bin/apps/worker/cli.mjs feature validate --name request.md
+node bin/apps/worker/cli.mjs feature submit --name request.md --if-match REVISION
+```
+
+Start the worker, then accept the detected project checkout with
+`repository accept --discovery-id ID` if tasks should use it. For a local worker the
+new assignment is not watched, so nothing is fetched in the background. Pass
+`--watch true` to `repository accept` to watch it anyway; `--watch false` also works for a
+shared worker. `shared status` and `feature list` carry `intake: "local"` and a hint that
+shared intake is intentionally off. To move to shared intake later, set
+`features.intake` to `"shared"` (or remove it) and follow
+[Submit your first shared request](#submit-your-first-shared-request).
+`footprint` and `uninstall` treat the local template as a generated authoring file:
+removed when unchanged, kept as your work once edited.
 
 ## Start with Docker
 

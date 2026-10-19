@@ -70,7 +70,7 @@ export async function main(kind, argv = process.argv.slice(2)) {
       const selected = o['state-dir'] === undefined ? undefined : await stateDirectory(kind, root, o['state-dir']);
       console.log(JSON.stringify(await seedEnvironment(kind, directory, { ...(selected ? { stateDirectory: selected, defaults: { 'state-dir': relative(directory, selected) || '.' } } : {}) }))); return;
     }
-    if (kind === 'worker' && cmd === 'init') { validateOptions(o, ['project-dir', 'features-dir', 'workflow-dir', 'provider', 'port']); console.log(JSON.stringify(await initializeWorker(root, { ...o, ...flags }))); return; }
+    if (kind === 'worker' && cmd === 'init') { validateOptions(o, ['project-dir', 'features-dir', 'workflow-dir', 'provider', 'port', 'intake']); console.log(JSON.stringify(await initializeWorker(root, { ...o, ...flags }))); return; }
     if (kind === 'worker' && cmd === 'feature template') { validateOptions(o, []); const { featureTemplate } = await import(new URL('../../../src/worker/dist/worker/infrastructure/features/document.js', import.meta.url)); process.stdout.write(featureTemplate); return; }
     if (kind === 'worker' && cmd === 'uninstall') await (await import('./uninstall.mjs')).assertOutsideApp(root);
     const launching = ['run', '_run', 'start'].includes(cmd), recovery = ['status', 'stop', 'update status', 'update apply', 'update rollback'].includes(cmd);

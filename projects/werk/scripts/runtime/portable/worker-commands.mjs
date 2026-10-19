@@ -111,8 +111,8 @@ export function workerCommands(catalog) {
   };
   for (const name of ["accept", "decline"])
     catalog["repository " + name] = {
-      ...action("/api/repositories", name, ["discovery-id"], false, [], { "discovery-id": "discoveryId" }),
-      description: "Record the explicit choice for the exact detected installation repository. Read repository status for its discovery id first.",
+      ...action("/api/repositories", name, ["discovery-id"], false, name === "accept" ? ["watch"] : [], { "discovery-id": "discoveryId", ...(name === "accept" ? { watch: "watch" } : {}) }),
+      description: "Record the explicit choice for the exact detected installation repository. Read repository status for its discovery id first." + (name === "accept" ? " --watch true|false sets whether the new assignment is fetched in the background; the default is false for a worker created with init --intake local, otherwise true when the checkout has a remote and branch." : ""),
     };
   catalog["worktrees list"] = {
     timeoutMs: GIT_REQUEST_TIMEOUT_MS,
@@ -702,7 +702,7 @@ export async function workerBody(command, body, options) {
   };
   for (const [option, field] of Object.entries(command.fields ?? {}))
     if (options[option] !== undefined) {
-      if (["remove-worktree", "discard-changes"].includes(option)) {
+      if (["remove-worktree", "discard-changes", "watch"].includes(option)) {
         if (!["true", "false"].includes(options[option])) throw inputError("--" + option + " must be true or false.");
         result[field] = options[option] === "true";
       } else result[field] = options[option];

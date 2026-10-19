@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { inputError } from '../config.mjs';
 import { environmentExample, environmentKeys } from './environment.mjs';
 import { status } from './lifecycle.mjs';
+import { localRequestTemplate, localTemplateName } from './local-intake.mjs';
 import { contained, display, info, lf, measure, smallText, trackedBelow, trackedFiles, within } from './footprint-files.mjs';
 
 /**
@@ -114,6 +115,7 @@ async function candidates(root, project, state) {
   const generated = await generatedAuthoring(root, layout);
   add('authoring', '.werk/feature-workflow.json'); add('authoring', '.werk/authoring');
   if (layout.workflow) for (const path of [layout.workflow.template, layout.workflow.base, layout.workflow.readyCheck, layout.workflow.doneCheck, layout.workflow.readyPrompt, layout.workflow.donePrompt, layout.workflow.readyReviewPrompt]) if (path) add('authoring', path, await ownership(resolve(project, path), generated.get(path)));
+  if (layout.features && layout.worker?.features?.intake === 'local') { const path = layout.features + '/' + localTemplateName; add('authoring', path, await ownership(resolve(project, path), localRequestTemplate(layout.provider))); }
   for (const path of new Set([layout.features, layout.workflow?.reviewDirectory, layout.tasks].filter(Boolean))) add('requests', path);
   const integrations = await integrationOwnership(root, project);
   for (const path of integrationPaths) add('integrations', path, integrations.get(path) ?? {});

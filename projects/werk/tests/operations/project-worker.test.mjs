@@ -66,7 +66,7 @@ test('installed native worker consumes files, exports review patches and keeps t
 test('generated private question, task and gate ignores preserve operator rules and remain idempotent on repeat init', async t => {
   const cwd = await project(t);
   const setup = await initializeWorker(resolve('bin/apps/worker'), { 'project-dir': cwd, 'features-dir': 'requests/features' });
-  assert.match(setup.intake.setup, /shared setup/); assert.match(setup.next, /local provider explicitly/);
+  assert.match(/** @type {{ setup: string }} */ (setup.intake).setup, /shared setup/); assert.match(setup.next, /local provider explicitly/);
   const ignorePath = join(setup.featuresDirectory, '.gitignore');
   assert.match(await readFile(ignorePath, 'utf8'), /^_questions\/$/m);
   assert.match(await readFile(ignorePath, 'utf8'), /^_gates\/$/m);

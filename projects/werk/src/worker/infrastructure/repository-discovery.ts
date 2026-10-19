@@ -52,8 +52,10 @@ export class RepositoryDiscovery {
   private installation: string;
   private signal: AbortSignal;
   private legacyRepository?: string;
-  constructor(directory: string, installation: string, signal: AbortSignal, legacyRepository?: string) {
-    this.directory = directory; this.installation = installation; this.signal = signal; this.legacyRepository = legacyRepository;
+  /** false for an operator-only (local intake) worker: the detected checkout is not watched unless the choice says so. */
+  private watchDefault?: boolean;
+  constructor(directory: string, installation: string, signal: AbortSignal, legacyRepository?: string, watchDefault?: boolean) {
+    this.directory = directory; this.installation = installation; this.signal = signal; this.legacyRepository = legacyRepository; this.watchDefault = watchDefault;
     this.legacyInstallation = legacyRepository !== undefined && resolve(legacyRepository) === resolve(installation);
   }
   async init(assignments: RepositoryAssignment[]) {
@@ -76,7 +78,7 @@ export class RepositoryDiscovery {
     if (!this.candidate) return null;
     const { commonDirectory: _, ...candidate } = this.candidate;
     const decision = this.decision?.id === candidate.id ? this.decision.decision : this.approvedLegacy || (this.assignedId && this.decision?.repositoryId !== this.assignedId) ? 'accepted' : 'pending';
-    return { ...candidate, decision, watch: !!candidate.remote && !!candidate.currentBranch, ...(this.assignedId ? { repositoryId: this.assignedId } : {}) };
+    return { ...candidate, decision, watch: this.defaultWatch(candidate), ...(this.assignedId ? { repositoryId: this.assignedId } : {}) };
   }
   async assignmentsChanged(assignments: RepositoryAssignment[]) {
     // Explicit assignment can follow Git initialization after worker startup.
@@ -112,13 +114,15 @@ export class RepositoryDiscovery {
     }
     return this.view()!;
   }
-  assignment(items: RepositoryAssignment[]): RepositoryAssignment {
+  private defaultWatch(candidate: Pick<Candidate, 'remote' | 'currentBranch'>) { return this.watchDefault !== false && !!candidate.remote && !!candidate.currentBranch; }
+  assignment(items: RepositoryAssignment[], watch?: boolean): RepositoryAssignment {
     if (!this.candidate) throw new DomainError('conflict', 'The installation repository is no longer available.');
     const name = basename(this.candidate.path).replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 40) || 'repository';
     const base = `local-${name}-${this.candidate.id.slice(0, 12)}`;
     let id = base, suffix = 1;
     while (items.some(item => item.id === id)) id = `${base}-${suffix++}`;
-    return { id, path: this.candidate.path, remote: this.candidate.remote ?? 'origin', watch: !!this.candidate.remote && !!this.candidate.currentBranch };
+    if (watch === true && !(this.candidate.remote && this.candidate.currentBranch)) throw new DomainError('invalid_input', 'Watching needs a remote and a checked-out branch. Use --watch false or add a remote first.');
+    return { id, path: this.candidate.path, remote: this.candidate.remote ?? 'origin', watch: watch ?? this.defaultWatch(this.candidate) };
   }
   async record(decision: 'accepted' | 'declined', repositoryId = this.assignedId) {
     if (!this.candidate) throw new DomainError('conflict', 'The installation repository is no longer available.');
