@@ -155,6 +155,11 @@ export function windowsContainment(executable: string, args: string[], env: Node
   for (const key of ['ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432', 'CommonProgramFiles', 'CommonProgramFiles(x86)', 'CommonProgramW6432', 'PROCESSOR_ARCHITECTURE', 'PROCESSOR_ARCHITEW6432', 'NUMBER_OF_PROCESSORS', 'OS'])
     if (process.env[key]) setRuntimeValue(key, process.env[key]!);
   if (process.env.PSModulePath) setRuntimeValue('PSModulePath', process.env.PSModulePath);
+  // Windows PowerShell appends ';.CPL' to PATHEXT at startup, and without one it creates
+  // 'PathEXT=.CPL', which stops cmd.exe resolving 'node'. Always restore the caller's
+  // value exactly (or remove the variable) before the child is created.
+  const callerPathext = Object.keys(env).filter(key => key.toLowerCase() === 'pathext').sort()[0];
+  restoreEnvironment.PATHEXT = callerPathext === undefined ? null : env[callerPathext] ?? null;
   return {
     executable: powershell,
     args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(supervisor, 'utf16le').toString('base64')],

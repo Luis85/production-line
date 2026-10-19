@@ -1,7 +1,7 @@
 import { withOwnedResponse } from './transport.js';
 import { readResponseBody, ResponseBodyLimitError } from './response-body.js';
 import { ApiError } from './errors.js';
-export const DEFAULT_REQUEST_TIMEOUT_MS = 10000;
+export const DEFAULT_REQUEST_TIMEOUT_MS = 30000;
 /** The client stopped waiting; the server may still finish the operation. */
 export class RequestTimeoutError extends Error {
     readonly code = 'timeout';

@@ -79,7 +79,7 @@ Factory children are logical records inside one registry, not federated Factory 
 
 ## API, CLI and MCP
 
-All mutations use the authoritative HTTP API. CLI stdin is a client input mechanism, not a second process command queue or a direct SQL route. Unknown fields and unsupported options are rejected. JSON bodies are limited to 64 KiB; common HTTP clients bound responses to 8 MiB and use a 10-second request timeout. Timeouts can happen after a commit.
+All mutations use the authoritative HTTP API. CLI stdin is a client input mechanism, not a second process command queue or a direct SQL route. Unknown fields and unsupported options are rejected. JSON bodies are limited to 64 KiB; common HTTP clients bound responses to 8 MiB. The worker-to-orchestrator gateway (heartbeats, claims, completion) uses a 10-second request timeout; the portable CLI and the worker, Factory, orchestrator and importer CLIs use 30 seconds by default. Timeouts can happen after a commit.
 
 | Surface | Current contract | Important limit |
 | --- | --- | --- |

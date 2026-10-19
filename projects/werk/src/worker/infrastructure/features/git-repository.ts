@@ -1,5 +1,6 @@
+import { sharedFeaturePublicationIssue, sharedFeaturePublicationLimits } from '../../application/shared-feature-publication-limits.js';
 import type { FeatureRequestPublication } from '../../application/feature-authoring-contracts.js';
-import { approvedPathsCollide } from '../../application/approved-paths.js';
+import { approvedPathMatch, approvedPathsCollide } from '../../application/approved-paths.js';
 import { containsSensitivePatchMaterial } from '../../application/review-patch-policy.js';
 import { acceptedSharedBody, sharedReadyReviewParts, sharedSourceProjectionKeys } from './shared-progress.js';
 import { requestName, parseFeature } from './document.js';
@@ -203,17 +204,21 @@ export class GitFeatureRepository {
       if (names.some(name => name !== parts[i] && key(name) === key(parts[i]!))) throw new GitFeatureError('conflict', 'Feature patch adds a path that differs from an existing file or folder only by case or Unicode normalization.');
     }
   }
+  /** Worker control storage, workflow storage and protected files never change through a feature patch. */
+  private publicationPath(path: string, folder: boolean) {
+    const normalized = path.toLowerCase(), overlaps = (directory: string) => normalized === directory || beneath(normalized, directory) || folder && beneath(directory, normalized);
+    if (overlaps('.werk')) throw new GitFeatureError('invalid_input', 'Feature patches cannot modify worker control storage.');
+    if ([this.options.requestsDirectory, this.options.reviewDirectory, this.options.tasksDirectory ?? this.options.reviewDirectory + '/_tasks'].some(directory => overlaps(directory.toLowerCase())) || (this.options.protectedPaths ?? []).some(protectedPath => normalized === protectedPath.toLowerCase() || folder && beneath(protectedPath.toLowerCase(), normalized))) throw new GitFeatureError('invalid_input', 'Feature patches cannot modify their workflow configuration, request intake or review artifacts.');
+  }
   publishPatch(value: GitPatchPublication, signal?: AbortSignal): Promise<GitFeatureBranchPublication> {
     const input = structuredClone(value), bounded = this.signal(signal); operation(input.operationId);
     if (!/^[a-z0-9][a-z0-9-]{0,79}$/.test(input.featureId) || !commitId(input.sourceCommit) || !Array.isArray(input.approvedPaths) || !input.approvedPaths.length || input.approvedPaths.length > 32 || new Set(input.approvedPaths).size !== input.approvedPaths.length) throw new GitFeatureError('invalid_input', 'Feature publication requires a stable feature ID, source commit and explicit approved paths.');
-    textBytes(input.patch, 131072);
+    textBytes(input.patch, sharedFeaturePublicationLimits.patchMaxBytes);
+    const issue = sharedFeaturePublicationIssue(input.patch);
+    if (issue) throw new GitFeatureError('invalid_input', issue);
     if (!input.patch.trim() || containsSensitivePatchMaterial(input.patch)) throw new GitFeatureError('invalid_input', 'Feature patch is empty or contains sensitive material.');
-    for (const path of input.approvedPaths) {
-      gitPath(path);
-      const normalized = path.toLowerCase();
-      if (normalized === '.werk' || beneath(normalized, '.werk')) throw new GitFeatureError('invalid_input', 'Feature patches cannot modify worker control storage.');
-      if ([this.options.requestsDirectory, this.options.reviewDirectory, this.options.tasksDirectory ?? this.options.reviewDirectory + '/_tasks'].some(directory => normalized === directory.toLowerCase() || beneath(normalized, directory.toLowerCase())) || (this.options.protectedPaths ?? []).some(protectedPath => normalized === protectedPath.toLowerCase())) throw new GitFeatureError('invalid_input', 'Feature patches cannot modify their workflow configuration, request intake or review artifacts.');
-    }
+    // Folder approvals (ending in /) are refused when they contain or lie within protected storage; changed files are checked again below.
+    for (const path of input.approvedPaths) this.publicationPath(path.endsWith('/') ? gitPath(path.slice(0, -1)) : gitPath(path), path.endsWith('/'));
     if (approvedPathsCollide(input.approvedPaths)) throw new GitFeatureError('invalid_input', 'Approved feature paths must be unique without file or folder aliases.');
     const branch = branchName(`${this.options.branchPrefix ?? 'werk/features'}/${input.featureId}-${hash(input.operationId).slice(0, 12)}`);
     const digest = hash(canonicalJson({ ...input, approvedPaths: [...input.approvedPaths].sort() }));
@@ -223,13 +228,14 @@ export class GitFeatureRepository {
         await this.io.output(worktree, ['apply', '--check', '--index', '--whitespace=nowarn', '-'], bounded, input.patch);
         await this.io.output(worktree, ['apply', '--index', '--whitespace=nowarn', '-'], bounded, input.patch);
         const raw = (await this.io.output(worktree, ['diff', '--cached', '--raw', '-z', '--no-renames'], bounded)).split('\0').filter(Boolean);
-        if (!raw.length || raw.length % 2 || raw.length > 64) throw new GitFeatureError('conflict', 'Feature patch must contain a bounded set of approved file changes.');
+        if (!raw.length || raw.length % 2 || raw.length > sharedFeaturePublicationLimits.changedFilesMax * 2) throw new GitFeatureError('conflict', 'Feature patch must contain a bounded set of approved file changes.');
         for (let i = 0; i < raw.length; i += 2) {
           const match = /^:(000000|100644|100755) (000000|100644|100755) [a-f0-9]+ [a-f0-9]+ ([AMD])$/.exec(raw[i]!);
           const regularChange = match && (match[3] === 'A' ? match[1] === '000000' && match[2] !== '000000'
             : match[3] === 'D' ? match[1] !== '000000' && match[2] === '000000'
               : match[1] !== '000000' && match[1] === match[2]);
-          if (!regularChange || !input.approvedPaths.includes(raw[i + 1]!)) throw new GitFeatureError('conflict', 'Feature patch changed an unapproved path, file mode or file type.');
+          if (!regularChange || !approvedPathMatch(input.approvedPaths, raw[i + 1]!)) throw new GitFeatureError('conflict', 'Feature patch changed an unapproved path, file mode or file type.');
+          this.publicationPath(raw[i + 1]!, false);
           if (match![3] === 'A') await this.assertNoAlias(worktree, input.sourceCommit, raw[i + 1]!, bounded);
         }
         const tree = (await this.io.output(worktree, ['write-tree'], bounded)).trim();

@@ -225,20 +225,55 @@ inspection limit is 67,108,864 bytes (execution.candidateSourceMaxBytes).` A lar
 bound permits more source to be inspected; it never skips files, widens approved
 edit paths or sends the entire snapshot to the model. Untracked ignored outputs
 are excluded; tracked files remain included even when an ignore rule matches them.
-The approved-file limits stay fixed: 24,000 bytes per approved file, 48,000 bytes
-of approved text in total and a 120,000-byte review patch.
+Three more execution settings bound what a reviewer receives from an
+implementation candidate. They apply to exact approved files and to changed, added
+or deleted files below approved folders (entries ending in `/`). Unchanged files
+below an approved folder count only toward the inspection limits above. Proposal
+requests keep their fixed bounds.
+
+| Setting | Default | Range | Bounds |
+| --- | --- | --- | --- |
+| `candidateApprovedFileMaxBytes` | 24000 | 1000–8388608 | One approved file in the candidate |
+| `candidateApprovedTotalMaxBytes` | 48000 | 1000–67108864, at least `candidateApprovedFileMaxBytes` | All approved text in the candidate |
+| `candidateReviewPatchMaxBytes` | 120000 | 10000–4194304 (4 MiB) | The review patch |
+
+Every changed approved file appears in the review patch, so `candidateReviewPatchMaxBytes`
+also bounds approved content in practice: per-file and total values above the patch
+limit only matter for exact approved files that stay unchanged.
+
+Errors name the measured value, the limit and the setting, for example
+`Approved candidate file "src/app/generated.ts" is 30,000 bytes; the approved file
+limit is 24,000 bytes (execution.candidateApprovedFileMaxBytes).` The
+`werk_candidate_apply` content schema states the frozen per-file limit. Raising
+these limits never widens the approved paths: the review patch contains only
+approved paths. These settings have no webview editor yet; use `settings set`.
+The taskboard stores each review patch in one document limited to 16 MiB, so the
+review patch maximum is 4 MiB; shared feature publication keeps its 128 KiB patch bound.
+`werk_candidate_status` and `werk_candidate_apply` return a listing bounded to 64 KiB of
+paths and hashes, well below the 128 KiB tool result limit. Exact approved files and
+requested paths always keep their hashes; changed files follow with `changed: true`,
+beyond the budget in `changedPathsWithoutHashes` and then counted in
+`omittedChangedPaths`; up to 200 other files below approved folders fill the rest,
+with `omittedFiles` counting those left out and `filesNote` explaining any gap.
+`changedFileCount` is the complete number of changed files. The optional `paths`
+argument of `werk_candidate_status` (at most 32) returns the hashes of specific
+approved files. `werk_candidate_apply` refuses a path below an approved folder that
+the repository's Git ignore rules exclude, naming the path.
 
 The private settings API and `settings set --file` use whole bytes, for example
 `{"execution":{"candidateSourceMaxBytes":134217728}}`. `settings get` shows the
 effective values. For a guarded save, include the complete
 `expectedCandidateInspection` object from the latest settings response's
-`execution` fields; see the baseline contract below. Omitting a field in a partial
-update preserves its saved value.
+`execution` fields; see the baseline contract below. Guard approved content edits
+with the complete `expectedCandidateReview` object in the same way. Omitting a field
+in a partial update preserves its saved value.
 
 Each prepared dispatch freezes its duration and tool budgets, including while
 queued or when execution uses that saved dispatch. An implementation dispatch also
-freezes the three candidate source limits and records them with its tool limit
-evidence (`toolManifest.limits.candidateInspection`). A newly prepared follow-up,
+freezes the three candidate source limits and the three approved content limits
+and records them with its tool limit evidence
+(`toolManifest.limits.candidateInspection` and `toolManifest.limits.candidateReview`).
+Dispatches prepared before these settings existed use their defaults. A newly prepared follow-up,
 answer or resume attempt captures current execution settings; it does not rewrite
 the earlier dispatch or inherit its budget indefinitely.
 See [long-running worker operations](../how-to/monitor-long-running-worker.md) for
@@ -256,6 +291,7 @@ so a concurrent policy change returns a conflict before anything is written:
 | Queue & duration | `expectedDuration` | `maxRuntimeMs`, `longRunningMs` |
 | Tool execution limits | `expectedToolBudget` | `maxToolCalls`, `commandTimeoutMs` |
 | Repository inspection limits | `expectedCandidateInspection` | `candidateSourceMaxBytes`, `candidateSourceMaxFiles`, `candidateFileMaxBytes` |
+| Approved content limits (CLI) | `expectedCandidateReview` | `candidateApprovedFileMaxBytes`, `candidateApprovedTotalMaxBytes`, `candidateReviewPatchMaxBytes` |
 | Consumption | `expectedConsumption` | The complete saved consumption policy |
 
 A guarded queue edit sends only queue limits/order in `board`; pause is an

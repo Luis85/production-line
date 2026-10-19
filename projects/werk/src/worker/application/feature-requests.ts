@@ -50,6 +50,8 @@ export interface FeatureQueuePort {
   interact?(record: FeatureRecord, command: InteractionCommand): Promise<unknown>;
   control?(record: FeatureRecord, action: 'cancel' | 'retry'): Promise<unknown>;
   submit(record: FeatureRecord): Promise<void>;
+  /** Report a definition selection that admission would refuse, before the request is reserved. Admission still checks it. */
+  admissionIssue?(input: FeatureInput): string | undefined;
   inspect(record: FeatureRecord): { status: string; text?: string; patch?: string; error?: string; evidence?: FeatureExecutionEvidence; interaction?: InteractionView; request?: WorkerRequest } | undefined;
 }
 const fingerprint = (input: FeatureInput) => createHash('sha256').update(JSON.stringify(input)).digest('hex');
@@ -140,6 +142,8 @@ export class FeatureRequests {
         if (file.source === 'orchestrator' || !['draft', 'ready', undefined].includes(file.status)) { this.errors.push({ file: file.name, message: 'Unrecognized lifecycle record. New requests must use status: draft or ready and no worker metadata.' }); continue; }
         if (!admit || file.status === 'draft' || previous !== file.revision) continue;
         if (!file.input) continue;
+        const issue = this.queue.admissionIssue?.(file.input);
+        if (issue) { this.errors.push({ file: file.name, message: issue.slice(0, 500) }); continue; }
         if (this.index.records.length >= 1000) { this.errors.push({ file: file.name, message: 'Feature index reached 1,000 records. Use a new worker state and folder for further requests.' }); continue; }
         let selection: ModelSelection | undefined;
         try { if (this.queue.selection) selection = validateModelSelection(this.queue.selection(file.input)); }

@@ -248,19 +248,21 @@ test('delegated subprocesses use the child session and run while keeping the par
 
 for (const tool of ['werk_file_read', 'werk_candidate_status', 'werk_candidate_apply', 'werk_candidate_check']) test(`candidate parent delegation retains only relevant frozen inspection evidence for ${tool}`, async t => {
   const captured = { candidateSourceMaxBytes: 134217728, candidateSourceMaxFiles: 40000, candidateFileMaxBytes: 16777216 };
+  const review = { candidateApprovedFileMaxBytes: 64000, candidateApprovedTotalMaxBytes: 256000, candidateReviewPatchMaxBytes: 512000 };
   let requests = 0;
   const f = await fixture(t, factory(async request => {
     requests++;
     assert.deepEqual(request.toolManifest.tools.map(item => item.name), [tool]);
     assert.deepEqual(request.toolManifest.limits.candidateInspection, tool === 'werk_file_read' ? undefined : captured);
-    for (const field of Object.keys(captured)) assert.equal(request.policy[field], tool === 'werk_candidate_apply' ? captured[field] : undefined);
+    assert.deepEqual(request.toolManifest.limits.candidateReview, tool === 'werk_file_read' ? undefined : review);
+    for (const [field, value] of Object.entries({ ...captured, ...review })) assert.equal(request.policy[field], tool === 'werk_candidate_apply' ? value : undefined);
     assert.equal(request.policy.development, tool === 'werk_candidate_apply' ? true : undefined);
     assert.equal(request.operation, tool === 'werk_candidate_apply' ? 'patch' : 'chat');
     return { type: 'completed', text: 'Same accepted candidate; narrowed child authority.' };
   }));
   const parent = tools();
   parent.manifest.tools = ['werk_file_read', 'werk_candidate_status', 'werk_candidate_apply', 'werk_candidate_check', 'werk_delegate'].map(name => ({ name, description: 'Approved fixture tool', inputSchema: { type: 'object' } }));
-  parent.manifest.limits = { maxCalls: 8, windowMs: 10000, callTimeoutMs: {}, candidateInspection: captured };
+  parent.manifest.limits = { maxCalls: 8, windowMs: 10000, callTimeoutMs: {}, candidateInspection: captured, candidateReview: review };
   const broker = delegationTool({ enabled: true, maxChildren: 4, maxConcurrent: 2 }, () => parent, { runChild: f.run, record: async () => {} });
   assert.ok(broker);
   const response = await broker.call({ tasks: [{ id: 'narrowed', prompt: 'Inspect the same Feature Request.', tools: [tool] }] }, new AbortController().signal);

@@ -1,3 +1,4 @@
+import { sharedFeaturePublicationIssue } from './shared-feature-publication-limits.js';
 import { SharedReadyReviewLifecycle } from './shared-ready-review.js';
 import { sharedFeatureRequestReference } from './feature-request-reference.js';
 import { createTaskNoteIdentity } from './task-notes.js';
@@ -159,8 +160,8 @@ export class SharedFeatureLifecycle {
     // is lost. A concurrent teammate edit must never be replaced by this notice.
     await this.publish(record, repository, signal, guarded);
   }
-  private blocker(record: SharedFeatureRecord, reason: string) {
-    const markdown = renderSharedBlocker(record, reason), digest = sharedHash(markdown);
+  private blocker(record: SharedFeatureRecord, reason: string, nextStep?: string) {
+    const markdown = renderSharedBlocker(record, reason, nextStep), digest = sharedHash(markdown);
     if (record.diagnostic?.markdown !== markdown) record.diagnostic = { path: featureTaskDirectory(record.workflow.configuration) + '/blocked-' + sharedHash(record.taskId! + digest).slice(0, 40) + '.md', markdown };
     record.taskNote = record.diagnostic.path;
     return record.diagnostic.published === digest ? [] : [{ path: record.diagnostic.path, expectedRevision: null, content: markdown }];
@@ -173,6 +174,16 @@ export class SharedFeatureLifecycle {
     if (evaluation) {
       const outputDigest = request!.execution!.outputDigest!, publicationDigest = sharedFeaturePublicationDigest(record, outputDigest);
       if (record.outputDigest !== outputDigest || !record.featureCommit) {
+        const issue = sharedFeaturePublicationIssue(execution.patch!);
+        if (issue) {
+          this.change(record, 'blocked', issue);
+          record.done = { passed: true, issues: [] };
+          record.progress = 'Implementation and completion checks passed, but the retained candidate exceeds shared publication limits. Follow the diagnostic Task; the worker will not repeat implementation.';
+          const artifacts = this.blocker(record, issue, 'The implementation and verification results are retained. Ask a maintainer to inspect and publish the retained candidate manually, or create smaller successor Feature Requests from the project template, then commit and push them. This accepted request and its scope remain frozen. Changing this Task does not resume implementation or retry an oversized feature publication.');
+          await this.save();
+          await this.publish(record, repository, signal, [...feedback.artifacts, ...artifacts]);
+          return;
+        }
         this.change(record, 'publishing');
         record.done = { passed: true, issues: [] };
         await this.save();

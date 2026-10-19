@@ -12,7 +12,7 @@ import { defaultExecutionPolicy, validateExecutionPolicy } from '../../src/worke
 import { prepareModelRequest } from '../../src/worker/dist/worker/application/model-contract.js';
 import { providerTransport } from '../../src/worker/dist/worker/infrastructure/provider-transport.js';
 test('execution policy bounds are explicit and saved request budget is immutable', () => {
-  const candidate = { candidateSourceMaxBytes: 67108864, candidateSourceMaxFiles: 20000, candidateFileMaxBytes: 8388608 };
+  const candidate = { candidateSourceMaxBytes: 67108864, candidateSourceMaxFiles: 20000, candidateFileMaxBytes: 8388608, candidateApprovedFileMaxBytes: 24000, candidateApprovedTotalMaxBytes: 48000, candidateReviewPatchMaxBytes: 120000 };
   assert.deepEqual(defaultExecutionPolicy(), { maxRuntimeMs: 21600000, maxToolCalls: 128, commandTimeoutMs: 300000, ...candidate });
   assert.deepEqual(validateExecutionPolicy({ maxRuntimeMs: 1000 }), { maxRuntimeMs: 1000, maxToolCalls: 128, commandTimeoutMs: 300000, ...candidate }, 'old saved policies adopt bounded tool defaults');
   for (const maxToolCalls of [1, 128, 512]) assert.equal(validateExecutionPolicy({ maxRuntimeMs: 1000, maxToolCalls }).maxToolCalls, maxToolCalls);

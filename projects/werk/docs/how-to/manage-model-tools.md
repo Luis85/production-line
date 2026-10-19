@@ -498,8 +498,10 @@ when the first tool starts. It is not a field in `tool-access.json`.
 longest preset deadline and `presetTimeoutMs` records individual presets.
 An implementation dispatch with candidate tools also records `candidateInspection`
 with the frozen `candidateSourceMaxBytes`, `candidateSourceMaxFiles` and
-`candidateFileMaxBytes`; the same values are in its `policy` and bound candidate
-inspection for that attempt. Delegated candidate tools inherit the same frozen
+`candidateFileMaxBytes`, and `candidateReview` with the frozen
+`candidateApprovedFileMaxBytes`, `candidateApprovedTotalMaxBytes` and
+`candidateReviewPatchMaxBytes`; the same values are in its `policy` and bound candidate
+inspection, edits and the review patch for that attempt. Delegated candidate tools inherit the same frozen
 bounds; a child granted only status/check tools keeps that evidence without
 gaining candidate-edit authority.
 Metadata is evidence, not authority: the accepted execution budget and current

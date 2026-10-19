@@ -2,11 +2,11 @@ import { callTimeout } from './tool-limits.js';
 import { classifyDevelopmentEvidence } from './development-verification.js';
 import { createHash } from 'node:crypto';
 import { DomainError } from '../../shared/errors.js';
-import { validateApprovedPaths } from './approved-paths.js';
+import { approvedFolder, approvedPathMatch, validateApprovedPaths } from './approved-paths.js';
 import { gateDigest } from './request-gates.js';
 import type { ToolPolicy, ToolCommandPreset } from './tool-policy.js';
 import type { ToolWorktreeIdentity } from './tool-runtime.js';
-import type { CandidateInspectionLimits } from './execution-policy.js';
+import type { CandidateLimits } from './execution-policy.js';
 
 /** Frozen authority for a new repository implementation. Never inferred for saved proposal tasks. */
 export interface DevelopmentCheck { id: string; name: string; executable: string; args: string[]; fingerprint: string; timeoutMs?: number; }
@@ -18,17 +18,24 @@ export interface DevelopmentCheckEvidence {
 }
 export interface DevelopmentEvidence { schemaVersion: 1; candidateDigest: string | null; changedPaths: string[]; checks: DevelopmentCheckEvidence[]; updatedAt: string; }
 export interface DevelopmentCompletion { turnId: string; runId: string; candidateDigest: string; patchSha256: string; evidenceDigest: string; verified: boolean; }
-export interface DevelopmentCandidate { patch: string; digest: string; changedPaths: string[]; files?: Array<{ path: string; hash: string | null }>; }
+/** An approved file and its current hash (null when absent); `changed` marks candidate changes. */
+export interface DevelopmentListedFile { path: string; hash: string | null; changed?: true }
+/**
+ * `changedPaths` is always complete. `files` is a byte-bounded listing with hashes; changed paths beyond its budget are
+ * listed without hashes, then counted, and `omittedFiles` counts unchanged files below approved folders left out.
+ */
+export interface DevelopmentCandidate { patch: string; digest: string; changedPaths: string[]; files?: DevelopmentListedFile[]; changedPathsWithoutHashes?: string[]; omittedChangedPaths?: number; omittedFiles?: number; }
 export interface DevelopmentRuntime {
   /** Validate the retained workspace and durably invalidate earlier checks before a native provider may edit. */
   prepareNative?(signal: AbortSignal): Promise<void>;
   apply(input: { path: string; content: string | null; expectedHash?: string | null }, signal: AbortSignal): Promise<unknown>;
   check(presetId: string, signal: AbortSignal): Promise<DevelopmentCheckEvidence>;
-  capture(signal: AbortSignal): Promise<DevelopmentCandidate>;
+  /** `paths` requests hashes for specific approved files beyond the bounded listing. */
+  capture(signal: AbortSignal, paths?: readonly string[]): Promise<DevelopmentCandidate>;
   evidence(): DevelopmentEvidence;
 }
 /** Execution limits frozen with an attempt's dispatch; absent values use the settings defaults. */
-export type DevelopmentLimits = Partial<CandidateInspectionLimits> & { commandTimeoutMs?: number };
+export type DevelopmentLimits = Partial<CandidateLimits> & { commandTimeoutMs?: number };
 export interface DevelopmentFactoryOptions extends DevelopmentLimits {
   scope: DevelopmentScope; worktree: string; worktreeIdentity: ToolWorktreeIdentity; repository: string;
   initialEvidence?: DevelopmentEvidence;
@@ -51,6 +58,10 @@ export function freezeDevelopmentScope(baseCommit: string | undefined, approvedP
   const scope: DevelopmentScope = { schemaVersion: 1, mode: 'worktree', baseCommit, approvedPaths: [...approvedPaths], checks };
   validateDevelopmentState(scope);
   return scope;
+}
+/** Folder approvals exist only for implementation scopes; proposal requests keep exact files. */
+export function assertFolderApprovals(paths: readonly string[], policy: ToolPolicy, implementation = !!policy.builtins.files && policy.builtins.commands.some(item => item.enabled && item.verification)): void {
+  if (!implementation && paths.some(approvedFolder)) throw new DomainError('invalid_input', 'Folder approvals (paths ending in /) require an implementation request: an assigned Git repository, repository file access and at least one required verification check. Approve exact files for a proposal.');
 }
 export function assertDevelopmentPolicy(scope: DevelopmentScope, policy: ToolPolicy): void {
   const current = freezeDevelopmentScope(scope.baseCommit, scope.approvedPaths, policy);
@@ -82,10 +93,10 @@ const date = (value: unknown): value is string => typeof value === 'string' && N
 export function validateDevelopmentState(scope: unknown, evidence?: unknown): asserts scope is DevelopmentScope {
   const invalid = () => new DomainError('conflict', 'Saved implementation authority or verification evidence is invalid. Retained files require inspection.');
   if (!object(scope) || scope.schemaVersion !== 1 || scope.mode !== 'worktree' || typeof scope.baseCommit !== 'string' || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(scope.baseCommit) || !Array.isArray(scope.checks) || !scope.checks.length || scope.checks.length > 32) throw invalid();
-  try { validateApprovedPaths(scope.approvedPaths); for (const check of scope.checks) if (object(check)) callTimeout(check.timeoutMs, 'Required check'); } catch { throw invalid(); }
+  try { validateApprovedPaths(scope.approvedPaths, 'Approved paths', { folders: true }); for (const check of scope.checks) if (object(check)) callTimeout(check.timeoutMs, 'Required check'); } catch { throw invalid(); }
   if (scope.checks.some(check => !object(check) || typeof check.id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(check.id) || typeof check.name !== 'string' || !check.name.trim() || check.name.length > 120 || typeof check.executable !== 'string' || !check.executable.trim() || check.executable.length > 4096 || !Array.isArray(check.args) || check.args.length > 64 || check.args.some(arg => typeof arg !== 'string' || arg.length > 4000 || arg.includes('\0')) || !hash(check.fingerprint) || developmentCheckFingerprint(check as unknown as DevelopmentCheck) !== check.fingerprint) || new Set(scope.checks.map(check => check.id)).size !== scope.checks.length) throw invalid();
   if (evidence === undefined) return;
-  if (!object(evidence) || evidence.schemaVersion !== 1 || evidence.candidateDigest !== null && !hash(evidence.candidateDigest) || !Array.isArray(evidence.changedPaths) || evidence.changedPaths.some(path => !(scope.approvedPaths as string[]).includes(path)) || new Set(evidence.changedPaths).size !== evidence.changedPaths.length || !date(evidence.updatedAt) || !Array.isArray(evidence.checks) || evidence.checks.length > 32) throw invalid();
+  if (!object(evidence) || evidence.schemaVersion !== 1 || evidence.candidateDigest !== null && !hash(evidence.candidateDigest) || !Array.isArray(evidence.changedPaths) || evidence.changedPaths.some(path => typeof path !== 'string' || !approvedPathMatch(scope.approvedPaths as string[], path)) || new Set(evidence.changedPaths).size !== evidence.changedPaths.length || !date(evidence.updatedAt) || !Array.isArray(evidence.checks) || evidence.checks.length > 32) throw invalid();
   const requiredChecks = scope.checks;
   if (new Set(evidence.checks.map(check => object(check) ? check.presetId : null)).size !== evidence.checks.length) throw invalid();
   if (evidence.checks.some(check => !object(check) || !requiredChecks.some(required => required.id === check.presetId && required.fingerprint === check.presetFingerprint) || !hash(check.candidateDigest) || !['passed', 'failed', 'interrupted'].includes(check.status as string) || check.exitCode !== null && !Number.isSafeInteger(check.exitCode) || check.status === 'passed' && check.exitCode !== 0 || typeof check.stdout !== 'string' || check.stdout.length > 32768 || typeof check.stderr !== 'string' || check.stderr.length > 32768 || !date(check.startedAt) || !date(check.finishedAt) || check.truncated !== undefined && typeof check.truncated !== 'boolean')) throw invalid();

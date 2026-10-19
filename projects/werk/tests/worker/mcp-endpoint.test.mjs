@@ -62,7 +62,8 @@ test('MCP callers retain their own errors for refused addresses', t => {
 
 test('saved-address bounds remain stricter than URL parsing and web-origin policy stays independent', () => {
   for (const input of ['https://docs.example/mcp\n', 'https://docs.example/' + 'x'.repeat(2048)]) {
-    assert.throws(() => save(input), error => testErrorCode(error) === 'invalid_input' && testErrorMessage(error) === 'Use a valid MCP address.');
+    const reason = /[\x00-\x1f]/.test(input) ?'contains control characters' : 'is longer than 2048 characters';
+    assert.throws(() => save(input), error => testErrorCode(error) === 'invalid_input' && testErrorMessage(error) === `MCP connection "docs": MCP address ${reason}.`);
     assert.equal(validateMcpEndpoint(input).href, new URL(input).href);
   }
   const defaults = defaultToolPolicy();

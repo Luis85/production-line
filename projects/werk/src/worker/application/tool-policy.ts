@@ -1,3 +1,4 @@
+import { entryLabel, entryMessage, stringProblem } from './tool-field-error.js';
 import { validateServicePolicy, type ServicePolicy } from './service-access-policy.js';
 import { validateDelegationPolicy, type DelegationPolicy } from './delegation-policy.js';
 import { callTimeout, toolTimeLimits } from './tool-limits.js';
@@ -40,24 +41,26 @@ function fields(value: unknown, allowed: string[], label: string): Record<string
   if (unexpected.length) invalid(`Use the documented ${label} fields. Unexpected: ${unexpected.slice(0, 5).map(key => key.length > 64 ? `${key.slice(0, 64)}…` : key).join(', ')}${unexpected.length > 5 ? ', …' : ''}.`);
   return value;
 }
-function string(value: unknown, label: string, max: number, empty = false): string {
-  if (typeof value !== 'string' || value.length > max || (!empty && !value.trim()) || /[\x00-\x1f\x7f]/.test(value)) invalid(`Use a valid ${label}.`);
-  return value;
+/** With an `entry`, the error names it and the reason; without one the message stays the short generic form. */
+function string(value: unknown, label: string, max: number, empty = false, entry?: string): string {
+  const problem = stringProblem(value, max, empty);
+  if (problem) invalid(entry ? entryMessage(entry, `${label} ${problem}.`) : `Use a valid ${label}.`);
+  return value as string;
 }
 function boolean(value: unknown, label: string): boolean { if (typeof value !== 'boolean') invalid(`${label} must be true or false.`); return value; }
-function id(value: unknown): string { const result = string(value, 'tool configuration ID', 64); if (!/^[a-zA-Z0-9_-]+$/.test(result)) invalid('Tool configuration IDs use letters, digits, underscores and hyphens.'); return result; }
-function strings(value: unknown, label: string, maxItems: number, maxLength: number): string[] {
-  if (!Array.isArray(value) || value.length > maxItems) invalid(`Too many ${label}.`);
-  return value.map(item => string(item, label, maxLength, true));
+function id(value: unknown, entry?: string): string { const result = string(value, 'tool configuration ID', 64, false, entry); if (!/^[a-zA-Z0-9_-]+$/.test(result)) invalid(entryMessage(entry, 'Tool configuration IDs use letters, digits, underscores and hyphens.')); return result; }
+function strings(value: unknown, label: string, maxItems: number, maxLength: number, entry?: string): string[] {
+  if (!Array.isArray(value) || value.length > maxItems) invalid(entryMessage(entry, `Too many ${label}.`));
+  return value.map((item, index) => string(item, entry ? `${label} item ${index + 1}` : label, maxLength, true, entry));
 }
-function absolute(value: unknown, label: string): string {
-  const result = string(value, label, 4096);
+function absolute(value: unknown, label: string, entry?: string): string {
+  const result = string(value, label, 4096, false, entry);
   // Validate the portable representation here; host-specific executability belongs to the adapter.
-  if (!/^(?:\/|[a-zA-Z]:[\\/]|\\\\)/.test(result)) invalid(`${label} must be an absolute path on the worker machine.`);
+  if (!/^(?:\/|[a-zA-Z]:[\\/]|\\\\)/.test(result)) invalid(entryMessage(entry, `${label} must be an absolute path on the worker machine.`));
   return result;
 }
-function url(value: unknown, originOnly: boolean): string {
-  const raw = string(value, originOnly ? 'web origin' : 'MCP address', 2048);
+function url(value: unknown, originOnly: boolean, entry?: string): string {
+  const raw = string(value, originOnly ? 'web origin' : 'MCP address', 2048, false, entry);
   if (!originOnly) return validateMcpAddress(raw).href;
   let parsed: URL; try { parsed = new URL(raw); } catch { return invalid('Use an HTTP(S) address without credentials.'); }
   if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash || !['', '/'].includes(parsed.pathname)) invalid('Use an HTTP(S) address without credentials, query or fragment; web grants use origins only.');
@@ -104,38 +107,40 @@ function withSavedTimeout(value: unknown, previous?: { timeoutMs?: number }): un
 function builtins(value: unknown, previous?: ToolBuiltinPolicy): ToolBuiltinPolicy {
   const input = fields(value, ['files', 'commands', 'cliTools', 'webOrigins'], 'built-in tool policy');
   if (!Array.isArray(input.commands) || input.commands.length > 16) invalid('Configure at most 16 command presets.');
-  const commands = input.commands.map(item => {
+  const commands = input.commands.map((item, index) => {
+    const entry = entryLabel('Command preset', item, index);
     const command = fields(previous ? withSavedTimeout(item, previous.commands.find(saved => record(item) && saved.id === item.id)) : item, ['id', 'name', 'executable', 'args', 'enabled', 'verification', 'timeoutMs', 'chatDirectory'], 'command preset');
     const timeoutMs = callTimeout(command.timeoutMs, 'Command preset');
-    return { id: id(command.id), name: string(command.name, 'command name', 120), executable: absolute(command.executable, 'Command executable'), args: strings(command.args, 'command arguments', 32, 2048), enabled: boolean(command.enabled, 'Command enabled'), ...(command.verification === undefined || boolean(command.verification, 'Required feature check') === false ? {} : { verification: true }), ...chatDirectory(command.chatDirectory, 'Command preset'), ...(timeoutMs === undefined ? {} : { timeoutMs }) };
+    return { id: id(command.id, entry), name: string(command.name, 'command name', 120, false, entry), executable: absolute(command.executable, 'Command executable', entry), args: strings(command.args, 'command arguments', 32, 2048, entry), enabled: boolean(command.enabled, 'Command enabled'), ...(command.verification === undefined || boolean(command.verification, 'Required feature check') === false ? {} : { verification: true }), ...chatDirectory(command.chatDirectory, 'Command preset'), ...(timeoutMs === undefined ? {} : { timeoutMs }) };
   });
   if (new Set(commands.map(item => item.id)).size !== commands.length) invalid('Command preset IDs must be unique.');
   // Documents saved before CLI tools existed omit the list; absence grants nothing.
   if (input.cliTools !== undefined && (!Array.isArray(input.cliTools) || input.cliTools.length > cliToolLimits.tools)) invalid(`Configure at most ${cliToolLimits.tools} CLI tools.`);
-  const cliTools = ((input.cliTools ?? []) as unknown[]).map(item => validateCliTool(previous ? withSavedTimeout(item, previous.cliTools.find(saved => record(item) && saved.id === item.id)) : item, absolute));
+  const cliTools = ((input.cliTools ?? []) as unknown[]).map((item, index) => validateCliTool(previous ? withSavedTimeout(item, previous.cliTools.find(saved => record(item) && saved.id === item.id)) : item, absolute, entryLabel('CLI tool', item, index)));
   if (new Set(cliTools.map(item => item.id)).size !== cliTools.length) invalid('CLI tool IDs must be unique.');
   const webOrigins = strings(input.webOrigins, 'web origins', 16, 2048).map(item => url(item, true));
   if (new Set(webOrigins).size !== webOrigins.length) invalid('Web origins must be unique.');
   return { files: boolean(input.files, 'File access'), commands, cliTools, webOrigins };
 }
-function connection(value: unknown): ToolMcpConnection {
+function connection(value: unknown, index = 0): ToolMcpConnection {
+  const entry = entryLabel('MCP connection', value, index);
   const input = fields(value, ['id', 'name', 'transport', 'enabled', 'command', 'args', 'url', 'secretEnv', 'secret', 'allowedTools', 'discoveredTools', 'timeoutMs', 'chatDirectory'], 'saved MCP connection');
   if (!['stdio', 'http'].includes(String(input.transport))) invalid('Choose stdio or HTTP for the MCP transport.');
   const transport = input.transport as 'stdio' | 'http';
-  const command = transport === 'stdio' ? absolute(input.command, 'MCP executable') : string(input.command, 'unused MCP executable', 0, true);
-  const args = strings(input.args, 'MCP arguments', 32, 2048);
+  const command = transport === 'stdio' ? absolute(input.command, 'MCP executable', entry) : string(input.command, 'unused MCP executable', 0, true, entry);
+  const args = strings(input.args, 'MCP arguments', 32, 2048, entry);
   if (transport === 'http' && args.length) invalid('HTTP MCP connections do not take command arguments.');
   if (transport === 'http' && input.chatDirectory !== undefined) invalid('HTTP MCP connections have no working directory. Remove chatDirectory.');
-  const address = transport === 'http' ? url(input.url, false) : string(input.url, 'unused MCP address', 0, true);
+  const address = transport === 'http' ? url(input.url, false, entry) : string(input.url, 'unused MCP address', 0, true, entry);
   // A local server without a credential needs no variable; a stored secret always needs its dedicated destination.
-  const secretEnv = transport === 'stdio' ? string(input.secretEnv ?? 'MCP_AUTH_TOKEN', 'secret environment variable', 80, true) : string(input.secretEnv ?? '', 'unused secret environment variable', 0, true);
+  const secretEnv = transport === 'stdio' ? string(input.secretEnv ?? 'MCP_AUTH_TOKEN', 'secret environment variable', 80, true, entry) : string(input.secretEnv ?? '', 'unused secret environment variable', 0, true, entry);
   if (secretEnv && (!/^[A-Z_][A-Z0-9_]{0,79}$/.test(secretEnv) || /^(?:PATH|HOME|USERPROFILE|SYSTEMROOT|WINDIR|SHELL|ENV|BASH_ENV|COMSPEC|PATHEXT|NODE_OPTIONS|NODE_PATH|PYTHONPATH|PYTHONHOME|RUBYOPT|RUBYLIB|PERL5OPT|PERL5LIB|LD_.*|DYLD_.*|WERK_.*|CODEX_.*|CLAUDE_.*)$/.test(secretEnv))) invalid('Choose a dedicated MCP credential environment variable, not a process or worker configuration variable.');
-  if (transport === 'stdio' && !secretEnv && string(input.secret, 'MCP secret', 4096, true)) invalid('Name the environment variable that receives the MCP secret, or remove the secret.');
+  if (transport === 'stdio' && !secretEnv && string(input.secret, 'MCP secret', 4096, true, entry)) invalid('Name the environment variable that receives the MCP secret, or remove the secret.');
   const discoveredTools = validateToolDefinitions(input.discoveredTools);
-  const allowedTools = strings(input.allowedTools, 'granted tool names', 64, 128);
+  const allowedTools = strings(input.allowedTools, 'granted tool names', 64, 128, entry);
   if (new Set(allowedTools).size !== allowedTools.length || allowedTools.some(name => !discoveredTools.some(tool => tool.name === name))) invalid('Grant only tools from the current discovered MCP catalog.');
   const timeoutMs = callTimeout(input.timeoutMs, 'MCP connection', transport === 'http' ? toolTimeLimits.httpMcpMaxMs : toolTimeLimits.mcpMaxMs);
-  return { id: id(input.id), name: string(input.name, 'connection name', 120), transport, enabled: boolean(input.enabled, 'MCP enabled'), command, args, url: address, secretEnv, secret: string(input.secret, 'MCP secret', 4096, true), allowedTools, discoveredTools, ...chatDirectory(input.chatDirectory, 'MCP connection'), ...(timeoutMs === undefined ? {} : { timeoutMs }) };
+  return { id: id(input.id, entry), name: string(input.name, 'connection name', 120, false, entry), transport, enabled: boolean(input.enabled, 'MCP enabled'), command, args, url: address, secretEnv, secret: string(input.secret, 'MCP secret', 4096, true, entry), allowedTools, discoveredTools, ...chatDirectory(input.chatDirectory, 'MCP connection'), ...(timeoutMs === undefined ? {} : { timeoutMs }) };
 }
 export function validateToolPolicy(value: unknown): ToolPolicy {
   const input = fields(value, ['schemaVersion', 'revision', 'builtins', 'mcp', 'delegation', 'services'], 'tool policy');
@@ -158,18 +163,18 @@ export function updateToolPolicy(previous: ToolPolicy, value: unknown, assignedR
   const input = fields(value, ['expectedRevision', 'builtins', 'mcp', 'delegation', 'services'], 'tool access update');
   if (input.expectedRevision !== previous.revision) throw new DomainError('conflict', 'Tool access changed. Reload the saved policy before applying your changes.');
   if (!Array.isArray(input.mcp) || input.mcp.length > 8) invalid('Configure at most eight MCP connections.');
-  const mcp = input.mcp.map(raw => {
+  const mcp = input.mcp.map((raw, index) => {
     const entry = fields(raw, ['id', 'name', 'transport', 'enabled', 'command', 'args', 'url', 'secretEnv', 'secret', 'clearSecret', 'allowedTools', 'timeoutMs', 'chatDirectory'], 'MCP connection');
     if (entry.clearSecret !== undefined && typeof entry.clearSecret !== 'boolean') invalid('Clear secret must be true or false.');
     if (entry.secret !== undefined && typeof entry.secret !== 'string') invalid('MCP secret must be a string.');
     if (entry.clearSecret === true && entry.secret) invalid('Choose replacing or clearing the MCP secret.');
     const saved = previous.mcp.find(item => item.id === entry.id);
-    const normalizedDestination = { ...entry, url: entry.transport === 'http' ? url(entry.url, false) : entry.url, secretEnv: entry.secretEnv ?? (entry.transport === 'stdio' ? 'MCP_AUTH_TOKEN' : '') } as unknown as ToolMcpConnection;
+    const normalizedDestination = { ...entry, url: entry.transport === 'http' ? url(entry.url, false, entryLabel('MCP connection', entry, index)) : entry.url, secretEnv: entry.secretEnv ?? (entry.transport === 'stdio' ? 'MCP_AUTH_TOKEN' : '') } as unknown as ToolMcpConnection;
     const same = saved && destination(saved) === destination(normalizedDestination);
     const sameCatalog = same && saved.chatDirectory === entry.chatDirectory;
     const { clearSecret, ...rest } = entry;
     const secret = clearSecret === true ? '' : entry.secret !== undefined && entry.secret !== '' ? entry.secret : same ? saved.secret : '';
-    return connection(withSavedTimeout({ ...rest, secret, allowedTools: sameCatalog ? entry.allowedTools : [], discoveredTools: sameCatalog ? saved.discoveredTools : [] }, saved));
+    return connection(withSavedTimeout({ ...rest, secret, allowedTools: sameCatalog ? entry.allowedTools : [], discoveredTools: sameCatalog ? saved.discoveredTools : [] }, saved), index);
   });
   const delegation = input.delegation === undefined ? previous.delegation : input.delegation;
   const services = input.services === undefined ? previous.services : input.services;

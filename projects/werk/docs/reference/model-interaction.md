@@ -149,7 +149,13 @@ official [permissions](https://cursor.com/docs/cli/reference/permissions),
 New implementation dispatches carry `policy.development: true`; only the private
 accepted task scope authorizes candidate tools. They also freeze the candidate source
 limits `candidateSourceMaxBytes`, `candidateSourceMaxFiles` and `candidateFileMaxBytes`
-in `policy` and record them as `toolManifest.limits.candidateInspection`.
+in `policy` and record them as `toolManifest.limits.candidateInspection`. The approved
+content limits `candidateApprovedFileMaxBytes`, `candidateApprovedTotalMaxBytes` and
+`candidateReviewPatchMaxBytes` are frozen the same way and recorded as
+`toolManifest.limits.candidateReview`; the `werk_candidate_apply` content schema states
+the frozen per-file limit. Approved entries ending in `/` approve safe files below
+that folder; `werk_candidate_apply` addresses such a file by its full path, with
+`expectedHash: null` when it does not exist yet.
 Delegated candidate tools retain the parent's frozen manifest evidence. Only an
 implementation child also carries these fields in `policy`; a status/check-only
 child does not gain edit authority. Dispatches without candidate tools omit the

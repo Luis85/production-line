@@ -50,6 +50,13 @@ The default checked-in workflow is:
 }
 ```
 
+`init --workflow-dir DIR` or `feature setup --workflow-dir DIR` generates a new workflow
+with `reviewDirectory` `DIR/reviews`, `tasksDirectory` `DIR/tasks`, `base`
+`DIR/Feature Requests.base`, and `readyCheck`/`doneCheck` `DIR/checks/fr-ready-check.json`
+and `DIR/checks/fr-done-check.json`; the Base's folder filters use those paths. An
+existing workflow file is never rewritten: a differing `--workflow-dir` yields a
+`workflow_directory_mismatch` warning.
+
 Paths use safe repository-relative POSIX syntax. Request and review folders must
 be separate and cannot contain one another. Workflow files use distinct paths;
 the template must not appear as a normal root-level intake request. Paths cannot
@@ -429,6 +436,15 @@ publishes `<reviewDirectory>/<feature-id>-<publication-digest-prefix>.md` with
 `type: PullRequest` and the source lifecycle update. The note is a Markdown review
 handoff, not a Git-hosting pull-request object. Feature branches are not
 automatically merged or approved.
+
+Shared feature publication accepts at most 128 KiB of patch text and 32 changed
+files, independently of configurable local candidate limits. If a verified result
+exceeds either bound, the worker retains it, marks the Feature Request blocked and
+publishes a diagnostic Task note with the measured limit and next steps. It does
+not repeatedly attempt an oversized feature push or rerun the model. A maintainer
+can inspect and publish the retained candidate manually, or the team can create
+smaller successor requests. This diagnostic Task does not accept answers or change
+the accepted scope. Lost acknowledgements still replay the same pending note.
 
 Private state stores the accepted snapshot and pending publication intent.
 Publication identities include the repository binding, source commit, feature ID and output digest.

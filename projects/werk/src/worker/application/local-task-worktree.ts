@@ -16,6 +16,7 @@ export function developmentRuntime(host: Pick<LocalTaskRuntime, "settings" | "de
     return host.development({ scope: structuredClone(task.implementation), worktree: task.worktree, worktreeIdentity: task.worktreeIdentity, repository: task.repository,
       initialEvidence: task.developmentEvidence, commandTimeoutMs: limits.commandTimeoutMs,
       candidateSourceMaxBytes: limits.candidateSourceMaxBytes, candidateSourceMaxFiles: limits.candidateSourceMaxFiles, candidateFileMaxBytes: limits.candidateFileMaxBytes,
+      candidateApprovedFileMaxBytes: limits.candidateApprovedFileMaxBytes, candidateApprovedTotalMaxBytes: limits.candidateApprovedTotalMaxBytes, candidateReviewPatchMaxBytes: limits.candidateReviewPatchMaxBytes,
       verifyWorkspace: signal => host.assertToolWorkspace(task, signal, false, limits), currentPolicy: () => host.settings.toolPolicy(),
       checkpoint: async evidence => {
         validateDevelopmentState(task.implementation, evidence);

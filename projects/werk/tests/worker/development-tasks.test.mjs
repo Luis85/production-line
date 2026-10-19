@@ -85,8 +85,8 @@ async function fixture(t, execute, { verification = true, native = false, observ
     root, state, repository, baseCommit, settings, requests, grant, worktreeInspections,
     get board() { return board; }, get sessions() { return sessions; }, get invocations() { return invocations; },
     request(id) { return sessions.requests.get(board.executionDetail(id).requestId); },
-    async create() {
-      await board.create({ title: 'Implement the approved fixture change', instruction: 'Change approved.txt to after and verify the actual source.', repository, paths: ['approved.txt'], provider: native ? 'cursor-cli' : 'openai-api' });
+    async create(paths = ['approved.txt']) {
+      await board.create({ title: 'Implement the approved fixture change', instruction: 'Change approved.txt to after and verify the actual source.', repository, paths, provider: native ? 'cursor-cli' : 'openai-api' });
       return board.view().tasks.at(-1).id;
     },
     async settle(id, expected) {
@@ -165,6 +165,32 @@ test('candidate inspection uses the limits frozen with the accepted dispatch, no
   assert.ok(f.worktreeInspections.length > 1);
   assert.ok(f.worktreeInspections.every(value => value.candidateSourceMaxFiles === 20000), 'initial execution and later candidate guards use accepted limits, not live settings');
   assert.equal(f.settings.publicView().execution.candidateFileMaxBytes, 65536, 'the later change applies to new attempts only');
+});
+
+test('an approved folder admits generated files under the frozen approved content limits', { timeout: testTimeoutMs }, async t => {
+  const generated = 'x'.repeat(26000) + '\n';
+  const f = await fixture(t, async ({ runtime, request, signal, task }) => {
+    assert.equal(request.policy.candidateApprovedFileMaxBytes, 30000); assert.equal(request.toolManifest.limits.candidateReview.candidateApprovedTotalMaxBytes, 60000);
+    assert.deepEqual(task.files.find(file => file.path === 'gen/'), { path: 'gen/', content: '', existed: false }, 'folder snapshots hold no contents');
+    assert.match(request.messages[0].text, /Approved folders end in \//);
+    // A project generator writes the component folder directly; the frozen 30,000-byte bound admits it.
+    await mkdir(join(task.worktree, 'gen', 'component'), { recursive: true }); await writeFile(join(task.worktree, 'gen', 'component', 'view.ts'), generated);
+    await edit(runtime, signal); await check(runtime, signal);
+    return complete('Generated the component and verified it.');
+  });
+  await f.settings.update({ execution: { candidateApprovedFileMaxBytes: 30000, candidateApprovedTotalMaxBytes: 60000 } });
+  const id = await f.create(['approved.txt', 'gen/']);
+  await f.settings.update({ execution: { candidateApprovedFileMaxBytes: 24000, candidateApprovedTotalMaxBytes: 48000 } });
+  const task = await f.settle(id, 'review');
+  assert.equal(task.developmentCompletion.verified, true);
+  assert.match(task.patch, /gen\/component\/view\.ts/); assert.match(task.patch, /\+after/);
+  assert.equal(task.changedFileCount, 2);
+});
+
+test('proposal requests keep exact files: a folder approval is refused before a worktree is prepared', { timeout: testTimeoutMs }, async t => {
+  const f = await fixture(t, async () => complete('unused'), { verification: false });
+  await assert.rejects(f.create(['approved.txt', 'gen/']), /Folder approvals \(paths ending in \/\) require an implementation request/);
+  assert.equal(f.board.view().tasks.length, 0); assert.deepEqual(f.worktreeInspections, []);
 });
 
 const incomplete = {

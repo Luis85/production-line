@@ -60,6 +60,9 @@ the app into that project's `bin/apps/worker`, create `.env`/`.env.example`,
 `.werk/worker.json`, a draft
 feature-request template and `.werk/compose.worker.yaml`. Use `--features-dir` to
 choose a project-relative folder and `--provider` to choose its default connection.
+`--workflow-dir DIR` places the Feature Requests Base, reviews, tasks and check files
+under `DIR` (see [keep the project root tidy](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/project-worker.md#keep-the-project-root-tidy));
+`--no-npm` skips the root `package.json` and reports `npm: { skipped: true }`.
 Run or start from the project directory; the installed worker discovers its project
 configuration. `feature template` prints a fresh Markdown template without a running
 worker; `feature list` reads the authenticated watcher state. Template output is
@@ -132,8 +135,16 @@ Worker help also lists the verified-implementation source limits
 Queue & duration → Repository inspection limits**, or use `settings set` with an
 `execution` body. CLI/API sizes are whole bytes; the webview displays MiB. Include
 the complete `expectedCandidateInspection` baseline from `settings get` to reject
-concurrent edits. These bounds affect source inspection, not approved edit scope;
-see [execution settings](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/configuration.md#local-worker-execution-policy).
+concurrent edits. These bounds affect source inspection, not approved edit scope.
+Approved candidate content for implementation requests has three further settings:
+`execution.candidateApprovedFileMaxBytes` (default 24000, 1000–8388608),
+`candidateApprovedTotalMaxBytes` (default 48000, 1000–67108864, at least the
+per-file limit) and `candidateReviewPatchMaxBytes` (default 120000,
+10000–4194304). `settings get` shows them; change them with `settings set` and an
+`execution` body, including the complete `expectedCandidateReview` baseline (all
+three current values) to reject concurrent edits. Each implementation dispatch
+freezes them; raising them never widens the approved paths. See
+[execution settings](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/configuration.md#local-worker-execution-policy).
 Inspect `settings get` for `executionSource` and `resource status` for admission
 conditions. Resource snapshots measure the worker Node process, not provider
 subprocess totals or subscription balances. Fleet `workers.execution.timeoutMs`
@@ -209,6 +220,62 @@ manifest and runs the staged CLI once. Then it:
    defaults and previous port. A foreground `run` is left for its terminal or
    service manager. `--no-restart` skips the restart.
 
+If another process holds the app folder open and must keep running, so the folder
+cannot be renamed (the `Could not move` error described below), pass
+`--in-place` explicitly. It is never chosen automatically:
+
+```sh
+node bin/apps/worker/cli.mjs update apply --stop --in-place
+```
+
+`--in-place` first ships in 0.14.0. An installed 0.13.x or earlier launcher cannot
+use that flag for its first upgrade: stop the process holding the directory and
+use the normal update, or stop the app and replace its complete app folder from a
+verified release while preserving external state. Once 0.14.0 is installed, future
+updates and rollbacks support `--in-place`. Running a newer release's launcher with
+`--project-dir` does not target an older app folder; that option selects the project,
+and an update replaces the app containing the invoked launcher.
+
+Release verification, staging, the preflight, `--stop`, the state lock, the state
+backup and the history record are the same. Step 4 changes: the updater copies the
+current folder to `bin/apps/.<app>-update/<version>-<timestamp>` and verifies the
+copy, then writes changed and added files from the verified staged release into the
+app folder, deletes files the release manifest does not list and removes directories
+that become empty. A directory that cannot be removed because a process holds it
+open is left empty and listed in `inPlace.emptyDirectoriesLeft`; this is not an
+error. Finally every file in the app folder is compared with the release manifest,
+byte for byte, and extra or missing files fail the update. For failures caught by
+the updater, it attempts to write the retained copy back and verify it. A successful
+restore removes that redundant copy, reports that the previous files were restored
+and restarts the previous version as below. If restoration also fails, the app stays
+stopped and the error names the retained copy for manual recovery. `package.json`
+and `cli.mjs` are written last when upgrading and first when downgrading, but this
+ordering does not make the update atomic.
+
+A forced termination, host shutdown or power loss can interrupt a file write or
+leave a mixture of versions. The installed launcher and update command may no
+longer load; rerunning `update apply` is not a guaranteed repair. Keep the app
+stopped and preserve its state and all update folders. After verifying the updater
+and every process using the app have exited, restore the complete previous app
+from the retained folder under `bin/apps/.<app>-update/`: replace the app folder
+with that copy, or copy its files back and remove app files absent from the retained
+copy. Do not merge it over the interrupted tree without removing extra files. If
+termination occurred while creating the retained copy, that copy may be incomplete;
+use a separately downloaded and verified release of the previous version instead.
+Only after restoring a complete app, remove the stale `update.lock` and application
+maintenance lock if their owning processes have exited, then inspect status and
+start the app with its original state directory. No history entry is guaranteed
+for an interrupted operation, so `update rollback` may still refer to an earlier
+update. Keep the retained folder until the restored app has been checked.
+
+The result reports
+`method: "in-place"` (otherwise `"swap"`) and `inPlace` with `written`, `removed`
+and `emptyDirectoriesLeft` (otherwise `null`); the history entry records
+`method: "in-place"`.
+Files you added inside the app folder are removed by an in-place update and kept in
+the retained copy. A Docker Compose worker that mounts the folder still needs to be
+stopped and recreated.
+
 The JSON result names the new version, the retained folder, the backup and the
 restart outcome. A failed restart exits 1 after a successful replacement; start the
 app manually. If an update fails after stopping the app and its original folder is
@@ -232,9 +299,12 @@ old ones after the new version is confirmed. Files you added inside the app fold
 remain in the retained folder only.
 
 `rollback` swaps back the folder retained by the last update or rollback, so a
-second rollback returns to the newer version. It never changes state. If the newer
-version already changed state, stop the app, restore the update's backup into a
-new directory and start with that state:
+second rollback returns to the newer version. `update rollback --stop --in-place`
+restores the same retained folder by the in-place method instead: it retains a
+verified copy of the current files, copies the retained files back into the app
+folder, verifies them and keeps the retained folder it copied from. Rollback never
+changes state. If the newer version already changed state, stop the app, restore
+the update's backup into a new directory and start with that state:
 
 ```sh
 node bin/apps/worker/cli.mjs update restore --from .werk/worker.updates/backups/BACKUP --to .werk/worker-restored
@@ -263,7 +333,11 @@ handles, so the tools that list locked files can show nothing. Look for
 long-running processes whose working directory is the project: agent MCP servers,
 language servers and file watchers started from the project folder. Stop them and
 run the update again. Nothing was replaced; if the update stopped the app, it
-restarts the previous version and reports whether that worked.
+restarts the previous version and reports whether that worked. If you cannot stop
+that process, for example the MCP servers of agent sessions you keep open, run
+`update apply --stop --in-place` (or `update rollback --stop --in-place`), as the
+error suggests. It replaces the files inside the folder, verifies them against the
+release manifest and reports directories it had to leave empty.
 
 Downloads and extraction use the system temporary directory to keep paths short.
 
@@ -371,7 +445,7 @@ for native permissions, model selection and unavailable usage counters.
 ```sh
 node bin/apps/worker/cli.mjs provider check --id codex-cli
 node bin/apps/worker/cli.mjs definition preview --file .werk/agents/project-reviewer.yaml
-node bin/apps/worker/cli.mjs definition import --file .werk/agents/project-reviewer.yaml --name "Project reviewer"
+node bin/apps/worker/cli.mjs definition import --file .werk/agents/project-reviewer.yaml --name "Project reviewer" --ref project-reviewer
 node bin/apps/worker/cli.mjs definition list
 node bin/apps/worker/cli.mjs definition ref --id DEFINITION_ID --ref project-reviewer
 node bin/apps/worker/cli.mjs definition update --ref project-reviewer --file .werk/agents/project-reviewer.yaml --dry-run
@@ -385,7 +459,9 @@ stay JSON. JSON preview input is `{"yaml":"YAML_TEXT"}`; JSON import adds
 `"name":"Project reviewer"` and optionally a stable `"ref":"project-reviewer"`.
 `--name NAME` (import and update) sets the name for YAML and JSON input alike and
 is required when importing a YAML file; give the name either as `--name` or in
-the JSON, not both. `definition update` replaces the profile behind a reference in
+the JSON, not both. `--ref REF` on import sets the stable reference in the same
+step (as `--ref` or JSON `"ref"`, not both); a reference another definition holds
+is refused with exit 2, and `definition ref` moves it instead. `definition update` replaces the profile behind a reference in
 place: its ID and reference stay, and without a name the stored name is kept. `--dry-run` writes nothing and returns the current `revision`, the
 name and digest change, and added, removed and changed agents. Apply with
 `--if-match` set to the `revision` from the dry run or `definition list`; a changed
@@ -398,8 +474,12 @@ immutable instruction/model snapshot. Supported OpenAI/Anthropic model reference
 require a matching worker provider; the definition never silently changes billing.
 
 This is an instruction-profile integration. Preview lists unsupported Docker
-runtime features. Only after reviewing them, add `"useInstructionsOnly":true`
-to explicitly omit them for the task. Tools, hooks, harnesses, sub-agents, remote
+runtime features, and preview, import and update responses add a `warnings`
+array naming each agent that needs adaptation and its unsupported items. Only
+after reviewing them, add `"useInstructionsOnly":true` to explicitly omit them
+for the task. `feature validate` and local folder intake report a request that
+selects such a profile without it, or an unknown `definitionRef`, before the
+request is reserved. Tools, hooks, harnesses, sub-agents, remote
 resources and parallel execution are not started. Imports do not expand variables
 or load credentials. Each complete JSON request must fit 64 KiB. Definitions stay
 in private worker state and persist across restart; all task execution stays serial.

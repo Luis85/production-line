@@ -53,8 +53,12 @@ export function featureWorkflowPath(value: unknown, label = 'Workflow path'): st
   return value;
 }
 const inside = (path: string, directory: string) => path.toLowerCase() === directory.toLowerCase() || path.toLowerCase().startsWith(directory.toLowerCase() + '/');
-export function defaultFeatureWorkflow(): FeatureWorkflowConfiguration {
-  return { schemaVersion: 1, id: 'feature-requests', requestsDirectory: 'features', reviewDirectory: 'feature-reviews', tasksDirectory: 'feature-tasks', template: 'features/_templates/feature-request.md', base: 'Feature Requests.base', readyCheck: 'fr-ready-check.json', doneCheck: 'fr-done-check.json' };
+/** A workflow directory is opt-in; without it the Base, checks, reviews and tasks keep their project-root defaults. */
+export function defaultFeatureWorkflow(workflowDirectory?: string): FeatureWorkflowConfiguration {
+  const root = { schemaVersion: 1, id: 'feature-requests', requestsDirectory: 'features', reviewDirectory: 'feature-reviews', tasksDirectory: 'feature-tasks', template: 'features/_templates/feature-request.md', base: 'Feature Requests.base', readyCheck: 'fr-ready-check.json', doneCheck: 'fr-done-check.json' } satisfies FeatureWorkflowConfiguration;
+  if (workflowDirectory === undefined) return root;
+  const directory = featureWorkflowPath(workflowDirectory, '--workflow-dir');
+  return { ...root, reviewDirectory: `${directory}/reviews`, tasksDirectory: `${directory}/tasks`, base: `${directory}/Feature Requests.base`, readyCheck: `${directory}/checks/fr-ready-check.json`, doneCheck: `${directory}/checks/fr-done-check.json` };
 }
 export function featureTaskDirectory(config: FeatureWorkflowConfiguration): string {
   return config.tasksDirectory ?? config.reviewDirectory + '/_tasks';

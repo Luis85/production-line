@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { assignmentResponse } from '../../src/worker/dist/worker/infrastructure/responses.js';
+import { createServer } from 'node:http';
 import { HttpWorkerGateway } from '../../src/worker/dist/worker/infrastructure/orchestrator-client.js';
+import { DEFAULT_REQUEST_TIMEOUT_MS } from '../../src/worker/dist/shared/http/client.js';
 import { ReportingError } from '../../src/worker/dist/worker/application/errors.js';
 
 /** @returns {import('../../src/shared/domain.js').Task} */
@@ -65,4 +67,17 @@ test('assignment shape validation does not manufacture ownership or execution au
   const client = new HttpWorkerGateway(identity.url, '', async (_base, path) => path.endsWith('/next') ? { task: null } : { tasks: [] }).connect(identity);
   assert.equal(await client.claim('claim-empty'), null);
   assert.deepEqual(await client.currentAssignments(), []);
+});
+
+test('the default worker gateway transport keeps its own 10 s bound instead of the 30 s CLI default', async t => {
+  assert.equal(DEFAULT_REQUEST_TIMEOUT_MS, 30000, 'the shared CLI default the gateway must not inherit');
+  const sockets = new Set(), server = createServer(() => {}); // Accepts and never answers.
+  server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
+  await /** @type {Promise<void>} */ (new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve())));
+  t.after(() => new Promise(resolve => { for (const socket of sockets) socket.destroy(); server.close(resolve); }));
+  const { port } = /** @type {import('node:net').AddressInfo} */ (server.address()), started = Date.now();
+  const client = new HttpWorkerGateway(`http://127.0.0.1:${port}`, '').connect(identity);
+  await assert.rejects(client.currentAssignments(), error => error instanceof ReportingError && error.retryable === true && error.message === 'Orchestrator transport request failed');
+  const elapsed = Date.now() - started;
+  assert.ok(elapsed >= 9000 && elapsed < 20000, `stopped after ${elapsed} ms`);
 });

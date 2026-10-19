@@ -7,16 +7,33 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-19
+
 ### Added
 
-- Shared Feature Requests support optional `readyPrompt` and `donePrompt` paths in `.werk/feature-workflow.json`. Teams commit Markdown or text definitions of ready and done; the worker pins their content and digests before claim and supplies them on dispatch and continuation. The shared-workflow view exposes their paths and digests. These prompts supplement deterministic readiness/completion checks and retain existing tool, edit-scope and human-review boundaries.
-- An optional `readyReviewPrompt` enables a model Feature Request Ready Check before deterministic readiness checks. The worker confirms its Git claim, reviews using the request's selected model and existing capacity/allowance (tool-free Codex/Claude/API or Cursor's native read-only ask mode), and publishes findings in the same request. Questions pause work until the team answers in Markdown and commits and pushes `status: ready`; unchanged polling never starts another review.
-- Feature Requests can select provider, model and supported reasoning effort in Markdown and the webview. Editable worker defaults apply to new requests; accepted provider/model/effort selections remain fixed through Ready Check answers, implementation and restart recovery.
-- Cursor CLI integrates account login or a private Cursor API key, exact native session continuation and candidate implementation under Cursor's native permissions, hooks and subagent policy. Supplemental Werk grants retain their own boundaries; required worker checks still gate review. Token and cost usage remain unavailable, including native subagents, and do not bypass consumption holds.
+- Feature Requests can select a provider, model and supported reasoning effort in Markdown and the webview. Worker settings supply defaults for new requests; accepted choices remain fixed through readiness review, implementation, follow-up and restart.
+- Cursor CLI supports local account login or a private API key, exact native session continuation and implementation in the retained candidate worktree. Cursor owns its native permissions, hooks and subagents; Werk still runs required checks before review. Native token and cost usage remain unavailable and do not bypass consumption holds.
+- Configurable, committed `readyPrompt` and `donePrompt` files supplement deterministic workflow checks. Their contents and digests stay pinned through the Feature Request lifecycle.
+- An opt-in `readyReviewPrompt` dispatches a model reviewer before the Definition of Ready check. Findings and questions appear on the same Feature Request; the team answers in Markdown, marks it ready, commits and pushes to resume review.
+- Implementation requests can approve folder prefixes, allowing a worker to maintain a feature directory or run a project generator. Approved content and review-patch size limits are configurable and frozen per dispatch. Folder approval excludes ignored, hidden and secret-like paths; explicitly approved files retain their existing rules. Proposal requests still require exact files. Shared publication retains its 32-file and 128 KiB limits.
+- Portable updates and rollbacks accept an explicit `--in-place` option for Windows folders held open by other processes. The updater verifies the release, retains the previous tree and attempts restoration on handled failures. Abrupt interruption requires manual recovery from the retained copy; file-by-file replacement is not a crash-atomic update. Installations on 0.13.x or earlier must complete the first upgrade using the normal update or verified complete-folder replacement before this new option is available.
+- Project setup accepts `--workflow-dir` to group the Feature Requests Base, review notes, Task notes and check files. `init --no-npm` leaves the root package manifest to the project.
+- Definition import accepts `--ref`, and preview/import/update responses expose compatibility warnings before a request is queued.
 
 ### Changed
 
-- Advisory mutation testing now covers the Ready Check protocol, shared review lifecycle and review eligibility alongside the existing accounting and boundary checks. Expanded failure, recovery and concurrency contracts improve the baseline; exact compiled-source, suite and configuration provenance prevents comparing incomplete or stale measurements. Mutation findings continue to warn without blocking releases or running in ordinary development checks.
+- Advisory mutation coverage includes the readiness-review protocol, shared review lifecycle and review eligibility, with stronger failure/recovery contracts and exact source, suite and configuration provenance. Release measurements warn without blocking publication or ordinary development.
+- Operator CLI requests wait 30 seconds by default; settings changes and Git-backed operations allow 120 seconds. The worker-to-orchestrator gateway retains its 10-second bound, and explicit timeout overrides remain available.
+- Candidate tool listings stay within a byte budget while preserving requested-file hashes and reporting omitted changes. Complete repository inspection and approved-scope verification remain mandatory. Finish active implementation work before upgrading: changed tool manifests can require explicit recovery of previously prepared dispatches.
+
+### Fixed
+
+- Windows contained processes preserve `PATHEXT` and `ComSpec`, allowing npm lifecycle scripts and approved command presets to resolve executables correctly.
+- Shared implementations that exceed publication limits produce an actionable blocked Task note and retain their result for recovery, instead of retrying an impossible publication indefinitely.
+- Environment setup respects effective Git ignore rules, including later negations, so generated worker credentials remain excluded without repeatedly adding ignore lines.
+- Incompatible or unknown execution profiles are reported before intake reservation. Errors identify unsupported fields and explain updating the profile or opting into instructions-only adaptation.
+- Tool Access validation identifies the affected command, CLI tool or MCP connection and explains the invalid field.
+- Provider/session recovery retains accepted model choices, and readiness result parsing rejects non-string finding kinds instead of allowing a blocking question to bypass the review gate.
 
 ## [0.13.0] - 2026-10-18
 

@@ -121,8 +121,8 @@ worker’s local credentials; stdout is JSON and no command prompts for a choice
 | `profile set --file profiles.json` | Save a guarded profile update while paused and idle; `--file -` reads stdin |
 
 JSON input from `--file PATH` or `--file -` may start with a UTF-8 byte order mark,
-which Windows PowerShell 5.1 adds to piped input. Each API call waits 10 s, or
-120 s for the Git operations marked above; `--request-timeout-ms 1000–600000`
+which Windows PowerShell 5.1 adds to piped input. Each API call waits 30 s, or
+120 s for the Git operations marked above and for `settings set`; `--request-timeout-ms 1000–600000`
 overrides the wait. A timeout (`"code":"timeout"`, exit 1) only means the client
 stopped waiting: run `shared status` or `repository status` before retrying.
 

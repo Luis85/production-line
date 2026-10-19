@@ -1,5 +1,6 @@
 import { callTimeout, formatToolDuration } from './tool-limits.js';
 import { DomainError } from '../../shared/errors.js';
+import { entryMessage, stringProblem } from './tool-field-error.js';
 
 /**
  * A project command-line tool the model may call with its own arguments. The
@@ -32,9 +33,10 @@ const record = (value: unknown): value is Record<string, unknown> => !!value && 
 const control = /[\x00-\x1f\x7f]/;
 const optionPattern = /^-{1,2}[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/;
 const tokenPattern = /^(?:--?)?[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
-function text(value: unknown, label: string, max: number, empty = false): string {
-  if (typeof value !== 'string' || value.length > max || (!empty && !value.trim()) || control.test(value)) invalid(`Use a valid ${label} (at most ${max} characters, no control characters).`);
-  return value;
+function text(value: unknown, label: string, max: number, empty = false, entry?: string): string {
+  const problem = stringProblem(value, max, empty);
+  if (problem) invalid(entryMessage(entry, `${label} ${problem}.`));
+  return value as string;
 }
 function integer(value: unknown, fallback: number, min: number, max: number, label: string): number {
   if (value === undefined) return fallback;
@@ -54,20 +56,20 @@ function fields(value: unknown, allowed: string[], label: string): Record<string
 }
 
 /** Validate a stored or submitted CLI tool; optional limits receive documented defaults. */
-export function validateCliTool(value: unknown, absolute: (value: unknown, label: string) => string): ToolCliTool {
+export function validateCliTool(value: unknown, absolute: (value: unknown, label: string, entry?: string) => string, entry = 'CLI tool'): ToolCliTool {
   const input = fields(value, ['id', 'name', 'description', 'enabled', 'executable', 'args', 'commands', 'refusedOptions', 'maxArgs', 'maxArgLength', 'outputKiB', 'truncationHint', 'timeoutMs'], 'CLI tool');
-  const id = text(input.id, 'CLI tool ID', 48);
-  if (!/^[a-zA-Z0-9_-]+$/.test(id)) invalid('CLI tool IDs use 1–48 letters, digits, underscores and hyphens.');
-  const executable = absolute(input.executable, 'CLI tool executable');
+  const id = text(input.id, 'CLI tool ID', 48, false, entry);
+  if (!/^[a-zA-Z0-9_-]+$/.test(id)) invalid(entryMessage(entry, 'CLI tool IDs use 1–48 letters, digits, underscores and hyphens.'));
+  const executable = absolute(input.executable, 'CLI tool executable', entry);
   // cmd.exe re-parses batch-file arguments, so model text could become shell syntax.
   if (/\.(?:bat|cmd)$/i.test(executable.trim())) invalid('CLI tools cannot run .bat or .cmd files, because Windows passes their arguments through cmd.exe. Use the interpreter executable, such as node.exe, with the script as a fixed argument.');
   if (!Array.isArray(input.args) || input.args.length > 32) invalid('Use at most 32 fixed CLI tool arguments.');
-  const args = input.args.map(item => text(item, 'fixed CLI tool argument', 2048, true));
+  const args = input.args.map((item, index) => text(item, `fixed CLI tool argument ${index + 1}`, 2048, true, entry));
   const refusedOptions = options(input.refusedOptions, 'refused options', cliToolLimits.options);
   if (!Array.isArray(input.commands) || !input.commands.length || input.commands.length > cliToolLimits.rules) invalid(`Allow 1–${cliToolLimits.rules} commands for each CLI tool.`);
   const commands = input.commands.map(raw => {
     const rule = fields(raw, ['command', 'requireOneOf', 'refusedOptions'], 'CLI command rule');
-    const command = text(rule.command, 'allowed command', 129).trim();
+    const command = text(rule.command, 'allowed command', 129, false, entry).trim();
     const tokens = command.split(' ');
     if (tokens.length > 2 || tokens.some(token => !tokenPattern.test(token))) invalid(`Allowed commands are one or two words, such as "check" or "backlog context": "${command}" is not.`);
     if (tokens.some(token => refusedOptions.includes(token))) invalid(`Allowed command "${command}" uses a refused option.`);
@@ -79,12 +81,12 @@ export function validateCliTool(value: unknown, absolute: (value: unknown, label
   if (new Set(commands.map(item => item.command)).size !== commands.length) invalid('List each allowed CLI command once.');
   const timeoutMs = callTimeout(input.timeoutMs, `CLI tool "${id}"`);
   const tool: ToolCliTool = {
-    id, name: text(input.name, 'CLI tool name', 120), description: text(input.description ?? '', 'CLI tool description', 1000, true), enabled: input.enabled === true ? true : input.enabled === false ? false : invalid('CLI tool enabled must be true or false.'),
+    id, name: text(input.name, 'CLI tool name', 120, false, entry), description: text(input.description ?? '', 'CLI tool description', 1000, true, entry), enabled: input.enabled === true ? true : input.enabled === false ? false : invalid('CLI tool enabled must be true or false.'),
     executable, args, commands, refusedOptions,
     maxArgs: integer(input.maxArgs, cliToolDefaults.maxArgs, 1, cliToolLimits.maxArgs, 'Maximum arguments'),
     maxArgLength: integer(input.maxArgLength, cliToolDefaults.maxArgLength, 1, cliToolLimits.maxArgLength, 'Maximum argument length'),
     outputKiB: integer(input.outputKiB, cliToolDefaults.outputKiB, 1, cliToolLimits.outputKiB, 'Output limit (KiB)'),
-    truncationHint: text(input.truncationHint ?? cliToolDefaults.truncationHint, 'truncation hint', 300, true),
+    truncationHint: text(input.truncationHint ?? cliToolDefaults.truncationHint, 'truncation hint', 300, true, entry),
     ...(timeoutMs === undefined ? {} : { timeoutMs }),
   };
   if (cliToolDescription(tool).length > cliToolLimits.description) invalid(`The generated description for CLI tool "${id}" exceeds ${cliToolLimits.description} characters. Shorten its description or allow fewer commands.`);

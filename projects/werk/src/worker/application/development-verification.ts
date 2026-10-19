@@ -1,4 +1,5 @@
 import type { DevelopmentCheckEvidence, DevelopmentEvidence, DevelopmentScopeView } from './development.js';
+import { approvedPathMatch } from './approved-paths.js';
 
 export type DevelopmentVerificationStatus = 'not_run' | 'stale' | 'passed' | 'failed' | 'interrupted' | 'invalid';
 export interface ClassifiedDevelopmentCheck {
@@ -17,7 +18,7 @@ export function classifyDevelopmentEvidence(scope: DevelopmentScopeView, evidenc
   const invalid = requiredIds.size !== scope.checks.length ||
     new Set(receipts.map(check => check.presetId)).size !== receipts.length ||
     receipts.some(check => !requiredIds.has(check.presetId)) ||
-    new Set(changedPaths).size !== changedPaths.length || changedPaths.some(path => !scope.approvedPaths.includes(path));
+    new Set(changedPaths).size !== changedPaths.length || changedPaths.some(path => !approvedPathMatch(scope.approvedPaths, path));
   const checks: ClassifiedDevelopmentCheck[] = scope.checks.map(required => {
     const receipt = receipts.findLast(check => check.presetId === required.id);
     const current = !!candidateDigest && receipt?.candidateDigest === candidateDigest && receipt.presetFingerprint === required.fingerprint;

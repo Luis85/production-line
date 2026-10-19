@@ -1,7 +1,7 @@
 import { open, unlink } from 'node:fs/promises';
 import { providerIds } from '../application/provider-contract.js';
 import { parseFeature } from './features/document.js';
-import { defaultFeatureWorkflow, defaultFeatureCheck, validateFeatureWorkflow, validateFeatureCheck, featureWorkflowPolicy, validateFeaturePromptContent, type FeatureWorkflowConfiguration } from '../application/feature-workflow.js';
+import { defaultFeatureWorkflow, defaultFeatureCheck, featureTaskDirectory, validateFeatureWorkflow, validateFeatureCheck, featureWorkflowPolicy, validateFeaturePromptContent, type FeatureWorkflowConfiguration } from '../application/feature-workflow.js';
 import { validateFeatureTemplate } from './features/workflow.js';
 import { authoringBase, authoringDefinitionPrompt, authoringReadyReviewPrompt, authoringSkill, authoringTemplateFor } from './feature-authoring-assets.js';
 import { authoringRoot, authoringPath, authoringRevision, readAuthoringFile, replaceAuthoringFile, seedAuthoringFile } from './feature-authoring-files.js';
@@ -17,7 +17,7 @@ const lf = (text: string) => text.replace(/\r\n/g, '\n');
 const contentHash = (text: string) => authoringRevision(lf(text));
 const sameText = (a: string, b: string) => lf(a) === lf(b);
 
-type AuthoringSetup = { featuresDirectory?: string; provider?: string; script: string; ifMatch?: string };
+type AuthoringSetup = { featuresDirectory?: string; workflowDirectory?: string; provider?: string; script: string; ifMatch?: string };
 type AuthoringWarning = { code: string; message: string; revision?: string };
 type ScriptPlan = { action: 'create' | 'keep' | 'refresh' | 'preserve'; revision?: string; reason?: 'managed' | 'if-match' };
 
@@ -47,6 +47,13 @@ async function planScript(root: string, options: AuthoringSetup): Promise<Script
   if (options.ifMatch !== undefined) return { action: 'refresh', revision, reason: 'if-match' };
   return { action: 'preserve', revision };
 }
+/** An existing workflow wins; --workflow-dir naming other locations is reported and nothing is moved. */
+function workflowDirectoryMismatch(config: FeatureWorkflowConfiguration, workflowDirectory: string | undefined): AuthoringWarning | undefined {
+  if (workflowDirectory === undefined) return undefined;
+  const wanted = defaultFeatureWorkflow(workflowDirectory), tasks = featureTaskDirectory(config);
+  if (wanted.base === config.base && wanted.readyCheck === config.readyCheck && wanted.doneCheck === config.doneCheck && wanted.reviewDirectory === config.reviewDirectory && wanted.tasksDirectory === tasks) return undefined;
+  return { code: 'workflow_directory_mismatch', message: `--workflow-dir ${workflowDirectory} was ignored: ${featureWorkflowPath} already places the Base at ${config.base}, checks at ${config.readyCheck} and ${config.doneCheck}, reviews at ${config.reviewDirectory} and tasks at ${tasks}, not under ${workflowDirectory}. Nothing was moved. Edit ${featureWorkflowPath} and move those files yourself, or omit --workflow-dir.` };
+}
 /** Installs missing portable authoring files and refreshes only the unmodified, Werk-managed script. */
 async function prepareFeatureAuthoring(directory: string, options: AuthoringSetup) {
   const root = await authoringRoot(directory);
@@ -54,16 +61,20 @@ async function prepareFeatureAuthoring(directory: string, options: AuthoringSetu
   if (!provider) throw Error('Choose a supported feature provider.');
   if (!options.script || Buffer.byteLength(options.script) > 2097152) throw Error('A bounded bundled authoring script is required.');
   const saved = await readAuthoringFile(root, featureWorkflowPath, 16384);
+  const warnings: AuthoringWarning[] = [];
   let config: FeatureWorkflowConfiguration;
   if (saved !== undefined) {
     config = validateFeatureWorkflow(JSON.parse(saved));
     if (options.featuresDirectory !== undefined && options.featuresDirectory !== config.requestsDirectory) throw Error('The authoring workflow already uses a different feature folder.');
+    const mismatch = workflowDirectoryMismatch(config, options.workflowDirectory);
+    if (mismatch) warnings.push(mismatch);
   } else {
-    const defaults = defaultFeatureWorkflow();
+    const defaults = defaultFeatureWorkflow(options.workflowDirectory);
     const workerRaw = await readAuthoringFile(root, '.werk/worker.json');
     const worker = workerRaw === undefined ? undefined : JSON.parse(workerRaw);
     const directory = options.featuresDirectory ?? worker?.features?.directory ?? defaults.requestsDirectory;
-    config = validateFeatureWorkflow({ ...defaults, requestsDirectory: directory, template: `${directory}/_templates/feature-request.md` });
+    try { config = validateFeatureWorkflow({ ...defaults, requestsDirectory: directory, template: `${directory}/_templates/feature-request.md` }); }
+    catch (error) { throw options.workflowDirectory === undefined ? error : Error(`--workflow-dir ${options.workflowDirectory} cannot be used with the feature folder ${directory}: ${error instanceof Error ? error.message : 'Invalid workflow.'} Choose a workflow folder outside the feature folder, .werk and bin/apps.`); }
   }
   const prompts: Record<string, string> = {};
   for (const stage of ['ready', 'done'] as const) {
@@ -78,7 +89,6 @@ async function prepareFeatureAuthoring(directory: string, options: AuthoringSetu
   }
   if ([config.template, config.base, config.readyCheck, config.doneCheck, ...Object.keys(prompts)].some(path => [featureWorkflowPath, authoringScriptPath, authoringManifestPath].includes(path.toLowerCase()))) throw Error('Workflow files must not replace the workflow configuration or authoring kit.');
   const template = await readAuthoringFile(root, config.template);
-  const warnings: AuthoringWarning[] = [];
   if (template !== undefined) {
     try {
       validateFeatureTemplate(template);

@@ -19,8 +19,9 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     # Native Windows containment and multi-clone Git journeys need extra time.
-    # Keep per-test/command deadlines; allow the full suite to report failures.
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 40 || 15 }}
+    # macOS runner variation also needs room for the complete lifecycle suite.
+    # Keep per-test/command deadlines and leave time to retain failure diagnostics.
+    timeout-minutes: ${{ matrix.os == 'windows-latest' && 50 || matrix.os == 'macos-latest' && 25 || 15 }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -36,13 +37,13 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Run full check (POSIX)
         if: matrix.os != 'windows-latest'
-        timeout-minutes: 11
+        timeout-minutes: ${{ matrix.os == 'macos-latest' && 20 || 11 }}
         run: |
           set -o pipefail
           npm run check 2>&1 | tee "$RUNNER_TEMP/werk-check.log"
       - name: Run full check (Windows)
         if: matrix.os == 'windows-latest'
-        timeout-minutes: 36
+        timeout-minutes: 46
         run: |
           $PSNativeCommandUseErrorActionPreference = $false
           npm run check 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/werk-check.log"

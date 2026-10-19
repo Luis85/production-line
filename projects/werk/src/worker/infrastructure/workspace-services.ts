@@ -27,12 +27,12 @@ import { modelFor } from './providers.js';
 import { createToolRuntime } from './tool-runtime.js';
 import { createDevelopmentRuntime } from './candidate-tools.js';
 import { executeModel, legacyModelReply, modelCapabilities, type StructuredModel } from '../application/model-contract.js';
-import { DEFAULT_MAX_RUNTIME_MS, DEFAULT_MAX_TOOL_CALLS, DEFAULT_COMMAND_TIMEOUT_MS, candidateInspectionFields, type CandidateInspectionLimits } from '../application/execution-policy.js';
+import { DEFAULT_MAX_RUNTIME_MS, DEFAULT_MAX_TOOL_CALLS, DEFAULT_COMMAND_TIMEOUT_MS, candidateLimitFields, type CandidateLimits } from '../application/execution-policy.js';
 import { definitionStorage, sessionCatalogStorage, localTaskStorage, approvedTaskFiles } from './journal/workspace-files.js';
 
 type ModelSettings = Pick<WorkerSettingsPort, 'toolPolicy'> & { readonly value: Pick<WorkerSettingsPort['value'], 'execution' | 'repositories'> };
 /** Frozen dispatch values, else current settings. Absent dispatch values resolve to defaults in the runtime. */
-const candidateLimits = (source: Partial<CandidateInspectionLimits>): Partial<CandidateInspectionLimits> => Object.fromEntries(candidateInspectionFields.filter(field => source[field] !== undefined).map(field => [field, source[field]]));
+const candidateLimits = (source: Partial<CandidateLimits>): Partial<CandidateLimits> => Object.fromEntries(candidateLimitFields.filter(field => source[field] !== undefined).map(field => [field, source[field]]));
 export type WorkspaceProviderFactory = (...args: Parameters<typeof modelFor>) => (ConversationModel & Partial<StructuredModel>) | undefined;
 
 /** Concrete provider/tool construction stays at the worker edge. Each call observes current grants. */

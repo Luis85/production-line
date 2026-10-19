@@ -8,6 +8,7 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { commands } from '../../scripts/runtime/portable/commands.mjs';
+import { waitForWorker } from '../../scripts/runtime/portable/worker-commands.mjs';
 import { request, RequestTimeoutError, DEFAULT_REQUEST_TIMEOUT_MS } from '../../src/worker/dist/shared/http/client.js';
 
 const entry = new URL('../../scripts/runtime/portable/cli.mjs', import.meta.url).href;
@@ -78,7 +79,28 @@ test('Git-backed worker commands wait longer than ordinary API calls', () => {
   const catalog = commands('worker');
   for (const name of ['shared sync', 'shared configure', 'repository sync']) assert.ok(catalog[name].timeoutMs >= 60000, name);
   for (const name of ['shared status', 'repository status', 'settings get']) assert.equal(catalog[name].timeoutMs, undefined, name);
-  assert.equal(DEFAULT_REQUEST_TIMEOUT_MS, 10000);
+  assert.equal(DEFAULT_REQUEST_TIMEOUT_MS, 30000);
+});
+
+test('settings set waits as long as Git operations because repository and worktree validation can be slow', () => {
+  const catalog = commands('worker');
+  assert.equal(catalog['settings set'].timeoutMs, catalog['shared sync'].timeoutMs);
+  assert.equal(catalog['settings set'].timeoutMs, 120000);
+  assert.equal(catalog['settings get'].timeoutMs, undefined);
+  assert.equal(commands('factory')['settings set'], undefined);
+});
+
+test('the client default, the poll default and the help text agree on 30 s; Git commands keep 120 s', async () => {
+  const seen = [];
+  await waitForWorker(async timeout => { seen.push(timeout); return { session: { status: 'waiting_input' } }; }, 'task', '60000', undefined);
+  assert.deepEqual(seen, [30000], 'a feature wait poll uses the same default as every other call');
+  seen.length = 0;
+  await waitForWorker(async timeout => { seen.push(timeout); return { session: { status: 'waiting_input' } }; }, 'task', '60000', 5000);
+  assert.deepEqual(seen, [5000], 'an explicit --request-timeout-ms still wins');
+  const help = JSON.parse((await run(['help'])).stdout);
+  assert.match(help.requestTimeout, /waits 30 s by default and 120 s for Git operations/);
+  assert.match(help.requestTimeout, /settings set/);
+  assert.doesNotMatch(help.requestTimeout, /10 s/);
 });
 
 test('the shared HTTP client reports its own timeout instead of a raw abort', async t => {

@@ -97,7 +97,7 @@ export async function task(workspace: WorkspaceContext, input: unknown, referenc
       const message = text(requestMessage, "message", 8000);
       if (body.action === "create") {
         const files = body.files === undefined ? undefined : object(body.files, 'Approved task files', ['repository', 'paths']);
-        const approved = files ? { repository: text(files.repository, 'repository', 4096), paths: validateApprovedPaths(files.paths) } : undefined;
+        const approved = files ? { repository: text(files.repository, 'repository', 4096), paths: validateApprovedPaths(files.paths, 'Approved paths', { folders: true }) } : undefined;
         // File request IDs and their generated session IDs share the task namespace.
         const aliasesPendingPreparation = (!approved && workspace.board.preparation(id)) ||
           (id.startsWith("local-") && workspace.board.preparation(id.slice(6)));

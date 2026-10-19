@@ -76,6 +76,14 @@ test('same readiness parser extracts actual criteria and freezes the meaningful 
   assert.match(result.inputHash,/^[a-f0-9]{64}$/);
   assert.equal(validateFeatureReadiness(request.replace('status: ready','status: draft'),ready(),'codex-cli',template).inputHash,result.inputHash);
 });
+test('shared readiness accepts implementation folder entries and refuses unsafe or protected folders',()=>{
+  const folder=validateFeatureReadiness(request.replace('  - src/navigation.ts','  - src/navigation/'),ready(),'codex-cli',template,{configuration:defaultFeatureWorkflow()});
+  assert.equal(folder.valid,true,JSON.stringify(folder.errors));assert.deepEqual(folder.input.paths,['src/navigation/']);
+  for(const path of ['/','.git/','src/.cache/','config/secrets/','features/','feature-reviews/']){
+    const result=validateFeatureReadiness(request.replace('  - src/navigation.ts','  - '+JSON.stringify(path)),ready(),'codex-cli',template,{configuration:defaultFeatureWorkflow()});
+    assert.equal(result.valid,false,path);
+  }
+});
 test('draft placeholders, malformed sections, implicit scope and managed records never pass readiness',()=>{
   assert.equal(validateFeatureReadiness(template,ready(),'codex-cli',template).valid,false);
   for(const changed of [request.replace('id: keyboard-navigation\n',''),request.replace('mode: patch','mode: chat'),request.replace('  - src/navigation.ts','  - ../outside.ts'),request.replace('  - src/navigation.ts','  - src/navigation.ts\n  - SRC/navigation.ts'),request.replace('status: ready','status: running'),request.replace('status: ready','status: ready\nwerk: {}'),request.replace('## Context\nPreserve existing pointer interactions.','## Context\n<!-- later -->'),request.replace('- [ ] Arrow keys move selection.\n- Enter opens the selected result.','- [ ] <!-- later -->'),request.replace('## Verification plan','## Different heading')]) assert.equal(validateFeatureReadiness(changed,ready(),'codex-cli',template).valid,false,changed);

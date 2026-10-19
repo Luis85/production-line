@@ -5,7 +5,7 @@ export type { ModelResult } from './model-result.js';
 import { validateModelSessionBinding, type ModelSessionBinding } from './model-session.js';
 import { modelContext, type ModelContextCheckpoint, type ProjectModelContext } from './model-context.js';
 import { candidateToolNames, type ToolBudgetEvidence, type ToolManifest } from './tool-runtime.js';
-import { candidateInspectionBounds, candidateInspectionFields, DEFAULT_MAX_RUNTIME_MS, MAX_MAX_RUNTIME_MS, MAX_TOOL_CALLS, MAX_COMMAND_TIMEOUT_MS, type CandidateInspectionLimits } from './execution-policy.js';
+import { candidateInspectionFields, candidateLimitBounds, candidateLimitFields, candidateReviewFields, DEFAULT_MAX_RUNTIME_MS, MAX_MAX_RUNTIME_MS, MAX_TOOL_CALLS, MAX_COMMAND_TIMEOUT_MS, type CandidateLimits } from './execution-policy.js';
 import type { ChatMessage, ConversationModel } from './conversation.js';
 import type { ProviderUsage } from './run-evidence.js';
 export interface ModelCapabilities { continuation: 'worker_context_replay' | 'provider_session'; nativeResume: boolean; streaming: false; tools: 'none' | 'granted' | 'provider_native'; structuredQuestions: 'werk_protocol_v1'; usage: 'provider_reported_when_available'; usageScope: 'invocation'; cost: 'provider_reported_estimate_or_unavailable'; }
@@ -13,7 +13,7 @@ export const modelCapabilities: ModelCapabilities = Object.freeze({ continuation
 export interface ModelProvider { id: string; model: string; instruction: string; effort?: ModelEffort; }
 export interface ModelRequest {
   schemaVersion: 1 | 2; session?: ModelSessionBinding; sessionRecovery?: { operationId: string; priorTurnId: string; priorDispatchDigest: string }; contextCheckpoint?: ModelContextCheckpoint; operation: 'chat' | 'patch'; messages: ChatMessage[];
-  provider: ModelProvider; policy: { tools: 'none' | 'granted' | 'provider_native'; filesystem: 'read_only' | 'worker_grants' | 'provider_permissions'; continuation: 'worker_context_replay' | 'provider_session'; sessionContext?: true; maxRuntimeMs?: number; maxToolCalls?: number; commandTimeoutMs?: number; development?: true } & Partial<CandidateInspectionLimits>;
+  provider: ModelProvider; policy: { tools: 'none' | 'granted' | 'provider_native'; filesystem: 'read_only' | 'worker_grants' | 'provider_permissions'; continuation: 'worker_context_replay' | 'provider_session'; sessionContext?: true; maxRuntimeMs?: number; maxToolCalls?: number; commandTimeoutMs?: number; development?: true } & Partial<CandidateLimits>;
   toolManifest?: ToolManifest;
   capabilities: ModelCapabilities; interactionProtocol: 1; protocolInstructions: string; renderedPrompt: string;
 }
@@ -22,7 +22,7 @@ export interface ModelRequest {
  */
 export interface ModelInvocationControl { beforeCall(): void; observeToolBudget?(evidence: ToolBudgetEvidence): void; }
 export interface StructuredModel extends ConversationModel {
-  readonly sessionBinding?: ModelSessionBinding; loadProjectContext?(signal: AbortSignal): Promise<ProjectModelContext | null>; readonly configuration: ModelProvider; readonly capabilities: ModelCapabilities; readonly toolManifest?: ToolManifest; readonly executionPolicy?: { maxToolCalls?: number; commandTimeoutMs?: number } & Partial<CandidateInspectionLimits>;
+  readonly sessionBinding?: ModelSessionBinding; loadProjectContext?(signal: AbortSignal): Promise<ProjectModelContext | null>; readonly configuration: ModelProvider; readonly capabilities: ModelCapabilities; readonly toolManifest?: ToolManifest; readonly executionPolicy?: { maxToolCalls?: number; commandTimeoutMs?: number } & Partial<CandidateLimits>;
   /** Lazy metadata only: resolve a manifest using the same frozen budgets as dispatch. */
   toolManifestFor?(policy: ModelRequest['policy']): ToolManifest | undefined;
   execute(request: ModelRequest, signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void, control?: ModelInvocationControl): Promise<ModelResult>;
@@ -41,7 +41,7 @@ export function prepareModelRequest(model: ConversationModel, input: ChatMessage
   const native = typed.capabilities?.tools === 'provider_native';
   const policy: ModelRequest['policy'] = { tools: native ? 'provider_native' : 'none', filesystem: native ? 'provider_permissions' : 'read_only', continuation: session ? typed.capabilities?.continuation ?? 'worker_context_replay' : 'worker_context_replay', ...(session ? { sessionContext: true as const } : {}), maxRuntimeMs, ...executionPolicy };
   // Candidate source bounds are frozen only into implementation dispatches.
-  const candidate = Object.fromEntries(candidateInspectionFields.filter(field => limits?.[field] !== undefined).map(field => [field, limits![field]]));
+  const candidate = Object.fromEntries(candidateLimitFields.filter(field => limits?.[field] !== undefined).map(field => [field, limits![field]]));
   const available = typed.toolManifestFor ? typed.toolManifestFor({ ...policy, ...candidate }) : typed.toolManifest;
   const toolManifest = available?.tools.length ? structuredClone(available) : undefined;
   if (context.checkpoint && !toolManifest?.tools.some(tool => tool.name === 'werk_session_history')) throw new ProviderModelError('protocol');
@@ -92,15 +92,19 @@ export async function legacyModelReply(model: StructuredModel, input: ChatMessag
 const deadline = (value: unknown, max: number) => Number.isSafeInteger(value) && Number(value) >= 1 && Number(value) <= max;
 const deadlines = (value: unknown, keys: (key: string) => boolean) => object(value) && Object.entries(value).every(([key, ms]) => keys(key) && deadline(ms, MAX_COMMAND_TIMEOUT_MS));
 /** Values come from settings, so they stay inside the editable ranges and the file bound stays inside the total. */
-function validCandidateLimits(value: Record<string, unknown>, required: boolean): boolean {
-  return candidateInspectionFields.every(field => value[field] === undefined ? !required : Number.isSafeInteger(value[field]) && Number(value[field]) >= candidateInspectionBounds[field].minimum && Number(value[field]) <= candidateInspectionBounds[field].maximum)
-    && (value.candidateFileMaxBytes === undefined || value.candidateSourceMaxBytes === undefined || Number(value.candidateFileMaxBytes) <= Number(value.candidateSourceMaxBytes));
+function validCandidateLimits(value: Record<string, unknown>, required: boolean, fields: readonly (keyof CandidateLimits)[] = candidateLimitFields): boolean {
+  return fields.every(field => value[field] === undefined ? !required : Number.isSafeInteger(value[field]) && Number(value[field]) >= candidateLimitBounds[field].minimum && Number(value[field]) <= candidateLimitBounds[field].maximum)
+    && (value.candidateFileMaxBytes === undefined || value.candidateSourceMaxBytes === undefined || Number(value.candidateFileMaxBytes) <= Number(value.candidateSourceMaxBytes))
+    && (value.candidateApprovedFileMaxBytes === undefined || value.candidateApprovedTotalMaxBytes === undefined || Number(value.candidateApprovedFileMaxBytes) <= Number(value.candidateApprovedTotalMaxBytes));
 }
+/** Optional limit evidence names exactly one group of fields, all present. */
+const validLimitGroup = (value: unknown, fields: readonly (keyof CandidateLimits)[]) => value === undefined || object(value) && Object.keys(value).every(key => (fields as string[]).includes(key)) && validCandidateLimits(value, true, fields);
 /** Dispatches saved before configurable limits have none; when present they describe only this manifest's tools. */
 function validManifestLimits(manifest: ToolManifest): boolean {
   const limits = manifest.limits, names = new Set(Array.isArray(manifest.tools) ? manifest.tools.map(tool => tool?.name) : []);
-  return object(limits) && Object.keys(limits).every(key => ['maxCalls', 'windowMs', 'callTimeoutMs', 'presetTimeoutMs', 'candidateInspection'].includes(key))
-    && (limits.candidateInspection === undefined || candidateToolNames.some(name => names.has(name)) && object(limits.candidateInspection) && Object.keys(limits.candidateInspection).every(key => (candidateInspectionFields as string[]).includes(key)) && validCandidateLimits(limits.candidateInspection, true))
+  return object(limits) && Object.keys(limits).every(key => ['maxCalls', 'windowMs', 'callTimeoutMs', 'presetTimeoutMs', 'candidateInspection', 'candidateReview'].includes(key))
+    && (limits.candidateInspection === undefined && limits.candidateReview === undefined || candidateToolNames.some(name => names.has(name)))
+    && validLimitGroup(limits.candidateInspection, candidateInspectionFields) && validLimitGroup(limits.candidateReview, candidateReviewFields)
     && deadline(limits.maxCalls, MAX_TOOL_CALLS) && deadline(limits.windowMs, MAX_MAX_RUNTIME_MS)
     && deadlines(limits.callTimeoutMs, key => names.has(key))
     && (limits.presetTimeoutMs === undefined || ((names.has('werk_command_run') || names.has('werk_candidate_check')) && deadlines(limits.presetTimeoutMs, key => /^[a-zA-Z0-9_-]{1,64}$/.test(key))));
@@ -125,7 +129,7 @@ export function requireModelRequest(request: ModelRequest, providerId: string) {
   // Short positive budgets are supported only by internally injected test fixtures. Public settings require at least one second.
   if (request.policy.maxRuntimeMs !== undefined && (!Number.isSafeInteger(request.policy.maxRuntimeMs) || request.policy.maxRuntimeMs < 1 || request.policy.maxRuntimeMs > MAX_MAX_RUNTIME_MS)) throw new ProviderModelError('protocol');
   if (request.policy.maxToolCalls !== undefined && (!Number.isSafeInteger(request.policy.maxToolCalls) || request.policy.maxToolCalls < 1 || request.policy.maxToolCalls > 512) || request.policy.commandTimeoutMs !== undefined && (!Number.isSafeInteger(request.policy.commandTimeoutMs) || request.policy.commandTimeoutMs < 1000 || request.policy.commandTimeoutMs > 3600000) || request.policy.development !== undefined && (request.policy.development !== true || request.operation !== 'patch' || !request.toolManifest?.tools.some(tool => tool.name === 'werk_candidate_apply'))) throw new ProviderModelError('protocol');
-  if (!validCandidateLimits(request.policy, false) || request.policy.development !== true && candidateInspectionFields.some(field => request.policy[field] !== undefined)) throw new ProviderModelError('protocol');
+  if (!validCandidateLimits(request.policy, false) || request.policy.development !== true && candidateLimitFields.some(field => request.policy[field] !== undefined)) throw new ProviderModelError('protocol');
   const expected = request.protocolInstructions + '\nConversation JSON:\n' + JSON.stringify(request.messages.map(({ role, text }) => ({ role, content: text })));
   if (request.renderedPrompt !== expected) throw new ProviderModelError('protocol');
 }

@@ -64,7 +64,9 @@ export const approvedTaskFiles: ApprovedTaskFiles = {
       );
     let bytes = 0;
     for (const path of paths) {
-      const parts = path.split("/");
+      // A folder approval snapshots no contents: the model reads files below it with its tools.
+      const folder = path.endsWith("/"), parts = (folder ? path.slice(0, -1) : path).split("/");
+      let present = true;
       for (let i = 1; i <= parts.length; i++) {
         const entry = join(snapshotRoot, ...parts.slice(0, i));
         const info = await lstat(entry).catch((error) => {
@@ -72,19 +74,20 @@ export const approvedTaskFiles: ApprovedTaskFiles = {
           return null;
         });
         await assertUnambiguousName(join(snapshotRoot, ...parts.slice(0, i - 1)), parts[i - 1], info);
-        if (!info) break;
+        if (!info) { present = false; break; }
         if (
           info?.isSymbolicLink() ||
-          (info && i < parts.length && !info.isDirectory())
+          (info && (i < parts.length || folder) && !info.isDirectory())
         )
           throw new DomainError(
             "invalid_input",
-            "Approved files cannot contain symlinks.",
+            folder ? "Approved folders must be folders without symlinks." : "Approved files cannot contain symlinks.",
           );
       }
       const absolute = resolve(snapshotRoot, path);
       if (relative(snapshotRoot, absolute).startsWith(".."))
         throw new DomainError("invalid_input", "File outside repository");
+      if (folder) { files.push({ path, content: "", existed: present }); continue; }
       let content = "",
         existed = true;
       try {

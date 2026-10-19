@@ -3,14 +3,14 @@ import { lstatSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { chatRepositoryId, type ToolPolicy } from '../application/tool-policy.js';
 import type { DevelopmentRuntime } from '../application/development.js';
-import { resolveCandidateInspectionLimits, resolveToolLimits, type ResolvedToolLimits } from '../application/tool-limits.js';
-import { candidateInspectionFields, type CandidateInspectionLimits } from '../application/execution-policy.js';
+import { resolveCandidateInspectionLimits, resolveCandidateReviewLimits, resolveToolLimits, type ResolvedToolLimits } from '../application/tool-limits.js';
+import { candidateInspectionFields, candidateReviewFields, type CandidateLimits } from '../application/execution-policy.js';
 import { cliToolName } from '../application/cli-tool-policy.js';
 import { candidateToolNames, ToolAccessError, type ToolBudgetEvidence, type ToolManifest, type ToolResult, type ToolRuntime, type ToolWorktreeIdentity } from '../application/tool-runtime.js';
 import { builtinToolOperations, BuiltinToolError, chatRepositoryNote, chatToolDirectory, chatWorkspaceHint, chatWorkspaceNote, type ToolOperation, type ToolRepository } from './builtin-tools.js';
 import { callMcpTool, mcpTransportConfiguration } from './tool-mcp.js';
 
-export interface ToolRuntimeOptions extends Partial<CandidateInspectionLimits> {
+export interface ToolRuntimeOptions extends Partial<CandidateLimits> {
   policy: ToolPolicy;
   currentRevision: () => number;
   /** Private worker state directory. Chat commands start in its chat-workspace child unless a grant opts in to a repository. */
@@ -39,7 +39,7 @@ export function mcpToolName(connection: string, tool: string): string {
 }
 
 /** Deadline evidence names only exposed tools; grant IDs and numbers disclose no private command configuration. */
-function manifestLimits(policy: ToolPolicy, names: string[], mcp: Map<string, number>, limits: ResolvedToolLimits, candidate: Partial<CandidateInspectionLimits>): NonNullable<ToolManifest['limits']> {
+function manifestLimits(policy: ToolPolicy, names: string[], mcp: Map<string, number>, limits: ResolvedToolLimits, candidate: Partial<CandidateLimits>): NonNullable<ToolManifest['limits']> {
   const callTimeoutMs: Record<string, number> = {};
   const commands = policy.builtins.commands.filter(item => item.enabled);
   for (const name of names) {
@@ -52,7 +52,8 @@ function manifestLimits(policy: ToolPolicy, names: string[], mcp: Map<string, nu
   return { maxCalls: limits.maxCalls, windowMs: limits.maxRuntimeMs, callTimeoutMs,
     ...(names.includes('werk_command_run') ? { presetTimeoutMs: { ...limits.presetTimeoutMs } } : {}),
     // Recorded when the invocation captured candidate limits; dispatches prepared without them keep their exact manifest.
-    ...(candidateToolNames.some(name => names.includes(name)) && candidateInspectionFields.some(field => candidate[field] !== undefined) ? { candidateInspection: { ...resolveCandidateInspectionLimits(candidate) } } : {}) };
+    ...(candidateToolNames.some(name => names.includes(name)) && candidateInspectionFields.some(field => candidate[field] !== undefined) ? { candidateInspection: { ...resolveCandidateInspectionLimits(candidate) } } : {}),
+    ...(candidateToolNames.some(name => names.includes(name)) && candidateReviewFields.some(field => candidate[field] !== undefined) ? { candidateReview: { ...resolveCandidateReviewLimits(candidate) } } : {}) };
 }
 const windowText = (ms: number) => ms >= 1000 ? `${Math.floor(ms / 1000)} s` : `${ms} ms`;
 const remainingText = (ms: number) => ms >= 1000 ? `${Math.floor(ms / 1000)} s` : 'less than 1 s';

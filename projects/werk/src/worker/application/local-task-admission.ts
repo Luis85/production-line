@@ -136,7 +136,7 @@ export function admissionInput(host: Pick<LocalTaskRuntime, "sessions" | "settin
       throw new DomainError("unavailable", "Pinned task admission requires the repository worktree service.");
     const repositoryPath = assignment?.path ?? selector;
     if (!isAbsolute(repositoryPath)) throw new DomainError("invalid_input", "Repository must be an absolute project folder or assigned repository.");
-    const allowedPaths = validateApprovedPaths(body.paths);
+    const allowedPaths = validateApprovedPaths(body.paths, 'Approved paths', { folders: true });
     if (
       body.priority !== undefined &&
       body.priority !== 1 &&

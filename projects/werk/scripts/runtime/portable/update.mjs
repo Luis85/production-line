@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { constants } from 'node:fs';
 import { cp, mkdtemp, open, readdir, readFile, realpath, rename, rm, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -11,13 +11,16 @@ import { createPrivate, inputError, privateDirectory, readPrivate } from '../con
 import { exists, restoreSnapshot, snapshotState } from '../maintenance/snapshot.mjs';
 import { latest, newer, published, versionParts } from '../update/remote.mjs';
 import { status, stop } from './lifecycle.mjs';
+import { inventory, replaceInPlace, verifyTree } from './update-in-place.mjs';
 
 /**
  * Guarded self-update for a copied portable app folder (bin/apps/<kind>).
  * The release is verified before anything changes; the app is replaced by two
  * renames inside its parent directory, and the previous folder is retained under
- * bin/apps/.<kind>-update for rollback. State lives outside the app folder and is
- * only read, into a new verified backup. Project files are never written.
+ * bin/apps/.<kind>-update for rollback. With --in-place (explicit, for a folder another
+ * process holds open) the files are replaced inside the folder instead and a verified
+ * copy is retained. State lives outside the app folder and is only read, into a new
+ * verified backup. Project files are never written.
  */
 const execute = promisify(execFile);
 const LOCKS = { worker: 'worker.lock', factory: 'runtime.lock', orchestrator: 'runtime.lock' };
@@ -90,28 +93,9 @@ async function move(from, to) {
       const message = locked
         ? `Could not move ${from} (${error.code}). Another process holds a file or directory open inside it: an editor, indexer or antivirus scan, or a long-running process started in the project folder such as an MCP or language server. Stop it and retry. Nothing was replaced.`
         : `Could not move ${from} (${error.code}). Nothing was replaced.`;
-      throw Object.assign(Error(message), { code: error.code });
+      throw Object.assign(Error(message), { code: error.code, locked });
     }
   }
-}
-async function digestFile(path) {
-  const handle = await open(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
-  try { return createHash('sha256').update(await handle.readFile()).digest('hex'); } finally { await handle.close(); }
-}
-/** The staged folder must equal the release manifest's bin/apps/<kind> entries, byte for byte. */
-async function verifyTree(directory, expected) {
-  const actual = [];
-  async function visit(path) {
-    for (const entry of await readdir(join(directory, path), { withFileTypes: true })) {
-      const child = path ? `${path}/${entry.name}` : entry.name;
-      if (entry.isDirectory()) await visit(child);
-      else if (entry.isFile()) actual.push(child);
-      else throw Error(`Staged app contains a link or special file: ${child}`);
-    }
-  }
-  await visit('');
-  if (JSON.stringify(actual.sort()) !== JSON.stringify(expected.map(file => file.path).sort())) throw Error('Staged app inventory differs from the release manifest.');
-  for (const file of expected) if (await digestFile(join(directory, ...file.path.split('/'))) !== file.sha256) throw Error(`Staged app integrity mismatch: ${file.path}`);
 }
 async function target(options, fetcher) {
   if (options.from) {
@@ -221,7 +205,10 @@ async function restartAfter(launch, options, app) {
   if (launch.mode === 'run') return { restarted: false, reason: 'foreground', message: 'It ran in the foreground; start it again from its terminal or service manager.' };
   return relaunch(app, launch);
 }
-/** After a failure that left the original folder active, bring back an instance this command stopped. */
+/**
+ * After a failure that left the original folder active, bring back an instance this command stopped.
+ * @returns {Promise<never>} always rethrows the error
+ */
 async function recover(error, owned, options, app) {
   if (error.recoveryUnsafe || !owned?.launch || options['no-restart'] || owned.launch.mode !== 'start') throw error;
   await owned.release().catch(() => {});
@@ -256,6 +243,21 @@ async function replaceAndRecord(paths, incoming, retained, entry) {
       throw error;
     }
   } finally { await history.discard(); }
+}
+/** Activate by folder swap, or with --in-place by verified file replacement; incoming is { root, files } (files only for in-place). */
+async function activate(paths, incoming, retained, entry, inPlace) {
+  if (!inPlace) { await replaceAndRecord(paths, incoming.root, retained, entry); return null; }
+  const history = await prepareHistory(paths, { ...entry, method: 'in-place' });
+  // apply only moves forward; a rollback alternates, and an unparsable (pre-release) pair is treated as a downgrade.
+  let upgrade = entry.operation === 'apply';
+  if (!upgrade) try { upgrade = newer(entry.to, entry.from); } catch { /* Keep downgrade ordering. */ }
+  try { return await replaceInPlace(paths.app, join(paths.home, retained), incoming.root, incoming.files, history, upgrade); }
+  finally { await history.discard(); }
+}
+/** A folder another process holds open cannot be renamed; name the explicit alternative. */
+function suggestInPlace(error, command) {
+  if (error.locked) error.message += ` If that process must keep running, run ${command} --stop --in-place to replace the files inside the folder instead of renaming it.`;
+  return error;
 }
 
 export async function checkUpdate(kind, root, options = {}, { fetcher = fetch } = {}) {
@@ -302,14 +304,16 @@ export async function applyUpdate(kind, root, state, options = {}, { fetcher = f
     if (JSON.parse(preflight.stdout).application !== kind) throw Error('Candidate preflight reported another application. Nothing was replaced.');
     owned = await quiesce(kind, state, options, projectDir, log, paths.app);
     const backup = owned.canonical ? await backupState(owned, owned.lock, current).catch(error => recover(error, owned, options, paths.app)) : null;
-    const retained = `${current}-${stamp()}`;
-    await replaceAndRecord(paths, staging, retained, { operation: 'apply', at: new Date().toISOString(), from: current, to: found.version, retained, backup: backup?.backup ?? null }).catch(error => recover(error, owned, options, paths.app));
-    staging = undefined;
+    const retained = `${current}-${stamp()}`, inPlace = options['in-place'] === true;
+    if (inPlace) log('Replacing files inside the app folder (--in-place).');
+    const replaced = await activate(paths, { root: staging, files }, retained, { operation: 'apply', at: new Date().toISOString(), from: current, to: found.version, retained, backup: backup?.backup ?? null }, inPlace)
+      .catch(error => recover(suggestInPlace(error, 'update apply'), owned, options, paths.app));
+    if (!inPlace) staging = undefined; // The swap consumed it; an in-place copy source is removed below.
     await owned.release();
     const restart = await restartAfter(owned.launch, options, paths.app);
     owned = undefined;
-    return { ok: !restart.error, updated: true, application: kind, version: found.version, previous: current, retained: join(paths.home, retained), backup: backup?.backup ?? null, restart,
-      next: 'Project files and integrations were not changed; review integrations plan for new templates. update rollback swaps the retained folder back.' };
+    return { ok: !restart.error, updated: true, application: kind, version: found.version, previous: current, retained: join(paths.home, retained), backup: backup?.backup ?? null, restart, method: inPlace ? 'in-place' : 'swap', inPlace: replaced,
+      next: `Project files and integrations were not changed; review integrations plan for new templates. ${inPlace ? 'update rollback --in-place restores the retained files.' : 'update rollback swaps the retained folder back.'}` };
   } finally {
     await owned?.release().catch(() => {});
     if (staging) await rm(staging, { recursive: true, force: true }).catch(() => {});
@@ -327,16 +331,19 @@ export async function rollbackUpdate(kind, root, state, options = {}, { log = ()
     if (await appVersion(paths.app, kind) !== current) throw inputError('The installed app changed while preparing rollback. Check update status and retry.');
     const last = (await readHistory(paths)).entries.at(-1);
     if (!last || typeof last.retained !== 'string' || !/^[0-9A-Za-z][0-9A-Za-z.-]*$/.test(last.retained) || !await exists(join(paths.home, last.retained))) throw inputError('No retained app folder is available for rollback.');
-    const incoming = join(paths.home, last.retained), version = await appVersion(incoming, kind);
+    const incoming = join(paths.home, last.retained), version = await appVersion(incoming, kind), inPlace = options['in-place'] === true;
     if (!await exists(join(incoming, 'cli.mjs'))) throw inputError(`Retained folder ${incoming} is incomplete.`);
+    // In place, the retained folder is the copy source and stays; its inventory is fixed before stopping the app.
+    const files = inPlace ? await inventory(incoming) : undefined;
     owned = await quiesce(kind, state, options, projectDir, log, paths.app);
     const retained = `${current}-${stamp()}`;
     // Rolling back again swaps the newer folder in: each entry retains what it replaced.
-    await replaceAndRecord(paths, incoming, retained, { operation: 'rollback', at: new Date().toISOString(), from: current, to: version, retained, backup: null }).catch(error => recover(error, owned, options, paths.app));
+    const replaced = await activate(paths, { root: incoming, files }, retained, { operation: 'rollback', at: new Date().toISOString(), from: current, to: version, retained, backup: null }, inPlace)
+      .catch(error => recover(suggestInPlace(error, 'update rollback'), owned, options, paths.app));
     await owned.release();
     const restart = await restartAfter(owned.launch, options, paths.app);
     owned = undefined;
-    return { ok: !restart.error, rolledBack: true, application: kind, version, previous: current, retained: join(paths.home, retained), restart,
+    return { ok: !restart.error, rolledBack: true, application: kind, version, previous: current, retained: join(paths.home, retained), restart, method: inPlace ? 'in-place' : 'swap', inPlace: replaced,
       ...(last.operation === 'apply' && last.backup ? { backup: last.backup } : {}),
       next: 'State was not changed. If the newer version changed it, stop the app, restore the update backup with update restore --from BACKUP --to NEW_STATE_DIRECTORY, and start with --state-dir NEW_STATE_DIRECTORY.' };
   } finally {

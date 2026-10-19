@@ -99,11 +99,17 @@ test('host refuses a replaced pinned directory before spawning its approved payl
 
 test('EOF during host setup cannot spawn a payload after its lifetime lease ended', { timeout: 30000 }, async t => {
   const f = await setup(t);
-  const entry = fileURLToPath(new URL('../../src/worker/dist/worker/infrastructure/processes/service-host.js', import.meta.url));
-  const host = f.lifetime.launch(process.execPath, [entry], { cwd: f.directory, env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot }, mode: 'contained', observation: 'ignore' });
+  const host = f.lifetime.launch(process.execPath, [fixture, 'validating-host'], { cwd: f.directory, env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot }, mode: 'contained', observation: 'ignore' });
   let text = ''; host.stdout.setEncoding('utf8').on('data', value => { text += value; }); host.stderr.resume();
-  host.stdin.end(JSON.stringify({ preset: f.preset, scope: f.scope, expiresAt: new Date(Date.now() + f.preset.ttlMs).toISOString() }) + '\n');
-  await f.lifetime.closed(host); assert.equal(text.includes('"type":"started"'), false); assert.equal(text.includes('"ready":true'), false);
+  host.stdin.write(JSON.stringify({ preset: f.preset, scope: f.scope, expiresAt: new Date(Date.now() + f.preset.ttlMs).toISOString() }) + '\n');
+  await until(() => text.includes('"type":"fixture-validation-pending"'), Boolean, 'The host did not enter its real directory validation.');
+  assert.equal(text.includes('"type":"started"'), false, 'Validation must still be held before ending the lease.');
+  host.stdin.end();
+  await f.lifetime.closed(host);
+  const events = text.trim().split('\n').map(line => JSON.parse(line));
+  assert.ok(events.some(event => event.type === 'exit' && event.value.reason === 'parent_lost'), 'The actual host must acknowledge lease EOF.');
+  assert.equal(events.some(event => event.type === 'started'), false);
+  assert.equal(events.some(event => event.type === 'output' && readiness(event.text)), false);
 });
 
 test('adapter forces its live stubborn host and descendants after graceful stop is ignored', { timeout: 30000 }, async t => {
