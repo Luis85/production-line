@@ -102,6 +102,7 @@ export function createToolAccessEditor(ports: EditorPorts) {
       const label = tool.name || tool.id;
       if (tool.id.length > 48) return 'Use at most 48 characters for each CLI tool ID.';
       if (!absolute(tool.executable.trim())) return `Enter an absolute executable path for CLI tool ${label}.`;
+      if (/(?:^|[\\/])cmd\.exe$/i.test(tool.executable.trim())) return 'CLI tools cannot run cmd.exe, because it would parse model arguments as shell syntax. Use a command preset, or call an interpreter such as node.exe directly.';
       if (/\.(?:bat|cmd)$/i.test(tool.executable.trim())) return 'CLI tools cannot run .bat or .cmd files. Use an interpreter such as node.exe and pass the script as a fixed argument.';
       let rules: CliCommandRule[]; try { rules = parseCliRules(tool.commands); } catch (failure) { return `${label}: ${(failure as Error).message}`; }
       if (!rules.length) return `Allow at least one command for CLI tool ${label}.`;

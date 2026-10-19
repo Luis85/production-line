@@ -160,9 +160,11 @@ function windowsCommandLine(executable: string, args: string[]): string | null {
 /**
  * Windows launch plan for a contained process: Windows PowerShell runs the job
  * supervisor above, which creates the real executable inside a kill-on-close job.
- * Paths and arguments travel as base64 JSON, never as script text.
+ * Paths and arguments travel as base64 JSON, never as script text. A cmd.exe command
+ * line is built verbatim only when the caller states that every argument is
+ * operator-fixed; otherwise cmd.exe keeps the standard quoting.
  */
-export function windowsContainment(executable: string, args: string[], env: NodeJS.ProcessEnv): { executable: string; args: string[]; env: NodeJS.ProcessEnv } {
+export function windowsContainment(executable: string, args: string[], env: NodeJS.ProcessEnv, verbatimCmd = false): { executable: string; args: string[]; env: NodeJS.ProcessEnv } {
   const systemRoot = process.env.SystemRoot;
   if (!systemRoot || !win32.isAbsolute(systemRoot)) throw Error('Windows SystemRoot is unavailable');
   const powershell = win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
@@ -187,6 +189,6 @@ export function windowsContainment(executable: string, args: string[], env: Node
   return {
     executable: powershell,
     args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(supervisor, 'utf16le').toString('base64')],
-    env: { ...supervisorEnv, WERK_PROVIDER_LAUNCH: Buffer.from(JSON.stringify({ executable, arguments: args, commandLine: windowsCommandLine(executable, args) ?? undefined, restoreEnvironment }), 'utf8').toString('base64') },
+    env: { ...supervisorEnv, WERK_PROVIDER_LAUNCH: Buffer.from(JSON.stringify({ executable, arguments: args, commandLine: (verbatimCmd ? windowsCommandLine(executable, args) : null) ?? undefined, restoreEnvironment }), 'utf8').toString('base64') },
   };
 }

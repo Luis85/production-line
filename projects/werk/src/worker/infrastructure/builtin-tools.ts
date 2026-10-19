@@ -243,7 +243,7 @@ export function builtinToolOperations(options: BuiltinToolOptions): ToolOperatio
     const workspace = chat && chatRepositoryId(preset) === undefined, hint = workspace ? ' ' + chatWorkspaceHint : '';
     check(signal);
     try {
-      const command = await runApprovedToolProcess(preset.executable, preset.args, { cwd, signal, timeoutMs: limits.presetTimeoutMs[preset.id], maxOutputBytes: 32768 });
+      const command = await runApprovedToolProcess(preset.executable, preset.args, { cwd, signal, timeoutMs: limits.presetTimeoutMs[preset.id], maxOutputBytes: 32768, fixedArguments: true });
       return output({ preset: preset.id, exitCode: command.exitCode, stdout: command.stdout.toString('utf8'), stderr: command.stderr.toString('utf8'), ...(chat ? { workingDirectory: where(preset) } : {}), ...(workspace && command.exitCode !== 0 ? { hint: chatWorkspaceHint } : {}) });
     } catch (error) {
       if (error instanceof ProcessRunError) throw new BuiltinToolError(`Command stopped (${error.reason}); no automatic retry was made.${hint}`);
