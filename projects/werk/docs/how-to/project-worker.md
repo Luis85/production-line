@@ -278,8 +278,12 @@ installs the offline authoring kit, and it also:
 - reports `intake: { mode: "local", template, commands, next }` instead of the shared
   connection steps.
 
-`mode: patch` needs an explicit `paths` list, so copy the template outside the
-feature folder and uncomment and edit `paths` first. Then create, check and queue it:
+`mode: patch` needs an explicit `paths` list (`feature create` and `feature validate`
+refuse a request without one), so copy the template, uncomment and edit `paths`, then
+create, check and queue it. Keep the copy outside the feature folder: the worker scans
+every file in that folder, so an unedited copy there is reported as an error and would
+stay as a second request next to the one `feature create` makes. The template's
+operator instructions are front-matter comments, so they are never sent to the model.
 
 ```bash
 cp features/_templates/local-request.md request-draft.md   # edit title, paths and body

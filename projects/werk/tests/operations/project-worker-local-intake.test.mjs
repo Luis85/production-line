@@ -18,7 +18,7 @@ test('init --intake local writes a local request template, records the choice an
   const cwd = await temporary(t, 'werk-local-init-'), result = await init(cwd, '--intake', 'local', '--features-dir', 'requests', '--provider', 'claude-cli');
   const template = join(cwd, 'requests/_templates/local-request.md'), raw = await read(template), data = front(raw);
   assert.equal(data.templateId, undefined); assert.equal(data.status, 'draft'); assert.equal(data.mode, 'patch'); assert.equal(data.provider, 'claude-cli'); assert.equal(data.schemaVersion, 1);
-  assert.equal(data.paths, undefined); assert.match(raw, /^# paths:\n#   - src\/example\.ts\n#   - docs\/$/m); assert.match(raw, /^# definitionRef: /m);
+  assert.equal(data.paths, undefined); assert.doesNotMatch(raw.split(/^---$/m)[2], /Ready to queue|feature create|templateId/, 'Operator instructions stay out of the body sent to the model.'); assert.deepEqual(raw.split(/^---$/m)[2].match(/^#{1,2} .*$/gm), ['# Goal', '## Acceptance criteria', '## Context']); assert.match(raw.split(/^---$/m)[1], /OUTSIDE the feature folder/); assert.match(raw, /^# paths:\n#   - src\/example\.ts\n#   - docs\/$/m); assert.match(raw, /^# definitionRef: /m);
   assert.deepEqual(JSON.parse(await read(join(cwd, '.werk/worker.json'))).features, { directory: 'requests', provider: 'claude-cli', pollMs: 1000, intake: 'local' });
   assert.equal(result.intake.mode, 'local'); assert.equal(result.intake.connectionRequired, false); assert.equal(result.intake.template, template);
   assert.match(result.intake.commands.create, /feature create --name \S+ --markdown \S+/); assert.match(result.intake.commands.validate, /feature validate --name/); assert.match(result.intake.commands.submit, /feature submit --name \S+ --if-match/);
@@ -62,7 +62,9 @@ test('a request created from the local template is accepted by local folder inta
   await writeFile(join(features, 'team.md'), (await read(join(features, '_templates/feature-request.md'))).replace('status: draft', 'status: ready')); await service.tick(true);
   assert.equal((await service.list()).files.find(item => item.name === 'team.md').shared, true, 'The shared template carries templateId and is skipped by folder intake.');
   assert.equal(submitted.length, 1);
-  await assert.rejects(service.action({ action: 'create', name: 'bare.md', markdown: template }), /explicit paths list/);
+  await assert.rejects(service.action({ action: 'create', name: 'bare.md', markdown: template }), /explicit paths list. Set paths: list the approved files or folders.*uncomment the paths example/);
+  await writeFile(join(features, 'copy.md'), template); await service.tick(true);
+  assert.match((await service.list()).files.find(item => item.name === 'copy.md').error, /explicit paths list/, 'An unedited copy inside the folder is an error, the reason to keep copies outside it.');
   } finally { await service.close(); }
 });
 
