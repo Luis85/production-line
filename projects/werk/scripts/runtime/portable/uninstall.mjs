@@ -1,4 +1,4 @@
-import { lstat, mkdtemp, open, realpath, rename, rmdir, unlink } from 'node:fs/promises';
+import { lstat, mkdtemp, open, realpath, rename, rmdir, stat as follow, unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createPrivate, inputError } from '../config.mjs';
@@ -140,6 +140,8 @@ export async function uninstallWorker(root, options, state, flags) {
   // The running CLI may be the app folder this command removes last; load what the error path needs now.
   await import(pathToFileURL(join(root, 'src/worker/dist/shared/errors.js')).href);
   const self = within(join(project, 'bin/apps/worker'), await realpath(root));
+  // A file named as the state folder is reported as kept by --dry-run and footprint; --confirm stops before changing anything.
+  if (flags.confirm && await info(state) && !(await follow(state).catch(() => null))?.isDirectory()) throw inputError(`The selected state directory ${state} is not a folder, so uninstall cannot tell what the worker wrote. Pass the worker's state folder with --state-dir or WERK_WORKER_STATE_DIR (by default .werk/worker), then run uninstall --confirm again; uninstall --dry-run reports the path as kept.`);
   const live = await status('worker', state);
   if (flags.confirm && live.state === 'unreachable') throw inputError(live.action);
   const running = live.state !== 'stopped';

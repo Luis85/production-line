@@ -14,13 +14,15 @@ async function record(kind, state) {
   if (value.kind !== kind) throw inputError('State belongs to another application. Choose a separate --state-dir.');
   return value;
 }
+/** A missing state file. A state path that is a file makes POSIX report ENOTDIR for its entries: nothing runs from it either. */
+export const stateAbsent = error => error?.code === 'ENOENT' || error?.code === 'ENOTDIR';
 export async function status(kind, state) {
   let value;
   try { value = await record(kind, state); }
   catch (error) {
-    if (error.code !== 'ENOENT') throw error;
+    if (!stateAbsent(error)) throw error;
     for (const name of ['worker.lock', 'runtime.lock']) {
-      if (await lstat(join(state, name)).catch(error => { if (error.code !== 'ENOENT') throw error; })) return { state: 'unreachable', kind, stateDirectory: state, action: 'Startup may be in progress. After a crash, verify the old process has exited before removing its lock.' };
+      if (await lstat(join(state, name)).catch(error => { if (!stateAbsent(error)) throw error; })) return { state: 'unreachable', kind, stateDirectory: state, action: 'Startup may be in progress. After a crash, verify the old process has exited before removing its lock.' };
     }
     return { state: 'stopped', kind, stateDirectory: state };
   }

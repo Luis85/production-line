@@ -104,20 +104,21 @@ export const lf = text => text?.replace(/\r\n/g, '\n');
  * files, tracked files and nested Git repositories, submodules or worktrees (any
  * directory with a `.git` entry, in any letter case) stay, and no walk ever enters an
  * entry named `.git`; the result counts what stayed and why. Paths in `skip` (absolute;
- * entries the plan keeps, such as an edited template, and guard files) stay without a
- * count, since the plan reports them itself. With `dryRun` nothing changes and the
- * result predicts the removal. `hold` is the real path of a lock that stays in place
+ * entries the plan keeps, such as an edited template, and guard files; compared without
+ * case where `tracked` is caseless) stay without a count, since the plan reports them
+ * itself. With `dryRun` nothing changes and the result predicts the removal. `hold` is the real path of a lock that stays in place
  * for the caller to remove last; a dry run treats it as removable.
  */
 export async function removeUntracked(project, path, tracked, { hold, dryRun = false, skip = [] } = {}) {
   const result = { removed: 0, tracked: 0, links: 0, linkPaths: [], special: 0, repositories: [] };
   const held = async current => !!hold && basename(current).toLowerCase() === basename(hold).toLowerCase() && fold(await realpath(current).catch(() => '')) === fold(hold);
-  const skipped = new Set(skip.map(fold));
+  // Compare kept paths the way tracked files are compared: caseless on Windows and wherever Git ignores case.
+  const same = path => tracked.key(fold(path)), skipped = new Set(skip.map(same));
   const repository = current => { result.repositories.push(display(project, current)); return false; };
   let budget = ENTRY_LIMIT;
   async function visit(current) {
     if (--budget < 0) throw inputError('Too many entries to remove safely. Remove the remaining files manually.');
-    if (skipped.has(fold(current))) return false;
+    if (skipped.has(same(current))) return false;
     if (basename(current).toLowerCase() === '.git') return repository(dirname(current));
     const stat = await info(current);
     if (!stat) return true;

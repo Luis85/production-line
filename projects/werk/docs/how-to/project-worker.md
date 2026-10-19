@@ -482,7 +482,9 @@ What stays:
   files. The result lists the unknown entries as `unknownEntries`. This protects
   you from a mistaken `--state-dir` or `WERK_WORKER_STATE_DIR` such as `.werk` or
   a data folder. A state directory option that names a file instead of a folder
-  is kept and reported the same way.
+  is reported as kept by `--dry-run` and `footprint`, and `uninstall --confirm`
+  refuses, naming the path, until you pass the worker's state folder with
+  `--state-dir` or `WERK_WORKER_STATE_DIR`.
 - `.werk/.gitignore` and `.werk/worker-project.json`, while any state, provider
   home, retained or integration path they protect still exists, whether the plan
   keeps it or its removal was incomplete. Resolve the reported paths and run
