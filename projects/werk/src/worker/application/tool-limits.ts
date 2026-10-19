@@ -1,5 +1,5 @@
 import { DomainError } from '../../shared/errors.js';
-import { candidateFileLimitError, candidateInspectionBounds, candidateInspectionFields, DEFAULT_COMMAND_TIMEOUT_MS, DEFAULT_MAX_RUNTIME_MS, DEFAULT_MAX_TOOL_CALLS, MAX_COMMAND_TIMEOUT_MS, MAX_MAX_RUNTIME_MS, MAX_TOOL_CALLS, type CandidateInspectionLimits } from './execution-policy.js';
+import { candidateApprovedLimitError, candidateFileLimitError, candidateInspectionBounds, candidateInspectionFields, candidateReviewBounds, candidateReviewFields, type CandidateReviewLimits, DEFAULT_COMMAND_TIMEOUT_MS, DEFAULT_MAX_RUNTIME_MS, DEFAULT_MAX_TOOL_CALLS, MAX_COMMAND_TIMEOUT_MS, MAX_MAX_RUNTIME_MS, MAX_TOOL_CALLS, type CandidateInspectionLimits } from './execution-policy.js';
 import { ToolAccessError } from './tool-runtime.js';
 import type { ToolPolicy } from './tool-policy.js';
 
@@ -27,6 +27,12 @@ function budget(value: number | undefined, fallback: number, maximum: number): n
 export function resolveCandidateInspectionLimits(input: Partial<CandidateInspectionLimits> = {}): Readonly<CandidateInspectionLimits> {
   const limits = Object.fromEntries(candidateInspectionFields.map(field => [field, budget(input[field], candidateInspectionBounds[field].default, candidateInspectionBounds[field].maximum)])) as unknown as CandidateInspectionLimits;
   if (limits.candidateFileMaxBytes > limits.candidateSourceMaxBytes) throw new ToolAccessError(candidateFileLimitError(limits.candidateFileMaxBytes, limits.candidateSourceMaxBytes));
+  return Object.freeze(limits);
+}
+/** Frozen approved-content and review patch bounds for one implementation attempt; absent values keep the 0.13 bounds. */
+export function resolveCandidateReviewLimits(input: Partial<CandidateReviewLimits> = {}): Readonly<CandidateReviewLimits> {
+  const limits = Object.fromEntries(candidateReviewFields.map(field => [field, budget(input[field], candidateReviewBounds[field].default, candidateReviewBounds[field].maximum)])) as unknown as CandidateReviewLimits;
+  if (limits.candidateApprovedTotalMaxBytes < limits.candidateApprovedFileMaxBytes) throw new ToolAccessError(candidateApprovedLimitError(limits.candidateApprovedFileMaxBytes, limits.candidateApprovedTotalMaxBytes));
   return Object.freeze(limits);
 }
 export function resolveCommandTimeoutMs(cap?: number, override?: number): number {

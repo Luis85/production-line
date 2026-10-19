@@ -159,6 +159,17 @@ test('patch path and file-mode validation fails before any remote branch is publ
   assert.equal(f.main(), f.sourceCommit);
 });
 
+test('a folder approval publishes files below it, never outside it or in protected storage', async t => {
+  const f = await fixture(t), adapter = f.client(), input = f.publication('publish-folder');
+  const created = 'diff --git a/src/app/new.ts b/src/app/new.ts\nnew file mode 100644\n--- /dev/null\n+++ b/src/app/new.ts\n@@ -0,0 +1 @@\n+created\n';
+  await assert.rejects(adapter.publishPatch({ ...input, approvedPaths: ['src/'] }), /unapproved path/);
+  for (const approvedPaths of [['features/'], ['feature-reviews/drafts/'], ['.werk/']]) assert.throws(() => adapter.publishPatch({ ...input, patch: created, approvedPaths }), /cannot modify/, approvedPaths[0]);
+  assert.throws(() => f.client({ requestsDirectory: 'docs/features' }).publishPatch({ ...input, patch: created, approvedPaths: ['docs/'] }), /cannot modify/, 'a folder containing the request queue is refused');
+  assert.equal(git(f.remote, 'for-each-ref', '--format=%(refname)', 'refs/heads/werk'), '');
+  const result = await adapter.publishPatch({ ...input, patch: created + patch(), approvedPaths: ['src/', 'file.txt'] });
+  assert.deepEqual(git(f.remote, 'diff', '--name-only', f.sourceCommit, result.commit).split('\n'), ['file.txt', 'src/app/new.ts']);
+});
+
 test('committed symlink intake and unsafe Git metadata paths are refused; cancellation never publishes', async t => {
   const f = await fixture(t), adapter = f.client();
   const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], { cwd: f.producer, input: '../file.txt', encoding: 'utf8' }).trim();

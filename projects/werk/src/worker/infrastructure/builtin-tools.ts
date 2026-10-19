@@ -8,14 +8,16 @@ import { ProcessRunError } from '../../shared/process/launcher.js';
 import { chatRepositoryId, type ToolChatDirectory, type ToolDefinition, type ToolPolicy } from '../application/tool-policy.js';
 import { cliToolDescription, cliToolInputSchema, cliToolName } from '../application/cli-tool-policy.js';
 import { CliToolError, runCliTool } from './cli-tools.js';
-import { resolveToolLimits, formatToolDuration, type ResolvedToolLimits } from '../application/tool-limits.js';
+import { resolveCandidateReviewLimits, resolveToolLimits, formatToolDuration, type ResolvedToolLimits } from '../application/tool-limits.js';
+import type { CandidateReviewLimits } from '../application/execution-policy.js';
 import type { DevelopmentRuntime } from '../application/development.js';
 import { CandidateToolError } from './candidate-tools.js';
 import type { ToolResult, ToolWorktreeIdentity } from '../application/tool-runtime.js';
 
 export class BuiltinToolError extends Error {}
 export interface ToolOperation { definition: ToolDefinition; /** Only the worker delegation broker may wait outside the shared side-effect queue. */ concurrent?: true; call(args: unknown, signal: AbortSignal): Promise<ToolResult>; }
-export interface BuiltinToolOptions { policy: ToolPolicy; directory: string; worktree?: string; worktreeIdentity?: ToolWorktreeIdentity; development?: DevelopmentRuntime; commandTimeoutMs?: number; limits?: ResolvedToolLimits; fetch?: typeof globalThis.fetch; repositories?: () => readonly ToolRepository[]; }
+/** Candidate review limits arrive frozen from the dispatch; absent values keep the 0.13 bounds. */
+export interface BuiltinToolOptions extends Partial<CandidateReviewLimits> { policy: ToolPolicy; directory: string; worktree?: string; worktreeIdentity?: ToolWorktreeIdentity; development?: DevelopmentRuntime; commandTimeoutMs?: number; limits?: ResolvedToolLimits; fetch?: typeof globalThis.fetch; repositories?: () => readonly ToolRepository[]; }
 /** A current worker repository assignment (settings `repositories.items`), never a path supplied by the model. */
 export interface ToolRepository { id: string; path: string; }
 const output = (data: unknown): ToolResult => ({ content: [{ type: 'text', text: typeof data === 'string' ? data : JSON.stringify(data) }] });
@@ -206,7 +208,7 @@ export function builtinToolOperations(options: BuiltinToolOptions): ToolOperatio
       object(value, []); const candidate = await development.capture(signal);
       return output({ digest: candidate.digest, changedPaths: candidate.changedPaths, files: candidate.files, evidence: { ...development.evidence(), checks: development.evidence().checks.map(check => ({ ...check, stdout: check.stdout.slice(0, 512), stderr: check.stderr.slice(0, 512), truncated: check.truncated || check.stdout.length > 512 || check.stderr.length > 512 })) } });
     }));
-    add('werk_candidate_apply', 'Apply one change to an explicitly approved candidate file in the pinned worktree. Use its current hash from werk_candidate_status; null hash means the file must not exist. Content null deletes the file. Every edit invalidates earlier checks; repository checkout and unapproved paths are untouched.', schema({ path: { type: 'string', maxLength: 240 }, content: { type: ['string', 'null'], maxLength: 24000 }, expectedHash: { type: ['string', 'null'], pattern: '^[a-f0-9]{64}$' } }, ['path', 'content', 'expectedHash']), candidateCall(async (value, signal) => {
+    add('werk_candidate_apply', 'Apply one change to an explicitly approved candidate file in the pinned worktree. Use its current hash from werk_candidate_status; null hash means the file must not exist. Content null deletes the file. Every edit invalidates earlier checks; repository checkout and unapproved paths are untouched.', schema({ path: { type: 'string', maxLength: 240 }, content: { type: ['string', 'null'], maxLength: resolveCandidateReviewLimits(options).candidateApprovedFileMaxBytes }, expectedHash: { type: ['string', 'null'], pattern: '^[a-f0-9]{64}$' } }, ['path', 'content', 'expectedHash']), candidateCall(async (value, signal) => {
       const args = object(value, ['path', 'content', 'expectedHash']);
       if (typeof args.path !== 'string' || args.content !== null && typeof args.content !== 'string' || args.expectedHash !== null && typeof args.expectedHash !== 'string') throw new BuiltinToolError('Supply an approved path, content or null, and the current expectedHash.');
       return output(await development.apply({ path: args.path, content: args.content as string | null, expectedHash: args.expectedHash as string | null }, signal));

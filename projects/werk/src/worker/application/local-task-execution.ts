@@ -76,8 +76,8 @@ export async function execute(host: Pick<LocalTaskRuntime, "change" | "execution
       validateTaskSelection(task, task.requestId ? host.sessions.requests.get(task.requestId) : undefined);
       const connection = localTaskConnection(host.settings.provider(task.provider), task);
       // Implementation limits come from the accepted dispatch, never from settings changed later.
-      const { commandTimeoutMs, candidateSourceMaxBytes, candidateSourceMaxFiles, candidateFileMaxBytes } = turn.dispatch.policy;
-      const development = host.developmentRuntime(task, { commandTimeoutMs, candidateSourceMaxBytes, candidateSourceMaxFiles, candidateFileMaxBytes });
+      const { commandTimeoutMs, candidateSourceMaxBytes, candidateSourceMaxFiles, candidateFileMaxBytes, candidateApprovedFileMaxBytes, candidateApprovedTotalMaxBytes, candidateReviewPatchMaxBytes } = turn.dispatch.policy;
+      const development = host.developmentRuntime(task, { commandTimeoutMs, candidateSourceMaxBytes, candidateSourceMaxFiles, candidateFileMaxBytes, candidateApprovedFileMaxBytes, candidateApprovedTotalMaxBytes, candidateReviewPatchMaxBytes });
       if (!!task.implementation !== (turn.dispatch.policy.development === true)) throw Error('Prepared implementation mode differs from accepted authority.');
       const model = host.model(
         connection,

@@ -4,7 +4,7 @@ import type { WorkerSettingsView } from '../application/workspace-view.js';
 import { defaultToolPolicy, discoveredToolPolicy, persistedToolPolicy, publicToolPolicy, updateToolPolicy, validateToolPolicy, type ToolPolicy } from '../application/tool-policy.js';
 import { defaultRepositoryConfiguration, validateRepositoryConfiguration, type RepositoryConfiguration } from '../application/repositories.js';
 import { defaultResourcePolicy, validateResourcePolicy, type ResourcePolicy } from '../application/resources.js';
-import { defaultExecutionPolicy, EXECUTION_POLICY_FIELDS, candidateInspectionFields, validateExecutionPolicy, type ExecutionPolicy } from '../application/execution-policy.js';
+import { defaultExecutionPolicy, EXECUTION_POLICY_FIELDS, candidateInspectionFields, candidateReviewFields, validateExecutionPolicy, type ExecutionPolicy } from '../application/execution-policy.js';
 import { join, isAbsolute, resolve } from 'node:path';
 import { object, text } from '../../shared/contracts.js';
 import { DomainError } from '../../shared/errors.js';
@@ -68,7 +68,7 @@ export class WorkerSettings {
   provider(id: string) { const value = this.value.providers.find(item => item.id === id); if (!value) throw new DomainError('invalid_input', 'Choose a supported provider.'); return value; }
   async update(input: unknown) {
     const operation = this.writing.catch(() => {}).then(async () => {
-      const body = object(input, 'Settings', ['provider', 'defaultProvider', 'expectedDefaultProvider', 'connection', 'board', 'resources', 'execution', 'repositories', 'consumption', 'expectedConsumption', 'expectedBoard', 'expectedDuration', 'expectedToolBudget', 'expectedCandidateInspection']);
+      const body = object(input, 'Settings', ['provider', 'defaultProvider', 'expectedDefaultProvider', 'connection', 'board', 'resources', 'execution', 'repositories', 'consumption', 'expectedConsumption', 'expectedBoard', 'expectedDuration', 'expectedToolBudget', 'expectedCandidateInspection', 'expectedCandidateReview']);
       if (body.execution !== undefined && object(body.execution, 'Execution', [...EXECUTION_POLICY_FIELDS]).maxRuntimeMs !== undefined && this.executionOverride) throw new DomainError('conflict', 'WERK_WORKER_MAX_RUNTIME_MS controls this worker. Change or remove that environment override and restart before editing the execution limit.');
       if (body.expectedConsumption !== undefined) {
         if (body.consumption === undefined) throw new DomainError('invalid_input', 'A consumption baseline requires a new consumption policy.');
@@ -119,6 +119,16 @@ export class WorkerSettings {
       }
       if (body.expectedDefaultProvider !== undefined && (body.defaultProvider === undefined || body.expectedDefaultProvider !== this.value.defaultProvider))
         throw new DomainError('conflict', 'The default model connection changed. Reload worker settings before saving.');
+      if (body.expectedCandidateReview !== undefined) {
+        if (body.execution === undefined) throw new DomainError('invalid_input', 'An approved content baseline requires new execution limits.');
+        const patch = object(body.execution, 'Execution', [...EXECUTION_POLICY_FIELDS]);
+        if (!candidateReviewFields.some(key => patch[key] !== undefined)) throw new DomainError('invalid_input', 'An approved content baseline requires new approved content or review patch limits.');
+        const expected = object(body.expectedCandidateReview, 'Approved content baseline', candidateReviewFields);
+        if (candidateReviewFields.some(key => expected[key] === undefined)) throw new DomainError('invalid_input', 'Use the complete approved content baseline before saving.');
+        const checked = validateExecutionPolicy({ maxRuntimeMs: this.value.execution.maxRuntimeMs, ...expected });
+        if (candidateReviewFields.some(key => checked[key] !== this.value.execution[key]))
+          throw new DomainError('conflict', 'Approved content limits changed in another session. Reload the current execution limits before saving.');
+      }
       const next = structuredClone(this.value);
       if (body.defaultProvider !== undefined) next.defaultProvider = body.defaultProvider as ProviderId;
       if (body.consumption !== undefined) next.consumption = validateConsumptionPolicy(body.consumption);

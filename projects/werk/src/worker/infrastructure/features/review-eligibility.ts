@@ -20,8 +20,8 @@ export function validateFeatureReviewEligibility(markdown: string, snapshot: Rev
     const template = validateFeatureTemplate(snapshot.template);
     if (data.templateId !== template.templateId) invalid('Feature request templateId does not match the configured template.');
     const base = featureInput(parsed, provider, { reviewOnly: true }), paths = base.paths ?? [];
-    if (paths.length) validateApprovedPaths(paths);
-    for (const path of paths) featureWorkflowPath(path, 'Approved path');
+    if (paths.length) validateApprovedPaths(paths, 'Approved paths', { folders: true });
+    for (const path of paths) featureWorkflowPath(path.endsWith('/') ? path.slice(0, -1) : path, 'Approved path');
     if (new Set(paths.map(path => path.toLowerCase())).size !== paths.length) invalid('Approved paths must be distinct, including on case-insensitive filesystems.');
     validateFeatureWorkflowApprovedPaths(paths, snapshot.configuration, snapshot.files?.configuration.path);
     const sections = featureMarkdownSections(parsed.body), section = (name: string) => sections.get(name)?.join('\n').trim() ?? '';

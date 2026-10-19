@@ -2,7 +2,7 @@ import type { ModelSelection } from './model-selection.js';
 import { loadTaskProjectContext } from './local-task-preparation.js';
 import { interactionFeatureRequest } from './feature-request-reference.js';
 
-import { freezeDevelopmentScope } from './development.js';
+import { assertFolderApprovals, freezeDevelopmentScope } from './development.js';
 
 import { type DefinitionSnapshot } from "./definitions.js";
 import { randomUUID } from "node:crypto";
@@ -31,6 +31,8 @@ export async function createTask(host: Pick<LocalTaskRuntime, "model" | "closed"
     const { body, title, instruction, definition, provider, selection, selector, assignment, repositoryPath, allowedPaths } = host.admissionInput(input, submission, options.definition, options.selection);
     // Reserve capacity before preparing a durable worktree. Chat admission reads
     // board.active, so a concurrent chat cannot consume this task's queue slot.
+    // Refuse folder approvals before preparing a worktree when this worker cannot run an implementation.
+    assertFolderApprovals(allowedPaths, host.settings.toolPolicy(), host.development ? undefined : false);
     host.assertAdmissionCapacity(host.tasks);
     host.admissionReserved = true;
     const id = submission?.id ?? options.id ?? randomUUID();
@@ -79,6 +81,8 @@ export async function createTask(host: Pick<LocalTaskRuntime, "model" | "closed"
         "This task worktree already exists. Inspect the retained task before submitting again.",
       );
     const interruptedWorktree = prepared.reused && prepared.pristine !== true;
+    const implementation = !interruptedWorktree && host.development ? freezeDevelopmentScope(prepared.baseCommit, allowedPaths, host.settings.toolPolicy()) : undefined;
+    if (!interruptedWorktree) assertFolderApprovals(allowedPaths, host.settings.toolPolicy(), !!implementation);
     // Never turn modified or unverifiable retained contents into a fresh approval.
     // A durable failed receipt lets the operator leave an otherwise endless retry.
     const { repository, path: snapshotRoot, files } = interruptedWorktree
@@ -113,7 +117,7 @@ export async function createTask(host: Pick<LocalTaskRuntime, "model" | "closed"
           }
         : {}),
       files,
-      ...(!interruptedWorktree && host.development ? { implementation: freezeDevelopmentScope(prepared.baseCommit, allowedPaths, host.settings.toolPolicy()) } : {}),
+      ...(!interruptedWorktree && host.development ? { implementation } : {}),
       status: interruptedWorktree ? "failed" : "queued",
       priority: Number(body.priority ?? 1),
       createdAt: new Date().toISOString(),

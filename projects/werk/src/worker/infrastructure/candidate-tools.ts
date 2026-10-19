@@ -7,12 +7,14 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { ProcessRunError } from '../../shared/process/launcher.js';
 import type { DevelopmentFactory, DevelopmentEvidence, DevelopmentCandidate, DevelopmentCheckEvidence } from '../application/development.js';
 import { assertDevelopmentPolicy, validateDevelopmentState } from '../application/development.js';
-import { validateApprovedPaths } from '../application/approved-paths.js';
+import { approvedFolder, approvedPathMatch, validateApprovedPaths } from '../application/approved-paths.js';
 import { candidateGitOutputBytes, RepositoryGitError, repositoryGit } from './repositories-git.js';
 import { syncDirectory } from './journal/files.js';
-import { resolveCandidateInspectionLimits, resolveCommandTimeoutMs } from '../application/tool-limits.js';
+import { resolveCandidateInspectionLimits, resolveCandidateReviewLimits, resolveCommandTimeoutMs } from '../application/tool-limits.js';
 
 export class CandidateToolError extends Error {}
+/** Internal: sizes of reviewed approved files, for the apply-time total. Never part of evidence or tool output. */
+type InspectedCandidate = DevelopmentCandidate & { reviewedSizes: Record<string, number> };
 const hash = (value: string | Buffer) => createHash('sha256').update(value).digest('hex');
 const empty = (): DevelopmentEvidence => ({ schemaVersion: 1, candidateDigest: null, changedPaths: [], checks: [], updatedAt: new Date().toISOString() });
 function fail(message: string): never { throw new CandidateToolError(message); }
@@ -26,10 +28,13 @@ const cleanOutput = (bytes: Buffer) => bytes.toString('utf8').replace(/\x1b\[[0-
 export const createDevelopmentRuntime: DevelopmentFactory = options => {
   validateDevelopmentState(options.scope, options.initialEvidence);
   const scope = structuredClone(options.scope);
-  const approved = validateApprovedPaths(scope.approvedPaths);
+  // Implementation scopes may approve folders: safe paths below them are approved, everything else stays outside.
+  const approved = validateApprovedPaths(scope.approvedPaths, 'Approved paths', { folders: true });
+  const exact = approved.filter(path => !approvedFolder(path));
+  const isApproved = (path: string) => approvedPathMatch(approved, path);
   const root = resolve(options.worktree);
   // Frozen with the attempt's dispatch; every tracked and non-ignored file is still read and fingerprinted.
-  const limits = resolveCandidateInspectionLimits(options);
+  const limits = resolveCandidateInspectionLimits(options), review = resolveCandidateReviewLimits(options);
   // File listings scale with the frozen file limit: allow an average of 4 KiB per path, from the default up to 1 GiB.
   const listingBytes = candidateGitOutputBytes(limits);
   const listing = (args: string[], signal: AbortSignal) => repositoryGit(root, args, signal, 30000, listingBytes).then(output => output.split('\0').filter(Boolean), error => {
@@ -37,6 +42,9 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
     throw error;
   });
   const sourceBytesError = (size: number) => `Candidate source is ${count(size)} bytes; the inspection limit is ${count(limits.candidateSourceMaxBytes)} bytes (execution.candidateSourceMaxBytes).`;
+  const approvedTotalError = (size: number) => `Approved candidate text is ${count(size)} bytes; the approved content limit is ${count(review.candidateApprovedTotalMaxBytes)} bytes (execution.candidateApprovedTotalMaxBytes).`;
+  const approvedFileError = (path: string, size: number) => `Approved candidate file ${JSON.stringify(path)} is ${count(size)} bytes; the approved file limit is ${count(review.candidateApprovedFileMaxBytes)} bytes (execution.candidateApprovedFileMaxBytes).`;
+  const patchError = (size: string) => `Candidate review patch is ${size} bytes; the review patch limit is ${count(review.candidateReviewPatchMaxBytes)} bytes (execution.candidateReviewPatchMaxBytes).`;
   let state = structuredClone(options.initialEvidence ?? empty());
   let broken = false;
   let previous: Promise<unknown> = Promise.resolve();
@@ -77,15 +85,15 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
     if (await realpath(target) !== target) fail('Candidate path changed during inspection.');
     return target;
   }
-  /** Approved text keeps its fixed review bound; other source files use the frozen per-file limit. */
-  const tooLarge = (path: string, size: number, limit: number) => approved.includes(path) ? 'Candidate source exceeds the bounded file inspection limit.'
+  /** Reviewed approved text uses the frozen approved file bound; other source files use the frozen per-file inspection limit. */
+  const tooLarge = (path: string, size: number, limit: number, reviewed: boolean) => reviewed ? approvedFileError(path, size)
     : `Candidate file ${JSON.stringify(path)} is ${count(size)} bytes; the per-file inspection limit is ${count(limit)} bytes (execution.candidateFileMaxBytes).`;
-  async function bytes(path: string, limit: number): Promise<{ body: Buffer; mode: number } | null> {
+  async function bytes(path: string, limit: number, reviewed = false): Promise<{ body: Buffer; mode: number } | null> {
     const target = await pathFor(path, true);
     const before = await lstat(target).catch(error => { if (missing(error)) return null; throw error; });
     if (!before) return null;
     if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1) fail('Candidate files must be ordinary files without symbolic or hard links.');
-    if (before.size > limit) fail(tooLarge(path, before.size, limit));
+    if (before.size > limit) fail(tooLarge(path, before.size, limit, reviewed));
     const handle = await open(target, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     try {
       const opened = await handle.stat();
@@ -94,13 +102,13 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
       const buffer = Buffer.alloc(Math.min(limit + 1, opened.size + 1));
       let size = 0;
       while (size < buffer.length) { const part = await handle.read(buffer, size, buffer.length - size, null); if (!part.bytesRead) break; size += part.bytesRead; }
-      if (size > limit) fail(tooLarge(path, Math.max(size, opened.size), limit));
+      if (size > limit) fail(tooLarge(path, Math.max(size, opened.size), limit, reviewed));
       const after = await handle.stat();
       if (after.size !== size || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs) fail('Candidate file changed during inspection.');
       return { body: buffer.subarray(0, size), mode: opened.mode & 0o777 };
     } finally { await handle.close(); }
   }
-  /** Reports the whole source size once the limit is exceeded, so one settings change suffices; unread files are measured, not read. */
+  /** Reports the whole size once a limit is exceeded, so one settings change suffices; unread files are measured, not read. */
   async function sizeOnDisk(rest: string[], signal: AbortSignal) {
     let size = 0;
     for (const path of rest) {
@@ -118,55 +126,71 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
     if (body.includes(0)) fail('Approved candidate files must contain UTF-8 text.');
     try { return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(body); } catch { return fail('Approved candidate files must contain UTF-8 text.'); }
   }
-  async function inspectOnce(signal: AbortSignal): Promise<DevelopmentCandidate> {
+  /**
+   * Exact approved files are always reviewed text. Below an approved folder, every safe file is listed with its hash for
+   * edits, while only changed, added or deleted files count as reviewed text; unchanged ones are ordinary inspected source.
+   */
+  async function inspectOnce(signal: AbortSignal): Promise<InspectedCandidate> {
     await guard(signal);
-    const changed = (await repositoryGit(root, ['diff', '--no-ext-diff', '--no-textconv', '--name-only', '-z', scope.baseCommit, '--'], signal)).split('\0').filter(Boolean);
+    const changed = await listing(['diff', '--no-ext-diff', '--no-textconv', '--name-only', '-z', scope.baseCommit, '--'], signal);
     const untracked = await listing(['ls-files', '-z', '--others', '--exclude-standard'], signal);
-    if ([...changed, ...untracked].some(path => !approved.includes(path))) fail('The worktree contains changes outside the approved paths. Inspect them before continuing; they will not be published.');
+    const outside = [...changed, ...untracked].find(path => !isApproved(path));
+    if (outside !== undefined) fail(`The worktree contains changes outside the approved paths, including ${JSON.stringify(outside)}. Inspect them before continuing; they will not be published.`);
     const tracked = await listing(['ls-files', '-z', '--cached'], signal);
     const flags = await listing(['ls-files', '-v', '-z'], signal);
     if (flags.some(entry => !entry.startsWith('H '))) fail('Candidate index flags changed. Hidden or sparse changes cannot be verified.');
-    const paths = [...new Set([...tracked, ...untracked, ...approved])].sort();
+    const paths = [...new Set([...tracked, ...untracked, ...exact])].sort();
     if (paths.length > limits.candidateSourceMaxFiles) fail(`Candidate source has ${count(paths.length)} files; the inspection limit is ${count(limits.candidateSourceMaxFiles)} files (execution.candidateSourceMaxFiles).`);
+    const touched = new Set([...changed, ...untracked]), trackedSet = new Set(tracked);
+    const reviewed = (path: string) => exact.includes(path) || touched.has(path);
     const digest = createHash('sha256').update(JSON.stringify(['werk-candidate-v1', scope.baseCommit]));
     const files: { path: string; hash: string | null }[] = [];
     const additions: { path: string; content: string; mode: number }[] = [];
+    const reviewedSizes: Record<string, number> = {};
     let total = 0, approvedTotal = 0;
     for (const [index, path] of paths.entries()) {
       signal.throwIfAborted();
-      const value = await bytes(path, approved.includes(path) ? 24000 : limits.candidateFileMaxBytes);
+      const counted = reviewed(path);
+      const value = await bytes(path, counted ? review.candidateApprovedFileMaxBytes : limits.candidateFileMaxBytes, counted);
       total += value?.body.length ?? 0;
       if (total > limits.candidateSourceMaxBytes) fail(sourceBytesError(total + await sizeOnDisk(paths.slice(index + 1), signal)));
       const fileHash = value ? hash(value.body) : null;
       digest.update(JSON.stringify([path, value?.mode ?? null, fileHash]));
-      if (approved.includes(path)) {
-        files.push({ path, hash: fileHash });
-        approvedTotal += value?.body.length ?? 0;
-        if (approvedTotal > 48000) fail('Approved candidate text exceeds the 48,000-byte limit.');
-        if (value) {
-          const content = text(value.body);
-          if (!tracked.includes(path)) additions.push({ path, content, mode: value.mode });
-        }
+      if (isApproved(path)) files.push({ path, hash: fileHash });
+      if (!counted) continue;
+      reviewedSizes[path] = value?.body.length ?? 0;
+      approvedTotal += reviewedSizes[path];
+      if (approvedTotal > review.candidateApprovedTotalMaxBytes) fail(approvedTotalError(approvedTotal + await sizeOnDisk(paths.slice(index + 1).filter(reviewed), signal)));
+      if (value) {
+        const content = text(value.body);
+        if (!trackedSet.has(path)) additions.push({ path, content, mode: value.mode });
       }
     }
-    let patch = await repositoryGit(root, ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '--no-renames', '--binary', '--src-prefix=a/', '--dst-prefix=b/', scope.baseCommit, '--', ...approved], signal);
+    // Folder entries are Git directory pathspecs; every changed path below them was approved above.
+    const patchBytes = Math.max(2 * 1024 * 1024, review.candidateReviewPatchMaxBytes + 1);
+    let patch = await repositoryGit(root, ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '--no-renames', '--binary', '--src-prefix=a/', '--dst-prefix=b/', scope.baseCommit, '--', ...approved], signal, 30000, patchBytes).catch(error => {
+      if (error instanceof RepositoryGitError && error.outputLimit) fail(patchError('more than ' + count(patchBytes - 1)));
+      throw error;
+    });
     for (const file of additions) {
       const lines = file.content ? file.content.split('\n') : [];
       const finalNewline = file.content.endsWith('\n'); if (finalNewline) lines.pop();
       patch += `diff --git ${JSON.stringify('a/' + file.path)} ${JSON.stringify('b/' + file.path)}\nnew file mode ${file.mode & 0o111 ? '100755' : '100644'}\n`;
       if (lines.length) patch += `--- /dev/null\n+++ ${JSON.stringify('b/' + file.path)}\n@@ -0,0 +1,${lines.length} @@\n${lines.map(line => '+' + line).join('\n')}\n${finalNewline ? '' : '\\ No newline at end of file\n'}`;
     }
-    if (Buffer.byteLength(patch) > 120000) fail('Candidate patch exceeds the bounded review size.');
+    const patchSize = Buffer.byteLength(patch);
+    if (patchSize > review.candidateReviewPatchMaxBytes) fail(patchError(count(patchSize)));
     // Preserve the same review-leak guard used by legacy proposal patches.
     if (containsSensitivePatchMaterial(patch)) fail('Candidate patch contains sensitive material and cannot be published for review.');
     await rootIdentity(); authorize(signal);
-    return { patch, digest: digest.digest('hex'), changedPaths: [...new Set([...changed, ...additions.map(file => file.path)])].sort(), files };
+    return { patch, digest: digest.digest('hex'), changedPaths: [...new Set([...changed, ...additions.map(file => file.path)])].sort(), files, reviewedSizes };
   }
-  async function inspect(signal: AbortSignal): Promise<DevelopmentCandidate> {
+  async function inspect(signal: AbortSignal): Promise<InspectedCandidate> {
     const first = await inspectOnce(signal), second = await inspectOnce(signal);
     if (first.digest !== second.digest || first.patch !== second.patch) fail('Candidate source changed during inspection. Retry after external edits finish.');
     return second;
   }
+  const editLimit = Math.max(review.candidateApprovedFileMaxBytes, limits.candidateFileMaxBytes);
   const updated = (candidate: DevelopmentCandidate, checks = state.checks): DevelopmentEvidence => ({ schemaVersion: 1, candidateDigest: candidate.digest, changedPaths: [...candidate.changedPaths], checks, updatedAt: new Date().toISOString() });
   async function capture(signal: AbortSignal) {
     const candidate = await inspect(signal);
@@ -183,15 +207,17 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
     capture: signal => serial(() => capture(signal)),
     apply: (input, signal) => serial(async () => {
       await guard(signal);
-      if (!input || !approved.includes(input.path) || input.content !== null && typeof input.content !== 'string' || !Object.hasOwn(input, 'expectedHash') || input.expectedHash !== null && !/^[a-f0-9]{64}$/.test(input.expectedHash ?? '')) fail('Apply one explicitly approved path with content (or null to delete) and its current expectedHash from candidate status.');
+      if (!input || typeof input.path !== 'string' || !isApproved(input.path) || input.content !== null && typeof input.content !== 'string' || !Object.hasOwn(input, 'expectedHash') || input.expectedHash !== null && !/^[a-f0-9]{64}$/.test(input.expectedHash ?? '')) fail('Apply one explicitly approved path (an approved file, or a safe file below an approved folder ending in /) with content (or null to delete) and its current expectedHash from candidate status.');
       const before = await inspect(signal);
-      const current = before.files!.find(file => file.path === input.path)!;
-      if (current.hash !== input.expectedHash) fail('Candidate content changed. Read candidate status and retry with its current hash.');
+      // Files below an approved folder that do not exist yet have no status entry; their current hash is null.
+      const current = before.files!.find(file => file.path === input.path)?.hash ?? null;
+      if (current !== input.expectedHash) fail('Candidate content changed. Read candidate status and retry with its current hash.');
       const body = input.content === null ? null : Buffer.from(input.content, 'utf8');
-      if (body && (body.length > 24000 || body.includes(0))) fail('Candidate content must be UTF-8 text of at most 24,000 bytes.');
-      let approvedSize = body?.length ?? 0;
-      for (const path of approved.filter(path => path !== input.path)) approvedSize += (await bytes(path, 24000))?.body.length ?? 0;
-      if (approvedSize > 48000) fail('Approved candidate text exceeds the 48,000-byte limit.');
+      if (body?.includes(0)) fail('Candidate content must be UTF-8 text without NUL characters.');
+      if (body && body.length > review.candidateApprovedFileMaxBytes) fail(approvedFileError(input.path, body.length));
+      const approvedSize = Object.entries(before.reviewedSizes).reduce((sum, [path, size]) => path === input.path ? sum : sum + size, body?.length ?? 0);
+      if (approvedSize > review.candidateApprovedTotalMaxBytes) fail(approvedTotalError(approvedSize));
+      // Inspection already bounded the current file; edits re-read it to compare hashes.
       const target = await pathFor(input.path, true);
       let parent = root;
       for (const part of relative(root, dirname(target)).split(sep).filter(Boolean)) {
@@ -199,13 +225,13 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
         await mkdir(parent, { mode: 0o700 }).catch(error => { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; });
         await pathFor(relative(root, parent).split(sep).join('/'), false);
       }
-      const reread = await bytes(input.path, 24000);
+      const reread = await bytes(input.path, editLimit);
       if ((reread ? hash(reread.body) : null) !== input.expectedHash) fail('Candidate content changed before the edit; retry with its current hash.');
       authorize(signal); await rootIdentity();
       // Invalidate old successful checks durably before any filesystem mutation.
       await checkpoint({ ...state, checks: [], updatedAt: new Date().toISOString() });
       authorize(signal); await rootIdentity();
-      const ready = await bytes(input.path, 24000);
+      const ready = await bytes(input.path, editLimit);
       if ((ready ? hash(ready.body) : null) !== input.expectedHash) fail('Candidate content changed while saving evidence; retry with its current hash.');
       if (body === null) {
         if (reread) await unlink(await pathFor(input.path, false));
@@ -215,7 +241,7 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
         try {
           await handle.writeFile(body); await handle.sync(); await handle.close();
           await pathFor(input.path, true); await rootIdentity(); authorize(signal);
-          const latest = await bytes(input.path, 24000);
+          const latest = await bytes(input.path, editLimit);
           if ((latest ? hash(latest.body) : null) !== input.expectedHash) fail('Candidate content changed before publication; retry with its current hash.');
           await rename(temporary, target);
         } finally { await handle.close().catch(() => {}); await unlink(temporary).catch(error => { if (!missing(error)) throw error; }); }

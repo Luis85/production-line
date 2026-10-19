@@ -241,17 +241,20 @@ export function inputGateFacts(input: GateInput): GateFactSnapshot {
       : files.reduce((sum, f) => sum + (f.bytes ?? 0), 0),
     "input.pathsValid":
       new Set(files.map((f) => f.path)).size === files.length &&
-      files.every(
-        (f) =>
-          !!f.path &&
-          !f.path.startsWith("/") &&
-          !f.path.includes("\\") &&
-          !f.path
+      files.every((f) => {
+        // Implementation folder approvals end in one "/"; the folder name follows the file rules.
+        const path = f.path.endsWith("/") ? f.path.slice(0, -1) : f.path;
+        return (
+          !!path &&
+          !path.startsWith("/") &&
+          !path.includes("\\") &&
+          !path
             .split("/")
             .some((part) => !part || part === "." || part === "..") &&
-          !/^[a-z]:/i.test(f.path) &&
-          !f.path.includes("\0"),
-      ),
+          !/^[a-z]:/i.test(path) &&
+          !path.includes("\0")
+        );
+      }),
   };
 }
 export function evaluateGate(

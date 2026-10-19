@@ -59,7 +59,7 @@ export function createDelegationChildRunner(options: DelegationChildOptions): De
         configuration: { id: connection.id, model: connection.model, instruction: connection.instruction ?? '', ...(connection.effort === undefined ? {} : { effort: connection.effort }) },
         capabilities: instance.capabilities ?? modelCapabilities,
         toolManifest: input.tools.manifest.tools.length ? input.tools.manifest : undefined,
-        executionPolicy: input.tools.limits ? { maxToolCalls: input.tools.limits.maxCalls, commandTimeoutMs: input.tools.limits.commandTimeoutMs, ...(implementsCandidate ? input.tools.manifest.limits?.candidateInspection : {}) } : undefined,
+        executionPolicy: input.tools.limits ? { maxToolCalls: input.tools.limits.maxCalls, commandTimeoutMs: input.tools.limits.commandTimeoutMs, ...(implementsCandidate ? { ...input.tools.manifest.limits?.candidateInspection, ...input.tools.manifest.limits?.candidateReview } : {}) } : undefined,
         reply: (...args) => legacyModelReply(model, ...args),
         execute: (...args) => options.observations
           ? options.observations.run({ featureRequestKey: options.featureRequestKey, sessionId, taskId: parent.taskId ?? null, runId: run.id }, () => executeModel(instance, ...args))

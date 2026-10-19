@@ -39,7 +39,7 @@ const approvedPaths = () => intake.paths.split('\n').map(path => path.trim()).fi
 const fileIssue = computed(() => {
   if (!intake.fileChanges) return '';
   if (repositories.value.length ? !repositories.value.some(item => item.id === intake.repository) : !intake.repository.trim()) return 'Choose a repository for the approved file changes.';
-  try { validateApprovedPaths(approvedPaths()); return ''; } catch (error) { return (error as Error).message; }
+  try { validateApprovedPaths(approvedPaths(), 'Approved paths', { folders: true }); return ''; } catch (error) { return (error as Error).message; }
 });
 const canCreate = computed(() => state.unlocked && !state.workspaceBusy && !sending.value && (!!intake.pending || connection.value?.configured && capacity.value.admissionAvailable !== false && !!intake.message.trim() && !incompatible.value && !missingAgent.value && !fileIssue.value && (!agent.value?.requiresAdaptation || intake.adapt)));
 const model = computed(() => intake.model.trim() || agent.value?.model || connection.value?.model || 'Provider default');

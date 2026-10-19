@@ -25,8 +25,9 @@ const git = (directory, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/
 const defaults = { candidateSourceMaxBytes: 67108864, candidateSourceMaxFiles: 20000, candidateFileMaxBytes: 8388608 };
 
 test('candidate inspection settings have explicit defaults, bounds and named errors', () => {
-  assert.deepEqual(defaultExecutionPolicy(), { maxRuntimeMs: 21600000, maxToolCalls: 128, commandTimeoutMs: 300000, ...defaults });
-  assert.deepEqual(validateExecutionPolicy({ maxRuntimeMs: 1000 }), { maxRuntimeMs: 1000, maxToolCalls: 128, commandTimeoutMs: 300000, ...defaults }, 'saved policies without the settings adopt today\'s bounds');
+  const reviewDefaults = { candidateApprovedFileMaxBytes: 24000, candidateApprovedTotalMaxBytes: 48000, candidateReviewPatchMaxBytes: 120000 };
+  assert.deepEqual(defaultExecutionPolicy(), { maxRuntimeMs: 21600000, maxToolCalls: 128, commandTimeoutMs: 300000, ...defaults, ...reviewDefaults });
+  assert.deepEqual(validateExecutionPolicy({ maxRuntimeMs: 1000 }), { maxRuntimeMs: 1000, maxToolCalls: 128, commandTimeoutMs: 300000, ...defaults, ...reviewDefaults },'saved policies without the settings adopt today\'s bounds');
   const valid = { candidateSourceMaxBytes: [1048576, 67108864, 1073741824], candidateSourceMaxFiles: [1, 20000, 200000], candidateFileMaxBytes: [65536, 8388608] };
   for (const [field, values] of Object.entries(valid)) for (const value of values) assert.equal(validateExecutionPolicy({ maxRuntimeMs: 1000, candidateFileMaxBytes: 65536, [field]: value })[field], value);
   assert.equal(validateExecutionPolicy({ maxRuntimeMs: 1000, candidateSourceMaxBytes: 268435456, candidateFileMaxBytes: 268435456 }).candidateFileMaxBytes, 268435456);
@@ -97,7 +98,7 @@ test('implementation dispatches freeze the captured candidate limits and record 
   const info = await lstat(directory), worktreeIdentity = { dev: String(info.dev), ino: String(info.ino), birthtimeMs: info.birthtimeMs };
   const policy = defaultToolPolicy(); policy.builtins.files = true;
   const captured = { candidateSourceMaxBytes: 128 * MiB, candidateSourceMaxFiles: 40000, candidateFileMaxBytes: 16 * MiB };
-  const settings = { value: { execution: { maxToolCalls: 40, maxRuntimeMs: 900000, commandTimeoutMs: 1500, ...captured }, repositories: { pollMs: 30000, items: [] } }, toolPolicy: () => policy };
+  const settings = { value: { execution: { maxToolCalls: 40, maxRuntimeMs: 900000, commandTimeoutMs: 1500, candidateApprovedFileMaxBytes: 24000, candidateApprovedTotalMaxBytes: 48000, candidateReviewPatchMaxBytes: 120000, ...captured }, repositories: { pollMs: 30000, items: [] } }, toolPolicy: () => policy };
   const unused = () => { throw Error('Metadata inspection must not inspect the candidate'); };
   const development = { capture: unused, apply: unused, check: unused, evidence: unused };
   const factory = workspaceModelFactory(directory, settings, (saved, path, _transport, options) => modelFor(saved, path, async () => { throw Error('No provider call'); }, options));

@@ -1,5 +1,5 @@
 import type { ToolDefinition } from './tool-policy.js';
-import type { CandidateInspectionLimits } from './execution-policy.js';
+import type { CandidateInspectionLimits, CandidateReviewLimits } from './execution-policy.js';
 
 export const candidateToolNames: readonly string[] = Object.freeze(['werk_candidate_status', 'werk_candidate_apply', 'werk_candidate_check']);
 
@@ -10,9 +10,10 @@ export interface ToolWorktreeIdentity { dev: string; ino: string; birthtimeMs: n
  * tool with its own deadline; `werk_command_run` reports its longest preset and `presetTimeoutMs`
  * each preset. `windowMs` records the existing overall invocation budget; it is not a separate
  * tool-policy window. File tools have no separate deadline. `candidateInspection` records the
- * candidate source bounds frozen for an implementation attempt; it is present only with candidate tools.
+ * candidate source bounds and `candidateReview` the approved-content and review patch bounds frozen
+ * for an implementation attempt; both are present only with candidate tools.
  */
-export interface ToolManifestLimits { maxCalls: number; windowMs: number; callTimeoutMs: Record<string, number>; presetTimeoutMs?: Record<string, number>; candidateInspection?: CandidateInspectionLimits; }
+export interface ToolManifestLimits { maxCalls: number; windowMs: number; callTimeoutMs: Record<string, number>; presetTimeoutMs?: Record<string, number>; candidateInspection?: CandidateInspectionLimits; candidateReview?: CandidateReviewLimits; }
 /** Public invocation snapshot. Credentials and host paths never belong in a dispatch. */
 export interface ToolManifest { revision: number; tools: ToolDefinition[]; limits?: ToolManifestLimits; }
 export interface ToolResult { content: { type: 'text'; text: string }[]; isError?: boolean; }

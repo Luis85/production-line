@@ -73,7 +73,9 @@ export interface FeatureReadinessScope { configuration: FeatureWorkflowConfigura
 export function validateFeatureWorkflowApprovedPaths(paths: string[], configuration: FeatureWorkflowConfiguration, workflowPath = featureWorkflowConfigPath): void {
   const config = validateFeatureWorkflow(configuration), protectedFiles = [config.template, config.base, config.readyCheck, config.doneCheck, config.readyPrompt, config.donePrompt, config.readyReviewPrompt, featureWorkflowPath(workflowPath)].filter((path): path is string => path !== undefined);
   const inside = (path: string, root: string) => path === root || path.startsWith(root + '/');
-  if (paths.some(path => { const lower = path.toLowerCase(); return [config.requestsDirectory, config.reviewDirectory, featureTaskDirectory(config)].some(root => inside(lower, root.toLowerCase())) || protectedFiles.some(file => lower === file.toLowerCase()); })) invalid('Approved paths cannot change workflow configuration, checks, definition prompts, templates, Base files, request queues or generated Task and review notes.');
+  // A folder approval (ending in /) is refused when it contains, or lies within, protected workflow storage.
+  const touches = (path: string, protectedPath: string) => path.endsWith('/') ? inside(protectedPath, path.slice(0, -1)) || inside(path.slice(0, -1), protectedPath) : inside(path, protectedPath);
+  if (paths.some(path => { const lower = path.toLowerCase(); return [config.requestsDirectory, config.reviewDirectory, featureTaskDirectory(config)].some(root => touches(lower, root.toLowerCase())) || protectedFiles.some(file => lower.endsWith('/') ? inside(file.toLowerCase(), lower.slice(0, -1)) : lower === file.toLowerCase()); })) invalid('Approved paths cannot change workflow configuration, checks, definition prompts, templates, Base files, request queues or generated Task and review notes.');
 }
 export function validateFeatureReadiness(markdown: string, readyCheck: FeatureCheck, provider = 'codex-cli', template?: string, scope?: FeatureReadinessScope): FeatureReadiness {
   const policy = featureWorkflowPolicy(readyCheck, defaultFeatureCheck('done'));
@@ -87,8 +89,8 @@ export function validateFeatureReadiness(markdown: string, readyCheck: FeatureCh
     if (!scope?.allowLegacyProgressMetadata && ['werkOwner', 'werkTask', 'werkPullRequest'].some(key => Object.hasOwn(parsed.data, key))) invalid('New shared requests must not contain worker-owned progress links.');
     if (parsed.data.werk !== undefined || parsed.data.source !== undefined) invalid('New shared feature requests must not contain worker-owned werk or source metadata.');
     if (base.mode !== 'patch' || !base.paths?.length) invalid('Shared feature requests require mode: patch and explicit approved paths.');
-    validateApprovedPaths(base.paths);
-    for (const path of base.paths) featureWorkflowPath(path, 'Approved path');
+    validateApprovedPaths(base.paths, 'Approved paths', { folders: true });
+    for (const path of base.paths) featureWorkflowPath(path.endsWith('/') ? path.slice(0, -1) : path, 'Approved path');
     if (scope) validateFeatureWorkflowApprovedPaths(base.paths, scope.configuration, scope.workflowPath);
     if (new Set(base.paths.map(path => path.toLowerCase())).size !== base.paths.length) invalid('Approved paths must be distinct, including on case-insensitive filesystems.');
     const sections = featureRequestSections(parsed.body);
