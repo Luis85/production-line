@@ -203,6 +203,17 @@ test('saved CLI grants persist privately and an empty list stays readable by ear
   assert.equal(publicToolPolicy(reloaded.toolPolicy()).builtins.cliTools[0].executable, process.execPath);
 });
 
+test('a saved cmd.exe CLI tool stops startup with the file, the entry and the fix', async t => {
+  const path = await directory(t), settings = new WorkerSettings(path); await settings.init();
+  const base = settings.toolPolicy();
+  await settings.updateToolAccess({ expectedRevision: base.revision, builtins: { ...base.builtins, cliTools: [harness()] }, mcp: [] });
+  const file = join(path, 'tool-access.json'), saved = JSON.parse(await readFile(file, 'utf8'));
+  saved.builtins.cliTools[0].executable = 'C:\\Windows\\System32\\cmd.exe'; await writeFile(file, JSON.stringify(saved));
+  const message = await new WorkerSettings(path).init().then(() => '', error => error.message);
+  assert.ok(message.startsWith(file + ': CLI tool "harness": CLI tools cannot run cmd.exe'), message);
+  assert.match(message, /Remove or replace this CLI tool: use a command preset.*Edit or remove that entry in .*tool-access\.json, then start the worker again\./);
+});
+
 test('tool-access CLI commands round-trip the redacted view and guard discovery with a revision', async () => {
   const catalog = commands('worker');
   assert.deepEqual([catalog['tool-access get'].method, catalog['tool-access set'].method, catalog['tool-access discover'].method], ['GET', 'POST', 'POST']);

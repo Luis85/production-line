@@ -41,8 +41,13 @@ export class WorkerSettings {
       this.value = this.validate(this.value); await this.persist(this.value);
     }
     if (this.executionOverride) { this.value.execution = { ...this.value.execution, maxRuntimeMs: this.executionOverride.maxRuntimeMs }; this.executionSource = 'environment'; }
-    try { this.tools = validateToolPolicy(JSON.parse(await readBoundedFile(join(this.directory, 'tool-access.json'), 655360))); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    const toolAccess = join(this.directory, 'tool-access.json');
+    try { this.tools = validateToolPolicy(JSON.parse(await readBoundedFile(toolAccess, 655360))); }
+    catch (error) {
+      // A saved grant that this version refuses, such as a cmd.exe CLI tool, names the file and entry to fix.
+      if (error instanceof DomainError) throw new DomainError(error.code, `${toolAccess}: ${error.message} Edit or remove that entry in ${toolAccess}, then start the worker again.`);
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
 
   }
   toolPolicy(): ToolPolicy { return structuredClone(this.tools); }

@@ -102,6 +102,9 @@ test('contained Windows cmd.exe does not interpret model-style arguments unless 
   const comspec = process.env.ComSpec;
   const options = { cwd: process.cwd(), signal: new AbortController().signal, timeoutMs: 30000, maxOutputBytes: 65536 };
   const model = await runApprovedToolProcess(comspec, ['/d', '/s', '/c', 'echo', 'x & echo INJECTED'], options);
+  // cmd.exe must run and echo the model text literally: a failed launch would also lack INJECTED.
+  assert.equal(model.exitCode, 0, model.stderr.toString());
+  assert.match(model.stdout.toString(), /x & echo INJECTED/, 'the model text reaches echo as literal text');
   assert.doesNotMatch(model.stdout.toString(), /^INJECTED/m, 'CLI-tool launches keep CRT quoting, so the second command never runs');
   const fixed = await runApprovedToolProcess(comspec, ['/d', '/s', '/c', 'echo a b & echo c'], { ...options, fixedArguments: true });
   assert.match(fixed.stdout.toString(), /^a b\s*\r?\nc\s*$/);
