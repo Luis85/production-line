@@ -7,7 +7,7 @@ import { gateDigest } from './request-gates.js';
 import type { ToolPolicy, ToolCommandPreset } from './tool-policy.js';
 import type { ToolWorktreeIdentity } from './tool-runtime.js';
 import type { CandidateLimits } from './execution-policy.js';
-import { sharedFeaturePublicationLimits, type SharedFeaturePublicationLimits } from './shared-feature-publication-limits.js';
+import { sharedFeaturePublicationIssue, sharedFeaturePublicationLimits, type SharedFeaturePublicationLimits } from './shared-feature-publication-limits.js';
 
 /** Frozen authority for a new repository implementation. Never inferred for saved proposal tasks. */
 export interface DevelopmentCheck { id: string; name: string; executable: string; args: string[]; fingerprint: string; timeoutMs?: number; }
@@ -72,7 +72,9 @@ export function assertDevelopmentPolicy(scope: DevelopmentScope, policy: ToolPol
   if (!current || gateDigest(current.checks) !== gateDigest(scope.checks))
     throw new DomainError('conflict', 'Repository file access or the required verification commands changed. Create a new request with the current verification plan; retained changes are preserved.');
 }
+/** A shared-intake candidate above the publication bounds is never verified, even with passing receipts (defense in depth). */
 export function developmentVerified(scope: DevelopmentScope, candidate: DevelopmentCandidate, evidence: DevelopmentEvidence | undefined): boolean {
+  if (scope.sharedPublication && sharedFeaturePublicationIssue(candidate.patch) !== undefined) return false;
   return !!candidate.patch.trim() && candidate.changedPaths.length > 0 && !!evidence && evidence.candidateDigest === candidate.digest &&
     gateDigest([...candidate.changedPaths].sort()) === gateDigest([...evidence.changedPaths].sort()) &&
     classifyDevelopmentEvidence(scope, evidence).verified;

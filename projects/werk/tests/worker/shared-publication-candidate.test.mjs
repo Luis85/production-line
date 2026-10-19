@@ -9,7 +9,7 @@ import { createRepositoryWorktree, repositoryRoot } from '../../src/worker/dist/
 import { createToolRuntime } from '../../src/worker/dist/worker/infrastructure/tool-runtime.js';
 import { GitFeatureRepository } from '../../src/worker/dist/worker/infrastructure/features/git-repository.js';
 import { defaultToolPolicy, validateToolPolicy } from '../../src/worker/dist/worker/application/tool-policy.js';
-import { developmentScopeView, freezeDevelopmentScope, validateDevelopmentState } from '../../src/worker/dist/worker/application/development.js';
+import { developmentScopeView, developmentVerified, freezeDevelopmentScope, validateDevelopmentState } from '../../src/worker/dist/worker/application/development.js';
 import { sharedFeaturePublicationIssue, sharedFeaturePublicationLimits } from '../../src/worker/dist/worker/application/shared-feature-publication-limits.js';
 import { cleanup } from './fixture-cleanup.mjs';
 
@@ -107,4 +107,13 @@ test('the same candidates as local requests pass and status shows no publication
     const check = await f.call('werk_candidate_check', { preset: 'check' });
     assert.equal(check.isError, false); assert.equal(check.value.status, 'passed');
   }
+});
+
+test('developmentVerified refuses a shared-scope candidate above the publication bounds even with passing receipts', async t => {
+  const f = await fixture(t, manyFiles(33), { shared: false });
+  assert.equal((await f.development.check('check', signal())).status, 'passed');
+  const candidate = await f.development.capture(signal()), evidence = f.development.evidence();
+  assert.equal(developmentVerified(f.scope, candidate, evidence), true, 'A local request has no publication bound.');
+  const shared = { ...f.scope, sharedPublication: { ...sharedFeaturePublicationLimits } };
+  assert.equal(developmentVerified(shared, candidate, evidence), false, 'Defense in depth: the receipts alone never verify an unpublishable shared candidate.');
 });
