@@ -98,8 +98,13 @@ Unchanged files below an approved folder are inspected like other source files a
 do not count toward the approved limits. Every changed approved file appears in the
 review patch, so the patch limit (at most 4 MiB) also bounds approved content in
 practice, whatever the per-file and total settings allow.
-`werk_candidate_status` lists exact approved files, changed files and up to 200 other
-files below approved folders; the model requests the hashes of other files by path. Approved files must be UTF-8 text. The
+`werk_candidate_status` and `werk_candidate_apply` return a listing bounded to 64 KiB:
+exact approved files and requested paths with hashes, then changed files (marked
+`changed`; beyond the budget without hashes, then only counted) and up to 200 other
+files below approved folders. `filesNote` says when the listing is incomplete; the
+model requests the hashes of other files by path. A file below an approved folder that
+the repository's `.gitignore` excludes is refused, because it would be neither
+reviewed nor published. Approved files must be UTF-8 text. The
 review patch contains only approved paths. An error names the measured size, the
 limit and the setting, for example `Approved candidate text is 60,000 bytes; the
 approved content limit is 48,000 bytes (execution.candidateApprovedTotalMaxBytes).`

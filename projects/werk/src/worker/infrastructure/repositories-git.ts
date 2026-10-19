@@ -32,13 +32,21 @@ export function candidateGitOutputBytes(inspection: Partial<CandidateInspectionL
 }
 /** Bounded, noninteractive Git; credentials and command diagnostics never enter status or evidence. Callers listing whole trees may raise the output bound. */
 export async function repositoryGit(cwd: string, args: string[], signal: AbortSignal, timeoutMs = 30000, maxOutputBytes = DEFAULT_GIT_OUTPUT_BYTES): Promise<string> {
+  return (await gitRun(cwd, args, signal, timeoutMs, maxOutputBytes, false)).stdout.toString('utf8');
+}
+/** True when Git's ignore rules exclude the relative path, which need not exist; tracked files are never ignored. */
+export async function repositoryPathIgnored(cwd: string, path: string, signal: AbortSignal): Promise<boolean> {
+  const { exitCode } = await gitRun(cwd, ['check-ignore', '-q', '--', path], signal, 30000, 65536, true);
+  if (exitCode !== 0 && exitCode !== 1) throw new RepositoryGitError('failed');
+  return exitCode === 0;
+}
+async function gitRun(cwd: string, args: string[], signal: AbortSignal, timeoutMs: number, maxOutputBytes: number, allowNonZeroExit: boolean) {
   signal.throwIfAborted();
   try {
     const mode = gitLaunchMode(args), env = gitEnvironment(mode === 'plain' ? 'host-local' : 'host');
-    const result = await runProcess(await gitExecutable(cwd, env, mode), ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'log.showSignature=false', '-c', 'core.longpaths=true', '-c', 'submodule.recurse=false', '-c', 'protocol.ext.allow=never', ...args], {
-      cwd, env, mode, observation: { kind: 'git', label: 'Git operation' }, signal, timeoutMs, maxOutputBytes,
+    return await runProcess(await gitExecutable(cwd, env, mode), ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'log.showSignature=false', '-c', 'core.longpaths=true', '-c', 'submodule.recurse=false', '-c', 'protocol.ext.allow=never', ...args], {
+      cwd, env, mode, observation: { kind: 'git', label: 'Git operation' }, signal, timeoutMs, maxOutputBytes, allowNonZeroExit,
     });
-    return result.stdout.toString('utf8');
   } catch (error) {
     const reason = error instanceof ProcessRunError ? error.reason : 'spawn';
     throw new RepositoryGitError(signal.aborted || reason === 'cancelled' ? 'cancelled' : reason === 'timeout' ? 'timeout' : 'failed', reason === 'output_limit');

@@ -18,8 +18,13 @@ export interface DevelopmentCheckEvidence {
 }
 export interface DevelopmentEvidence { schemaVersion: 1; candidateDigest: string | null; changedPaths: string[]; checks: DevelopmentCheckEvidence[]; updatedAt: string; }
 export interface DevelopmentCompletion { turnId: string; runId: string; candidateDigest: string; patchSha256: string; evidenceDigest: string; verified: boolean; }
-/** `files` lists approved files with hashes; `omittedFiles` counts unchanged files below approved folders left out of a bounded listing. */
-export interface DevelopmentCandidate { patch: string; digest: string; changedPaths: string[]; files?: Array<{ path: string; hash: string | null }>; omittedFiles?: number; }
+/** An approved file and its current hash (null when absent); `changed` marks candidate changes. */
+export interface DevelopmentListedFile { path: string; hash: string | null; changed?: true }
+/**
+ * `changedPaths` is always complete. `files` is a byte-bounded listing with hashes; changed paths beyond its budget are
+ * listed without hashes, then counted, and `omittedFiles` counts unchanged files below approved folders left out.
+ */
+export interface DevelopmentCandidate { patch: string; digest: string; changedPaths: string[]; files?: DevelopmentListedFile[]; changedPathsWithoutHashes?: string[]; omittedChangedPaths?: number; omittedFiles?: number; }
 export interface DevelopmentRuntime {
   /** Validate the retained workspace and durably invalidate earlier checks before a native provider may edit. */
   prepareNative?(signal: AbortSignal): Promise<void>;

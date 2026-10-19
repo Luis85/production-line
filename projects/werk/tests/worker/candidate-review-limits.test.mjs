@@ -71,7 +71,7 @@ async function fixture(t, files, approvedPaths, committed = {}) {
   policy.builtins.files = true; policy.builtins.commands = [{ id: 'check', name: 'Check', executable: process.execPath, args: ['-e', ''], enabled: true, verification: true }]; policy = validateToolPolicy(policy);
   const scope = freezeDevelopmentScope(prepared.baseCommit, approvedPaths, policy);
   const create = limits => createDevelopmentRuntime({ scope, worktree: prepared.path, worktreeIdentity, repository, currentPolicy: () => policy, checkpoint: async () => {}, verifyWorkspace: async () => {}, ...limits });
-  return Object.assign(create, { tools: development => createToolRuntime({ policy, currentRevision: () => policy.revision, directory, worktree: prepared.path, worktreeIdentity, development }) });
+  return Object.assign(create, { worktree: prepared.path, tools: development => createToolRuntime({ policy, currentRevision: () => policy.revision, directory, worktree: prepared.path, worktreeIdentity, development }) });
 }
 const lines = (count, width = 99) => Array.from({ length: count }, (_, index) => String(index).padStart(width, 'x')).join('\n') + '\n';
 
@@ -125,7 +125,8 @@ test('werk_candidate_apply uses the frozen approved file and total limits and na
   const raised = (await fixture(t, { 'gen/a.ts': lines(200) }, ['gen/']))({ candidateApprovedFileMaxBytes: 30000, candidateApprovedTotalMaxBytes: 50000 });
   await assert.rejects(raised.apply({ path: 'gen/new.ts', content: 'x'.repeat(30001), expectedHash: null }, signal()), /is 30,001 bytes; the approved file limit is 30,000 bytes/);
   const result = await raised.apply({ path: 'gen/new.ts', content: 'x'.repeat(29000), expectedHash: null }, signal());
-  assert.ok(/** @type {{ changedPaths: string[] }} */ (result).changedPaths.includes('gen/new.ts'), 'content above the default per-file bound is accepted under the frozen raised limit');
+  const view = /** @type {{ changedFileCount: number; files: Array<{ path: string; changed?: true }> }} */ (result);
+  assert.ok(view.files.some(file => file.path === 'gen/new.ts' && file.changed) && view.changedFileCount === 2, 'content above the default per-file bound is accepted under the frozen raised limit');
 });
 
 test('implementation dispatches freeze the approved content limits, record them as evidence and size the apply schema', async t => {
@@ -174,4 +175,45 @@ test('implementation dispatches freeze the approved content limits, record them 
     value => { value.toolManifest.limits.candidateReview.candidateSourceMaxBytes = 67108864; },
   ]) assert.throws(() => requireModelRequest(changed(change), connection.id), { code: 'protocol' });
   assert.throws(() => requireModelRequest({ ...structuredClone(chat), policy: { ...chat.policy, ...captured } }, connection.id), { code: 'protocol' });
+});
+
+test('hundreds of changed files below a folder keep status and apply results under the tool result limit', async t => {
+  const name = index => `gen/generated/components/feature-module-${String(index).padStart(3, '0')}.generated.ts`;
+  const committed = Object.fromEntries(Array.from({ length: 300 }, (_, index) => [name(index), `export const removed${index} = ${index};\n`]));
+  const added = Object.fromEntries(Array.from({ length: 300 }, (_, index) => [name(300 + index), `export const added${index} = ${index};\n`]));
+  const create = await fixture(t, added, ['gen/', 'readme.md'], committed);
+  for (const path of Object.keys(committed)) await rm(join(create.worktree, path));
+  const runtime = create({ candidateReviewPatchMaxBytes: 1024 * 1024 }), broker = create.tools(runtime); cleanup(t, () => broker.close());
+  /** @param {{ content: Array<{ text: string }>; isError?: boolean }} result */
+  const view = result => { assert.equal(result.isError, undefined, result.content[0].text); assert.ok(Buffer.byteLength(JSON.stringify(result)) < 100 * 1024); return JSON.parse(result.content[0].text); };
+  const status = view(await broker.call('werk_candidate_status', {}, signal()));
+  assert.equal(status.changedFileCount, 600); assert.equal(status.evidence.changedPaths, undefined, 'evidence does not repeat the changed paths');
+  const hashed = status.files.filter(file => file.changed).map(file => file.path), unhashed = status.changedPathsWithoutHashes ?? [];
+  assert.ok(hashed.length > 0 && unhashed.length > 0, 'beyond the budget, changed paths are listed without hashes');
+  assert.equal(new Set([...hashed, ...unhashed]).size, hashed.length + unhashed.length, 'each changed path appears once');
+  assert.equal(hashed.length + unhashed.length + (status.omittedChangedPaths ?? 0), 600);
+  assert.ok(status.files.some(file => file.path === 'readme.md' && /^[a-f0-9]{64}$/.test(file.hash)), 'exact entries keep their hashes');
+  assert.match(status.filesNote, /changed paths are listed without hashes.*Call werk_candidate_status with paths/);
+  const requested = view(await broker.call('werk_candidate_status', { paths: [unhashed.at(-1)] }, signal()));
+  assert.ok(requested.files.some(file => file.path === unhashed.at(-1) && file.changed && 'hash' in file), 'requested paths keep their hashes');
+  const applied = view(await broker.call('werk_candidate_apply', { path: 'gen/new-module.ts', content: 'export const created = true;\n', expectedHash: null }, signal()));
+  assert.equal(applied.changedFileCount, 601); assert.match(applied.filesNote, /Call werk_candidate_status with paths/);
+  assert.equal(await readFile(join(create.worktree, 'gen/new-module.ts'), 'utf8'), 'export const created = true;\n');
+  assert.equal((await runtime.capture(signal())).changedPaths.length, 601, 'the internal candidate keeps every changed path');
+});
+
+test('a staged move from outside an approved folder into it fails the outside-scope check', async t => {
+  const create = await fixture(t, {}, ['gen/'], { 'other.ts': 'export const other = 1;\n' });
+  await mkdir(join(create.worktree, 'gen'), { recursive: true }); git(create.worktree, 'mv', 'other.ts', 'gen/moved.ts');
+  await assert.rejects(create().capture(signal()), { message: 'The worktree contains changes outside the approved paths, including "other.ts". Inspect them before continuing; they will not be published.' });
+});
+
+test('apply refuses ignored paths below a folder but keeps exact entries; non-UTF-8 files are named', async t => {
+  const create = await fixture(t, {}, ['gen/', 'build/exact.js'], { '.gitignore': 'dist/\nbuild/\n' }), runtime = create();
+  await assert.rejects(runtime.apply({ path: 'gen/dist/bundle.js', content: 'x\n', expectedHash: null }, signal()), { message: '"gen/dist/bundle.js" is ignored by the repository\'s Git ignore rules, so it would not be reviewed or published. Choose a path that is not ignored, approve it as an exact file, or change the ignore rules in the base commit.' });
+  await assert.rejects(readFile(join(create.worktree, 'gen/dist/bundle.js')), { code: 'ENOENT' });
+  const exact = /** @type {{ changedFileCount: number }} */ (await runtime.apply({ path: 'build/exact.js', content: 'x\n', expectedHash: null }, signal()));
+  assert.equal(exact.changedFileCount, 1, 'an ignored exact entry is still fingerprinted and published');
+  await mkdir(join(create.worktree, 'gen'), { recursive: true }); await writeFile(join(create.worktree, 'gen/binary.ts'), Buffer.from([0xff, 0xfe, 0x41]));
+  await assert.rejects(runtime.capture(signal()), { message: 'Approved candidate file "gen/binary.ts" is not UTF-8 text without NUL characters; approved files are reviewed as text, so replace or delete it.' });
 });

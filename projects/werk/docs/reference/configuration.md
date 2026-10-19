@@ -249,9 +249,16 @@ these limits never widens the approved paths: the review patch contains only
 approved paths. These settings have no webview editor yet; use `settings set`.
 The taskboard stores each review patch in one document limited to 16 MiB, so the
 review patch maximum is 4 MiB; shared feature publication keeps its 128 KiB patch bound.
-`werk_candidate_status` lists exact approved files, changed files and up to 200 other
-files below approved folders, with `omittedFiles` counting the rest; its optional
-`paths` argument returns the hashes of specific approved files.
+`werk_candidate_status` and `werk_candidate_apply` return a listing bounded to 64 KiB of
+paths and hashes, well below the 128 KiB tool result limit. Exact approved files and
+requested paths always keep their hashes; changed files follow with `changed: true`,
+beyond the budget in `changedPathsWithoutHashes` and then counted in
+`omittedChangedPaths`; up to 200 other files below approved folders fill the rest,
+with `omittedFiles` counting those left out and `filesNote` explaining any gap.
+`changedFileCount` is the complete number of changed files. The optional `paths`
+argument of `werk_candidate_status` (at most 32) returns the hashes of specific
+approved files. `werk_candidate_apply` refuses a path below an approved folder that
+the repository's Git ignore rules exclude, naming the path.
 
 The private settings API and `settings set --file` use whole bytes, for example
 `{"execution":{"candidateSourceMaxBytes":134217728}}`. `settings get` shows the

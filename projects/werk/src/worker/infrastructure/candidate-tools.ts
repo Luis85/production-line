@@ -8,7 +8,8 @@ import { ProcessRunError } from '../../shared/process/launcher.js';
 import type { DevelopmentFactory, DevelopmentEvidence, DevelopmentCandidate, DevelopmentCheckEvidence } from '../application/development.js';
 import { assertDevelopmentPolicy, validateDevelopmentState } from '../application/development.js';
 import { approvedFolder, approvedPathMatch, validateApprovedPaths } from '../application/approved-paths.js';
-import { candidateGitOutputBytes, RepositoryGitError, repositoryGit } from './repositories-git.js';
+import { candidateGitOutputBytes, RepositoryGitError, repositoryGit, repositoryPathIgnored } from './repositories-git.js';
+import { boundedListing, candidateView } from './candidate-listing.js';
 import { syncDirectory } from './journal/files.js';
 import { resolveCandidateInspectionLimits, resolveCandidateReviewLimits, resolveCommandTimeoutMs } from '../application/tool-limits.js';
 
@@ -22,8 +23,6 @@ const below = (root: string, target: string) => { const path = relative(root, ta
 const missing = (error: unknown) => (error as NodeJS.ErrnoException).code === 'ENOENT';
 const safeRelative = (path: string) => !!path && !isAbsolute(path) && !path.includes('\\') && !path.includes(':') && !path.includes('\0') && path.split('/').every(part => !!part && part !== '..' && part !== '.' && part.toLowerCase() !== '.git');
 const count = (value: number) => value.toLocaleString('en-US');
-/** Unchanged files below approved folders listed in status and apply results; exact, changed and requested files are always listed. */
-const CANDIDATE_LISTED_FOLDER_FILES = 200;
 const cleanOutput = (bytes: Buffer) => bytes.toString('utf8').replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '').slice(0, 4096);
 
 /** Lazy, private worktree adapter. The application supplies retained ownership verification and durable evidence storage. */
@@ -124,9 +123,10 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
     await rootIdentity(); authorize(signal);
     return size;
   }
-  function text(body: Buffer) {
-    if (body.includes(0)) fail('Approved candidate files must contain UTF-8 text.');
-    try { return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(body); } catch { return fail('Approved candidate files must contain UTF-8 text.'); }
+  function text(path: string, body: Buffer) {
+    const notText = () => fail(`Approved candidate file ${JSON.stringify(path)} is not UTF-8 text without NUL characters; approved files are reviewed as text, so replace or delete it.`);
+    if (body.includes(0)) notText();
+    try { return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(body); } catch { return notText(); }
   }
   /**
    * Exact approved files are always reviewed text. Below an approved folder, every safe file is listed with its hash for
@@ -134,7 +134,7 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
    */
   async function inspectOnce(signal: AbortSignal): Promise<InspectedCandidate> {
     await guard(signal);
-    const changed = await listing(['diff', '--no-ext-diff', '--no-textconv', '--name-only', '-z', scope.baseCommit, '--'], signal);
+    const changed = await listing(['diff', '--no-ext-diff', '--no-textconv', '--no-renames', '--name-only', '-z', scope.baseCommit, '--'], signal);
     const untracked = await listing(['ls-files', '-z', '--others', '--exclude-standard'], signal);
     const outside = [...changed, ...untracked].find(path => !isApproved(path));
     if (outside !== undefined) fail(`The worktree contains changes outside the approved paths, including ${JSON.stringify(outside)}. Inspect them before continuing; they will not be published.`);
@@ -164,11 +164,11 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
       approvedTotal += reviewedSizes[path];
       if (approvedTotal > review.candidateApprovedTotalMaxBytes) fail(approvedTotalError(approvedTotal + await sizeOnDisk(paths.slice(index + 1).filter(reviewed), signal)));
       if (value) {
-        const content = text(value.body);
+        const content = text(path, value.body);
         if (!trackedSet.has(path)) additions.push({ path, content, mode: value.mode });
       }
     }
-    // Folder entries are Git directory pathspecs; every changed path below them was approved above.
+    // Folder entries are Git directory pathspecs; every changed path below them was approved above (renames are split, so a moved-out source is checked too).
     const patchBytes = Math.max(2 * 1024 * 1024, review.candidateReviewPatchMaxBytes + 1);
     let patch = await repositoryGit(root, ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '--no-renames', '--binary', '--src-prefix=a/', '--dst-prefix=b/', scope.baseCommit, '--', ...approved], signal, 30000, patchBytes).catch(error => {
       if (error instanceof RepositoryGitError && error.outputLimit) fail(patchError('more than ' + count(patchBytes - 1)));
@@ -199,17 +199,10 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
     if (state.candidateDigest !== candidate.digest) await checkpoint(updated(candidate, []));
     return candidate;
   }
-  /** Bounded model-facing listing: a wide approved folder cannot produce unbounded tool output. */
+  /** Byte-bounded model-facing listing: a wide approved folder cannot exceed the tool result limit. `changedPaths` stays complete. */
   function listed(candidate: InspectedCandidate, requested: readonly string[] = []): DevelopmentCandidate {
     if (!Array.isArray(requested) || requested.length > 32 || requested.some(path => typeof path !== 'string' || !isApproved(path))) fail('Request hashes for at most 32 approved paths (approved files or safe files below an approved folder).');
-    const always = new Set([...exact, ...candidate.changedPaths]), all = candidate.files ?? [];
-    const others = all.filter(file => !always.has(file.path) && !requested.includes(file.path));
-    const kept = new Set(others.slice(0, CANDIDATE_LISTED_FOLDER_FILES).map(file => file.path));
-    const files = all.filter(file => always.has(file.path) || requested.includes(file.path) || kept.has(file.path));
-    for (const path of requested) if (!files.some(file => file.path === path)) files.push({ path, hash: null });
-    files.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
-    const omitted = others.length - kept.size;
-    return { patch: candidate.patch, digest: candidate.digest, changedPaths: candidate.changedPaths, files, ...(omitted ? { omittedFiles: omitted } : {}) };
+    return { patch: candidate.patch, digest: candidate.digest, changedPaths: candidate.changedPaths, ...boundedListing(candidate.files ?? [], candidate.changedPaths, new Set(exact), [...new Set(requested)]) };
   }
   return {
     evidence: () => structuredClone(state),
@@ -222,6 +215,8 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
     apply: (input, signal) => serial(async () => {
       await guard(signal);
       if (!input || typeof input.path !== 'string' || !isApproved(input.path) || input.content !== null && typeof input.content !== 'string' || !Object.hasOwn(input, 'expectedHash') || input.expectedHash !== null && !/^[a-f0-9]{64}$/.test(input.expectedHash ?? '')) fail('Apply one explicitly approved path (an approved file, or a safe file below an approved folder ending in /) with content (or null to delete) and its current expectedHash from candidate status.');
+      // Ignored files below a folder are neither fingerprinted nor published; exact entries are always inspected.
+      if (!exact.includes(input.path) && await repositoryPathIgnored(root, input.path, signal)) fail(`${JSON.stringify(input.path)} is ignored by the repository's Git ignore rules, so it would not be reviewed or published. Choose a path that is not ignored, approve it as an exact file, or change the ignore rules in the base commit.`);
       const before = await inspect(signal);
       // Files below an approved folder that do not exist yet have no status entry; their current hash is null.
       const current = before.files!.find(file => file.path === input.path)?.hash ?? null;
@@ -262,8 +257,7 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
       }
       await syncDirectory(dirname(target));
       const after = await inspect(signal); await checkpoint(updated(after, []));
-      const view = listed(after);
-      return { digest: view.digest, changedPaths: view.changedPaths, files: view.files, ...(view.omittedFiles ? { omittedFiles: view.omittedFiles } : {}) };
+      return candidateView(listed(after));
     }),
     check: (presetId, signal) => serial(async () => {
       const preset = scope.checks.find(check => check.id === presetId);
