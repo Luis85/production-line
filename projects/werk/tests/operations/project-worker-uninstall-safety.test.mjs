@@ -27,6 +27,8 @@ test('tracking ignores case where Git does, so committed files under a different
 test('a nested Git repository inside a removed folder is kept and reported', { timeout: 180000 }, async t => {
   const cwd = await project(t), vault = join(cwd, 'features/vault');
   await mkdir(vault); await git(vault, 'init', '-q'); await writeFile(join(vault, 'note.md'), 'private\n');
+  const preview = await cli(cwd, 'uninstall', '--dry-run', '--include-requests');
+  assert.deepEqual(preview.keep.find(item => item.repositories)?.repositories, ['features/vault'], 'The dry run predicts the nested repository.');
   const result = await cli(cwd, 'uninstall', '--confirm', '--include-requests');
   assert.equal(await readFile(join(vault, 'note.md'), 'utf8'), 'private\n');
   assert.deepEqual(result.kept.find(item => item.repositories)?.repositories, ['features/vault']);
@@ -36,7 +38,13 @@ test('ignore rules and the project marker stay while worker state could not be r
   const cwd = await project(t), outside = await temporary(t, 'werk-uninstall-outside-');
   await writeFile(join(outside, 'keep.txt'), 'outside\n');
   await writeFile(join(cwd, '.werk/worker/webview-token'), 'a'.repeat(64));
-  await symlink(outside, join(cwd, '.werk/worker/linked'), 'junction');
+  await mkdir(join(cwd, '.werk/worker/snapshots'));
+  await symlink(outside, join(cwd, '.werk/worker/snapshots/linked'), 'junction');
+  const preview = await cli(cwd, 'uninstall', '--dry-run');
+  for (const path of ['.werk/.gitignore', '.werk/worker-project.json']) {
+    assert.match(preview.keep.find(item => item.path === path)?.reason ?? '', /Kept while .*worker still exists/, 'The dry run predicts the guard ' + path);
+    assert.equal(preview.remove.some(item => item.path === path), false);
+  }
   const result = await cli(cwd, 'uninstall', '--confirm');
   assert.equal(await readFile(join(outside, 'keep.txt'), 'utf8'), 'outside\n', 'Links are never followed.');
   assert.equal(await exists(join(cwd, '.werk/worker/webview-token')), false);
@@ -47,14 +55,17 @@ test('ignore rules and the project marker stay while worker state could not be r
   assert.equal(await exists(join(cwd, '.werk/worker.lock')) || await exists(join(cwd, '.werk/worker/worker.lock')), false, 'The lock is released.');
 });
 
-test('a state directory without worker state files is kept, whatever --state-dir names', { timeout: 180000 }, async t => {
+test('a state directory holding anything the worker does not write is kept whole, even with a worker file', { timeout: 180000 }, async t => {
   const cwd = await project(t);
-  await mkdir(join(cwd, 'data')); await writeFile(join(cwd, 'data/notes.txt'), 'unrelated\n');
+  await mkdir(join(cwd, 'data')); await writeFile(join(cwd, 'data/notes.txt'), 'unrelated\n'); await writeFile(join(cwd, 'data/webview-token'), 'd'.repeat(64));
   const listed = (await cli(cwd, 'footprint', '--state-dir', 'data')).groups.state.find(entry => entry.path === 'data');
-  assert.equal(listed.workerState, false);
+  assert.equal(listed.workerState, false); assert.deepEqual(listed.unknownEntries, ['notes.txt']);
   const result = await cli(cwd, 'uninstall', '--confirm', '--state-dir', 'data');
   assert.equal(await readFile(join(cwd, 'data/notes.txt'), 'utf8'), 'unrelated\n');
-  assert.match(result.kept.find(item => item.path === 'data').reason, /no worker state files/);
+  assert.equal(await exists(join(cwd, 'data/webview-token')), true, 'Nothing in the folder is removed.');
+  const kept = result.kept.find(item => item.path === 'data');
+  assert.match(kept.reason, /entries the worker does not write/); assert.deepEqual(kept.unknownEntries, ['notes.txt']);
+  assert.equal(await exists(join(cwd, '.werk/worker-project.json')), true, 'The marker stays while the selected state stays.');
   assert.equal(await exists(join(cwd, 'data/worker.lock')), false, 'The lock is released.');
 });
 
@@ -69,7 +80,7 @@ test('a state directory that holds other project files, such as .werk, is kept',
 test('a folder holding a task worktree that stays is never removed', { timeout: 180000 }, async t => {
   const cwd = await project(t), other = await temporary(t, 'werk-uninstall-repo-');
   await git(other, 'init', '-q'); await writeFile(join(other, 'README.md'), 'other\n'); await git(other, 'add', 'README.md'); await git(other, 'commit', '-q', '-m', 'init');
-  const storage = join(cwd, '.werk/worker/tasks');
+  const storage = join(cwd, '.werk/worker/worktrees');
   await mkdir(storage); await writeFile(join(cwd, '.werk/worker/webview-token'), 'c'.repeat(64));
   const config = JSON.parse(await readFile(join(cwd, '.werk/worker.json'), 'utf8'));
   await writeFile(join(cwd, '.werk/worker.json'), JSON.stringify({ ...config, repositories: { items: [{ id: 'other', path: other }], worktreeDirectory: storage } }), { mode: 0o600 });
@@ -81,6 +92,11 @@ test('a folder holding a task worktree that stays is never removed', { timeout: 
   assert.equal(await readFile(join(changed.path, 'draft.txt'), 'utf8'), 'unsaved\n');
   assert.equal(await exists(join(cwd, '.werk/worker/webview-token')), true);
   assert.match(result.kept.find(item => item.path === '.werk/worker').reason, /task worktree that stays/);
+  for (const path of ['.werk/.gitignore', '.werk/worker-project.json']) {
+    assert.equal(await exists(join(cwd, path)), true, path);
+    assert.match(result.kept.find(item => item.path === path).reason, /Kept while .*worker still exists/);
+    assert.match(preview.keep.find(item => item.path === path).reason, /Kept while .*worker still exists/);
+  }
 });
 
 test('an oversized generated file cannot be compared and is kept as edited', { timeout: 180000 }, async t => {

@@ -425,13 +425,22 @@ What stays:
 - Links, junctions, nested Git repositories or submodules (any folder with a
   `.git` entry), any folder that holds a task worktree that stays, and anything
   outside the project directory.
-- A state directory that has no worker state files (`webview-token`,
-  `workspace-settings.json`, `portable.json`, `portable.log`) or contains other
-  project files, which protects you from a mistaken `--state-dir` or
-  `WERK_WORKER_STATE_DIR` such as `.werk`.
-- `.werk/.gitignore` and `.werk/worker-project.json`, while worker state they
-  protect could not be removed. Resolve the reported paths and run
+- The whole state directory when its top level holds anything the worker does not
+  write (only names such as `webview-token`, `workspace-settings.json`,
+  `portable.json`, `portable.log`, `worker-*.sqlite` and its `-wal`/`-shm` files,
+  `snapshots/`, `outbox/` and `sessions/` count), or when it contains other project
+  files. The result lists the unknown entries as `unknownEntries`. This protects
+  you from a mistaken `--state-dir` or `WERK_WORKER_STATE_DIR` such as `.werk` or
+  a data folder.
+- `.werk/.gitignore` and `.werk/worker-project.json`, while any state, provider
+  home, retained or integration path they protect still exists, whether the plan
+  keeps it or its removal was incomplete. Resolve the reported paths and run
   `uninstall --confirm` again.
+
+`--dry-run` predicts these keeps, including nested repositories and the two guard
+files, so its `remove` and `keep` lists match what `--confirm` does unless files
+change in between. `--include-environment` rewrites `.env` through a temporary
+`.env.tmp-*` file next to it, which it removes again on failure.
 
 Git tracking is compared without regard to case wherever Git ignores case, as on
 Windows, so a file committed as `Features/request.md` counts as tracked in

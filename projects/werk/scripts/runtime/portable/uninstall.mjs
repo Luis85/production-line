@@ -1,12 +1,13 @@
 import { randomBytes } from 'node:crypto';
 import { lstat, open, realpath, rename, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createPrivate, inputError } from '../config.mjs';
 import { environmentExample, environmentKeys } from './environment.mjs';
 import { status, stop } from './lifecycle.mjs';
 import { inventory, taskWorktrees } from './footprint.mjs';
 import { holdsOtherThan, info, missing, pruneParents, removeUntracked, smallText, within } from './footprint-files.mjs';
+import { LOCK, ORDER, decide, guardedNow, isGuard, phase, predict, protectWorktrees, residue } from './uninstall-plan.mjs';
 
 /**
  * Guarded removal of a project worker. Git-tracked files, request folders and .env
@@ -16,51 +17,32 @@ import { holdsOtherThan, info, missing, pruneParents, removeUntracked, smallText
  * the .werk ignore rules and project marker go after everything they protect, and the
  * running CLI's own app goes last.
  */
-const ORDER = ['integrations', 'authoring', 'configuration', 'requests', 'environment', 'state', 'retained', 'ignore', 'marker', 'app'];
-const GUARDS = { '.werk/.gitignore': 'they keep worker state and credentials out of Git', '.werk/worker-project.json': 'uninstall finds this worker through it' };
-const LOCK = 'worker.lock';
-const keep = (entry, reason) => ({ action: 'keep', entry, reason });
-const phase = entry => entry.path === '.werk/.gitignore' ? 'ignore' : entry.path === '.werk/worker-project.json' ? 'marker' : entry.group;
 const STOP_HINT = 'Stop it first (node bin/apps/worker/cli.mjs stop, or docker compose --env-file .env -f .werk/compose.worker.yaml down), or pass --stop to stop the native worker gracefully.';
-
-function decide(entry, flags) {
-  if (!entry.exists) return null;
-  if (!entry.inside) return keep(entry, 'Outside the project directory or reached through a link; remove it manually after review.');
-  if (entry.type === 'link') return keep(entry, 'A symbolic link or junction; remove it manually after review.');
-  if (entry.type === 'special') return keep(entry, 'Not a regular file or directory; remove it manually after review.');
-  if (entry.stateDirectory && entry.holdsProjectFiles) return keep(entry, 'The selected state directory contains other project files; check --state-dir and WERK_WORKER_STATE_DIR.');
-  if (entry.stateDirectory && entry.workerState === false) return keep(entry, 'The selected state directory has no worker state files (webview-token, workspace-settings.json, portable.json, portable.log); check --state-dir and WERK_WORKER_STATE_DIR.');
-  if (entry.group === 'requests' && !flags['include-requests']) return keep(entry, 'Request folders are kept. Pass --include-requests to remove their untracked files.');
-  if (entry.group === 'environment') {
-    if (entry.path === '.gitignore') return entry.rules?.length ? keep(entry, 'Project ignore rules stay; they keep .env out of Git.') : null;
-    if (entry.path === '.env' ? !entry.keys?.length : !entry.werkBlock) return null;
-    if (!flags['include-environment']) return keep(entry, 'Environment entries are kept. Pass --include-environment to remove the worker entries.');
-    if (entry.tracked) return keep(entry, 'Tracked by Git; never changed.');
-    return { action: 'edit', entry };
-  }
-  if (entry.managed === false) return keep(entry, entry.note);
-  if (entry.type === 'file' && entry.tracked) return keep(entry, 'Tracked by Git; never removed.');
-  return { action: 'remove', entry };
-}
 const summary = ({ group, path, type, size, trackedFiles }) => ({ group, path, type, size, ...(trackedFiles ? { keepsTrackedFiles: trackedFiles } : {}) });
+const byPhase = (a, b) => ORDER.indexOf(phase(a.entry)) - ORDER.indexOf(phase(b.entry));
 
-/** Replace a private file through a sibling temporary file, so a failure leaves the original intact. */
+/**
+ * Replace a private file through a sibling temporary file named `.env.tmp-*`, which the
+ * usual `.env.*` ignore rules cover; it is removed again on any failure.
+ */
 async function replaceFile(path, text, mode) {
-  const temporary = `${path}.werk-${randomBytes(4).toString('hex')}`;
-  const handle = await open(temporary, 'wx', 0o600);
+  const temporary = join(dirname(path), `.env.tmp-${randomBytes(6).toString('hex')}`);
+  let moved = false;
   try {
-    if (process.platform !== 'win32') await handle.chmod(mode & 0o777);
-    await handle.writeFile(text); await handle.sync();
-  } catch (error) { await handle.close(); await unlink(temporary).catch(missing); throw error; }
-  await handle.close();
-  try { await rename(temporary, path); } catch (error) { await unlink(temporary).catch(missing); throw error; }
+    const handle = await open(temporary, 'wx', 0o600);
+    try {
+      if (process.platform !== 'win32') await handle.chmod(mode & 0o777);
+      await handle.writeFile(text); await handle.sync();
+    } finally { await handle.close(); }
+    await rename(temporary, path); moved = true;
+  } finally { if (!moved) await unlink(temporary).catch(missing); }
 }
 /** Remove the worker's .env keys or .env.example block; other lines and files stay unchanged. */
 async function editEnvironment(project, entry) {
   const path = join(project, entry.path), stat = await lstat(path);
   if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) return { kept: 'Not a single regular file; edit it manually.' };
   const text = await smallText(path);
-  if (text === undefined) return { kept: 'Larger than 64 KiB; edit it manually.' };
+  if (text === undefined) return { kept: 'Larger than 64 KiB or unreadable; edit it manually.' };
   const newline = text.includes('\r\n') ? '\r\n' : '\n';
   let next;
   if (entry.path === '.env') {
@@ -96,42 +78,23 @@ async function worktreePlan(root, project, state, layout, flags) {
   for (const failure of listing.errors) result.push({ group: 'worktrees', path: null, repositoryId: failure.repositoryId ?? null, outcome: 'kept', reason: failure.error });
   return result;
 }
-/** Paths that hold a task worktree staying in place are never removed recursively. */
-function protectWorktrees(plan, worktrees) {
-  const staying = worktrees.filter(item => item.outcome === 'kept' && item.name && item.path).map(item => item.path);
-  return plan.map(item => item.action !== 'keep' && staying.some(path => within(item.entry.absolute, path)) ? keep(item.entry, 'Contains a task worktree that stays; review the worktree first.') : item);
-}
 
 async function lockState(state) {
   const path = join(state, LOCK);
-  if (!await info(state)) return { path: null, release: async () => {} };
+  if (!await info(state)) return { path: null, real: undefined, release: async () => {} };
   try { await createPrivate(path, { maintenance: 'uninstall', pid: process.pid }); }
   catch (error) { if (error.code === 'EEXIST') throw inputError('The worker started again or another operation holds its lock. Inspect status and retry.'); throw error; }
-  return { path, release: () => unlink(path).catch(missing) };
+  return { path, real: await realpath(path), release: () => unlink(path).catch(missing) };
 }
 function failure(error) {
   if (error.code === 'EACCES') return 'Could not remove (EACCES); permission denied.';
   if (['EBUSY', 'EPERM'].includes(error.code)) return `Could not remove (${error.code}); a process holds it open or it is read-only.`;
   return `Could not remove (${error.code ?? 'error'}).`;
 }
-/** A guard stays while any path it protects, and that this run meant to remove, still has content. */
-async function guardedBy(project, entry, plan, lock) {
-  const planned = new Set(plan.filter(item => item.action === 'remove').map(item => item.entry.absolute));
-  const protectedPaths = entry.path === '.werk/.gitignore'
-    ? ['.werk/worker', '.werk/provider-home', '.werk/agent-integrations.json', '.werk/agent-integrations.pending.json', '.werk/agent-integrations.lock'].map(path => join(project, path))
-    : [...plan.filter(item => ['state', 'retained'].includes(item.entry.group)).map(item => item.entry.absolute), join(project, '.werk/.gitignore')];
-  for (const path of protectedPaths) {
-    if (!planned.has(path)) continue;
-    const stat = await info(path);
-    if (stat && (!stat.isDirectory() || await holdsOtherThan(path, lock && join(path, LOCK) === lock ? [LOCK] : []))) return path;
-  }
-  return null;
-}
 
-async function apply(project, plan, lock) {
+async function apply(project, plan, hold) {
   const removed = [], kept = [], manual = [];
-  const ordered = plan.filter(item => item.action !== 'keep').sort((a, b) => ORDER.indexOf(phase(a.entry)) - ORDER.indexOf(phase(b.entry)));
-  for (const { action, entry } of ordered) {
+  for (const { action, entry } of plan.filter(item => item.action !== 'keep').sort(byPhase)) {
     const report = { group: entry.group, path: entry.path };
     try {
       if (action === 'edit') {
@@ -140,17 +103,12 @@ async function apply(project, plan, lock) {
         else { removed.push({ ...report, file: outcome.removed ? 'removed' : 'edited', ...(entry.path === '.env' ? { removedKeys: entry.keys } : { removedBlock: '# Werk worker environment' }) }); if (outcome.removed) await pruneParents(project, entry.absolute); }
         continue;
       }
-      if (GUARDS[entry.path]) {
-        const remaining = await guardedBy(project, entry, plan, lock);
-        if (remaining) { kept.push({ ...report, reason: `Kept while ${remaining} still exists; ${GUARDS[entry.path]}. Resolve the kept paths, then run uninstall --confirm again.` }); continue; }
-      }
-      const result = await removeUntracked(project, entry.absolute, entry.trackedSet, lock);
-      const gone = result.gone || (lock && join(entry.absolute, LOCK) === lock && !await holdsOtherThan(entry.absolute, [LOCK]));
+      const guarded = isGuard(entry) && await guardedNow(project, entry, plan);
+      if (guarded) { kept.push({ ...report, reason: guarded }); continue; }
+      const result = await removeUntracked(project, entry.absolute, entry.trackedSet, { hold });
+      const gone = result.gone || (!!hold && within(entry.absolute, hold) && !await holdsOtherThan(entry.absolute, [LOCK]));
       removed.push({ ...report, files: result.removed, ...(gone ? {} : { partial: true }) });
-      if (result.tracked) kept.push({ ...report, reason: `${result.tracked} Git-tracked file(s) stay.` });
-      if (result.links) kept.push({ ...report, reason: `${result.links} link(s) or junction(s) stay; review them manually.`, links: result.linkPaths });
-      if (result.repositories.length) kept.push({ ...report, reason: 'Nested Git repositories, submodules or worktrees stay; review them manually.', repositories: result.repositories });
-      if (result.special) kept.push({ ...report, reason: `${result.special} special file(s) stay.` });
+      kept.push(...residue(report, result));
       if (result.gone) await pruneParents(project, entry.absolute);
     } catch (error) {
       kept.push({ ...report, reason: failure(error) });
@@ -166,6 +124,7 @@ const PROJECT_HINT = 'Run uninstall from the project directory (node bin/apps/wo
 export async function assertOutsideApp(root) {
   if (within(await realpath(root), await realpath(process.cwd()))) throw inputError(PROJECT_HINT);
 }
+const keepItem = item => ({ group: item.entry.group, path: item.entry.path, reason: item.reason, ...(item.unknownEntries ? { unknownEntries: item.unknownEntries } : {}) });
 export async function uninstallWorker(root, options, state, flags) {
   if (!!flags['dry-run'] === !!flags.confirm) throw inputError(flags['dry-run'] ? 'Use either --dry-run or --confirm, not both.' : 'uninstall removes files. Preview with uninstall --dry-run, then run uninstall --confirm.');
   const { configuredProjectRoot } = await import('./project.mjs');
@@ -185,12 +144,12 @@ export async function uninstallWorker(root, options, state, flags) {
   if (flags.confirm && entries.some(entry => entry.group === 'state' && entry.path.endsWith('/_worker.lock') && entry.exists)) throw inputError('A worker holds the feature folder lock (_worker.lock), for example in Docker. ' + STOP_HINT + ' After a crash, verify no worker runs before deleting the lock.');
   const decided = entries.map(entry => decide({ ...entry, trackedSet: tracked }, flags)).filter(Boolean);
   const header = { schemaVersion: 1, projectDirectory: project, stateDirectory: state, worker: { state: running && flags.confirm ? 'stopped' : live.state, ...(running ? { stopRequired: true } : {}) } };
-  const keepList = plan => plan.filter(item => item.action === 'keep').map(item => ({ group: item.entry.group, path: item.entry.path, reason: item.reason }));
   if (flags['dry-run']) {
-    const worktrees = await worktreePlan(root, project, state, layout, flags), plan = protectWorktrees(decided, worktrees);
+    const worktrees = await worktreePlan(root, project, state, layout, flags), plan = await predict(project, protectWorktrees(decided, worktrees));
+    const removing = plan.filter(item => item.action !== 'keep').sort(byPhase);
     return { ...header, dryRun: true,
-      remove: [...worktrees.filter(item => item.outcome === 'would_remove').map(({ outcome, ...item }) => item), ...plan.filter(item => item.action !== 'keep').sort((a, b) => ORDER.indexOf(phase(a.entry)) - ORDER.indexOf(phase(b.entry))).map(item => ({ ...summary(item.entry), ...(item.action === 'edit' ? { edit: item.entry.path === '.env' ? { removeKeys: item.entry.keys } : { removeBlock: '# Werk worker environment' } } : {}) }))],
-      keep: [...worktrees.filter(item => item.outcome !== 'would_remove').map(({ outcome, ...item }) => item), ...keepList(plan)],
+      remove: [...worktrees.filter(item => item.outcome === 'would_remove').map(({ outcome, ...item }) => item), ...removing.map(item => ({ ...summary(item.entry), ...(item.prediction && !item.prediction.gone ? { partial: true } : {}), ...(item.action === 'edit' ? { edit: item.entry.path === '.env' ? { removeKeys: item.entry.keys } : { removeBlock: '# Werk worker environment' } } : {}) }))],
+      keep: [...worktrees.filter(item => item.outcome !== 'would_remove').map(({ outcome, ...item }) => item), ...plan.filter(item => item.action === 'keep').map(keepItem), ...removing.flatMap(item => item.prediction ? residue({ group: item.entry.group, path: item.entry.path }, item.prediction) : [])],
       ...(self ? { note: 'This CLI runs from the app folder it removes; the app folder is removed last.' } : {}),
       next: running ? 'Stop the worker or pass --stop, then run uninstall --confirm.' : 'Run uninstall --confirm to apply exactly this plan.' };
   }
@@ -198,8 +157,8 @@ export async function uninstallWorker(root, options, state, flags) {
   let worktrees, plan, result;
   try {
     worktrees = await worktreePlan(root, project, state, layout, flags);
-    plan = protectWorktrees(decided, worktrees);
-    result = await apply(project, plan, lock.path);
+    plan = await predict(project, protectWorktrees(decided, worktrees), lock.real);
+    result = await apply(project, plan, lock.real);
   } finally {
     await lock.release();
     // The state folder stayed only for the lock; remove it now when nothing else is left.
@@ -209,6 +168,6 @@ export async function uninstallWorker(root, options, state, flags) {
   const manual = [...result.manual, ...(keptWorktrees.some(item => item.name) ? ['Review kept task worktrees; after review remove each with git worktree remove PATH in its repository.'] : [])];
   return { ...header, dryRun: false, ok: !result.kept.some(item => item.reason.startsWith('Could not remove')),
     removed: [...worktrees.filter(item => item.outcome === 'removed').map(({ outcome, ...item }) => item), ...result.removed],
-    kept: [...keptWorktrees.map(({ outcome, ...item }) => item), ...keepList(plan), ...result.kept], manual,
+    kept: [...keptWorktrees.map(({ outcome, ...item }) => item), ...plan.filter(item => item.action === 'keep').map(keepItem), ...result.kept], manual,
     next: 'Git-tracked files were not changed. If the team no longer needs them, remove them from the checkout in a separate commit.' };
 }

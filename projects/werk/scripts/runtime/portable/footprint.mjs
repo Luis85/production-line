@@ -1,15 +1,34 @@
+import { readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { inputError } from '../config.mjs';
 import { environmentExample, environmentKeys } from './environment.mjs';
 import { status } from './lifecycle.mjs';
-import { contained, display, holdsOtherThan, info, lf, measure, smallText, trackedBelow, trackedFiles, within } from './footprint-files.mjs';
+import { contained, display, info, lf, measure, smallText, trackedBelow, trackedFiles, within } from './footprint-files.mjs';
 
 /**
  * Read-only inventory of what an installed project worker owns or created. Paths,
  * sizes, Git tracking and key names only: never file contents or credentials.
  */
-const STATE_MARKERS = ['webview-token', 'workspace-settings.json', 'portable.json', 'portable.log'];
+/**
+ * Exactly what the worker and portable launcher write at the state root. A selected state
+ * folder holding anything else is not removed: a mistaken --state-dir stays intact.
+ */
+const STATE_FILES = new Set(['webview-token', 'workspace-settings.json', 'portable.json', 'portable.log', 'machine-id', 'status.json', 'identity.json', 'worker.lock',
+  'feature-index.json', 'feature-tracking-owner.json', 'sessions.json', 'shared-intake.json', 'task-index.json', 'taskboard.json', 'tool-access.json', 'conversation.json',
+  'repository-discovery.json', 'execution-profiles.json', 'agent-definitions.json', 'services.json', 'broker.json', 'mcp.json']);
+const STATE_DATABASE = /^worker-(?:consumption|interactions|requests|resources|runs)\.sqlite(?:-wal|-shm|-journal)?$/;
+const STATE_DIRECTORIES = new Set(['outbox', 'snapshots', 'processes', 'sessions', 'model-sessions', 'model-workspaces', 'feature-requests', 'review', 'local-review', 'workspaces', 'git-metadata', 'chat-workspace', 'worktrees']);
+const knownStateFile = name => STATE_FILES.has(name) || STATE_DATABASE.test(name) || [...STATE_FILES].some(file => name.startsWith(file + '.') && /^[0-9a-f-]{36}\.tmp$/.test(name.slice(file.length + 1)));
+/** Top-level entries of a state folder that the worker does not write; empty means removable. */
+async function unknownStateEntries(path) {
+  const unknown = [];
+  for (const entry of await readdir(path, { withFileTypes: true })) {
+    const known = entry.isDirectory() ? STATE_DIRECTORIES.has(entry.name) : entry.isFile() && knownStateFile(entry.name);
+    if (!known) unknown.push(entry.name);
+  }
+  return unknown.sort();
+}
 const GROUPS = ['app', 'retained', 'state', 'configuration', 'authoring', 'requests', 'integrations', 'environment', 'worktrees'];
 const json = value => JSON.stringify(value, null, 2) + '\n';
 const integrationPaths = ['.claude/skills/werk-worker/SKILL.md', '.agents/skills/werk-worker/SKILL.md', '.codex/werk-worker.md'];
@@ -50,10 +69,13 @@ async function generatedAuthoring(root, layout) {
   return result;
 }
 async function ownership(path, expected) {
-  if (expected === undefined || !await info(path)) return {};
-  const text = await smallText(path, 4 * 1024 * 1024).catch(() => undefined);
-  if (text === undefined) return { managed: false, note: 'Could not be compared with the generated content; kept as your work.' };
-  return lf(text) === lf(expected) ? { managed: true } : { managed: false, note: 'Changed from the generated content; kept as your work.' };
+  if (expected === undefined) return {};
+  try {
+    if (!await info(path)) return {};
+    const text = await smallText(path, 4 * 1024 * 1024);
+    if (text === undefined) return { managed: false, note: 'Could not be compared with the generated content; kept as your work.' };
+    return lf(text) === lf(expected) ? { managed: true } : { managed: false, note: 'Changed from the generated content; kept as your work.' };
+  } catch (error) { return { managed: false, note: `Could not be inspected (${error.code ?? 'error'}); kept.` }; }
 }
 async function integrationOwnership(root, project) {
   try {
@@ -137,7 +159,10 @@ export async function taskWorktrees(root, project, state, layout, signal = Abort
 
 /** Resolve one candidate: existence, size, containment and Git tracking. */
 async function describe(project, item, tracked) {
-  const path = display(project, item.absolute), inside = await contained(project, item.absolute), measured = await measure(item.absolute);
+  const path = display(project, item.absolute);
+  let inside, measured;
+  try { inside = await contained(project, item.absolute); measured = await measure(item.absolute); }
+  catch (error) { if (!['EACCES', 'EPERM'].includes(error.code)) throw error; inside = true; measured = { exists: true, type: 'unreadable', size: 0, error: error.code }; }
   const count = inside && tracked.repository ? trackedBelow(tracked, path) : 0;
   const { absolute, group, ...details } = item;
   return { group, path, absolute, inside, ...measured, tracked: tracked.repository === null ? null : count > 0, ...(measured.type === 'directory' && count ? { trackedFiles: count } : {}), ...details };
@@ -151,7 +176,8 @@ export async function inventory(root, project, state) {
   for (const item of list) entries.push(await describe(project, item, tracked));
   // A mistaken --state-dir such as .werk or a data folder must not be removed as worker state.
   for (const entry of entries.filter(item => item.stateDirectory && item.type === 'directory')) {
-    entry.workerState = !await holdsOtherThan(entry.absolute) || (await Promise.all(STATE_MARKERS.map(name => info(join(entry.absolute, name))))).some(Boolean);
+    entry.unknownEntries = await unknownStateEntries(entry.absolute).catch(error => [`(unreadable: ${error.code ?? 'error'})`]);
+    entry.workerState = !entry.unknownEntries.length;
     entry.holdsProjectFiles = entries.some(other => other !== entry && other.exists && other.absolute !== entry.absolute && within(entry.absolute, other.absolute));
   }
   return { entries, layout, tracked };

@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { lstat, readdir, readFile, realpath, rmdir, unlink } from 'node:fs/promises';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { inputError } from '../config.mjs';
 
 /**
@@ -43,7 +43,8 @@ async function git(project, args) {
 export async function trackedFiles(project, paths) {
   const exact = path => path;
   try {
-    const ignoreCase = await git(project, ['config', '--bool', 'core.ignorecase']).then(result => result.stdout.trim() === 'true', () => false);
+    // Exit 1 means the setting is unset (case-sensitive); any other failure counts as caseless, so more files stay tracked.
+    const ignoreCase = await git(project, ['config', '--bool', 'core.ignorecase']).then(result => result.stdout.trim() === 'true', error => error.code !== 1);
     const caseless = process.platform === 'win32' || ignoreCase, magic = caseless ? ':(literal,icase)' : ':(literal)';
     const { stdout } = paths.length ? await git(project, ['ls-files', '-z', '--', ...paths.map(path => magic + path)]) : await git(project, ['rev-parse', '--git-dir']).then(() => ({ stdout: '' }));
     const key = caseless ? path => path.toLowerCase() : exact;
@@ -63,49 +64,55 @@ export function trackedBelow(tracked, rel) {
   return count;
 }
 
+const denied = error => ['EACCES', 'EPERM'].includes(error?.code);
 /** Existence, type and recursive size without following links or reading contents. */
 export async function measure(path) {
-  const top = await info(path);
+  let top;
+  try { top = await info(path); } catch (error) { if (denied(error)) return { exists: true, type: 'unreadable', size: 0, error: error.code }; throw error; }
   if (!top) return { exists: false, type: 'missing', size: 0 };
   if (top.isSymbolicLink()) return { exists: true, type: 'link', size: 0 };
   if (top.isFile()) return { exists: true, type: 'file', size: top.size };
   if (!top.isDirectory()) return { exists: true, type: 'special', size: 0 };
-  let size = 0, files = 0, links = 0, entries = 0, truncated = false;
+  let size = 0, files = 0, links = 0, entries = 0, unreadable = 0, truncated = false;
   const pending = [path];
   while (pending.length && !truncated) {
     const current = pending.pop();
-    for (const entry of await readdir(current, { withFileTypes: true }).catch(error => { missing(error); return []; })) {
+    for (const entry of await readdir(current, { withFileTypes: true }).catch(error => { if (denied(error)) unreadable++; else missing(error); return []; })) {
       if (++entries > ENTRY_LIMIT) { truncated = true; break; }
-      const child = join(current, entry.name), stat = await info(child);
+      const child = join(current, entry.name), stat = await info(child).catch(error => { if (!denied(error)) throw error; unreadable++; });
       if (!stat) continue;
       if (stat.isSymbolicLink()) links++;
       else if (stat.isDirectory()) pending.push(child);
       else if (stat.isFile()) { files++; size += stat.size; }
     }
   }
-  return { exists: true, type: 'directory', size, files, links, ...(truncated ? { truncated: true } : {}) };
+  return { exists: true, type: 'directory', size, files, links, ...(unreadable ? { unreadable } : {}), ...(truncated ? { truncated: true } : {}) };
 }
 
-/** Read a small regular file as text; links and oversized files are not read. */
+/** Read a small regular file as text; links, oversized and unreadable files are not read. */
 export async function smallText(path, limit = 65536) {
-  const stat = await info(path);
-  if (!stat || !stat.isFile() || stat.isSymbolicLink() || stat.size > limit) return undefined;
-  return readFile(path, 'utf8');
+  try {
+    const stat = await info(path);
+    if (!stat || !stat.isFile() || stat.isSymbolicLink() || stat.size > limit) return undefined;
+    return await readFile(path, 'utf8');
+  } catch (error) { if (denied(error)) return undefined; throw error; }
 }
 export const lf = text => text?.replace(/\r\n/g, '\n');
 
 /**
  * Remove untracked files below `path`, then directories left empty. Links, special
  * files, tracked files and nested Git repositories, submodules or worktrees (any
- * directory with a `.git` entry) stay; the result counts what stayed and why. `hold`
- * is a file that stays in place for the caller to remove later.
+ * directory with a `.git` entry) stay; the result counts what stayed and why. With
+ * `dryRun` nothing changes and the result predicts the removal. `hold` is the real
+ * path of a lock that stays in place for the caller to remove last; a dry run treats
+ * it as removable.
  */
-export async function removeUntracked(project, path, tracked, hold) {
+export async function removeUntracked(project, path, tracked, { hold, dryRun = false } = {}) {
   const result = { removed: 0, tracked: 0, links: 0, linkPaths: [], special: 0, repositories: [] };
+  const held = async current => !!hold && basename(current).toLowerCase() === basename(hold).toLowerCase() && fold(await realpath(current).catch(() => '')) === fold(hold);
   let budget = ENTRY_LIMIT;
   async function visit(current) {
     if (--budget < 0) throw inputError('Too many entries to remove safely. Remove the remaining files manually.');
-    if (current === hold) return false;
     const stat = await info(current);
     if (!stat) return true;
     if (stat.isSymbolicLink()) { if (result.links++ < 20) result.linkPaths.push(display(project, current)); return false; }
@@ -113,12 +120,14 @@ export async function removeUntracked(project, path, tracked, hold) {
       if (await info(join(current, '.git'))) { result.repositories.push(display(project, current)); return false; }
       let empty = true;
       for (const name of await readdir(current)) if (!await visit(join(current, name))) empty = false;
-      if (empty) await rmdir(current).catch(error => { if (error.code === 'ENOTEMPTY' || error.code === 'EEXIST') empty = false; else missing(error); });
+      if (empty && !dryRun) await rmdir(current).catch(error => { if (error.code === 'ENOTEMPTY' || error.code === 'EEXIST') empty = false; else missing(error); });
       return empty;
     }
     if (!stat.isFile()) { result.special++; return false; }
+    if (await held(current)) return dryRun;
     if (tracked.files.has(tracked.key(display(project, current)))) { result.tracked++; return false; }
-    await unlink(current).catch(missing); result.removed++;
+    if (!dryRun) await unlink(current).catch(missing);
+    result.removed++;
     return true;
   }
   const gone = await visit(path);

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ownWorkspace } from '../helpers/workspace-processes.mjs';
 import { testErrorOutput } from '../helpers/process-errors.mjs';
@@ -56,6 +56,7 @@ test('uninstall includes requests and environment entries only on request and ne
   assert.equal(await exists(join(cwd, 'features/local-draft.md')), false);
   assert.equal(await exists(join(cwd, 'features/team-request.md')), true);
   assert.equal(await readFile(join(cwd, '.env'), 'utf8'), 'OTHER_SETTING=kept\n');
+  assert.deepEqual((await readdir(cwd)).filter(name => name.startsWith('.env.tmp-')), [], 'The atomic rewrite leaves no temporary file.');
   assert.equal(await exists(join(cwd, '.env.example')), false);
   assert.match(await readFile(join(cwd, '.gitignore'), 'utf8'), /^\.env$/m);
 });
