@@ -223,7 +223,7 @@ explicit ready status, ID, template ID and patch mode; see the
 | `provider` | `codex-cli`, `claude-cli`, `openai-api`, `anthropic-api` or `cursor-cli`; omission uses the saved worker `defaultProvider`. Configure/authenticate that connection separately. |
 | `model` | Optional model name, at most 200 characters with no surrounding whitespace or control characters. A nonempty value overrides a compatible instruction-profile model and then the provider's default; omission or an empty string inherits. |
 | `effort` | Optional [provider-supported effort](model-interaction.md#provider-model-and-effort-selection). Omission inherits the worker's provider default; explicit `default` uses the provider's own behavior. Cursor supports `default` only. |
-| `paths` | Required for patch mode: up to 32 project-relative approved text files. Rejected in chat mode. |
+| `paths` | Required for patch mode: up to 32 project-relative approved text files or, for implementation, folders ending in `/`. Rejected in chat mode. |
 | `priority` | `1` or `2` (default `1`); applies to patch tasks when the taskboard uses priority ordering. |
 | `definitionRef` or `definitionId`, `agent`, `useInstructionsOnly` | Optional [Docker Agent instruction profile](agent-definitions.md) selection, with the same compatibility acknowledgement as the webview. Use `definitionRef` (1–80 lowercase letters, digits or hyphens) in committed or shared files: it names a definition by its [stable reference](agent-definitions.md#stable-references-for-committed-requests). `definitionId` is specific to one worker. A request may use one, not both. |
 | `source`, `werk` | Worker-owned provenance and lifecycle metadata. Orchestrator files use `source: orchestrator`; users must not create remote assignments by editing this field. |
@@ -276,6 +276,30 @@ The worker rejects these paths:
 
 Example of an accepted path:
 `docs/requirements/FA-9_Material-Logistics/LACF-REQ-033 Warenein- und -ausgang einschließlich Zoll abwickeln.md`.
+
+#### Folder entries
+
+An entry that ends in `/`, such as `src/frontend/src/app/features/auftrag/`,
+approves a folder. File tasks, local feature folders, shared Git intake and offline
+authoring accept folder entries; the live Codex `allowedPaths` setting does not.
+
+- A folder entry follows the same rules as a file path, without the final `/`. The
+  repository root (`/`) and folders such as `.git/`, `.github/` or `config/secrets/`
+  are rejected.
+- The 32-entry limit counts folder and file entries together.
+- A folder and a file, or two folders, must not differ only by letter case or
+  Unicode normalization. A file may have the folder's name only in one form.
+- A folder entry requires an implementation request: an assigned Git repository,
+  repository file access and at least one required verification check. A proposal
+  request refuses it.
+- The implementation may create, change and delete files below the folder. A file
+  below it is approved only when its own path follows the file rules above; for
+  example `auftrag/.env` or `auftrag/secrets.json` stays unapproved, and a change to it
+  fails the candidate.
+- The initial snapshot records a folder entry without file contents. The model reads
+  files with its granted tools.
+- Shared intake refuses a folder that contains, or lies within, the request, review or
+  task folders or another protected workflow file.
 
 YAML gives some characters special meaning, so write paths that contain them as
 a block list:

@@ -75,7 +75,36 @@ This supplements the existing mandatory rules. Proposal-only or unverified resul
 
 ## Current limits
 
-A request approves at most 32 text-file paths. Initial input is limited to 24,000 bytes per file and 48,000 characters total; the edited candidate is limited to 24,000 bytes per approved file and 48,000 bytes total, with a 120,000-byte review patch. Approved binary files, secret-like paths, dotfiles and path traversal are excluded. Split larger changes into reviewable features.
+A request approves at most 32 entries. An entry is an exact text-file path or, for an
+implementation request, a folder ending in `/`, such as
+`src/frontend/src/app/features/auftrag/`. A folder entry lets the worker create,
+change and delete files below it, for example the output of a project code
+generator. Files below the folder with dot-prefixed, secret-like or otherwise unsafe
+names stay unapproved, and the repository root cannot be approved. A proposal
+request (no implementation tools or required checks) keeps exact files only and
+refuses folder entries.
+
+Initial input is limited to 24,000 bytes per exact file and 48,000 characters total;
+a folder entry snapshots no contents, because the model reads files with its tools.
+The edited candidate is bounded by three execution settings:
+
+| Setting | Default | Bounds |
+| --- | --- | --- |
+| `candidateApprovedFileMaxBytes` | 24,000 bytes | One exact approved file, or one changed file below an approved folder |
+| `candidateApprovedTotalMaxBytes` | 48,000 bytes | All exact approved files plus changed files below approved folders |
+| `candidateReviewPatchMaxBytes` | 120,000 bytes | The review patch |
+
+Unchanged files below an approved folder are inspected like other source files and
+do not count toward the approved limits. Approved files must be UTF-8 text. The
+review patch contains only approved paths. An error names the measured size, the
+limit and the setting, for example `Approved candidate text is 60,000 bytes; the
+approved content limit is 48,000 bytes (execution.candidateApprovedTotalMaxBytes).`
+Raise the named setting with `settings set` (see
+[worker execution policy](../reference/configuration.md#local-worker-execution-policy));
+a new attempt captures it. Shared feature publication keeps its own bounds: a patch of
+at most 128 KiB and at most 32 changed files. The taskboard stores each review
+patch, and its storage is limited to 16 MiB in total. Split larger changes into
+reviewable features.
 
 Candidate verification inspects every tracked file and every nonignored untracked
 file, including files outside the approved edit list. Repositories containing
@@ -90,7 +119,7 @@ and expand **Repository inspection limits**. Raise the named bound to cover the
 project, keeping the individual-file limit within the total, then **Save execution limits**. The CLI exposes the same values through
 `settings set`; see [worker execution policy](../reference/configuration.md#local-worker-execution-policy).
 A successful inspection still reads and fingerprints every included file. These
-settings do not widen the approved edit list or the fixed review-patch limits.
+settings do not widen the approved edit list or the approved content limits.
 A new attempt captures current settings; a queued or running attempt keeps its
 prepared values. Inspect the request's retained result and use its available
 retry/resume action after resolving the blocker.
