@@ -11,7 +11,7 @@ import { inputError } from '../config.mjs';
 const runFile = promisify(execFile);
 const ENTRY_LIMIT = 1000000;
 export const missing = error => { if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error; };
-const info = path => lstat(path).catch(missing);
+export const info = path => lstat(path).catch(missing);
 const fold = path => process.platform === 'win32' ? path.toLowerCase() : path;
 /** True when `path` is `base` or below it, compared case-insensitively on Windows. */
 export function within(base, path) {
@@ -32,27 +32,34 @@ export async function contained(project, path) {
 async function git(project, args) {
   const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.toUpperCase().startsWith('GIT_')));
   Object.assign(environment, { GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' });
-  return runFile('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'core.quotePath=false', '--literal-pathspecs', '-C', project, ...args], { env: environment, timeout: 60000, maxBuffer: 256 * 1024 * 1024, windowsHide: true, encoding: 'utf8' });
+  return runFile('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'core.quotePath=false', '-C', project, ...args], { env: environment, timeout: 60000, maxBuffer: 256 * 1024 * 1024, windowsHide: true, encoding: 'utf8' });
 }
 /**
  * Tracked files below the given project-relative paths. A project outside Git has none;
- * a checkout Git cannot read is reported as unknown so nothing is removed.
+ * a checkout Git cannot read is reported as unknown so nothing is removed. On Windows,
+ * and wherever Git ignores case, `Features/a.md` in the index tracks `features/a.md`:
+ * pathspecs and comparisons are case-insensitive there.
  */
 export async function trackedFiles(project, paths) {
+  const exact = path => path;
   try {
-    const { stdout } = paths.length ? await git(project, ['ls-files', '-z', '--', ...paths]) : await git(project, ['rev-parse', '--git-dir']).then(() => ({ stdout: '' }));
-    return { repository: true, files: new Set(stdout.split('\0').filter(Boolean)) };
+    const ignoreCase = await git(project, ['config', '--bool', 'core.ignorecase']).then(result => result.stdout.trim() === 'true', () => false);
+    const caseless = process.platform === 'win32' || ignoreCase, magic = caseless ? ':(literal,icase)' : ':(literal)';
+    const { stdout } = paths.length ? await git(project, ['ls-files', '-z', '--', ...paths.map(path => magic + path)]) : await git(project, ['rev-parse', '--git-dir']).then(() => ({ stdout: '' }));
+    const key = caseless ? path => path.toLowerCase() : exact;
+    return { repository: true, key, files: new Set(stdout.split('\0').filter(Boolean).map(key)) };
   } catch {
     for (let ancestor = project; ;) {
-      if (await info(join(ancestor, '.git'))) return { repository: null, files: new Set() };
-      const parent = resolve(ancestor, '..'); if (parent === ancestor) return { repository: false, files: new Set() }; ancestor = parent;
+      if (await info(join(ancestor, '.git'))) return { repository: null, key: exact, files: new Set() };
+      const parent = resolve(ancestor, '..'); if (parent === ancestor) return { repository: false, key: exact, files: new Set() }; ancestor = parent;
     }
   }
 }
 /** Tracked files equal to or below a project-relative path. */
 export function trackedBelow(tracked, rel) {
+  const prefix = tracked.key(rel);
   let count = 0;
-  for (const file of tracked) if (file === rel || file.startsWith(rel + '/')) count++;
+  for (const file of tracked.files) if (file === prefix || file.startsWith(prefix + '/')) count++;
   return count;
 }
 
@@ -89,29 +96,40 @@ export const lf = text => text?.replace(/\r\n/g, '\n');
 
 /**
  * Remove untracked files below `path`, then directories left empty. Links, special
- * files and tracked files stay; the result counts what stayed and why.
+ * files, tracked files and nested Git repositories, submodules or worktrees (any
+ * directory with a `.git` entry) stay; the result counts what stayed and why. `hold`
+ * is a file that stays in place for the caller to remove later.
  */
-export async function removeUntracked(project, path, tracked) {
-  const result = { removed: 0, tracked: 0, links: 0, linkPaths: [], special: 0 };
+export async function removeUntracked(project, path, tracked, hold) {
+  const result = { removed: 0, tracked: 0, links: 0, linkPaths: [], special: 0, repositories: [] };
   let budget = ENTRY_LIMIT;
   async function visit(current) {
     if (--budget < 0) throw inputError('Too many entries to remove safely. Remove the remaining files manually.');
+    if (current === hold) return false;
     const stat = await info(current);
     if (!stat) return true;
     if (stat.isSymbolicLink()) { if (result.links++ < 20) result.linkPaths.push(display(project, current)); return false; }
     if (stat.isDirectory()) {
+      if (await info(join(current, '.git'))) { result.repositories.push(display(project, current)); return false; }
       let empty = true;
       for (const name of await readdir(current)) if (!await visit(join(current, name))) empty = false;
       if (empty) await rmdir(current).catch(error => { if (error.code === 'ENOTEMPTY' || error.code === 'EEXIST') empty = false; else missing(error); });
       return empty;
     }
     if (!stat.isFile()) { result.special++; return false; }
-    if (tracked.has(display(project, current))) { result.tracked++; return false; }
+    if (tracked.files.has(tracked.key(display(project, current)))) { result.tracked++; return false; }
     await unlink(current).catch(missing); result.removed++;
     return true;
   }
   const gone = await visit(path);
   return { gone, ...result };
+}
+/** True when the directory exists and holds anything other than the named entries. */
+export async function holdsOtherThan(path, names = []) {
+  const stat = await info(path);
+  if (!stat) return false;
+  if (!stat.isDirectory() || stat.isSymbolicLink()) return true;
+  return (await readdir(path)).some(name => !names.includes(name));
 }
 
 /** Remove now-empty parent directories of a removed path, up to the project root. */

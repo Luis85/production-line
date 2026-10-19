@@ -422,7 +422,21 @@ What stays:
 - Task worktrees with uncommitted or untracked changes, commits, an operator lock,
   links or junctions, an invalid record or another assignment. The result lists
   each with its reason; review them before `git worktree remove PATH`.
-- Links, junctions and anything outside the project directory.
+- Links, junctions, nested Git repositories or submodules (any folder with a
+  `.git` entry), any folder that holds a task worktree that stays, and anything
+  outside the project directory.
+- A state directory that has no worker state files (`webview-token`,
+  `workspace-settings.json`, `portable.json`, `portable.log`) or contains other
+  project files, which protects you from a mistaken `--state-dir` or
+  `WERK_WORKER_STATE_DIR` such as `.werk`.
+- `.werk/.gitignore` and `.werk/worker-project.json`, while worker state they
+  protect could not be removed. Resolve the reported paths and run
+  `uninstall --confirm` again.
+
+Git tracking is compared without regard to case wherever Git ignores case, as on
+Windows, so a file committed as `Features/request.md` counts as tracked in
+`features/`. The worker lock stays in place until the last step, so the worker
+cannot start during removal.
 
 The CLI removes its own app folder last. If another process, such as a shell,
 editor or `npm --prefix bin/apps/worker`, holds it open, the result reports

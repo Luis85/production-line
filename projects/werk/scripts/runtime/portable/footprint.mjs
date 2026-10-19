@@ -3,12 +3,13 @@ import { pathToFileURL } from 'node:url';
 import { inputError } from '../config.mjs';
 import { environmentExample, environmentKeys } from './environment.mjs';
 import { status } from './lifecycle.mjs';
-import { contained, display, lf, measure, smallText, trackedBelow, trackedFiles, within } from './footprint-files.mjs';
+import { contained, display, holdsOtherThan, info, lf, measure, smallText, trackedBelow, trackedFiles, within } from './footprint-files.mjs';
 
 /**
  * Read-only inventory of what an installed project worker owns or created. Paths,
  * sizes, Git tracking and key names only: never file contents or credentials.
  */
+const STATE_MARKERS = ['webview-token', 'workspace-settings.json', 'portable.json', 'portable.log'];
 const GROUPS = ['app', 'retained', 'state', 'configuration', 'authoring', 'requests', 'integrations', 'environment', 'worktrees'];
 const json = value => JSON.stringify(value, null, 2) + '\n';
 const integrationPaths = ['.claude/skills/werk-worker/SKILL.md', '.agents/skills/werk-worker/SKILL.md', '.codex/werk-worker.md'];
@@ -49,9 +50,9 @@ async function generatedAuthoring(root, layout) {
   return result;
 }
 async function ownership(path, expected) {
-  if (expected === undefined) return {};
-  const text = await smallText(path, 4 * 1024 * 1024);
-  if (text === undefined) return {};
+  if (expected === undefined || !await info(path)) return {};
+  const text = await smallText(path, 4 * 1024 * 1024).catch(() => undefined);
+  if (text === undefined) return { managed: false, note: 'Could not be compared with the generated content; kept as your work.' };
   return lf(text) === lf(expected) ? { managed: true } : { managed: false, note: 'Changed from the generated content; kept as your work.' };
 }
 async function integrationOwnership(root, project) {
@@ -85,7 +86,7 @@ async function candidates(root, project, state) {
   const add = (group, path, extra = {}) => { const absolute = resolve(project, path); if (!list.some(item => item.group === group && item.absolute === absolute)) list.push({ group, absolute, ...extra }); };
   add('app', 'bin/apps/worker');
   add('retained', 'bin/apps/.worker-update'); add('retained', state + '.updates');
-  add('state', state); add('state', '.werk/provider-home'); add('state', '.werk/feature-folder-change.json');
+  add('state', state, { stateDirectory: true }); add('state', '.werk/provider-home'); add('state', '.werk/feature-folder-change.json');
   if (layout.features) for (const name of ['_worker-owner.json', '_worker-status.md', '_worker.lock']) add('state', join(layout.features, name));
   for (const name of ['worker.json', 'worker-project.json', 'compose.worker.yaml', '.gitignore']) add('configuration', '.werk/' + name);
   const generated = await generatedAuthoring(root, layout);
@@ -137,7 +138,7 @@ export async function taskWorktrees(root, project, state, layout, signal = Abort
 /** Resolve one candidate: existence, size, containment and Git tracking. */
 async function describe(project, item, tracked) {
   const path = display(project, item.absolute), inside = await contained(project, item.absolute), measured = await measure(item.absolute);
-  const count = inside && tracked.repository ? trackedBelow(tracked.files, path) : 0;
+  const count = inside && tracked.repository ? trackedBelow(tracked, path) : 0;
   const { absolute, group, ...details } = item;
   return { group, path, absolute, inside, ...measured, tracked: tracked.repository === null ? null : count > 0, ...(measured.type === 'directory' && count ? { trackedFiles: count } : {}), ...details };
 }
@@ -148,6 +149,11 @@ export async function inventory(root, project, state) {
   const tracked = await trackedFiles(project, [...new Set(relative)]);
   const entries = [];
   for (const item of list) entries.push(await describe(project, item, tracked));
+  // A mistaken --state-dir such as .werk or a data folder must not be removed as worker state.
+  for (const entry of entries.filter(item => item.stateDirectory && item.type === 'directory')) {
+    entry.workerState = !await holdsOtherThan(entry.absolute) || (await Promise.all(STATE_MARKERS.map(name => info(join(entry.absolute, name))))).some(Boolean);
+    entry.holdsProjectFiles = entries.some(other => other !== entry && other.exists && other.absolute !== entry.absolute && within(entry.absolute, other.absolute));
+  }
   return { entries, layout, tracked };
 }
 
@@ -158,7 +164,7 @@ export async function footprint(root, options, state) {
   const { entries, layout, tracked } = await inventory(root, project, state);
   const worktrees = await taskWorktrees(root, project, state, layout);
   const groups = Object.fromEntries(GROUPS.map(group => [group, []]));
-  for (const { group, absolute, inside, ...entry } of entries) groups[group].push({ ...entry, ...(inside ? {} : { outsideProject: true }) });
+  for (const { group, absolute, inside, stateDirectory: _state, holdsProjectFiles: _files, ...entry } of entries) groups[group].push({ ...entry, ...(inside ? {} : { outsideProject: true }) });
   groups.worktrees = worktrees.items.map(({ root: _root, ...item }) => item);
   const live = await status('worker', state);
   return { schemaVersion: 1, projectDirectory: project, stateDirectory: state, worker: { state: live.state }, git: tracked.repository === null ? 'unreadable' : tracked.repository ? 'repository' : 'none', worktreeDirectory: worktrees.worktreeDirectory, groups, worktreeErrors: worktrees.errors, warnings: layout.warnings,

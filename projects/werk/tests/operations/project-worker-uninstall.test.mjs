@@ -1,38 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import { mkdtemp, readdir, readFile, realpath, rm, writeFile, lstat } from 'node:fs/promises';
-import { join, relative, resolve, sep } from 'node:path';
-import { tmpdir } from 'node:os';
+import { readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { ownWorkspace } from '../helpers/workspace-processes.mjs';
 import { testErrorOutput } from '../helpers/process-errors.mjs';
 import { createRepositoryWorktree, repositoryRoot } from '../../src/worker/dist/worker/infrastructure/repositories-git.js';
-
-const exec = promisify(execFile), installer = resolve('bin/apps/worker/cli.mjs');
-const gitIdentity = ['-c', 'user.name=Werk Test', '-c', 'user.email=werk@example.invalid', '-c', 'commit.gpgsign=false'];
-const git = (cwd, ...args) => exec('git', [...gitIdentity, ...args], { cwd, timeout: 30000 });
-async function cli(cwd, ...args) { const result = await exec(process.execPath, [join(cwd, 'bin/apps/worker/cli.mjs'), ...args], { cwd, timeout: 120000, maxBuffer: 8 * 1048576 }); return JSON.parse(result.stdout); }
-const exists = path => lstat(path).then(() => true, () => false);
-async function files(directory, base = directory) {
-  const result = [];
-  for (const entry of await readdir(directory, { withFileTypes: true })) {
-    if (entry.name === '.git') continue;
-    const path = join(directory, entry.name);
-    if (entry.isDirectory()) result.push(...await files(path, base)); else result.push(relative(base, path).split(sep).join('/'));
-  }
-  return result.sort();
-}
-/** A Git project with an initialized worker; some authoring files are committed like a team kit. */
-async function project(t, { cleanup = true } = {}) {
-  const cwd = await realpath(await mkdtemp(join(tmpdir(), 'werk-uninstall-')));
-  if (cleanup) t.after(() => rm(cwd, { recursive: true, force: true, maxRetries: 5 }));
-  await git(cwd, 'init', '-q'); await writeFile(join(cwd, 'README.md'), '# Project\n'); await git(cwd, 'add', 'README.md'); await git(cwd, 'commit', '-q', '-m', 'init');
-  await exec(process.execPath, [installer, 'init', '--no-npm'], { cwd, timeout: 120000, maxBuffer: 8 * 1048576 });
-  await git(cwd, 'add', '.werk/worker.json', '.werk/feature-workflow.json', 'Feature Requests.base'); await git(cwd, 'commit', '-q', '-m', 'kit');
-  await writeFile(join(cwd, 'features/team-request.md'), '---\ntitle: Team request\nstatus: draft\n---\nKeep me.\n');
-  return cwd;
-}
+import { cli, exec, exists, files, git, project } from './project-worker-uninstall-fixture.mjs';
 
 test('footprint inventories every group with existence, size and Git tracking without printing contents', { timeout: 180000 }, async t => {
   const cwd = await project(t), value = await cli(cwd, 'footprint');
