@@ -29,6 +29,13 @@ export type JsonTransport = (
   body?: unknown,
 ) => Promise<unknown>;
 
+/**
+ * Worker-to-orchestrator calls (heartbeats, claims, completion) keep their own 10 s bound: lease close awaits an
+ * in-flight heartbeat, so they must not inherit the longer shared CLI default.
+ */
+const WORKER_GATEWAY_TIMEOUT_MS = 10000;
+const gatewayRequest: JsonTransport = (base, path, token, method, body) => request(base, path, token, method, body, undefined, WORKER_GATEWAY_TIMEOUT_MS);
+
 /** HTTP details and credential use stop at this adapter boundary. */
 export class HttpWorkerGateway implements WorkerGateway {
   private base: string;
@@ -38,7 +45,7 @@ export class HttpWorkerGateway implements WorkerGateway {
   constructor(
     base: string,
     enrollmentToken: string,
-    transport: JsonTransport = request,
+    transport: JsonTransport = gatewayRequest,
   ) {
     this.base = base;
     this.enrollmentToken = enrollmentToken;
