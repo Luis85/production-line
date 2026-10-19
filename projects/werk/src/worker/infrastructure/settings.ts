@@ -41,8 +41,16 @@ export class WorkerSettings {
       this.value = this.validate(this.value); await this.persist(this.value);
     }
     if (this.executionOverride) { this.value.execution = { ...this.value.execution, maxRuntimeMs: this.executionOverride.maxRuntimeMs }; this.executionSource = 'environment'; }
-    try { this.tools = validateToolPolicy(JSON.parse(await readBoundedFile(join(this.directory, 'tool-access.json'), 655360))); }
-    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    const toolAccess = join(this.directory, 'tool-access.json');
+    try { this.tools = validateToolPolicy(JSON.parse(await readBoundedFile(toolAccess, 655360))); }
+    catch (error) {
+      // Refused grants retain their entry details; file-level failures describe configuration recovery.
+      const recovery = `Correct the configuration in ${toolAccess}, then start the worker again.`;
+      if (error instanceof DomainError) throw new DomainError(error.code, `${toolAccess}: ${error.message} ${recovery}`);
+      // JSON parse errors can quote private configuration, including credentials.
+      if (error instanceof SyntaxError) throw new DomainError('invalid_input', `${toolAccess}: Saved tool policy is not valid JSON. ${recovery}`);
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
 
   }
   toolPolicy(): ToolPolicy { return structuredClone(this.tools); }

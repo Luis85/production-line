@@ -31,12 +31,14 @@ export async function configuration(options: Record<string, string>, document?: 
   const raw = object(parsed, 'Worker configuration', ['schemaVersion', 'scheduler', 'execution', 'systemPrompt', 'profiles', 'journal', 'chat', 'features', 'repositories']);
   if (raw.schemaVersion !== undefined && raw.schemaVersion !== 1) throw new ValidationError('Unknown worker configuration version');
   const repositories = validateRepositoryConfiguration(raw.repositories, path => resolve(options['project-dir'] ?? process.cwd(), path));
-  const featuresRaw = section(raw, 'features', ['directory', 'provider', 'pollMs']);
+  const featuresRaw = section(raw, 'features', ['directory', 'provider', 'pollMs', 'intake']);
   const directory = options['features-dir'] ?? featuresRaw.directory;
   if (directory !== undefined && (typeof directory !== 'string' || !directory.trim() || directory.length > 4096 || /[\x00-\x1f]/.test(directory))) throw new ValidationError('features.directory must be a folder path.');
   const provider = featuresRaw.provider ?? 'codex-cli';
   if (!providerIds.includes(provider as ProviderId)) throw new ValidationError('Invalid features.provider.');
-  const features = directory === undefined ? undefined : { directory: resolve(options['project-dir'] ?? process.cwd(), directory as string), provider: String(provider), pollMs: integer(String(featuresRaw.pollMs ?? 1000), 'features.pollMs', 250, 30000) };
+  if (featuresRaw.intake !== undefined && featuresRaw.intake !== 'shared' && featuresRaw.intake !== 'local') throw new ValidationError('features.intake must be "shared" or "local".');
+  const intake = featuresRaw.intake === 'local' ? 'local' as const : 'shared' as const;
+  const features = directory === undefined ? undefined : { directory: resolve(options['project-dir'] ?? process.cwd(), directory as string), provider: String(provider), intake, pollMs: integer(String(featuresRaw.pollMs ?? 1000), 'features.pollMs', 250, 30000) };
   const scheduler = section(raw, 'scheduler', ['maxParallel', 'order', 'pollMs', 'maxAttempts']);
   const execution = section(raw, 'execution', ['mode', 'timeoutMs', 'mockMs', 'codex']);
   const journal = section(raw, 'journal', ['retainedPairs']);

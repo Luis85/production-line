@@ -331,8 +331,12 @@ refresh and reconcile on conflict. `settings get`, `settings set --file`
 and `provider configure --file` use those routes.
 
 `defaultProvider` must be `codex-cli`, `claude-cli`, `openai-api`, `anthropic-api`
-or `cursor-cli`. The legacy startup `features.provider` is a seed only when no
-saved default exists. A template or request with an explicit provider continues
+or `cursor-cli`. `features.intake` in `.werk/worker.json` is `shared` (default) or
+`local`; `init --intake local` writes the local setup preset and makes the detected
+checkout default to `watch: false`. An explicitly saved shared repository binding
+takes precedence over this preset, even when paused; changing `features.intake`
+alone does not disconnect it. The legacy startup `features.provider` is a seed only
+when no saved default exists. A template or request with an explicit provider continues
 to use it. Model and effort selections follow the
 [shared selection contract](model-interaction.md#provider-model-and-effort-selection):
 request override, compatible profile model, then provider default for models;
@@ -562,7 +566,7 @@ To record a detected-repository choice, send
 `{"action":"decline","discoveryId":"ID_FROM_STATUS"}`. Do not send assignment
 `id` with these actions; a stale discovery ID conflicts and requires a fresh
 inspection. The portable worker CLI exposes `repository status`,
-`repository sync [--id ID]`, and `repository accept|decline --discovery-id ID`.
+`repository sync [--id ID]`, and `repository accept|decline --discovery-id ID`. Accept also takes an optional boolean `watch` (CLI `--watch true|false`) for the new assignment; omitted, it follows `features.intake`.
 See the [CLI contract](runtime-cli.md#worker-repositories-and-execution-profiles).
 
 Managed Docker fleets reject checkout assignments because their generated mounts

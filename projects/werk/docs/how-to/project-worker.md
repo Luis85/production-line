@@ -97,7 +97,7 @@ same choice is **Use this Git repository?** → **Use repository** or **Don’t 
 a skipped repository can be accepted later in **Settings → Repositories**.
 
 Accepting adds a saved assignment. A checkout with a branch and remote starts
-watching; without a remote, or with detached HEAD, watching starts off. Committed
+watching (unless the worker was initialized with `--intake local` or you pass `--watch false`); without a remote, or with detached HEAD, watching starts off. Committed
 files remain usable for worktree tasks. Configure a remote/current branch before
 enabling watching. Finish queued/running work before accepting. A Git checkout
 in a parent directory is not automatically offered, and linked worktrees with a
@@ -248,14 +248,79 @@ text completion alone does not establish passing project tests.
 
 ### Local folder intake without a shared repository
 
-The separate local folder flow accepts requests without `templateId`. Generate
-its draft with `feature template`, then use the local management commands below.
+Local folder intake targets the same Feature Request lifecycle and worker queue.
+It accepts requests without `templateId`. Generate a draft with `feature template`,
+then use the local management commands below.
 Its saves are consumed locally and do not require commit/push. The installed team
 template belongs to shared intake and is never silently executed by this watcher.
 See the [local proposal tutorial](../tutorials/worker-feature-lifecycle.md) and
 [request contract](../reference/feature-requests.md) for this alternative.
 For day-to-day operation, including Windows input files and tool limits, use the
 [project worker checklist](operate-project-worker.md).
+
+## Set up an operator-only worker
+
+If you only want a local worker that reads requests from its feature folder, with no
+shared Git repository or team, initialize it with `--intake local`:
+
+```bash
+node /path/to/werk-release/bin/apps/worker/cli.mjs init --intake local
+```
+
+The default is `--intake shared`, which changes nothing. With `local`, `init` still
+installs the offline authoring kit, and it also:
+
+- writes `features/_templates/local-request.md`: a local request template without
+  `templateId`, with `status: draft`, `mode: patch`, your provider, and commented
+  `paths` (including a folder entry ending in `/`) and `definitionRef` examples;
+- records `features.intake: "local"` in `.werk/worker.json`. A repeated `init` keeps
+  it. `init` refuses an explicit conflicting intake choice without changing
+  existing configuration; it names the file and the migration steps;
+- reports `intake: { mode: "local", template, commands, next }` instead of the shared
+  connection steps.
+
+`mode: patch` needs an explicit `paths` list (`feature create` and `feature validate`
+refuse a request without one), so copy the template, uncomment and edit `paths`, then
+create, check and queue it. Keep the copy outside the feature folder: the worker scans
+every file in that folder, so an unedited copy there is reported as an error and would
+stay as a second request next to the one `feature create` makes. The template's
+operator instructions are front-matter comments, so they are never sent to the model.
+
+```bash
+cp features/_templates/local-request.md request-draft.md   # edit title, paths and body
+node bin/apps/worker/cli.mjs feature create --name request.md --markdown request-draft.md
+node bin/apps/worker/cli.mjs feature validate --name request.md
+node bin/apps/worker/cli.mjs feature submit --name request.md --if-match REVISION
+```
+
+Start the worker, then accept the detected project checkout with
+`repository accept --discovery-id ID` if tasks should use it. For a local worker the
+new assignment is not watched, so nothing is fetched in the background. Pass
+`--watch true` to `repository accept` to watch it anyway; `--watch false` also works for a
+shared worker. `--watch` only applies to a new assignment: for a checkout that is assigned
+already it is refused, so change watching in **Settings → Repositories** or with
+`settings set` instead. Until a shared repository is connected, `shared status` and
+`feature list` carry `intake: "local"` and guidance for local requests.
+
+To connect this worker to a team later, follow
+[Submit your first shared request](#submit-your-first-shared-request). The explicit
+saved shared binding takes precedence over the local setup preset immediately,
+including when shared intake is paused and after a restart. New requests then use
+shared intake; existing local requests retain their identity and can be continued.
+Changing `features.intake` is optional: to restore shared repository-discovery
+defaults, stop the worker, set it to `"shared"` (or remove it), then restart. Existing
+repository assignments keep their saved watch setting.
+
+For an **existing shared installation**, `init --intake local` deliberately refuses
+to switch it. Finish owned shared requests and publish their notes first, then
+pause the queue. Use `shared status` and `shared configure` to save the current configuration with
+`enabled: false` and an empty `repositoryId`, using its current revision. Stop the
+worker, set `features.intake` to `"local"` in `.werk/worker.json`, then run
+`node bin/apps/worker/cli.mjs init` from the project and restart it. Changing the
+startup file alone does not disconnect shared intake. Existing shared notes keep
+their `templateId` and are never executed by local folder intake.
+`footprint` and `uninstall` treat the local template as a generated authoring file:
+removed when unchanged, kept as your work once edited.
 
 ## Start with Docker
 
@@ -372,3 +437,104 @@ follow its [overnight handoff](shared-feature-intake.md#work-during-the-day-impl
 Inspect `settings get` for redacted configuration. `queue pause` stops new
 execution and orchestrator claims while running tasks finish; `queue resume` resumes it. Use
 `queue configure --file queue.json` for capacity and routing intake settings.
+
+## Remove a project worker
+
+Run every step from the project directory, not from inside `bin/apps/worker`.
+First list what the worker owns or created. `footprint` is read-only and works
+while the worker runs or is stopped:
+
+```sh
+node bin/apps/worker/cli.mjs footprint
+```
+
+It groups paths as `app` (`bin/apps/worker`), `retained` (`bin/apps/.worker-update`
+and `.werk/worker.updates` from updates), `state` (`.werk/worker`, `.werk/provider-home`
+and the worker's owner and status files in the feature folder), `configuration`,
+`authoring` (workflow, Base, checks, prompts, template and `.werk/authoring`),
+`requests` (feature, review and task folders), `integrations` (agent skills, the
+Codex guide, their ownership record and a generated `package.json`), `environment`
+(`.env` key names, the `.env.example` block, `.gitignore` rules) and `worktrees`.
+Each entry shows its path, whether it exists, its size and whether Git tracks it.
+Task worktrees come from the same ownership records as `worktrees list`, with
+their state, including those under **Task worktree folder** outside the checkout.
+The output never contains file contents or credentials.
+
+Preview the removal, then apply exactly that plan:
+
+```sh
+node bin/apps/worker/cli.mjs uninstall --dry-run
+node bin/apps/worker/cli.mjs uninstall --confirm
+```
+
+Without `--dry-run` or `--confirm` the command refuses. `--confirm` requires a
+stopped worker; pass `--stop` to stop a native worker gracefully first, or stop a
+Docker worker with `docker compose --env-file .env -f .werk/compose.worker.yaml down`.
+It removes clean task worktrees this worker owns through the same checks as
+`worktrees prune`, then integration files, authoring files, configuration, state,
+retained folders and finally the app folder.
+
+What stays:
+
+- Every Git-tracked file. Commit their removal separately if the team no longer
+  needs the kit.
+- Request folders. `--include-requests` removes their untracked files, including
+  local drafts and results, but never a file the plan keeps, such as an edited
+  `_templates/feature-request.md` or `_templates/local-request.md`.
+- `.env` and the `.env.example` block. `--include-environment` removes only the
+  worker keys and block; other lines stay and `.gitignore` is never changed.
+  Ambiguous multiline environment assignments keep the file intact for manual
+  editing, as reported by the plan.
+- Customized templates, skills, Bases, checks and prompts; customized authoring
+  bundles and generated project package manifests; and integration files Werk
+  does not own. Untracked worker configuration is removed as shown in the preview.
+- Task worktrees with uncommitted or untracked changes, commits, an operator lock,
+  links or junctions, an invalid record or another assignment. The result lists
+  each with its reason; review them before `git worktree remove PATH`.
+- Links, junctions, nested Git repositories or submodules (any folder with a
+  `.git` entry, in any letter case; removal never enters a `.git` entry), any
+  folder that holds a task worktree that stays, and other paths outside the project
+  directory. Clean owned task worktrees are handled separately as described above.
+- The whole state directory when its top level holds anything the worker does not
+  write (only names such as `webview-token`, `workspace-settings.json`,
+  `portable.json`, `portable.log`, `worker-*.sqlite` and its `-wal`/`-shm` files,
+  `snapshots/`, `outbox/` and `sessions/` count), or when it contains other project
+  files. The result lists the unknown entries as `unknownEntries`. This protects
+  you from a mistaken `--state-dir` or `WERK_WORKER_STATE_DIR` such as `.werk` or
+  a data folder. A state directory option that names a file instead of a folder
+  is reported as kept by `--dry-run` and `footprint`, and `uninstall --confirm`
+  refuses, naming the path, until you pass the worker's state folder with
+  `--state-dir` or `WERK_WORKER_STATE_DIR`.
+- `.werk/.gitignore` and `.werk/worker-project.json`, while any state, provider
+  home, retained or integration path they protect still exists, whether the plan
+  keeps it or its removal was incomplete. Resolve the reported paths and run
+  `uninstall --confirm` again. When a kept path holds Git-tracked files, the
+  reason says so: remove those files from the checkout in a commit first, because
+  uninstall never deletes them. A tracked `.werk/.gitignore` itself stays, and the
+  project marker does not wait for it.
+
+`--dry-run` predicts these keeps, including nested repositories and the two guard
+files. Apply rechecks safety conditions and may keep a path if they differ.
+`--include-environment` rewrites `.env` through a temporary file named `.env` inside
+a new private `.werk-env-*` folder next to it. In a Git project, the plan checks
+whether a private staging path is ignored, and apply checks the actual temporary
+path before writing credentials. Werk's generated `.env` rule covers both paths;
+a custom root-only `/.env` rule does not. If staging is not ignored, the file stays
+for manual editing. The rename stays on the same volume, and the temporary file
+and folder are removed again on handled failure. A hard interruption
+can leave that private folder and its `.env` behind. Once no worker or uninstall
+process is running, inspect the project `.env` and the leftover privately in your
+editor before removing the exact leftover folder. Keep credentials out of terminal
+output, issues and commits. The root `.env` is replaced by rename only after the
+replacement file has been written; a leftover may be incomplete and is not an
+automatic recovery source.
+
+Git tracking is compared without regard to case wherever Git ignores case, as on
+Windows, so a file committed as `Features/request.md` counts as tracked in
+`features/`. The worker lock stays in place until the last step, so the worker
+cannot start during removal.
+
+The CLI removes its own app folder last. If another process, such as a shell,
+editor or `npm --prefix bin/apps/worker`, holds it open, the result reports
+`ok: false` and names the manual step, for example
+`Remove-Item -Recurse -Force bin\apps\worker` on Windows.

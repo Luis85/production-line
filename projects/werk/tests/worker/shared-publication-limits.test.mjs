@@ -23,6 +23,15 @@ test('shared publication preflight measures UTF-8 bytes and actual Git file head
   assert.equal(sharedFeaturePublicationIssue(patch(1) + '+diff --git a/content b/content\n'.repeat(40)), undefined, 'added content is not a Git file header');
 });
 
+test('retained publication bounds can be stricter but cannot weaken current publication ceilings', () => {
+  assert.match(sharedFeaturePublicationIssue('é'.repeat(4), { patchMaxBytes: 7, changedFilesMax: 32 }), /8 bytes.*7 bytes\./);
+  assert.equal(sharedFeaturePublicationIssue('é'.repeat(4), { patchMaxBytes: 8, changedFilesMax: 32 }), undefined);
+  assert.match(sharedFeaturePublicationIssue(patch(2), { patchMaxBytes: 131072, changedFilesMax: 1 }), /changes 2 files.*1 changed files/);
+  assert.equal(sharedFeaturePublicationIssue(patch(1), { patchMaxBytes: 131072, changedFilesMax: 1 }), undefined);
+  assert.match(sharedFeaturePublicationIssue('a'.repeat(131073), { patchMaxBytes: 999999, changedFilesMax: 100 }), /131,073 bytes.*131,072 bytes/);
+  assert.match(sharedFeaturePublicationIssue(patch(33), { patchMaxBytes: 999999, changedFilesMax: 100 }), /changes 33 files.*32 changed files/);
+});
+
 /** @type {Array<[string, string, RegExp]>} */
 const cases = [
   ['too many changed files', patch(33), /changes 33 files/],

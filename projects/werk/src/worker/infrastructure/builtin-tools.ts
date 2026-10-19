@@ -205,7 +205,7 @@ export function builtinToolOperations(options: BuiltinToolOptions): ToolOperatio
     const candidateCall = (call: ToolOperation['call']): ToolOperation['call'] => async (value, signal) => {
       try { return await call(value, signal); } catch (error) { if (error instanceof CandidateToolError) throw new BuiltinToolError(error.message); throw error; }
     };
-    add('werk_candidate_status', 'Inspect the current candidate and its required verification receipts. Returns approved file hashes for safe edits in a bounded listing: exact approved files, changed files (marked changed) and up to 200 other files below approved folders. When filesNote is present the listing is incomplete; pass paths for specific files. A changed candidate invalidates earlier successful checks.', schema({ paths: { type: 'array', maxItems: 32, items: { type: 'string', maxLength: 240 }, description: 'Optional approved paths whose current hashes to include, for example unlisted files below an approved folder.' } }), candidateCall(async (value, signal) => {
+    add('werk_candidate_status', 'Inspect the current candidate and its required verification receipts. Returns approved file hashes for safe edits in a bounded listing: exact approved files, changed files (marked changed) and up to 200 other files below approved folders. When filesNote is present the listing is incomplete; pass paths for specific files. A changed candidate invalidates earlier successful checks. Requests from shared intake also return sharedPublication: the shared Git publication bounds (patch bytes, changed files), the candidate measurements and an error when it exceeds them; such a candidate fails every required check.', schema({ paths: { type: 'array', maxItems: 32, items: { type: 'string', maxLength: 240 }, description: 'Optional approved paths whose current hashes to include, for example unlisted files below an approved folder.' } }), candidateCall(async (value, signal) => {
       const args = object(value, ['paths']);
       if (args.paths !== undefined && (!Array.isArray(args.paths) || args.paths.length > 32 || args.paths.some(path => typeof path !== 'string'))) throw new BuiltinToolError('Supply at most 32 approved paths.');
       const candidate = await development.capture(signal, args.paths as string[] | undefined);
@@ -243,7 +243,7 @@ export function builtinToolOperations(options: BuiltinToolOptions): ToolOperatio
     const workspace = chat && chatRepositoryId(preset) === undefined, hint = workspace ? ' ' + chatWorkspaceHint : '';
     check(signal);
     try {
-      const command = await runApprovedToolProcess(preset.executable, preset.args, { cwd, signal, timeoutMs: limits.presetTimeoutMs[preset.id], maxOutputBytes: 32768 });
+      const command = await runApprovedToolProcess(preset.executable, preset.args, { cwd, signal, timeoutMs: limits.presetTimeoutMs[preset.id], maxOutputBytes: 32768, fixedArguments: true });
       return output({ preset: preset.id, exitCode: command.exitCode, stdout: command.stdout.toString('utf8'), stderr: command.stderr.toString('utf8'), ...(chat ? { workingDirectory: where(preset) } : {}), ...(workspace && command.exitCode !== 0 ? { hint: chatWorkspaceHint } : {}) });
     } catch (error) {
       if (error instanceof ProcessRunError) throw new BuiltinToolError(`Command stopped (${error.reason}); no automatic retry was made.${hint}`);

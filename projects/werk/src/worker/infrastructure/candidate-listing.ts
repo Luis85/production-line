@@ -50,5 +50,6 @@ export function candidateView(candidate: DevelopmentCandidate) {
     ...(unhashed ? { changedPathsWithoutHashes: candidate.changedPathsWithoutHashes } : {}),
     ...(omittedChanged ? { omittedChangedPaths: omittedChanged } : {}), ...(omitted ? { omittedFiles: omitted } : {}),
     ...(notes.length ? { filesNote: `${notes.join(' ')} Call werk_candidate_status with paths (at most 32) for the files you want to edit.` } : {}),
+    ...(candidate.sharedPublication ? { sharedPublication: candidate.sharedPublication } : {}),
   };
 }

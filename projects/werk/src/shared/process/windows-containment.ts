@@ -72,7 +72,7 @@ public static class WerkProviderJob {
       destination.Flush();
     }
   }
-  public static int Run(string executable, string[] arguments) {
+  public static int Run(string executable, string[] arguments, string commandLine) {
     IntPtr job = IntPtr.Zero, inRead = IntPtr.Zero, inWrite = IntPtr.Zero, outRead = IntPtr.Zero, outWrite = IntPtr.Zero, errRead = IntPtr.Zero, errWrite = IntPtr.Zero;
     ProcessInfo child = new ProcessInfo(); FileStream input = null, output = null, error = null;
     try {
@@ -86,7 +86,9 @@ public static class WerkProviderJob {
       Check(CreatePipe(out outRead, out outWrite, ref security, 0)); Check(SetHandleInformation(outRead, 1, 0));
       Check(CreatePipe(out errRead, out errWrite, ref security, 0)); Check(SetHandleInformation(errRead, 1, 0));
       var startup = new Startup { Size = Marshal.SizeOf(typeof(Startup)), Flags = 0x100, Input = inRead, Output = outWrite, Error = errWrite };
-      var command = new StringBuilder(Quote(executable)); foreach (string arg in arguments ?? new string[0]) command.Append(' ').Append(Quote(arg));
+      // cmd.exe does not parse CRT-quoted arguments: the caller supplies its exact command line.
+      var command = new StringBuilder(); if (!string.IsNullOrEmpty(commandLine)) command.Append(commandLine);
+      else { command.Append(Quote(executable)); foreach (string arg in arguments ?? new string[0]) command.Append(' ').Append(Quote(arg)); }
       // CREATE_SUSPENDED | CREATE_NO_WINDOW. Environment inherits the sanitized supervisor environment.
       Check(CreateProcess(executable, command, IntPtr.Zero, IntPtr.Zero, true, 0x08000004, IntPtr.Zero, Environment.CurrentDirectory, ref startup, out child));
       if (!AssignProcessToJobObject(job, child.Process)) {
@@ -125,7 +127,7 @@ public static class WerkProviderJob {
   foreach ($entry in $launch.restoreEnvironment.PSObject.Properties) {
     [Environment]::SetEnvironmentVariable($entry.Name, $entry.Value)
   }
-  $code = [WerkProviderJob]::Run([string]$launch.executable, [string[]]$launch.arguments)
+  $code = [WerkProviderJob]::Run([string]$launch.executable, [string[]]$launch.arguments, [string]$launch.commandLine)
   exit $code
 } catch {
   [Console]::Error.WriteLine('Provider supervisor could not complete the contained invocation.')
@@ -133,12 +135,36 @@ public static class WerkProviderJob {
 }
 `;
 
+const cmdSwitch = /^\/[A-Za-z](?::\w+)?$/;
+
+/**
+ * Command line for cmd.exe, built like Node's `shell: true` on Windows: switches
+ * stay unquoted and the text after /c or /k is verbatim, wrapped in one pair of
+ * outer quotes when /s is present. cmd.exe does not use C runtime quoting, so it
+ * would misparse `"/d" "/s" "/c" "..."`. Returns null for any other executable or
+ * for an argument shape this form does not describe, which keeps standard quoting.
+ */
+function windowsCommandLine(executable: string, args: string[]): string | null {
+  if (win32.basename(executable).toLowerCase() !== 'cmd.exe' || executable.includes('"')) return null;
+  const run = args.findIndex(arg => /^\/[ck]$/i.test(arg));
+  const switches = run < 0 ? args : args.slice(0, run + 1);
+  if (!switches.every(arg => cmdSwitch.test(arg))) return null;
+  const parts = [`"${executable}"`, ...switches];
+  if (run >= 0 && run + 1 < args.length) {
+    const text = args.slice(run + 1).join(' ');
+    parts.push(switches.some(arg => arg.toLowerCase() === '/s') ? `"${text}"` : text);
+  }
+  return parts.join(' ');
+}
+
 /**
  * Windows launch plan for a contained process: Windows PowerShell runs the job
  * supervisor above, which creates the real executable inside a kill-on-close job.
- * Paths and arguments travel as base64 JSON, never as script text.
+ * Paths and arguments travel as base64 JSON, never as script text. A cmd.exe command
+ * line is built verbatim only when the caller states that every argument is
+ * operator-fixed; otherwise cmd.exe keeps the standard quoting.
  */
-export function windowsContainment(executable: string, args: string[], env: NodeJS.ProcessEnv): { executable: string; args: string[]; env: NodeJS.ProcessEnv } {
+export function windowsContainment(executable: string, args: string[], env: NodeJS.ProcessEnv, verbatimCmd = false): { executable: string; args: string[]; env: NodeJS.ProcessEnv } {
   const systemRoot = process.env.SystemRoot;
   if (!systemRoot || !win32.isAbsolute(systemRoot)) throw Error('Windows SystemRoot is unavailable');
   const powershell = win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
@@ -163,6 +189,6 @@ export function windowsContainment(executable: string, args: string[], env: Node
   return {
     executable: powershell,
     args: ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(supervisor, 'utf16le').toString('base64')],
-    env: { ...supervisorEnv, WERK_PROVIDER_LAUNCH: Buffer.from(JSON.stringify({ executable, arguments: args, restoreEnvironment }), 'utf8').toString('base64') },
+    env: { ...supervisorEnv, WERK_PROVIDER_LAUNCH: Buffer.from(JSON.stringify({ executable, arguments: args, commandLine: (verbatimCmd ? windowsCommandLine(executable, args) : null) ?? undefined, restoreEnvironment }), 'utf8').toString('base64') },
   };
 }

@@ -13,6 +13,7 @@ import { prepareRepositoryWorktree } from '../../src/worker/dist/worker/infrastr
 import { modelCapabilities } from '../../src/worker/dist/worker/application/model-contract.js';
 import { defaultGatePolicy } from '../../src/worker/dist/worker/application/request-gates.js';
 import { SharedFeatureLifecycle } from '../../src/worker/dist/worker/application/shared-feature-lifecycle.js';
+import { sharedFeatureRequestReference } from '../../src/worker/dist/worker/application/feature-request-reference.js';
 
 const run = promisify(execFile), delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 // Native Windows containment adds process startup cost to each Git/check operation.
@@ -85,8 +86,8 @@ async function fixture(t, execute, { verification = true, native = false, observ
     root, state, repository, baseCommit, settings, requests, grant, worktreeInspections,
     get board() { return board; }, get sessions() { return sessions; }, get invocations() { return invocations; },
     request(id) { return sessions.requests.get(board.executionDetail(id).requestId); },
-    async create(paths = ['approved.txt']) {
-      await board.create({ title: 'Implement the approved fixture change', instruction: 'Change approved.txt to after and verify the actual source.', repository, paths, provider: native ? 'cursor-cli' : 'openai-api' });
+    async create(paths = ['approved.txt'], submission = undefined) {
+      await board.create({ title: 'Implement the approved fixture change', instruction: 'Change approved.txt to after and verify the actual source.', repository, paths, provider: native ? 'cursor-cli' : 'openai-api' }, submission);
       return board.view().tasks.at(-1).id;
     },
     async settle(id, expected) {
@@ -185,6 +186,26 @@ test('an approved folder admits generated files under the frozen approved conten
   assert.equal(task.developmentCompletion.verified, true);
   assert.match(task.patch, /gen\/component\/view\.ts/); assert.match(task.patch, /\+after/);
   assert.equal(task.changedFileCount, 2);
+});
+
+test('shared intake admission freezes the publication bounds that candidate status reports; local admission does not', { timeout: multiPhaseTimeoutMs }, async t => {
+  const reported = [];
+  const f = await fixture(t, async ({ runtime, signal, invocation }) => {
+    reported.push((await call(runtime, 'werk_candidate_status', {}, signal)).value.sharedPublication);
+    if (invocation > 1) return complete('Only inspected the local candidate.');
+    await edit(runtime, signal); await check(runtime, signal);
+    return complete('Verified within the frozen bounds.');
+  });
+  const feature = sharedFeatureRequestReference({ id: 'shared-change', sourcePath: 'features/shared-change.md', binding: { repositoryId: 'project', remote: 'origin', branch: 'main', workflowPath: 'werk/workflow.json' } });
+  const shared = await f.create(['approved.txt'], { id: 'shared-change-task', hash: 'b'.repeat(64), feature });
+  assert.equal(shared, 'shared-change-task');
+  assert.deepEqual(f.board.executionDetail(shared).implementation.sharedPublication, { patchMaxBytes: 131072, changedFilesMax: 32 });
+  assert.equal((await f.settle(shared, 'review')).developmentCompletion.verified, true);
+  await f.create();
+  const local = f.board.view().tasks.find(task => task.id !== shared).id;
+  assert.equal(Object.hasOwn(f.board.executionDetail(local).implementation, 'sharedPublication'), false);
+  await f.settle(local, 'needs_rework');
+  assert.deepEqual(reported, [{ patchMaxBytes: 131072, changedFilesMax: 32, patchBytes: 0, changedFileCount: 0 }, undefined]);
 });
 
 test('proposal requests keep exact files: a folder approval is refused before a worktree is prepared', { timeout: testTimeoutMs }, async t => {

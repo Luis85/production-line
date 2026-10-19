@@ -17,12 +17,14 @@ export interface LaunchOptions {
   processGroup?: 'new' | 'inherit';
   /** Probes and service internals opt out. Display metadata must never include command details. */
   observation?: 'ignore' | ProcessPurpose;
+  /** A contained cmd.exe receives its command text verbatim. Only for arguments that are entirely operator-fixed; model-supplied text must never reach cmd.exe parsing. */
+  verbatimCmd?: boolean;
 }
 
 export function launchProcess(executable: string, args: string[], options: LaunchOptions): ChildProcessWithoutNullStreams {
   if (executable.includes('\0') || args.some(arg => arg.includes('\0'))) throw new TypeError('Process executable and arguments cannot contain NUL');
   const windows = process.platform === 'win32';
-  const plan = windows && options.mode === 'contained' ? windowsContainment(executable, args, options.env) : { executable, args, env: options.env };
+  const plan = windows && options.mode === 'contained' ? windowsContainment(executable, args, options.env, options.verbatimCmd === true) : { executable, args, env: options.env };
   const child = spawn(plan.executable, plan.args, { cwd: options.cwd, env: plan.env, detached: !windows && options.processGroup !== 'inherit', windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
   if (options.observation !== 'ignore') observeProcessLaunch(child, !windows && options.processGroup !== 'inherit', options.observation);
   return child;

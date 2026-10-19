@@ -89,8 +89,9 @@ test('real CLI processes retain pinned context across server restart and execute
   const statusListening = () => worker.stderr.split('\n').some(line => line.includes('"event":"status_listening"'));
   let completed, lastTask = replay, phase = 'worker status readiness';
   try {
-    // Workspace initialization is separate from the context execution being asserted.
-    await until(() => { worker.check(); return statusListening(); }, phase);
+    // Workspace initialization is separate from the context execution being asserted;
+    // a cold worker start on a loaded Windows runner can exceed 10s before it listens.
+    await until(() => { worker.check(); return statusListening(); }, phase, process.platform === 'win32' ? 30000 : 10000);
     phase = 'pinned mock completion';
     // Match the real mock-fleet test: cold Windows snapshot publication can exceed 10s.
     completed = await until(async () => {

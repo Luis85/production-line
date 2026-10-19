@@ -39,6 +39,9 @@ test('CLI tool validation rejects unsafe or ambiguous configuration with clear e
     [{ executable: 'node' }, /absolute path/],
     [{ executable: 'C:\\tools\\project.cmd' }, /\.bat or \.cmd/],
     [{ executable: 'C:\\tools\\project.BAT' }, /\.bat or \.cmd/],
+    [{ executable: 'C:\\Windows\\System32\\cmd.exe' }, /cannot run cmd\.exe/],
+    [{ executable: 'c:/windows/system32/CMD.EXE' }, /cannot run cmd\.exe/],
+    [{ executable: 'C:\\Windows/System32\\Cmd.Exe' }, /cannot run cmd\.exe/],
     [{ id: 'x'.repeat(49) }, /CLI tool ID/],
     [{ id: 'has space' }, /letters, digits/],
     [{ commands: [] }, /Allow 1–64 commands/],
@@ -198,6 +201,17 @@ test('saved CLI grants persist privately and an empty list stays readable by ear
   const reloaded = new WorkerSettings(path); await reloaded.init();
   assert.deepEqual(reloaded.toolPolicy().builtins.cliTools, settings.toolPolicy().builtins.cliTools);
   assert.equal(publicToolPolicy(reloaded.toolPolicy()).builtins.cliTools[0].executable, process.execPath);
+});
+
+test('a saved cmd.exe CLI tool stops startup with the file, the entry and the fix', async t => {
+  const path = await directory(t), settings = new WorkerSettings(path); await settings.init();
+  const base = settings.toolPolicy();
+  await settings.updateToolAccess({ expectedRevision: base.revision, builtins: { ...base.builtins, cliTools: [harness()] }, mcp: [] });
+  const file = join(path, 'tool-access.json'), saved = JSON.parse(await readFile(file, 'utf8'));
+  saved.builtins.cliTools[0].executable = 'C:\\Windows\\System32\\cmd.exe'; await writeFile(file, JSON.stringify(saved));
+  const message = await new WorkerSettings(path).init().then(() => '', error => error.message);
+  assert.ok(message.startsWith(file + ': CLI tool "harness": CLI tools cannot run cmd.exe'), message);
+  assert.match(message, /Remove or replace this CLI tool: use a command preset.*Correct the configuration in .*tool-access\.json, then start the worker again\./);
 });
 
 test('tool-access CLI commands round-trip the redacted view and guard discovery with a revision', async () => {

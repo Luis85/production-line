@@ -206,9 +206,12 @@ executable and its argument grammar before granting it. In particular:
   the proposed patch is not applied, so the CLI does not verify that proposal.
   A CLI tool result does not replace the required feature-check evidence.
 
-Batch files (`.bat`, `.cmd`) cannot be CLI tools because Windows passes their
-arguments through `cmd.exe`. Use the interpreter, such as `node.exe`, and pass
-the script as a fixed argument.
+Batch files (`.bat`, `.cmd`) and `cmd.exe` itself cannot be CLI tools, because
+`cmd.exe` would parse the model's arguments as shell syntax. Use the interpreter,
+such as `node.exe`, and pass the script as a fixed argument, or make a fixed
+`cmd.exe` command line a command preset. A worker whose saved `tool-access.json`
+still holds a `cmd.exe` CLI tool refuses to start with an error that names the
+file and the CLI tool; remove or replace that entry, then start the worker again.
 
 ### Move from command presets or a custom MCP server
 

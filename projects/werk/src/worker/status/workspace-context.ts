@@ -51,7 +51,7 @@ export interface WorkspaceConfiguration {
     integrationProjectDir?: string;
     codex?: { repository?: string };
     repositories?: RepositoryConfiguration;
-    features?: { directory: string; provider: string; pollMs: number };
+    features?: { directory: string; provider: string; pollMs: number; intake?: 'shared' | 'local' };
     chatExecutable?: string;
     retainedPairs?: number;
     pollMs: number;
@@ -135,7 +135,7 @@ export class WorkspaceContext {
     );
     this.consumption = new WorkerConsumption(new WorkerConsumptionJournal(config.stateDir), () => this.settings.value.consumption);
     this.repositories = new RepositoryManager(this.settings.value.repositories, { beforeRepositoryUse: item => this.repositoryDiscovery.assertAllowed(item.path), preserveCheckout: item => this.sharedRuntime?.intake.binding?.repositoryId === item.id || (this.sharedRuntime?.intake.requiredRepositoryIds().includes(item.id) ?? false) });
-    this.repositoryDiscovery = new RepositoryDiscovery(config.stateDir, config.integrationProjectDir ?? config.projectDir ?? process.cwd(), this.repositoryStop.signal, config.codex?.repository);
+    this.repositoryDiscovery = new RepositoryDiscovery(config.stateDir, config.integrationProjectDir ?? config.projectDir ?? process.cwd(), this.repositoryStop.signal, config.codex?.repository, config.features?.intake === 'local' ? false : undefined);
     this.sessions = createWorkerSessions(
       config.stateDir, this.settings, modelFor, undefined, () => this.board.active, this.consumption,
       { remote: () => { const status = this.get(); return { waiting: status.queuedTasks?.length ?? null, running: status.activeTasks.length }; } },

@@ -213,6 +213,14 @@ Shared mode accepts approved-file patch requests only. It retains the existing
   only by letter case or Unicode normalization. Workflow configuration, checks,
   template, Base and prompt files, and request/review and Task namespaces cannot
   be changed by the feature patch.
+- Publication accepts a feature patch of at most 131,072 UTF-8 bytes that changes
+  at most 32 files. An implementation request freezes these bounds at admission:
+  candidate status reports them as `sharedPublication` with the candidate's patch
+  size and changed-file count, and a candidate above either bound fails every
+  required check before it runs, with the same message that would block
+  publication. The post-verification block described under
+  [Ownership, publication and recovery](#ownership-publication-and-recovery)
+  remains the backstop. See [Implement a feature](../how-to/implement-feature.md#current-limits).
 - Before implementation, Goal, Context, Acceptance criteria and Verification
   plan headings are required, with substantive core text after HTML comments and
   fenced examples are excluded. Acceptance criteria contain 1–32 nonempty list
@@ -438,9 +446,12 @@ handoff, not a Git-hosting pull-request object. Feature branches are not
 automatically merged or approved.
 
 Shared feature publication accepts at most 128 KiB of patch text and 32 changed
-files, independently of configurable local candidate limits. If a verified result
-exceeds either bound, the worker retains it, marks the Feature Request blocked and
-publishes a diagnostic Task note with the measured limit and next steps. It does
+files, independently of configurable local candidate limits. Required checks
+already fail during implementation while a candidate exceeds either bound, so this
+block is a backstop, for example for requests admitted before implementation
+scopes recorded the bounds. If a verified result still exceeds either bound, the
+worker retains it, marks the Feature Request blocked and publishes a diagnostic
+Task note with the measured limit and next steps. It does
 not repeatedly attempt an oversized feature push or rerun the model. A maintainer
 can inspect and publish the retained candidate manually, or the team can create
 smaller successor requests. This diagnostic Task does not accept answers or change

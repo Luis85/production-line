@@ -35,9 +35,13 @@ export function featureTrackingSnapshot(workspace: WorkspaceContext): FeatureTra
   });
 }
 
+/** Explain the local setup preset only while no explicit shared repository binding owns intake. */
+const localIntakeHint = { intake: 'local', hint: 'Shared Git intake is intentionally off: this worker was created with init --intake local. Create a request by copying <features>/_templates/local-request.md outside the feature folder, setting paths, then running feature create --markdown <copy>. To use shared intake, run shared setup; its saved repository binding takes precedence over the local setup defaults.' } as const;
+const withLocalHint = <T extends object>(workspace: WorkspaceContext, view: T): T | (T & typeof localIntakeHint) => workspace.config.features?.intake === 'local' && !workspace.sharedRuntime.intake.binding?.repositoryId ? { ...view, ...localIntakeHint } : view;
+
 export function sharedIntakeView(workspace: WorkspaceContext){
   const blocked = toolAccessBlockedReason(workspace)?.replaceAll('tool access', 'shared intake') ?? null;
-  return workspace.sharedRuntime.intake.view(blocked);
+  return withLocalHint(workspace, workspace.sharedRuntime.intake.view(blocked));
 }
 
 export async function sharedIntakeCommand(workspace: WorkspaceContext, input: unknown){
@@ -57,9 +61,9 @@ export async function sharedIntakeCommand(workspace: WorkspaceContext, input: un
   throw new DomainError('invalid_input', 'Use configure, sync or note for shared intake.');
 }
 
-export function featureView(workspace: WorkspaceContext){ return workspace.sharedRuntime.intake.binding?.repositoryId ? { enabled: false, reason: 'Shared repository intake is configured.' } : workspace.features?.view() ?? { enabled: false }; }
+export function featureView(workspace: WorkspaceContext){ return workspace.sharedRuntime.intake.binding?.repositoryId ? { enabled: false, reason: 'Shared repository intake is configured.' } : withLocalHint(workspace, workspace.features?.view() ?? { enabled: false }); }
 
-export async function featureList(workspace: WorkspaceContext){ return workspace.sharedRuntime.intake.binding?.repositoryId ? featureView(workspace) : await workspace.features?.list() ?? { enabled: false }; }
+export async function featureList(workspace: WorkspaceContext){ return workspace.sharedRuntime.intake.binding?.repositoryId ? featureView(workspace) : withLocalHint(workspace, await workspace.features?.list() ?? { enabled: false }); }
 
 export async function featureCommand(workspace: WorkspaceContext, input: unknown){
   if (!workspace.features) throw new DomainError('conflict', 'Configure a feature folder first.');

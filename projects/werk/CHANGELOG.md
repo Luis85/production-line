@@ -7,6 +7,20 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+### Added
+
+- The portable worker CLI adds `footprint` and guarded `uninstall --dry-run` / `uninstall --confirm`. Inventory reports paths, sizes and ownership without printing environment values. Removal preserves tracked files, nested repositories, customized authoring assets and project manifests, unknown state and worktrees with changes. Requests and environment entries stay unless explicitly included. See [Remove a project worker](docs/how-to/project-worker.md#remove-a-project-worker).
+- `init --intake local` provides an operator-only setup with a local Markdown template and the same Feature Request lifecycle. Repository acceptance defaults to watching off; `repository accept --watch true|false` overrides it. Shared intake remains the default.
+
+### Changed
+
+- Model-callable CLI tools reject `cmd.exe`, as they already reject `.bat` and `.cmd` files, because it interprets model arguments as shell syntax. **Upgrade note:** a saved `tool-access.json` containing such a CLI tool now prevents startup with a file and entry diagnostic. Replace it with a direct executable such as `node.exe`, or configure the fixed command as a command preset.
+
+### Fixed
+
+- Shared implementation requests receive publication bounds during implementation: 128 KiB of patch text and 32 changed files. Candidate tools report current usage, and required checks stop before running while either bound is exceeded so the model can reduce its changes and retry. Publication retains its independent final check; local requests and previously admitted requests keep their existing behavior.
+- Windows containment uses command-shell quoting for operator-fixed `cmd.exe` command presets, required checks and MCP connections. Model-supplied CLI arguments retain the standard argument transport and cannot opt into command-shell parsing.
+
 ## [0.14.0] - 2026-10-19
 
 ### Added

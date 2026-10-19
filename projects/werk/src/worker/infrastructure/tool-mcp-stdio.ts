@@ -16,7 +16,7 @@ export function openMcpStdio(config: Extract<McpTransportConfiguration, { transp
   const launch = options.dependencies?.launch ?? launchProcess;
   const terminate = options.dependencies?.terminate ?? terminateProcess;
   let child: ReturnType<typeof launchProcess>;
-  try { child = launch(config.executable, config.args, { cwd: options.directory, env: mcpEnvironment(options.dependencies?.environment ?? process.env, config.env), mode: 'contained', observation: { kind: 'mcp', label: 'MCP connection' } }); }
+  try { child = launch(config.executable, config.args, { cwd: options.directory, env: mcpEnvironment(options.dependencies?.environment ?? process.env, config.env), mode: 'contained', verbatimCmd: true, observation: { kind: 'mcp', label: 'MCP connection' } }); }
   catch { throw new McpClientError('unavailable'); }
   let id = 0, bytes = 0, size = 0, failure: McpClientError | undefined, closed = false;
   let pending: { id: number; resolve(value: unknown): void; reject(error: Error): void } | undefined;

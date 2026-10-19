@@ -110,10 +110,12 @@ worker’s local credentials; stdout is JSON and no command prompts for a choice
 | --- | --- |
 | `repository status` | Inspect assignments and the detected project checkout without fetching |
 | `repository sync [--id ASSIGNMENT_ID]` | Fetch and safely fast-forward one assignment, or all when omitted; waits up to 120 s |
-| `repository accept --discovery-id ID` | Accept the exact detected checkout and save an assignment; requires idle work |
+| `repository accept --discovery-id ID [--watch true|false]` | Accept the exact detected checkout and save an assignment; requires idle work. `--watch` sets background fetching for the new assignment; default `false` when `features.intake` is `local`, otherwise `true` for a checkout with a remote and branch. `true` without a remote is refused, and so is `--watch` for a checkout that is assigned already: change its watching in **Settings → Repositories** or with `settings set` (`repositories.items[].watch`) |
 | `repository decline --discovery-id ID` | Persist the choice not to use the detected checkout |
 | `worktrees list` | List task worktrees in assigned repositories with location, state and using file task |
 | `worktrees prune [--id NAME] [--repository ID] [--discard-changes true] [--dry-run]` | Remove worktrees no file task uses; clean only unless `--discard-changes true`; requires idle work except for `--dry-run` |
+| `footprint` | Read-only inventory of the installed worker by group (`app`, `retained`, `state`, `configuration`, `authoring`, `requests`, `integrations`, `environment`, `worktrees`) with path, existence, size and Git tracking; works running or stopped; no file contents or credentials |
+| `uninstall --dry-run \| --confirm [--stop] [--include-requests] [--include-environment]` | Run from the project directory. `--dry-run` lists `remove` and `keep` with reasons; `--confirm` needs a stopped worker (or `--stop`), removes owned clean task worktrees, then untracked integration, authoring, configuration, state, retained and app files, the app last. Tracked files, edited files, request folders and `.env` entries stay unless included. Exit 1 with `ok: false` when something could not be removed. See [Remove a project worker](../how-to/project-worker.md#remove-a-project-worker) |
 | `shared status` | Inspect shared Git intake: binding, `revision`, workflow snapshot and requests, without fetching |
 | `shared sync` | Fetch the shared branch now and reconcile claims and publications; waits up to 120 s |
 | `shared configure --file intake.json` | Save `{"expectedRevision":N,"config":{...}}` while new starts are paused and idle. `config` must be complete: `enabled`, `repositoryId`, `remote`, `branch`, `workflowPath` and `pollMs` |

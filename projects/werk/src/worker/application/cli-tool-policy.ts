@@ -62,6 +62,7 @@ export function validateCliTool(value: unknown, absolute: (value: unknown, label
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) invalid(entryMessage(entry, 'CLI tool IDs use 1–48 letters, digits, underscores and hyphens.'));
   const executable = absolute(input.executable, 'CLI tool executable', entry);
   // cmd.exe re-parses batch-file arguments, so model text could become shell syntax.
+  if (/(?:^|[\\/])cmd\.exe$/i.test(executable.trim())) invalid(entryMessage(entry, 'CLI tools cannot run cmd.exe, because it would parse model arguments as shell syntax. Remove or replace this CLI tool: use a command preset for a fixed command line, or call the interpreter executable, such as node.exe, directly.'));
   if (/\.(?:bat|cmd)$/i.test(executable.trim())) invalid('CLI tools cannot run .bat or .cmd files, because Windows passes their arguments through cmd.exe. Use the interpreter executable, such as node.exe, with the script as a fixed argument.');
   if (!Array.isArray(input.args) || input.args.length > 32) invalid('Use at most 32 fixed CLI tool arguments.');
   const args = input.args.map((item, index) => text(item, `fixed CLI tool argument ${index + 1}`, 2048, true, entry));
