@@ -29,6 +29,8 @@ const definitions = {
 };
 function definition(kind) { const value = definitions[kind]; if (!value) throw inputError('Unknown environment application.'); return value; }
 function supported(kind) { const value = definition(kind); return new Set([...Object.keys(value.options), ...value.extra]); }
+/** Names of the .env keys an application reads; values are never part of this list. */
+export function environmentKeys(kind) { return [...supported(kind)]; }
 const syntaxError = key => inputError('Invalid .env value for ' + key + '. Use a single assignment with optional quotes and comments.');
 
 /** Only supported Werk keys are interpreted. Shell substitutions are literal strings. */
