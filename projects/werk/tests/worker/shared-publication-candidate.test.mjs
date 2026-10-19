@@ -1,0 +1,110 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { lstat, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { createDevelopmentRuntime } from '../../src/worker/dist/worker/infrastructure/candidate-tools.js';
+import { createRepositoryWorktree, repositoryRoot } from '../../src/worker/dist/worker/infrastructure/repositories-git.js';
+import { createToolRuntime } from '../../src/worker/dist/worker/infrastructure/tool-runtime.js';
+import { GitFeatureRepository } from '../../src/worker/dist/worker/infrastructure/features/git-repository.js';
+import { defaultToolPolicy, validateToolPolicy } from '../../src/worker/dist/worker/application/tool-policy.js';
+import { developmentScopeView, freezeDevelopmentScope, validateDevelopmentState } from '../../src/worker/dist/worker/application/development.js';
+import { sharedFeaturePublicationIssue, sharedFeaturePublicationLimits } from '../../src/worker/dist/worker/application/shared-feature-publication-limits.js';
+import { cleanup } from './fixture-cleanup.mjs';
+
+const signal = () => new AbortController().signal;
+const git = (directory, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-C', directory, ...args], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+// The in-run refusal wraps the exact message that blocks publication after verification.
+const inRun = issue => `Shared publication limit: ${issue} Reduce the change before verification; required checks fail while it exceeds the limit.`;
+const patchError = size => inRun(`The retained candidate patch is ${size} bytes; shared feature publication allows at most 131,072 bytes (128 KiB).`);
+const filesError = count => inRun(`The retained candidate changes ${count} files; shared feature publication allows at most 32 changed files.`);
+// Raised approved-content limits let a candidate reach the publication bound before the review bounds.
+const raised = { candidateApprovedFileMaxBytes: 200000, candidateApprovedTotalMaxBytes: 400000, candidateReviewPatchMaxBytes: 400000 };
+
+function policyFixture() {
+  const policy = defaultToolPolicy();
+  policy.builtins.files = true; policy.builtins.commands = [{ id: 'check', name: 'Check', executable: process.execPath, args: ['-e', ''], enabled: true, verification: true }];
+  return validateToolPolicy(policy);
+}
+
+async function fixture(t, files, { shared }) {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-shared-publication-'))), repository = join(directory, 'repo');
+  await mkdir(repository, { recursive: true }); cleanup(t, () => rm(directory, { recursive: true, force: true }));
+  git(repository, 'init', '-b', 'main'); git(repository, 'config', 'core.autocrlf', 'false'); git(repository, 'config', 'user.name', 'Fixture'); git(repository, 'config', 'user.email', 'fixture@example.invalid');
+  await writeFile(join(repository, 'readme.md'), 'notes\n'); git(repository, 'add', '.'); git(repository, 'commit', '-m', 'Baseline');
+  const prepared = await createRepositoryWorktree(await repositoryRoot(repository, signal()), 'project', 'publication', signal());
+  for (const [path, body] of Object.entries(files)) { await mkdir(join(prepared.path, path, '..'), { recursive: true }); await writeFile(join(prepared.path, path), body); }
+  const info = await lstat(prepared.path), worktreeIdentity = { dev: String(info.dev), ino: String(info.ino), birthtimeMs: info.birthtimeMs };
+  const policy = policyFixture(), scope = freezeDevelopmentScope(prepared.baseCommit, ['gen/'], policy, { sharedPublication: shared });
+  const development = createDevelopmentRuntime({ scope, worktree: prepared.path, worktreeIdentity, repository, currentPolicy: () => policy, checkpoint: async () => {}, verifyWorkspace: async () => {}, ...raised });
+  const tools = createToolRuntime({ policy, currentRevision: () => policy.revision, directory, worktree: prepared.path, worktreeIdentity, development, ...raised });
+  cleanup(t, () => tools.close());
+  const call = async (name, args) => { const result = await tools.call(name, args, signal()); return { isError: result.isError === true, value: JSON.parse(result.content.map(item => item.text).join('\n')) }; };
+  return { scope, development, call };
+}
+const manyFiles = count => Object.fromEntries(Array.from({ length: count }, (_, index) => [`gen/file-${String(index).padStart(2, '0')}.ts`, `export const value = ${index};\n`]));
+const largeFile = { 'gen/large.ts': Array.from({ length: 1400 }, (_, index) => String(index).padStart(99, 'x')).join('\n') + '\n' };
+
+test('shared implementation scopes freeze the publisher limits; local scopes and saved scopes without them stay unbounded', () => {
+  assert.deepEqual(sharedFeaturePublicationLimits, { patchMaxBytes: 131072, changedFilesMax: 32 });
+  assert.ok(Object.isFrozen(sharedFeaturePublicationLimits));
+  const policy = policyFixture(), base = 'a'.repeat(40);
+  const shared = freezeDevelopmentScope(base, ['gen/'], policy, { sharedPublication: true });
+  assert.deepEqual(shared.sharedPublication, { patchMaxBytes: 131072, changedFilesMax: 32 });
+  assert.deepEqual(developmentScopeView(shared).sharedPublication, shared.sharedPublication, 'the model context names the bounds with the frozen scope');
+  for (const local of [freezeDevelopmentScope(base, ['gen/'], policy), freezeDevelopmentScope(base, ['gen/'], policy, { sharedPublication: false })]) {
+    assert.equal(Object.hasOwn(local, 'sharedPublication'), false);
+    assert.equal(Object.hasOwn(developmentScopeView(local), 'sharedPublication'), false);
+  }
+  for (const sharedPublication of [null, 'shared', {}, { patchMaxBytes: 131072 }, { patchMaxBytes: 0, changedFilesMax: 32 }, { patchMaxBytes: 131072, changedFilesMax: 1.5 }, { patchMaxBytes: 131072, changedFilesMax: 32, extra: 1 }])
+    assert.throws(() => validateDevelopmentState({ ...shared, sharedPublication }), /Saved implementation authority/, JSON.stringify(sharedPublication));
+});
+
+test('the shared publisher refuses a candidate patch with the same measurement the in-run check reports', () => {
+  const directory = tmpdir();
+  const adapter = new GitFeatureRepository({ repository: directory, stateDirectory: directory, remote: 'origin', branch: 'main', requestsDirectory: 'features', reviewDirectory: 'reviews', workerId: 'worker-1' });
+  const patch = Object.keys(manyFiles(33)).map(path => `diff --git a/${path} b/${path}
+new file mode 100644
+`).join('');
+  const input = { operationId: 'publish-1', featureId: 'feature-1', sourceCommit: 'a'.repeat(40), approvedPaths: ['gen/'], patch };
+  assert.throws(() => adapter.publishPatch(input), { message: sharedFeaturePublicationIssue(patch) });
+  assert.equal(inRun(sharedFeaturePublicationIssue(patch)), filesError(33));
+});
+
+test('a shared candidate above the changed-file bound fails verification with the named limit; status reports the bounds', async t => {
+  const f = await fixture(t, manyFiles(33), { shared: true });
+  const status = await f.call('werk_candidate_status', {});
+  assert.equal(status.isError, false);
+  assert.equal(status.value.changedFileCount, 33);
+  const candidate = await f.development.capture(signal());
+  assert.deepEqual(status.value.sharedPublication, { patchMaxBytes: 131072, changedFilesMax: 32, patchBytes: Buffer.byteLength(candidate.patch), changedFileCount: 33, error: inRun(sharedFeaturePublicationIssue(candidate.patch)) });
+  assert.equal(status.value.sharedPublication.error, filesError(33));
+  const check = await f.call('werk_candidate_check', { preset: 'check' });
+  assert.equal(check.isError, true); assert.equal(check.value.status, 'failed'); assert.equal(check.value.exitCode, null);
+  assert.equal(check.value.stderr, filesError(33));
+  assert.equal(f.development.evidence().checks[0].status, 'failed', 'the durable receipt records the failed publication bound');
+});
+
+test('a shared candidate above the patch byte bound fails verification; within both bounds it passes and status shows its measurements', async t => {
+  const f = await fixture(t, largeFile, { shared: true });
+  const candidate = await f.development.capture(signal()), size = Buffer.byteLength(candidate.patch);
+  assert.ok(size > 131072 && size < 200000);
+  const check = await f.development.check('check', signal());
+  assert.equal(check.status, 'failed'); assert.equal(check.stderr, patchError(size.toLocaleString('en-US')));
+  const within = await fixture(t, manyFiles(32), { shared: true });
+  const status = await within.call('werk_candidate_status', {});
+  assert.deepEqual(Object.keys(status.value.sharedPublication).sort(), ['changedFileCount', 'changedFilesMax', 'patchBytes', 'patchMaxBytes']);
+  assert.equal(status.value.sharedPublication.changedFileCount, 32);
+  assert.equal((await within.development.check('check', signal())).status, 'passed');
+});
+
+test('the same candidates as local requests pass and status shows no publication bounds', async t => {
+  for (const files of [manyFiles(33), largeFile]) {
+    const f = await fixture(t, files, { shared: false });
+    const status = await f.call('werk_candidate_status', {});
+    assert.equal(status.isError, false); assert.equal(Object.hasOwn(status.value, 'sharedPublication'), false);
+    const check = await f.call('werk_candidate_check', { preset: 'check' });
+    assert.equal(check.isError, false); assert.equal(check.value.status, 'passed');
+  }
+});

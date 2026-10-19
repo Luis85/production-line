@@ -5,8 +5,9 @@ import { constants } from 'node:fs';
 import { lstat, mkdir, open, realpath, rename, unlink } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { ProcessRunError } from '../../shared/process/launcher.js';
-import type { DevelopmentFactory, DevelopmentEvidence, DevelopmentCandidate, DevelopmentCheckEvidence } from '../application/development.js';
+import type { DevelopmentFactory, DevelopmentEvidence, DevelopmentCandidate, DevelopmentCheckEvidence, SharedPublicationStatus } from '../application/development.js';
 import { assertDevelopmentPolicy, validateDevelopmentState } from '../application/development.js';
+import { sharedFeaturePublicationIssue, sharedFeaturePublicationMeasure } from '../application/shared-feature-publication-limits.js';
 import { approvedFolder, approvedPathMatch, validateApprovedPaths } from '../application/approved-paths.js';
 import { candidateGitOutputBytes, RepositoryGitError, repositoryGit, repositoryPathIgnored } from './repositories-git.js';
 import { boundedListing, candidateView } from './candidate-listing.js';
@@ -46,6 +47,15 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
   const approvedTotalError = (size: number) => `Approved candidate text is ${count(size)} bytes; the approved content limit is ${count(review.candidateApprovedTotalMaxBytes)} bytes (execution.candidateApprovedTotalMaxBytes).`;
   const approvedFileError = (path: string, size: number) => `Approved candidate file ${JSON.stringify(path)} is ${count(size)} bytes; the approved file limit is ${count(review.candidateApprovedFileMaxBytes)} bytes (execution.candidateApprovedFileMaxBytes).`;
   const patchError = (size: string) => `Candidate review patch is ${size} bytes; the review patch limit is ${count(review.candidateReviewPatchMaxBytes)} bytes (execution.candidateReviewPatchMaxBytes).`;
+  /** Shared requests freeze the publisher's bounds: an oversized candidate cannot pass verification, while status and edits still work so it can shrink. */
+  function publication(candidate: DevelopmentCandidate): SharedPublicationStatus | undefined {
+    const limits = scope.sharedPublication;
+    if (!limits) return;
+    // The same measurement and refusal that block publication after verification, so the two layers cannot disagree.
+    const issue = sharedFeaturePublicationIssue(candidate.patch);
+    const error = issue && `Shared publication limit: ${issue} Reduce the change before verification; required checks fail while it exceeds the limit.`;
+    return { ...limits, ...sharedFeaturePublicationMeasure(candidate.patch), ...(error ? { error } : {}) };
+  }
   let state = structuredClone(options.initialEvidence ?? empty());
   let broken = false;
   let previous: Promise<unknown> = Promise.resolve();
@@ -202,7 +212,8 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
   /** Byte-bounded model-facing listing: a wide approved folder cannot exceed the tool result limit. `changedPaths` stays complete. */
   function listed(candidate: InspectedCandidate, requested: readonly string[] = []): DevelopmentCandidate {
     if (!Array.isArray(requested) || requested.length > 32 || requested.some(path => typeof path !== 'string' || !isApproved(path))) fail('Request hashes for at most 32 approved paths (approved files or safe files below an approved folder).');
-    return { patch: candidate.patch, digest: candidate.digest, changedPaths: candidate.changedPaths, ...boundedListing(candidate.files ?? [], candidate.changedPaths, new Set(exact), [...new Set(requested)]) };
+    const shared = publication(candidate);
+    return { patch: candidate.patch, digest: candidate.digest, changedPaths: candidate.changedPaths, ...boundedListing(candidate.files ?? [], candidate.changedPaths, new Set(exact), [...new Set(requested)]), ...(shared ? { sharedPublication: shared } : {}) };
   }
   return {
     evidence: () => structuredClone(state),
@@ -266,6 +277,12 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
       const startedAt = new Date().toISOString();
       let receipt: DevelopmentCheckEvidence = { presetId, presetFingerprint: preset.fingerprint, candidateDigest: before.digest, status: 'interrupted', exitCode: null, stdout: '', stderr: '', startedAt, finishedAt: startedAt };
       const retained = () => state.checks.filter(check => check.presetId !== presetId);
+      const unpublishable = publication(before)?.error;
+      if (unpublishable) {
+        receipt = { ...receipt, status: 'failed', stderr: unpublishable };
+        await checkpoint(updated(before, [...retained(), receipt]));
+        return structuredClone(receipt);
+      }
       await checkpoint(updated(before, [...retained(), receipt]));
       let stdout: Buffer = Buffer.alloc(0), stderr: Buffer = Buffer.alloc(0), exitCode: number | null = null, stopped = '';
       try {

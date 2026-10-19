@@ -81,7 +81,8 @@ export async function createTask(host: Pick<LocalTaskRuntime, "model" | "closed"
         "This task worktree already exists. Inspect the retained task before submitting again.",
       );
     const interruptedWorktree = prepared.reused && prepared.pristine !== true;
-    const implementation = !interruptedWorktree && host.development ? freezeDevelopmentScope(prepared.baseCommit, allowedPaths, host.settings.toolPolicy()) : undefined;
+    // Shared intake publishes the candidate through Git, so its implementation scope freezes the publisher's bounds.
+    const implementation = !interruptedWorktree && host.development ? freezeDevelopmentScope(prepared.baseCommit, allowedPaths, host.settings.toolPolicy(), { sharedPublication: submission?.feature?.source === 'shared_git' }) : undefined;
     if (!interruptedWorktree) assertFolderApprovals(allowedPaths, host.settings.toolPolicy(), !!implementation);
     // Never turn modified or unverifiable retained contents into a fresh approval.
     // A durable failed receipt lets the operator leave an otherwise endless retry.

@@ -7,6 +7,10 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+### Fixed
+
+- Implementation requests from shared intake learn the shared Git publication bounds during implementation, before a full model run ends in a blocked publication. Admission freezes the publisher's limits (a patch of at most 131,072 UTF-8 bytes and at most 32 changed files) into the implementation scope; `werk_candidate_status` and `werk_candidate_apply` report them as `sharedPublication` with the candidate's `patchBytes` and `changedFileCount`, and while a candidate exceeds either bound every required check fails before running, with the same measurement and message that block publication after verification, prefixed `Shared publication limit:`. The post-verification block remains the backstop. Local requests and requests admitted before this change are unaffected.
+
 ## [0.14.0] - 2026-10-19
 
 ### Added

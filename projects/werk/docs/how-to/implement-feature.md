@@ -110,14 +110,33 @@ limit and the setting, for example `Approved candidate text is 60,000 bytes; the
 approved content limit is 48,000 bytes (execution.candidateApprovedTotalMaxBytes).`
 Raise the named setting with `settings set` (see
 [worker execution policy](../reference/configuration.md#local-worker-execution-policy));
-a new attempt captures it. Shared feature publication keeps its own bounds: a patch of
-at most 128 KiB and at most 32 changed files. The taskboard stores each review
-patch in a document limited to 16 MiB in total, which is why a review patch is
-limited to 4 MiB. Split larger changes into reviewable features. If a completed
-shared result exceeds its publication bounds, the worker retains the candidate
-and publishes a blocked Task note with recovery guidance. Ask a maintainer to
-inspect it or create smaller successor requests; editing that diagnostic note does
-not rerun implementation.
+a new attempt captures it.
+
+The taskboard stores each review patch in a document limited to 16 MiB in total,
+which is why a review patch is limited to 4 MiB. Split larger changes into
+reviewable features.
+
+Shared feature publication keeps its own fixed bounds: a patch of at most 131,072
+UTF-8 bytes (128 KiB) and at most 32 changed files, counted as the patch's Git file
+headers. The approved content settings above do not raise them. Two layers enforce
+the same measurement, so they cannot disagree:
+
+1. **During implementation.** An implementation request admitted through
+   [shared intake](../reference/shared-feature-intake.md#request-and-template-contract)
+   freezes these bounds with its scope. `werk_candidate_status` and
+   `werk_candidate_apply` return `sharedPublication` with both bounds and the
+   candidate's `patchBytes` and `changedFileCount`, plus an `error` once either
+   bound is exceeded, for example `Shared publication limit: The retained candidate
+   changes 33 files; shared feature publication allows at most 32 changed files.
+   Reduce the change before verification; required checks fail while it exceeds
+   the limit.` Every required check on such a candidate fails with that message
+   without running, so the request cannot reach review; reduce the change and run
+   the checks again. Local requests are unaffected.
+2. **After verification.** If a completed shared result still exceeds the bounds,
+   for example a request admitted before scopes recorded them, the worker retains
+   the candidate instead of pushing it and publishes a blocked Task note with
+   recovery guidance. Ask a maintainer to inspect it or create smaller successor
+   requests; editing that diagnostic note does not rerun implementation.
 
 Candidate verification inspects every tracked file and every nonignored untracked
 file, including files outside the approved edit list. Repositories containing
