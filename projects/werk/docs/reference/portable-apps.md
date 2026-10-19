@@ -135,8 +135,16 @@ Worker help also lists the verified-implementation source limits
 Queue & duration → Repository inspection limits**, or use `settings set` with an
 `execution` body. CLI/API sizes are whole bytes; the webview displays MiB. Include
 the complete `expectedCandidateInspection` baseline from `settings get` to reject
-concurrent edits. These bounds affect source inspection, not approved edit scope;
-see [execution settings](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/configuration.md#local-worker-execution-policy).
+concurrent edits. These bounds affect source inspection, not approved edit scope.
+Approved candidate content for implementation requests has three further settings:
+`execution.candidateApprovedFileMaxBytes` (default 24000, 1000–8388608),
+`candidateApprovedTotalMaxBytes` (default 48000, 1000–67108864, at least the
+per-file limit) and `candidateReviewPatchMaxBytes` (default 120000,
+10000–4194304). `settings get` shows them; change them with `settings set` and an
+`execution` body, including the complete `expectedCandidateReview` baseline (all
+three current values) to reject concurrent edits. Each implementation dispatch
+freezes them; raising them never widens the approved paths. See
+[execution settings](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/configuration.md#local-worker-execution-policy).
 Inspect `settings get` for `executionSource` and `resource status` for admission
 conditions. Resource snapshots measure the worker Node process, not provider
 subprocess totals or subscription balances. Fleet `workers.execution.timeoutMs`

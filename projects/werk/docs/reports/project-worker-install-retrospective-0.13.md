@@ -39,9 +39,10 @@ the [current documentation](../index.md).
 | 6 | The default 10 s client timeout was exceeded by `settings set` (repository assignment and worktree folder), `interaction answer` and a `feature wait` poll. Each operation still succeeded on the server. | Three misleading client failures that each needed a status check before retrying. | Fixed in this change: a 30 s default and 120 s for `settings set`. The wait loop already tolerates slow polls since 0.13. |
 | 7 | `Use a valid Command executable.` named neither the entry nor the reason. A shell had collapsed backslashes into a control character. | Required source reading to diagnose. | Fixed in this change: tool-access errors name the entry and the reason. |
 | 8 | `definition import` cannot set the stable reference, so `definition ref` is a second command. | One extra step and a definition ID to copy. | Fixed in this change: `definition import --ref`. |
-| 9 | There is no uninstall or footprint listing. Removing the old worker meant collecting the app, `.werk/`, the request folder, four skill folders, the Codex guide, retained update folders and Git-registered task worktrees by hand. Windows refused to recycle folders that other processes held open. | A manual inventory, plus a copy-then-delete backup outside the project. | Open: a `footprint` or `uninstall --dry-run` command that lists every installed path and owned worktree. |
-| 10 | Operator-only use is not a first-class setup. `init` always generates the shared Git template, which the local folder intake refuses (it carries a `templateId`), and it enables repository watching on accept. | The operator wrote a local request template by hand and turned watching off so the worker would not fast-forward a busy checkout. | Open: an `init --intake local` that generates a local request template and leaves watching off. |
-| 11 | `integrations plan` rejects `--request-timeout-ms`, although `help` lists it as a general client option. | Cosmetic inconsistency. | Open. |
+| 9 | The operator wants the worker as a full-time developer that runs the project's code generators. Generators write whole folders and large files, but an implementation scope approved only exact files (at most 32) within fixed bounds of 24 KB per file, 48 KB in total and a 120 KB review patch. | Generator-driven requests could not be scoped or exceeded the bounds, so verified implementation was limited to small hand edits. | Fixed in this change: folder approvals and configurable approved-content limits (patch ≤ 4 MiB). |
+| 10 | There is no uninstall or footprint listing. Removing the old worker meant collecting the app, `.werk/`, the request folder, four skill folders, the Codex guide, retained update folders and Git-registered task worktrees by hand. Windows refused to recycle folders that other processes held open. | A manual inventory, plus a copy-then-delete backup outside the project. | Open: a `footprint` or `uninstall --dry-run` command that lists every installed path and owned worktree. |
+| 11 | Operator-only use is not a first-class setup. `init` always generates the shared Git template, which the local folder intake refuses (it carries a `templateId`), and it enables repository watching on accept. | The operator wrote a local request template by hand and turned watching off so the worker would not fast-forward a busy checkout. | Open: an `init --intake local` that generates a local request template and leaves watching off. |
+| 12 | `integrations plan` rejects `--request-timeout-ms`, although `help` lists it as a general client option. | Cosmetic inconsistency. | Open. |
 
 ## Notes
 
@@ -53,7 +54,7 @@ the [current documentation](../index.md).
 - **Pattern from items 2 and 5–8.** As in the previous retrospective, the CLI accepted
   input and then failed later, or reported a generic error. Validating early and
   naming the field is still the cheapest operator improvement.
-- **Pattern from items 3, 4, 9 and 10.** Installing into a real, busy vault is a
+- **Pattern from items 3, 4, 10 and 11.** Installing into a real, busy vault is a
   different operating environment from a clean demo project: other agents' processes,
   strict Git hygiene and a single operator. These items make that path explicit
   instead of manual.
