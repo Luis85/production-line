@@ -235,7 +235,11 @@ requests keep their fixed bounds.
 | --- | --- | --- | --- |
 | `candidateApprovedFileMaxBytes` | 24000 | 1000–8388608 | One approved file in the candidate |
 | `candidateApprovedTotalMaxBytes` | 48000 | 1000–67108864, at least `candidateApprovedFileMaxBytes` | All approved text in the candidate |
-| `candidateReviewPatchMaxBytes` | 120000 | 10000–67108864 | The review patch |
+| `candidateReviewPatchMaxBytes` | 120000 | 10000–4194304 (4 MiB) | The review patch |
+
+Every changed approved file appears in the review patch, so `candidateReviewPatchMaxBytes`
+also bounds approved content in practice: per-file and total values above the patch
+limit only matter for exact approved files that stay unchanged.
 
 Errors name the measured value, the limit and the setting, for example
 `Approved candidate file "src/app/generated.ts" is 30,000 bytes; the approved file
@@ -243,8 +247,11 @@ limit is 24,000 bytes (execution.candidateApprovedFileMaxBytes).` The
 `werk_candidate_apply` content schema states the frozen per-file limit. Raising
 these limits never widens the approved paths: the review patch contains only
 approved paths. These settings have no webview editor yet; use `settings set`.
-The taskboard stores each review patch and is limited to 16 MiB in total, and shared
-feature publication keeps its 128 KiB patch bound.
+The taskboard stores each review patch in one document limited to 16 MiB, so the
+review patch maximum is 4 MiB; shared feature publication keeps its 128 KiB patch bound.
+`werk_candidate_status` lists exact approved files, changed files and up to 200 other
+files below approved folders, with `omittedFiles` counting the rest; its optional
+`paths` argument returns the hashes of specific approved files.
 
 The private settings API and `settings set --file` use whole bytes, for example
 `{"execution":{"candidateSourceMaxBytes":134217728}}`. `settings get` shows the

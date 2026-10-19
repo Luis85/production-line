@@ -25,12 +25,13 @@ const pick = value => Object.fromEntries(Object.keys(defaults).map(key => [key, 
 
 test('approved content settings keep the 0.13 defaults and enforce their ranges with named errors', () => {
   assert.deepEqual(pick(validateExecutionPolicy({ maxRuntimeMs: 1000 })), defaults, 'saved policies without the settings keep today\'s bounds');
-  const valid = { candidateApprovedFileMaxBytes: [1000, 24000, 8388608], candidateApprovedTotalMaxBytes: [8388608, 67108864], candidateReviewPatchMaxBytes: [10000, 120000, 67108864] };
+  const valid = { candidateApprovedFileMaxBytes: [1000, 24000, 8388608], candidateApprovedTotalMaxBytes: [8388608, 67108864], candidateReviewPatchMaxBytes: [10000, 120000, 4194304] };
   for (const [field, values] of Object.entries(valid)) for (const value of values)
     assert.equal(validateExecutionPolicy({ maxRuntimeMs: 1000, candidateApprovedTotalMaxBytes: 67108864, [field]: value })[field], value, `${field}=${value}`);
-  const invalid = { candidateApprovedFileMaxBytes: [999, 8388609, 1.5, '24000', null], candidateApprovedTotalMaxBytes: [999, 67108865, '48000'], candidateReviewPatchMaxBytes: [9999, 67108865, 2.5, null] };
+  const invalid = { candidateApprovedFileMaxBytes: [999, 8388609, 1.5, '24000', null], candidateApprovedTotalMaxBytes: [999, 67108865, '48000'], candidateReviewPatchMaxBytes: [9999, 4194305, 67108864, 2.5, null] };
   for (const [field, values] of Object.entries(invalid)) for (const value of values)
     assert.throws(() => validateExecutionPolicy({ maxRuntimeMs: 1000, candidateApprovedFileMaxBytes: 1000, candidateApprovedTotalMaxBytes: 67108864, [field]: value }), error => error instanceof Error && error.message.startsWith(`execution.${field} must be an integer from `), `${field}=${String(value)}`);
+  assert.throws(() => validateExecutionPolicy({ maxRuntimeMs: 1000, candidateReviewPatchMaxBytes: 4194305 }), { message: 'execution.candidateReviewPatchMaxBytes must be an integer from 10000 to 4194304 (4 MiB).' }, 'a stored patch must leave room in the 16 MiB taskboard');
   assert.throws(() => validateExecutionPolicy({ maxRuntimeMs: 1000, candidateApprovedFileMaxBytes: 100000 }), { message: 'execution.candidateApprovedTotalMaxBytes (48000) must be at least execution.candidateApprovedFileMaxBytes (100000).' });
 });
 
@@ -46,6 +47,7 @@ test('settings get shows approved content limits, saves only changed values and 
   await assert.rejects(settings.update({ execution: { candidateApprovedFileMaxBytes: 1000 }, expectedCandidateReview: defaults }), error => testErrorCode(error) === 'conflict' && error instanceof Error && /Approved content limits changed in another session/.test(error.message));
   await assert.rejects(settings.update({ execution: { candidateApprovedFileMaxBytes: 1000 }, expectedCandidateReview: { candidateApprovedFileMaxBytes: 64000 } }), /complete approved content baseline/);
   await assert.rejects(settings.update({ execution: { maxToolCalls: 64 }, expectedCandidateReview: raised }), /requires new approved content or review patch limits/);
+  await assert.rejects(settings.update({ execution: { candidateReviewPatchMaxBytes: 4194305 } }), error => testErrorCode(error) === 'invalid_input' && error instanceof Error && error.message === 'execution.candidateReviewPatchMaxBytes must be an integer from 10000 to 4194304 (4 MiB).');
   await assert.rejects(settings.update({ execution: { candidateApprovedTotalMaxBytes: 32000 } }), error => testErrorCode(error) === 'invalid_input' && error instanceof Error && /candidateApprovedTotalMaxBytes \(32000\) must be at least execution\.candidateApprovedFileMaxBytes \(64000\)/.test(error.message));
   await settings.update({ execution: { candidateSourceMaxFiles: 30000 }, expectedCandidateInspection: { candidateSourceMaxBytes: 67108864, candidateSourceMaxFiles: 20000, candidateFileMaxBytes: 8388608 } });
   assert.equal(settings.publicView().execution.candidateApprovedFileMaxBytes, 64000, 'the inspection guard keeps its three fields and leaves review limits alone');
@@ -55,11 +57,12 @@ test('settings get shows approved content limits, saves only changed values and 
   for (const key of Object.keys(defaults)) assert.equal((await saved())[key], undefined);
 });
 
-async function fixture(t, files, approvedPaths) {
+async function fixture(t, files, approvedPaths, committed = {}) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-review-limits-'))), repository = join(directory, 'repo');
   await mkdir(join(repository, 'gen'), { recursive: true }); cleanup(t, () => rm(directory, { recursive: true, force: true }));
   git(repository, 'init', '-b', 'main'); git(repository, 'config', 'core.autocrlf', 'false'); git(repository, 'config', 'user.name', 'Fixture'); git(repository, 'config', 'user.email', 'fixture@example.invalid');
   await writeFile(join(repository, 'readme.md'), 'notes\n');
+  for (const [path, body] of Object.entries(committed)) { await mkdir(join(repository, path, '..'), { recursive: true }); await writeFile(join(repository, path), body); }
   git(repository, 'add', '.'); git(repository, 'commit', '-m', 'Baseline');
   const prepared = await createRepositoryWorktree(await repositoryRoot(repository, signal()), 'project', 'review', signal());
   for (const [path, body] of Object.entries(files)) { await mkdir(join(prepared.path, path, '..'), { recursive: true }); await writeFile(join(prepared.path, path), body); }
@@ -67,7 +70,8 @@ async function fixture(t, files, approvedPaths) {
   let policy = defaultToolPolicy();
   policy.builtins.files = true; policy.builtins.commands = [{ id: 'check', name: 'Check', executable: process.execPath, args: ['-e', ''], enabled: true, verification: true }]; policy = validateToolPolicy(policy);
   const scope = freezeDevelopmentScope(prepared.baseCommit, approvedPaths, policy);
-  return limits => createDevelopmentRuntime({ scope, worktree: prepared.path, worktreeIdentity, repository, currentPolicy: () => policy, checkpoint: async () => {}, verifyWorkspace: async () => {}, ...limits });
+  const create = limits => createDevelopmentRuntime({ scope, worktree: prepared.path, worktreeIdentity, repository, currentPolicy: () => policy, checkpoint: async () => {}, verifyWorkspace: async () => {}, ...limits });
+  return Object.assign(create, { tools: development => createToolRuntime({ policy, currentRevision: () => policy.revision, directory, worktree: prepared.path, worktreeIdentity, development }) });
 }
 const lines = (count, width = 99) => Array.from({ length: count }, (_, index) => String(index).padStart(width, 'x')).join('\n') + '\n';
 
@@ -93,6 +97,26 @@ test('approved total and review patch limits fail at their defaults and pass whe
   assert.ok(Buffer.byteLength(passed.patch) > 120000 && passed.changedPaths.length === 6);
 });
 
+test('a wide approved folder lists changed files and at most 200 others; specific hashes are available by path', async t => {
+  const committed = Object.fromEntries(Array.from({ length: 205 }, (_, index) => [`gen/file-${String(index).padStart(3, '0')}.ts`, `export const value${index} = ${index};\n`]));
+  const create = await fixture(t, { 'gen/new.ts': 'export const created = true;\n' }, ['gen/', 'readme.md'], committed), runtime = create();
+  const status = await runtime.capture(signal());
+  assert.equal(status.files.length, 202, 'readme.md, the changed gen/new.ts and 200 unchanged folder files');
+  assert.equal(status.omittedFiles, 5);
+  assert.ok(status.files.some(file => file.path === 'gen/new.ts') && status.files.some(file => file.path === 'readme.md'));
+  assert.equal(status.files.some(file => file.path === 'gen/file-204.ts'), false);
+  const requested = await runtime.capture(signal(), ['gen/file-204.ts', 'gen/missing.ts']);
+  const hash = requested.files.find(file => file.path === 'gen/file-204.ts')?.hash;
+  assert.match(hash ?? '', /^[a-f0-9]{64}$/); assert.equal(requested.files.find(file => file.path === 'gen/missing.ts')?.hash, null);
+  await assert.rejects(runtime.capture(signal(), ['other.ts']), /at most 32 approved paths/);
+  const applied = /** @type {{ files: Array<{ path: string }>; omittedFiles: number }} */ (await runtime.apply({ path: 'gen/file-204.ts', content: 'export const value204 = 0;\n', expectedHash: hash ?? null }, signal()));
+  assert.equal(applied.files.length, 203, 'the edited file is now changed and always listed'); assert.equal(applied.omittedFiles, 4);
+  const broker = create.tools(runtime); cleanup(t, () => broker.close());
+  const result = JSON.parse((await broker.call('werk_candidate_status', { paths: ['gen/file-203.ts'] }, signal())).content[0].text);
+  assert.equal(result.omittedFiles, 3); assert.match(result.filesNote, /3 more unchanged files below approved folders are not listed\. Call werk_candidate_status with paths/);
+  assert.ok(result.files.some(file => file.path === 'gen/file-203.ts'));
+});
+
 test('werk_candidate_apply uses the frozen approved file and total limits and names the setting', async t => {
   const create = await fixture(t, { 'gen/a.ts': lines(200) }, ['gen/']), runtime = create();
   await assert.rejects(runtime.apply({ path: 'gen/new.ts', content: 'x'.repeat(24001), expectedHash: null }, signal()), { message: 'Approved candidate file "gen/new.ts" is 24,001 bytes; the approved file limit is 24,000 bytes (execution.candidateApprovedFileMaxBytes).' });
@@ -108,7 +132,7 @@ test('implementation dispatches freeze the approved content limits, record them 
   const directory = await mkdtemp(join(tmpdir(), 'werk-review-dispatch-')); cleanup(t, () => rm(directory, { recursive: true, force: true }));
   const info = await lstat(directory), worktreeIdentity = { dev: String(info.dev), ino: String(info.ino), birthtimeMs: info.birthtimeMs };
   const policy = defaultToolPolicy(); policy.builtins.files = true;
-  const captured = { candidateApprovedFileMaxBytes: 64000, candidateApprovedTotalMaxBytes: 4 * MiB, candidateReviewPatchMaxBytes: 8 * MiB };
+  const captured = { candidateApprovedFileMaxBytes: 64000, candidateApprovedTotalMaxBytes: 4 * MiB, candidateReviewPatchMaxBytes: 4 * MiB };
   const settings = { value: { execution: { ...validateExecutionPolicy({ maxRuntimeMs: 900000 }), ...captured }, repositories: { pollMs: 30000, items: [] } }, toolPolicy: () => policy };
   const unused = () => { throw Error('Metadata inspection must not inspect the candidate'); };
   const development = { capture: unused, apply: unused, check: unused, evidence: unused };
@@ -118,14 +142,17 @@ test('implementation dispatches freeze the approved content limits, record them 
   /** @type {import('../../src/worker/application/conversation-contracts.js').ChatMessage[]} */
   const messages = [{ id: 'u', role: 'user', text: 'Implement.', state: 'complete', at: '2026-10-19T00:00:00Z' }];
   /** @param {{ tools: Array<{ name: string; inputSchema: unknown }> }} manifest */
-  const maxLength = manifest => {
+  const contentSchema = manifest => {
     const apply = manifest.tools.find(tool => tool.name === 'werk_candidate_apply'); assert.ok(apply);
-    return /** @type {{ properties: { content: { maxLength: number } } }} */ (apply.inputSchema).properties.content.maxLength;
+    return /** @type {{ properties: { content: { maxLength: number; description: string } } }} */ (apply.inputSchema).properties.content;
   };
+  /** @param {{ tools: Array<{ name: string; inputSchema: unknown }> }} manifest */
+  const maxLength = manifest => contentSchema(manifest).maxLength;
   const request = prepareModelRequest(factory(connection, { sessionId: 'task', worktree: directory, worktreeIdentity, development }), messages, 'patch', 900000);
   assert.deepEqual(pick(request.policy), captured);
   assert.deepEqual(request.toolManifest.limits.candidateReview, captured);
   assert.equal(maxLength(request.toolManifest), 64000, 'the model learns the frozen approved file bound');
+  assert.match(contentSchema(request.toolManifest).description, /at most 64000 bytes; characters outside ASCII use 2–4 bytes each/, 'the schema states bytes, not characters');
   settings.value.execution = { ...settings.value.execution, ...defaults };
   const next = prepareModelRequest(factory(connection, { sessionId: 'task', worktree: directory, worktreeIdentity, development }), messages, 'patch', 900000);
   assert.deepEqual(next.toolManifest.limits.candidateReview, defaults, 'new attempts capture current settings');

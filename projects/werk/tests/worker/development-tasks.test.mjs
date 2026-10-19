@@ -173,7 +173,8 @@ test('an approved folder admits generated files under the frozen approved conten
     assert.equal(request.policy.candidateApprovedFileMaxBytes, 30000); assert.equal(request.toolManifest.limits.candidateReview.candidateApprovedTotalMaxBytes, 60000);
     assert.deepEqual(task.files.find(file => file.path === 'gen/'), { path: 'gen/', content: '', existed: false }, 'folder snapshots hold no contents');
     assert.match(request.messages[0].text, /Approved folders end in \//);
-    await call(runtime, 'werk_candidate_apply', { path: 'gen/component/view.ts', content: generated, expectedHash: null }, signal);
+    // A project generator writes the component folder directly; the frozen 30,000-byte bound admits it.
+    await mkdir(join(task.worktree, 'gen', 'component'), { recursive: true }); await writeFile(join(task.worktree, 'gen', 'component', 'view.ts'), generated);
     await edit(runtime, signal); await check(runtime, signal);
     return complete('Generated the component and verified it.');
   });

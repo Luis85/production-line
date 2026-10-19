@@ -23,11 +23,14 @@ export const candidateInspectionBounds = Object.freeze({
   candidateFileMaxBytes: Object.freeze({ default: 8 * MIB, minimum: 64 * 1024, maximum: 256 * MIB }),
 });
 export const candidateInspectionFields = Object.keys(candidateInspectionBounds) as Array<keyof CandidateInspectionLimits>;
-/** Defaults keep the fixed 0.13 review bounds. */
+/**
+ * Defaults keep the fixed 0.13 review bounds. The review patch is stored in the 16 MiB taskboard document, so its
+ * 4 MiB maximum always leaves room; it also bounds approved content in practice.
+ */
 export const candidateReviewBounds = Object.freeze({
   candidateApprovedFileMaxBytes: Object.freeze({ default: 24000, minimum: 1000, maximum: 8 * MIB }),
   candidateApprovedTotalMaxBytes: Object.freeze({ default: 48000, minimum: 1000, maximum: 64 * MIB }),
-  candidateReviewPatchMaxBytes: Object.freeze({ default: 120000, minimum: 10000, maximum: 64 * MIB }),
+  candidateReviewPatchMaxBytes: Object.freeze({ default: 120000, minimum: 10000, maximum: 4 * MIB }),
 });
 export const candidateReviewFields = Object.keys(candidateReviewBounds) as Array<keyof CandidateReviewLimits>;
 export const candidateLimitBounds = Object.freeze({ ...candidateInspectionBounds, ...candidateReviewBounds });
@@ -46,7 +49,8 @@ function candidateLimits(input: Partial<CandidateLimits>): CandidateLimits {
   const limits = defaultCandidateLimits();
   for (const field of candidateLimitFields) {
     const value = input[field] === undefined ? limits[field] : input[field], { minimum, maximum } = candidateLimitBounds[field];
-    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum || value > maximum) throw new ValidationError(`execution.${field} must be an integer from ${minimum} to ${maximum}.`);
+    const size = field.endsWith('Bytes') && maximum % MIB === 0 ? ` (${maximum / MIB} MiB)` : '';
+    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum || value > maximum) throw new ValidationError(`execution.${field} must be an integer from ${minimum} to ${maximum}${size}.`);
     limits[field] = value;
   }
   if (limits.candidateFileMaxBytes > limits.candidateSourceMaxBytes) throw new ValidationError(candidateFileLimitError(limits.candidateFileMaxBytes, limits.candidateSourceMaxBytes));

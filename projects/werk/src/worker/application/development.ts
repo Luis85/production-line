@@ -18,13 +18,15 @@ export interface DevelopmentCheckEvidence {
 }
 export interface DevelopmentEvidence { schemaVersion: 1; candidateDigest: string | null; changedPaths: string[]; checks: DevelopmentCheckEvidence[]; updatedAt: string; }
 export interface DevelopmentCompletion { turnId: string; runId: string; candidateDigest: string; patchSha256: string; evidenceDigest: string; verified: boolean; }
-export interface DevelopmentCandidate { patch: string; digest: string; changedPaths: string[]; files?: Array<{ path: string; hash: string | null }>; }
+/** `files` lists approved files with hashes; `omittedFiles` counts unchanged files below approved folders left out of a bounded listing. */
+export interface DevelopmentCandidate { patch: string; digest: string; changedPaths: string[]; files?: Array<{ path: string; hash: string | null }>; omittedFiles?: number; }
 export interface DevelopmentRuntime {
   /** Validate the retained workspace and durably invalidate earlier checks before a native provider may edit. */
   prepareNative?(signal: AbortSignal): Promise<void>;
   apply(input: { path: string; content: string | null; expectedHash?: string | null }, signal: AbortSignal): Promise<unknown>;
   check(presetId: string, signal: AbortSignal): Promise<DevelopmentCheckEvidence>;
-  capture(signal: AbortSignal): Promise<DevelopmentCandidate>;
+  /** `paths` requests hashes for specific approved files beyond the bounded listing. */
+  capture(signal: AbortSignal, paths?: readonly string[]): Promise<DevelopmentCandidate>;
   evidence(): DevelopmentEvidence;
 }
 /** Execution limits frozen with an attempt's dispatch; absent values use the settings defaults. */

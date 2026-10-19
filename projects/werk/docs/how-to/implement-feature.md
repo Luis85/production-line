@@ -92,10 +92,14 @@ The edited candidate is bounded by three execution settings:
 | --- | --- | --- |
 | `candidateApprovedFileMaxBytes` | 24,000 bytes | One exact approved file, or one changed file below an approved folder |
 | `candidateApprovedTotalMaxBytes` | 48,000 bytes | All exact approved files plus changed files below approved folders |
-| `candidateReviewPatchMaxBytes` | 120,000 bytes | The review patch |
+| `candidateReviewPatchMaxBytes` | 120,000 bytes, at most 4 MiB | The review patch |
 
 Unchanged files below an approved folder are inspected like other source files and
-do not count toward the approved limits. Approved files must be UTF-8 text. The
+do not count toward the approved limits. Every changed approved file appears in the
+review patch, so the patch limit (at most 4 MiB) also bounds approved content in
+practice, whatever the per-file and total settings allow.
+`werk_candidate_status` lists exact approved files, changed files and up to 200 other
+files below approved folders; the model requests the hashes of other files by path. Approved files must be UTF-8 text. The
 review patch contains only approved paths. An error names the measured size, the
 limit and the setting, for example `Approved candidate text is 60,000 bytes; the
 approved content limit is 48,000 bytes (execution.candidateApprovedTotalMaxBytes).`
@@ -103,8 +107,8 @@ Raise the named setting with `settings set` (see
 [worker execution policy](../reference/configuration.md#local-worker-execution-policy));
 a new attempt captures it. Shared feature publication keeps its own bounds: a patch of
 at most 128 KiB and at most 32 changed files. The taskboard stores each review
-patch, and its storage is limited to 16 MiB in total. Split larger changes into
-reviewable features.
+patch in a document limited to 16 MiB in total, which is why a review patch is
+limited to 4 MiB. Split larger changes into reviewable features.
 
 Candidate verification inspects every tracked file and every nonignored untracked
 file, including files outside the approved edit list. Repositories containing

@@ -22,6 +22,8 @@ const below = (root: string, target: string) => { const path = relative(root, ta
 const missing = (error: unknown) => (error as NodeJS.ErrnoException).code === 'ENOENT';
 const safeRelative = (path: string) => !!path && !isAbsolute(path) && !path.includes('\\') && !path.includes(':') && !path.includes('\0') && path.split('/').every(part => !!part && part !== '..' && part !== '.' && part.toLowerCase() !== '.git');
 const count = (value: number) => value.toLocaleString('en-US');
+/** Unchanged files below approved folders listed in status and apply results; exact, changed and requested files are always listed. */
+const CANDIDATE_LISTED_FOLDER_FILES = 200;
 const cleanOutput = (bytes: Buffer) => bytes.toString('utf8').replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '').slice(0, 4096);
 
 /** Lazy, private worktree adapter. The application supplies retained ownership verification and durable evidence storage. */
@@ -197,6 +199,18 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
     if (state.candidateDigest !== candidate.digest) await checkpoint(updated(candidate, []));
     return candidate;
   }
+  /** Bounded model-facing listing: a wide approved folder cannot produce unbounded tool output. */
+  function listed(candidate: InspectedCandidate, requested: readonly string[] = []): DevelopmentCandidate {
+    if (!Array.isArray(requested) || requested.length > 32 || requested.some(path => typeof path !== 'string' || !isApproved(path))) fail('Request hashes for at most 32 approved paths (approved files or safe files below an approved folder).');
+    const always = new Set([...exact, ...candidate.changedPaths]), all = candidate.files ?? [];
+    const others = all.filter(file => !always.has(file.path) && !requested.includes(file.path));
+    const kept = new Set(others.slice(0, CANDIDATE_LISTED_FOLDER_FILES).map(file => file.path));
+    const files = all.filter(file => always.has(file.path) || requested.includes(file.path) || kept.has(file.path));
+    for (const path of requested) if (!files.some(file => file.path === path)) files.push({ path, hash: null });
+    files.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
+    const omitted = others.length - kept.size;
+    return { patch: candidate.patch, digest: candidate.digest, changedPaths: candidate.changedPaths, files, ...(omitted ? { omittedFiles: omitted } : {}) };
+  }
   return {
     evidence: () => structuredClone(state),
     prepareNative: signal => serial(async () => {
@@ -204,7 +218,7 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
       await checkpoint(updated(candidate, []));
       await guard(signal);
     }),
-    capture: signal => serial(() => capture(signal)),
+    capture: (signal, paths) => serial(async () => listed(await capture(signal), paths)),
     apply: (input, signal) => serial(async () => {
       await guard(signal);
       if (!input || typeof input.path !== 'string' || !isApproved(input.path) || input.content !== null && typeof input.content !== 'string' || !Object.hasOwn(input, 'expectedHash') || input.expectedHash !== null && !/^[a-f0-9]{64}$/.test(input.expectedHash ?? '')) fail('Apply one explicitly approved path (an approved file, or a safe file below an approved folder ending in /) with content (or null to delete) and its current expectedHash from candidate status.');
@@ -248,7 +262,8 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
       }
       await syncDirectory(dirname(target));
       const after = await inspect(signal); await checkpoint(updated(after, []));
-      return { digest: after.digest, changedPaths: after.changedPaths, files: after.files };
+      const view = listed(after);
+      return { digest: view.digest, changedPaths: view.changedPaths, files: view.files, ...(view.omittedFiles ? { omittedFiles: view.omittedFiles } : {}) };
     }),
     check: (presetId, signal) => serial(async () => {
       const preset = scope.checks.find(check => check.id === presetId);
