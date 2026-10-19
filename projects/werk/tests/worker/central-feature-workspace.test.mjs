@@ -21,6 +21,18 @@ const complete = markdown => markdown
   .replace('<!-- Explain how each outcome will be checked and what evidence reviewers need. -->', 'Run the CSV unit tests and inspect the exported headers.');
 
 async function fixture(t, withFolder = false, prompts) {
+  const started = performance.now(), completed = [];
+  let active = { name: 'create Git fixture', started };
+  const stage = name => {
+    const now = performance.now();
+    completed.push({ name: active.name, elapsedMs: Math.round(now - active.started) });
+    if (completed.length > 12) completed.shift();
+    active = { name, started: now };
+  };
+  const interrupted = () => t.diagnostic('Workspace journey interrupted: ' + JSON.stringify({ active: active.name, activeMs: Math.round(performance.now() - active.started), totalMs: Math.round(performance.now() - started), completed }));
+  t.signal.addEventListener('abort', interrupted, { once: true });
+  // Successful tests also abort their signal after cleanup; report only an interruption during the journey.
+  t.after(() => t.signal.removeEventListener('abort', interrupted));
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-fr-workspace-'))), remote = join(directory, 'remote.git'), project = join(directory, 'project'), state = join(directory, 'state');
   git(directory, 'init', '--bare', '--initial-branch=main', remote); git(directory, 'clone', '--', remote, project);
   const workflow = { ...defaultFeatureWorkflow(), ...(prompts ? { readyPrompt: 'team/definition-of-ready.md', donePrompt: 'team/definition-of-done.txt' } : {}) }, ready = defaultFeatureCheck('ready');
@@ -32,8 +44,9 @@ async function fixture(t, withFolder = false, prompts) {
   const originalHead = git(project, 'rev-parse', 'HEAD');
   const config = { stateDir: state, projectDir: project, ...(withFolder ? { features: { directory: join(project, 'legacy-features'), provider: 'openai-api', pollMs: 1000 } } : {}), repositories: { pollMs: 300000, items: [{ id: 'project', path: project, remote: 'origin', branch: 'main', watch: false }] }, pollMs: 1000, timeoutMs: 60000 };
   let workspace, journal, server, configured = false;
-  async function close() { if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); server = undefined; } if (workspace) { await workspace.close(); workspace = undefined; } journal?.close(); }
+  async function close() { stage('close fixture'); if (server) { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); server = undefined; } if (workspace) { await workspace.close(); workspace = undefined; } journal?.close(); }
   async function open() {
+    stage('initialize workspace');
     journal = new SnapshotJournal(state, 'a'.repeat(64), 'b'.repeat(64)); await journal.init();
     workspace = new WorkerWorkspace(config, journal, workerStatus); await workspace.init();
     await workspace.updateSettings({ board: { paused: true }, ...(!configured ? { provider: { id: 'openai-api', apiKey: 'fixture-private-provider-key', model: 'fixture-never-dispatched' } } : {}) });
@@ -43,12 +56,14 @@ async function fixture(t, withFolder = false, prompts) {
   t.after(async () => { await close(); await rm(directory, { recursive: true, force: true }); });
   await open();
   async function api(path, body, expected = 200) {
+    const label = `${body === undefined ? 'GET' : 'POST'} ${path}${body?.action ? ': ' + body.action : ''}`;
+    stage(label);
     const token = (await readFile(join(state, 'webview-token'), 'utf8')).trim();
-    const response = await fetch('http://127.0.0.1:' + server.address().port + path, { method: body === undefined ? 'GET' : 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
-    const result = await response.json(); assert.equal(response.status, expected, JSON.stringify(result)); return result;
+    const response = await fetch('http://127.0.0.1:' + server.address().port + path, { method: body === undefined ? 'GET' : 'POST', signal: t.signal, headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    const result = await response.json(); assert.equal(response.status, expected, JSON.stringify(result)); stage('assertions after ' + label); return result;
   }
   const publish = (draft, operationId, status = 'draft', markdown = draft.markdown) => api('/api/features', { action: 'publish', operationId, name: draft.name, markdown, status, expectedRevision: draft.revision, expectedWorkflowDigest: draft.workflowDigest, expectedBinding: draft.binding });
-  return { directory, remote, project, state, originalHead, workflow, api, publish, get workspace() { return workspace; }, async restart() { await close(); await open(); } };
+  return { directory, remote, project, state, originalHead, workflow, api, publish, stage, get workspace() { return workspace; }, async restart() { await close(); await open(); } };
 }
 
 test('shared binding closes every legacy new-work route without requiring a legacy feature folder', { timeout: 120000 }, async t => {
@@ -70,9 +85,11 @@ test('shared binding closes every legacy new-work route without requiring a lega
   assert.equal(git(f.project, 'rev-parse', 'HEAD'), f.originalHead);
 });
 
-test('chat publication and Markdown intake share one feature identity, definitions, policy, execution and progress projection', { timeout: 120000 }, async t => {
+// Windows qualification reached the final replay after 114 s: ready publication alone took 25 s and draft publication 18 s.
+// Keep the complete restart journey together, with modest Windows headroom and interruption diagnostics for an actual stall.
+test('chat publication and Markdown intake share one feature identity, definitions, policy, execution and progress projection', { timeout: process.platform === 'win32' ? 180000 : 120000 }, async t => {
   const prompts = { ready: 'Confirm the CSV consumers and their timezone expectations before implementation.', done: 'Report CSV regression evidence and document any unresolved compatibility limitations.' };
-  const f = await fixture(t, false, prompts); await f.workspace.sharedIntakeCommand({ action: 'configure', expectedRevision: 0, config: binding });
+  const f = await fixture(t, false, prompts); f.stage('configure shared intake'); await f.workspace.sharedIntakeCommand({ action: 'configure', expectedRevision: 0, config: binding });
   const draft = await f.api('/api/features', { action: 'prepare', operationId: 'browser-one', seed });
   const saved = await f.publish(draft, 'draft-one');
   const reopened = await f.api('/api/features', { action: 'prepare', operationId: 'reopen', name: saved.name });
@@ -81,6 +98,7 @@ test('chat publication and Markdown intake share one feature identity, definitio
   const command = { action: 'publish', operationId: 'ready-one', name: reopened.name, markdown, status: 'ready', expectedRevision: reopened.revision, expectedWorkflowDigest: reopened.workflowDigest, expectedBinding: reopened.binding };
   const published = await f.api('/api/features', command);
   assert.equal(published.readiness.valid, true); assert.equal(f.workspace.board.view().tasks.length, 0, 'A paused queue does not admit the ready note.');
+  f.stage('unpause queue and admit shared request');
   await f.workspace.updateSettings({ board: { paused: false } }); await f.workspace.sharedIntakeCommand({ action: 'sync' });
   const shared = f.workspace.sharedIntakeView().requests.find(record => record.id === draft.featureId); assert.ok(shared?.taskId);
   const task = f.workspace.board.executionDetail(shared.taskId), detail = await f.api('/api/tasks', { action: 'get', id: task.sessionId });
@@ -104,10 +122,11 @@ test('chat publication and Markdown intake share one feature identity, definitio
   }
   await writeFile(join(f.project, f.workflow.readyPrompt), 'A local edit is not accepted team guidance.');
   await writeFile(join(f.project, f.workflow.donePrompt), 'A local edit cannot change this request completion guidance.');
+  f.stage('read canonical feature progress');
   const tracking = await f.workspace.featureTrackingCommand({ action: 'get', sessionId: task.sessionId });
   assert.equal(parseFeature(tracking.markdown).data.type, 'FeatureRequestProgress');
   assert.match(tracking.markdown, new RegExp(feature.key)); assert.doesNotMatch(tracking.markdown, /fixture-private-provider-key|export const orders/);
-  await f.api('/api/features', command); await f.workspace.sharedIntakeCommand({ action: 'sync' });
+  await f.api('/api/features', command); f.stage('synchronize replayed publication'); await f.workspace.sharedIntakeCommand({ action: 'sync' });
   assert.equal(f.workspace.board.view().tasks.length, 1); assert.equal(f.workspace.sessions.runs.list().total, 1);
   assert.ok(f.workspace.sessions.runs.list().rows.every(run => run.startedAt === null), 'This integration checks admission without invoking a commercial provider.');
   for (const [path, body] of [

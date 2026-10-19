@@ -1,10 +1,30 @@
 import { spawn } from 'node:child_process';
+import filesystem from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { nodeServiceHost } from '../../src/worker/dist/worker/infrastructure/processes/node-host.js';
 
 const mode = process.argv[2];
-if (mode === 'descendant') {
+if (mode === 'validating-host') {
+  // Let the guarded validation continuation run before Windows process.exit.
+  // Otherwise immediate host exit could hide a missing post-validation guard.
+  const exit = process.exit;
+  Reflect.set(process, 'exit', code => { setImmediate(() => exit(code)); });
+  const realpath = filesystem.realpath;
+  filesystem.realpath = async (...args) => {
+    const canonical = await Reflect.apply(realpath, filesystem, args);
+    // Hold the final real identity check until this host observes EOF, not merely
+    // until its parent closes the writer that Windows containment still pumps.
+    await new Promise(resolve => {
+      process.stdin.once('end', resolve);
+      process.stdout.write(JSON.stringify({ type: 'fixture-validation-pending' }) + '\n');
+    });
+    return canonical;
+  };
+  syncBuiltinESMExports();
+  await import('../../src/worker/dist/worker/infrastructure/processes/service-host.js');
+} else if (mode === 'descendant') {
   process.on('SIGTERM', () => {}); process.send?.('ready'); setInterval(() => {}, 1000);
 } else if (mode === 'stalled-host') {
   process.stdin.resume(); process.on('SIGTERM', () => {});
