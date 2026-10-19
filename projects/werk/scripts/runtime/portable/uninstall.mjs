@@ -1,5 +1,4 @@
-import { randomBytes } from 'node:crypto';
-import { lstat, open, realpath, rename, unlink } from 'node:fs/promises';
+import { lstat, mkdtemp, open, realpath, rename, rmdir, unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createPrivate, inputError } from '../config.mjs';
@@ -7,7 +6,7 @@ import { environmentExample, environmentKeys } from './environment.mjs';
 import { status, stop } from './lifecycle.mjs';
 import { inventory, taskWorktrees } from './footprint.mjs';
 import { holdsOtherThan, info, missing, pruneParents, removeUntracked, smallText, within } from './footprint-files.mjs';
-import { LOCK, ORDER, decide, guardedNow, isGuard, phase, predict, protectWorktrees, residue } from './uninstall-plan.mjs';
+import { LOCK, ORDER, decide, guardedNow, isGuard, keptPaths, phase, predict, protectWorktrees, residue } from './uninstall-plan.mjs';
 
 /**
  * Guarded removal of a project worker. Git-tracked files, request folders and .env
@@ -22,11 +21,13 @@ const summary = ({ group, path, type, size, trackedFiles }) => ({ group, path, t
 const byPhase = (a, b) => ORDER.indexOf(phase(a.entry)) - ORDER.indexOf(phase(b.entry));
 
 /**
- * Replace a private file through a sibling temporary file named `.env.tmp-*`, which the
- * usual `.env.*` ignore rules cover; it is removed again on any failure.
+ * Replace a private file through a temporary file named `.env` inside a new private
+ * `.werk-env-*` folder next to it: Werk's generated `.env` ignore rule matches that name
+ * in any folder, so the credentials never show up as an untracked file. The rename stays
+ * on the same volume; the temporary file and folder are removed again on any failure.
  */
 async function replaceFile(path, text, mode) {
-  const temporary = join(dirname(path), `.env.tmp-${randomBytes(6).toString('hex')}`);
+  const folder = await mkdtemp(join(dirname(path), '.werk-env-')), temporary = join(folder, '.env');
   let moved = false;
   try {
     const handle = await open(temporary, 'wx', 0o600);
@@ -35,7 +36,10 @@ async function replaceFile(path, text, mode) {
       await handle.writeFile(text); await handle.sync();
     } finally { await handle.close(); }
     await rename(temporary, path); moved = true;
-  } finally { if (!moved) await unlink(temporary).catch(missing); }
+  } finally {
+    if (!moved) await unlink(temporary).catch(missing);
+    await rmdir(folder).catch(() => {});
+  }
 }
 /** Remove the worker's .env keys or .env.example block; other lines and files stay unchanged. */
 async function editEnvironment(project, entry) {
@@ -81,7 +85,9 @@ async function worktreePlan(root, project, state, layout, flags) {
 
 async function lockState(state) {
   const path = join(state, LOCK);
-  if (!await info(state)) return { path: null, real: undefined, release: async () => {} };
+  const stat = await info(state);
+  // A state path that is not a folder is kept by the plan; there is nothing to lock.
+  if (!stat || !stat.isDirectory() || stat.isSymbolicLink()) return { path: null, real: undefined, release: async () => {} };
   try { await createPrivate(path, { maintenance: 'uninstall', pid: process.pid }); }
   catch (error) { if (error.code === 'EEXIST') throw inputError('The worker started again or another operation holds its lock. Inspect status and retry.'); throw error; }
   return { path, real: await realpath(path), release: () => unlink(path).catch(missing) };
@@ -105,7 +111,7 @@ async function apply(project, plan, hold) {
       }
       const guarded = isGuard(entry) && await guardedNow(project, entry, plan);
       if (guarded) { kept.push({ ...report, reason: guarded }); continue; }
-      const result = await removeUntracked(project, entry.absolute, entry.trackedSet, { hold });
+      const result = await removeUntracked(project, entry.absolute, entry.trackedSet, { hold, skip: keptPaths(project, plan, entry) });
       const gone = result.gone || (!!hold && within(entry.absolute, hold) && !await holdsOtherThan(entry.absolute, [LOCK]));
       removed.push({ ...report, files: result.removed, ...(gone ? {} : { partial: true }) });
       kept.push(...residue(report, result));

@@ -56,7 +56,8 @@ test('uninstall includes requests and environment entries only on request and ne
   assert.equal(await exists(join(cwd, 'features/local-draft.md')), false);
   assert.equal(await exists(join(cwd, 'features/team-request.md')), true);
   assert.equal(await readFile(join(cwd, '.env'), 'utf8'), 'OTHER_SETTING=kept\n');
-  assert.deepEqual((await readdir(cwd)).filter(name => name.startsWith('.env.tmp-')), [], 'The atomic rewrite leaves no temporary file.');
+  assert.deepEqual((await readdir(cwd)).filter(name => name.startsWith('.werk-env-')), [], 'The atomic rewrite leaves no temporary folder.');
+  await git(cwd, 'check-ignore', '-q', '.werk-env-probe/.env'); // The temporary .env inside it matches the generated rule.
   assert.equal(await exists(join(cwd, '.env.example')), false);
   assert.match(await readFile(join(cwd, '.gitignore'), 'utf8'), /^\.env$/m);
 });

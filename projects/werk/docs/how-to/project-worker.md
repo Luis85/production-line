@@ -460,7 +460,8 @@ What stays:
 - Every Git-tracked file. Commit their removal separately if the team no longer
   needs the kit.
 - Request folders. `--include-requests` removes their untracked files, including
-  local drafts and results.
+  local drafts and results, but never a file the plan keeps, such as an edited
+  `_templates/feature-request.md` or `_templates/local-request.md`.
 - `.env` and the `.env.example` block. `--include-environment` removes only the
   worker keys and block; other lines stay and `.gitignore` is never changed.
 - Files you edited, such as a changed skill, Base or check, and integration files
@@ -469,24 +470,32 @@ What stays:
   links or junctions, an invalid record or another assignment. The result lists
   each with its reason; review them before `git worktree remove PATH`.
 - Links, junctions, nested Git repositories or submodules (any folder with a
-  `.git` entry), any folder that holds a task worktree that stays, and anything
-  outside the project directory.
+  `.git` entry, in any letter case; removal never enters a `.git` entry), any
+  folder that holds a task worktree that stays, and anything outside the project
+  directory.
 - The whole state directory when its top level holds anything the worker does not
   write (only names such as `webview-token`, `workspace-settings.json`,
   `portable.json`, `portable.log`, `worker-*.sqlite` and its `-wal`/`-shm` files,
   `snapshots/`, `outbox/` and `sessions/` count), or when it contains other project
   files. The result lists the unknown entries as `unknownEntries`. This protects
   you from a mistaken `--state-dir` or `WERK_WORKER_STATE_DIR` such as `.werk` or
-  a data folder.
+  a data folder. A state directory option that names a file instead of a folder
+  is kept and reported the same way.
 - `.werk/.gitignore` and `.werk/worker-project.json`, while any state, provider
   home, retained or integration path they protect still exists, whether the plan
   keeps it or its removal was incomplete. Resolve the reported paths and run
-  `uninstall --confirm` again.
+  `uninstall --confirm` again. When a kept path holds Git-tracked files, the
+  reason says so: remove those files from the checkout in a commit first, because
+  uninstall never deletes them. A tracked `.werk/.gitignore` itself stays, and the
+  project marker does not wait for it.
 
 `--dry-run` predicts these keeps, including nested repositories and the two guard
 files, so its `remove` and `keep` lists match what `--confirm` does unless files
 change in between. `--include-environment` rewrites `.env` through a temporary
-`.env.tmp-*` file next to it, which it removes again on failure.
+file named `.env` inside a new private `.werk-env-*` folder next to it. Werk's
+generated `.env` ignore rule matches that name in any folder, so the credentials
+never appear as an untracked file; the rename stays on the same volume, and the
+temporary file and folder are removed again on failure.
 
 Git tracking is compared without regard to case wherever Git ignores case, as on
 Windows, so a file committed as `Features/request.md` counts as tracked in
