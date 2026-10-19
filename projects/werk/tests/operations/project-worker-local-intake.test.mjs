@@ -77,3 +77,10 @@ test('footprint and uninstall treat the local template as a generated authoring 
   const edited = find(await installed(cwd, 'footprint')); assert.equal(edited.managed, false); assert.match(edited.note, /kept as your work/);
   assert.ok((await installed(cwd, 'uninstall', '--dry-run')).keep.some(item => item.path === path));
 });
+
+test('the help schema lists init --intake shared|local with the same choices init validates', async t => {
+  const cwd = await temporary(t, 'werk-local-help-'), setup = (await run(cwd, installer, 'help')).projectSetup;
+  assert.match(setup.command, /^init .*\[--intake shared\|local\]/);
+  assert.match(setup.intake, /--intake shared \(default\).*--intake local writes <features-dir>\/_templates\/local-request\.md/);
+  await assert.rejects(init(cwd, '--intake', 'both'), error => /--intake/.test(failure(error)));
+});
