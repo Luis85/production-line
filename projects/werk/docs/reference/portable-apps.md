@@ -228,6 +228,14 @@ cannot be renamed (the `Could not move` error described below), pass
 node bin/apps/worker/cli.mjs update apply --stop --in-place
 ```
 
+`--in-place` first ships in 0.14.0. An installed 0.13.x or earlier launcher cannot
+use that flag for its first upgrade: stop the process holding the directory and
+use the normal update, or stop the app and replace its complete app folder from a
+verified release while preserving external state. Once 0.14.0 is installed, future
+updates and rollbacks support `--in-place`. Running a newer release's launcher with
+`--project-dir` does not target an older app folder; that option selects the project,
+and an update replaces the app containing the invoked launcher.
+
 Release verification, staging, the preflight, `--stop`, the state lock, the state
 backup and the history record are the same. Step 4 changes: the updater copies the
 current folder to `bin/apps/.<app>-update/<version>-<timestamp>` and verifies the
@@ -236,14 +244,31 @@ app folder, deletes files the release manifest does not list and removes directo
 that become empty. A directory that cannot be removed because a process holds it
 open is left empty and listed in `inPlace.emptyDirectoriesLeft`; this is not an
 error. Finally every file in the app folder is compared with the release manifest,
-byte for byte, and extra or missing files fail the update. On any failure the
-retained copy is written back the same way and verified, the copy is removed, and
-the error says the previous files were restored; the updater then restarts the
-previous version as below. If that restore also fails, the app stays stopped and the
-error names the retained copy to copy back by hand. `package.json` and `cli.mjs`,
-which identify the installed version, are written last when updating and first
-when restoring an older version, so an interrupted in-place update still reports
-the previous version; run `update apply --stop --in-place` again to repair the folder. The result reports
+byte for byte, and extra or missing files fail the update. For failures caught by
+the updater, it attempts to write the retained copy back and verify it. A successful
+restore removes that redundant copy, reports that the previous files were restored
+and restarts the previous version as below. If restoration also fails, the app stays
+stopped and the error names the retained copy for manual recovery. `package.json`
+and `cli.mjs` are written last when upgrading and first when downgrading, but this
+ordering does not make the update atomic.
+
+A forced termination, host shutdown or power loss can interrupt a file write or
+leave a mixture of versions. The installed launcher and update command may no
+longer load; rerunning `update apply` is not a guaranteed repair. Keep the app
+stopped and preserve its state and all update folders. After verifying the updater
+and every process using the app have exited, restore the complete previous app
+from the retained folder under `bin/apps/.<app>-update/`: replace the app folder
+with that copy, or copy its files back and remove app files absent from the retained
+copy. Do not merge it over the interrupted tree without removing extra files. If
+termination occurred while creating the retained copy, that copy may be incomplete;
+use a separately downloaded and verified release of the previous version instead.
+Only after restoring a complete app, remove the stale `update.lock` and application
+maintenance lock if their owning processes have exited, then inspect status and
+start the app with its original state directory. No history entry is guaranteed
+for an interrupted operation, so `update rollback` may still refer to an earlier
+update. Keep the retained folder until the restored app has been checked.
+
+The result reports
 `method: "in-place"` (otherwise `"swap"`) and `inPlace` with `written`, `removed`
 and `emptyDirectoriesLeft` (otherwise `null`); the history entry records
 `method: "in-place"`.

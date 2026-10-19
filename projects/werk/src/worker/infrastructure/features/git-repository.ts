@@ -1,3 +1,4 @@
+import { sharedFeaturePublicationIssue, sharedFeaturePublicationLimits } from '../../application/shared-feature-publication-limits.js';
 import type { FeatureRequestPublication } from '../../application/feature-authoring-contracts.js';
 import { approvedPathMatch, approvedPathsCollide } from '../../application/approved-paths.js';
 import { containsSensitivePatchMaterial } from '../../application/review-patch-policy.js';
@@ -212,7 +213,9 @@ export class GitFeatureRepository {
   publishPatch(value: GitPatchPublication, signal?: AbortSignal): Promise<GitFeatureBranchPublication> {
     const input = structuredClone(value), bounded = this.signal(signal); operation(input.operationId);
     if (!/^[a-z0-9][a-z0-9-]{0,79}$/.test(input.featureId) || !commitId(input.sourceCommit) || !Array.isArray(input.approvedPaths) || !input.approvedPaths.length || input.approvedPaths.length > 32 || new Set(input.approvedPaths).size !== input.approvedPaths.length) throw new GitFeatureError('invalid_input', 'Feature publication requires a stable feature ID, source commit and explicit approved paths.');
-    textBytes(input.patch, 131072);
+    textBytes(input.patch, sharedFeaturePublicationLimits.patchMaxBytes);
+    const issue = sharedFeaturePublicationIssue(input.patch);
+    if (issue) throw new GitFeatureError('invalid_input', issue);
     if (!input.patch.trim() || containsSensitivePatchMaterial(input.patch)) throw new GitFeatureError('invalid_input', 'Feature patch is empty or contains sensitive material.');
     // Folder approvals (ending in /) are refused when they contain or lie within protected storage; changed files are checked again below.
     for (const path of input.approvedPaths) this.publicationPath(path.endsWith('/') ? gitPath(path.slice(0, -1)) : gitPath(path), path.endsWith('/'));
@@ -225,7 +228,7 @@ export class GitFeatureRepository {
         await this.io.output(worktree, ['apply', '--check', '--index', '--whitespace=nowarn', '-'], bounded, input.patch);
         await this.io.output(worktree, ['apply', '--index', '--whitespace=nowarn', '-'], bounded, input.patch);
         const raw = (await this.io.output(worktree, ['diff', '--cached', '--raw', '-z', '--no-renames'], bounded)).split('\0').filter(Boolean);
-        if (!raw.length || raw.length % 2 || raw.length > 64) throw new GitFeatureError('conflict', 'Feature patch must contain a bounded set of approved file changes.');
+        if (!raw.length || raw.length % 2 || raw.length > sharedFeaturePublicationLimits.changedFilesMax * 2) throw new GitFeatureError('conflict', 'Feature patch must contain a bounded set of approved file changes.');
         for (let i = 0; i < raw.length; i += 2) {
           const match = /^:(000000|100644|100755) (000000|100644|100755) [a-f0-9]+ [a-f0-9]+ ([AMD])$/.exec(raw[i]!);
           const regularChange = match && (match[3] === 'A' ? match[1] === '000000' && match[2] !== '000000'

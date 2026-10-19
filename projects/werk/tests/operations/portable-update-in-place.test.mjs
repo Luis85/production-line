@@ -153,8 +153,8 @@ test('a failed copy into the retained folder replaces nothing, leaves no partial
   assert.deepEqual(await leftovers(app), []);
 });
 
-test('an interrupted in-place update whose restore also fails stays stopped, still reports the previous version and is repaired by a re-run', { timeout: 300000 }, async t => {
-  const { app, cwd, directory, state, home } = await startWorker(t, 'update in place interrupted');
+test('a caught copy failure before the version marker whose restore fails stays stopped and permits a retry with its intact launcher', { timeout: 300000 }, async t => {
+  const { app, cwd, directory, state, home } = await startWorker(t, 'update in place copy failure');
   // Local differences make the forward sync write more than the version file.
   for (const name of ['README.md', 'cli.mjs']) await fs.appendFile(join(app, name), '\n// local difference\n');
   const releaseRoot = await extracted(directory, '99.0.0'), writes = [];
@@ -163,22 +163,23 @@ test('an interrupted in-place update whose restore also fails stays stopped, sti
     if (!to.startsWith(app + sep)) return original(from, to, ...args);
     const restoring = from.startsWith(join(home, installed + '-'));
     writes.push([restoring ? 'restore' : 'forward', relative(app, to).split(sep).join('/')]);
-    // Stand-in for a kill before the last write, then a restore that cannot write either.
+    // A caught copy error before the marker write; the launcher stays intact.
+    // This does not simulate abrupt process termination or a partially written file.
     if (restoring) throw Object.assign(Error('injected restore failure'), { code: 'EIO' });
-    if (to === join(app, 'package.json')) throw Object.assign(Error('injected interruption'), { code: 'EIO' });
+    if (to === join(app, 'package.json')) throw Object.assign(Error('injected copy failure'), { code: 'EIO' });
     return original(from, to, ...args);
   });
   let error;
   try { await applyUpdate('worker', app, state, { from: releaseRoot, stop: true, 'in-place': true }); }
   catch (value) { error = value; }
   assert.equal(error?.recoveryUnsafe, true, error?.message);
-  assert.match(error.message, /in-place replacement failed \(injected interruption\) and restoring the previous files failed \(injected restore failure\)\. The app remains stopped\. The previous files are retained at .+: once no process holds files in .+, copy them back over it/);
+  assert.match(error.message, /in-place replacement failed \(injected copy failure\) and restoring the previous files failed \(injected restore failure\)\. The app remains stopped\. The previous files are retained at .+: once no process holds files in .+, copy them back over it/);
   assert.doesNotMatch(error.message, /restarted/);
   const forward = writes.filter(([phase]) => phase === 'forward').map(([, path]) => path);
   assert.deepEqual(forward.slice(-2), ['cli.mjs', 'package.json'], 'version-identifying files are written last');
   assert.ok(forward.includes('README.md'));
   assert.deepEqual(writes.find(([phase]) => phase === 'restore'), ['restore', 'cli.mjs'], 'the restore writes version-identifying files first');
-  assert.equal(await appVersion(app), installed, 'the mixed tree still reports the previous version');
+  assert.equal(await appVersion(app), installed, 'this failure occurs before package.json is changed');
   assert.equal((await tree(app))['README.md'], (await manifestTree(releaseRoot))['README.md'], 'the tree is mixed');
   assert.equal((await invoke(cwd, ['status', '--state-dir', state])).data.state, 'stopped', 'nothing is restarted');
   await assert.rejects(readFile(join(home, 'history.json')), { code: 'ENOENT' });

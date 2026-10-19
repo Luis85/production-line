@@ -116,20 +116,32 @@ export function environmentExample(kind) {
     + Object.entries(config.options).filter(([, option]) => config.defaults[option] !== undefined).map(([key, option]) => key + '=' + config.defaults[option]).join('\n') + '\n'
     + (kind === 'worker' ? '# WERK_WORKER_CONFIG=.werk/worker.json\n# WERK_WORKER_ORCHESTRATOR_URL=http://127.0.0.1:3000\n# WERK_WORKER_MAX_RUNTIME_MS=21600000\n' : '');
 }
-async function tracked(directory, filename) {
+async function gitFile(directory, args, allowNoMatch = false) {
   const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.toUpperCase().startsWith('GIT_')));
   Object.assign(environment, { GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' });
   try {
-    const result = await runFile('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-C', directory, 'ls-files', '-z', '--', filename], { env: environment, timeout: 5000, maxBuffer: 65536, windowsHide: true });
-    return Boolean(result.stdout.length);
+    return await runFile('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-C', directory, ...args], { env: environment, timeout: 5000, maxBuffer: 65536, windowsHide: true });
   } catch (error) {
+    if (allowNoMatch && error.code === 1) return null;
     // A project without a Git checkout is supported; a broken checkout must not receive generated secrets.
     let ancestor = directory;
     for (;;) {
-      if (await lstat(join(ancestor, '.git')).catch(failure => { if (failure.code !== 'ENOENT') throw failure; })) throw inputError('Could not verify whether .env is tracked. Repair Git access before initializing environment secrets.');
-      const parent = resolve(ancestor, '..'); if (parent === ancestor) return false; ancestor = parent;
+      if (await lstat(join(ancestor, '.git')).catch(failure => { if (failure.code !== 'ENOENT') throw failure; })) throw inputError('Could not verify whether .env is tracked or ignored. Repair Git access before initializing environment secrets.');
+      const parent = resolve(ancestor, '..'); if (parent === ancestor) return undefined; ancestor = parent;
     }
   }
+}
+async function tracked(directory, filename) {
+  return Boolean((await gitFile(directory, ['ls-files', '-z', '--', filename]))?.stdout.length);
+}
+async function ignored(directory) {
+  const result = await gitFile(directory, ['check-ignore', '--quiet', '--no-index', '--', '.env'], true);
+  return result === undefined ? undefined : result !== null;
+}
+function terminalEnvRule(lines) {
+  const index = Math.max(lines.lastIndexOf('.env'), lines.lastIndexOf('/.env'));
+  // Outside Git, a later negation may expose credentials when the project is initialized.
+  return index >= 0 && !lines.slice(index + 1).some(line => line.startsWith('!') && !['!.env.example', '!/.env.example'].includes(line));
 }
 async function savedTokens(kind, stateDirectory) {
   if (!stateDirectory) return {};
@@ -185,7 +197,7 @@ export async function seedEnvironment(kind, directory, { stateDirectory, default
   }
   validateTokens(kind, { ...values, ...additions });
   validateTokens(kind, { ...values, ...additions, ...Object.fromEntries([...supported(kind)].filter(key => environment[key] !== undefined).map(key => [key, environment[key]])) });
-  if ((Object.keys(additions).length || current && process.platform !== 'win32' && current.stat.mode & 0o077) && await tracked(project, '.env')) throw inputError('The project .env is tracked by Git. Untrack it before adding environment secrets.');
+  if (await tracked(project, '.env')) throw inputError('The project .env is tracked by Git. Untrack it before adding environment secrets.');
   const encoded = Object.entries(additions).map(([key, value]) => {
     if (/[\0\r\n]/.test(value)) throw inputError('Environment defaults must be single-line values.');
     // Select a representation only when Node's dotenv parser returns the exact value.
@@ -199,13 +211,16 @@ export async function seedEnvironment(kind, directory, { stateDirectory, default
   const next = encoded ? appended(current?.content ?? '', encoded + '\n') : current?.content ?? '';
   const exampleBlock = environmentExample(kind), marker = '# Werk ' + kind + ' environment';
   const nextExample = example?.content.includes(marker) ? example.content : appended(example?.content ?? '', exampleBlock);
-  // Add only missing rules, matched as exact lines without trailing whitespace (Git ignores trailing, not leading, spaces), so a project's own .env rules are never duplicated.
-  const ignoreLines = ['.env', '!.env.example'], header = '# Werk local environment';
-  const present = (ignore?.content ?? '').split(/\r?\n/).map(line => line.trimEnd()), ignoreAdded = ignoreLines.filter(line => !present.includes(line));
+  // Git ignores unescaped trailing spaces, but leading spaces remain part of a pattern.
+  const header = '# Werk local environment', present = (ignore?.content ?? '').split(/\r?\n/).map(line => line.replace(/ +$/, ''));
+  const hasEnvRule = present.includes('.env') || present.includes('/.env');
+  const protectsEnv = hasEnvRule && (await ignored(project) ?? terminalEnvRule(present));
+  const ignoreAdded = [...(protectsEnv ? [] : ['.env']), ...(present.includes('!.env.example') ? [] : ['!.env.example'])];
   const nextIgnore = ignoreAdded.length ? appended(ignore?.content ?? '', (present.includes(header) ? '' : header + '\n') + ignoreAdded.join('\n') + '\n') : ignore?.content ?? '';
   // Preflight every destination before writes. Ignore rules precede generated credentials.
   for (const content of [next, nextExample, nextIgnore]) if (Buffer.byteLength(content) > limit) throw inputError('Environment setup file would exceed 64 KiB.');
   await appendFile(gitignorePath, ignore, nextIgnore);
+  if (await ignored(project) === false) throw inputError('The project .env is not ignored by Git. Repair its ignore rules before initializing environment secrets.');
   await appendFile(examplePath, example, nextExample);
   await appendFile(path, current, next, true);
   return { path, examplePath, gitignorePath, stateDirectory: state, created: !current, added: Object.keys(additions), ignoreAdded };

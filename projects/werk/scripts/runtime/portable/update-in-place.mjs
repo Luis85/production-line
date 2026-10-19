@@ -10,12 +10,13 @@ import { inputError } from '../config.mjs';
  * holds a directory handle inside it and the folder cannot be renamed. The folder
  * itself stays in place: its files are copied to the retained location first, then
  * changed and added files are written, files outside the expected inventory are
- * deleted and the result is verified byte for byte. Any failure restores the
- * retained files the same way.
+ * deleted and the result is verified byte for byte. Caught failures attempt to
+ * restore the retained files the same way; an unsuccessful restore stays stopped.
  *
- * The files that identify the installed version are written last when moving to a
- * newer version and first when moving to an older one, so a run killed midway still
- * reports the older version: update apply sees the release as newer and repairs the tree.
+ * Version-identifying files are written last for upgrades and first for downgrades.
+ * This ordering helps recovery from caught copy failures, but it is not a transaction:
+ * abrupt termination can leave truncated files or a mixed tree that cannot load the
+ * updater. Recover that case manually from the retained copy, or a verified release.
  */
 const MARKERS = ['cli.mjs', 'package.json'];
 const native = path => path.split('/');

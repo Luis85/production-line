@@ -113,7 +113,11 @@ Raise the named setting with `settings set` (see
 a new attempt captures it. Shared feature publication keeps its own bounds: a patch of
 at most 128 KiB and at most 32 changed files. The taskboard stores each review
 patch in a document limited to 16 MiB in total, which is why a review patch is
-limited to 4 MiB. Split larger changes into reviewable features.
+limited to 4 MiB. Split larger changes into reviewable features. If a completed
+shared result exceeds its publication bounds, the worker retains the candidate
+and publishes a blocked Task note with recovery guidance. Ask a maintainer to
+inspect it or create smaller successor requests; editing that diagnostic note does
+not rerun implementation.
 
 Candidate verification inspects every tracked file and every nonignored untracked
 file, including files outside the approved edit list. Repositories containing

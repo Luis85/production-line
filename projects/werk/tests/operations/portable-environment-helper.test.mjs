@@ -217,3 +217,57 @@ test('ignore setup adds only the rules a project lacks and writes the header onc
   assert.deepEqual((await seedEnvironment('worker', indented, { environment: {} })).ignoreAdded, ['.env']);
   assert.equal(await readFile(indentedPath, 'utf8'), ' .env\r\n!.env.example\r\n# Werk local environment\r\n.env\r\n');
 });
+
+test('initialization repairs later negations using Git semantics and remains idempotent', async t => {
+  for (const [rules, expected] of [
+    ['.env\n!.env\n', ['.env']],
+    ['.env\n!*\n', ['.env']],
+    ['/.env\n!/.env\n', ['.env']],
+    ['.env\n!.[e]nv\n', ['.env']],
+    ['/.env\n!nested/.env\n', []],
+    ['.env\n!unrelated\n', []],
+    ['.env  \r\n', []],
+    [' .env\n', ['.env']],
+    ['.env\u00a0\n', ['.env']],
+  ]) {
+    const project = await directory(t); await git(project, 'init', '-q');
+    const path = join(project, '.gitignore'), original = rules + '!.env.example\n';
+    await writeFile(path, original);
+    assert.deepEqual((await seedEnvironment('worker', project, { environment: {} })).ignoreAdded, expected);
+    await git(project, 'check-ignore', '--quiet', '.env');
+    await assert.rejects(git(project, 'check-ignore', '--quiet', '.env.example'), { code: 1 });
+    const first = await readFile(path, 'utf8');
+    assert.equal(first.startsWith(original), true);
+    if (!expected.length) assert.equal(first, original);
+    assert.deepEqual((await seedEnvironment('worker', project, { environment: {} })).ignoreAdded, []);
+    assert.equal(await readFile(path, 'utf8'), first);
+  }
+});
+
+test('nested projects protect their local environment despite parent and anchored negations', async t => {
+  const repository = await directory(t); await git(repository, 'init', '-q');
+  await writeFile(join(repository, '.gitignore'), '.env\n!nested/.env\n');
+  const project = join(repository, 'nested'); await mkdir(project);
+  await writeFile(join(project, '.gitignore'), '/.env\n!/.env\n!.env.example\n');
+  assert.deepEqual((await seedEnvironment('worker', project, { environment: {} })).ignoreAdded, ['.env']);
+  await git(repository, 'check-ignore', '--quiet', 'nested/.env');
+  assert.deepEqual((await seedEnvironment('worker', project, { environment: {} })).ignoreAdded, []);
+});
+
+test('setup outside Git orders protection after negations before future repository initialization', async t => {
+  const project = await directory(t), path = join(project, '.gitignore');
+  await writeFile(path, '.env\n!*\n!.env.example\n');
+  assert.deepEqual((await seedEnvironment('worker', project, { environment: {} })).ignoreAdded, ['.env']);
+  const first = await readFile(path, 'utf8');
+  assert.deepEqual((await seedEnvironment('worker', project, { environment: {} })).ignoreAdded, []);
+  assert.equal(await readFile(path, 'utf8'), first);
+  await git(project, 'init', '-q'); await git(project, 'check-ignore', '--quiet', '.env');
+});
+
+test('already complete tracked credentials cannot report protected initialization', async t => {
+  const project = await directory(t); await git(project, 'init', '-q');
+  await seedEnvironment('worker', project, { environment: {} }); await git(project, 'add', '-f', '.env');
+  const files = ['.env', '.env.example', '.gitignore'], before = await Promise.all(files.map(file => readFile(join(project, file), 'utf8')));
+  await assert.rejects(seedEnvironment('worker', project, { environment: {} }), /tracked by Git/);
+  assert.equal(JSON.stringify(await Promise.all(files.map(file => readFile(join(project, file), 'utf8')))) === JSON.stringify(before), true);
+});
