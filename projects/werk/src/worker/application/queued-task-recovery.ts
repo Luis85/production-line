@@ -21,7 +21,7 @@ function preparedRequest(task: PreparedTask, evidence: Evidence): WorkerRequest 
   const request = evidence.requests.get(task.requestId), execution = request.execution;
   if (request.id !== task.requestId || request.owner.sessionId !== task.sessionId || request.owner.rootTurnId !== task.id ||
       request.owner.taskId !== task.id || request.owner.featureId !== task.feature.key || request.owner.remote ||
-      request.input.kind !== 'patch' || request.provider.model !== task.model || ![task.provider, 'legacy'].includes(request.provider.id) ||
+      request.input.kind !== 'patch' || request.provider.model !== task.model || (request.provider.effort ?? 'default') !== (task.selection?.effort ?? 'default') || ![task.provider, 'legacy'].includes(request.provider.id) ||
       request.phase !== 'ready' || request.recoveryHold) return;
   if (!execution || execution.status !== 'prepared' || execution.turnId !== task.currentTurnId || execution.runId !== task.runId ||
       execution.inputRevision !== request.inputRevision || execution.result !== null || execution.outcome !== null ||

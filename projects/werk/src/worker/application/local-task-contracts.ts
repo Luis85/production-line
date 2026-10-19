@@ -1,3 +1,5 @@
+import { validateModelSelection, type ModelSelection } from './model-selection.js';
+import { validateFeatureDefinitionPrompts, type FeatureDefinitionPrompts } from './feature-workflow.js';
 import type { CandidateInspectionLimits } from './execution-policy.js';
 import type { ProjectModelContext } from './model-context.js';
 import { validateFeatureRequestReference, type FeatureRequestReference } from './feature-request-reference.js';
@@ -60,16 +62,18 @@ export interface LocalTaskPreparation {
 }
 /** Trusted coordinator reservation; these fields are never accepted from a task HTTP body. */
 export interface LocalTaskSubmission {
+  selection?: ModelSelection;
   feature?: FeatureRequestReference;
   id: string;
   hash: string;
   policy?: GatePolicy;
+  definitionPrompts?: FeatureDefinitionPrompts;
   criteria?: string[];
   repositoryId?: string;
   baseCommit?: string;
 }
 export function freezeSubmission(input: LocalTaskSubmission): LocalTaskSubmission {
-  const value = object(input, "Task reservation", ["id", "hash", "policy", "criteria", "repositoryId", "baseCommit", "feature"]);
+  const value = object(input, "Task reservation", ["id", "hash", "policy", "criteria", "repositoryId", "baseCommit", "feature", "definitionPrompts", "selection"]);
   if (typeof value.id !== "string" || !/^[a-z0-9-]{1,90}$/.test(value.id) ||
       typeof value.hash !== "string" || !/^[a-f0-9]{64}$/.test(value.hash))
     throw new DomainError("invalid_input", "Invalid feature task identity.");
@@ -77,10 +81,18 @@ export function freezeSubmission(input: LocalTaskSubmission): LocalTaskSubmissio
     throw new DomainError("invalid_input", "Invalid reserved repository ID.");
   if (value.baseCommit !== undefined && (typeof value.baseCommit !== "string" || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(value.baseCommit)))
     throw new DomainError("invalid_input", "Task base must be a full Git commit identifier.");
+  const definitionPrompts = value.definitionPrompts === undefined ? undefined : validateFeatureDefinitionPrompts(value.definitionPrompts);
+  if (definitionPrompts && value.repositoryId === undefined)
+    throw new DomainError("invalid_input", "Definition prompts require a reserved repository assignment.");
+  // Ready Check answers may advance the implementation base while retaining the original workflow guidance.
+  if (definitionPrompts && value.baseCommit === undefined)
+    throw new DomainError("invalid_input", "Definition prompts require a reserved task source commit.");
   return {
     id: value.id,
     hash: value.hash,
+    ...(value.selection === undefined ? {} : { selection: validateModelSelection(value.selection) }),
     ...(value.feature === undefined ? {} : { feature: validateFeatureRequestReference(value.feature) }),
+    ...(definitionPrompts === undefined ? {} : { definitionPrompts }),
     ...(value.policy === undefined ? {} : { policy: validateGatePolicy(value.policy) }),
     ...(value.criteria === undefined ? {} : { criteria: validateGateInput({ kind: "patch", title: "", message: "", criteria: value.criteria }).criteria }),
     ...(value.repositoryId === undefined ? {} : { repositoryId: value.repositoryId as string }),
@@ -88,7 +100,7 @@ export function freezeSubmission(input: LocalTaskSubmission): LocalTaskSubmissio
   };
 }
 export function submissionContextHash(submission?: LocalTaskSubmission) {
-  const context = { policy: submission?.policy, criteria: submission?.criteria, repositoryId: submission?.repositoryId, baseCommit: submission?.baseCommit };
+  const context = { policy: submission?.policy, criteria: submission?.criteria, repositoryId: submission?.repositoryId, baseCommit: submission?.baseCommit, definitionPrompts: submission?.definitionPrompts, selection: submission?.selection };
   return Object.values(context).some(value => value !== undefined) ? gateDigest(context) : undefined;
 }
 export interface TaskFile {
@@ -97,7 +109,12 @@ export interface TaskFile {
   existed: boolean;
 }
 export interface LocalTask {
+  /** Resolved once at admission; absent only on legacy records. */
+  selection?: ModelSelection;
+  /** Whether the trusted submission also bound the selection into its context hash. */
+  selectionReserved?: true;
   projectContext?: ProjectModelContext | null;
+  definitionPrompts?: FeatureDefinitionPrompts;
   feature?: FeatureRequestReference;
   implementation?: DevelopmentScope;
   developmentEvidence?: DevelopmentEvidence;

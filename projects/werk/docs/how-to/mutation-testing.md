@@ -16,8 +16,10 @@ npm run mutation:contracts
 npm run mutation
 ```
 
-`mutation:contracts` runs 54 focused contract tests without mutation, including
-the existing serialized-operation and real SQLite consumption suites. `mutation` runs the complete bounded
+`mutation:contracts` runs 96 focused contract tests without mutation, including
+the existing serialized-operation and real SQLite consumption suites, structural
+Ready Check admission, reviewer result contracts and the durable Feature Request
+lifecycle. `mutation` runs the complete bounded
 experiment and returns a failure for tool errors or incomplete evidence. A low
 score or surviving mutant does not fail either release or local qualification.
 The usual `npm test`, `npm run check`, builds, pull request checks and interactive
@@ -35,8 +37,8 @@ uses `taskkill /T /F` for cancellation and timeout cleanup.
 
 ## Understand the scoped baseline
 
-The release experiment covers seven modules with shared boundary and worker
-accounting/protocol responsibilities:
+The release experiment covers ten modules with shared boundary, worker
+accounting and Feature Request readiness responsibilities:
 
 | Module | Contract under test |
 | --- | --- |
@@ -47,6 +49,9 @@ accounting/protocol responsibilities:
 | `src/worker/application/consumption.ts` | Whole-token shares, UTC windows, reservations, cumulative usage and fail-closed admission |
 | `src/worker/infrastructure/journal/consumption.ts` | Real SQLite transactions, restart recovery, durable charges and corrupt-state rejection |
 | `src/worker/infrastructure/responses.ts` | Assignment authority, complete task input, context pins and durable acknowledgement identity |
+| `src/worker/application/ready-review-protocol.ts` | Strict reviewer findings, blocking questions, bounded responses and untrusted review context |
+| `src/worker/application/shared-ready-review.ts` | Claim-before-payment ordering, explicit re-review, revision fencing, capacity, restart holds and deterministic DoR handoff |
+| `src/worker/infrastructure/features/review-eligibility.ts` | Structural admission before semantic DoR, safe repository scope, author metadata and source bounds |
 
 This is not a whole-repository mutation score or proof of end-to-end model
 execution. Provider subprocesses, Git worktrees, the wider application services
@@ -54,47 +59,67 @@ and Vue rendering remain outside this scope. Ordinary tests and release
 qualification cover those paths independently. SQLite tests use isolated temporary
 databases; no live provider, application build or existing worker state is needed.
 
-Measured on 17 October 2026 with the committed dependency lockfile, scope
-`worker-accounting-protocol-v2` completed in 53.2 seconds:
+Measured on 2026-10-18 with the committed dependency lockfile, scope
+`worker-ready-review-v3` completed in 137.2 seconds:
 
 | Scoped score | Mutants | Killed | Timed out | Survived | Uncovered / errors / ignored |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| 97.78% | 811 | 777 | 16 | 18 | 0 / 0 / 0 |
+| 97.60% | 1334 | 1287 | 15 | 30 | 2 / 0 / 0 |
 
 The reviewed baseline lives in
-[`scripts/mutation/baseline.json`](https://github.com/Luis85/production-line/blob/v0.11.0/projects/werk/scripts/mutation/baseline.json).
-It records the measured score, counts, per-file findings, source/test/configuration
-hashes, Stryker and Node versions, source commit and checkout state. Stryker's
-embedded mutated source must match the recorded source hashes; changing tests or
-configuration during measurement makes the run incomplete.
+[`scripts/mutation/baseline.json`](https://github.com/Luis85/production-line/blob/main/projects/werk/scripts/mutation/baseline.json).
+It preserves the completed summary exactly: score, counts, per-file findings,
+source/test/configuration hashes, Stryker and Node versions, source commit and
+checkout state. The ten scored source files are recorded separately from all
+286 TypeScript inputs compiled by the isolated harness, including unmutated
+dependencies. The compiler and provenance collector share the same discovery
+rules; the worker webview, `dist`, `public`, `node_modules` and `.d.ts`
+files are excluded from compilation.
 
-The original four-module experiment is preserved as
-[`baselines/shared-boundaries-v1.json`](https://github.com/Luis85/production-line/blob/v0.11.0/projects/werk/scripts/mutation/baselines/shared-boundaries-v1.json):
-176 mutants, 94.89%, 25.9 seconds. Its scope differs from the current baseline;
-these percentages are not a regression/improvement comparison. No modules or
-mutators were removed to improve the reported score.
+Stryker's embedded source must match the scored-source hashes. The measurement
+also rediscovers compiled source and test membership afterward: changing,
+adding or deleting a compiled dependency or matched test makes the analysis
+incomplete. Measurement/configuration scripts have their own before-and-after
+hashes. This prevents a successful report from claiming reproducibility while
+its supporting source or tests changed.
 
-The expanded first pass exposed missing assertions for invalid provider admission,
-initialization failure before polling, terminal-record fencing, durable zero
-charges, corrupt accounting totals and optional assignment validation. The
-polishing pass added observable assertions for these paths. All 75 SQLite journal
-mutants are now detected by assertions. Remaining survivors are retained as
-reviewed equivalence candidates, with individual rationale and the exact report
-digest in
-[`scripts/mutation/survivor-review.json`](https://github.com/Luis85/production-line/blob/v0.11.0/projects/werk/scripts/mutation/survivor-review.json):
+Historical experiments remain available:
 
-- Receipt guards repeat constraints already enforced by strict enum membership or combined nonnegative counts.
-- Polling generations are opaque identity values; increasing or decreasing them preserves cancellation behavior.
-- Consumption guards repeat validated integer/range constraints; null-aware maxima have equivalent results for nonnegative counters.
-- Assignment validator diagnostics are caught and replaced with a fixed public error; repository validation and omitted optional fields repeat existing checks.
+- [`baselines/shared-boundaries-v1.json`](https://github.com/Luis85/production-line/blob/main/projects/werk/scripts/mutation/baselines/shared-boundaries-v1.json): four modules, 176 mutants, 94.89%, 25.9 seconds.
+- [`baselines/worker-accounting-protocol-v2.json`](https://github.com/Luis85/production-line/blob/main/projects/werk/scripts/mutation/baselines/worker-accounting-protocol-v2.json): seven modules, 811 mutants, 97.78%, 53.2 seconds, with its [survivor review](https://github.com/Luis85/production-line/blob/main/projects/werk/scripts/mutation/baselines/worker-accounting-protocol-v2-survivors.json).
 
-These candidates are not excluded or silently counted as killed. The report uses
-Stryker's denominator: killed plus timed-out mutants divided by killed, timed-out,
-surviving and uncovered mutants. The 16 timeouts come from the bounded shared
-asynchronous contracts; they are not described as assertion failures. Compile
-errors and ignored mutants are shown separately; runtime errors, missing files,
-unknown statuses, source mismatch or interruption make the aggregate score
-unavailable.
+Their scopes and measurement configurations differ from v3. These percentages
+are historical evidence, not regression or improvement comparisons. No module,
+mutator or surviving result was excluded to raise the current score.
+
+The Ready Check pass exposed assertions masked by unrelated rejection paths.
+Existing tests exercised nonboolean blocking flags only in results that also
+claimed to pass, and tested chat-mode rejection with file paths still present.
+Dedicated assertions now check each boundary independently. Reviewing the
+result contract also found and fixed a coercion bug: an array containing
+`question` could bypass the blocking-question rule. Finding kinds now require
+strict string membership, covered by ordinary runner tests and mutation contracts.
+Lifecycle tests also cover advancing time without idle publication churn, pushed changes during
+queued and running reviews, profile incompatibility, questions arriving before
+result projection, missing restart evidence, capacity holds, lost acknowledgments
+and cancellation of a pass publication. These are local port and persistence
+contracts; they do not claim that a real provider implemented a feature.
+
+Every remaining survivor and uncovered mutant is retained with an individual
+classification and rationale, bound to the exact report, source and test digests,
+in [`scripts/mutation/survivor-review.json`](https://github.com/Luis85/production-line/blob/main/projects/werk/scripts/mutation/survivor-review.json).
+The classifications distinguish equivalent candidates from diagnostic wording
+changes and defensive guards. The two uncovered branches are a duplicate-path
+diagnostic already rejected by an earlier validator and a fallback for non-Error
+throws. Their remaining coverage limits are explicit, without fabricated tests
+or a claim of complete coverage.
+
+The raw report uses Stryker's denominator: killed plus timed-out mutants divided
+by killed, timed-out, surviving and uncovered mutants. Its 15 timeouts count
+as detected but are not described as assertion failures. Compile errors and
+ignored mutants are shown separately; runtime errors, missing files, duplicate
+or unknown mutant identities/statuses, source mismatch or interruption make the
+aggregate score unavailable.
 
 ## Inspect release evidence
 
@@ -110,7 +135,7 @@ The job emits warnings for surviving or uncovered mutants, lower scores,
 incomplete analysis and tool errors. A previous HTML or JSON report is removed
 before starting, so a failed run cannot reuse an old successful result. Baseline
 deltas are calculated only when the declared scope, Stryker version and mutation
-configuration match. Source and test changes remain visible through their hashes
+configuration match. Scored source, compiled dependencies and test changes remain visible through their hashes
 and can legitimately improve the score. Missing or incompatible baselines warn
 without manufacturing a comparison.
 
@@ -125,7 +150,8 @@ Release availability is independent of that advisory outcome.
    calls out of individual-mutant execution.
 2. Run `mutation:contracts`, then `mutation`. Inspect survivors and timeouts in
    the HTML report; distinguish missing assertions from equivalent behavior.
-3. Review the source/test/configuration digests and full report, then deliberately
+3. Review the scored-source, compiled-source, test and configuration digests and
+   full report, then deliberately
    replace `scripts/mutation/baseline.json` with the reviewed `summary.json`.
    Baselines are never rewritten automatically by CI. Document a scope/version
    change rather than comparing incompatible numbers.

@@ -1,3 +1,5 @@
+import { providerIds, type ProviderId } from '../application/provider-contract';
+import { parseModelEffort, providerEfforts, type ModelEffort } from '../application/model-effort';
 import { isMap, parseDocument } from 'yaml';
 export const featureDetailFields = [
   { key: 'goal', label: 'Goal', hint: 'Describe the outcome you want.', rows: 4 },
@@ -5,6 +7,7 @@ export const featureDetailFields = [
   { key: 'acceptance criteria', label: 'Acceptance criteria', hint: 'One observable result per line.', rows: 4 },
   { key: 'verification plan', label: 'Verification plan', hint: 'Explain how the implementation should be checked.', rows: 3 },
 ] as const;
+export type FeatureModelField = 'provider' | 'model' | 'effort';
 export type FeatureDetailField = typeof featureDetailFields[number]['key'];
 interface Section { name: string; start: number; end: number; }
 function document(markdown: string) {
@@ -38,14 +41,19 @@ export function readFeatureDetails(markdown: string) {
     const value = parsed.lines.slice(section.start, section.end).join('\n').replace(/<!--[\s\S]*?-->/g, '').trim();
     fields[key] = key === 'acceptance criteria' ? value.split('\n').map(line => line.replace(/^ {0,3}[-*+]\s+(?:\[[ xX]\]\s*)?/, '')).join('\n') : value;
   }
-  const values = (parsed.metadata.toJS({ maxAliasCount: 0 }) as Record<string, unknown>).paths;
-  return { fields, title: String(parsed.metadata.get('title') ?? ''), paths: Array.isArray(values) ? values.filter((path): path is string => typeof path === 'string').join('\n') : '' };
+  const metadata = parsed.metadata.toJS({ maxAliasCount: 0 }) as Record<string, unknown>, values = metadata.paths;
+  const provider = metadata.provider as ProviderId | undefined, effort = metadata.effort as ModelEffort | undefined;
+  if (provider !== undefined && !providerIds.includes(provider) || effort !== undefined && provider && !providerEfforts[provider]?.includes(effort)) throw Error('Correct the provider or effort in Advanced template editing.');
+  if (effort !== undefined) { try { parseModelEffort(effort); } catch { throw Error('Correct the provider or effort in Advanced template editing.'); } }
+  const selection = { provider, model: String(metadata.model ?? ''), effort: effort ?? '' as ModelEffort | '' };
+  return { fields, selection, title: String(parsed.metadata.get('title') ?? ''), paths: Array.isArray(values) ? values.filter((path): path is string => typeof path === 'string').join('\n') : '' };
 }
 /** Edits only a named template field; the worker remains the readiness authority. */
-export function writeFeatureDetail(markdown: string, field: FeatureDetailField | 'paths' | 'title', value: string) {
+export function writeFeatureDetail(markdown: string, field: FeatureDetailField | FeatureModelField | 'paths' | 'title', value: string) {
   const parsed = document(markdown);
-  if (field === 'paths' || field === 'title') {
-    parsed.metadata.set(field, field === 'paths' ? value.split('\n').map(path => path.trim()).filter(Boolean) : value);
+  if (field === 'paths' || field === 'title' || field === 'provider' || field === 'model' || field === 'effort') {
+    if ((field === 'model' || field === 'effort') && !value.trim()) parsed.metadata.delete(field);
+    else parsed.metadata.set(field, field === 'paths' ? value.split('\n').map(path => path.trim()).filter(Boolean) : value);
     return '---\n' + parsed.metadata.toString({ lineWidth: 0 }) + '---\n' + parsed.lines.join('\n');
   }
   const section = parsed.sections.find(section => section.name === field)!;

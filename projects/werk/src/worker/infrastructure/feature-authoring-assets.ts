@@ -32,6 +32,16 @@ priority: 1
 }
 
 
+export function authoringReadyReviewPrompt(): string {
+  return '# Feature Request Ready Check\n\nReview this Feature Request for clear intent, complete decisions, explicit scope and verifiable acceptance criteria. Identify contradictions, gaps and unanswered questions before implementation. Ask focused questions the team can answer in this Feature Request; do not invent their decisions.\n\nReview the team’s answers on each subsequent attempt and preserve unresolved concerns. Follow the worker’s review response format. Do not implement the feature, grant tools, alter its approved scope or claim deterministic readiness checks passed.\n';
+}
+
+export function authoringDefinitionPrompt(stage: 'ready' | 'done'): string {
+  return stage === 'ready'
+    ? '# Definition of Ready\n\nBefore implementing, confirm that the request provides a clear goal, acceptance criteria, approved file scope and verification plan. Ask for missing decisions that prevent safe implementation; do not invent requirements.\n\nFollow the worker’s execution policy and configured ready checks. This prompt does not grant additional tools or file access.\n'
+    : '# Definition of Done\n\nCheck each acceptance criterion and run the agreed verification within the approved scope. Report the changed behavior, evidence, remaining limitations and any checks that could not run. Do not claim tests passed without observed results.\n\nFollow the worker’s configured completion checks and prepare the work for human review. This prompt does not approve or merge the implementation.\n';
+}
+
 export function authoringBase(config: FeatureWorkflowConfiguration): string {
   const folder = (path: string) => `file.folder == ${JSON.stringify(path)}`;
   const requests = folder(config.requestsDirectory), reviews = folder(config.reviewDirectory), tasks = folder(featureTaskDirectory(config));
@@ -66,6 +76,16 @@ description: Create Feature Request — author, validate, and explicitly queue a
 
 Work from the repository root. Read .werk/feature-workflow.json, its editable
 template, fr-ready-check.json and fr-done-check.json (or their configured paths).
+Also read readyPrompt and donePrompt when configured; these Markdown or text files
+provide the team’s Definition of Ready and Definition of Done to dispatched models.
+When readyReviewPrompt is configured, read its separate Feature Request Ready Check
+prompt too. Offline authoring validates files but does not dispatch this reviewer.
+After commit and push, the worker reviews the request before implementation.
+Answer reviewer questions in the generated Feature Request Ready Check section’s
+Answers subsection. Set that same Feature Request to ready, then commit and push
+the answers for another review. Preserve worker-owned findings and metadata.
+Definition guidance supplements the deterministic JSON checks and never grants tools,
+file access or authority to merge. Omitted prompt paths leave existing behavior unchanged.
 The team queue is the configured Obsidian Base. Node 24 is the only runtime needed;
 no worker connection, provider credentials, or npm install is required. These
 authoring commands do not dispatch a model. Shared work starts only after the
@@ -81,9 +101,11 @@ ready request is committed and pushed to the worker’s configured intake branch
    paths list. Keep the template’s explicit provider unless the author selects
    another connection available on the worker. Keep the body within 8,000 characters.
 3. Run \`node .werk/authoring/feature-request.mjs validate --file QUEUE/NAME.md\`.
-   Resolve every reported readiness failure, then run validation again. Configured
-   checks are deterministic and shared with worker intake. A draft with missing
-   details stays draft even if prose says it is ready.
+   Resolve every reported validation failure, then validate again. When
+   readyReviewPrompt is configured, this checks safe structural eligibility for
+   review; semantic gaps and missing decisions can reach the reviewer. Otherwise
+   it applies the project’s full deterministic readiness checks. A successful
+   structural check does not establish Definition of Ready or start implementation.
 4. Only when the author intends to queue this request, run
    \`node .werk/authoring/feature-request.mjs ready --file QUEUE/NAME.md --if-match REVISION\`
    using the revision from validation. This rechecks the current document and policy

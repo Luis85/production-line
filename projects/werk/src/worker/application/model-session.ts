@@ -1,3 +1,4 @@
+import { providerIds, type ProviderId } from './provider-contract.js';
 import { createHash } from 'node:crypto';
 
 /** A logical FR session is distinct from provider handles, turns and execution runs. */
@@ -38,7 +39,7 @@ export function validateModelSessionBinding(value: unknown): asserts value is Mo
   if (!record(value) || Object.keys(value).some(key => !['schemaVersion', 'logicalSessionId', 'featureRequestKey', 'providerId', 'generation'].includes(key))
     || value.schemaVersion !== 1 || typeof value.logicalSessionId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(value.logicalSessionId)
     || typeof value.featureRequestKey !== 'string' || !/^fr-[a-f0-9]{64}$/.test(value.featureRequestKey)
-    || !['codex-cli', 'claude-cli', 'openai-api', 'anthropic-api'].includes(String(value.providerId))
+    || !providerIds.includes(value.providerId as ProviderId)
     || !Number.isSafeInteger(value.generation) || Number(value.generation) < 1) throw Error('Invalid model session binding.');
 }
 export function validateModelSessionUpdate(value: unknown): asserts value is ModelSessionUpdate {

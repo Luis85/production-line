@@ -1,6 +1,6 @@
 import { constants } from 'node:fs';
 import { access } from 'node:fs/promises';
-import { runProviderProbe } from './provider-process.js';
+import { providerProbeKey, runProviderProbe } from './provider-process.js';
 import type { ProviderConnection, ProviderId } from '../application/provider-contract.js';
 import type { ProviderAccountStatus } from '../application/provider-account.js';
 
@@ -23,6 +23,14 @@ export function parseProviderAccount(id: ProviderId, exitCode: number | null, st
     }
     return base;
   }
+  if (id === 'cursor-cli') {
+    // The CLI has no documented JSON status contract; accept only narrow status lines and safe email.
+    const output = (stdout + '\n' + stderr).replace(/\x1b\[[0-9;]*m/g, '');
+    if (/^(?:[✓✔]\s*)?(?:Not authenticated|Not logged in|Logged out)[.!]?\s*$/im.test(output)) return { ...base, signedIn: false, message: 'Cursor reports no signed-in account. Run agent login as the worker account.' };
+    const match = /^(?:[✓✔]\s*)?(?:Logged in|Authenticated)(?: as ([^\s@]+@[^\s@]+\.[^\s@]+))?[.!]?\s*$/im.exec(output);
+    if (exitCode === 0 && match) return { ...base, signedIn: true, email: safeText(match[1], 254), message: 'Cursor reports a signed-in account. Subscription, quota and model access were not checked.' };
+    return { ...base, message: 'Cursor did not expose a recognized status line. Run agent status as the worker account; no model request was made.' };
+  }
   if (id !== 'claude-cli') return { ...base, message: 'Account identity is unavailable for API-key connections. No provider request was made.' };
   let value: Record<string, unknown>;
   try { const parsed: unknown = JSON.parse(stdout); if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return base; value = parsed as Record<string, unknown>; } catch { return base; }
@@ -40,7 +48,7 @@ export class ProviderAccountChecks {
   private controller = new AbortController();
   async check(connection: ProviderConnection): Promise<ProviderAccountStatus> {
     if (this.controller.signal.aborted) return this.unavailable(connection.id, 'The worker is stopping.');
-    const key = connection.executable;
+    const key = providerProbeKey(connection);
     const cached = this.cached.get(connection.id);
     if (cached && cached.key === key && cached.until > Date.now()) return structuredClone(cached.value);
     const pending = this.pending.get(connection.id);
@@ -55,8 +63,8 @@ export class ProviderAccountChecks {
     if (!connection.executable) return this.unavailable(connection.id, 'Save the provider CLI executable before checking its account.');
     try { await access(connection.executable, constants.X_OK); } catch { return this.unavailable(connection.id, 'The saved CLI executable cannot be run by the worker account.'); }
     try {
-      const args = connection.id === 'codex-cli' ? ['login', 'status'] : ['auth', 'status', '--json'];
-      const result = await runProviderProbe(connection.executable, connection.id === 'codex-cli' ? 'codex' : 'claude', args, { signal: this.controller.signal, timeoutMs: 5000, maxOutputBytes: 16384 });
+      const args = connection.id === 'codex-cli' ? ['login', 'status'] : connection.id === 'cursor-cli' ? ['status'] : ['auth', 'status', '--json'];
+      const result = await runProviderProbe(connection.executable, connection.id === 'codex-cli' ? 'codex' : connection.id === 'cursor-cli' ? 'cursor' : 'claude', args, { signal: this.controller.signal, timeoutMs: 5000, maxOutputBytes: 16384 }, connection.id === 'cursor-cli' && connection.apiKey ? { CURSOR_API_KEY: connection.apiKey } : {});
       return parseProviderAccount(connection.id, result.exitCode, result.stdout.toString('utf8'), result.stderr.toString('utf8'));
     } catch { return this.unavailable(connection.id, 'The account check failed, timed out or returned too much output. Retry after checking the CLI installation.'); }
   }

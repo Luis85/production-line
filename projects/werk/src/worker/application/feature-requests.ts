@@ -1,3 +1,4 @@
+import { validateModelSelection, type ModelSelection, type ModelEffort } from './model-selection.js';
 import { featureRequestReference, validateFeatureRequestReference, type FeatureRequestReference } from './feature-request-reference.js';
 import { SerializedOperations } from '../../shared/serialized-operations.js';
 import type { WorkerRequest, RequestPhase } from './request-gates.js';
@@ -22,8 +23,8 @@ export interface FeatureExecutionLinks {
   runId: string; attempt: number; before: string; after?: string; completedAt?: string;
   result?: string; patch?: string;
 }
-export interface FeatureInput { title: string; mode: 'chat' | 'patch'; provider: string; message: string; paths?: string[]; priority: number; definitionId?: string; definitionRef?: string; agent?: string; useInstructionsOnly?: boolean; }
-export interface FeatureRecord { feature?: FeatureRequestReference; id: string; name: string; source: 'folder' | 'orchestrator'; taskId: string; sessionId: string; input?: FeatureInput; inputHash: string; submitted: boolean; status: string; createdAt: string; updatedAt: string; error?: string; result?: string; patch?: string; attempt?: number; archived?: boolean; taskNote?: FeatureTaskProjection; attention?: string; execution?: FeatureExecutionLinks; executionDirectory?: string; gates?: FeatureGateProjection; executionStatus?: string; interaction?: { phase: string; revision: number; pendingId?: string; link?: string }; }
+export interface FeatureInput { title: string; mode: 'chat' | 'patch'; provider: string; model?: string; effort?: ModelEffort; message: string; paths?: string[]; priority: number; definitionId?: string; definitionRef?: string; agent?: string; useInstructionsOnly?: boolean; }
+export interface FeatureRecord { selection?: ModelSelection; feature?: FeatureRequestReference; id: string; name: string; source: 'folder' | 'orchestrator'; taskId: string; sessionId: string; input?: FeatureInput; inputHash: string; submitted: boolean; status: string; createdAt: string; updatedAt: string; error?: string; result?: string; patch?: string; attempt?: number; archived?: boolean; taskNote?: FeatureTaskProjection; attention?: string; execution?: FeatureExecutionLinks; executionDirectory?: string; gates?: FeatureGateProjection; executionStatus?: string; interaction?: { phase: string; revision: number; pendingId?: string; link?: string }; }
 export interface FeatureIndex { version: 1; owner: string; records: FeatureRecord[]; }
 export interface FeatureFile { name: string; revision: string; id?: string; status?: string; source?: string; shared?: boolean; input?: FeatureInput; error?: string; }
 export interface FeatureFolderPort {
@@ -44,6 +45,7 @@ export interface FeatureFolderPort {
   close(): Promise<void>;
 }
 export interface FeatureQueuePort {
+  selection?(input: FeatureInput): ModelSelection;
   reference?(sessionId: string): FeatureRequestReference | undefined;
   interact?(record: FeatureRecord, command: InteractionCommand): Promise<unknown>;
   control?(record: FeatureRecord, action: 'cancel' | 'retry'): Promise<unknown>;
@@ -139,8 +141,11 @@ export class FeatureRequests {
         if (!admit || file.status === 'draft' || previous !== file.revision) continue;
         if (!file.input) continue;
         if (this.index.records.length >= 1000) { this.errors.push({ file: file.name, message: 'Feature index reached 1,000 records. Use a new worker state and folder for further requests.' }); continue; }
+        let selection: ModelSelection | undefined;
+        try { if (this.queue.selection) selection = validateModelSelection(this.queue.selection(file.input)); }
+        catch (error) { this.errors.push({ file: file.name, message: error instanceof Error ? error.message : 'Choose a configured model before accepting this request.' }); continue; }
         const id = file.id ?? randomUUID(), at = new Date().toISOString();
-        record = { id, feature: featureRequestReference({ id, source: 'folder', scope: this.folder.directory, sourcePath: file.name }), name: file.name, source: 'folder', taskId: 'feature-' + id, sessionId: (file.input.mode === 'patch' ? 'local-feature-' : 'feature-') + id, input: structuredClone(file.input), inputHash: fingerprint(file.input), submitted: false, status: 'waiting', createdAt: at, updatedAt: at };
+        record = { id, ...(selection ? { selection } : {}), feature: featureRequestReference({ id, source: 'folder', scope: this.folder.directory, sourcePath: file.name }), name: file.name, source: 'folder', taskId: 'feature-' + id, sessionId: (file.input.mode === 'patch' ? 'local-feature-' : 'feature-') + id, input: structuredClone(file.input), inputHash: fingerprint(file.input), submitted: false, status: 'waiting', createdAt: at, updatedAt: at };
         this.index.records.push(record); await this.persist();
       }
       record.name = file.name;

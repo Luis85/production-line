@@ -7,6 +7,17 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+### Added
+
+- Shared Feature Requests support optional `readyPrompt` and `donePrompt` paths in `.werk/feature-workflow.json`. Teams commit Markdown or text definitions of ready and done; the worker pins their content and digests before claim and supplies them on dispatch and continuation. The shared-workflow view exposes their paths and digests. These prompts supplement deterministic readiness/completion checks and retain existing tool, edit-scope and human-review boundaries.
+- An optional `readyReviewPrompt` enables a model Feature Request Ready Check before deterministic readiness checks. The worker confirms its Git claim, reviews using the request's selected model and existing capacity/allowance (tool-free Codex/Claude/API or Cursor's native read-only ask mode), and publishes findings in the same request. Questions pause work until the team answers in Markdown and commits and pushes `status: ready`; unchanged polling never starts another review.
+- Feature Requests can select provider, model and supported reasoning effort in Markdown and the webview. Editable worker defaults apply to new requests; accepted provider/model/effort selections remain fixed through Ready Check answers, implementation and restart recovery.
+- Cursor CLI integrates account login or a private Cursor API key, exact native session continuation and candidate implementation under Cursor's native permissions, hooks and subagent policy. Supplemental Werk grants retain their own boundaries; required worker checks still gate review. Token and cost usage remain unavailable, including native subagents, and do not bypass consumption holds.
+
+### Changed
+
+- Advisory mutation testing now covers the Ready Check protocol, shared review lifecycle and review eligibility alongside the existing accounting and boundary checks. Expanded failure, recovery and concurrency contracts improve the baseline; exact compiled-source, suite and configuration provenance prevents comparing incomplete or stale measurements. Mutation findings continue to warn without blocking releases or running in ordinary development checks.
+
 ## [0.13.0] - 2026-10-18
 
 ### Added

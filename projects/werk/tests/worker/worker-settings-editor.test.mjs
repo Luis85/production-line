@@ -13,7 +13,7 @@ async function editor(t) {
     .replace(/^import U(?:Button|Input|Select).*\n/gm, '')
     .replace(/^import \{ state,.*\n/gm, '')
     .replace(/^defineProps.*\n/gm, '');
-  const fixture = { unlocked: true, settings: { providers: [{ id: 'codex-cli', executable: '/old/codex', model: 'old-model', hasApiKey: false }], connection: { enabled: true, url: 'http://old.example', hasEnrollmentToken: true } } };
+  const fixture = { unlocked: true, settings: { defaultProvider: 'codex-cli', providers: [{ id: 'codex-cli', executable: '/old/codex', model: 'old-model', hasApiKey: false }], connection: { enabled: true, url: 'http://old.example', hasEnrollmentToken: true } } };
   const harness = `import { reactive } from 'vue';
 export const state = reactive(${JSON.stringify(fixture)});
 let action = async () => undefined;
@@ -22,7 +22,7 @@ const workspaceAction = (...args) => action(...args);
 const request = async () => ({ message: 'Checked', authentication: 'signed-in', checkedAt: '2026-10-14T00:00:00Z' });
 const date = value => value;
 ${script}
-export { provider, executable, model, key, clearKey, url, enrollment, busy, checking, message, providerNotice, connectionNotice, editingLocked, dirty, connectionDirty, fillProvider, fillConnection, save };
+export { providerCommand, accountConnectionKey, provider, executable, model, effort, defaultProvider, defaultBaseline, defaultNotice, defaultDirty, fillDefault, key, clearKey, url, enrollment, busy, checking, message, providerNotice, connectionNotice, editingLocked, dirty, connectionDirty, fillProvider, fillConnection, save };
 `;
   await mkdir(join(root, 'work'), { recursive: true });
   const directory = await mkdtemp(join(root, 'work/settings-editor-')), path = join(directory, 'editor.mjs');
@@ -71,4 +71,34 @@ test('lock during an outstanding settings save clears secrets and does not publi
   e.state.unlocked = false; await nextTick();
   assert.equal(e.key.value, ''); assert.equal(e.enrollment.value, '');
   finish(undefined); await saving; assert.equal(e.message.value, ''); assert.equal(e.busy.value, false);
+});
+
+
+test('model effort and default provider drafts survive polling and save the expected baseline', async t => {
+  const e = await editor(t); e.effort.value = 'high';
+  Object.assign(e.state.settings.providers[0], { effort: 'low' }); await nextTick();
+  assert.equal(e.effort.value, 'high'); assert.match(e.providerNotice.value, /changed elsewhere/);
+  e.fillProvider(); assert.equal(e.effort.value, 'low');
+  e.defaultProvider.value = 'claude-cli'; e.state.settings.defaultProvider = 'cursor-cli'; await nextTick();
+  assert.equal(e.defaultProvider.value, 'claude-cli'); assert.equal(e.defaultBaseline.value, 'codex-cli'); assert.match(e.defaultNotice.value, /changed elsewhere/);
+  e.fillDefault(); assert.equal(e.defaultProvider.value, 'cursor-cli'); assert.equal(e.defaultDirty.value, false);
+  e.defaultProvider.value = 'claude-cli'; let submitted;
+  e.onSave(async (path, body) => { submitted = body; e.state.settings.defaultProvider = body.defaultProvider; return e.state.settings; });
+  await e.save({ defaultProvider: e.defaultProvider.value, expectedDefaultProvider: e.defaultBaseline.value });
+  assert.deepEqual(submitted, { defaultProvider: 'claude-cli', expectedDefaultProvider: 'cursor-cli' });
+  assert.equal(e.defaultDirty.value, false); assert.equal(e.defaultNotice.value, '');
+});
+
+
+test('Cursor optional key save and removal use the guarded provider command and invalidate account evidence', async t => {
+  const e = await editor(t), submitted = [];
+  e.state.settings.providers.push({ id: 'cursor-cli', executable: '/bin/agent', model: 'auto', effort: 'default', hasApiKey: false });
+  e.provider.value = 'cursor-cli'; await nextTick(); const before = e.accountConnectionKey.value;
+  e.onSave(async (path, body) => { submitted.push(structuredClone(body)); e.state.settings.providers[1].hasApiKey = !body.provider.clearApiKey; return e.state.settings; });
+  e.key.value = 'illustrative-key'; await e.save(e.providerCommand());
+  assert.deepEqual(submitted[0], { provider: { id: 'cursor-cli', executable: '/bin/agent', model: 'auto', effort: 'default', apiKey: 'illustrative-key', clearApiKey: false } });
+  assert.equal(e.key.value, ''); assert.notEqual(e.accountConnectionKey.value, before); assert.doesNotMatch(e.accountConnectionKey.value, /illustrative-key/);
+  const saved = e.accountConnectionKey.value; e.clearKey.value = true; await e.save(e.providerCommand());
+  assert.equal(submitted[1].provider.clearApiKey, true); assert.equal(submitted[1].provider.apiKey, ''); assert.equal(e.clearKey.value, false);
+  assert.notEqual(e.accountConnectionKey.value, saved);
 });

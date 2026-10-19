@@ -21,21 +21,43 @@ const response = id => id === 'openai-api'
   : { stop_reason: 'end_turn', usage, content: [{ type: 'text', text: 'Fixture result.' }] };
 
 for (const id of /** @type {const} */ (['openai-api', 'anthropic-api'])) {
-  test(`${id} persists the FR fence before inference and keeps replay capability honest`, async t => {
+  test(`${id} preserves legacy sessions across default-effort migration and fences changed selections`, async t => {
     const root = await directory(t), store = new FileModelSessionStore(root), scope = binding(id); let calls = 0;
-    const model = modelFor({ id, apiKey: 'fixture-key', model: 'fixture', executable: '' }, root, async () => {
+    /** @param {import('../../src/worker/application/model-effort.js').ModelEffort} [effort] */
+    const create = (effort, modelName = 'fixture') => modelFor({ id, apiKey: 'fixture-key', model: modelName, executable: '', ...(effort === undefined ? {} : { effort }) }, root, async () => {
       calls++; const state = await store.load(scope); assert.equal(state.status, 'running'); assert.equal(state.checkpoint.nativeId, undefined);
       return Response.json(response(id));
     }, { session: { binding: scope, store } });
+    const model = create();
     assert.equal(model.capabilities.nativeResume, false);
     assert.equal(model.capabilities.continuation, 'worker_context_replay');
     const request = prepareModelRequest(model, [message('first', 'Implement feature.')]);
     assert.equal(request.schemaVersion, 2);
     assert.equal((await executeModel(model, request, signal())).type, 'completed');
-    assert.equal((await store.load(scope)).status, 'idle');
-    await assert.rejects(executeModel(model, request, signal()), { code: 'session_conflict' });
-    await executeModel(model, prepareModelRequest(model, [...request.messages, message('answer', 'Fixture result.', 'assistant'), message('next', 'Add validation.')]), signal());
+    const legacy = await store.load(scope); assert.equal(legacy.status, 'idle');
+    assert.equal(Object.hasOwn(request.provider, 'effort'), false);
+    assert.equal(legacy.checkpoint.providerContextDigest, sessionDigest({ provider: request.provider, executable: '' }));
+    const messages = [...request.messages, message('answer', 'Fixture result.', 'assistant'), message('next', 'Add validation.')];
+    for (const changed of [create('high'), create('default', 'different-model')]) {
+      await assert.rejects(executeModel(changed, prepareModelRequest(changed, messages), signal()), { code: 'session_conflict' });
+      assert.deepEqual(await store.load(scope), legacy);
+    }
+    assert.equal(calls, 1);
+    const migrated = create('default'), next = prepareModelRequest(migrated, messages);
+    assert.equal(next.provider.effort, 'default');
+    await executeModel(migrated, next, signal());
+    const continued = await store.load(scope);
+    assert.equal(continued.checkpoint.providerContextDigest, legacy.checkpoint.providerContextDigest);
+    assert.equal(continued.lastDispatchDigest, sessionDigest(next), 'Dispatch identity remains byte-exact.');
+    await assert.rejects(executeModel(migrated, next, signal()), { code: 'session_conflict' });
     assert.equal(calls, 2);
+    // A checkpoint written by the earlier explicit-default implementation also remains resumable.
+    await store.save(scope, continued.revision, { status: 'idle', lastDispatchDigest: continued.lastDispatchDigest,
+      checkpoint: { ...continued.checkpoint, providerContextDigest: sessionDigest({ provider: next.provider, executable: '' }) } });
+    const olderAdapter = create(), followup = prepareModelRequest(olderAdapter, [...next.messages, message('later', 'Check the final result.')]);
+    await executeModel(olderAdapter, followup, signal());
+    assert.equal((await store.load(scope)).checkpoint.providerContextDigest, legacy.checkpoint.providerContextDigest);
+    assert.equal(calls, 3);
     const files = await readdir(join(root, 'model-sessions'));
     for (const file of files.filter(file => file.endsWith('.json'))) assert.doesNotMatch(await readFile(join(root, 'model-sessions', file), 'utf8'), /fixture-key|Implement feature/);
   });
@@ -93,7 +115,7 @@ test('Claude cost scopes preserve old per-call totals and subtract only proven c
   assert.equal(claudeSessionUsage({ ...value, subtype: 'error_during_execution', total_cost_usd: 0 }, true, 'session', 0).providerReportedCostUsd, null);
 });
 
-test('Claude binds and resumes one explicit UUID per FR across adapter reconstruction, sends only new input, and records cost deltas', { skip: process.platform === 'win32' }, async t => {
+test('Claude retains the native UUID, history and cost across legacy default-effort migration', { skip: process.platform === 'win32' }, async t => {
   const root = await directory(t), store = new FileModelSessionStore(root), executable = join(root, 'claude-fixture'), log = join(root, 'invocations.jsonl');
   await writeFile(executable, '#!' + process.execPath + '\n' + `
 const fs = require('node:fs'); const args = process.argv.slice(2);
@@ -104,13 +126,24 @@ fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify({ args, input: JSON.par
 process.stdout.write(JSON.stringify({ type: 'result', session_id: id, result: 'Fixture result.', usage: ${JSON.stringify(usage)}, total_cost_usd: resumed ? 1.5 : 1 })); });
 `, { mode: 0o700 });
   const scope = binding('claude-cli');
-  const create = current => modelFor({ id: 'claude-cli', executable, model: 'fixture', apiKey: '' }, root, undefined, { session: { binding: current, store } });
+  /** @param {ReturnType<typeof binding>} current @param {import('../../src/worker/application/model-effort.js').ModelEffort} [effort] */
+  const create = (current, effort, modelName = 'fixture') => modelFor({ id: 'claude-cli', executable, model: modelName, apiKey: '', ...(effort === undefined ? {} : { effort }) }, root, undefined, { session: { binding: current, store } });
   const first = create(scope), request = prepareModelRequest(first, [message('first', 'Implement feature.')]);
   assert.equal(first.capabilities.nativeResume, true);
   const observed = [];
   await executeModel(first, request, signal(), value => observed.push(value));
   const state = await store.load(scope); assert.match(state.checkpoint.nativeId, /^[a-f0-9-]{36}$/);
-  await executeModel(create(scope), prepareModelRequest(create(scope), [...request.messages, message('answer', 'Fixture result.', 'assistant'), message('followup', 'Add validation.')]), signal(), value => observed.push(value));
+  assert.equal(Object.hasOwn(request.provider, 'effort'), false);
+  assert.equal(state.checkpoint.providerContextDigest, sessionDigest({ provider: request.provider, executable }));
+  const messages = [...request.messages, message('answer', 'Fixture result.', 'assistant'), message('followup', 'Add validation.')];
+  for (const changed of [create(scope, 'high'), create(scope, 'default', 'different-model')]) {
+    await assert.rejects(executeModel(changed, prepareModelRequest(changed, messages), signal()), { code: 'session_conflict' });
+    assert.deepEqual(await store.load(scope), state);
+  }
+  const migrated = create(scope, 'default'), next = prepareModelRequest(migrated, messages);
+  await executeModel(migrated, next, signal(), value => observed.push(value));
+  assert.equal((await store.load(scope)).lastDispatchDigest, sessionDigest(next));
+  assert.equal((await store.load(scope)).checkpoint.providerContextDigest, state.checkpoint.providerContextDigest);
   await executeModel(create(binding('claude-cli', 'second-feature')), prepareModelRequest(create(binding('claude-cli', 'second-feature')), [message('another', 'Independent feature.')]), signal());
   const invocations = (await readFile(log, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
   assert.equal(invocations.length, 3); assert.equal(invocations[0].id, invocations[1].id); assert.notEqual(invocations[0].id, invocations[2].id);

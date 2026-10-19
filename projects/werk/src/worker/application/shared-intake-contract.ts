@@ -1,3 +1,4 @@
+import type { ModelSelection } from './model-selection.js';
 import type { FeatureRequestReference } from './feature-request-reference.js';
 /** Public worker UI contract. Git credentials and private runtime state are never returned. */
 export interface SharedIntakeConfig {
@@ -8,7 +9,19 @@ export interface SharedIntakeConfig {
   workflowPath: string;
   pollMs: number;
 }
+/** Public readiness review evidence excludes private prompt bytes and model checkpoints. */
+export interface SharedFeatureReadyReviewView {
+  status: 'queued' | 'running' | 'waiting_input' | 'passed' | 'failed';
+  attempt: number;
+  sessionId?: string;
+  runId?: string;
+  promptPath: string;
+  promptDigest: string;
+  findings: { kind: 'question' | 'issue' | 'gap'; message: string; blocking: boolean }[];
+}
 export interface SharedFeatureView {
+  selection?: ModelSelection;
+  readyReview?: SharedFeatureReadyReviewView;
   feature?: FeatureRequestReference;
   id: string;
   name: string;
@@ -56,6 +69,12 @@ export interface SharedIntakeView {
     doneCheck: string;
     readyDigest: string;
     doneDigest: string;
+    readyReviewPrompt?: string;
+    readyReviewPromptDigest?: string;
+    readyPrompt?: string;
+    donePrompt?: string;
+    readyPromptDigest?: string;
+    donePromptDigest?: string;
   };
   requests: SharedFeatureView[];
 }

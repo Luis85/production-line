@@ -4,7 +4,7 @@ import { parseDocument, isAlias, isCollection, isPair, isScalar, visit } from 'y
 import { DomainError } from '../../shared/errors.js';
 import { object, text, identifier } from '../../shared/contracts.js';
 import type { DefinitionStorage } from './workspace-ports.js';
-import type { ProviderConnection } from './provider-contract.js';
+import { providerSupportsDefinition, type ProviderConnection } from './provider-contract.js';
 export interface DefinitionAgent { name: string; description: string; instruction: string; model: string; provider: 'openai' | 'anthropic' | ''; unsupported: string[]; requiresAdaptation: boolean; }
 /** `ref` is an operator-assigned stable name, unique per worker, that committed requests can use instead of the generated id. */
 export interface AgentDefinition { id: string; ref?: string; name: string; digest: string; createdAt: string; updatedAt?: string; agents: DefinitionAgent[]; }
@@ -116,8 +116,7 @@ export function validateSnapshot(value: unknown): asserts value is DefinitionSna
 export function definitionConnection(connection: ProviderConnection, definition?: DefinitionSnapshot): ProviderConnection {
   if (!definition) return connection;
   validateSnapshot(definition);
-  const family = connection.id === 'codex-cli' || connection.id === 'openai-api' ? 'openai' : 'anthropic';
-  if (definition.provider && definition.provider !== family) invalid(`This definition uses ${definition.provider}. Choose a matching worker provider.`);
+  if (!providerSupportsDefinition(connection.id, definition.provider)) invalid(`This definition uses ${definition.provider}. Choose a matching worker provider.`);
   return { ...connection, model: definition.model || connection.model, instruction: definition.instruction };
 }
 export class WorkerDefinitions {

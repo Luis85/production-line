@@ -17,8 +17,10 @@ export function summarizeReport(report, metadata, baseline, execution) {
     const entry = report?.files?.[path], mutants = entry?.mutants;
     if (typeof entry?.source !== 'string' || createHash('sha256').update(entry.source).digest('hex') !== metadata.sources?.files?.[path]) warnings.push(`Measured source does not match recorded provenance for ${path}.`);
     if (!Array.isArray(mutants) || mutants.length === 0) { warnings.push(`Missing mutant results for ${path}.`); continue; }
-    const own = emptyCounts();
+    const own = emptyCounts(), ids = new Set();
     for (const mutant of mutants) {
+      if (!mutant || typeof mutant !== 'object' || typeof mutant.id !== 'string' || !mutant.id || ids.has(mutant.id)) { warnings.push(`Invalid or duplicate mutant identity in ${path}.`); continue; }
+      ids.add(mutant.id);
       if (!statuses.includes(mutant.status)) { warnings.push(`Unrecognized mutant status in ${path}.`); continue; }
       own[mutant.status]++; counts[mutant.status]++;
       if (['Survived', 'NoCoverage', 'RuntimeError', 'Pending'].includes(mutant.status)) findings.push({ file: path, id: mutant.id, status: mutant.status, mutator: mutant.mutatorName, line: mutant.location?.start?.line ?? null, replacement: String(mutant.replacement ?? '').slice(0, 240) });
@@ -34,8 +36,9 @@ export function summarizeReport(report, metadata, baseline, execution) {
   if (counts.Survived || counts.NoCoverage) warnings.push(`${counts.Survived} surviving and ${counts.NoCoverage} uncovered mutants in this limited scope.`);
   let baselineDelta = null;
   if (!baseline) warnings.push('No recorded baseline is available for comparison.');
+  else if (baseline.status !== 'completed' || typeof baseline.score !== 'number' || !Number.isFinite(baseline.score) || baseline.score < 0 || baseline.score > 100) warnings.push('Recorded baseline is incomplete or has an invalid score; scores cannot be compared.');
   else if (baseline.scope?.id !== metadata.scope.id || JSON.stringify(baseline.scope?.targets) !== JSON.stringify(metadata.scope.targets)) warnings.push('Baseline scope differs; scores cannot be compared.');
-  else if (baseline.strykerVersion !== metadata.strykerVersion || baseline.configuration?.digest !== metadata.configuration?.digest) warnings.push('Stryker version or mutation configuration differs; review comparability before interpreting a score change.');
+  else if (!/^[a-f0-9]{64}$/.test(metadata.configuration?.digest ?? '') || !/^[a-f0-9]{64}$/.test(baseline.configuration?.digest ?? '') || baseline.strykerVersion !== metadata.strykerVersion || baseline.configuration.digest !== metadata.configuration.digest) warnings.push('Stryker version or mutation configuration differs or lacks provenance; review comparability before interpreting a score change.');
   else if (mutationScore !== null && typeof baseline.score === 'number') {
     baselineDelta = Math.round((mutationScore - baseline.score) * 100) / 100;
     if (baselineDelta < 0) warnings.push(`Mutation score decreased ${Math.abs(baselineDelta)} percentage points from the recorded baseline.`);

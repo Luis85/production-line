@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AcceptedModelSelection from './AcceptedModelSelection.vue';
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue';
 import UButton from '@nuxt/ui/components/Button.vue';
 import UInput from '@nuxt/ui/components/Input.vue';
@@ -6,6 +7,7 @@ import USelect from '@nuxt/ui/components/Select.vue';
 import UBadge from '@nuxt/ui/components/Badge.vue';
 import MessageContent from './MessageContent.vue';
 import type { SharedFeatureView } from '../../application/shared-intake-contract';
+import { sharedReadyReviewView } from '../shared-ready-review-view';
 import { createSharedIntakeEditor } from '../shared-intake-editor';
 import { date, request, state } from '../store';
 const editor = createSharedIntakeEditor({ unlocked: () => state.unlocked, epoch: () => state.draftEpoch, repositories: () => state.settings?.repositories.items ?? [], read: () => request('/api/shared-intake'), write: command => request('/api/shared-intake', 'POST', command), note: id => request('/api/shared-intake', 'POST', { action: 'note', id }) });
@@ -15,9 +17,10 @@ let active = true, trigger: HTMLElement | null = null;
 const repositories = computed(() => (state.settings?.repositories.items ?? []).map(item => ({ label: item.id + ' · ' + item.path, value: item.id })));
 const seconds = computed({ get: () => draft.config.pollMs / 1000, set: (value: number | string) => { draft.config.pollMs = Number(value) * 1000; } });
 const selected = computed(() => view.value?.requests.find(item => item.id === selectedId.value));
-const needsAttention = (item: SharedFeatureView) => item.ready?.passed === false || item.done?.passed === false || item.publication === 'error' || !!item.error;
+const readinessReview = computed(() => selected.value ? sharedReadyReviewView(selected.value) : null);
+const needsAttention = (item: SharedFeatureView) => ['waiting_input', 'failed'].includes(item.readyReview?.status ?? '') || item.ready?.passed === false || item.done?.passed === false || item.publication === 'error' || !!item.error;
 const requests = computed(() => (view.value?.requests ?? []).filter(item => (filter.value === 'all' || filter.value === 'local' && item.isLocal || filter.value === 'attention' && needsAttention(item)) && [item.title, item.name, item.id, item.owner, item.status].join(' ').toLowerCase().includes(search.value.trim().toLowerCase())));
-const phase = (value: string) => ({ draft: 'Draft', ready: 'Ready for intake', readiness: 'Checking readiness', queued: 'Queued', running: 'Running', waiting_input: 'Waiting for an answer', needs_rework: 'Needs rework', review: 'Human review required', ready_for_review: 'Human review required', done: 'Done checks passed', completed: 'Execution completed', failed: 'Failed', interrupted: 'Interrupted', cancelled: 'Cancelled', claimed: 'Claimed', unclaimed: 'Unclaimed', escalated: 'Decision needed' }[value] ?? value.replaceAll('_', ' '));
+const phase = (value: string) => ({ reviewing_ready: 'Reviewing readiness', waiting_ready_input: 'Ready Check needs your input', draft: 'Draft', ready: 'Ready for intake', readiness: 'Checking readiness', queued: 'Queued', running: 'Running', waiting_input: 'Waiting for an answer', needs_rework: 'Needs rework', review: 'Human review required', ready_for_review: 'Human review required', done: 'Done checks passed', completed: 'Execution completed', failed: 'Failed', interrupted: 'Interrupted', cancelled: 'Cancelled', claimed: 'Claimed', unclaimed: 'Unclaimed', escalated: 'Decision needed' }[value] ?? value.replaceAll('_', ' '));
 const owner = (item: SharedFeatureView) => item.isLocal ? 'This worker · ' + (item.owner || view.value?.workerId || 'owner recorded locally') : item.owner ? 'Worker · ' + item.owner : 'Unclaimed';
 const publication = (item: SharedFeatureView) => item.publication === 'synced' ? 'Published to Git' : item.publication === 'error' ? 'Git publication failed' : 'Publication pending';
 const gate = (value: SharedFeatureView['ready']) => value === null ? 'Not checked' : value.passed ? 'Passed' : 'Needs attention';
@@ -54,7 +57,7 @@ watch(() => selected.value?.reviewNote, (next, previous) => { if (next !== previ
             <div class="shared-intake-fields"><div><label for="shared-intake-remote">Remote name</label><UInput id="shared-intake-remote" v-model="draft.config.remote" maxlength="100" class="w-full" :required="draft.config.enabled" /></div><div><label for="shared-intake-branch">Shared branch</label><UInput id="shared-intake-branch" v-model="draft.config.branch" maxlength="200" class="w-full" :required="draft.config.enabled" /></div></div>
             <label for="shared-intake-workflow">Workflow file · relative to repository</label><UInput id="shared-intake-workflow" v-model="draft.config.workflowPath" maxlength="4096" class="w-full" :required="draft.config.enabled" />
             <label for="shared-intake-interval">Check shared requests every · seconds</label><UInput id="shared-intake-interval" v-model="seconds" type="number" min="1" max="300" step="1" class="w-full" :required="draft.config.enabled" />
-            <p class="page-note">This saves the worker’s connection. Edit shared folders and ready/done JSON checks in the checked-in workflow files, then commit and push those changes.</p>
+            <p class="page-note">This saves the worker’s connection. Edit shared folders, ready/done JSON checks and optional prompt paths in the checked-in workflow files, then commit and push those changes.</p>
             <p v-if="validation && dirty" class="error-text" role="status">{{ validation }}</p>
             <div class="actions"><UButton type="submit" :loading="draft.saving" :disabled="!canSave">Save shared intake connection</UButton><UButton v-if="dirty || stale" type="button" color="neutral" variant="ghost" @click="editor.reloadSaved">Reload saved connection</UButton></div>
           </fieldset>
@@ -71,7 +74,22 @@ watch(() => selected.value?.reviewNote, (next, previous) => { if (next !== previ
       <template v-if="view.config.enabled || view.requests.length">
         <div class="shared-intake-sync"><p class="page-note break-anywhere">{{ view.config.repositoryId }} · {{ view.config.remote }} / {{ view.config.branch }}<br>Source commit {{ view.sourceCommit || 'not observed yet' }}</p><UButton color="neutral" variant="outline" :loading="draft.syncing" :disabled="!canSync" @click="editor.sync">Sync shared requests</UButton></div>
         <p class="page-note">Sync uses the saved connection and can publish lifecycle and review updates. Feature branches still require human review before merge.</p>
-        <details v-if="view.workflow" class="shared-workflow-paths"><summary>Shared workflow files &amp; checks</summary><dl><div><dt>Requests folder</dt><dd>{{ view.workflow.requestsDirectory }}</dd></div><div><dt>Review notes folder</dt><dd>{{ view.workflow.reviewDirectory }}</dd></div><div><dt>Draft template</dt><dd>{{ view.workflow.template }}</dd></div><div><dt>Obsidian Base</dt><dd>{{ view.workflow.base }}</dd></div><div><dt>Ready checks</dt><dd>{{ view.workflow.readyCheck }}<small>Digest {{ view.workflow.readyDigest }}</small></dd></div><div><dt>Done checks</dt><dd>{{ view.workflow.doneCheck }}<small>Digest {{ view.workflow.doneDigest }}</small></dd></div></dl></details>
+        <details v-if="view.workflow" class="shared-workflow-paths">
+          <summary>Shared workflow files, checks &amp; prompts</summary>
+          <dl>
+            <div><dt>Requests folder</dt><dd>{{ view.workflow.requestsDirectory }}</dd></div>
+            <div><dt>Review notes folder</dt><dd>{{ view.workflow.reviewDirectory }}</dd></div>
+            <div><dt>Draft template</dt><dd>{{ view.workflow.template }}</dd></div>
+            <div><dt>Obsidian Base</dt><dd>{{ view.workflow.base }}</dd></div>
+            <div><dt>Ready checks</dt><dd>{{ view.workflow.readyCheck }}<small>Digest {{ view.workflow.readyDigest }}</small></dd></div>
+            <div><dt>Done checks</dt><dd>{{ view.workflow.doneCheck }}<small>Digest {{ view.workflow.doneDigest }}</small></dd></div>
+            <div><dt>Feature Request Ready Check</dt><dd>{{ view.workflow.readyReviewPrompt || 'Off · no reviewer prompt configured' }}<small v-if="view.workflow.readyReviewPromptDigest">Digest {{ view.workflow.readyReviewPromptDigest }}</small></dd></div>
+            <div><dt>Definition of ready prompt</dt><dd>{{ view.workflow.readyPrompt || 'Not configured' }}<small v-if="view.workflow.readyPromptDigest">Digest {{ view.workflow.readyPromptDigest }}</small></dd></div>
+            <div><dt>Definition of done prompt</dt><dd>{{ view.workflow.donePrompt || 'Not configured' }}<small v-if="view.workflow.donePromptDigest">Digest {{ view.workflow.donePromptDigest }}</small></dd></div>
+          </dl>
+          <p class="page-note break-anywhere">Opt in with <code>readyReviewPrompt</code> in <code>{{ view.config.workflowPath }}</code>. The reviewer examines the request before Ready checks. Questions pause it for answers in the Feature Request; mark it ready, then commit and push to review again.</p>
+          <p class="page-note break-anywhere">Set optional <code>readyPrompt</code> and <code>donePrompt</code> paths in <code>{{ view.config.workflowPath }}</code>, then commit and push the workflow and prompt files. New requests use the updated guidance; accepted work keeps its original prompts. JSON checks still determine whether readiness and completion pass.</p>
+        </details>
         <div class="shared-request-filters"><div><label for="shared-request-search">Find a shared request</label><UInput id="shared-request-search" v-model="search" placeholder="Title, file, worker or state" class="w-full" /></div><div><label for="shared-request-filter">Show requests</label><USelect id="shared-request-filter" v-model="filter" :items="[{ label: 'All requests', value: 'all' }, { label: 'Needs attention', value: 'attention' }, { label: 'Owned by this worker', value: 'local' }]" class="w-full" /></div></div>
         <p v-if="!requests.length" class="page-note">{{ view.requests.length ? 'No shared requests match these filters.' : view.lastSyncedAt ? 'No shared requests were found. Add a Markdown request using the checked-in template, then commit and push it.' : 'No shared requests have been observed yet. Sync the saved connection to read the workflow.' }}</p>
         <ul v-else class="shared-request-list"><li v-for="item in requests" :key="item.id"><div><strong>{{ item.title || item.name }}</strong><span>{{ item.name }}</span><span>{{ owner(item) }}</span><span>{{ phase(item.status) }} · {{ publication(item) }}</span><span class="page-note">Ready: {{ gate(item.ready) }} · Done: {{ gate(item.done) }}</span></div><UButton color="neutral" variant="outline" :aria-label="'Inspect shared request ' + (item.title || item.name)" @click="inspect(item.id, $event)">Inspect request</UButton></li></ul>
@@ -81,7 +99,15 @@ watch(() => selected.value?.reviewNote, (next, previous) => { if (next !== previ
           <p v-if="!selected.isLocal && selected.owner" class="page-note">Another worker owns this request. Its shared progress and review notes are read-only here.</p>
           <p v-if="selected.publication !== 'synced'" class="page-note">{{ selected.isLocal ? 'Local progress is retained. Shared updates are not yet confirmed in Git.' : 'The latest shared updates have not been confirmed as published.' }}</p>
           <p v-if="selected.error" role="alert" class="error-text">{{ selected.error }}</p>
+          <section v-if="readinessReview && selected.readyReview" class="shared-ready-review" aria-labelledby="shared-ready-review-title">
+            <h4 id="shared-ready-review-title">Feature Request Ready Check · {{ readinessReview.label }}</h4>
+            <p>{{ readinessReview.description }}</p>
+            <p class="page-note break-anywhere">Feature Request: <code>{{ selected.feature?.sourcePath || selected.name }}</code></p>
+            <ul v-if="selected.readyReview.findings.length"><li v-for="(finding, index) in selected.readyReview.findings" :key="index"><strong>{{ finding.kind === 'question' ? 'Question' : finding.blocking ? 'Blocking finding' : 'Finding' }}</strong><MessageContent :text="finding.message" /></li></ul>
+            <p class="page-note break-anywhere">Review {{ selected.readyReview.attempt }} · Prompt <code>{{ selected.readyReview.promptPath }}</code></p>
+          </section>
           <div class="shared-gate-results"><section v-for="stage in ['ready', 'done'] as const" :key="stage"><h4>{{ stage === 'ready' ? 'Ready checks' : 'Done checks' }} · {{ gate(selected[stage]) }}</h4><ul v-if="selected[stage]?.issues.length"><li v-for="(issue, index) in selected[stage]!.issues" :key="index">{{ issue }}</li></ul><p v-else class="page-note">{{ selected[stage] === null ? 'No check result has been published.' : selected[stage]?.passed ? 'The recorded checks passed.' : 'Inspect the review note for the recorded findings.' }}</p></section></div>
+          <AcceptedModelSelection v-if="selected.owner" :selection="selected.selection" />
           <dl class="shared-request-facts"><div><dt>Request</dt><dd>{{ selected.id }}</dd></div><div><dt>Source commit</dt><dd>{{ selected.sourceCommit }}</dd></div><div v-if="selected.featureBranch"><dt>Feature branch</dt><dd>{{ selected.featureBranch }}</dd></div><div v-if="selected.reviewNote"><dt>Review note</dt><dd>{{ selected.reviewNote }}</dd></div><div v-if="selected.taskId"><dt>Local task</dt><dd>{{ selected.taskId }}</dd></div></dl>
           <div class="actions"><UButton v-if="selected.isLocal && selected.taskId" to="/taskboard" color="neutral" variant="outline">Open taskboard</UButton><UButton v-if="selected.reviewNote" color="neutral" variant="outline" :loading="draft.noteLoading" @click="editor.openNote(selected.id)">Read review note</UButton></div>
           <p class="page-note">Execution completion, passing checks and Git publication are separate from human review and merge.</p>
@@ -109,6 +135,7 @@ watch(() => selected.value?.reviewNote, (next, previous) => { if (next !== previ
 .shared-request-list { list-style: none; padding: 0; margin: 0; }.shared-request-list > li { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px 0; border-top: 1px solid var(--ui-border); }.shared-request-list > li > div { display: grid; gap: 6px; min-width: 0; }.shared-request-list span { font-size: .8125rem; }.shared-request-list strong, .shared-request-list span { overflow-wrap: anywhere; }.shared-request-list button { flex-shrink: 0; }
 .shared-request-detail { display: grid; gap: 16px; border-top: 1px solid var(--ui-border-accented); padding-top: 24px; min-width: 0; }.shared-request-detail h3 { overflow-wrap: anywhere; }
 .shared-gate-results { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; padding-block: 8px; }.shared-gate-results section { min-width: 0; }.shared-gate-results ul { list-style: disc; margin: 0; padding-left: 20px; font-size: .8125rem; }.shared-gate-results li { margin-bottom: 8px; overflow-wrap: anywhere; }
+.shared-ready-review { display: grid; gap: 12px; min-width: 0; }.shared-ready-review ul { padding-left: 20px; margin: 0; }.shared-ready-review li { margin-block: 12px; overflow-wrap: anywhere; }.shared-ready-review li > strong { font-size: .8125rem; }
 .shared-review-note { border-top: 1px solid var(--ui-border); padding-top: 20px; min-width: 0; }.shared-review-note > p { margin-bottom: 16px; }
 .shared-intake-panel .error-text { overflow-wrap: anywhere; }.shared-intake-panel code { overflow-wrap: anywhere; }
 @media (max-width: 600px) { .shared-intake-fields, .shared-request-filters, .shared-gate-results { grid-template-columns: 1fr; }.shared-request-list > li { align-items: flex-start; flex-direction: column; gap: 12px; }.shared-workflow-paths dl > div, .shared-request-facts > div { grid-template-columns: 1fr; gap: 5px; }.shared-intake-panel .section-heading { flex-wrap: wrap; } }

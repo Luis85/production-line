@@ -41,7 +41,7 @@ function launch(file, args, env) {
   };
 }
 
-test('real CLI processes retain pinned context across server restart and execute with matching worker evidence', { timeout: 30000 }, async t => {
+test('real CLI processes retain pinned context across server restart and execute with matching worker evidence', { timeout: process.platform === 'win32' ? 60000 : 30000 }, async t => {
   const root = await mkdtemp(join(tmpdir(), 'werk-pinned-process-')), children = [];
   t.after(async () => { await Promise.all(children.map(child => child.stop())); await rm(root, { recursive: true, force: true }); });
   const repository = join(root, 'source'); await mkdir(join(repository, 'docs'), { recursive: true });
@@ -86,7 +86,27 @@ test('real CLI processes retain pinned context across server restart and execute
   assert.deepEqual(await api(restarted.base, `/v1/tasks/${task.id}/context`), pinned);
   const worker = launch(workerCli, ['run', '--url', restarted.base, '--state-dir', join(root, 'worker'), '--status-port', '0', '--profiles', 'claude', '--poll-ms', '100', '--mock-ms', '5'],
     { WERK_ENROLLMENT_TOKEN: enrollment, WERK_ADMIN_TOKEN: '' }); children.push(worker);
-  const completed = await until(async () => { worker.check(); const current = await api(restarted.base, `/v1/tasks/${task.id}`); return current.status === 'simulated' && current; }, 'pinned mock completion');
+  const statusListening = () => worker.stderr.split('\n').some(line => line.includes('"event":"status_listening"'));
+  let completed, lastTask = replay, phase = 'worker status readiness';
+  try {
+    // Workspace initialization is separate from the context execution being asserted.
+    await until(() => { worker.check(); return statusListening(); }, phase);
+    phase = 'pinned mock completion';
+    // Match the real mock-fleet test: cold Windows snapshot publication can exceed 10s.
+    completed = await until(async () => {
+      worker.check(); restarted.server.check();
+      lastTask = await api(restarted.base, `/v1/tasks/${task.id}`);
+      return lastTask.status === 'simulated' && lastTask;
+    }, phase, process.platform === 'win32' ? 30000 : 10000);
+  } catch (cause) {
+    const snapshotCount = await api(restarted.base, '/v1/snapshots?task=' + encodeURIComponent(task.id))
+      .then(result => result.snapshots.length, () => null);
+    // Retain progress diagnostics without logging context, credentials, paths or model output.
+    const progress = { phase, task: lastTask && { status: lastTask.status, attempt: lastTask.attempt, assigned: Boolean(lastTask.workerId) },
+      snapshots: snapshotCount, worker: { listening: statusListening(), exitCode: worker.child.exitCode, signal: worker.child.signalCode },
+      server: { exitCode: restarted.server.child.exitCode, signal: restarted.server.child.signalCode } };
+    throw new Error('Pinned context process did not complete: ' + JSON.stringify(progress), { cause });
+  }
   assert.equal(completed.attempt, 1); assert.deepEqual(completed.context, task.context);
   const snapshots = await api(restarted.base, '/v1/snapshots?task=' + encodeURIComponent(task.id));
   assert.equal(snapshots.snapshots.length, 2);

@@ -63,7 +63,6 @@
     "unused-export:src/worker/infrastructure/features/git-repository.ts:GitFeatureError",
     "unused-export:src/worker/infrastructure/features/workflow.ts:featureRequestSections",
     "unused-export:src/worker/infrastructure/project-integrations.ts:seedProjectIntegrations",
-    "unused-export:src/worker/infrastructure/provider-account.ts:parseProviderAccount",
     "unused-export:src/worker/infrastructure/provider-process.ts:providerEnvironment",
     "unused-export:src/worker/infrastructure/providers.ts:claudeArguments",
     "unused-export:src/worker/infrastructure/providers.ts:claudeToolEnvironment",

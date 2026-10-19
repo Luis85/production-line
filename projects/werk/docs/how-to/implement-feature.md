@@ -10,6 +10,15 @@ Use this workflow when an attached model should change project code, run your ch
 4. Add a fixed command preset for each check the feature must pass. Use an absolute executable path and a JSON array of fixed arguments. Enable the preset and mark **Required feature check**, then save.
 5. Review **Settings → Queue & duration**. The total task limit defaults to six hours. Tool execution defaults to 128 calls and five minutes per command. Set limits appropriate for the project's check suite. Optional command/CLI timeouts in **Tools & MCP** can shorten the global command ceiling; MCP connections have their own deadlines. Resume new starts after saving.
 
+For Cursor CLI, also review the native Cursor permissions and hooks that apply
+to the worker account and candidate workspace. Werk's file/tool grants do not
+confine Cursor's native tools. Cursor implements in the retained candidate; after
+it returns, the worker inspects the changes and runs the frozen required checks.
+Model claims or native command output do not replace those worker-recorded
+results. Cursor native subagents follow Cursor policy; the worker delegation grant
+does not apply, and their usage is unavailable. See the
+[Cursor execution contract](../reference/model-interaction.md#cursor-native-execution).
+
 For a Node project with committed tests, a preset might use the worker machine's absolute Node executable and arguments `["--test", "test/slug.test.mjs"]`. A project script can run the build, tests and lint checks as one command, returning nonzero when any required step fails. On Windows use the actual executable/interpreter, not a `.cmd` shell wrapper. A clean task worktree has no `node_modules`, so install dependencies inside the worktree as part of the required check (for example run `npm ci` at the start of the check script). Do not link your checkout's dependencies into the worktree: removing a worktree refuses folders that contain symbolic links or junctions.
 
 Existing grants operate on the candidate. A tool that resets the worktree (`git checkout`, `git clean`, `git stash`) discards the model's edits, and a tool that writes other files adds unapproved changes that fail verification. Review every command preset, project CLI grant and MCP tool before you mark a check as required.

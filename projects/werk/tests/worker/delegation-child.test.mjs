@@ -48,7 +48,7 @@ async function fixture(t, model = factory(async (_request, _signal, observe, con
   await runs.start(parent.id);
   /** @type {ChildOptions} */
   const options = {
-    connection: { id: 'claude-cli', executable: '/fixture/claude', model: 'fixture-model', apiKey: '', instruction: 'Keep the selected execution profile.' },
+    connection: { id: 'claude-cli', executable: '/fixture/claude', model: 'fixture-model', apiKey: '', effort: 'high', instruction: 'Keep the selected execution profile.' },
     directory, featureRequestKey: 'fr-' + 'a'.repeat(64), parentSessionId: parent.sessionId,
     parent: () => runs.latest(parent.sessionId), runs, consumption, model,
   };
@@ -69,6 +69,7 @@ test('children retain one FR/provider/profile and separate native handles and nu
       control?.beforeCall(); assert.equal(signal.aborted, false);
       assert.equal(request.provider.instruction, connection.instruction);
       assert.equal(request.provider.model, connection.model);
+      assert.equal(request.provider.effort, 'high');
       assert.deepEqual(request.session, session.binding);
       assert.equal(request.policy.maxToolCalls, 8);
       assert.equal(request.policy.maxRuntimeMs, 10000);

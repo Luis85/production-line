@@ -1,3 +1,4 @@
+import type { ModelSelection } from './model-selection.js';
 import { loadTaskProjectContext } from './local-task-preparation.js';
 import { interactionFeatureRequest } from './feature-request-reference.js';
 
@@ -11,7 +12,7 @@ import { DomainError } from "../../shared/errors.js";
 import { ADMISSION_TIMEOUT_MS, submissionContextHash, type LocalTask, type LocalTaskWorkspaces, type LocalTaskPreparation, type LocalTaskSubmission } from './local-task-contracts.js';
 import type { LocalTaskRuntime } from './local-task-runtime-contract.js';
 
-export async function createTask(host: Pick<LocalTaskRuntime, "model" | "closed" | "tasks" | "view" | "admissionInput" | "assertAdmissionCapacity" | "admissionReserved" | "admissionTaskId" | "workspaceController" | "workspaces" | "files" | "development" | "settings" | "change" | "sessions" | "input" | "ensureRequest" | "context" | "prepareTurn" | "persistenceError">, input: unknown, submission?: LocalTaskSubmission, options: { id?: string; budgetMs?: number; preparation?: LocalTaskPreparation; signal?: AbortSignal; definition?: DefinitionSnapshot | null } = {}) {
+export async function createTask(host: Pick<LocalTaskRuntime, "model" | "closed" | "tasks" | "view" | "admissionInput" | "assertAdmissionCapacity" | "admissionReserved" | "admissionTaskId" | "workspaceController" | "workspaces" | "files" | "development" | "settings" | "change" | "sessions" | "input" | "ensureRequest" | "context" | "prepareTurn" | "persistenceError">, input: unknown, submission?: LocalTaskSubmission, options: { id?: string; budgetMs?: number; preparation?: LocalTaskPreparation; signal?: AbortSignal; definition?: DefinitionSnapshot | null; selection?: ModelSelection } = {}) {
     if (host.closed) throw new DomainError("unavailable", "Worker is stopping");
     if (submission) {
       const existing = host.tasks.find((task) => task.id === submission.id);
@@ -27,7 +28,7 @@ export async function createTask(host: Pick<LocalTaskRuntime, "model" | "closed"
         return host.view();
       }
     }
-    const { body, title, instruction, definition, provider, selector, assignment, repositoryPath, allowedPaths } = host.admissionInput(input, submission, options.definition);
+    const { body, title, instruction, definition, provider, selection, selector, assignment, repositoryPath, allowedPaths } = host.admissionInput(input, submission, options.definition, options.selection);
     // Reserve capacity before preparing a durable worktree. Chat admission reads
     // board.active, so a concurrent chat cannot consume this task's queue slot.
     host.assertAdmissionCapacity(host.tasks);
@@ -86,7 +87,10 @@ export async function createTask(host: Pick<LocalTaskRuntime, "model" | "closed"
     admission.throwIfAborted();
     if (host.closed) throw new DomainError("unavailable", "Worker is stopping");
     const task: LocalTask = {
+      selection: structuredClone(selection),
+      ...(submission?.selection ? { selectionReserved: true } : {}),
       ...(submission ? { submissionHash: submission.hash, submissionContextHash: submissionContextHash(submission) } : {}),
+      ...(submission?.definitionPrompts ? { definitionPrompts: structuredClone(submission.definitionPrompts) } : {}),
       ...(submission?.policy ? { gatePolicy: structuredClone(submission.policy) } : {}),
       ...(submission?.criteria === undefined ? {} : { criteria: structuredClone(submission.criteria) }),
       ...(definition ? { definition } : {}),
@@ -144,6 +148,7 @@ export async function createTask(host: Pick<LocalTaskRuntime, "model" | "closed"
           task.submissionHash,
           task.definition,
           task.feature,
+          task.selection,
         );
         if (task.admissionFailure) await host.sessions.blockContinuation(task.sessionId, task.error ?? 'This interrupted request has no accepted file snapshots. Inspect its retained worktree and create a new request.');
         host.sessions.protectTask(task.sessionId, true);

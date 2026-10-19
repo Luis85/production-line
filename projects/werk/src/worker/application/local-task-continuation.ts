@@ -45,7 +45,7 @@ export async function executeOwnedRequest(host: Pick<LocalTaskRuntime, "closed" 
       if (current.execution?.inputRevision === current.inputRevision) return;
       if (
         tasks.filter((item) => ["queued", "running"].includes(item.status)).length +
-          host.sessions.chatActive + Number(host.admissionReserved) +
+          (host.sessions.admissionActive ?? host.sessions.chatActive) + Number(host.admissionReserved) +
           host.continuationReservations + host.waitingPreparations >=
         host.settings.value.board.queueCapacity
       )
@@ -193,7 +193,7 @@ export async function continueTask(host: Pick<LocalTaskRuntime, "closed" | "sess
           host.running.has(task.id) ||
           tasks.filter((item) => ["queued", "running"].includes(item.status))
             .length +
-            host.sessions.chatActive + Number(host.admissionReserved) +
+            (host.sessions.admissionActive ?? host.sessions.chatActive) + Number(host.admissionReserved) +
             host.continuationReservations >=
             host.settings.value.board.queueCapacity
         )

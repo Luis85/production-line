@@ -1,3 +1,4 @@
+import type { ModelSelection, ModelEffort } from './model-selection.js';
 import type { FeatureRequestReference } from './feature-request-reference.js';
 import type { FeatureTrackingRecord, FeatureTrackingStatus } from './feature-tracking.js';
 import type { WorkerCapacitySnapshot } from './worker-capacity.js';
@@ -20,6 +21,7 @@ export interface WorkerBoardSettings {
   paused: boolean; maxParallel: number; queueCapacity: number; orchestratorQueue: number; order: 'fifo' | 'priority';
 }
 export interface WorkerSettingsView {
+  defaultProvider: ProviderId;
   repositories: RepositoryConfiguration;
   executionSource: 'environment' | 'saved_settings' | 'default';
   resources: ResourcePolicy;
@@ -38,6 +40,8 @@ export interface SessionView {
 }
 /** Shared public task fields are an allowlist, independent of the private execution aggregate. */
 export interface LocalTaskView {
+  selection?: ModelSelection;
+  effort?: ModelEffort;
   feature?: FeatureRequestReference;
   id: string;
   title: string;

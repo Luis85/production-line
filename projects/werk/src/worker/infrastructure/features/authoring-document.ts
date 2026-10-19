@@ -1,9 +1,11 @@
+import { validateModelEffort, validateModelName } from '../../application/model-effort.js';
 import { DomainError } from '../../../shared/errors.js';
 import type { FeatureAuthoringDocuments, FeatureAuthoringSeed } from '../../application/feature-authoring-contracts.js';
 import type { FeatureWorkflowSnapshot } from '../../application/feature-workflow.js';
 import { providerIds } from '../../application/provider-contract.js';
 import { parseFeature } from './document.js';
 import { validateFeatureReadiness, replaceFeatureSection } from './workflow.js';
+import { validateFeatureReviewEligibility } from './review-eligibility.js';
 
 function invalid(message: string): never { throw new DomainError('invalid_input', message); }
 function parse(markdown: string) {
@@ -19,9 +21,11 @@ function inspect(markdown: string) {
   return { id: data.id, status: data.status as 'draft' | 'ready' };
 }
 function seedInput(value: FeatureAuthoringSeed): FeatureAuthoringSeed {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !['title', 'message', 'provider', 'paths', 'definitionRef', 'agent', 'useInstructionsOnly'].includes(key))) invalid('Invalid feature draft seed.');
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !['title', 'message', 'provider', 'model', 'effort', 'paths', 'definitionRef', 'agent', 'useInstructionsOnly'].includes(key))) invalid('Invalid feature draft seed.');
   if (typeof value.title !== 'string' || !value.title.trim() || value.title.length > 120 || typeof value.message !== 'string' || value.message.length > 8000) invalid('Provide a bounded title and request message.');
   if (!providerIds.includes(value.provider as typeof providerIds[number])) invalid('Choose a supported model connection.');
+  if (value.model !== undefined) validateModelName(value.model);
+  if (value.effort !== undefined) validateModelEffort(value.effort, value.provider);
   if (value.paths !== undefined && (!Array.isArray(value.paths) || value.paths.length > 32 || value.paths.some(path => typeof path !== 'string' || !path || path.length > 1024))) invalid('Approved paths must be a bounded file list.');
   if (value.definitionRef !== undefined && (typeof value.definitionRef !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(value.definitionRef))) invalid('Use a stable definition reference.');
   if (value.agent !== undefined && (typeof value.agent !== 'string' || !value.agent || value.agent.length > 100)) invalid('Use a bounded agent name.');
@@ -35,7 +39,7 @@ function prepare(snapshot: FeatureWorkflowSnapshot, featureId: string, supplied?
   if (seed) {
     parsed.document.set('title', seed.title.trim()); parsed.document.set('provider', seed.provider);
     if (seed.paths !== undefined) parsed.document.set('paths', seed.paths);
-    for (const key of ['definitionRef', 'agent', 'useInstructionsOnly'] as const) if (seed[key] !== undefined) parsed.document.set(key, seed[key]);
+    for (const key of ['model', 'effort', 'definitionRef', 'agent', 'useInstructionsOnly'] as const) if (seed[key] !== undefined) parsed.document.set(key, seed[key]);
     if (seed.definitionRef !== undefined) parsed.document.delete('definitionId');
     if (seed.message.trim()) body = replaceFeatureSection(body, 'goal', seed.message);
   }
@@ -49,8 +53,10 @@ export const featureAuthoringDocuments: FeatureAuthoringDocuments = {
     const parsed = parse(markdown); parsed.document.set('status', status);
     return '---\n' + parsed.document.toString({ lineWidth: 0 }) + '---\n' + parsed.body;
   },
-  ready(markdown, snapshot) {
-    const result = validateFeatureReadiness(markdown, snapshot.readyCheck, undefined, snapshot.template, { configuration: snapshot.configuration, workflowPath: snapshot.files.configuration.path });
-    return { valid: result.valid, errors: result.errors };
+  ready(markdown, snapshot, provider = 'codex-cli') {
+    const result = snapshot.configuration.readyReviewPrompt
+      ? validateFeatureReviewEligibility(markdown, snapshot, provider)
+      : validateFeatureReadiness(markdown, snapshot.readyCheck, provider, snapshot.template, { configuration: snapshot.configuration, workflowPath: snapshot.files.configuration.path });
+    return { valid: result.valid, errors: result.errors, ...(snapshot.configuration.readyReviewPrompt ? { reviewRequired: true } : {}) };
   },
 };

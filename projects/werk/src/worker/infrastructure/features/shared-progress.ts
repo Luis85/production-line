@@ -1,3 +1,4 @@
+import { readyReviewParts } from '../../application/ready-review-notes.js';
 import { createHash } from 'node:crypto';
 import type { FeatureDocument } from './document.js';
 
@@ -16,7 +17,15 @@ export function sharedProgressSection(value: unknown): string {
   const links = [p.task ? `- Action needed: [[${p.task.replace(/\.md$/, '')}]]` : '', p.review ? `- Pull request: [[${p.review.replace(/\.md$/, '')}]]` : ''].filter(Boolean);
   return '\n\n<!-- werk:progress:v1 -->\n## Worker progress\n\n' + p.summary.replace(/[\r\n]+/g, ' ') + '\n' + (links.length ? '\n' + links.join('\n') + '\n' : '') + '\n<!-- /werk:progress:v1 -->\n';
 }
+export function sharedReadyReviewParts(parsed: FeatureDocument) {
+  const metadata = parsed.data.werk as { shared?: { progress?: unknown; readyReview?: unknown } } | undefined;
+  const value = progress(metadata?.shared?.progress), section = sharedProgressSection(value);
+  const body = value && section && parsed.body.endsWith(section) ? parsed.body.slice(0, -section.length) : parsed.body;
+  return readyReviewParts(body, metadata?.shared?.readyReview);
+}
 export function acceptedSharedBody(parsed: FeatureDocument): string {
+  const reviewed = sharedReadyReviewParts(parsed);
+  if (reviewed) return reviewed.body;
   const metadata = parsed.data.werk as { shared?: { progress?: unknown } } | undefined;
   const value = progress(metadata?.shared?.progress), section = sharedProgressSection(value);
   if (!value || !section || !parsed.body.endsWith(section)) return parsed.body;

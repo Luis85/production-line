@@ -32,6 +32,7 @@ async function readResponse(response: Response, signal: AbortSignal) {
 /** Stateless tool loops: each turn replays this invocation only; server-side conversation storage stays off. */
 export async function apiReply(connection: ProviderConnection, request: ModelRequest, signal: AbortSignal, transport: typeof fetch, onUsage?: (usage: ProviderUsage) => void, runtime?: ToolRuntime, control?: ModelInvocationControl) {
   const openai = connection.id === 'openai-api';
+  const effort = request.provider.effort && request.provider.effort !== 'default' ? request.provider.effort : undefined;
   const history: any[] = request.messages.map(({ role, text }) => ({ role, content: text }));
   const definitions = runtime?.manifest.tools.map(tool => openai
     ? { type: 'function', name: tool.name, description: tool.description, parameters: tool.inputSchema, strict: false }
@@ -47,8 +48,8 @@ export async function apiReply(connection: ProviderConnection, request: ModelReq
   for (let turn = 0; turn <= maxCalls + 1; turn++) {
     if (signal.aborted) throw new ProviderModelError('cancelled');
     const body = openai
-      ? { model: request.provider.model, instructions: request.protocolInstructions, store: false, max_output_tokens: 8192, input: history, ...(definitions ? { tools: definitions, parallel_tool_calls: false, include: ['reasoning.encrypted_content'] } : {}) }
-      : { model: request.provider.model, system: request.protocolInstructions, max_tokens: 8192, messages: history, ...(definitions ? { tools: definitions } : {}) };
+      ? { model: request.provider.model, ...(effort ? { reasoning: { effort } } : {}), instructions: request.protocolInstructions, store: false, max_output_tokens: 8192, input: history, ...(definitions ? { tools: definitions, parallel_tool_calls: false, include: ['reasoning.encrypted_content'] } : {}) }
+      : { model: request.provider.model, ...(effort ? { output_config: { effort } } : {}), system: request.protocolInstructions, max_tokens: 8192, messages: history, ...(definitions ? { tools: definitions } : {}) };
     if (Buffer.byteLength(JSON.stringify(body)) > 4194304) throw new ProviderModelError('protocol');
     control?.beforeCall();
     let response: Response;

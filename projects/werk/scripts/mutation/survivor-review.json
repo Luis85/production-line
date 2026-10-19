@@ -1,10 +1,13 @@
 {
   "schemaVersion": 1,
-  "scopeId": "worker-accounting-protocol-v2",
-  "reportDigest": "cbd0499bf3ddf42cc1d947c0ec7cbfebacfa16e5d8602241a2c9a4d49ea0386d",
-  "sourceDigest": "c926f0265c2ca3dee9315b0879f509c9eac7a1f8ad723e9a4ad977de881970e2",
-  "reviewedAt": "2026-10-17T12:56:38.381Z",
-  "policy": "Candidates remain surviving in the raw report and mutation score. No mutator exclusions or score adjustments are applied.",
+  "scopeId": "worker-ready-review-v3",
+  "reportDigest": "0a2f65b3069a276fcc7a9917518f957e275b6b74df86583f4f0fe8ba85b05501",
+  "sourceDigest": "8860a7dfb8aa93b42e11ef3034c709e61d69a45d3ac5ce5d1ad2b3a177488d2b",
+  "compiledSourceDigest": "d6941842a4fd485f99a3c3248603f72e2eaa8c6a878695068db15f9b5bb1cf5c",
+  "testDigest": "2c8c0b62e3a350896f5d53a41c2f85810b759c6c60aec13b04184988d0189634",
+  "configurationDigest": "0eff89ec2b09c55c1a7df4ce2ef4dd78d35aaa8459e4aae06bbe9706a28ef5ae",
+  "reviewedAt": "2026-10-18T21:16:27.605Z",
+  "policy": "All surviving and uncovered mutants remain in the raw report and denominator. Classifications explain remaining evidence limits; no mutator exclusions or score adjustments are applied.",
   "findings": [
     {
       "file": "src/shared/request-gate.ts",
@@ -118,7 +121,7 @@
     },
     {
       "file": "src/worker/infrastructure/responses.ts",
-      "id": "663",
+      "id": "1197",
       "status": "Survived",
       "mutator": "StringLiteral",
       "line": 28,
@@ -128,17 +131,7 @@
     },
     {
       "file": "src/worker/infrastructure/responses.ts",
-      "id": "671",
-      "status": "Survived",
-      "mutator": "StringLiteral",
-      "line": 30,
-      "replacement": "\"\"",
-      "classification": "equivalent_candidate",
-      "rationale": "The identifier field label only changes an internal error message; the assignment catch boundary replaces that message with its fixed public error."
-    },
-    {
-      "file": "src/worker/infrastructure/responses.ts",
-      "id": "672",
+      "id": "1205",
       "status": "Survived",
       "mutator": "StringLiteral",
       "line": 30,
@@ -148,7 +141,17 @@
     },
     {
       "file": "src/worker/infrastructure/responses.ts",
-      "id": "686",
+      "id": "1206",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 30,
+      "replacement": "\"\"",
+      "classification": "equivalent_candidate",
+      "rationale": "The thrown diagnostic is inside a catch boundary that always replaces it with the same fixed public assignment error."
+    },
+    {
+      "file": "src/worker/infrastructure/responses.ts",
+      "id": "1220",
       "status": "Survived",
       "mutator": "StringLiteral",
       "line": 35,
@@ -158,7 +161,7 @@
     },
     {
       "file": "src/worker/infrastructure/responses.ts",
-      "id": "689",
+      "id": "1223",
       "status": "Survived",
       "mutator": "StringLiteral",
       "line": 36,
@@ -168,7 +171,7 @@
     },
     {
       "file": "src/worker/infrastructure/responses.ts",
-      "id": "699",
+      "id": "1233",
       "status": "Survived",
       "mutator": "MethodExpression",
       "line": 37,
@@ -178,13 +181,153 @@
     },
     {
       "file": "src/worker/infrastructure/responses.ts",
-      "id": "701",
+      "id": "1235",
       "status": "Survived",
       "mutator": "ConditionalExpression",
       "line": 37,
       "replacement": "true",
       "classification": "equivalent_candidate",
       "rationale": "The intake validator treats absent optional fields and present fields with value undefined identically; required fields are checked before projection."
+    },
+    {
+      "file": "src/worker/application/ready-review-protocol.ts",
+      "id": "513",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 6,
+      "replacement": "true",
+      "classification": "equivalent_candidate",
+      "rationale": "Within transported JSON, required fields reject primitives and the separate array guard rejects arrays. Removing the object typeof clause does not admit another JSON result."
+    },
+    {
+      "file": "src/worker/application/ready-review-protocol.ts",
+      "id": "594",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 15,
+      "replacement": "false",
+      "classification": "equivalent_candidate",
+      "rationale": "Strict includes(raw.kind) independently rejects nonstring finding kinds without coercion. Removing only the separate typeof guard does not admit arrays, objects or other nonstring JSON values; both ordinary and mutation regressions reject the previously accepted array-kind bypass."
+    },
+    {
+      "file": "src/worker/application/ready-review-protocol.ts",
+      "id": "630",
+      "status": "Survived",
+      "mutator": "BlockStatement",
+      "line": 25,
+      "replacement": "{}",
+      "classification": "equivalent_candidate",
+      "rationale": "An empty JSON parse-error catch leaves value undefined; the structured parser then raises the same protocol error."
+    },
+    {
+      "file": "src/worker/application/ready-review-protocol.ts",
+      "id": "635",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 29,
+      "replacement": "false",
+      "classification": "defensive_contract",
+      "rationale": "A valid ModelResult.request passed to parseModelResult yields needs_input or throws. Removing this guard differs for an absent request outside that typed boundary, but still fails closed; no equivalence claim for malformed in-process objects."
+    },
+    {
+      "file": "src/worker/application/shared-ready-review.ts",
+      "id": "671",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 13,
+      "replacement": "\"\"",
+      "classification": "equivalent_candidate",
+      "rationale": "The operation prefix is opaque within the dedicated review session. Removing it preserves the deterministic identity and remains within the identifier contract; the raw mutant is retained."
+    },
+    {
+      "file": "src/worker/application/shared-ready-review.ts",
+      "id": "672",
+      "status": "Survived",
+      "mutator": "MethodExpression",
+      "line": 13,
+      "replacement": "sharedHash(feature.key + generation + featureInputHash(record.accepted) + prompt.sha256)",
+      "classification": "equivalent_candidate",
+      "rationale": "Keeping all 64 digest characters instead of 48 preserves deterministic operation identity and remains below the 100-character identifier limit. Exact hash truncation is not a product contract."
+    },
+    {
+      "file": "src/worker/application/shared-ready-review.ts",
+      "id": "754",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 54,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing the separator between multiple readiness diagnostics changes spacing, while each diagnostic and the admission rejection remain intact. No exact-wording equivalence is claimed."
+    },
+    {
+      "file": "src/worker/application/shared-ready-review.ts",
+      "id": "771",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 66,
+      "replacement": "false",
+      "classification": "defensive_guard",
+      "rationale": "The remote receipt comparison repeats the accompanying rendered-state fence in the exercised lifecycle states. It remains an explicit independent acknowledgment defense; tests do not manufacture an otherwise unreachable partial in-memory receipt."
+    },
+    {
+      "file": "src/worker/infrastructure/features/review-eligibility.ts",
+      "id": "979",
+      "status": "NoCoverage",
+      "mutator": "StringLiteral",
+      "line": 25,
+      "replacement": "\"\"",
+      "classification": "redundant_defense",
+      "rationale": "The earlier validateApprovedPaths call rejects case-insensitive duplicates, leaving this repeated diagnostic branch uncovered."
+    },
+    {
+      "file": "src/worker/infrastructure/features/review-eligibility.ts",
+      "id": "1035",
+      "status": "NoCoverage",
+      "mutator": "StringLiteral",
+      "line": 38,
+      "replacement": "\"\"",
+      "classification": "defensive_fallback",
+      "rationale": "Current parsing and validation paths throw Error objects. The uncovered fallback handles a non-Error throw from a future or substituted dependency; it is retained without fabricated coverage."
+    },
+    {
+      "file": "src/worker/infrastructure/features/review-eligibility.ts",
+      "id": "910",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 11,
+      "replacement": "\"\"",
+      "classification": "equivalent_candidate",
+      "rationale": "The internal DomainError code is not projected. The outer catch always returns feature_review_structure with the original message."
+    },
+    {
+      "file": "src/worker/infrastructure/features/review-eligibility.ts",
+      "id": "972",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 24,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing the Approved path label changes diagnostic wording while retaining the repository-relative path rejection. This remains a surviving wording change, not a killed mutant."
+    },
+    {
+      "file": "src/worker/infrastructure/features/review-eligibility.ts",
+      "id": "974",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 25,
+      "replacement": "false",
+      "classification": "equivalent_candidate",
+      "rationale": "validateApprovedPaths already rejects case-insensitive duplicate paths before this repeated check."
+    },
+    {
+      "file": "src/worker/infrastructure/features/review-eligibility.ts",
+      "id": "1002",
+      "status": "Survived",
+      "mutator": "MethodExpression",
+      "line": 30,
+      "replacement": "match?.[1]",
+      "classification": "equivalent_candidate",
+      "rationale": "Greedy list and checkbox whitespace expressions consume whitespace-only captures. The returned criterion still trims text, so removing trim only from the nonempty predicate preserves the parsed criteria."
     }
   ]
 }

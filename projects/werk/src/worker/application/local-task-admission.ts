@@ -2,7 +2,8 @@
 
 import { validateApprovedPaths } from './approved-paths.js';
 
-import { definitionConnection, type DefinitionSnapshot } from "./definitions.js";
+import { modelSelection, selectedConnection, type ModelSelection } from "./model-selection.js";
+import { type DefinitionSnapshot } from "./definitions.js";
 import { randomUUID } from "node:crypto";
 import { isAbsolute, resolve } from "node:path";
 import { object, text } from "../../shared/contracts.js";
@@ -44,7 +45,7 @@ export function createInBackground(host: Pick<LocalTaskRuntime, "closed" | "prep
       // Keep the failed receipt until replacement admission validates and reserves capacity.
     }
     const snapshot = structuredClone(input);
-    const { title, selector, definition } = host.admissionInput(snapshot, submission, retainedOwner?.definition);
+    const { title, selector, definition, selection } = host.admissionInput(snapshot, submission, retainedOwner?.definition, retainedOwner?.selection);
     // A queued request and its explicit retries retain the exact accepted agent instructions.
     const frozenDefinition = definition ? structuredClone(definition) : null;
     host.assertAdmissionCapacity(host.tasks, host.admissionOccupancy);
@@ -56,13 +57,13 @@ export function createInBackground(host: Pick<LocalTaskRuntime, "closed" | "prep
     const failed = host.preparations.filter(item => item.state === 'failed');
     if (failed.length >= 20) host.forgetPreparation(failed[0]!);
     const controller = new AbortController();
-    host.preparationOwners.set(preparation.id, { submission, definition: frozenDefinition, controller });
+    host.preparationOwners.set(preparation.id, { submission, definition: frozenDefinition, selection, controller });
     host.preparations.push(preparation);
     void host.admitting.run(async () => {
       try {
         controller.signal.throwIfAborted();
         preparation.phase = "worktree";
-        await host.createTask(snapshot, submission, { id: preparation.id, budgetMs: BACKGROUND_ADMISSION_TIMEOUT_MS, preparation, signal: controller.signal, definition: frozenDefinition });
+        await host.createTask(snapshot, submission, { id: preparation.id, budgetMs: BACKGROUND_ADMISSION_TIMEOUT_MS, preparation, signal: controller.signal, definition: frozenDefinition, selection });
         // A cancellation that raced the durable write still cancels before tick can start this task.
         const task = host.tasks.find(item => item.id === preparation.id);
         if (controller.signal.aborted && task?.status === 'queued') await host.action({ id: task.id, action: 'cancel' });
@@ -87,13 +88,13 @@ export function assertAdmissionCapacity(host: Pick<LocalTaskRuntime, "waitingPre
       );
     if (
       tasks.filter((item) => ["queued", "running"].includes(item.status)).length +
-        host.sessions.chatActive + host.continuationReservations + host.waitingPreparations + reserved >=
+        (host.sessions.admissionActive ?? host.sessions.chatActive) + host.continuationReservations + host.waitingPreparations + reserved >=
       host.settings.value.board.queueCapacity
     )
       throw new DomainError("conflict", "Local task queue is full.");
   }
 
-export function admissionInput(host: Pick<LocalTaskRuntime, "sessions" | "settings" | "workspaces">, input: unknown, submission?: LocalTaskSubmission, frozenDefinition?: DefinitionSnapshot | null) {
+export function admissionInput(host: Pick<LocalTaskRuntime, "sessions" | "settings" | "workspaces">, input: unknown, submission?: LocalTaskSubmission, frozenDefinition?: DefinitionSnapshot | null, frozenSelection?: ModelSelection) {
     const body = object(input, "Local task", [
       "title",
       "instruction",
@@ -101,6 +102,8 @@ export function admissionInput(host: Pick<LocalTaskRuntime, "sessions" | "settin
       "paths",
       "priority",
       "provider",
+      "model",
+      "effort",
       "definitionId",
       "definitionRef",
       "agent",
@@ -112,14 +115,9 @@ export function admissionInput(host: Pick<LocalTaskRuntime, "sessions" | "settin
     const title = text(body.title, "Title", 200),
       instruction = text(body.instruction, "Instruction", 8000);
     const definition = frozenDefinition === undefined ? host.sessions.definitions.select(body) : frozenDefinition ?? undefined;
-    const provider = definitionConnection(
-      host.settings.provider(
-        body.provider === undefined
-          ? host.sessions.current.provider
-          : String(body.provider),
-      ),
-      definition,
-    );
+    const connection = host.settings.provider(String(body.provider ?? frozenSelection?.provider ?? submission?.selection?.provider ?? host.settings.value.defaultProvider ?? 'codex-cli'));
+    const selection = frozenSelection ?? submission?.selection ?? modelSelection(connection, body, definition);
+    const provider = selectedConnection(connection, selection, definition);
     const selector = text(body.repository, "Repository", 4096);
     const assignments = host.settings.value.repositories.items;
     const assignment = assignments.find(
@@ -150,5 +148,5 @@ export function admissionInput(host: Pick<LocalTaskRuntime, "sessions" | "settin
         "unavailable",
         "The assigned repository worktree service is unavailable.",
       );
-    return { body, title, instruction, definition, provider, selector, assignment, repositoryPath, allowedPaths };
+    return { body, title, instruction, definition, provider, selection, selector, assignment, repositoryPath, allowedPaths };
   }

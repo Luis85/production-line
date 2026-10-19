@@ -1,6 +1,6 @@
 import { sessionFeatureRequest } from './feature-request-reference.js';
 import { WorkerConversation } from './conversation.js';
-import { definitionConnection } from './definitions.js';
+import { sessionConnection } from './session-model-selection.js';
 import type { SessionRecord } from './session-catalog.js';
 import type { WorkerSettingsPort, SessionCatalogStorage } from './workspace-ports.js';
 import type { ModelFactory } from './provider-contract.js';
@@ -28,10 +28,7 @@ interface SessionConversationContext {
 export async function loadSessionConversation(context: SessionConversationContext, record: SessionRecord) {
     const store = await context.storage.conversation(record.id);
     const model = context.model(
-      definitionConnection(
-        context.settings.provider(record.provider),
-        record.definition,
-      ),
+      sessionConnection(context.settings, record),
       { sessionId: record.id, feature: sessionFeatureRequest(record) },
     );
     const conversation = new WorkerConversation(
@@ -55,13 +52,11 @@ export async function loadSessionConversation(context: SessionConversationContex
             throw new DomainError("conflict", "Worker task queue is full.");
         },
         provider: () => {
-          const connection = definitionConnection(
-            context.settings.provider(record.provider),
-            record.definition,
-          );
+          const connection = sessionConnection(context.settings, record);
           return {
             id: connection.id,
             model: connection.model,
+            ...(record.selection ? { effort: record.selection.effort } : {}),
             instruction: connection.instruction ?? "",
           };
         },
@@ -72,9 +67,7 @@ export async function loadSessionConversation(context: SessionConversationContex
           kind: record.kind,
           title: record.title,
           provider: record.provider,
-          model:
-            record.definition?.model ||
-            context.settings.provider(record.provider).model,
+          model: sessionConnection(context.settings, record).model,
         }),
       },
     );

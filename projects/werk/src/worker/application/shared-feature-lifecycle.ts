@@ -1,3 +1,4 @@
+import { SharedReadyReviewLifecycle } from './shared-ready-review.js';
 import { sharedFeatureRequestReference } from './feature-request-reference.js';
 import { createTaskNoteIdentity } from './task-notes.js';
 import { SharedFeatureFeedback } from './shared-feature-feedback.js';
@@ -18,7 +19,8 @@ export class SharedFeatureLifecycle {
   private ports: SharedIntakePorts;
   private save: () => Promise<void>;
   private feedback: SharedFeatureFeedback;
-  constructor(ports: SharedIntakePorts, save: () => Promise<void>) { this.ports = ports; this.save = save; this.feedback = new SharedFeatureFeedback(ports, save); }
+  private readiness: SharedReadyReviewLifecycle;
+  constructor(ports: SharedIntakePorts, save: () => Promise<void>) { this.ports = ports; this.save = save; this.feedback = new SharedFeatureFeedback(ports, save); this.readiness = new SharedReadyReviewLifecycle(ports, save, (record, repository, signal) => this.publish(record, repository, signal)); }
   /** A receipt confirms only the exact source and artifacts it published, never later local changes. */
   publication(record: SharedFeatureRecord): SharedFeatureRecord['publication'] {
     if (record.publication === 'error') return 'error';
@@ -35,6 +37,15 @@ export class SharedFeatureLifecycle {
     const write = record.pending;
     try { await repository.publishLifecycle(write, signal); }
     catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'conflict' && record.claimed && record.readyReviewState && !record.submitted && !write.artifacts.length && this.ports.readyReviewResponse) {
+        const current = await repository.readBlob(await repository.head(signal), record.sourcePath, signal);
+        if (current !== null) {
+          // A definite CAS conflict is not an unknown acknowledgment. Preserve the pushed edit and re-read it through the owned FR phase.
+          this.ports.readyReviewResponse(current, record);
+          delete record.pending; delete record.readyReviewState.implementationReady;
+          record.publication = 'pending'; await this.save(); return;
+        }
+      }
       if (error && typeof error === 'object' && 'code' in error && error.code === 'conflict' &&
           await recoverSharedFeatureResponseConflict(record, repository, signal)) {
         await this.save();
@@ -49,6 +60,7 @@ export class SharedFeatureLifecycle {
     record.claimed = true;
     record.publication = 'synced';
     record.publishedState = sharedHash(write.request.content);
+    record.publishedSource = write.request.content;
     for (const artifact of write.artifacts) {
       if (artifact.path === record.reviewNote) record.publishedReview = artifact.path + ':' + sharedHash(artifact.content);
       if (artifact.path === record.task?.path) record.task.revision = sharedHash(artifact.content);
@@ -60,6 +72,7 @@ export class SharedFeatureLifecycle {
   async publish(record: SharedFeatureRecord, repository: SharedRepositoryPort, signal: AbortSignal, artifacts: { path: string; content: string; expectedRevision?: string | null }[] = []) {
     await this.flush(record, repository, signal);
     const content = this.ports.renderSource(record);
+    if (Buffer.byteLength(content) > 65536) throw new DomainError('invalid_input', 'The Feature Request progress note exceeds 64 KiB. Shorten its original details before publication can continue.');
     if (sharedHash(content) === record.publishedState && !artifacts.length) return;
     record.pending = {
       operationId: 'lifecycle-' + sharedHash(record.id + content + JSON.stringify(artifacts)),
@@ -90,6 +103,7 @@ export class SharedFeatureLifecycle {
       const repository = this.ports.repository(record.binding, record.workflow);
       await this.flush(record, repository, signal);
       if (!record.claimed) await this.publish(record, repository, signal);
+      if (!await this.readiness.reconcile(record, repository, signal)) return;
       if (!record.submitted) {
         const hold = this.ports.admissionHold?.();
         if (hold && !this.ports.inspect(record.taskId!)) {

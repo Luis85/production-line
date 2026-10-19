@@ -1,10 +1,11 @@
+import type { ModelEffort } from './model-effort.js';
 import type { FeatureWorkflowSnapshot } from './feature-workflow.js';
 import type { SharedIntakeConfig } from './shared-intake-contract.js';
 import type { SharedRepositoryPort } from './shared-feature-state.js';
 
 export type FeatureAuthoringBinding = Pick<SharedIntakeConfig, 'repositoryId' | 'remote' | 'branch' | 'workflowPath'>;
 export interface FeatureAuthoringSeed {
-  title: string; message: string; provider: string; paths?: string[];
+  title: string; message: string; provider: string; model?: string; effort?: ModelEffort; paths?: string[];
   definitionRef?: string; agent?: string; useInstructionsOnly?: boolean;
 }
 export interface FeatureAuthoringCommand {
@@ -12,7 +13,7 @@ export interface FeatureAuthoringCommand {
   seed?: FeatureAuthoringSeed; expectedRevision?: string | null;
   expectedWorkflowDigest?: string; expectedBinding?: FeatureAuthoringBinding;
 }
-export interface FeatureAuthoringReadiness { valid: boolean; errors: { code: string; message: string }[]; }
+export interface FeatureAuthoringReadiness { reviewRequired?: boolean; valid: boolean; errors: { code: string; message: string }[]; }
 export interface FeatureAuthoringResult {
   featureId: string; name: string; path: string; markdown: string; revision: string | null;
   status: 'draft' | 'ready'; readiness: FeatureAuthoringReadiness;
@@ -32,7 +33,7 @@ export interface FeatureAuthoringDocuments {
   prepare(snapshot: FeatureWorkflowSnapshot, featureId: string, seed?: FeatureAuthoringSeed): string;
   status(markdown: string, status: 'draft' | 'ready'): string;
   inspect(markdown: string): { id: string; status: 'draft' | 'ready' };
-  ready(markdown: string, snapshot: FeatureWorkflowSnapshot): FeatureAuthoringReadiness;
+  ready(markdown: string, snapshot: FeatureWorkflowSnapshot, provider?: string): FeatureAuthoringReadiness;
 }
 export interface FeatureAuthoringPorts {
   binding(): FeatureAuthoringBinding | null;

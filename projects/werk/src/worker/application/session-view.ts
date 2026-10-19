@@ -73,6 +73,7 @@ export function sessionView(context: SessionViewContext): SessionView {
             request.phase === "readiness" ? "needs_rework" : request.phase;
         return {
           ...record,
+          ...(record.selection ? { selection: structuredClone(record.selection) } : {}),
           feature: sessionFeatureRequest(record),
           ...(context.featureTracking?.record(record.id) ? { featureRequest: context.featureTracking.record(record.id) } : {}),
           ...(request

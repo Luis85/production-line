@@ -1,3 +1,4 @@
+import type { ModelEffort } from '../application/model-effort';
 import { jsonRequestInit, requestJson } from '../../shared/webview/http';
 import type { ConsumptionStatus } from '../application/consumption';
 import type { ConsumptionCommand } from './consumption-editor';
@@ -47,13 +48,12 @@ export function getCapacityFreshness(): CapacityFreshness {
 export function taskStatus(value: string) { return ({ draft: 'Draft', queued: 'Queued', running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Stopped', interrupted: 'Interrupted', waiting_input: 'Waiting for your answer', escalated: 'Decision needed' }[value] ?? value); }
 export interface DefinitionAgent { name: string; description: string; instruction: string; model: string; provider: string; unsupported: string[]; requiresAdaptation: boolean; }
 export interface AgentDefinition { id: string; ref?: string; name: string; digest: string; createdAt: string; agents: DefinitionAgent[]; }
-export async function newTask(options: { provider?: string; title?: string; definitionId?: string; agent?: string; useInstructionsOnly?: boolean } = {}) {
-  const current = state.sessions?.records.find(item => item.id === state.sessions?.selected);
-  const provider = current?.provider ?? state.settings?.providers.find(item => item.configured)?.id ?? 'codex-cli';
+export async function newTask(options: { model?: string; effort?: ModelEffort; provider?: string; title?: string; definitionId?: string; agent?: string; useInstructionsOnly?: boolean } = {}) {
+  const provider = state.settings?.defaultProvider ?? 'codex-cli';
   return workspaceAction('/api/sessions', { action: 'create', title: 'New task', provider, ...options });
 }
 export interface FeatureRequestCommand {
-  action: 'create'; id: string; title: string; message: string; provider: string;
+  action: 'create'; id: string; title: string; message: string; provider: string; model?: string; effort?: ModelEffort;
   definitionId?: string; agent?: string; useInstructionsOnly?: boolean;
   files?: { repository: string; paths: string[] };
   background?: true;

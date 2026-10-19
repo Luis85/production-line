@@ -2,7 +2,8 @@
 import { reactive, watch as watchPrivateDraft } from 'vue';
 import { state as workerState, type FeatureRequestCommand } from '../store';
 import type { ProviderId } from '../../application/provider-contract';
-const emptyDraft = () => ({ message: '', provider: undefined as ProviderId | undefined, title: '', definitionId: 'none', agent: '', adapt: false, fileChanges: false, repository: '', paths: '', pending: null as FeatureRequestCommand | null, error: '' });
+import type { ModelEffort } from '../../application/model-effort';
+const emptyDraft = () => ({ message: '', provider: undefined as ProviderId | undefined, model: '', effort: '' as ModelEffort | '', selectionEdited: false, title: '', definitionId: 'none', agent: '', adapt: false, fileChanges: false, repository: '', paths: '', pending: null as FeatureRequestCommand | null, error: '' });
 // Keep private drafts in tab memory; explicit locking clears them with the other editors.
 const intake = reactive(emptyDraft());
 watchPrivateDraft(() => workerState.draftEpoch, () => Object.assign(intake, emptyDraft()), { flush: 'sync' });
@@ -14,9 +15,11 @@ import UInput from '@nuxt/ui/components/Input.vue';
 import USelect from '@nuxt/ui/components/Select.vue';
 import UTextarea from '@nuxt/ui/components/Textarea.vue';
 import { createFeatureRequest, getCapacityFreshness, state, type FeatureRequestPreparation } from '../store';
+import { providerSupportsDefinition } from '../../application/provider-contract';
 import { validateApprovedPaths } from '../../application/approved-paths';
 import RunTask from './RunTask.vue';
 import SharedFeatureComposer from './SharedFeatureComposer.vue';
+import ModelSelectionFields from './ModelSelectionFields.vue';
 import { buildWorkerCapacityView } from '../worker-capacity';
 const sharedComposer = ref<InstanceType<typeof SharedFeatureComposer> | null>(null);
 const sharedBinding = computed(() => !!state.environment?.sharedIntake?.config.repositoryId);
@@ -30,7 +33,7 @@ const definition = computed(() => state.definitions.find(item => item.id === int
 const agent = computed(() => definition.value?.agents.find(item => item.name === intake.agent));
 const connection = computed(() => state.settings?.providers.find(item => item.id === intake.provider));
 const missingAgent = computed(() => intake.definitionId !== 'none' && !agent.value);
-const incompatible = computed(() => agent.value?.provider && !(intake.provider ?? '').startsWith(agent.value.provider === 'anthropic' ? 'claude' : 'codex') && intake.provider !== `${agent.value.provider}-api`);
+const incompatible = computed(() => agent.value?.provider && !providerSupportsDefinition(intake.provider ?? '', agent.value.provider));
 const repositories = computed(() => state.settings?.repositories.items ?? []);
 const approvedPaths = () => intake.paths.split('\n').map(path => path.trim()).filter(Boolean);
 const fileIssue = computed(() => {
@@ -39,7 +42,7 @@ const fileIssue = computed(() => {
   try { validateApprovedPaths(approvedPaths()); return ''; } catch (error) { return (error as Error).message; }
 });
 const canCreate = computed(() => state.unlocked && !state.workspaceBusy && !sending.value && (!!intake.pending || connection.value?.configured && capacity.value.admissionAvailable !== false && !!intake.message.trim() && !incompatible.value && !missingAgent.value && !fileIssue.value && (!agent.value?.requiresAdaptation || intake.adapt)));
-const model = computed(() => agent.value?.model || connection.value?.model || 'Provider default');
+const model = computed(() => intake.model.trim() || agent.value?.model || connection.value?.model || 'Provider default');
 const optionIssue = computed(() => missingAgent.value ? 'This definition or agent is no longer available. Choose another definition.' : incompatible.value ? 'Choose a ' + agent.value?.provider + ' connection for this agent’s model.' : agent.value?.requiresAdaptation && !intake.adapt ? 'Review this agent’s omitted features and accept instructions-only use before creating the task.' : '');
 const admissionNote = computed(() => sending.value && preparation.value ? 'Your request is being prepared. It has not joined the queue yet.' : intake.pending ? 'Retry checks the same request. It does not create a second request.' : capacity.value.admissionAvailable === false ? 'Local admission is full. Your instructions stay here while accepted work finishes.' : capacity.value.stale || capacity.value.state === 'unknown' ? 'Capacity needs refresh. The worker checks admission when you submit.' : capacity.value.startBlocked ? 'You can add this request to the queue. New model calls wait until the start conditions below are resolved.' : capacity.value.state === 'running' ? 'Joins the queue behind the active task.' : 'Joins this worker’s shared execution queue.');
 async function reviewOptions() { optionsOpen.value = true; await nextTick(); options.value?.querySelector('summary')?.focus(); }
@@ -48,8 +51,10 @@ const toolSummary = computed(() => {
   if (!tools) return 'Access not loaded';
   return tools.builtins.files || tools.builtins.commands.some(item => item.enabled) || (tools.builtins.cliTools ?? []).some(item => item.enabled) || tools.builtins.webOrigins.length || tools.mcp.some(item => item.enabled && item.allowedTools.length) ? 'Grants configured' : 'All tools off';
 });
-watch(() => state.settings?.providers, () => {
-  if (!intake.provider) intake.provider = state.settings?.providers.find(item => item.configured)?.id ?? state.settings?.providers[0]?.id;
+const defaultProvider = computed(() => state.settings?.defaultProvider ?? state.settings?.providers.find(item => item.configured)?.id ?? state.settings?.providers[0]?.id);
+watch([() => state.settings?.providers, defaultProvider], () => {
+  const untouched = !intake.selectionEdited && !intake.message && !intake.title && !intake.model && !intake.effort && !intake.fileChanges && !intake.paths && intake.definitionId === 'none' && !intake.pending;
+  if (!intake.provider || untouched) intake.provider = defaultProvider.value;
 }, { immediate: true });
 watch(() => intake.definitionId, () => { intake.agent = definition.value?.agents.find(item => item.name === 'root')?.name ?? definition.value?.agents[0]?.name ?? ''; intake.adapt = false; });
 watch(() => intake.agent, () => { intake.adapt = false; });
@@ -61,6 +66,7 @@ async function create() {
   if (!intake.pending) intake.pending = {
     action: 'create', id: crypto.randomUUID(), title: intake.title.trim() || intake.message.trim().slice(0, 80),
     message: intake.message, provider: intake.provider!,
+    ...(intake.model.trim() ? { model: intake.model.trim() } : {}), ...(intake.effort ? { effort: intake.effort } : {}),
     ...(definition.value ? { definitionId: definition.value.id, agent: intake.agent, useInstructionsOnly: intake.adapt } : {}),
     ...(intake.fileChanges ? { background: true as const, files: { repository: intake.repository.trim(), paths: approvedPaths() } } : {}),
   };
@@ -72,7 +78,7 @@ async function create() {
     });
     if (epoch !== state.draftEpoch) return;
     if (result) {
-      if (intake.message === command.message) intake.message = '';
+      if (intake.message === command.message) Object.assign(intake, { message: '', provider: defaultProvider.value, model: '', effort: '', selectionEdited: false, definitionId: 'none', agent: '', adapt: false });
       intake.title = ''; intake.pending = null; intake.fileChanges = false; intake.paths = '';
       emit('created', result.session.id, previousSessionId);
     } else intake.error = 'Creation could not be confirmed. Unlock if needed, then retry this same request.';
@@ -103,16 +109,8 @@ defineExpose({ focusInstructions });
         <details ref="options" class="intake-definition" :open="optionsOpen" @toggle="optionsOpen = ($event.target as HTMLDetailsElement).open">
           <summary><span>Task options</span><span class="options-selection">{{ connection?.label ?? 'Choose a connection' }} · {{ model }}</span></summary>
           <div class="intake-options-content">
-            <div class="intake-field">
-              <label for="new-task-connection">Connection</label>
-              <USelect id="new-task-connection" v-model="intake.provider" :items="state.settings?.providers.map(item => ({ label: item.label + (item.configured ? '' : ' · needs setup'), value: item.id })) ?? []" class="w-full" />
-            </div>
-            <div class="intake-field">
-              <span class="field-label" id="new-task-model-label">{{ agent?.model ? 'Model from agent definition' : 'Configured model' }}</span>
-              <div class="intake-model" aria-labelledby="new-task-model-label">{{ model }}</div>
-              <p class="intake-help">{{ agent?.model ? 'This task keeps a copy of the selected instructions and model.' : 'Uses this connection’s configuration when the task starts.' }}</p>
-            </div>
-            <p class="intake-tool-access">Tool access: {{ toolSummary }} · <RouterLink to="/settings#tool-access">Manage access</RouterLink><span v-if="state.toolAccess?.builtins.files">File reads use the task worktree. Edits stay within the approved paths below.</span></p>
+            <ModelSelectionFields id="new-task" @update:provider="intake.selectionEdited = true" @update:model="intake.selectionEdited = true" @update:effort="intake.selectionEdited = true" v-model:provider="intake.provider" v-model:model="intake.model" v-model:effort="intake.effort" :providers="state.settings?.providers ?? []" :definition-model="agent?.model" :disabled="sending || state.workspaceBusy || !!intake.pending" />
+            <p v-if="intake.provider !== 'cursor-cli'" class="intake-tool-access">Tool access: {{ toolSummary }} · <RouterLink to="/settings#tool-access">Manage access</RouterLink><span v-if="state.toolAccess?.builtins.files">File reads use the task worktree. Edits stay within the approved paths below.</span></p>
             <div class="intake-field">
               <label for="new-task-name">Request name · optional</label>
               <UInput id="new-task-name" v-model="intake.title" :maxlength="120" placeholder="Named from your first message" class="w-full" />

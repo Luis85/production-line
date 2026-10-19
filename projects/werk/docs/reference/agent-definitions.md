@@ -2,8 +2,8 @@
 
 Workers can import Docker Agent YAML, preview its named agents, and choose one as
 an instruction profile for a Feature Request's execution. The selected instructions
-and compatible model are passed to the worker's existing provider. Admission
-retains an immutable copy of the selection, including the source digest. Answers,
+and compatible model are passed to the worker's existing provider. Implementation
+admission retains an immutable copy of the selection, including the source digest. Answers,
 continuations and retries use that copy even if the imported definition is later
 removed.
 
@@ -18,8 +18,11 @@ set `definitionRef` and `agent` in its frontmatter, using **Advanced template
 editing** in the webview or your Markdown editor. The connected `feature prepare`
 command can seed these fields too. Validate and publish the same request through
 shared Git intake; selecting a profile does not start a separate task workflow.
-An accepted request keeps its original selection. Use a successor request for
-work requiring another profile.
+After implementation admission, a request keeps its original profile selection;
+use a successor for work requiring another profile. While an optional Ready Check
+waits, the team may revise compatible instruction-profile fields in the source
+note. Its provider, effective model and effort remain frozen from the first claim;
+a changed profile's model default cannot replace them.
 
 Private workers without a shared repository binding also expose the definition
 and named-agent selectors in **New request → Task options**. These local requests
@@ -41,10 +44,17 @@ agents:
 
 An inline `model: openai/MODEL_ID` or `model: anthropic/MODEL_ID` selects a model
 from that provider family. Replace `MODEL_ID` with a model your account can use.
-Named models resolve through the document's `models` mapping. OpenAI definitions
-require Codex CLI or OpenAI API; Anthropic definitions require Claude Code CLI or
-Anthropic API. Selecting a definition never switches billing or provider families
-automatically. CLI authentication still belongs to the worker's OS account.
+Named models resolve through the document's `models` mapping. Codex CLI and
+OpenAI API accept OpenAI definitions; Claude Code CLI and Anthropic API accept
+Anthropic definitions. Cursor CLI accepts either family when the selected model
+is available through Cursor. Selecting a definition never switches the request's
+provider or billing connection automatically.
+
+A nonempty request `model` overrides the compatible profile model; otherwise the
+profile model precedes the provider's configured default. Effort comes from the
+request override or provider default, not unsupported profile model parameters.
+See [selection precedence](model-interaction.md#provider-model-and-effort-selection).
+CLI authentication still belongs to the worker's OS account.
 
 ## Stable references for committed requests
 

@@ -19,29 +19,30 @@ const search = ref(''), view = ref<'board' | 'list'>('board');
 const interactionBusy = ref(false), opening = ref(false), queueBusy = ref(false), stopping = ref(false), actionError = ref('');
 const features = ref<TaskOverviewInput['features']>(null), activeRun = ref<WorkerRun | null>(null), evidenceError = ref('');
 let active = true, evidenceRevision = 0;
-const allTasks = computed(() => buildTaskOverview({ sessions: state.sessions, board: state.board, history: state.history, features: features.value, runs: activeRun.value ? [activeRun.value] : [] }));
-const overview = computed(() => buildTaskOverview({ sessions: state.sessions, board: state.board, history: state.history, features: features.value }, { search: search.value }));
+const allTasks = computed(() => buildTaskOverview({ sessions: state.sessions, board: state.board, history: state.history, features: features.value, sharedRequests: state.environment?.sharedIntake?.requests, runs: activeRun.value ? [activeRun.value] : [] }));
+const overview = computed(() => buildTaskOverview({ sessions: state.sessions, board: state.board, history: state.history, features: features.value, sharedRequests: state.environment?.sharedIntake?.requests, runs: activeRun.value ? [activeRun.value] : [] }, { search: search.value }));
 const running = computed(() => allTasks.value.groups.running[0]);
 const capacity = computed(() => buildWorkerCapacityView(state.sessions?.capacity, getCapacityFreshness()));
 const selectedSession = computed(() => state.sessions?.records.find(item => item.id === state.sessions?.selected));
 const showRemoteCapacity = computed(() => !!state.environment?.orchestratorUrl || (state.sessions?.capacity?.remote.accepted ?? 0) > 0);
 const queueNote = computed(() => capacity.value.stale || capacity.value.state === 'unknown' ? 'Refresh to check current start conditions.' : capacity.value.startBlocked ? 'New starts are on hold. See the worker conditions above.' : 'Waiting work shares one execution slot.');
-const currentSession = computed(() => state.sessions?.records.find(item => item.id === state.sessions?.execution.currentSessionId));
+const currentExecutionId = computed(() => state.sessions?.execution.currentSessionId);
+const currentSession = computed(() => state.sessions?.records.find(item => item.id === currentExecutionId.value));
 const originalAssignment = computed(() => currentSession.value?.kind === 'orchestrator' && ['queued', 'running'].includes(currentSession.value.taskState ?? ''));
-const activePurpose = computed(() => activeRun.value?.purpose === 'gate_review' ? 'Advisory review' : activeRun.value?.purpose === 'rework' ? 'Rework proposal' : originalAssignment.value && state.status?.mode === 'mock' ? 'Simulation · no implementation' : 'Task execution');
+const activePurpose = computed(() => activeRun.value?.purpose === 'gate_review' ? (running.value?.id.startsWith('shared-feature:') ? 'Feature Request Ready Check' : 'Advisory review') : activeRun.value?.purpose === 'rework' ? 'Rework proposal' : originalAssignment.value && state.status?.mode === 'mock' ? 'Simulation · no implementation' : 'Task execution');
 const canStop = computed(() => !!activeRun.value && activeRun.value.sessionId === currentSession.value?.id && (!activeRun.value.purpose || activeRun.value.purpose === 'execution') && !originalAssignment.value);
 const selectionBusy = computed(() => interactionBusy.value || opening.value || stopping.value || state.workspaceBusy);
-const runModel = computed(() => activeRun.value && activeRun.value.sessionId === currentSession.value?.id ? activeRun.value.model || 'Provider default' : 'Not yet recorded');
-const runProvider = computed(() => activeRun.value && activeRun.value.sessionId === currentSession.value?.id ? activeRun.value.provider : currentSession.value?.provider ?? 'Connection unavailable');
+const runModel = computed(() => activeRun.value && activeRun.value.sessionId === currentExecutionId.value ? activeRun.value.model || 'Provider default' : 'Not yet recorded');
+const runProvider = computed(() => activeRun.value && activeRun.value.sessionId === currentExecutionId.value ? activeRun.value.provider : currentSession.value?.provider ?? 'Connection unavailable');
 const runElapsed = computed(() => {
   const started = activeRun.value?.startedAt;
-  if (!started || activeRun.value?.sessionId !== currentSession.value?.id) return 'Elapsed unavailable';
+  if (!started || activeRun.value?.sessionId !== currentExecutionId.value) return 'Elapsed unavailable';
   const elapsed = Math.max(0, Math.floor((Date.parse(state.sessionsReadAt || new Date().toISOString()) - Date.parse(started)) / 1000));
   return Math.floor(elapsed / 60) + 'm ' + elapsed % 60 + 's elapsed';
 });
 const usage = computed(() => {
   const value = activeRun.value?.usage;
-  if (activeRun.value?.sessionId !== currentSession.value?.id || !value || value.inputTokens === null || value.outputTokens === null) return 'Token usage unavailable';
+  if (activeRun.value?.sessionId !== currentExecutionId.value || !value || value.inputTokens === null || value.outputTokens === null) return 'Token usage unavailable';
   return (value.inputTokens + value.outputTokens).toLocaleString() + ' tokens reported';
 });
 const groups = computed(() => [
@@ -52,7 +53,7 @@ const groups = computed(() => [
 async function readEvidence() {
   if (!active || !state.unlocked) return;
   const revision = ++evidenceRevision;
-  const sessionId = currentSession.value?.id;
+  const sessionId = currentExecutionId.value;
   if (activeRun.value?.sessionId !== sessionId) activeRun.value = null;
   const results = await Promise.allSettled([
     request('/api/features'),
@@ -65,7 +66,7 @@ async function readEvidence() {
   if (results[1].status === 'fulfilled') {
     const page = results[1].value as RunPage | null;
     const run = page?.total === 1 && page.rows.length === 1 ? page.rows[0] : null;
-    activeRun.value = run?.startedAt && !run.after && run.sessionId === sessionId && currentSession.value?.id === sessionId ? run : null;
+    activeRun.value = run?.startedAt && !run.after && run.sessionId === sessionId && currentExecutionId.value === sessionId ? run : null;
   } else { activeRun.value = null; notes.push('Current attempt evidence is unavailable.'); }
   evidenceError.value = notes.join(' ');
 }
@@ -149,14 +150,14 @@ onDeactivated(() => { active = false; evidenceRevision++; });
 
       <RepositoryDiscovery />
       <WorkerCapacityPanel :view="capacity" :remaining="state.sessions?.capacity?.local.remaining" :show-remote="showRemoteCapacity" :consumption-blocked="state.sessions?.capacity?.starts.consumption?.blocked" :refreshing="state.refreshingManually" :refresh-disabled="!state.unlocked" @refresh="refreshFromUser" />
-      <section v-if="currentSession" class="active-run occupied" aria-labelledby="active-run-heading">
+      <section v-if="currentExecutionId" class="active-run occupied" aria-labelledby="active-run-heading">
         <div class="active-run-heading"><span class="activity-dot" /><h2 id="active-run-heading">{{ capacity.stale ? 'Last reported task' : 'Current task' }}</h2></div>
-        <template v-if="currentSession">
-          <div class="active-run-content"><div class="active-run-title"><button :disabled="selectionBusy" @click="openSession(currentSession.id)">{{ running?.title ?? currentSession.title }}<UIcon name="i-lucide-arrow-up-right" /></button></div>
+        <template v-if="currentExecutionId">
+          <div class="active-run-content"><div class="active-run-title"><button v-if="currentSession" :disabled="selectionBusy" @click="openSession(currentSession.id)">{{ running?.title ?? currentSession.title }}<UIcon name="i-lucide-arrow-up-right" /></button><RouterLink v-else :to="running?.primaryAction.href ?? '/history?view=runs'">{{ running?.title ?? activeRun?.title ?? 'Worker execution' }}<UIcon name="i-lucide-arrow-up-right" /></RouterLink></div>
           <div class="active-run-meta"><span>{{ activePurpose }}</span><span>{{ runProvider }}</span><span>{{ runModel }}</span><span>{{ runElapsed }}</span></div>
           <p class="active-run-readout">{{ usage }} · {{ capacity.stale ? 'Activity needs refresh' : 'Updates every 3s' }}</p>
           <p v-if="originalAssignment" class="active-run-empty">Managed by its owning orchestrator.</p></div>
-          <div class="active-run-actions"><UButton v-if="canStop" color="error" variant="outline" icon="i-lucide-square" :loading="stopping" :disabled="selectionBusy" @click="stopTask">Stop task</UButton><UButton v-else-if="!originalAssignment" color="neutral" variant="outline" :disabled="selectionBusy" @click="openSession(currentSession.id, true)">Open task controls</UButton><RouterLink :to="running?.evidenceHref ?? '/history?view=runs'">Inspect attempt</RouterLink></div>
+          <div class="active-run-actions"><UButton v-if="canStop" color="error" variant="outline" icon="i-lucide-square" :loading="stopping" :disabled="selectionBusy" @click="stopTask">Stop task</UButton><UButton v-else-if="currentSession && !originalAssignment" color="neutral" variant="outline" :disabled="selectionBusy" @click="openSession(currentSession.id, true)">Open task controls</UButton><RouterLink :to="running?.evidenceHref ?? '/history?view=runs&runSession=' + encodeURIComponent(currentExecutionId)">Inspect attempt</RouterLink></div>
         </template>
       </section>
       <p v-if="actionError" class="board-error" role="alert">{{ actionError }}</p>
@@ -206,7 +207,7 @@ onDeactivated(() => { active = false; evidenceRevision++; });
 .activity-dot { height: 7px; width: 7px; border-radius: 50%; background: #8be0b8; flex-shrink: 0; }
 .active-run-heading h2 { font-size: .8125rem; font-weight: 650; color: #b9e7d1; }
 .active-run-title { margin: 0 0 4px; }
-.active-run-title button { display: inline-flex; text-align: left; align-items: center; gap: 10px; font-size: 1.0625rem; font-weight: 600; color: #edf4f7; cursor: pointer; min-height: 44px; overflow-wrap: anywhere; }
+.active-run-title button, .active-run-title a { display: inline-flex; text-align: left; align-items: center; gap: 10px; font-size: 1.0625rem; font-weight: 600; color: #edf4f7; cursor: pointer; min-height: 44px; overflow-wrap: anywhere; }
 .active-run-title button :deep(.iconify) { flex-shrink: 0; }
 .active-run-title button:disabled { cursor: default; opacity: .6; }
 .active-run-meta { display: flex; gap: 10px; flex-wrap: wrap; font-size: .75rem; color: #b6cbc7; }

@@ -18,11 +18,13 @@ async function fixture(t, execute) {
   const directory = await mkdtemp(join(tmpdir(), "werk-chat-gates-")),
     settings = new WorkerSettings(directory);
   await settings.init();
-  const model = () => ({
+  await settings.update({ provider: { id: "codex-cli", model: "fixture-model" } });
+  const model = connection => ({
         capabilities: modelCapabilities,
     configuration: {
-      id: "codex-cli",
-      model: "fixture-model",
+      id: connection.id,
+      model: connection.model,
+      effort: connection.effort,
       instruction: "Frozen fixture instructions",
     },
     async reply() {

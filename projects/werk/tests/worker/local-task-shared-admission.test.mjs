@@ -11,6 +11,9 @@ import { WorkerSettings } from '../../src/worker/dist/worker/infrastructure/sett
 import { WorkerSessions } from './application-fixtures.mjs';
 import { LocalTaskboard } from './application-fixtures.mjs';
 import { defaultGatePolicy, gateDigest } from '../../src/worker/dist/worker/application/request-gates.js';
+import { featureContentHash } from '../../src/worker/dist/worker/application/feature-workflow.js';
+import { submissionContextHash } from '../../src/worker/dist/worker/application/local-task-contracts.js';
+import { originalPrompt } from '../../src/worker/dist/worker/application/local-task-preparation.js';
 import { modelCapabilities } from '../../src/worker/dist/worker/application/model-contract.js';
 
 const execute = promisify(execFile);
@@ -38,7 +41,7 @@ async function fixture(t, options = {}) {
   const factory = connection => ({
     configuration: { id: connection.id, model: connection.model, instruction: 'Fixture only; no external calls' },
     capabilities: modelCapabilities,
-    async execute(request) { calls.push(request); return { type: 'completed', text: JSON.stringify({ summary: 'Fixture patch; tests not run.', files: [{ path: 'approved.txt', content: 'proposed change\n' }] }) }; },
+    async execute(request) { calls.push(request); if (options.question && calls.length === 1) return { type: 'needs_input', request: { schemaVersion: 1, kind: 'question', message: 'Which expected behavior?' } }; return { type: 'completed', text: JSON.stringify({ summary: 'Fixture patch; tests not run.', files: [{ path: 'approved.txt', content: 'proposed change\n' }] }) }; },
     async reply() { throw Error('Structured fixture required'); },
   });
   const port = options.noPort ? undefined : { async prepareWorktree(selector, taskKey, signal, pinned) {
@@ -62,7 +65,7 @@ async function fixture(t, options = {}) {
     input: { title: 'Shared feature', instruction: 'Change only the approved file.', repository, paths: ['approved.txt'], provider: 'openai-api' },
     submission(policy = defaultGatePolicy()) { return { id: 'shared-feature-task', hash: 'a'.repeat(64), repositoryId: 'shared', baseCommit, criteria: ['Approved content changes.'], policy }; },
     async restart() { await board.close(); await sessions.close(); await open(); },
-    async settle(id) { await board.tick(); for (let i = 0; i < 400; i++) { if (board.detail(id).status === 'review' && !sessions.executor.busy) return; await new Promise(resolve => setTimeout(resolve, 5)); } throw Error('Task did not produce review output'); },
+    async settle(id, status = 'review') { await board.tick(); for (let i = 0; i < 400; i++) { if (board.detail(id).status === status && !sessions.executor.busy) return; await new Promise(resolve => setTimeout(resolve, 5)); } throw Error('Task did not produce review output'); },
   };
 }
 function heldPolicy() {
@@ -149,4 +152,127 @@ test('pinned admission refuses an adapter returning another source commit or no 
   const submission = missing.submission(); delete submission.repositoryId;
   await assert.rejects(missing.board.create(missing.input, submission), /worktree service/);
   assert.equal(missing.board.view().tasks.length, 0);
+});
+
+
+/** @returns {import('../../src/worker/application/feature-workflow.ts').FeatureDefinitionPrompts & Required<Pick<import('../../src/worker/application/feature-workflow.ts').FeatureDefinitionPrompts, 'ready' | 'done'>>} */
+function definitionPrompts(commit) {
+  const ready = 'Confirm the migration target with the team before implementation.', done = 'Report the migration regression evidence and remaining limitations.';
+  return { schemaVersion: 1, commit,
+    ready: { path: 'team/definition-of-ready.md', content: ready, sha256: featureContentHash(ready) },
+    done: { path: 'team/definition-of-done.txt', content: done, sha256: featureContentHash(done) },
+  };
+}
+
+function dispatchedDefinition(prompt, stage) {
+  const lines = prompt.split('\n'), heading = lines.findIndex(line => line.startsWith('Definition of ' + stage + ' —'));
+  assert.notEqual(heading, -1, 'Dispatch must label the team definition.');
+  return JSON.parse(lines[heading + 1]);
+}
+
+test('definition prompts stay frozen through queued restart, questions, answers and trusted replay', async t => {
+  const f = await fixture(t, { question: true });
+  const submission = { ...f.submission(), definitionPrompts: definitionPrompts(f.baseCommit) }, frozen = structuredClone(submission);
+  const admission = f.board.create(f.input, submission);
+  submission.definitionPrompts.ready.content = 'A later team definition must not replace the accepted prompt.';
+  submission.definitionPrompts.done.path = 'team/later-done.md';
+  await admission;
+  let task = f.board.executionDetail(frozen.id);
+  assert.deepEqual(task.definitionPrompts, frozen.definitionPrompts);
+  const request = f.sessions.requests.get(task.requestId);
+  const context = request.input.context;
+  assert.ok(context && typeof context === 'object' && 'definitionPrompts' in context);
+  assert.deepEqual(context.definitionPrompts, frozen.definitionPrompts);
+  assert.equal(request.input.message, f.input.instruction, 'Definitions do not alter the authored request or its readiness length.');
+  assert.doesNotMatch(JSON.stringify(f.board.detail(task.id)), /Confirm the migration target|Report the migration regression/);
+  const accepted = f.sessions.interactions.turn(task.sessionId, task.currentTurnId).dispatch;
+  const firstMessage = accepted.messages[0].text;
+  assert.match(firstMessage, /Definition of Ready.*check prerequisites/);
+  assert.match(firstMessage, /Definition of Done.*verify the outcome/);
+  assert.deepEqual(dispatchedDefinition(firstMessage, 'Ready'), frozen.definitionPrompts.ready);
+  assert.deepEqual(dispatchedDefinition(firstMessage, 'Done'), frozen.definitionPrompts.done);
+  assert.match(firstMessage, /do not authorize new permissions.*deterministic checks or human review/);
+  assert.equal(accepted.policy.tools, 'none', 'Team prompts never grant tools.');
+  await f.restart();
+  assert.equal(f.board.detail(frozen.id).status, 'queued', 'A fully prepared prompt snapshot remains safe to dispatch after restart.');
+  await f.settle(frozen.id, 'waiting_input');
+  assert.equal(f.calls[0].messages[0].text, firstMessage);
+  await f.restart();
+  task = f.board.executionDetail(frozen.id);
+  const waiting = f.sessions.interactions.view(task.sessionId); assert.ok(waiting.pending);
+  await f.board.interact({ action: 'answer', sessionId: task.sessionId, expectedRevision: waiting.revision, pendingId: waiting.pending.id, operationId: 'confirm-migration', answer: 'Preserve the existing database behavior.' });
+  await f.settle(task.id);
+  assert.equal(f.calls.length, 2); assert.equal(f.calls[1].messages[0].text, firstMessage);
+  assert.equal(f.calls[1].messages.filter(message => message.text.includes('Team workflow definitions pinned')).length, 1);
+  assert.ok(f.calls[1].messages.some(message => message.text === 'Preserve the existing database behavior.'));
+  assert.deepEqual(f.board.executionDetail(task.id).definitionPrompts, frozen.definitionPrompts);
+  await f.board.create(f.input, frozen);
+  assert.equal(f.calls.length, 2); assert.equal(f.preparations.length, 1);
+  const changed = structuredClone(frozen); changed.definitionPrompts.done.content = 'A new team completion rule.';
+  changed.definitionPrompts.done.sha256 = featureContentHash(changed.definitionPrompts.done.content);
+  await assert.rejects(f.board.create(f.input, changed), /different input/);
+});
+
+test('definition prompts reject malformed reservations and cannot be supplied through the public task body', async t => {
+  const f = await fixture(t), submission = { ...f.submission(), definitionPrompts: definitionPrompts(f.baseCommit) };
+  await assert.rejects(f.board.create({ ...f.input, definitionPrompts: submission.definitionPrompts }), /unknown field/i);
+  for (const changed of [
+    { ...submission.definitionPrompts, commit: 'HEAD' },
+    { ...submission.definitionPrompts, done: { ...submission.definitionPrompts.done, sha256: '0'.repeat(64) } },
+    { ...submission.definitionPrompts, ready: { ...submission.definitionPrompts.ready, content: '' } },
+  ]) await assert.rejects(f.board.create(f.input, { ...submission, definitionPrompts: changed }), error => testErrorCode(error) === 'invalid_input');
+  await assert.rejects(f.board.create(f.input, { ...submission, baseCommit: undefined }), /reserved task source commit/);
+  await assert.rejects(f.board.create(f.input, { ...submission, repositoryId: undefined }), /reserved repository assignment/);
+  assert.equal(f.preparations.length, 0); assert.equal(f.calls.length, 0);
+});
+
+test('corrupt saved definition content and mismatched commits fail recovery before any model dispatch', async t => {
+  for (const corruption of ['content', 'content-hash', 'commit', 'reservation', 'missing']) await t.test(corruption, async child => {
+    const f = await fixture(child), submission = { ...f.submission(), definitionPrompts: definitionPrompts(f.baseCommit) };
+    await f.board.create(f.input, submission);
+    const path = join(f.state, 'taskboard.json'), saved = JSON.parse(await readFile(path, 'utf8'));
+    if (corruption === 'missing') delete saved[0].definitionPrompts;
+    else if (corruption === 'commit') saved[0].definitionPrompts.commit = f.headCommit;
+    else {
+      saved[0].definitionPrompts.ready.content = 'Unvalidated replacement.';
+      if (corruption !== 'content') saved[0].definitionPrompts.ready.sha256 = featureContentHash(saved[0].definitionPrompts.ready.content);
+      if (corruption === 'reservation') saved[0].submissionContextHash = submissionContextHash({ ...submission, definitionPrompts: saved[0].definitionPrompts });
+    }
+    await writeFile(path, JSON.stringify(saved));
+    await assert.rejects(f.restart(), /prompt|source commit/i);
+    assert.equal(f.calls.length, 0);
+  });
+});
+
+test('implementation-tool dispatch includes the same team definitions without changing mandatory verification', async t => {
+  const f = await fixture(t), submission = { ...f.submission(), definitionPrompts: definitionPrompts(f.baseCommit) };
+  await f.board.create(f.input, submission);
+  const task = f.board.executionDetail(submission.id);
+  const prompt = originalPrompt({ ...task, implementation: { schemaVersion: 1, mode: 'worktree', baseCommit: f.baseCommit, approvedPaths: ['approved.txt'], checks: [{ id: 'tests', name: 'Run required tests', executable: 'node', args: ['--test'], fingerprint: 'f'.repeat(64) }] } });
+  assert.match(prompt, /werk_candidate_check for EVERY required check/);
+  assert.match(prompt, /Human review is required/);
+  assert.deepEqual(dispatchedDefinition(prompt, 'Ready'), submission.definitionPrompts.ready);
+  assert.deepEqual(dispatchedDefinition(prompt, 'Done'), submission.definitionPrompts.done);
+  const legacy = originalPrompt({ ...task, definitionPrompts: undefined });
+  assert.doesNotMatch(legacy, /Team workflow definitions|Definition of Ready|Definition of Done/);
+});
+
+
+test('reviewed answers can advance the implementation base without replacing frozen definition provenance', async t => {
+  const f = await fixture(t);
+  const submission = { ...f.submission(), baseCommit: f.headCommit, definitionPrompts: definitionPrompts(f.baseCommit) };
+  await f.board.create(f.input, submission);
+  let task = f.board.executionDetail(submission.id);
+  assert.equal(task.baseCommit, f.headCommit);
+  assert.equal(task.definitionPrompts.commit, f.baseCommit);
+  assert.equal(f.preparations[0].pinned, f.headCommit);
+  const prepared = f.sessions.interactions.turn(task.sessionId, task.currentTurnId).dispatch;
+  assert.deepEqual(dispatchedDefinition(prepared.messages[0].text, 'Ready'), submission.definitionPrompts.ready);
+  await f.restart();
+  task = f.board.executionDetail(submission.id);
+  assert.equal(task.baseCommit, f.headCommit);
+  assert.deepEqual(task.definitionPrompts, submission.definitionPrompts);
+  await f.board.create(f.input, submission);
+  assert.equal(f.preparations.length, 1);
+  assert.equal(f.calls.length, 0, 'No dispatch occurs while the worker is paused.');
 });

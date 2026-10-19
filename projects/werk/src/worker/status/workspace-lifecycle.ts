@@ -34,7 +34,7 @@ export function close(workspace: WorkspaceContext, options: { deferEvidence?: bo
   // Abort Git preparation before awaiting intake; preserve evidence until remote assignments drain.
   workspace.draining ??= settleCleanup(
     [() => closeProcesses(workspace), () => workspace.features?.stopIntake(), () => workspace.sharedRuntime.close(), () => workspace.providerAccounts.close(), () => workspace.providerStatuses.close(),
-     () => workspace.repositories.close(), () => workspace.board.close(), () => workspace.reviews.close(), () => workspace.taskRequests],
+     () => workspace.repositories.close(), () => workspace.board.close(), () => workspace.reviews.close(), () => workspace.readyReviews.close(), () => workspace.taskRequests],
     () => workspace.sessions.close({ retainEvidence: true }),
   );
   if (options.deferEvidence) return workspace.draining;

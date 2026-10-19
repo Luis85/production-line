@@ -1,7 +1,7 @@
 import type { FeatureRequestPublication } from '../../application/feature-authoring-contracts.js';
 import { approvedPathsCollide } from '../../application/approved-paths.js';
 import { containsSensitivePatchMaterial } from '../../application/review-patch-policy.js';
-import { acceptedSharedBody, sharedSourceProjectionKeys } from './shared-progress.js';
+import { acceptedSharedBody, sharedReadyReviewParts, sharedSourceProjectionKeys } from './shared-progress.js';
 import { requestName, parseFeature } from './document.js';
 import { canonicalJson } from '../../application/request-gates.js';
 import { branchName, commitId, FeatureGitIo, GitFeatureError, gitPath, hash, textBytes, type GitBlob } from './git-io.js';
@@ -32,7 +32,7 @@ function unchangedRequest(before: string, after: string) {
   if (before === after) return;
   const old = parseFeature(before), next = parseFeature(after);
   const immutable = (value: Record<string, unknown>) => Object.fromEntries(Object.entries(value).filter(([key]) => !['id', 'status', 'werk', ...sharedSourceProjectionKeys].includes(key)));
-  if (acceptedSharedBody(old) !== acceptedSharedBody(next) || canonicalJson(immutable(old.data)) !== canonicalJson(immutable(next.data)) || old.data.id !== undefined && old.data.id !== next.data.id)
+  if (acceptedSharedBody(old) !== acceptedSharedBody(next) || (sharedReadyReviewParts(old)?.answer ?? '').replace(/<!--[\s\S]*?(?:-->|$)/g, '').trim() !== (sharedReadyReviewParts(next)?.answer ?? '').replace(/<!--[\s\S]*?(?:-->|$)/g, '').trim() || canonicalJson(immutable(old.data)) !== canonicalJson(immutable(next.data)) || old.data.id !== undefined && old.data.id !== next.data.id)
     throw new GitFeatureError('conflict', 'Lifecycle publication may update only the request ID, status and worker metadata; accepted developer content is preserved.');
 }
 

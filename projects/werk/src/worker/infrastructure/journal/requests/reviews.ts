@@ -75,9 +75,10 @@ export function requestStartReview(
       conflict("This review intent is no longer executable.");
     if (
       dispatch.provider.id !== intent.provider.id ||
-      dispatch.provider.model !== intent.provider.model
+      dispatch.provider.model !== intent.provider.model ||
+      (dispatch.provider.effort ?? 'default') !== (intent.provider.effort ?? 'default')
     )
-      conflict("Reviewer dispatch changed its frozen provider or model.");
+      conflict("Reviewer dispatch changed its frozen provider or model or effort.");
     intent.status = "running";
     intent.runId = runId;
     intent.dispatch = clone(dispatch);

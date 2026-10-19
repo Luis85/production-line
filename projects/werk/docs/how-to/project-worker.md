@@ -260,7 +260,7 @@ writable only by the worker's operator. Set `WERK_WORKER_PORT` to override the h
 port. Compose receives a unique project name; separate projects can run independent
 workers when their host ports differ.
 
-The stock image has no Claude/Codex CLI or host login. Configure an API provider,
+The stock image has no Claude, Codex or Cursor CLI or host login. Configure an API provider,
 or provide a reviewed image with your CLI through `WERK_WORKER_IMAGE` and sign in
 as the container's worker account. Host executable paths and host subscriptions
 are not automatically transferred. The same applies when switching back to native
@@ -291,8 +291,10 @@ docker run --rm --user 1000:1000 `
   node /installer/cli.mjs init
 ```
 
-Then use the Compose commands above. A native Windows worker can use the Claude
-Code CLI signed in on that machine, or an API provider; Codex CLI remains POSIX-only.
+Then use the Compose commands above. A native Windows worker can use Claude Code
+or Cursor CLI signed in on that machine, or an API provider; Codex CLI remains
+POSIX-only. [Cursor setup](use-worker-webview.md#connect-cursor-cli) explains its
+native permissions and hooks, which are separate from Werk tool grants.
 
 ## Add an orchestrator later
 

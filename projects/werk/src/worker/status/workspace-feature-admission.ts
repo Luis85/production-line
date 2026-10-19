@@ -7,7 +7,7 @@ interface AdmissionWorkspace {
   repositoriesUpdating: boolean;
   executionProfiles?: { pending(): boolean };
   settings: { value: { board: { paused: boolean; queueCapacity: number } } };
-  sessions: { readonly chatActive: number };
+  sessions: { readonly chatActive: number; readonly admissionActive?: number };
   board: { readonly active: number };
   consumption: { status(): Pick<ConsumptionStatus, 'blocked' | 'reason' | 'periodEnd'> };
 }
@@ -27,6 +27,6 @@ export function sharedFeatureAdmissionHold(workspace: AdmissionWorkspace): Share
         : 'The worker has used its configured token allowance.';
     return { code: 'budget', message: reason + ' This ready request will be checked again automatically when allowance is available. The next UTC allowance window starts at ' + consumption.periodEnd + '.', resumesAt: consumption.periodEnd };
   }
-  if (workspace.sessions.chatActive + workspace.board.active >= workspace.settings.value.board.queueCapacity) return { code: 'capacity', message: 'The worker queue is full. This ready request will be checked again automatically when a local queue place becomes available.' };
+  if ((workspace.sessions.admissionActive ?? workspace.sessions.chatActive) + workspace.board.active >= workspace.settings.value.board.queueCapacity) return { code: 'capacity', message: 'The worker queue is full. This ready request will be checked again automatically when a local queue place becomes available.' };
   return undefined;
 }

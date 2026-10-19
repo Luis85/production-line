@@ -1,3 +1,4 @@
+import type { ModelEffort } from '../application/model-effort.js';
 import { claudeVersion, minimumClaudeVersion } from './provider-version.js';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -28,7 +29,7 @@ async function costScope(executable: string, signal: AbortSignal): Promise<'invo
   throw error;
 }
 export async function claudeSessionReply(connection: ProviderConnection, directory: string, request: ModelRequest, signal: AbortSignal,
-  access: ModelSessionAccess, argumentsFor: (model: string, promptFile: string, bridge?: CliToolBridge) => string[],
+  access: ModelSessionAccess, argumentsFor: (model: string, promptFile: string, bridge?: CliToolBridge, effort?: ModelEffort) => string[],
   observe: (usage: ProviderUsage) => void, runtime?: ToolRuntime, control?: ModelInvocationControl) {
   const session = await openProviderSession(access, request, connection.executable), resumed = !!session.nativeId;
   const nativeId = session.nativeId ?? randomUUID();
@@ -40,7 +41,7 @@ export async function claudeSessionReply(connection: ProviderConnection, directo
     const scope = await costScope(connection.executable, signal), promptFile = join(promptDirectory, 'system-prompt.md');
     await writeFile(promptFile, request.protocolInstructions, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
     const output = await withCliToolBridge(runtime, signal, async bridge => {
-      const args = argumentsFor(request.provider.model, promptFile, bridge).filter(arg => arg !== '--no-session-persistence');
+      const args = argumentsFor(request.provider.model, promptFile, bridge, request.provider.effort).filter(arg => arg !== '--no-session-persistence');
       args.push('--system-prompt-snapshot', 'off', resumed ? '--resume' : '--session-id', nativeId);
       await session.begin(nativeId);
       control?.beforeCall();

@@ -144,6 +144,14 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
     manifest,
     limits: Object.freeze({ maxCalls, maxRuntimeMs, commandTimeoutMs }),
     assertAvailable: authorize,
+    ...(options.worktree && pinnedWorktree && options.development?.prepareNative ? {
+      async nativeWorkspace(signal: AbortSignal) {
+        authorize(signal);
+        await options.development!.prepareNative!(signal);
+        authorize(signal);
+        return resolve(options.worktree!);
+      },
+    } : {}),
     budget: () => ({ maxCalls, windowMs: maxRuntimeMs, callsUsed: calls, refusedCalls: refused, exhausted: exhausted ? { reason: exhausted, maxCalls, windowMs: maxRuntimeMs, callsUsed: calls, refusedCalls: refused } : null }),
     call(name, args, signal) {
       let input: unknown;

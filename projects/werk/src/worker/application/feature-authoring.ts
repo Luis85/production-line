@@ -68,6 +68,6 @@ export class SharedFeatureAuthoring {
     const publication = await repository.publishRequest({ operationId: input.operationId, request: { path, expectedRevision: input.expectedRevision!, content: markdown }, workflowFiles, workflowDigest: input.expectedWorkflowDigest!, binding, ...(readinessError ? { readinessError } : {}) }, signal);
     // A confirmed publication is durable even if a subsequent synchronization cannot run yet.
     await this.ports.sync().catch(() => undefined);
-    return { ...result, revision: featureContentHash(markdown), publication, workflowDigest: input.expectedWorkflowDigest!, ...(publication.replayed && document.status === 'ready' ? { readiness: { valid: true, errors: [] } } : {}) };
+    return { ...result, revision: featureContentHash(markdown), publication, workflowDigest: input.expectedWorkflowDigest!, ...(publication.replayed && document.status === 'ready' ? { readiness: { ...readiness, valid: true, errors: [] } } : {}) };
   }
 }

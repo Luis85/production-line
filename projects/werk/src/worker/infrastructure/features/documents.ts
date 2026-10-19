@@ -7,8 +7,8 @@ import type { FeatureDocumentPort } from '../../application/feature-management.j
 
 /** Access is serialized by FeatureRequests, alongside its watcher. */
 export class FeatureDocuments implements FeatureDocumentPort {
-  private directory: string; private provider: string; private check: () => Promise<void>;
-  constructor(directory: string, provider: string, check: () => Promise<void>) { this.directory = directory; this.provider = provider; this.check = check; }
+  private directory: string; private provider: string | (() => string); private check: () => Promise<void>;
+  constructor(directory: string, provider: string | (() => string), check: () => Promise<void>) { this.directory = directory; this.provider = provider; this.check = check; }
   private path(name: string) { if (!requestName(name)) throw new DomainError('invalid_input', 'Use a root-level .md filename without a leading underscore.'); return join(this.directory, name); }
   async read(name: string) {
     await this.check();
@@ -16,7 +16,7 @@ export class FeatureDocuments implements FeatureDocumentPort {
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new DomainError('not_found', 'Feature file not found.'); throw error; }
   }
   validate(markdown: string) {
-    try { const parsed = parseFeature(markdown); return { input: featureInput(parsed, this.provider), id: parsed.data.id, status: parsed.data.status, managed: parsed.data.werk !== undefined || parsed.data.source !== undefined, gates: (parsed.data.werk as { gates?: import('../../application/feature-requests.js').FeatureGateProjection } | undefined)?.gates }; }
+    try { const parsed = parseFeature(markdown); return { input: featureInput(parsed, typeof this.provider === 'function' ? this.provider() : this.provider), id: parsed.data.id, status: parsed.data.status, managed: parsed.data.werk !== undefined || parsed.data.source !== undefined, gates: (parsed.data.werk as { gates?: import('../../application/feature-requests.js').FeatureGateProjection } | undefined)?.gates }; }
     catch (error) { throw new DomainError('invalid_input', error instanceof Error ? error.message : 'Invalid feature document.'); }
   }
   ready(markdown: string) { const parsed = parseFeature(markdown); parsed.document.set('status', 'ready'); return '---\n' + parsed.document.toString({ lineWidth: 0 }) + '---\n' + parsed.body; }

@@ -47,6 +47,11 @@ test('folder relocation preserves edited template and checks while updating work
   await rename(join(f.root, f.authoring.workflow.readyCheck), join(f.root, 'features/_checks/ready.json'));
   await rename(join(f.root, f.authoring.workflow.base), join(f.root, 'features/_queue.base'));
   f.authoring.workflow.readyCheck = 'features/_checks/ready.json'; f.authoring.workflow.base = 'features/_queue.base';
+  f.authoring.workflow.readyPrompt = 'features/_checks/ready.md'; f.authoring.workflow.donePrompt = 'done.txt';
+  f.authoring.workflow.readyReviewPrompt = 'features/_checks/review.md';
+  await writeFile(join(f.root, f.authoring.workflow.readyReviewPrompt), 'Review unresolved requirements.\n');
+  await writeFile(join(f.root, f.authoring.workflow.readyPrompt), 'Team ready definition.\n');
+  await writeFile(join(f.root, f.authoring.workflow.donePrompt), 'Team done definition.\n');
   await writeFile(configPath, JSON.stringify(f.authoring.workflow, null, 2) + '\n');
   const original = await readFile(configPath, 'utf8'), templatePath = join(f.root, f.authoring.workflow.template);
   const template = await readFile(templatePath, 'utf8') + '\n## Team checklist\n\n<!-- Team-owned guidance. -->\n';
@@ -62,6 +67,11 @@ test('folder relocation preserves edited template and checks while updating work
   assert.equal(workflow.requestsDirectory, 'requests/team'); assert.equal(workflow.template, 'requests/team/_templates/feature-request.md');
   assert.equal(await readFile(join(f.root, workflow.template), 'utf8'), template); assert.equal(workflow.readyCheck, 'requests/team/_checks/ready.json'); assert.equal(workflow.base, 'requests/team/_queue.base');
   assert.equal(await readFile(join(f.root, workflow.readyCheck), 'utf8'), checkText);
+  assert.equal(workflow.readyPrompt, 'requests/team/_checks/ready.md'); assert.equal(workflow.donePrompt, 'done.txt');
+  assert.equal(workflow.readyReviewPrompt, 'requests/team/_checks/review.md');
+  assert.equal(await readFile(join(f.root, workflow.readyReviewPrompt), 'utf8'), 'Review unresolved requirements.\n');
+  assert.equal(await readFile(join(f.root, workflow.readyPrompt), 'utf8'), 'Team ready definition.\n');
+  assert.equal(await readFile(join(f.root, workflow.donePrompt), 'utf8'), 'Team done definition.\n');
   const movedBase = await readFile(join(f.root, workflow.base), 'utf8');
   assert.match(movedBase, /requests\/team/); assert.ok(movedBase.includes('\r\n'), 'preserve generated Base CRLF formatting');
   assert.equal(await readFile(join(f.root, 'requests/team/request.md'), 'utf8'), 'Original request bytes\n');

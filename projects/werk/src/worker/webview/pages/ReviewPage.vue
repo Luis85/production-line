@@ -3,6 +3,7 @@ import { computed, shallowRef } from 'vue';
 import { useRoute } from 'vue-router';
 import UButton from '@nuxt/ui/components/Button.vue';
 import UIcon from '@nuxt/ui/components/Icon.vue';
+import AcceptedModelSelection from '../components/AcceptedModelSelection.vue';
 import MessageContent from '../components/MessageContent.vue';
 import AssistantMessage from '../components/AssistantMessage.vue';
 import CandidateEvidence from '../components/CandidateEvidence.vue';
@@ -68,6 +69,7 @@ function requestChanged(value: WorkerRequest | null) {
       <nav class="review-sections" aria-label="Review sections"><a href="#review-goal">Accepted request</a><a href="#review-changes">{{ data.task ? 'Changes' : 'Result' }}</a><a href="#review-checks">Checks</a><a href="#review-decision">Decision</a><a v-if="data.shared" href="#review-handoff">Team handoff</a></nav>
       <section id="review-goal" class="review-section" aria-labelledby="review-goal-title">
         <div class="section-heading"><h2 id="review-goal-title">Accepted request</h2><span v-if="data.request" class="section-caption">Scope revision {{ data.request.inputRevision }}</span></div>
+        <AcceptedModelSelection :selection="review.selection" />
         <MessageContent v-if="goal" :text="goal" /><p v-else class="section-caption">Accepted instructions are not available in the retained evidence.</p>
         <h3>Acceptance criteria</h3><ul v-if="criteria.length" class="criteria"><li v-for="(criterion, index) in criteria" :key="index"><MessageContent :text="criterion" /></li></ul><p v-else class="section-caption">No acceptance criteria were recorded for this request.</p>
       </section>

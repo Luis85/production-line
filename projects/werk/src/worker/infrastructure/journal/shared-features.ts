@@ -1,3 +1,9 @@
+import { sharedFeatureInputHash, assertSharedFeatureSelection } from '../../application/shared-feature-selection.js';
+import { validateFeatureReviewEligibility } from '../features/review-eligibility.js';
+import { validateReadyReviewInput, readyReviewSessionId } from '../../application/ready-review-contracts.js';
+import { parseReadyReviewResult } from '../../application/ready-review-protocol.js';
+import { sharedReviewInput } from '../../application/shared-ready-review.js';
+import { readyReviewCandidate } from '../../application/ready-review-notes.js';
 import { SerializedOperations } from '../../../shared/serialized-operations.js';
 import { acceptedSharedBody } from '../features/shared-progress.js';
 import { readTaskNote, taskNoteResponse } from '../../application/task-notes.js';
@@ -10,7 +16,7 @@ import { sharedHash, sharedFeaturePublicationDigest } from '../../application/sh
 import { validateFeatureWorkflow, validateFeatureCheck, featureWorkflowPolicy, featureTaskDirectory } from '../../application/feature-workflow.js';
 import { identifier } from '../../../shared/validation.js';
 import { gateDigest, canonicalJson } from '../../application/request-gates.js';
-import { validateFeatureReadiness } from '../features/workflow.js';
+import { validateFeatureReadiness, assertFeatureWorkflowDefinitionPrompts } from '../features/workflow.js';
 
 /** Private recovery journal. No claim is dispatched from an unvalidated or partially written record. */
 export class SharedFeatureJournal {
@@ -26,12 +32,21 @@ export class SharedFeatureJournal {
         validateSharedIntakeConfig(record.binding);
         const snapshot = record.workflow;
         validateFeatureWorkflow(snapshot.configuration);
+        assertFeatureWorkflowDefinitionPrompts(snapshot);
         validateFeatureCheck(snapshot.readyCheck, 'ready'); validateFeatureCheck(snapshot.doneCheck, 'done');
-        if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(record.sourceCommit) || snapshot.commit !== record.sourceCommit || snapshot.policyDigest !== gateDigest(snapshot.policy) || snapshot.policyDigest !== gateDigest(featureWorkflowPolicy(snapshot.readyCheck, snapshot.doneCheck, snapshot.configuration.id)) || sharedHash(snapshot.template) !== snapshot.files.template.sha256) throw Error('Invalid frozen shared workflow.');
-        const readiness = validateFeatureReadiness(record.sourceMarkdown, snapshot.readyCheck, record.accepted.provider, snapshot.template, { configuration: snapshot.configuration, workflowPath: snapshot.files.configuration.path, allowLegacyProgressMetadata: true });
-        if (!readiness.valid || !readiness.input || record.id !== readiness.input.id || JSON.stringify(record.accepted) !== JSON.stringify(readiness.input) || record.owner !== state.workerId || record.taskId !== 'shared-feature-' + sharedHash(record.id + bindingKey(record.binding)).slice(0, 32)) throw Error('Invalid accepted shared feature.');
-        if (record.inputHash !== sharedHash(readiness.inputHash! + snapshot.policyDigest + record.sourceCommit + sharedHash(record.sourceMarkdown)) || typeof record.claimed !== 'boolean' || typeof record.submitted !== 'boolean' || record.submitted && !record.claimed || !/^[a-f0-9]{64}$/.test(record.remoteRevision)) throw Error('Invalid shared feature reservation.');
+        if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(record.sourceCommit) || (!record.readyReviewState && snapshot.commit !== record.sourceCommit) || snapshot.policyDigest !== gateDigest(snapshot.policy) || snapshot.policyDigest !== gateDigest(featureWorkflowPolicy(snapshot.readyCheck, snapshot.doneCheck, snapshot.configuration.id)) || sharedHash(snapshot.template) !== snapshot.files.template.sha256) throw Error('Invalid frozen shared workflow.');
+        const review = record.readyReviewState;
+        if (!!snapshot.readyReview !== !!review) throw Error('Missing accepted Ready Check checkpoint.');
+        const markdown = review ? readyReviewCandidate(record.sourceMarkdown, review.answer) : record.sourceMarkdown;
+        const readiness = review && !review.implementationReady
+          ? validateFeatureReviewEligibility(markdown, snapshot, record.accepted.provider)
+          : validateFeatureReadiness(markdown, snapshot.readyCheck, record.accepted.provider, snapshot.template, { configuration: snapshot.configuration, workflowPath: snapshot.files.configuration.path, allowLegacyProgressMetadata: true });
+        assertSharedFeatureSelection(record);
+        if (review) validateSharedReadyReview(record);
+        if (!readiness.valid || !readiness.input || record.id !== readiness.input.id || canonicalJson(record.accepted) !== canonicalJson(readiness.input) || record.owner !== state.workerId || record.taskId !== 'shared-feature-' + sharedHash(record.id + bindingKey(record.binding)).slice(0, 32)) throw Error('Invalid accepted shared feature.');
+        if (record.inputHash !== sharedFeatureInputHash(record) || typeof record.claimed !== 'boolean' || typeof record.submitted !== 'boolean' || record.submitted && !record.claimed || !/^[a-f0-9]{64}$/.test(record.remoteRevision)) throw Error('Invalid shared feature reservation.');
         if (record.sourcePath !== snapshot.configuration.requestsDirectory + '/' + record.name || !/^[^/\\]+\.md$/.test(record.name) || record.name.startsWith('_')) throw Error('Invalid shared feature source path.');
+        if (record.publishedSource !== undefined && (typeof record.publishedSource !== 'string' || sharedHash(record.publishedSource) !== record.publishedState)) throw Error('Invalid acknowledged shared source.');
         if (record.featureCommit !== undefined && !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(record.featureCommit) || record.outputDigest !== undefined && !/^[a-f0-9]{64}$/.test(record.outputDigest) || record.publishedState !== undefined && !/^[a-f0-9]{64}$/.test(record.publishedState) || record.publishedReview !== undefined && (typeof record.publishedReview !== 'string' || !record.publishedReview.startsWith(snapshot.configuration.reviewDirectory + '/') || !/^[^:]+:[a-f0-9]{64}$/.test(record.publishedReview))) throw Error('Invalid shared publication checkpoint.');
         if (record.reviewNote !== null && (typeof record.outputDigest !== 'string' || !/^[a-f0-9]{64}$/.test(record.outputDigest) || record.reviewNote !== snapshot.configuration.reviewDirectory + '/' + record.id + '-' + sharedFeaturePublicationDigest(record, record.outputDigest).slice(0, 12) + '.md' || typeof record.reviewMarkdown !== 'string' || Buffer.byteLength(record.reviewMarkdown) > 524288)) throw Error('Invalid shared review note.');
         const task = record.task, taskDirectory = featureTaskDirectory(snapshot.configuration);
@@ -83,4 +98,17 @@ export class SharedFeatureJournal {
     if (Buffer.byteLength(text) > 16777216) return Promise.reject(Error('Shared intake journal exceeds 16 MiB.'));
     return this.writes.run(() => atomicWrite(this.path, text));
   }
+}
+
+function validateSharedReadyReview(record: import('../../application/shared-feature-state.js').SharedFeatureRecord) {
+  const review = record.readyReviewState!;
+  validateReadyReviewInput(review.input);
+  if (!Number.isSafeInteger(review.generation) || review.generation < 1 || typeof review.answer !== 'string' || review.answer.length > 8000 || !['queued', 'running', 'waiting_input', 'passed', 'failed'].includes(review.status)
+      || !Array.isArray(review.sessionIds) || review.sessionIds.length > 16 || !review.sessionIds.includes(readyReviewSessionId(review.input)) || review.sessionIds.some(id => typeof id !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(id))) throw Error('Invalid Ready Check checkpoint.');
+  if (canonicalJson(review.input) !== canonicalJson(sharedReviewInput(record, review.answer, review.generation, review.previousResult)) || review.reviewedHash !== gateDigest(record.accepted)) throw Error('Ready Check input differs from the accepted request revision.');
+  if (review.previousResult) parseReadyReviewResult({ schemaVersion: 1, ...review.previousResult });
+  if (review.result) parseReadyReviewResult({ schemaVersion: 1, ...review.result });
+  if (review.implementationReady && (review.status !== 'passed' || !review.result?.passed) || record.submitted && !review.implementationReady) throw Error('Ready Check has not authorized implementation admission.');
+  if (review.attempt && (review.attempt.operationId !== review.input.operationId || review.attempt.sessionId !== readyReviewSessionId(review.input) || typeof review.attempt.turnId !== 'string' || review.attempt.runId !== null && typeof review.attempt.runId !== 'string')) throw Error('Invalid Ready Check execution identity.');
+  if (review.gateIssues && (!Array.isArray(review.gateIssues) || review.gateIssues.length > 64 || review.gateIssues.some(issue => typeof issue !== 'string' || issue.length > 2000))) throw Error('Invalid Ready Check readiness issues.');
 }

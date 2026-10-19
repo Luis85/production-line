@@ -7,6 +7,10 @@ export const featureWorkflowConfigPath = '.werk/feature-workflow.json';
 export interface FeatureWorkflowConfiguration {
   schemaVersion: 1; id: string; requestsDirectory: string; reviewDirectory: string;
   template: string; base: string; readyCheck: string; doneCheck: string;
+  /** Optional team instructions appended to model dispatch; JSON gates remain authoritative. */
+  readyPrompt?: string; donePrompt?: string;
+  /** Optional reviewer instructions before implementation readiness; omission disables this review. */
+  readyReviewPrompt?: string;
   /** Older frozen workflows keep Task notes beneath their review directory. */
   tasksDirectory?: string;
 }
@@ -19,11 +23,20 @@ export interface SharedFeatureInput extends FeatureInput {
   sections: { goal: string; context: string; verificationPlan: string };
 }
 export interface FeatureSourceFile { path: string; sha256: string; }
+export interface FeatureDefinitionPrompt extends FeatureSourceFile { content: string; }
+export interface FeatureDefinitionPrompts {
+  schemaVersion: 1; commit: string; ready?: FeatureDefinitionPrompt; done?: FeatureDefinitionPrompt;
+}
+export interface FeatureReadyReview {
+  schemaVersion: 1; commit: string; prompt: FeatureDefinitionPrompt;
+}
 export interface FeatureWorkflowSnapshot {
   schemaVersion: 1; commit: string; configuration: FeatureWorkflowConfiguration;
   readyCheck: FeatureCheck; doneCheck: FeatureCheck; policy: GatePolicy; policyDigest: string;
   template: string;
-  files: { configuration: FeatureSourceFile; readyCheck: FeatureSourceFile; doneCheck: FeatureSourceFile; template: FeatureSourceFile; base: FeatureSourceFile };
+  definitionPrompts?: FeatureDefinitionPrompts;
+  readyReview?: FeatureReadyReview;
+  files: { configuration: FeatureSourceFile; readyCheck: FeatureSourceFile; doneCheck: FeatureSourceFile; template: FeatureSourceFile; base: FeatureSourceFile; readyPrompt?: FeatureSourceFile; donePrompt?: FeatureSourceFile; readyReviewPrompt?: FeatureSourceFile };
 }
 export interface FeatureReadiness {
   valid: boolean; input?: SharedFeatureInput; inputHash?: string;
@@ -47,22 +60,58 @@ export function featureTaskDirectory(config: FeatureWorkflowConfiguration): stri
   return config.tasksDirectory ?? config.reviewDirectory + '/_tasks';
 }
 export function validateFeatureWorkflow(value: unknown): FeatureWorkflowConfiguration {
-  const raw = exact(value, ['schemaVersion', 'id', 'requestsDirectory', 'reviewDirectory', 'tasksDirectory', 'template', 'base', 'readyCheck', 'doneCheck'], 'feature workflow');
+  const raw = exact(value, ['schemaVersion', 'id', 'requestsDirectory', 'reviewDirectory', 'tasksDirectory', 'template', 'base', 'readyCheck', 'doneCheck', 'readyPrompt', 'donePrompt', 'readyReviewPrompt'], 'feature workflow');
   if (raw.schemaVersion !== 1 || typeof raw.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(raw.id)) invalid('Feature workflow requires schemaVersion 1 and a stable lowercase ID.');
   const result = { schemaVersion: 1, id: raw.id } as FeatureWorkflowConfiguration;
   for (const key of ['requestsDirectory', 'reviewDirectory', 'template', 'base', 'readyCheck', 'doneCheck'] as const) result[key] = featureWorkflowPath(raw[key], key);
+  for (const key of ['readyPrompt', 'donePrompt', 'readyReviewPrompt'] as const) if (raw[key] !== undefined) result[key] = featurePromptPath(raw[key], key);
   if (raw.tasksDirectory !== undefined) result.tasksDirectory = featureWorkflowPath(raw.tasksDirectory, 'tasksDirectory');
   const tasks = featureTaskDirectory(result);
   if (inside(tasks, result.requestsDirectory) || inside(result.requestsDirectory, tasks) || inside(result.reviewDirectory, tasks) || inside(tasks, result.reviewDirectory + '/_operations')) invalid('Task notes must be separate from requests, review roots and publication receipts. A review subfolder is allowed.');
   if (inside(result.requestsDirectory, result.reviewDirectory) || inside(result.reviewDirectory, result.requestsDirectory)) invalid('Request and review directories must be separate, non-overlapping folders.');
   if ([result.requestsDirectory, result.reviewDirectory, tasks].some(path => path.toLowerCase().split('/').includes('.werk'))) invalid('Request and review directories must be outside private .werk storage.');
   if (!result.template.endsWith('.md') || !result.base.endsWith('.base') || !result.readyCheck.endsWith('.json') || !result.doneCheck.endsWith('.json')) invalid('Workflow template, Base and checks require .md, .base and .json extensions.');
-  const files = [result.template, result.base, result.readyCheck, result.doneCheck];
+  const prompts = [result.readyPrompt, result.donePrompt, result.readyReviewPrompt].filter((path): path is string => path !== undefined);
+  const files = [result.template, result.base, result.readyCheck, result.doneCheck, ...prompts];
   if ([result.requestsDirectory, result.reviewDirectory, tasks, ...files].some(path => ['.agents', '.claude', '.codex', '.werk/authoring', '.werk/worker', '.werk/provider-home', 'bin/apps'].some(reserved => inside(path, reserved) || inside(reserved, path)))) invalid('Workflow paths cannot overlap private runtime, installed applications or agent integration files.');
   if (new Set(files.map(path => path.toLowerCase())).size !== files.length || files.some(path => [result.requestsDirectory, result.reviewDirectory, tasks].some(directory => path.toLowerCase() === directory.toLowerCase()))) invalid('Workflow files must use distinct paths outside folder roots.');
   if (files.some(path => inside(path, result.reviewDirectory) || inside(path, tasks))) invalid('Workflow configuration files cannot be generated review notes.');
   if (inside(result.template, result.requestsDirectory) && result.template.slice(result.requestsDirectory.length + 1).split('/').length === 1 && !result.template.slice(result.requestsDirectory.length + 1).startsWith('_')) invalid('Place the template in a subfolder or use an underscore-prefixed name to keep it out of intake.');
+  if (prompts.some(path => path.endsWith('.md') && inside(path, result.requestsDirectory) && path.slice(result.requestsDirectory.length + 1).split('/').length === 1 && !path.slice(result.requestsDirectory.length + 1).startsWith('_'))) invalid('Place Markdown definition prompts in a subfolder or use an underscore-prefixed name to keep them out of intake.');
   return result;
+}
+function featurePromptPath(value: unknown, label: string): string {
+  const path = featureWorkflowPath(value, label);
+  if (!/\.(?:md|txt)$/.test(path)) invalid(`${label} must name a .md or .txt prompt file.`);
+  return path;
+}
+export function validateFeaturePromptContent(value: unknown, path: string): string {
+  if (typeof value !== 'string' || !value.trim() || value.includes('\0') || Buffer.byteLength(value, 'utf8') > 65536 || Buffer.from(value, 'utf8').toString('utf8') !== value) invalid(`Definition prompt must contain nonempty UTF-8 text of at most 64 KiB without NUL bytes: ${path}`);
+  return value;
+}
+/** Validates immutable model context without interpreting it as gate evidence or permission. */
+export function validateFeatureDefinitionPrompts(value: unknown): FeatureDefinitionPrompts {
+  const raw = exact(value, ['schemaVersion', 'commit', 'ready', 'done'], 'definition prompts');
+  if (raw.schemaVersion !== 1 || typeof raw.commit !== 'string' || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(raw.commit) || raw.ready === undefined && raw.done === undefined) invalid('Definition prompts require schemaVersion 1, an immutable Git commit and at least one prompt.');
+  const result: FeatureDefinitionPrompts = { schemaVersion: 1, commit: raw.commit };
+  for (const stage of ['ready', 'done'] as const) {
+    if (raw[stage] === undefined) continue;
+    result[stage] = validatePromptSource(raw[stage], `${stage} definition prompt`);
+  }
+  if (result.ready && result.done && result.ready.path.toLowerCase() === result.done.path.toLowerCase()) invalid('Definition prompts must use distinct paths.');
+  return result;
+}
+function validatePromptSource(value: unknown, label: string): FeatureDefinitionPrompt {
+  const prompt = exact(value, ['path', 'sha256', 'content'], label);
+  const path = featurePromptPath(prompt.path, label), content = validateFeaturePromptContent(prompt.content, path);
+  if (typeof prompt.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(prompt.sha256) || featureContentHash(content) !== prompt.sha256) invalid(`Definition prompt content does not match its SHA-256: ${path}`);
+  return { path, sha256: prompt.sha256, content };
+}
+/** Reviewer guidance has its own snapshot and is never implicit implementation context. */
+export function validateFeatureReadyReview(value: unknown): FeatureReadyReview {
+  const raw = exact(value, ['schemaVersion', 'commit', 'prompt'], 'Feature Request Ready Check');
+  if (raw.schemaVersion !== 1 || typeof raw.commit !== 'string' || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(raw.commit)) invalid('Feature Request Ready Check requires schemaVersion 1 and an immutable Git commit.');
+  return { schemaVersion: 1, commit: raw.commit, prompt: validatePromptSource(raw.prompt, 'Ready Check prompt') };
 }
 export function defaultFeatureCheck(stage: GateStage): FeatureCheck {
   return { schemaVersion: 1, id: `fr-${stage}-check`, version: 1, stage, rules: { chat: [], patch: [] } };

@@ -163,8 +163,11 @@ test('committed symlink intake and unsafe Git metadata paths are refused; cancel
   const f = await fixture(t), adapter = f.client();
   const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], { cwd: f.producer, input: '../file.txt', encoding: 'utf8' }).trim();
   git(f.producer, 'update-index', '--add', '--cacheinfo', '120000', blob, 'features/link.md');
+  git(f.producer, 'update-index', '--add', '--cacheinfo', '120000', blob, 'prompts/ready.md');
+  git(f.producer, 'update-index', '--add', '--cacheinfo', '160000', f.sourceCommit, 'prompts/done.txt');
   git(f.producer, 'commit', '-m', 'Symlink request'); git(f.producer, 'push', 'origin', 'main');
   await assert.rejects(adapter.snapshot(), /regular tracked files/);
+  for (const path of ['prompts/ready.md', 'prompts/done.txt']) await assert.rejects(adapter.readBlob(f.main(), path), /regular tracked files/);
   await assert.rejects(adapter.readBlob(f.sourceCommit, '.git/config'), /Git control metadata/);
   const controller = new AbortController(); controller.abort();
   await assert.rejects(adapter.publishLifecycle(f.lifecycle(), controller.signal));
@@ -198,8 +201,8 @@ test('copied operation metadata cannot make a different feature tree pass replay
 });
 
 test('feature patches cannot modify intake, review notes or frozen workflow assets', async t => {
-  const f = await fixture(t), adapter = f.client({ protectedPaths: ['fr-ready-check.json', 'fr-done-check.json', 'Feature Requests.base'] });
-  for (const path of ['features/request.md', 'features/_templates/feature-request.md', 'feature-reviews/claimed.md', 'FEATURE-REVIEWS/claimed.md', 'fr-ready-check.json', 'fr-done-check.json', 'Feature Requests.base'])
+  const f = await fixture(t), adapter = f.client({ protectedPaths: ['fr-ready-check.json', 'fr-done-check.json', 'Feature Requests.base', 'prompts/ready.md', 'prompts/done.txt'] });
+  for (const path of ['features/request.md', 'features/_templates/feature-request.md', 'feature-reviews/claimed.md', 'FEATURE-REVIEWS/claimed.md', 'fr-ready-check.json', 'fr-done-check.json', 'Feature Requests.base', 'prompts/ready.md', 'PROMPTS/READY.MD', 'prompts/done.txt'])
     assert.throws(() => adapter.publishPatch({ ...f.publication(), approvedPaths: [path] }), /workflow configuration/);
   assert.equal(git(f.remote, 'for-each-ref', '--format=%(refname)', 'refs/heads/werk'), '');
 });

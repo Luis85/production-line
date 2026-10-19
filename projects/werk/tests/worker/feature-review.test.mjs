@@ -209,3 +209,38 @@ test('real local session catalog aliases join their exact board task without acc
   const wrongSession = buildFeatureReviewView({ session, task: { ...local, sessionId: 'different-session' }, request: value });
   assert.equal(wrongSession.nextStep.action.kind, 'refresh'); assert.equal(wrongSession.evidence.candidate, null);
 });
+
+
+test('pre-DoR reviewer findings direct answers to the same Markdown request without inventing an implementation', () => {
+  const record = shared(); record.taskId = null; record.status = 'waiting_ready_input'; record.ready = null; record.done = null; record.featureBranch = null; record.reviewNote = null;
+  record.readyReview = { status: 'waiting_input', attempt: 1, promptPath: 'team/ready-review.md', promptDigest: 'c'.repeat(64), findings: [{ kind: 'question', message: 'Which users need search?', blocking: true }] };
+  let view = buildFeatureReviewView({ shared: record });
+  assert.equal(view.nextStep.actor, 'operator'); assert.equal(view.nextStep.action.kind, 'open_source');
+  assert.match(view.nextStep.description, /Feature Request.*mark the request ready.*commit and push/);
+  assert.equal(stage(view, 'execution').state, 'pending'); assert.equal(stage(view, 'readiness').state, 'blocked');
+  assert.equal(view.identity.sessionId, null); assert.equal(view.identity.taskId, null);
+  record.readyReview.status = 'running'; record.status = 'reviewing_ready';
+  view = buildFeatureReviewView({ shared: record });
+  assert.equal(view.nextStep.actor, 'worker'); assert.equal(view.nextStep.action, undefined);
+  assert.equal(stage(view, 'readiness').state, 'active'); assert.equal(stage(view, 'execution').state, 'pending');
+  record.readyReview.status = 'passed'; record.status = 'waiting_ready_input'; record.ready = { passed: false, issues: ['Acceptance criteria missing.'] };
+  view = buildFeatureReviewView({ shared: record });
+  assert.equal(view.nextStep.actor, 'operator'); assert.match(view.nextStep.description, /Definition of Ready checks have not passed/);
+  record.readyReview.status = 'failed'; record.status = 'blocked'; record.ready = null;
+  assert.match(buildFeatureReviewView({ shared: record }).nextStep.description, /explicit retry note/);
+  record.taskId = 'task-1'; record.readyReview.status = 'passed'; record.status = 'ready_for_review';
+  assert.doesNotMatch(buildFeatureReviewView({ shared: record }).nextStep.description, /Implementation has not started/);
+});
+
+
+test('review model information uses retained acceptance and never reconstructs it from current defaults', () => {
+  const local = task();
+  assert.equal(buildFeatureReviewView({ task: local }).selection, null, 'legacy model text does not invent an accepted effort');
+  local.selection = { provider: 'codex-cli', model: 'accepted-model', effort: 'high' };
+  local.model = 'different-observation';
+  assert.deepEqual(buildFeatureReviewView({ task: local }).selection, local.selection);
+  const remote = shared(); remote.selection = { provider: 'cursor-cli', model: 'team-cursor-model', effort: 'default' };
+  assert.deepEqual(buildFeatureReviewView({ shared: remote }).selection, remote.selection);
+  remote.taskId = 'another-task';
+  assert.equal(buildFeatureReviewView({ task: local, shared: remote }).selection, null, 'inconsistent identities hide selection with other mismatched evidence');
+});

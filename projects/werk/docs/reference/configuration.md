@@ -281,6 +281,32 @@ carries its capture time, manual pause and consumption blocker; these observatio
 do not reserve admission or predict completion time. Stale data cannot establish
 current readiness.
 
+## Worker provider defaults
+
+The worker's private `workspace-settings.json` stores `defaultProvider` and each
+provider connection's `model` and optional `effort`. Edit them through **Settings
+→ Providers & accounts** or the authenticated settings API/portable CLI; they
+are separate from orchestrator execution profiles and project launch `.env`
+keys. `GET /api/settings` exposes the redacted defaults. `POST /api/settings`
+accepts a top-level `defaultProvider` update or a `provider` update containing
+its `id` and changed configuration fields. Supply the observed
+`expectedDefaultProvider` with a default-provider edit to reject a stale save;
+refresh and reconcile on conflict. `settings get`, `settings set --file`
+and `provider configure --file` use those routes.
+
+`defaultProvider` must be `codex-cli`, `claude-cli`, `openai-api`, `anthropic-api`
+or `cursor-cli`. The legacy startup `features.provider` is a seed only when no
+saved default exists. A template or request with an explicit provider continues
+to use it. Model and effort selections follow the
+[shared selection contract](model-interaction.md#provider-model-and-effort-selection):
+request override, compatible profile model, then provider default for models;
+request override then provider default for effort.
+
+Defaults apply to newly accepted work. Owned requests retain provider, model and
+effort through their Ready Check, implementation, answers and restart recovery.
+Saving defaults does not prove the account can use the chosen model or effort,
+and never changes orchestration simulation into live execution.
+
 ## Editable execution profiles
 
 The private worker endpoint `GET /api/execution-profiles` returns
@@ -592,7 +618,9 @@ workspace settings for compatibility. If retained task state is incompatible,
 restore the pre-upgrade stopped-state backup.
 
 Tool changes require paused, drained execution and the current policy revision.
-Local request invocations resolve current grants; automated
-request reviewers stay tool-free. Repository assignment, provider sign-in and
-execution profiles do not implicitly grant tools. See
+Local request invocations resolve current Werk grants. Codex, Claude and API
+request reviewers stay tool-free; Cursor reviews use native read-only ask mode
+under Cursor permissions/hooks. Repository assignment, provider sign-in and
+execution profiles do not implicitly grant Werk tools. Cursor native tools use
+its separately configured operator policy. See
 [manage model tools](../how-to/manage-model-tools.md).

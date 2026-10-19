@@ -1,3 +1,4 @@
+import type { ModelSelection } from './model-selection.js';
 import type { ProcessObservation } from './process-observation.js';
 import type { SerializedOperations } from '../../shared/serialized-operations.js';
 import type { DevelopmentFactory, DevelopmentLimits, DevelopmentRuntime } from './development.js';
@@ -29,7 +30,7 @@ export interface LocalTaskState {
   admissionReserved: boolean;
   admissionTaskId?: string;
   preparations: LocalTaskPreparation[];
-  preparationOwners: Map<string, { submission?: LocalTaskSubmission; definition: DefinitionSnapshot | null; controller: AbortController }>;
+  preparationOwners: Map<string, { submission?: LocalTaskSubmission; definition: DefinitionSnapshot | null; selection: ModelSelection; controller: AbortController }>;
   continuationReservations: number;
   continuations: Set<Promise<unknown>>;
   workspaceController: AbortController;
@@ -44,6 +45,7 @@ export interface AdmissionInput {
   instruction: string;
   definition: DefinitionSnapshot | undefined;
   provider: ProviderConnection;
+  selection: ModelSelection;
   selector: string;
   assignment: RepositoryAssignment | undefined;
   repositoryPath: string;
@@ -55,6 +57,7 @@ export interface AdmissionOptions {
   preparation?: LocalTaskPreparation;
   signal?: AbortSignal;
   definition?: DefinitionSnapshot | null;
+  selection?: ModelSelection;
 }
 export type WorktreeRemoval = { outcome: 'removed' | 'kept' | 'not_applicable'; reason?: string };
 export type TaskActionView = LocalTaskboardView & { worktree?: WorktreeRemoval };
@@ -85,6 +88,7 @@ export interface LocalTaskRuntime extends LocalTaskDependencies, LocalTaskState 
   readonly admissionOccupancy: number;
   preparation(id: string): LocalTaskPreparation | undefined;
   preparationDefinition(id: string): DefinitionSnapshot | undefined;
+  preparationSelection(id: string): ModelSelection | undefined;
   view(): LocalTaskboardView;
   readonly waitingPreparations: number;
   detail(id: string): LocalTaskDetailView;
@@ -95,7 +99,7 @@ export interface LocalTaskRuntime extends LocalTaskDependencies, LocalTaskState 
   forgetPreparation(preparation: LocalTaskPreparation): void;
   createInBackground(input: unknown, submission?: LocalTaskSubmission): LocalTaskboardView & { preparationId: string };
   assertAdmissionCapacity(tasks: LocalTask[], reserved?: number): void;
-  admissionInput(input: unknown, submission?: LocalTaskSubmission, frozenDefinition?: DefinitionSnapshot | null): AdmissionInput;
+  admissionInput(input: unknown, submission?: LocalTaskSubmission, frozenDefinition?: DefinitionSnapshot | null, frozenSelection?: ModelSelection): AdmissionInput;
   createTask(input: unknown, submission?: LocalTaskSubmission, options?: AdmissionOptions): Promise<LocalTaskboardView>;
   trackContinuation<T>(operation: Promise<T>): Promise<T>;
   executeRequest(id: string): Promise<LocalTaskboardView>;

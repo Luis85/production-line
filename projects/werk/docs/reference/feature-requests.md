@@ -183,7 +183,9 @@ Explain a search flow for the project.
 - Describe how to verify the selected behavior.
 ```
 
-The installed `.werk/worker.json` configures the watcher:
+The installed `.werk/worker.json` configures the watcher. Its legacy
+`features.provider` seeds `defaultProvider` only when no saved default exists;
+later provider defaults are edited in the worker settings:
 
 ```json
 {"schemaVersion":1,"features":{"directory":"features","provider":"codex-cli","pollMs":1000}}
@@ -218,7 +220,9 @@ explicit ready status, ID, template ID and patch mode; see the
 | `status` | `draft` holds a new request. `ready` or an omitted status submits it once stable. After capture, the worker owns this field. |
 | `id` | Optional stable identifier, 1–80 lowercase letters/digits/hyphens, starting with a letter/digit. The worker assigns one when absent. Do not reuse IDs for different work; `remote-` is reserved. |
 | `mode` | `chat` (default) sends the Markdown as a task message. `patch` generates a review patch from explicitly approved files. |
-| `provider` | `codex-cli`, `claude-cli`, `openai-api` or `anthropic-api`; defaults to `features.provider`. Configure/authenticate that connection separately. |
+| `provider` | `codex-cli`, `claude-cli`, `openai-api`, `anthropic-api` or `cursor-cli`; omission uses the saved worker `defaultProvider`. Configure/authenticate that connection separately. |
+| `model` | Optional model name, at most 200 characters with no surrounding whitespace or control characters. A nonempty value overrides a compatible instruction-profile model and then the provider's default; omission or an empty string inherits. |
+| `effort` | Optional [provider-supported effort](model-interaction.md#provider-model-and-effort-selection). Omission inherits the worker's provider default; explicit `default` uses the provider's own behavior. Cursor supports `default` only. |
 | `paths` | Required for patch mode: up to 32 project-relative approved text files. Rejected in chat mode. |
 | `priority` | `1` or `2` (default `1`); applies to patch tasks when the taskboard uses priority ordering. |
 | `definitionRef` or `definitionId`, `agent`, `useInstructionsOnly` | Optional [Docker Agent instruction profile](agent-definitions.md) selection, with the same compatibility acknowledgement as the webview. Use `definitionRef` (1–80 lowercase letters, digits or hyphens) in committed or shared files: it names a definition by its [stable reference](agent-definitions.md#stable-references-for-committed-requests). `definitionId` is specific to one worker. A request may use one, not both. |
