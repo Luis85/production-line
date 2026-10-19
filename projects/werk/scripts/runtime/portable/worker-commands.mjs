@@ -5,7 +5,7 @@ import { inputError } from "../config.mjs";
 const GIT_REQUEST_TIMEOUT_MS = 120000;
 export function workerCommands(catalog) {
   catalog["settings set"] = { ...catalog["settings set"], timeoutMs: GIT_REQUEST_TIMEOUT_MS };
-  catalog["feature setup"] = { local: true, required: [], options: ["project-dir", "features-dir", "provider", "if-match"], mutating: true, description: "Install a standalone feature authoring kit without starting or installing a worker; preserve existing project files. The authoring script is refreshed only while it matches the content recorded in .werk/authoring/manifest.json; --if-match REVISION replaces an unrecorded script with that revision." };
+  catalog["feature setup"] = { local: true, required: [], options: ["project-dir", "features-dir", "workflow-dir", "provider", "if-match"], mutating: true, description: "Install a standalone feature authoring kit without starting or installing a worker; preserve existing project files. The authoring script is refreshed only while it matches the content recorded in .werk/authoring/manifest.json; --if-match REVISION replaces an unrecorded script with that revision." };
   for (const action of ["create", "validate", "ready"]) catalog["feature author " + action] = {
     local: true, required: action === "create" ? ["name", "title"] : ["file", ...(action === "ready" ? ["if-match"] : [])],
     options: ["project-dir"], mutating: action !== "validate",

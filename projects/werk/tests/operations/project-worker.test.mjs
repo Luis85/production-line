@@ -110,6 +110,7 @@ test('an existing workflow wins over a differing --workflow-dir and the warning 
 });
 test('feature setup honors --workflow-dir and rejects folders outside the project', async t => {
   const cwd = await project(t);
+  assert.ok((await cli(installer, cwd, 'schema')).commands['feature setup'].options.includes('workflow-dir'), 'schema agrees with help and validation');
   for (const bad of ['../outside', '.', '.werk/flow']) await assert.rejects(cli(installer, cwd, 'feature', 'setup', '--project-dir', cwd, '--workflow-dir', bad), /--workflow-dir/);
   await assert.rejects(cli(installer, cwd, 'init', '--workflow-dir', 'features/flow'), /--workflow-dir features\/flow cannot be used/);
   const result = await cli(installer, cwd, 'feature', 'setup', '--project-dir', cwd, '--workflow-dir', 'Vault/Flow');
