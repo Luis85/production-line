@@ -62,7 +62,7 @@ test('a request created from the local template is accepted by local folder inta
   await writeFile(join(features, 'team.md'), (await read(join(features, '_templates/feature-request.md'))).replace('status: draft', 'status: ready')); await service.tick(true);
   assert.equal((await service.list()).files.find(item => item.name === 'team.md').shared, true, 'The shared template carries templateId and is skipped by folder intake.');
   assert.equal(submitted.length, 1);
-  await assert.rejects(service.action({ action: 'create', name: 'bare.md', markdown: template }), /explicit paths list. Set paths: list the approved files or folders.*uncomment the paths example/);
+  await assert.rejects(service.action({ action: 'create', name: 'bare.md', markdown: template }), /explicit paths list. Set paths: to the approved project-relative files or folders.*such as _templates\/local-request\.md, only needs that example uncommented/);
   await writeFile(join(features, 'copy.md'), template); await service.tick(true);
   assert.match((await service.list()).files.find(item => item.name === 'copy.md').error, /explicit paths list/, 'An unedited copy inside the folder is an error, the reason to keep copies outside it.');
   } finally { await service.close(); }

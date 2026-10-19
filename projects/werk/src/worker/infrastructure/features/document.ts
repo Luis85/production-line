@@ -68,7 +68,7 @@ export function featureInput(parsed: FeatureDocument, defaultProvider: string, o
   if (d.model !== undefined) validateModelName(d.model);
   const effort = d.effort === undefined ? undefined : d.provider === undefined ? parseModelEffort(d.effort) : validateModelEffort(d.effort, String(provider));
   if (d.paths !== undefined && (!Array.isArray(d.paths) || d.paths.some(path => typeof path !== 'string' || !path || path.length > 1024) || d.paths.length > 32)) throw Error('paths must list at most 32 project-relative files.');
-  if (!options.reviewOnly && mode === 'patch' && (!Array.isArray(d.paths) || !d.paths.length)) throw Error('Patch requests require an explicit paths list. Set paths: list the approved files or folders (a folder ends with /); uncomment the paths example in the template.');
+  if (!options.reviewOnly && mode === 'patch' && (!Array.isArray(d.paths) || !d.paths.length)) throw Error('Patch requests require an explicit paths list. Set paths: to the approved project-relative files or folders (a folder ends with /). A request copied from a template with a commented paths example, such as _templates/local-request.md, only needs that example uncommented and edited.');
   if (mode === 'chat' && d.paths !== undefined) throw Error('Use mode: patch to supply approved files. Chat does not read paths.');
   if (d.definitionId !== undefined && (typeof d.definitionId !== 'string' || d.definitionId.length > 100)) throw Error('Invalid definitionId.');
   if (d.definitionRef !== undefined && (typeof d.definitionRef !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(d.definitionRef))) throw Error('definitionRef must use 1–80 lowercase letters, digits or hyphens.');
