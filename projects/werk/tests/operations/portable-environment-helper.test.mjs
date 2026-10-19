@@ -199,7 +199,7 @@ test('explicit defaults override process options while project fallbacks defer t
 });
 
 test('ignore setup adds only the rules a project lacks and writes the header once', async t => {
-  const complete = await directory(t), ignorePath = join(complete, '.gitignore'), full = '# mine\r\n  .env  \r\n!.env.example\r\nnode_modules/\r\n';
+  const complete = await directory(t), ignorePath = join(complete, '.gitignore'), full = '# mine\r\n.env  \r\n!.env.example\r\nnode_modules/\r\n';
   await writeFile(ignorePath, full);
   assert.deepEqual((await seedEnvironment('worker', complete, { environment: {} })).ignoreAdded, []);
   assert.equal(await readFile(ignorePath, 'utf8'), full);
@@ -211,4 +211,9 @@ test('ignore setup adds only the rules a project lacks and writes the header onc
   const fresh = await directory(t);
   assert.deepEqual((await seedEnvironment('worker', fresh, { environment: {} })).ignoreAdded, ['.env', '!.env.example']);
   assert.equal(await readFile(join(fresh, '.gitignore'), 'utf8'), '# Werk local environment\n.env\n!.env.example\n');
+  // Git keeps leading spaces as part of the pattern: " .env" does not ignore the generated credentials file.
+  const indented = await directory(t), indentedPath = join(indented, '.gitignore');
+  await writeFile(indentedPath, ' .env\r\n!.env.example\r\n');
+  assert.deepEqual((await seedEnvironment('worker', indented, { environment: {} })).ignoreAdded, ['.env']);
+  assert.equal(await readFile(indentedPath, 'utf8'), ' .env\r\n!.env.example\r\n# Werk local environment\r\n.env\r\n');
 });

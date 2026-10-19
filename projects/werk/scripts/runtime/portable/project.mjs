@@ -16,7 +16,8 @@ async function seed(path, text) {
 async function ignore(path, entries) {
   await plainFile(path);
   const previous = await readFile(path, 'utf8').catch(error => { if (error.code !== 'ENOENT') throw error; return ''; });
-  const present = previous.split(/\r?\n/).map(line => line.trim()), missing = entries.filter(value => !present.includes(value));
+  // Git treats leading spaces as part of a pattern and ignores trailing ones.
+  const present = previous.split(/\r?\n/).map(line => line.trimEnd()), missing = entries.filter(value => !present.includes(value));
   if (missing.length) { const file = await open(path, 'a', 0o600); try { await file.writeFile((previous && !previous.endsWith('\n') ? '\n' : '') + missing.join('\n') + '\n'); } finally { await file.close(); } }
 }
 /** Normalizes --workflow-dir to a contained, project-relative POSIX path; the workflow layer validates its characters. */
