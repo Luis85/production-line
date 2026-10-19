@@ -46,6 +46,18 @@ test('default init stays shared: no local template, no intake key and the shared
   assert.equal((await init(await temporary(t, 'werk-shared-explicit-'), '--intake', 'shared')).intake.mode, 'shared_git');
 });
 
+test('an existing shared installation refuses init --intake local without changing its configuration', async t => {
+  const cwd = await temporary(t, 'werk-shared-preserved-'); await init(cwd);
+  const config = join(cwd, '.werk/worker.json'), before = await read(config);
+  await assert.rejects(run(cwd, join(cwd, 'bin/apps/worker/cli.mjs'), 'init', '--intake', 'local'), error => {
+    assert.match(failure(error), /--intake local differs from features\.intake \W*shared\W* in \.werk\/worker\.json/);
+    assert.match(failure(error), /stop the worker.*installed app.*finish owned shared requests and clear the shared repository binding/s);
+    return true;
+  });
+  assert.equal(await read(config), before);
+  assert.equal(await exists(join(cwd, 'features/_templates/local-request.md')), false);
+});
+
 test('a request created from the local template is accepted by local folder intake, unlike the shared template', async t => {
   const cwd = await temporary(t, 'werk-local-folder-'); await init(cwd, '--intake', 'local');
   const features = join(cwd, 'features'), state = join(cwd, '.state'); await mkdir(state); await mkdir(join(cwd, 'src')); await writeFile(join(cwd, 'src/example.ts'), 'export {};\n');

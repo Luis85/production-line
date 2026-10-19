@@ -1,11 +1,11 @@
-import { lstat, mkdtemp, open, realpath, rename, rmdir, stat as follow, unlink } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { realpath, stat as follow, unlink } from 'node:fs/promises';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createPrivate, inputError } from '../config.mjs';
-import { environmentExample, environmentKeys } from './environment.mjs';
+import { editEnvironment } from './uninstall-environment.mjs';
 import { status, stop } from './lifecycle.mjs';
 import { inventory, taskWorktrees } from './footprint.mjs';
-import { holdsOtherThan, info, missing, pruneParents, removeUntracked, smallText, within } from './footprint-files.mjs';
+import { holdsOtherThan, info, missing, pruneParents, removeUntracked, within } from './footprint-files.mjs';
 import { LOCK, ORDER, decide, guardedNow, isGuard, keptPaths, phase, predict, protectWorktrees, residue } from './uninstall-plan.mjs';
 
 /**
@@ -19,54 +19,6 @@ import { LOCK, ORDER, decide, guardedNow, isGuard, keptPaths, phase, predict, pr
 const STOP_HINT = 'Stop it first (node bin/apps/worker/cli.mjs stop, or docker compose --env-file .env -f .werk/compose.worker.yaml down), or pass --stop to stop the native worker gracefully.';
 const summary = ({ group, path, type, size, trackedFiles }) => ({ group, path, type, size, ...(trackedFiles ? { keepsTrackedFiles: trackedFiles } : {}) });
 const byPhase = (a, b) => ORDER.indexOf(phase(a.entry)) - ORDER.indexOf(phase(b.entry));
-
-/**
- * Replace a private file through a temporary file named `.env` inside a new private
- * `.werk-env-*` folder next to it: Werk's generated `.env` ignore rule matches that name
- * in any folder, so the credentials never show up as an untracked file. The rename stays
- * on the same volume; the temporary file and folder are removed again on any failure.
- */
-async function replaceFile(path, text, mode) {
-  const folder = await mkdtemp(join(dirname(path), '.werk-env-')), temporary = join(folder, '.env');
-  let moved = false;
-  try {
-    const handle = await open(temporary, 'wx', 0o600);
-    try {
-      if (process.platform !== 'win32') await handle.chmod(mode & 0o777);
-      await handle.writeFile(text); await handle.sync();
-    } finally { await handle.close(); }
-    await rename(temporary, path); moved = true;
-  } finally {
-    if (!moved) await unlink(temporary).catch(missing);
-    await rmdir(folder).catch(() => {});
-  }
-}
-/** Remove the worker's .env keys or .env.example block; other lines and files stay unchanged. */
-async function editEnvironment(project, entry) {
-  const path = join(project, entry.path), stat = await lstat(path);
-  if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1) return { kept: 'Not a single regular file; edit it manually.' };
-  const text = await smallText(path);
-  if (text === undefined) return { kept: 'Larger than 64 KiB or unreadable; edit it manually.' };
-  const newline = text.includes('\r\n') ? '\r\n' : '\n';
-  let next;
-  if (entry.path === '.env') {
-    const keys = new Set(environmentKeys('worker')), lines = text.split(/\r?\n/), kept = [];
-    for (const line of lines) {
-      const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(line);
-      if (!match || !keys.has(match[1])) { kept.push(line); continue; }
-      const quote = ['"', "'", '`'].includes(match[2][0]) ? match[2][0] : undefined;
-      if (quote && !match[2].slice(1).includes(quote)) return { kept: 'A worker key spans several lines; edit .env manually.' };
-    }
-    next = kept.join(newline);
-  } else {
-    const block = environmentExample('worker').replaceAll('\n', newline);
-    if (!text.includes(block)) return { kept: 'The Werk worker block was edited; edit .env.example manually.' };
-    next = text.replace(block, '');
-  }
-  if (!next.trim()) { await unlink(path); return { removed: true }; }
-  await replaceFile(path, next, stat.mode);
-  return { edited: true };
-}
 
 async function worktreePlan(root, project, state, layout, flags) {
   const git = await import(pathToFileURL(join(root, 'src/worker/dist/worker/infrastructure/repositories-git.js')).href);

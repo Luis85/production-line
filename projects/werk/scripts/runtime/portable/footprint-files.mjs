@@ -21,18 +21,36 @@ export function within(base, path) {
 /** Project-relative POSIX path, or the absolute path for locations outside the project. */
 export const display = (project, path) => within(project, path) && path !== project ? relative(project, path).split(sep).join('/') : path;
 
-/** A location counts as inside the project only when its existing parent resolves inside the project too. */
+/** A contained target has no linked or non-directory ancestor below the project root. */
 export async function contained(project, path) {
   if (!within(project, path) || path === project) return false;
-  let parent = dirname(path);
-  while (!await info(parent)) { if (dirname(parent) === parent) return false; parent = dirname(parent); }
-  return within(project, await realpath(parent));
+  for (let parent = dirname(path); within(project, parent); parent = dirname(parent)) {
+    const stat = await info(parent);
+    if (stat && (stat.isSymbolicLink() || !stat.isDirectory())) return false;
+    if (fold(parent) === fold(project)) return true;
+  }
+  return false;
 }
 
 async function git(project, args) {
   const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.toUpperCase().startsWith('GIT_')));
   Object.assign(environment, { GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' });
   return runFile('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'core.quotePath=false', '-C', project, ...args], { env: environment, timeout: 60000, maxBuffer: 256 * 1024 * 1024, windowsHide: true, encoding: 'utf8' });
+}
+/** A nested repository remains protected when a configured path names one of its files. */
+async function enclosingRepository(project, path) {
+  for (let parent = dirname(path); within(project, parent) && fold(parent) !== fold(project); parent = dirname(parent)) {
+    const stat = await info(parent);
+    if (stat?.isDirectory() && (await readdir(parent)).some(name => name.toLowerCase() === '.git')) return parent;
+  }
+}
+/** Verify the actual private rewrite path before writing credentials there. */
+export async function privateRewriteAllowed(project, path) {
+  try { await git(project, ['check-ignore', '--quiet', '--no-index', '--', path]); return true; }
+  catch (error) {
+    if (error.code === 1) return false;
+    return (await trackedFiles(project, [])).repository === false;
+  }
 }
 /**
  * Tracked files below the given project-relative paths. A project outside Git has none;
@@ -78,6 +96,7 @@ export async function measure(path) {
   while (pending.length && !truncated) {
     const current = pending.pop();
     for (const entry of await readdir(current, { withFileTypes: true }).catch(error => { if (denied(error)) unreadable++; else missing(error); return []; })) {
+      if (entry.name.toLowerCase() === '.git') continue;
       if (++entries > ENTRY_LIMIT) { truncated = true; break; }
       const child = join(current, entry.name), stat = await info(child).catch(error => { if (!denied(error)) throw error; unreadable++; });
       if (!stat) continue;
@@ -138,6 +157,9 @@ export async function removeUntracked(project, path, tracked, { hold, dryRun = f
     result.removed++;
     return true;
   }
+  if (!await contained(project, path)) return { gone: false, ...result, links: 1, linkPaths: [display(project, path)] };
+  const nested = await enclosingRepository(project, path);
+  if (nested) return { gone: false, ...result, repositories: [display(project, nested)] };
   const gone = await visit(path);
   return { gone, ...result };
 }

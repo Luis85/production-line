@@ -13,7 +13,7 @@ test('a disabled shared binding suppresses legacy folder admission and mutations
   const repository = join(directory, 'project'), state = join(directory, 'state'), features = join(repository, 'features');
   await mkdir(features, { recursive: true }); await mkdir(state);
   await writeFile(join(repository, 'approved.txt'), 'untouched\n');
-  const config = { stateDir: state, projectDir: repository, features: { directory: features, provider: 'openai-api', pollMs: 1000 }, pollMs: 1000, timeoutMs: 60000 };
+  const config = { stateDir: state, projectDir: repository, features: { directory: features, provider: 'openai-api', pollMs: 1000, intake: /** @type {const} */ ('local') }, pollMs: 1000, timeoutMs: 60000 };
   /** @type {WorkerWorkspace | undefined} */
   let workspace;
   let journal;
@@ -24,12 +24,16 @@ test('a disabled shared binding suppresses legacy folder admission and mutations
   }
   t.after(async () => { await close(); await rm(directory, { recursive: true, force: true }); });
   await open(); assert.ok(workspace); await workspace.updateSettings({ board: { paused: true }, provider: { id: 'openai-api', apiKey: 'fixture-no-execution', model: 'fixture-model' } });
+  const hinted = view => /** @type {{ intake?: string, hint?: string }} */ (view);
+  assert.equal(hinted(workspace.sharedIntakeView()).intake, 'local');
   const binding = { enabled: false, repositoryId: 'shared', remote: 'origin', branch: 'main', workflowPath: '.werk/feature-workflow.json', pollMs: 300000 };
   await workspace.sharedIntakeCommand({ action: 'configure', expectedRevision: 0, config: binding });
   const ready = '---\nschemaVersion: 1\ntitle: Legacy folder request\nstatus: ready\nmode: patch\npaths: [approved.txt]\nprovider: openai-api\n---\nMake a bounded change.\n';
   const draft = ready.replace('status: ready', 'status: draft'), revision = createHash('sha256').update(draft).digest('hex');
   await writeFile(join(features, 'ready.md'), ready); await writeFile(join(features, 'draft.md'), draft);
   async function remainsDisabled() {
+    assert.equal(hinted(workspace.sharedIntakeView()).intake, undefined, 'A saved shared binding overrides the local setup preset, even while paused and after restart.');
+    assert.equal(hinted(workspace.sharedIntakeView()).hint, undefined);
     // The runner invokes tick directly; suppressing only the panel or GET route cannot satisfy this assertion.
     await workspace.features.tick(true); await workspace.features.tick(true);
     assert.equal(workspace.board.view().tasks.length, 0);
@@ -47,6 +51,8 @@ test('a disabled shared binding suppresses legacy folder admission and mutations
   const current = workspace.sharedIntakeView(); assert.equal(current.config.enabled, false); assert.equal(current.config.repositoryId, 'shared');
   await workspace.sharedIntakeCommand({ action: 'configure', expectedRevision: current.revision, config: { ...binding, repositoryId: '' } });
   await workspace.features.tick(true); await workspace.features.tick(true);
+  assert.equal(hinted(workspace.sharedIntakeView()).intake, 'local');
+  assert.equal(hinted(await workspace.featureList()).intake, 'local');
   assert.equal(workspace.featureView().enabled, true); assert.equal(workspace.board.view().tasks.length, 1);
   assert.equal(workspace.board.view().tasks[0].status, 'queued');
   assert.equal(await readFile(join(repository, 'approved.txt'), 'utf8'), 'untouched\n');

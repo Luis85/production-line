@@ -80,7 +80,7 @@ test('the shared default is unchanged: accepting watches a checkout that has a r
 test('shared status and feature list say shared intake is intentionally off only for features.intake local', async t => {
   const local = await workspace(t, 'local'), shared = await workspace(t);
   const hinted = view => /** @type {{ intake?: string, hint?: string }} */ (view);
-  for (const view of [local.worker.sharedIntakeView(), await local.worker.featureList()]) { assert.equal(hinted(view).intake, 'local'); assert.match(String(hinted(view).hint), /intentionally off.*init --intake local.*copying .*local-request\.md outside the feature folder, setting paths, then running feature create --markdown <copy>.*features\.intake/s); }
+  for (const view of [local.worker.sharedIntakeView(), await local.worker.featureList()]) { assert.equal(hinted(view).intake, 'local'); assert.match(String(hinted(view).hint), /intentionally off.*init --intake local.*copying .*local-request\.md outside the feature folder, setting paths, then running feature create --markdown <copy>.*shared setup.*saved repository binding takes precedence/s); }
   assert.equal(hinted(shared.worker.sharedIntakeView()).intake, undefined); assert.equal(hinted(await shared.worker.featureList()).hint, undefined);
 });
 

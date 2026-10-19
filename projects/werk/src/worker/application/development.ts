@@ -22,7 +22,7 @@ export interface DevelopmentEvidence { schemaVersion: 1; candidateDigest: string
 export interface DevelopmentCompletion { turnId: string; runId: string; candidateDigest: string; patchSha256: string; evidenceDigest: string; verified: boolean; }
 /** An approved file and its current hash (null when absent); `changed` marks candidate changes. */
 export interface DevelopmentListedFile { path: string; hash: string | null; changed?: true }
-/** Shared requests only: the frozen publication bounds, the candidate's measurements and the refusal when it exceeds them. */
+/** Shared requests only: the effective publication bounds, candidate measurements and refusal; retained bounds cannot weaken the current publisher. */
 export interface SharedPublicationStatus extends SharedFeaturePublicationLimits { patchBytes: number; changedFileCount: number; error?: string; }
 /**
  * `changedPaths` is always complete. `files` is a byte-bounded listing with hashes; changed paths beyond its budget are
@@ -74,7 +74,7 @@ export function assertDevelopmentPolicy(scope: DevelopmentScope, policy: ToolPol
 }
 /** A shared-intake candidate above the publication bounds is never verified, even with passing receipts (defense in depth). */
 export function developmentVerified(scope: DevelopmentScope, candidate: DevelopmentCandidate, evidence: DevelopmentEvidence | undefined): boolean {
-  if (scope.sharedPublication && sharedFeaturePublicationIssue(candidate.patch) !== undefined) return false;
+  if (scope.sharedPublication && sharedFeaturePublicationIssue(candidate.patch, scope.sharedPublication) !== undefined) return false;
   return !!candidate.patch.trim() && candidate.changedPaths.length > 0 && !!evidence && evidence.candidateDigest === candidate.digest &&
     gateDigest([...candidate.changedPaths].sort()) === gateDigest([...evidence.changedPaths].sort()) &&
     classifyDevelopmentEvidence(scope, evidence).verified;

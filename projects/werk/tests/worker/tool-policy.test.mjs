@@ -90,6 +90,20 @@ test('private tool policy migrates default-none, preserves and rotates secrets, 
   await writeFile(join(path, 'tool-access.json'), '{"schemaVersion":999}'); await assert.rejects(new WorkerSettings(path).init(), /saved tool policy/);
 });
 
+test('invalid saved tool policy identifies the file and safe recovery without exposing malformed JSON', async t => {
+  const path = await directory(t), file = join(path, 'tool-access.json');
+  const configurations = ['{"schemaVersion":999}', 'fixture-private-secret-not-json'];
+  for (const content of configurations) {
+    await writeFile(file, content);
+    const message = await new WorkerSettings(path).init().then(() => '', error => error.message);
+    assert.ok(message.startsWith(file + ': '), message);
+    assert.ok(message.endsWith(`Correct the configuration in ${file}, then start the worker again.`), message);
+    assert.doesNotMatch(message, /that entry|fixture-private-secret/);
+    if (content === configurations[1]) assert.match(message, /not valid JSON/);
+    assert.equal(await readFile(file, 'utf8'), content, 'startup must preserve the rejected configuration for correction');
+  }
+});
+
 async function workspace(t) {
   const path = await directory(t), state = join(path, 'state'); await mkdir(state);
   const journal = new SnapshotJournal(state, 'a'.repeat(64), 'b'.repeat(64)); await journal.init();

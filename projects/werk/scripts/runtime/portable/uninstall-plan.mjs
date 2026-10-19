@@ -28,6 +28,7 @@ export function decide(entry, flags) {
     if (entry.path === '.env' ? !entry.keys?.length : !entry.werkBlock) return null;
     if (!flags['include-environment']) return keep(entry, 'Environment entries are kept. Pass --include-environment to remove the worker entries.');
     if (entry.tracked) return keep(entry, 'Tracked by Git; never changed.');
+    if (entry.editIssue) return keep(entry, entry.editIssue);
     return { action: 'edit', entry };
   }
   if (entry.managed === false) return keep(entry, entry.note);

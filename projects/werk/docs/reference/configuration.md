@@ -331,8 +331,12 @@ refresh and reconcile on conflict. `settings get`, `settings set --file`
 and `provider configure --file` use those routes.
 
 `defaultProvider` must be `codex-cli`, `claude-cli`, `openai-api`, `anthropic-api`
-or `cursor-cli`. `features.intake` in `.werk/worker.json` is `shared` (default) or `local`; `init --intake local` writes `local`, which keeps shared intake off on purpose and makes the detected checkout default to `watch: false`. The legacy startup `features.provider` is a seed only when no
-saved default exists. A template or request with an explicit provider continues
+or `cursor-cli`. `features.intake` in `.werk/worker.json` is `shared` (default) or
+`local`; `init --intake local` writes the local setup preset and makes the detected
+checkout default to `watch: false`. An explicitly saved shared repository binding
+takes precedence over this preset, even when paused; changing `features.intake`
+alone does not disconnect it. The legacy startup `features.provider` is a seed only
+when no saved default exists. A template or request with an explicit provider continues
 to use it. Model and effort selections follow the
 [shared selection contract](model-interaction.md#provider-model-and-effort-selection):
 request override, compatible profile model, then provider default for models;

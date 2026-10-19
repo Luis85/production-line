@@ -1,8 +1,12 @@
+import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { inputError } from '../config.mjs';
-import { environmentExample, environmentKeys } from './environment.mjs';
+import { environmentExample, parseEnvironment } from './environment.mjs';
+import { workerProjectManifest } from './npm-package.mjs';
+import { environmentEditIssue } from './uninstall-environment.mjs';
 import { status } from './lifecycle.mjs';
 import { localRequestTemplate, localTemplateName } from './local-intake.mjs';
 import { contained, display, info, lf, measure, smallText, trackedBelow, trackedFiles, within } from './footprint-files.mjs';
@@ -88,17 +92,34 @@ async function integrationOwnership(root, project) {
 async function npmOwnership(project) {
   const manifest = await readJson(join(project, 'package.json'));
   if (!manifest || manifest.name !== 'werk-project-worker') return undefined;
-  const scripts = Object.values(manifest.scripts ?? {});
-  const generated = !['dependencies', 'devDependencies', 'optionalDependencies', 'workspaces'].some(key => key in manifest) && scripts.length && scripts.every(value => typeof value === 'string' && value.startsWith('node bin/apps/worker/cli.mjs'));
+  const generated = isDeepStrictEqual(manifest, workerProjectManifest());
   return generated ? { managed: true } : { managed: false, note: 'The generated package.json was customized; kept.' };
 }
+/** The authoring directory is removable only while every entry matches the shipped kit. */
+async function authoringBundleOwnership(root, project) {
+  const folder = join(project, '.werk/authoring'), stat = await info(folder);
+  if (!stat) return {};
+  const kept = { managed: false, note: 'The authoring bundle was customized or could not be verified; kept as your work.' };
+  if (!stat.isDirectory() || stat.isSymbolicLink()) return kept;
+  const names = ['feature-request.mjs', 'manifest.json', '.gitignore'];
+  try {
+    if ((await readdir(folder)).some(name => !names.includes(name))) return kept;
+    const script = await smallText(join(root, 'src/worker/dist/worker/authoring/feature-request.mjs'), 2097152);
+    if (!script || (await ownership(join(folder, names[0]), script)).managed !== true) return kept;
+    if (lf(await smallText(join(folder, '.gitignore'))) !== 'write.lock\n') return kept;
+    const sha256 = createHash('sha256').update(lf(script)).digest('hex');
+    const manifest = { schemaVersion: 1, files: { '.werk/authoring/feature-request.mjs': { sha256 } } };
+    return isDeepStrictEqual(await readJson(join(folder, 'manifest.json')), manifest) ? { managed: true } : kept;
+  } catch { return kept; }
+}
 async function environmentDetails(project) {
-  const keys = new Set(environmentKeys('worker')), env = await smallText(join(project, '.env')), example = await smallText(join(project, '.env.example'));
-  const present = (env ?? '').split(/\r?\n/).map(line => /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/.exec(line)?.[1]).filter(key => key && keys.has(key));
+  const env = await smallText(join(project, '.env')), example = await smallText(join(project, '.env.example'));
+  const present = Object.keys(parseEnvironment('worker', env ?? ''));
+  const block = environmentExample('worker'), werkBlock = !!example && lf(example).includes(block);
   const ignore = (await smallText(join(project, '.gitignore')) ?? '').split(/\r?\n/).map(line => line.trimEnd());
   return {
-    '.env': { keys: [...new Set(present)] },
-    '.env.example': { werkBlock: !!example && lf(example).includes(environmentExample('worker')) },
+    '.env': { keys: present, ...(present.length ? { editIssue: await environmentEditIssue(project, env) } : {}) },
+    '.env.example': { werkBlock, ...(werkBlock && lf(example).replace(block, '').trim() ? { editIssue: await environmentEditIssue(project, example) } : {}) },
     '.gitignore': { rules: ['.env', '!.env.example'].filter(rule => ignore.includes(rule)) },
   };
 }
@@ -113,7 +134,7 @@ async function candidates(root, project, state) {
   if (layout.features) for (const name of ['_worker-owner.json', '_worker-status.md', '_worker.lock']) add('state', join(layout.features, name));
   for (const name of ['worker.json', 'worker-project.json', 'compose.worker.yaml', '.gitignore']) add('configuration', '.werk/' + name);
   const generated = await generatedAuthoring(root, layout);
-  add('authoring', '.werk/feature-workflow.json'); add('authoring', '.werk/authoring');
+  add('authoring', '.werk/feature-workflow.json'); add('authoring', '.werk/authoring', await authoringBundleOwnership(root, project));
   if (layout.workflow) for (const path of [layout.workflow.template, layout.workflow.base, layout.workflow.readyCheck, layout.workflow.doneCheck, layout.workflow.readyPrompt, layout.workflow.donePrompt, layout.workflow.readyReviewPrompt]) if (path) add('authoring', path, await ownership(resolve(project, path), generated.get(path)));
   if (layout.features && layout.worker?.features?.intake === 'local') { const path = layout.features + '/' + localTemplateName; add('authoring', path, await ownership(resolve(project, path), localRequestTemplate(layout.provider))); }
   for (const path of new Set([layout.features, layout.workflow?.reviewDirectory, layout.tasks].filter(Boolean))) add('requests', path);

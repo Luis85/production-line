@@ -248,8 +248,9 @@ text completion alone does not establish passing project tests.
 
 ### Local folder intake without a shared repository
 
-The separate local folder flow accepts requests without `templateId`. Generate
-its draft with `feature template`, then use the local management commands below.
+Local folder intake targets the same Feature Request lifecycle and worker queue.
+It accepts requests without `templateId`. Generate a draft with `feature template`,
+then use the local management commands below.
 Its saves are consumed locally and do not require commit/push. The installed team
 template belongs to shared intake and is never silently executed by this watcher.
 See the [local proposal tutorial](../tutorials/worker-feature-lifecycle.md) and
@@ -273,8 +274,8 @@ installs the offline authoring kit, and it also:
   `templateId`, with `status: draft`, `mode: patch`, your provider, and commented
   `paths` (including a folder entry ending in `/`) and `definitionRef` examples;
 - records `features.intake: "local"` in `.werk/worker.json`. A repeated `init` keeps
-  it; `init --intake shared` against a local worker stops and names that file, so edit
-  or remove the key yourself to switch;
+  it. `init` refuses an explicit conflicting intake choice without changing
+  existing configuration; it names the file and the migration steps;
 - reports `intake: { mode: "local", template, commands, next }` instead of the shared
   connection steps.
 
@@ -298,10 +299,26 @@ new assignment is not watched, so nothing is fetched in the background. Pass
 `--watch true` to `repository accept` to watch it anyway; `--watch false` also works for a
 shared worker. `--watch` only applies to a new assignment: for a checkout that is assigned
 already it is refused, so change watching in **Settings → Repositories** or with
-`settings set` instead. `shared status` and `feature list` carry `intake: "local"` and a hint that
-shared intake is intentionally off. To move to shared intake later, set
-`features.intake` to `"shared"` (or remove it) and follow
-[Submit your first shared request](#submit-your-first-shared-request).
+`settings set` instead. Until a shared repository is connected, `shared status` and
+`feature list` carry `intake: "local"` and guidance for local requests.
+
+To connect this worker to a team later, follow
+[Submit your first shared request](#submit-your-first-shared-request). The explicit
+saved shared binding takes precedence over the local setup preset immediately,
+including when shared intake is paused and after a restart. New requests then use
+shared intake; existing local requests retain their identity and can be continued.
+Changing `features.intake` is optional: to restore shared repository-discovery
+defaults, stop the worker, set it to `"shared"` (or remove it), then restart. Existing
+repository assignments keep their saved watch setting.
+
+For an **existing shared installation**, `init --intake local` deliberately refuses
+to switch it. Finish owned shared requests and publish their notes first, then
+pause the queue. Use `shared status` and `shared configure` to save the current configuration with
+`enabled: false` and an empty `repositoryId`, using its current revision. Stop the
+worker, set `features.intake` to `"local"` in `.werk/worker.json`, then run
+`node bin/apps/worker/cli.mjs init` from the project and restart it. Changing the
+startup file alone does not disconnect shared intake. Existing shared notes keep
+their `templateId` and are never executed by local folder intake.
 `footprint` and `uninstall` treat the local template as a generated authoring file:
 removed when unchanged, kept as your work once edited.
 
@@ -466,15 +483,18 @@ What stays:
   `_templates/feature-request.md` or `_templates/local-request.md`.
 - `.env` and the `.env.example` block. `--include-environment` removes only the
   worker keys and block; other lines stay and `.gitignore` is never changed.
-- Files you edited, such as a changed skill, Base or check, and integration files
-  Werk does not own.
+  Ambiguous multiline environment assignments keep the file intact for manual
+  editing, as reported by the plan.
+- Customized templates, skills, Bases, checks and prompts; customized authoring
+  bundles and generated project package manifests; and integration files Werk
+  does not own. Untracked worker configuration is removed as shown in the preview.
 - Task worktrees with uncommitted or untracked changes, commits, an operator lock,
   links or junctions, an invalid record or another assignment. The result lists
   each with its reason; review them before `git worktree remove PATH`.
 - Links, junctions, nested Git repositories or submodules (any folder with a
   `.git` entry, in any letter case; removal never enters a `.git` entry), any
-  folder that holds a task worktree that stays, and anything outside the project
-  directory.
+  folder that holds a task worktree that stays, and other paths outside the project
+  directory. Clean owned task worktrees are handled separately as described above.
 - The whole state directory when its top level holds anything the worker does not
   write (only names such as `webview-token`, `workspace-settings.json`,
   `portable.json`, `portable.log`, `worker-*.sqlite` and its `-wal`/`-shm` files,
@@ -494,12 +514,20 @@ What stays:
   project marker does not wait for it.
 
 `--dry-run` predicts these keeps, including nested repositories and the two guard
-files, so its `remove` and `keep` lists match what `--confirm` does unless files
-change in between. `--include-environment` rewrites `.env` through a temporary
-file named `.env` inside a new private `.werk-env-*` folder next to it. Werk's
-generated `.env` ignore rule matches that name in any folder, so the credentials
-never appear as an untracked file; the rename stays on the same volume, and the
-temporary file and folder are removed again on failure.
+files. Apply rechecks safety conditions and may keep a path if they differ.
+`--include-environment` rewrites `.env` through a temporary file named `.env` inside
+a new private `.werk-env-*` folder next to it. In a Git project, the plan checks
+whether a private staging path is ignored, and apply checks the actual temporary
+path before writing credentials. Werk's generated `.env` rule covers both paths;
+a custom root-only `/.env` rule does not. If staging is not ignored, the file stays
+for manual editing. The rename stays on the same volume, and the temporary file
+and folder are removed again on handled failure. A hard interruption
+can leave that private folder and its `.env` behind. Once no worker or uninstall
+process is running, inspect the project `.env` and the leftover privately in your
+editor before removing the exact leftover folder. Keep credentials out of terminal
+output, issues and commits. The root `.env` is replaced by rename only after the
+replacement file has been written; a leftover may be incomplete and is not an
+automatic recovery source.
 
 Git tracking is compared without regard to case wherever Git ignores case, as on
 Windows, so a file committed as `Features/request.md` counts as tracked in

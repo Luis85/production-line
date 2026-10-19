@@ -69,7 +69,10 @@ worker: it writes `<features-dir>/_templates/local-request.md` (no `templateId`,
 `.werk/worker.json`, and reports `intake: { mode: "local", connectionRequired: false, template, commands, next }`
 instead of `shared_git`. Such a worker's detected checkout is accepted with `watch: false` unless
 `repository accept --watch true` says otherwise, and `shared status` and `feature list` add
-`intake: "local"` and a `hint`. See
+`intake: "local"` and a `hint` until a shared repository binding is saved. That binding
+takes precedence over the local preset, even when paused; existing repository watch
+settings remain unchanged. Repeated `init` preserves the recorded preset and refuses
+a conflicting explicit choice. See
 [operator-only setup](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/project-worker.md#set-up-an-operator-only-worker).
 Run or start from the project directory; the installed worker discovers its project
 configuration. `feature template` prints a fresh Markdown template without a running

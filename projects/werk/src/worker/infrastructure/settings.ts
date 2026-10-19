@@ -44,8 +44,11 @@ export class WorkerSettings {
     const toolAccess = join(this.directory, 'tool-access.json');
     try { this.tools = validateToolPolicy(JSON.parse(await readBoundedFile(toolAccess, 655360))); }
     catch (error) {
-      // A saved grant that this version refuses, such as a cmd.exe CLI tool, names the file and entry to fix.
-      if (error instanceof DomainError) throw new DomainError(error.code, `${toolAccess}: ${error.message} Edit or remove that entry in ${toolAccess}, then start the worker again.`);
+      // Refused grants retain their entry details; file-level failures describe configuration recovery.
+      const recovery = `Correct the configuration in ${toolAccess}, then start the worker again.`;
+      if (error instanceof DomainError) throw new DomainError(error.code, `${toolAccess}: ${error.message} ${recovery}`);
+      // JSON parse errors can quote private configuration, including credentials.
+      if (error instanceof SyntaxError) throw new DomainError('invalid_input', `${toolAccess}: Saved tool policy is not valid JSON. ${recovery}`);
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
 

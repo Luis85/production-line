@@ -35,9 +35,9 @@ export function featureTrackingSnapshot(workspace: WorkspaceContext): FeatureTra
   });
 }
 
-/** An operator-only worker (init --intake local) keeps shared Git intake off on purpose; say so instead of looking unconfigured. */
-const localIntakeHint = { intake: 'local', hint: 'Shared Git intake is intentionally off: this worker was created with init --intake local. Create a request by copying <features>/_templates/local-request.md outside the feature folder, setting paths, then running feature create --markdown <copy>. To use shared intake, change features.intake in .werk/worker.json to "shared" and run shared setup.' } as const;
-const withLocalHint = <T extends object>(workspace: WorkspaceContext, view: T): T | (T & typeof localIntakeHint) => workspace.config.features?.intake === 'local' ? { ...view, ...localIntakeHint } : view;
+/** Explain the local setup preset only while no explicit shared repository binding owns intake. */
+const localIntakeHint = { intake: 'local', hint: 'Shared Git intake is intentionally off: this worker was created with init --intake local. Create a request by copying <features>/_templates/local-request.md outside the feature folder, setting paths, then running feature create --markdown <copy>. To use shared intake, run shared setup; its saved repository binding takes precedence over the local setup defaults.' } as const;
+const withLocalHint = <T extends object>(workspace: WorkspaceContext, view: T): T | (T & typeof localIntakeHint) => workspace.config.features?.intake === 'local' && !workspace.sharedRuntime.intake.binding?.repositoryId ? { ...view, ...localIntakeHint } : view;
 
 export function sharedIntakeView(workspace: WorkspaceContext){
   const blocked = toolAccessBlockedReason(workspace)?.replaceAll('tool access', 'shared intake') ?? null;
