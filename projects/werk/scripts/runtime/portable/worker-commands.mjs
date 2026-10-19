@@ -112,7 +112,7 @@ export function workerCommands(catalog) {
   for (const name of ["accept", "decline"])
     catalog["repository " + name] = {
       ...action("/api/repositories", name, ["discovery-id"], false, name === "accept" ? ["watch"] : [], { "discovery-id": "discoveryId", ...(name === "accept" ? { watch: "watch" } : {}) }),
-      description: "Record the explicit choice for the exact detected installation repository. Read repository status for its discovery id first." + (name === "accept" ? " --watch true|false sets whether the new assignment is fetched in the background; the default is false for a worker created with init --intake local, otherwise true when the checkout has a remote and branch." : ""),
+      description: "Record the explicit choice for the exact detected installation repository. Read repository status for its discovery id first." + (name === "accept" ? " --watch true|false sets whether the new assignment is fetched in the background; the default is false for a worker created with init --intake local, otherwise true when the checkout has a remote and branch. For a checkout that is assigned already --watch is refused; change watching in Settings → Repositories or with settings set." : ""),
     };
   catalog["worktrees list"] = {
     timeoutMs: GIT_REQUEST_TIMEOUT_MS,

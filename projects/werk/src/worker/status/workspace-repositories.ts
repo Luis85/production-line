@@ -58,6 +58,8 @@ async function chooseDiscoveredRepository(workspace: WorkspaceContext, action: "
       if (candidate.repositoryId && candidate.decision === "accepted") throw new DomainError("conflict", "This repository is assigned already. Remove its assignment before declining it.");
       await workspace.repositoryDiscovery.record("declined");
     } else {
+      if (candidate.repositoryId && watch !== undefined)
+        throw new DomainError("conflict", "This checkout is assigned already, so --watch has no effect here; it only sets watching for a new assignment. Change watching for the existing assignment in Settings → Repositories, or with settings set (repositories.items[].watch).");
       if (!candidate.repositoryId) {
         const configuration = workspace.settings.value.repositories;
         await workspace.settings.update({ repositories: { ...configuration, items: [...configuration.items, workspace.repositoryDiscovery.assignment(configuration.items, watch)] } });

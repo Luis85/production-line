@@ -296,7 +296,9 @@ Start the worker, then accept the detected project checkout with
 `repository accept --discovery-id ID` if tasks should use it. For a local worker the
 new assignment is not watched, so nothing is fetched in the background. Pass
 `--watch true` to `repository accept` to watch it anyway; `--watch false` also works for a
-shared worker. `shared status` and `feature list` carry `intake: "local"` and a hint that
+shared worker. `--watch` only applies to a new assignment: for a checkout that is assigned
+already it is refused, so change watching in **Settings → Repositories** or with
+`settings set` instead. `shared status` and `feature list` carry `intake: "local"` and a hint that
 shared intake is intentionally off. To move to shared intake later, set
 `features.intake` to `"shared"` (or remove it) and follow
 [Submit your first shared request](#submit-your-first-shared-request).

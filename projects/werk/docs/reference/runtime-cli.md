@@ -110,7 +110,7 @@ worker’s local credentials; stdout is JSON and no command prompts for a choice
 | --- | --- |
 | `repository status` | Inspect assignments and the detected project checkout without fetching |
 | `repository sync [--id ASSIGNMENT_ID]` | Fetch and safely fast-forward one assignment, or all when omitted; waits up to 120 s |
-| `repository accept --discovery-id ID [--watch true|false]` | Accept the exact detected checkout and save an assignment; requires idle work. `--watch` sets background fetching for the new assignment; default `false` when `features.intake` is `local`, otherwise `true` for a checkout with a remote and branch. `true` without a remote is refused |
+| `repository accept --discovery-id ID [--watch true|false]` | Accept the exact detected checkout and save an assignment; requires idle work. `--watch` sets background fetching for the new assignment; default `false` when `features.intake` is `local`, otherwise `true` for a checkout with a remote and branch. `true` without a remote is refused, and so is `--watch` for a checkout that is assigned already: change its watching in **Settings → Repositories** or with `settings set` (`repositories.items[].watch`) |
 | `repository decline --discovery-id ID` | Persist the choice not to use the detected checkout |
 | `worktrees list` | List task worktrees in assigned repositories with location, state and using file task |
 | `worktrees prune [--id NAME] [--repository ID] [--discard-changes true] [--dry-run]` | Remove worktrees no file task uses; clean only unless `--discard-changes true`; requires idle work except for `--dry-run` |

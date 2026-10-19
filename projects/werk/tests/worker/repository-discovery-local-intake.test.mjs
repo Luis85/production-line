@@ -56,6 +56,15 @@ test('accepting the detected repository defaults to watch false for features.int
   assert.equal(accepted.items.length, 1); assert.equal(accepted.items[0].watch, false);
 });
 
+test('repository accept --watch on an already assigned checkout is refused with where to change watching', async t => {
+  const f = await workspace(t, 'local'), id = f.worker.repositoryStatus().discovery.id;
+  await f.worker.repositoryCommand({ action: 'accept', discoveryId: id });
+  for (const watch of [true, false])
+    await assert.rejects(f.worker.repositoryCommand({ action: 'accept', discoveryId: id, watch }), /assigned already.*--watch has no effect.*Settings → Repositories.*settings set \(repositories\.items\[\]\.watch\)/);
+  const again = await f.worker.repositoryCommand({ action: 'accept', discoveryId: id });
+  assert.equal(again.items.length, 1); assert.equal(again.items[0].watch, false, 'Accepting again without --watch stays allowed and unchanged.');
+});
+
 test('an explicit watch true on accept keeps the checkout watched for an operator-only worker', async t => {
   const f = await workspace(t, 'local'), id = f.worker.repositoryStatus().discovery.id;
   const accepted = await f.worker.repositoryCommand({ action: 'accept', discoveryId: id, watch: true });
