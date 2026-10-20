@@ -1,5 +1,6 @@
-import test from 'node:test';
+import test, { before } from 'node:test';
 import assert from 'node:assert/strict';
+import { prepareProcessRuntime } from '../../src/worker/dist/shared/process/launcher.js';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -10,6 +11,9 @@ import { delegationTool } from '../../src/worker/dist/worker/infrastructure/dele
 import { modelFor } from '../../src/worker/dist/worker/infrastructure/providers.js';
 import { withProviderTools } from '../../src/worker/dist/worker/infrastructure/provider-tool-session.js';
 import { withCliToolBridge } from '../../src/worker/dist/worker/infrastructure/cli-tool-bridge.js';
+
+// Native setup has a 45-second limit; allow five seconds to drain before scenario budgets start.
+before(async t => prepareProcessRuntime(process.cwd(), t.signal), { timeout: 50000 });
 
 const task = id => ({ id, prompt: 'Inspect the same Feature Request.', tools: [] });
 /** @param {import('node:test').TestContext} t

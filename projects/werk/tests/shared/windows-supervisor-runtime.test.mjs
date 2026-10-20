@@ -85,6 +85,7 @@ test('a cold deadline never dispatches its target and later adequate-budget warm
   await assert.rejects(readFile(marker), { code: 'ENOENT' });
   await assert.rejects(fresh.runProcess(node, target, { env: {}, cwd: directory, mode: 'contained', maxOutputBytes: 4096, signal: AbortSignal.abort() }), { reason: 'cancelled' });
   await assert.rejects(readFile(marker), { code: 'ENOENT' });
+  await fresh.prepareProcessRuntime(directory, t.signal);
   await fresh.runProcess(node, ['-e', ''], { env: {}, cwd: directory, mode: 'contained', maxOutputBytes: 4096, timeoutMs: 30000, signal: t.signal });
   const child = fresh.launchProcess(node, ['-e', ''], { env: {}, cwd: directory, mode: 'contained' });
   const result = collect(child, t.signal); child.stdin.end();

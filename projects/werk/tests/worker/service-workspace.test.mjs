@@ -16,7 +16,8 @@ import { testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import { workspaceContext, taskboardRuntime } from './runtime-fixtures.mjs';
 
 // Establish native process readiness separately from the bounded admission/service scenario.
-before(async t => prepareProcessRuntime(process.cwd(), t.signal), { timeout: 45000 });
+// Allow 45 s for native initialization and 5 s for cancellation cleanup.
+before(async t => prepareProcessRuntime(process.cwd(), t.signal), { timeout: 50000 });
 
 async function fixture(t, repositoryAlias = false) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-service-workspace-'))), repository = join(directory, 'repository'), state = join(directory, 'state');

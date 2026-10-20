@@ -12,7 +12,8 @@ import { bridgeToolTimeoutMs, withCliToolBridge } from '../../src/worker/dist/wo
 import { claudeToolEnvironment } from '../../src/worker/dist/worker/infrastructure/providers.js';
 import { prepareProcessRuntime } from '../../src/worker/dist/shared/process/launcher.js';
 // Establish native process readiness before testing the unchanged per-operation deadlines.
-before(async t => prepareProcessRuntime(process.cwd(), t.signal), { timeout: 45000 });
+// Allow 45 s for native initialization and 5 s for cancellation cleanup.
+before(async t => prepareProcessRuntime(process.cwd(), t.signal), { timeout: 50000 });
 
 const signal = () => new AbortController().signal;
 const manifest = { revision: 1, tools: [{ name: 'fixture', description: 'Fixture', inputSchema: { type: 'object' } }] };

@@ -277,6 +277,17 @@ owning workflow. Editing the original Feature Request body or a progress
 projection is not an answer to a pending question. See
 [answer and resume](../how-to/answer-and-resume-worker.md).
 
+## Windows command runtime preparation
+
+The worker prepares its contained command launcher in the background while its
+HTTP interface starts. This trusted setup has a separate 45-second ceiling; it
+does not run a provider or establish authentication. Native CLI and process-tool
+dispatches wait for setup within their existing invocation deadline. A shorter
+invocation, command or probe deadline still wins. Read-only files, web requests
+and HTTP MCP tools do not require native setup; stdio MCP, command, candidate and
+other process-capable tools do. Diagnostic and pilot commands announce setup
+before running their unchanged five-second provider checks.
+
 ## Private interaction API and CLI
 
 Authenticated `POST /api/interactions` provides:

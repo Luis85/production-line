@@ -19,7 +19,8 @@ import { DomainError } from '../../src/worker/dist/shared/errors.js';
 import { LocalTaskboard, WorkerSessions } from './application-fixtures.mjs';
 
 // Establish native process readiness separately from the bounded admission/service scenario.
-before(async t => prepareProcessRuntime(process.cwd(), t.signal), { timeout: 45000 });
+// Allow 45 s for native initialization and 5 s for cancellation cleanup.
+before(async t => prepareProcessRuntime(process.cwd(), t.signal), { timeout: 50000 });
 
 const execute = promisify(execFile);
 async function git(directory, ...args) {

@@ -84,6 +84,9 @@ test('installed worker publishes one frozen shared feature from two clones and p
   const { SnapshotJournal } = await import(pathToFileURL(join(built, 'infrastructure/journal/snapshots.js')).href);
   const { statusServer } = await import(pathToFileURL(join(built, 'status/server.js')).href);
   const { modelFor } = await import(pathToFileURL(join(built, 'infrastructure/providers.js')).href);
+  const { prepareProcessRuntime } = await import(pathToFileURL(join(application, 'src/worker/dist/shared/process/launcher.js')).href);
+  // This direct workspace fixture uses the installed package's runtime, outside runner startup.
+  await prepareProcessRuntime(checkout, t.signal);
   const state = join(checkout, '.werk/worker');
   const status = { workerId: null, project: null, mode: 'mock', state: 'standalone', taskId: null, attempt: null, profile: null, completedSimulations: 0, lastContact: null, lastError: null, updatedAt: new Date().toISOString(), profiles: [], heartbeatErrors: 0, maxParallel: 1, activeTasks: [], queuedTasks: [], configurationHash: 'a'.repeat(64), lastSnapshot: null };
   let modelCalls = 0, requestPath, featureId, sourceCommit;

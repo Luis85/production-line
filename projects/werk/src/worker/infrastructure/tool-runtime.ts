@@ -86,6 +86,8 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
   const resolved = resolveToolLimits(policy, options);
   const { maxCalls, maxRuntimeMs, commandTimeoutMs } = resolved;
   const operations: ToolOperation[] = [...builtinToolOperations({ ...options, policy, commandTimeoutMs, limits: resolved }), ...(options.additionalOperations ?? [])];
+  // Unknown/additional operations are conservative; only known file and HTTP operations skip native setup.
+  let requiresProcessRuntime = !!options.additionalOperations?.length || operations.some(operation => !['werk_files_list', 'werk_files_read', 'werk_files_search', 'werk_web_fetch'].includes(operation.definition.name));
   if (operations.some(operation => operation.concurrent && operation.definition.name !== 'werk_delegate')) throw new ToolAccessError('Only worker delegation may wait outside the shared tool queue.');
   const mcpTimeouts = new Map<string, number>();
   const directoryFor = chatToolDirectory(options);
@@ -93,6 +95,7 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
   const workspaceTools = new Set<string>();
   for (const connection of policy.mcp.filter(item => item.enabled)) {
     const granted = connection.discoveredTools.filter(tool => connection.allowedTools.includes(tool.name));
+    if (connection.transport === 'stdio' && granted.length) requiresProcessRuntime = true;
     for (const tool of granted) mcpTimeouts.set(mcpToolName(connection.id, tool.name), resolved.mcpTimeoutMs[connection.id]);
     const repository = chatRepositoryId(connection);
     const note = options.worktree || connection.transport !== 'stdio' ? '' : ' (' + (repository === undefined ? chatWorkspaceNote : chatRepositoryNote(repository)) + ')';
@@ -150,7 +153,7 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
     return note ? { ...result, content: [...result.content, { type: 'text', text: note }] } : result;
   };
   return {
-    manifest, failureSignal: failure.signal, stopUncertain,
+    manifest, requiresProcessRuntime, failureSignal: failure.signal, stopUncertain,
     limits: Object.freeze({ maxCalls, maxRuntimeMs, commandTimeoutMs }),
     assertAvailable: authorize,
     ...(options.worktree && pinnedWorktree && options.development?.prepareNative ? {

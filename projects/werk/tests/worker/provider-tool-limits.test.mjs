@@ -11,6 +11,7 @@ import { consumptionModel } from '../../src/worker/dist/worker/application/consu
 import { defaultToolPolicy } from '../../src/worker/dist/worker/application/tool-policy.js';
 import { prepareModelRequest, requireModelRequest, executeModel } from '../../src/worker/dist/worker/application/model-contract.js';
 import { defaultExecutionPolicy } from '../../src/worker/dist/worker/application/execution-policy.js';
+import { prepareProcessRuntime } from '../../src/worker/dist/shared/process/launcher.js';
 
 const signal = () => new AbortController().signal;
 /** @type {import('../../src/worker/application/conversation-contracts.js').ChatMessage[]} */
@@ -36,6 +37,8 @@ test('manifest preparation and dispatch use frozen budgets through composition a
   assert.deepEqual(request.toolManifest.limits, { maxCalls: 40, windowMs: 4321, callTimeoutMs: { werk_command_run: 1500 }, presetTimeoutMs: { check: 1500 } });
   assert.ok(Object.isFrozen(request.toolManifest.limits.presetTimeoutMs));
   await assert.rejects(access(state), { code: 'ENOENT' });
+  // This real command grant requires containment; prepare before the frozen 4321 ms invocation.
+  await prepareProcessRuntime(directory, t.signal);
   settings.value.execution = { ...defaultExecutionPolicy(), maxToolCalls: 1, maxRuntimeMs: 1000, commandTimeoutMs: 1000 };
   assert.equal(completedText((await executeModel(model, request, signal()))), 'Complete.');
   assert.equal(requests, 1, 'changing live execution settings cannot widen or invalidate this accepted snapshot');
@@ -43,7 +46,7 @@ test('manifest preparation and dispatch use frozen budgets through composition a
 });
 
 test('manifest validation bounds only named tools and preserves legacy metadata absence', () => {
-  const runtime = { manifest: { revision: 1, tools, limits }, async call() { throw Error('Metadata inspection must not call tools'); }, async close() {} };
+  const runtime = { requiresProcessRuntime: false, manifest: { revision: 1, tools, limits }, async call() { throw Error('Metadata inspection must not call tools'); }, async close() {} };
   const model = modelFor(connection, '/unused', undefined, { tools: () => runtime });
   const request = prepareModelRequest(model, messages);
   const changed = change => { const copy = structuredClone(request); change(copy.toolManifest); return copy; };
@@ -65,7 +68,7 @@ test('manifest validation bounds only named tools and preserves legacy metadata 
 
 test('legacy dispatches may omit limits but cannot change grant revisions or exact tool definitions', async () => {
   let current = { revision: 1, tools, limits }, requests = 0, closed = 0;
-  const model = modelFor(connection, '/unused', async () => { requests++; return answer(); }, { tools: () => ({ manifest: structuredClone(current), async call() { throw Error('Not called'); }, async close() { closed++; } }) });
+  const model = modelFor(connection, '/unused', async () => { requests++; return answer(); }, { tools: () => ({ requiresProcessRuntime: false, manifest: structuredClone(current), async call() { throw Error('Not called'); }, async close() { closed++; } }) });
   const request = structuredClone(prepareModelRequest(model, messages)); delete request.toolManifest.limits;
   assert.equal(completedText((await executeModel(model, request, signal()))), 'Complete.');
   for (const change of [

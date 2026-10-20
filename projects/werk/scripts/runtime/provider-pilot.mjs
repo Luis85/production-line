@@ -24,7 +24,7 @@ async function pilot() {
   let sessions, board, root;
   const receipt = { schemaVersion: 1, checkKind: 'real_provider_development_pilot', fixture: false, platform: process.platform, architecture: process.arch, node: process.versions.node, provider, authenticationMode: 'cli-account', startedAt: new Date().toISOString(), liveInferenceQualified: false };
   try {
-    if (process.platform === 'win32') console.error('Preparing the trusted Windows command runtime (up to 30 seconds); provider checks keep their separate five-second deadlines.');
+    if (process.platform === 'win32') console.error('Preparing the trusted Windows command runtime with a bounded setup deadline; provider checks keep their separate five-second deadlines.');
     await prepareProcessRuntime(process.cwd(), new AbortController().signal);
     const diagnostic = await checks.check(connection);
     if (!diagnostic.available || diagnostic.authentication !== 'authenticated') throw Error('The selected official CLI must pass its account/version diagnostic before billable execution.');

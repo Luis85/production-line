@@ -5,6 +5,8 @@ import { WindowsSupervisorCache } from './windows-supervisor-cache.js';
 
 const supervisorCache = process.platform === 'win32' ? new WindowsSupervisorCache() : undefined;
 let preparationOwners = 0;
+/** Trusted Windows setup only; every caller retains its shorter invocation or command deadline. */
+const PROCESS_RUNTIME_PREPARATION_TIMEOUT_MS = 45000;
 
 /**
  * The only place application code starts child processes. Every launch:
@@ -74,7 +76,7 @@ export async function prepareProcessRuntime(cwd: string, signal: AbortSignal): P
   signal.throwIfAborted();
   if (!supervisorCache) return;
   const stop = new AbortController(), bounded = AbortSignal.any([signal, stop.signal]);
-  const timer = setTimeout(() => stop.abort(), 30000); timer.unref();
+  const timer = setTimeout(() => stop.abort(), PROCESS_RUNTIME_PREPARATION_TIMEOUT_MS); timer.unref();
   preparationOwners++;
   try { await prepareWindowsSupervisor(cwd, bounded); bounded.throwIfAborted(); }
   finally { clearTimeout(timer); preparationOwners--; }
@@ -84,7 +86,7 @@ async function prepareWindowsSupervisor(cwd: string, signal: AbortSignal): Promi
   await supervisorCache?.prepare(async (plan, bounded) => {
     // Private path bypasses cache preparation, while the existing supervisor contains the compiler.
     await runUnpreparedProcess(plan.executable, plan.args, { cwd: plan.cwd, env: plan.env, mode: 'contained', observation: 'ignore', input: plan.input,
-      signal: bounded, timeoutMs: 30000, maxOutputBytes: 131072, captureStderr: true, graceMs: 0 });
+      signal: bounded, timeoutMs: PROCESS_RUNTIME_PREPARATION_TIMEOUT_MS, maxOutputBytes: 131072, captureStderr: true, graceMs: 0 });
   }, cwd, signal);
 }
 

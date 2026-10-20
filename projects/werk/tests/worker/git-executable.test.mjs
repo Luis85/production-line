@@ -7,9 +7,10 @@ import { gitExecutable } from '../../src/worker/dist/shared/git/executable.js';
 import { prepareProcessRuntime, runProcess } from '../../src/worker/dist/shared/process/launcher.js';
 
 // Startup is bounded separately; the test and each target retain their original deadlines.
+// Allow 45 s for native initialization and 5 s for cancellation cleanup.
 before(async context => {
   if (process.platform === 'win32') await prepareProcessRuntime(process.cwd(), context.signal);
-}, { timeout: 30000 });
+}, { timeout: 50000 });
 
 test('Windows Git in both launch modes resolves native executable only from its supplied PATH', { skip: process.platform !== 'win32', timeout: 20000 }, async t => {
   const directory = await mkdtemp(join(tmpdir(), 'werk-git-executable-')); t.after(() => rm(directory, { recursive: true, force: true }));

@@ -27,6 +27,8 @@ export interface ToolBudgetEvidence { reason: 'calls' | 'window'; maxCalls: numb
 export interface ToolBudget { maxCalls: number; windowMs: number; callsUsed: number; refusedCalls: number; exhausted: ToolBudgetEvidence | null; }
 export interface ToolRuntime {
   readonly manifest: ToolManifest;
+  /** Private adapter hint, never model authority. Only explicit false skips native runtime setup. */
+  readonly requiresProcessRuntime?: boolean;
   /** Fatal child uncertainty cancels the parent invocation and remains observable during cleanup. */
   readonly failureSignal?: AbortSignal;
   /** Private broker boundary: fence parent admission immediately, before child cleanup settles. */

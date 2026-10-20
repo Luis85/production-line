@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { before } from 'node:test';
 import assert from 'node:assert/strict';
 import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -15,6 +15,11 @@ import { ProviderAccountChecks } from '../../src/worker/dist/worker/infrastructu
 
 const windows = { skip: process.platform !== 'win32' && 'Windows process and environment behavior' };
 const posix = { skip: process.platform === 'win32' && 'POSIX shebang fixture' };
+// Setup is separate from each native test deadline, with time to drain cancelled initialization.
+// Allow 45 s for native initialization and 5 s for cancellation cleanup.
+before(async t => {
+  if (process.platform === 'win32') await prepareProcessRuntime(process.cwd(), t.signal);
+}, { timeout: 50000 });
 const connection = (id, extra = {}) => ({ id, executable: '', model: '', apiKey: '', ...extra });
 const alive = pid => { try { process.kill(pid, 0); return true; } catch { return false; } };
 const executeFile = promisify(execFile);
@@ -61,8 +66,6 @@ test('Windows provider environment keeps the account profile but drops unrelated
 
 test('Windows cancellation terminates the provider and its descendants', { ...windows, timeout: 30000 }, async t => {
   const f = await treeFixture(t);
-  // Native setup has its own bounded lifecycle; the unchanged marker deadline measures the dispatched provider.
-  await prepareProcessRuntime(f.directory, t.signal);
   const script = `const {spawn}=require('node:child_process');const c=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});require('node:fs').appendFileSync(${JSON.stringify(f.pidFile)},String(c.pid)+'\\n');setInterval(()=>{},1000);`;
   const execution = providerCommand(process.execPath, ['-e', script], f.directory, f.controller.signal, undefined, true, 'claude');
   let observed;

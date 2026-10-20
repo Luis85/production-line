@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { ownWorkspace } from '../helpers/workspace-processes.mjs';
 import { testErrorOutput } from '../helpers/process-errors.mjs';
 import { createRepositoryWorktree, repositoryRoot } from '../../src/worker/dist/worker/infrastructure/repositories-git.js';
+import { prepareProcessRuntime } from '../../src/worker/dist/shared/process/launcher.js';
 import { cli, exec, exists, files, git, project } from './project-worker-uninstall-fixture.mjs';
 
 test('footprint inventories every group with existence, size and Git tracking without printing contents', { timeout: 180000 }, async t => {
@@ -66,6 +67,8 @@ test('uninstall keeps changed and unowned task worktrees, removes clean owned on
   const cwd = await project(t);
   const config = JSON.parse(await readFile(join(cwd, '.werk/worker.json'), 'utf8'));
   await writeFile(join(cwd, '.werk/worker.json'), JSON.stringify({ ...config, repositories: { items: [{ id: 'project', path: cwd }] } }), { mode: 0o600 });
+  // Prepare native containment before the unchanged repository-operation deadlines.
+  await prepareProcessRuntime(cwd, t.signal);
   const root = await repositoryRoot(cwd, AbortSignal.timeout(30000));
   const clean = await createRepositoryWorktree(root, 'project', 'clean-task', AbortSignal.timeout(60000));
   const changed = await createRepositoryWorktree(root, 'project', 'changed-task', AbortSignal.timeout(60000));

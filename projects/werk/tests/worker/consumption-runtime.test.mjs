@@ -15,6 +15,7 @@ const messages = [{ id: 'u', role: 'user', text: 'Fixture input.', state: 'compl
 /** @param {import('../../src/worker/application/provider-contract.js').ProviderId} id
  * @returns {import('../../src/worker/application/provider-contract.js').ProviderConnection} */
 const connection = id => ({ id, model: 'fixture', apiKey: 'fixture-only', executable: '' });
+// Synthetic fixture_read runtimes below have no process effects; their trusted hint preserves this budget.
 const signal = () => AbortSignal.timeout(5000);
 const rawUsage = { input_tokens: 30, output_tokens: 20, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
 const answer = id => id === 'openai-api'
@@ -48,7 +49,7 @@ for (const id of providers) {
       ? { status: 'completed', output: [{ type: 'function_call', name: 'fixture_read', call_id: 'one', arguments: '{}' }] }
       : { stop_reason: 'tool_use', content: [{ type: 'tool_use', name: 'fixture_read', id: 'one', input: {} }] };
     if (!unknown) result.usage = rawUsage;
-    const model = consumptionModel(modelFor(connection(id), '/unused', async () => { calls++; return Response.json(result); }, { tools: () => ({ manifest, async call() { tools++; return { content: [{ type: 'text', text: 'Fixture result.' }] }; }, async close() { closed++; } }) }), f.runtime);
+    const model = consumptionModel(modelFor(connection(id), '/unused', async () => { calls++; return Response.json(result); }, { tools: () => ({ requiresProcessRuntime: false, manifest, async call() { tools++; return { content: [{ type: 'text', text: 'Fixture result.' }] }; }, async close() { closed++; } }) }), f.runtime);
     await assert.rejects(executeModel(model, prepareModelRequest(model, messages), signal()), { code: 'consumption_limit' });
     assert.equal(calls, 1); assert.equal(tools, 1); assert.equal(closed, 1);
     assert.equal(f.runtime.status().uncertainInvocations, unknown ? 1 : 0);
@@ -126,7 +127,7 @@ test('late provider usage cannot rewrite a settled consumption invocation', asyn
 test('rejected tool preparation releases its reservation before any model dispatch', async t => {
   const f = await fixture(t); let requests = 0, revision = 1;
   const manifest = { tools: [{ name: 'fixture_read', description: 'Read fixture', inputSchema: { type: 'object' } }] };
-  const model = consumptionModel(modelFor(connection('openai-api'), '/unused', async () => { requests++; return Response.json(answer('openai-api')); }, { tools: () => ({ manifest: { ...manifest, revision }, async call() { throw Error('No tool should execute.'); }, async close() {} }) }), f.runtime);
+  const model = consumptionModel(modelFor(connection('openai-api'), '/unused', async () => { requests++; return Response.json(answer('openai-api')); }, { tools: () => ({ requiresProcessRuntime: false, manifest: { ...manifest, revision }, async call() { throw Error('No tool should execute.'); }, async close() {} }) }), f.runtime);
   const dispatch = prepareModelRequest(model, messages); revision++;
   await assert.rejects(executeModel(model, dispatch, signal()), { code: 'tool_access' });
   assert.equal(requests, 0); assert.equal(f.runtime.status().activeInvocations, 0);
@@ -138,7 +139,7 @@ for (const disable of [false, true]) test('API continuation observes a consumpti
   const f = await fixture(t, { allowance: disable ? 100 : 1000, perRunReservation: 10 }); let requests = 0;
   const manifest = { revision: 1, tools: [{ name: 'fixture_read', description: 'Read fixture', inputSchema: { type: 'object' } }] };
   const first = { status: 'completed', usage: rawUsage, output: [{ type: 'function_call', name: 'fixture_read', call_id: 'one', arguments: '{}' }] };
-  const model = consumptionModel(modelFor(connection('openai-api'), '/unused', async () => Response.json(++requests === 1 ? first : answer('openai-api')), { tools: () => ({ manifest, async call() {
+  const model = consumptionModel(modelFor(connection('openai-api'), '/unused', async () => Response.json(++requests === 1 ? first : answer('openai-api')), { tools: () => ({ requiresProcessRuntime: false, manifest, async call() {
     if (disable) f.policy.enabled = false; else f.policy.allowance = 100;
     return { content: [{ type: 'text', text: 'Fixture result.' }] };
   }, async close() {} }) }), f.runtime);

@@ -1,4 +1,5 @@
-import test from 'node:test';
+import test, { before } from 'node:test';
+import { prepareProcessRuntime } from '../../src/worker/dist/shared/process/launcher.js';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -8,6 +9,9 @@ import { configuration } from '../../src/worker/dist/worker/config.js';
 import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';
 import { workspaceModelFactory } from '../../src/worker/dist/worker/infrastructure/workspace-services.js';
 import { modelFor } from '../../src/worker/dist/worker/infrastructure/providers.js';
+// History-enabled model composition requires native readiness before the unchanged queue-resume scenario.
+// Allow 45 s for native initialization and 5 s for cancellation cleanup.
+before(async t => prepareProcessRuntime(process.cwd(), t.signal), { timeout: 50000 });
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(predicate) { const deadline = performance.now() + 10000; while (performance.now() < deadline) { if (await predicate()) return; await delay(20); } throw Error('Queued worker did not resume.'); }
 

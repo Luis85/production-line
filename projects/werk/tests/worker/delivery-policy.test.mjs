@@ -1,5 +1,6 @@
-import test from 'node:test';
+import test, { before } from 'node:test';
 import assert from 'node:assert/strict';
+import { prepareProcessRuntime } from '../../src/worker/dist/shared/process/launcher.js';
 import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -9,6 +10,9 @@ import { defaultDeliveryProjectPolicy, validateDeliveryProjectPolicy, deliveryGa
 import { defaultGatePolicy, evaluateGate, inputGateFacts } from '../../src/worker/dist/worker/application/request-gates.js';
 import { readDeliveryPolicy, deliveryCommitInBaseline } from '../../src/worker/dist/worker/infrastructure/delivery-policy.js';
 import { cleanup } from './fixture-cleanup.mjs';
+
+// Native setup has a 45-second limit; allow five seconds to drain before scenario budgets start.
+before(async t => prepareProcessRuntime(process.cwd(), t.signal), { timeout: 50000 });
 
 const git = (repository, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-C', repository, ...args], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
 const baseline = 'a'.repeat(40);
