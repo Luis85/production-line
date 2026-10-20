@@ -130,5 +130,173 @@
     "viewport": "mobile",
     "issues": [],
     "passed": true
+  },
+  {
+    "id": "worker-review--verified-candidate",
+    "viewport": "desktop",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--verified-candidate",
+    "viewport": "mobile",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--record-acceptance",
+    "viewport": "desktop",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--record-acceptance",
+    "viewport": "mobile",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--failed-checks",
+    "viewport": "desktop",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--failed-checks",
+    "viewport": "mobile",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--outdated-checks",
+    "viewport": "desktop",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--outdated-checks",
+    "viewport": "mobile",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--publishing-handoff",
+    "viewport": "desktop",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--publishing-handoff",
+    "viewport": "mobile",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--published-handoff",
+    "viewport": "desktop",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--published-handoff",
+    "viewport": "mobile",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--answer-needed",
+    "viewport": "desktop",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--answer-needed",
+    "viewport": "mobile",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--interrupted-attempt",
+    "viewport": "desktop",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--interrupted-attempt",
+    "viewport": "mobile",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--unavailable-request",
+    "viewport": "desktop",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--unavailable-request",
+    "viewport": "mobile",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--quiet-refresh",
+    "viewport": "desktop",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--quiet-refresh",
+    "viewport": "mobile",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--stale-review",
+    "viewport": "desktop",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--stale-review",
+    "viewport": "mobile",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--keyboard-review",
+    "viewport": "desktop",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--keyboard-review",
+    "viewport": "mobile",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--mismatched-evidence",
+    "viewport": "desktop",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--mismatched-evidence",
+    "viewport": "mobile",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--request-navigation",
+    "viewport": "desktop",
+    "issues": [],
+    "passed": true
+  },
+  {
+    "id": "worker-review--request-navigation",
+    "viewport": "mobile",
+    "issues": [],
+    "passed": true
   }
 ]

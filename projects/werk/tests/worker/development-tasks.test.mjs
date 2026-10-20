@@ -16,8 +16,9 @@ import { SharedFeatureLifecycle } from '../../src/worker/dist/worker/application
 import { sharedFeatureRequestReference } from '../../src/worker/dist/worker/application/feature-request-reference.js';
 
 const run = promisify(execFile), delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+const attemptSettleTimeoutMs = 20000;
 // Native Windows containment adds process startup cost to each Git/check operation.
-const settleTimeoutMs = process.platform === 'win32' ? 120000 : 20000;
+const settleTimeoutMs = process.platform === 'win32' ? 120000 : attemptSettleTimeoutMs;
 const testTimeoutMs = process.platform === 'win32' ? 180000 : 120000;
 const multiPhaseTimeoutMs = process.platform === 'win32' ? 240000 : testTimeoutMs;
 const complete = text => ({ type: 'completed', text });
@@ -91,7 +92,11 @@ async function fixture(t, execute, { verification = true, native = false, observ
       return board.view().tasks.at(-1).id;
     },
     async settle(id, expected) {
-      const started = performance.now(), deadline = started + settleTimeoutMs;
+      // Exhaustion includes a real check and Git checkpoint for every frozen repair attempt.
+      const requestId = board.executionDetail(id).requestId;
+      const repairAttempts = expected === 'needs_rework' && requestId ? sessions.requests.get(requestId).delivery?.maxRepairAttempts ?? 0 : 0;
+      const budgetMs = Math.max(settleTimeoutMs, attemptSettleTimeoutMs * (repairAttempts + 1));
+      const started = performance.now(), deadline = started + budgetMs;
       await board.tick();
       for (;;) {
         const task = board.executionDetail(id);
@@ -105,7 +110,7 @@ async function fixture(t, execute, { verification = true, native = false, observ
       }
       if (failures.length) throw failures[0];
       const task = board.executionDetail(id);
-      throw Error(`Task ${id} did not settle after ${Math.round(performance.now() - started)} ms (limit ${settleTimeoutMs} ms): expected ${expected}, status ${task.status}, executor busy=${sessions.executor.busy}, provider invocations=${invocations}, test aborted=${t.signal.aborted}${task.error ? '; last error: ' + task.error : ''}`);
+      throw Error(`Task ${id} did not settle after ${Math.round(performance.now() - started)} ms (limit ${budgetMs} ms): expected ${expected}, status ${task.status}, executor busy=${sessions.executor.busy}, provider invocations=${invocations}, test aborted=${t.signal.aborted}${task.error ? '; last error: ' + task.error : ''}`);
     },
     async restart(beforeOpen) { await board.close(); await sessions.close(); await beforeOpen?.(); await open(); },
   };
@@ -225,6 +230,8 @@ for (const [label, attempt] of Object.entries(incomplete)) test(`${label} cannot
   const f = await fixture(t, async context => { await attempt(context); return complete('The model claims everything is complete.'); });
   const id = await f.create(), task = await f.settle(id, 'needs_rework');
   assert.equal(f.invocations, 4);
+  assert.equal(f.request(id).delivery.repairAttempts, 3);
+  assert.equal(f.request(id).delivery.status, 'failed');
   assert.equal(task.developmentCompletion.verified, false);
   assert.equal(f.request(id).execution.facts['output.verificationPassed'], false);
   assert.notEqual(f.request(id).phase, 'done');

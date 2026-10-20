@@ -49,7 +49,7 @@ const {
         <p>{{ review.nextStep.description }}</p>
         <div class="request-gate-badges" aria-label="Current request checks">
           <UBadge :color="currentEvaluation('ready')?.passed ? 'success' : 'neutral'" variant="subtle">Readiness · {{ gateLabel('ready') }}</UBadge>
-          <UBadge :color="currentEvaluation('done')?.passed ? 'success' : 'neutral'" variant="subtle">Completion · {{ gateLabel('done') }}</UBadge>
+          <UBadge v-if="!view.delivery" :color="currentEvaluation('done')?.passed ? 'success' : 'neutral'" variant="subtle">Completion · {{ gateLabel('done') }}</UBadge>
         </div>
       </div>
       <div v-if="operation" class="request-operation">
@@ -81,9 +81,9 @@ const {
         <details><summary>Read acceptance note</summary><MessageContent :text="view.attestation!.note" /></details>
       </div>
       <p v-if="pendingModel">The model is waiting for input. Answer its checkpoint in the interaction or the linked Task note.</p>
-      <p v-if="activeExecution">The worker is {{ view.execution?.status === 'prepared' ? 'queued' : 'running' }} with its accepted scope. Its task controls can stop the invocation.</p>
-      <p v-if="activeReview" role="status">An instruction review or proposal is queued or running. It cannot accept its own proposal or satisfy verified checks.</p>
-      <div v-if="!['done', 'cancelled'].includes(view.phase) && !pendingModel && !activeExecution && !activeReview" class="request-gate-actions">
+      <p v-if="activeExecution && !view.delivery">The worker is {{ view.execution?.status === 'prepared' ? 'queued' : 'running' }} with its accepted scope. Its task controls can stop the invocation.</p>
+      <p v-if="activeReview && !view.delivery" role="status">An instruction review or proposal is queued or running. It cannot accept its own proposal or satisfy verified checks.</p>
+      <div v-if="!view.delivery && !['done', 'cancelled'].includes(view.phase) && !pendingModel && !activeExecution && !activeReview" class="request-gate-actions">
         <UButton
           v-if="scopeMutable && stage === 'ready' && !view.owner.remote"
           :disabled="!mutable"
@@ -101,7 +101,9 @@ const {
       <details class="request-evidence" :open="view.phase === 'needs_rework' && !canAttest">
         <summary>Checks and findings · {{ openFindings.length }} open</summary>
         <p>Model completion, verified checks, human acceptance and merge are separate. Unknown or outdated evidence cannot pass a check.</p>
-        <RequestGateEvidence v-for="stageName in ['ready', 'done'] as const" :key="stageName" :stage="stageName" :evaluation="currentEvaluation(stageName)" />
+        <RequestGateEvidence stage="ready" :evaluation="currentEvaluation('ready')" />
+        <details v-if="view.delivery && currentEvaluation('done')"><summary>Retained completion gate evaluation</summary><p>This evaluation records an invocation’s input and output. The current delivery candidate and its criterion matrix determine current verification and review readiness.</p><RequestGateEvidence stage="done" :evaluation="currentEvaluation('done')" /></details>
+        <RequestGateEvidence v-else-if="!view.delivery" stage="done" :evaluation="currentEvaluation('done')" />
         <article v-for="finding in openFindings" :key="finding.id" class="request-finding">
           <div class="request-gate-badges">
             <UBadge :color="finding.blocking ? 'warning' : 'neutral'" variant="subtle">{{ finding.blocking ? 'Blocking finding' : 'Advisory finding' }}</UBadge>
@@ -173,7 +175,7 @@ const {
           <h3>Instruction proposal · {{ candidate.source === 'reviewer' ? 'Model' : 'Operator' }}</h3>
           <p>Based on input revision {{ candidate.basedOnInputRevision }} · {{ date(candidate.createdAt) }}</p>
           <details><summary>Read proposed instruction</summary><MessageContent :text="candidate.input.message" /></details>
-          <p v-if="!scopeMutable">This earlier proposal is retained as evidence. Changed shared scope requires a new Feature Request.</p>
+          <p v-if="!scopeMutable">This earlier proposal is retained as evidence. The accepted request keeps its scope; use a new Feature Request for different work.</p>
           <p v-else>Accepting queues work only if readiness passes. The original feature body and approved file snapshots remain retained.</p>
           <UButton
             v-if="scopeMutable"

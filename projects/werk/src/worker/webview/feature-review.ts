@@ -5,6 +5,7 @@ import type { SharedFeatureView } from '../application/shared-intake-contract';
 import { sharedReadyReviewView } from './shared-ready-review-view';
 import { candidateEvidenceView } from './candidate-evidence';
 import { deliveryNextStep } from './delivery-view';
+import { deliveryReviewStages } from './delivery-review-stages';
 
 export interface FeatureReviewInput {
   session?: SessionView['records'][number] | null;
@@ -69,6 +70,7 @@ export function buildFeatureReviewView(input: FeatureReviewInput) {
     scopeMutable: !sharedSource && !remote && !stale, readOnly: stale || otherOwner || unclaimed };
   const ready = currentRequestEvaluation(request, 'ready') ?? null, done = currentRequestEvaluation(request, 'done') ?? null;
   const candidate = task ? candidateEvidenceView(task) : null;
+  const deliveryView = request?.delivery ? deliveryReviewStages(request) : null;
   const hasPatch = !!task && ('patch' in task ? !!task.patch : task.hasPatch);
   const openFindings = request?.findings.filter(finding => finding.status === 'open') ?? [];
   const blockingFindingCount = openFindings.filter(finding => finding.blocking).length;
@@ -76,7 +78,7 @@ export function buildFeatureReviewView(input: FeatureReviewInput) {
   const acceptanceRules = done?.rules.filter(rule => rule.result !== 'pass') ?? [];
   const acceptanceOnly = acceptanceRules.length > 0 && acceptanceRules.every(rule => rule.fact === 'operator.accepted') &&
     openFindings.filter(finding => finding.blocking).every(finding => finding.source === 'deterministic' && finding.evaluationId === done?.id && acceptanceRules.some(rule => rule.ruleId === finding.ruleId));
-  const attested = !!request?.attestation && request.attestation.inputHash === request.inputHash && !!request.execution?.outputDigest && request.attestation.outputDigest === request.execution.outputDigest;
+  const attested = (!request?.delivery || !!deliveryView?.review && request.lifecycle === 'done') && !!request?.attestation && request.attestation.inputHash === request.inputHash && !!request.execution?.outputDigest && request.attestation.outputDigest === request.execution.outputDigest;
   const activeReview = request?.reviews.some(review => ['queued', 'running'].includes(review.status)) ?? false;
   const status = interaction?.phase && interaction.phase !== 'idle' ? interaction.phase : task?.status ?? session?.status ?? request?.phase ?? shared?.status ?? 'unknown';
   const activeExecution = ['queued', 'running'].includes(status) || !!request?.execution && ['prepared', 'running'].includes(request.execution.status);
@@ -113,12 +115,15 @@ export function buildFeatureReviewView(input: FeatureReviewInput) {
     else if (otherOwner) handoff.detail = 'Inspect the owning worker’s shared notes for its handoff.';
   } else if (hasPatch) Object.assign(handoff, { state: 'complete', detail: candidate?.implementation ? 'A patch is retained for inspection. Application to the developer checkout and merge are not tracked here.' : 'A proposed patch is retained. It has not been automatically applied or verified.' });
   else if (request?.phase === 'done') Object.assign(handoff, { state: 'complete', detail: 'Request checks passed. This does not record delivery, human approval or merge.' });
-  const evidence = { ready, done, candidate, openFindings, blockingFindingCount, attestationRequired, attested, hasPatch,
+  if (deliveryView) { Object.assign(execution, deliveryView.execution); Object.assign(verification, deliveryView.verification); Object.assign(handoff, deliveryView.handoff); }
+  const evidence = { ready, done, deliveryReview: deliveryView?.review ?? null, candidate, openFindings, blockingFindingCount, attestationRequired, attested, hasPatch,
     approvedFileCount: candidate?.approvedPaths.length ?? (request ? request.input.files?.length ?? 0 : null),
     changedFileCount: candidate?.implementation ? candidate.changedPaths.length : task?.changedFileCount ?? null,
     checks: candidate?.implementation ? { passed: candidate.checks.filter(check => check.passed).length, total: candidate.checks.length } : null,
     publication: shared?.publication ?? null };
-  const deliveryStep = request?.delivery ? deliveryNextStep(request.delivery) : null;
+  const deliveryStep = request?.delivery ? deliveryNextStep(request.delivery) ?? (deliveryView?.review
+    ? next('operator', request.lifecycle === 'done' ? 'Inspect the accepted candidate' : 'Review the current delivery candidate', 'Inspect this run’s candidate, required checks and human criteria. Acceptance does not publish or merge changes.', request.lifecycle === 'done' ? 'inspect_history' : 'attest', request.lifecycle === 'done' ? 'Inspect delivery evidence' : 'Review acceptance requirement')
+    : next('operator', 'Inspect the current delivery evidence', 'This run has no matching current review package. Earlier patches and completed interactions cannot establish its handoff.', 'inspect_history', 'Inspect delivery evidence')) : null;
   let nextStep: FeatureReviewNextStep;
   if (stale) nextStep = next('operator', 'Refresh the request evidence', conflict ? 'These snapshots identify different requests or executions. Refresh before making a decision.' : input.freshness?.error || 'Current request evidence is unavailable or may be stale. Retained results do not authorize an action.', 'refresh', 'Refresh evidence');
   else if (otherOwner) nextStep = next('owning_worker', 'Follow the owning worker', 'This worker can inspect the shared record. Continue through its Task note or the owning worker.', shared?.taskNote || shared?.reviewNote ? 'review_shared' : 'open_source', 'Read shared notes');

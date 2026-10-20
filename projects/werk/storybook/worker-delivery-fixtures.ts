@@ -33,7 +33,9 @@ export function installDeliveryFixture(variant: DeliveryFixture) {
   };
   request.delivery = run; request.lifecycle = variant === 'review' ? 'in_review' : 'in_progress';
   request.provider.id = 'claude-cli'; base.session.selection = { provider: 'claude-cli', model: 'claude-example', effort: 'high' };
+  if (variant === 'unknown') run.review = { ...review, candidate: { ...review.candidate, runId: 'delivery-earlier' } };
   if (variant === 'review') run.review = review;
+  else if (variant === 'unknown') { request.phase = 'interrupted'; request.execution!.status = 'interrupted'; }
   else { request.phase = 'running'; request.execution = { ...request.execution!, status: 'running', result: null, outputDigest: null }; }
   request.input.context = { deliveryPolicy: { schemaVersion: 1, baseline: 'a'.repeat(40), configurationDigest: 'example-configuration', configuration: { version: 1, reviewDirectory: 'feature-reviews' }, profile: { id: 'feature', maxRepairAttempts: 2, verificationInputs: ['tests/', 'package.json'] } } };
   const events: RequestEvent[] = [{ schemaVersion: 1, id: 'event-accepted', sequence: 1, requestId: request.id, revision: 1, type: 'accepted', phase: 'ready', at: '2026-10-15T10:24:00.000Z', inputRevision: 1 }, { schemaVersion: 1, id: 'event-started', sequence: 2, requestId: request.id, revision: 2, type: 'delivery_started', phase: 'running', at: run.startedAt, inputRevision: 1, runId: run.id }];

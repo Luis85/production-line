@@ -39,6 +39,7 @@ const goal = computed(() => data.value?.request?.input.message ?? data.value?.ta
 const criteria = computed(() => data.value?.request?.input.criteria ?? data.value?.task?.criteria ?? []);
 const currentResult = computed(() => {
   const request = data.value?.request, execution = request?.execution;
+  if (request?.delivery && !review.value.evidence.deliveryReview) return null;
   return execution?.inputRevision === request?.inputRevision && execution?.result?.type === 'completed' ? execution.result.text : null;
 });
 const result = computed(() => currentResult.value ?? data.value?.chat.messages.findLast(message => message.role === 'assistant' && message.state === 'complete')?.text);
@@ -80,17 +81,21 @@ function requestChanged(value: WorkerRequest | null) {
       <section id="review-changes" class="review-section" tabindex="-1" aria-labelledby="review-changes-title">
         <h2 id="review-changes-title">{{ data.task ? 'Proposed changes' : 'Worker result' }}</h2>
         <p v-if="data.task?.patch" class="section-caption">Inspect this retained patch before applying or merging changes. Request checks and human code review are separate.</p>
-        <p v-if="result && !currentResult" class="section-caption">Last completed reply from this conversation. It is not a confirmed result for the current request revision.</p>
+        <p v-if="result && !currentResult" class="section-caption">{{ data.request?.delivery ? 'Retained model output. This reply is not a confirmed result for the current delivery run.' : 'Last completed reply from this conversation. It is not a confirmed result for the current request revision.' }}</p>
         <AssistantMessage v-if="result" :text="result" :file-task="data.task ? data.task.implementation ? 'implementation' : 'proposal' : undefined" />
         <PatchReview v-if="data.task?.patch" :patch="data.task.patch" :task-id="data.task.id" />
         <p v-else class="review-empty">{{ data.task ? 'No patch is retained for this request. Inspect the worker result and checks for what happened.' : result ? 'This request has no retained file changes.' : 'No completed worker result is available yet.' }}</p>
       </section>
       <section id="review-checks" class="review-section" aria-labelledby="review-checks-title">
         <h2 id="review-checks-title">Checks and evidence</h2>
-        <CandidateEvidence v-if="data.task" :task="data.task" />
+        <details v-if="data.task && data.request?.delivery"><summary>Retained task candidate evidence</summary><p class="section-caption">These task checks are retained history. They do not establish verification or handoff for the current delivery run; inspect its candidate review package for current evidence.</p><CandidateEvidence :task="data.task" /></details>
+        <CandidateEvidence v-else-if="data.task" :task="data.task" />
         <p v-else class="section-caption">This request has no repository candidate checks.</p>
-        <DeliveryReviewEvidence v-if="data.request?.delivery?.review" :review="data.request.delivery.review" />
-        <RequestGateEvidence stage="ready" :evaluation="review.evidence.ready ?? undefined" /><RequestGateEvidence stage="done" :evaluation="review.evidence.done ?? undefined" />
+        <DeliveryReviewEvidence v-if="review.evidence.deliveryReview" :review="review.evidence.deliveryReview" />
+        <details v-else-if="data.request?.delivery?.review"><summary>Retained delivery review package</summary><p class="section-caption">This package does not establish a reviewable candidate for the current delivery run and accepted input. Its results and prior human observations remain historical evidence.</p><DeliveryReviewEvidence :review="data.request.delivery.review" /></details>
+        <RequestGateEvidence stage="ready" :evaluation="review.evidence.ready ?? undefined" />
+        <details v-if="data.request?.delivery && review.evidence.done"><summary>Retained completion gate evaluation</summary><p class="section-caption">This evaluation records an invocation’s input and output. The current delivery candidate and its criterion matrix determine current verification and review readiness.</p><RequestGateEvidence stage="done" :evaluation="review.evidence.done" /></details>
+        <RequestGateEvidence v-else-if="!data.request?.delivery" stage="done" :evaluation="review.evidence.done ?? undefined" />
         <RouterLink class="text-link" :to="'/history?view=runs&runSession=' + encodeURIComponent(data.session.id)">Inspect execution attempts<UIcon name="i-lucide-arrow-up-right" /></RouterLink>
       </section>
       <section id="review-decision" class="review-section" aria-labelledby="review-decision-title">

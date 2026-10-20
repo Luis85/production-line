@@ -20,8 +20,8 @@ try {
   assert.equal(manifest.dependencies, undefined);
   await assert.rejects(readFile(join(project, '.git/config')), { code: 'ENOENT' });
   const fixture = join(project, 'provider-fixture'), invocations = join(project, 'fixture-model-invocations');
-  await writeFile(fixture, `#!${process.execPath}\nimport { appendFileSync } from 'node:fs';if(process.argv.includes('login')){console.log('Logged in using fixture');process.exit(0)}appendFileSync(${JSON.stringify(invocations)},'invoked\\n');let text='';for await(const p of process.stdin)text+=p;const reply=text.includes('QUESTION_FLOW')&&!text.includes('ANSWER_COMPLETE')?JSON.stringify({werkInteraction:{schemaVersion:1,kind:'question',message:'Which layout should the fixture retain?',choices:[{id:'existing',label:'Keep the existing layout'}]}}):text.includes('ESCALATION_FLOW')&&!text.includes('RESUME_COMPLETE')?JSON.stringify({werkInteraction:{schemaVersion:1,kind:'escalation',message:'The fixture requires an operator decision.',reason:'No authority to choose a new layout.'}}):text.includes('Implement the requested changes')?JSON.stringify({summary:'Fixture review',files:[{path:'approved.txt',content:'changed\\n'}]}):'Packaged feature protocol fixture completed.';console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:reply}}));\n`, { mode: 0o700 });
-  await writeFile(join(project, 'provider.json'), JSON.stringify({ provider: { id: 'codex-cli', executable: fixture } }), { mode: 0o600 });
+  await writeFile(fixture, `#!${process.execPath}\nimport { appendFileSync } from 'node:fs';if(process.argv[2]==='--version'){console.log('codex-cli 0.0.0-fixture');process.exit(0)}if(process.argv[2]==='login'&&process.argv[3]==='status'){console.log('Logged in using ChatGPT');process.exit(0)}appendFileSync(${JSON.stringify(invocations)},'invoked\\n');let text='';for await(const p of process.stdin)text+=p;const reply=text.includes('QUESTION_FLOW')&&!text.includes('ANSWER_COMPLETE')?JSON.stringify({werkInteraction:{schemaVersion:1,kind:'question',message:'Which layout should the fixture retain?',choices:[{id:'existing',label:'Keep the existing layout'}]}}):text.includes('ESCALATION_FLOW')&&!text.includes('RESUME_COMPLETE')?JSON.stringify({werkInteraction:{schemaVersion:1,kind:'escalation',message:'The fixture requires an operator decision.',reason:'No authority to choose a new layout.'}}):text.includes('Implement the requested changes')?JSON.stringify({summary:'Fixture review',files:[{path:'approved.txt',content:'changed\\n'}]}):'Packaged feature protocol fixture completed.';console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:reply}}));\n`, { mode: 0o700 });
+  await writeFile(join(project, 'provider.json'), JSON.stringify({ provider: { id: 'codex-cli', executable: fixture, authenticationMode: 'cli-account' } }), { mode: 0o600 });
   const schema = await cli('schema');
   const hasRunEvidence = !!schema.commands['run analyze'];
   const hasInteractions = !!schema.commands['interaction answer'];
@@ -140,7 +140,15 @@ try {
   await cli('start', '--port', '0'); started = true;
   const restored = await cli('feature', 'get', '--name', 'example.md');
   assert.equal(restored.record.taskId, completed.record.taskId);
-  assert.equal((await cli('feature', 'list')).records.length, hasInteractions ? 3 : 2);
+  const features = await cli('feature', 'list');
+  assert.equal(features.records.length, hasInteractions ? 4 : 2, 'Chat/task intake retains its canonical Feature Request alongside folder requests.');
+  if (hasInteractions) {
+    const escalation = features.records.find(record => record.id === 'packaged-escalation');
+    assert.ok(escalation, 'Task intake retains its explicit Feature Request identity after restart.');
+    assert.equal(escalation.sessionId, 'packaged-escalation');
+    assert.equal(escalation.name, 'interaction-packaged-escalation.md');
+    assert.equal(features.files.find(file => file.name === escalation.name)?.title, 'Fixture escalation');
+  }
   if (hasRunEvidence) assert.deepEqual((await cli('run', 'list')).rows, retainedRuns.rows);
   console.log(JSON.stringify({ ok: true, journey: 'packaged-native-project-worker', source, installedWithoutNpm: true, projectGitRequired: false, configurableFolder: true, providerProtocolFixture: true, resultExported: !!result, patchRequiresReview: true, restartPreserved: true, durableRunEvidence: hasRunEvidence, interactionEvidence, liveProvider: false }));
 } finally { if(started) await cli('stop').catch(()=>{}); if(process.env.WERK_PROJECT_WORKER_KEEP !== '1') await rm(project,{recursive:true,force:true}); }

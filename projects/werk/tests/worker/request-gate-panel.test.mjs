@@ -135,3 +135,14 @@ test('stopped-process confirmation binds the run and observation and retries the
   assert.deepEqual(f.calls[0], f.calls[1]);
   assert.equal(f.calls.some(command => command.action === 'resume'), false);
 });
+
+
+test('a delivery run owns continuation while generic invocation and instruction controls are unavailable', async t => {
+  const f = fixture(); t.after(f.close);
+  f.view.value.delivery = { id: 'delivery-1', inputRevision: 1, allowedControls: ['resume'] };
+  assert.equal(f.scopeMutable.value, false);
+  for (const action of ['execute', 'evaluate', 'rework', 'propose', 'accept_candidate', 'assign']) await f.command({ action });
+  assert.equal(f.calls.length, 0); assert.match(f.error.value, /exact delivery controls/);
+  await f.deliveryCommand('resume');
+  assert.equal(f.calls.length, 1); assert.equal(f.calls[0].action, 'resume'); assert.equal(f.calls[0].deliveryRunId, 'delivery-1');
+});

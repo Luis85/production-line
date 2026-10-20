@@ -37,9 +37,13 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
   const pendingKey = ref('');
   let pendingAttempt: symbol | undefined;
   const isPending = (key: string) => busy.value && pendingKey.value === key;
-  const scopeMutable = computed(() => !sharedRequest.value);
+  const scopeMutable = computed(() => !sharedRequest.value && !view.value?.delivery);
   const scopeActions = new Set(['propose', 'accept_candidate', 'rework', 'execute']);
   function allowed(action: string) {
+    if (view.value?.delivery && ['execute', 'evaluate', 'rework', 'propose', 'accept_candidate', 'assign'].includes(action)) {
+      error.value = 'This Feature Request has a delivery run. Use its exact delivery controls or human review actions.';
+      return false;
+    }
     if (scopeMutable.value || !scopeActions.has(action)) return true;
     error.value = 'The accepted shared Feature Request owns its scope. Create a new Feature Request for different work.';
     return false;
@@ -90,7 +94,7 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
     !!view.value?.execution?.outputDigest &&
     view.value.execution.result?.type === 'completed' &&
     view.value.execution.inputRevision === view.value.inputRevision &&
-    (!view.value.delivery?.review || view.value.lifecycle === 'in_review') &&
+    (!view.value.delivery || !!review.value.evidence.deliveryReview && view.value.lifecycle === 'in_review') &&
     review.value.evidence.attestationRequired && !review.value.evidence.attested &&
     !['done', 'cancelled'].includes(view.value.phase),
   );

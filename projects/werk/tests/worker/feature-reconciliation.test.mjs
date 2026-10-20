@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile, rm, rename, readdir } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, rm, rename, readdir, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { FeatureRequests } from '../../src/worker/dist/worker/application/feature-requests.js';
@@ -10,7 +10,7 @@ import { featureTaskIdentity } from '../../src/worker/dist/worker/application/fe
 import { replaceFeatureFile } from '../../src/worker/dist/worker/infrastructure/features/recoverable-write.js';
 const note = (intent = 'submit', text = 'Deliver the requested behavior.') => `---\nschema: worker.request/v1\nid: FR-0042\ntitle: Implement feature\nintent: ${intent}\npaths: [src/]\n---\n## Outcome\n\n${text}\n\n## Acceptance criteria\n\n- AC-01: The behavior works.\n`;
 async function fixture(t) {
-  const project = await mkdtemp(join(tmpdir(), 'werk-revisions-')), directory = join(project, 'features'), state = join(project, '.state'); await mkdir(state);
+  const project = await realpath(await mkdtemp(join(tmpdir(), 'werk-revisions-'))), directory = join(project, 'features'), state = join(project, '.state'); await mkdir(state);
   const records = new Map(), submissions = [], revisions = [], holds = [];
   let allowRevision = false;
   const queue = {

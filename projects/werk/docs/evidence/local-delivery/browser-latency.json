@@ -1,17 +1,17 @@
 {
   "scope": "Linux Chromium Storybook fixture response revision to rendered worker review status. No real daemon, provider, Windows, network latency, or production load qualification. After the coherent fixture boundary is established, twenty sequential1s-polling updates per viewport; human observation draft, focus and scroll checked after every update.",
-  "measuredAt": "2026-10-20T13:17:17.157Z",
+  "measuredAt": "2026-10-20T14:14:50.475Z",
   "results": [
     {
       "viewport": "desktop",
       "sampleCount": 20,
-      "p95Milliseconds": 1031,
-      "maximumMilliseconds": 1040,
+      "p95Milliseconds": 1023,
+      "maximumMilliseconds": 1029,
       "passed": true,
       "samples": [
         {
           "index": 1,
-          "milliseconds": 908,
+          "milliseconds": 1003,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -19,7 +19,7 @@
         },
         {
           "index": 2,
-          "milliseconds": 940,
+          "milliseconds": 1029,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -27,7 +27,7 @@
         },
         {
           "index": 3,
-          "milliseconds": 1012,
+          "milliseconds": 973,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -35,7 +35,7 @@
         },
         {
           "index": 4,
-          "milliseconds": 990,
+          "milliseconds": 998,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -43,22 +43,6 @@
         },
         {
           "index": 5,
-          "milliseconds": 1001,
-          "focusPreserved": true,
-          "draftPreserved": true,
-          "scrollDelta": 0,
-          "editorViewportDelta": 0
-        },
-        {
-          "index": 6,
-          "milliseconds": 974,
-          "focusPreserved": true,
-          "draftPreserved": true,
-          "scrollDelta": 0,
-          "editorViewportDelta": 0
-        },
-        {
-          "index": 7,
           "milliseconds": 999,
           "focusPreserved": true,
           "draftPreserved": true,
@@ -66,8 +50,24 @@
           "editorViewportDelta": 0
         },
         {
+          "index": 6,
+          "milliseconds": 999,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 7,
+          "milliseconds": 996,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
           "index": 8,
-          "milliseconds": 1031,
+          "milliseconds": 996,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -75,7 +75,7 @@
         },
         {
           "index": 9,
-          "milliseconds": 956,
+          "milliseconds": 994,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -83,7 +83,7 @@
         },
         {
           "index": 10,
-          "milliseconds": 1040,
+          "milliseconds": 1000,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -91,7 +91,7 @@
         },
         {
           "index": 11,
-          "milliseconds": 960,
+          "milliseconds": 1002,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -99,7 +99,7 @@
         },
         {
           "index": 12,
-          "milliseconds": 1001,
+          "milliseconds": 995,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -107,7 +107,7 @@
         },
         {
           "index": 13,
-          "milliseconds": 1022,
+          "milliseconds": 993,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -115,7 +115,7 @@
         },
         {
           "index": 14,
-          "milliseconds": 977,
+          "milliseconds": 1012,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -123,7 +123,7 @@
         },
         {
           "index": 15,
-          "milliseconds": 993,
+          "milliseconds": 996,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -139,7 +139,7 @@
         },
         {
           "index": 17,
-          "milliseconds": 1002,
+          "milliseconds": 995,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -147,7 +147,7 @@
         },
         {
           "index": 18,
-          "milliseconds": 999,
+          "milliseconds": 998,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -163,7 +163,7 @@
         },
         {
           "index": 20,
-          "milliseconds": 1000,
+          "milliseconds": 1023,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -175,13 +175,13 @@
     {
       "viewport": "mobile",
       "sampleCount": 20,
-      "p95Milliseconds": 1122,
-      "maximumMilliseconds": 1269,
+      "p95Milliseconds": 1014,
+      "maximumMilliseconds": 1023,
       "passed": true,
       "samples": [
         {
           "index": 1,
-          "milliseconds": 997,
+          "milliseconds": 1000,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -189,7 +189,7 @@
         },
         {
           "index": 2,
-          "milliseconds": 1122,
+          "milliseconds": 1000,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -197,7 +197,7 @@
         },
         {
           "index": 3,
-          "milliseconds": 871,
+          "milliseconds": 994,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -205,7 +205,7 @@
         },
         {
           "index": 4,
-          "milliseconds": 1020,
+          "milliseconds": 994,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -213,7 +213,7 @@
         },
         {
           "index": 5,
-          "milliseconds": 964,
+          "milliseconds": 997,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -221,7 +221,7 @@
         },
         {
           "index": 6,
-          "milliseconds": 1005,
+          "milliseconds": 1001,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -229,7 +229,7 @@
         },
         {
           "index": 7,
-          "milliseconds": 978,
+          "milliseconds": 993,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -237,7 +237,7 @@
         },
         {
           "index": 8,
-          "milliseconds": 989,
+          "milliseconds": 1000,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -245,7 +245,7 @@
         },
         {
           "index": 9,
-          "milliseconds": 1024,
+          "milliseconds": 994,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -253,7 +253,7 @@
         },
         {
           "index": 10,
-          "milliseconds": 1012,
+          "milliseconds": 1011,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -261,7 +261,7 @@
         },
         {
           "index": 11,
-          "milliseconds": 963,
+          "milliseconds": 1023,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -269,7 +269,7 @@
         },
         {
           "index": 12,
-          "milliseconds": 1043,
+          "milliseconds": 976,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -277,7 +277,7 @@
         },
         {
           "index": 13,
-          "milliseconds": 1269,
+          "milliseconds": 993,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -285,7 +285,7 @@
         },
         {
           "index": 14,
-          "milliseconds": 696,
+          "milliseconds": 992,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -293,7 +293,7 @@
         },
         {
           "index": 15,
-          "milliseconds": 966,
+          "milliseconds": 995,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -301,7 +301,7 @@
         },
         {
           "index": 16,
-          "milliseconds": 1003,
+          "milliseconds": 1014,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -309,7 +309,7 @@
         },
         {
           "index": 17,
-          "milliseconds": 983,
+          "milliseconds": 991,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -317,7 +317,7 @@
         },
         {
           "index": 18,
-          "milliseconds": 981,
+          "milliseconds": 994,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,
@@ -333,7 +333,7 @@
         },
         {
           "index": 20,
-          "milliseconds": 998,
+          "milliseconds": 1013,
           "focusPreserved": true,
           "draftPreserved": true,
           "scrollDelta": 0,

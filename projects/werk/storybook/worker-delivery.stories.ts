@@ -35,7 +35,7 @@ export const PauseAtBoundary: Story = {
 export const UnknownOutcome: Story = {
   name: 'Unknown outcome does not silently dispatch another attempt',
   parameters: { storymap: storymap('A process whose completion is unknown remains explicit, with retained step correlation and no unsupported resume or retry action.') }, render: render('unknown'),
-  play: async ({ canvasElement }) => { await loaded(canvasElement); const query = within(canvasElement); if (!canvasElement.textContent?.includes('Outcome unknown')) throw Error('Unknown outcome missing.'); if (query.queryByRole('button', { name: /Resume work|Retry failed work/ })) throw Error('Unsafe continuation control exposed.'); await ready(canvasElement); },
+  play: async ({ canvasElement }) => { await loaded(canvasElement); const query = within(canvasElement); if (!canvasElement.textContent?.includes('Outcome unknown')) throw Error('Unknown outcome missing.'); if (canvasElement.textContent?.includes('The worker is running with its accepted scope.')) throw Error('A legacy invocation must not contradict the canonical unknown delivery.'); if (query.queryByRole('button', { name: /Resume work|Retry failed work|Record acceptance/ })) throw Error('Unsafe continuation or acceptance control exposed.'); await query.findByText('Retained model output. This reply is not a confirmed result for the current delivery run.'); const retained = await query.findByText('Retained delivery review package'); const packageElement = canvasElement.querySelector('.delivery-review-evidence')!; const disclosure = retained.closest('details'); if (!disclosure || disclosure.open || !disclosure.contains(packageElement) || packageElement.getClientRects().length || packageElement.checkVisibility()) throw Error('An earlier run’s package cannot appear as current review evidence.'); await userEvent.click(retained); await waitFor(() => { if (!packageElement.checkVisibility()) throw Error('Retained package did not open for inspection.'); }); await userEvent.click(retained); if (packageElement.checkVisibility()) throw Error('The retained package must close without becoming current evidence.'); await ready(canvasElement); },
 };
 export const ConfirmStoppedProcess: Story = {
   name: 'Confirm a stopped process before explicitly resuming',
@@ -53,6 +53,11 @@ export const ConfirmStoppedProcess: Story = {
     await userEvent.click(await query.findByText('Retained Git checkpoints · 1'));
     await query.findByText('werk/checkpoints/FR-42-stopped');
     if (!canvasElement.textContent?.includes('A checkpoint does not establish passed checks or human acceptance.')) throw Error('A retained checkpoint must not be presented as verified.');
+    const stages = [...canvasElement.querySelectorAll('.review-stages .stage-state')].slice(1);
+    if (stages.length !== 3 || stages.some(stage => stage.textContent === 'Complete')) throw Error('Historical results must not mark the interrupted delivery stages complete.');
+    await query.findByText('Retained task candidate evidence');
+    await query.findByText('Retained model output. This reply is not a confirmed result for the current delivery run.');
+    if (query.queryByRole('button', { name: /Check readiness and queue work|Evaluate readiness rules|Evaluate completion rules|Ask model for an instruction proposal/ })) throw Error('Delivery recovery must only expose exact delivery continuation controls.');
     await userEvent.click(query.getByText('Operator process confirmations · 1'));
     await query.findByText('Operator-attested stop');
     await ready(canvasElement);

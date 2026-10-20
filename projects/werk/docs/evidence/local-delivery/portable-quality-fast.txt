@@ -11,7 +11,7 @@ README matches maintained content.
 > software-fabrik@0.14.0 check:loc
 > node scripts/quality/loc.mjs
 
-LOC: 1013 files checked; 0 exceed their limits (source 400, tests/helpers 450).
+LOC: 1014 files checked; 0 exceed their limits (source 400, tests/helpers 450).
 
 > software-fabrik@0.14.0 lint:oxlint
 > oxlint --deny-warnings src scripts storybook .storybook tests werk.mjs stryker.config.mjs
@@ -28,25 +28,25 @@ Fallow retained baseline: 175 reviewed findings; see quality/fallow-baseline-rev
 > software-fabrik@0.14.0 check:architecture
 > node --test tests/architecture/architecture-boundaries.test.mjs tests/architecture/dependency-graph.test.mjs
 
-✔ service packages, pure contracts and worker application ports enforce dependency direction (1081.728408ms)
-✔ boundary rejects sibling dependency through declaration (7.599495ms)
-✔ boundary rejects sibling dependency through type declaration (0.904132ms)
-✔ boundary rejects sibling dependency through reexport (0.918088ms)
-✔ boundary rejects sibling dependency through import type expression (1.425959ms)
-✔ boundary rejects sibling dependency through dynamic string (1.921865ms)
-✔ boundary rejects sibling dependency through dynamic template (1.089847ms)
-✔ boundary rejects sibling dependency through CommonJS (1.274386ms)
-✔ boundary rejects sibling dependency through import equals (0.982532ms)
-✔ boundary rejects sibling dependency through createRequire alias (1.469739ms)
-✔ boundary rejects sibling dependency through package alias (0.960713ms)
-✔ boundary rejects sibling dependency through configured alias (0.605259ms)
-✔ boundary rejects sibling dependency through absolute path (0.638931ms)
-✔ boundary rejects sibling dependency through file URL (0.687163ms)
-✔ application rejects concrete adapters including type-only, shared transport and direct I/O (2.293002ms)
-✔ pure contracts reject adapter reached through another contract and computed loading (1.058498ms)
-✔ composition may load configured dependencies; pure application uses contracts and deterministic helpers (1.819847ms)
-✔ Vue ordinary and setup scripts both enforce boundaries, with type-only edge metadata (5.908154ms)
-✔ Factory and root orchestrator application files reject adapters without restricting composition (1.768037ms)
+✔ service packages, pure contracts and worker application ports enforce dependency direction (1254.361417ms)
+✔ boundary rejects sibling dependency through declaration (5.986546ms)
+✔ boundary rejects sibling dependency through type declaration (0.731136ms)
+✔ boundary rejects sibling dependency through reexport (0.582488ms)
+✔ boundary rejects sibling dependency through import type expression (1.330416ms)
+✔ boundary rejects sibling dependency through dynamic string (1.649423ms)
+✔ boundary rejects sibling dependency through dynamic template (1.417395ms)
+✔ boundary rejects sibling dependency through CommonJS (1.015782ms)
+✔ boundary rejects sibling dependency through import equals (0.689509ms)
+✔ boundary rejects sibling dependency through createRequire alias (1.049639ms)
+✔ boundary rejects sibling dependency through package alias (0.690485ms)
+✔ boundary rejects sibling dependency through configured alias (0.607613ms)
+✔ boundary rejects sibling dependency through absolute path (0.940901ms)
+✔ boundary rejects sibling dependency through file URL (0.369423ms)
+✔ application rejects concrete adapters including type-only, shared transport and direct I/O (1.642684ms)
+✔ pure contracts reject adapter reached through another contract and computed loading (0.780325ms)
+✔ composition may load configured dependencies; pure application uses contracts and deterministic helpers (1.462066ms)
+✔ Vue ordinary and setup scripts both enforce boundaries, with type-only edge metadata (4.328235ms)
+✔ Factory and root orchestrator application files reject adapters without restricting composition (1.076339ms)
 ℹ tests 19
 ℹ suites 0
 ℹ pass 19
@@ -54,7 +54,7 @@ Fallow retained baseline: 175 reviewed findings; see quality/fallow-baseline-rev
 ℹ cancelled 0
 ℹ skipped 0
 ℹ todo 0
-ℹ duration_ms 1412.489331
+ℹ duration_ms 1629.581189
 
 > software-fabrik@0.14.0 typecheck
 > tsc --noEmit && vue-tsc --noEmit -p tsconfig.webviews.json

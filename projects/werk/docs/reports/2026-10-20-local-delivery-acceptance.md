@@ -299,31 +299,48 @@ cases establish safe handling on Linux; they do not qualify a Windows volume.
 
 ### Browser interaction and state visibility
 
-The final targeted Chromium run passed **22 desktop/mobile scenarios** with no
-reported console/page errors: provider authentication, committed policy, active
-work, step pause, uncertain outcome, operator-attested stop, lost acknowledgement,
-individual human criteria, draft preservation and activity filtering.
+The replacement targeted Chromium run passed **50 desktop/mobile scenarios**,
+covering all existing Worker/Review scenes as well as delivery, setup and defaults.
+There were no reported console/page errors. The scenes exercise provider
+configuration, active work, pause, uncertain outcomes, operator-attested stops,
+lost acknowledgements, human criteria, draft preservation, activity filtering
+and stale or ownership-conflicting acceptance attempts.
 [Scene results](../evidence/local-delivery/browser-targeted-results.json) and
 [browser/source provenance](../evidence/local-delivery/browser-provenance.json)
-identify the fixture boundary. Representative renders show the same retained
-checkpoint and explicit operator-attestation receipt on
-[desktop](../evidence/local-delivery/recovery-desktop.png) and
+identify the exact fixture boundary. The targeted run used a working-tree UI
+follow-up to commit `fe792f4`, identified by its own source digest; it is separate
+from final whole-catalogue source qualification. Representative renders show
+retained checkpoints, historical evidence and the explicit operator-attestation
+receipt on [desktop](../evidence/local-delivery/recovery-desktop.png) and
 [mobile](../evidence/local-delivery/recovery-mobile.png). The pages visibly label
 this as illustrative data, with no model, command, Git change or review performed.
 
+Visual review exposed a gap in the earlier interaction checks: an interrupted
+current delivery could inherit completed milestones, a review package or output
+text from an older interaction or patch. Generic queue actions also duplicated
+the delivery controls. Current milestones and review authority now require the
+matching delivery run, accepted input and policy; older patches, checks, packages,
+DoD gates and invocation text remain explicitly historical. Delivery continuation
+uses its exact guarded controls. The strengthened fixtures deliberately retain
+older results beside an interrupted or unknown current run.
+[All 36 focused presenter/control tests passed](../evidence/local-delivery/portable-review-projection-tests.txt),
+and Vue typechecking passed after the final caption correction. Stale or
+ownership-conflicting reads keep drafts editable while blocking both ordinary
+and directly dispatched acceptance submission.
+
 A separate assay changed the coherent fixture response revision 20 times per
-viewport and observed the marker in the rendered request view through the actual
-one-second UI polling path. [All 40 samples](../evidence/local-delivery/browser-latency.json)
+viewport and observed the marker through the actual one-second UI polling path.
+[All 40 replacement samples](../evidence/local-delivery/browser-latency.json)
 retain timing, focus, draft and scroll observations. Nearest-rank p95 is the
 19th ordered sample of 20 for each viewport.
 
 | Viewport | Samples | State-to-visible p95 | Maximum | Focus/draft/scroll |
 | --- | --- | --- | --- | --- |
-| Desktop, 1440 × 1000 | 20 | **1,031ms** | 1,040ms | Preserved in every sample; 0px scroll/editor-position change. |
-| Mobile, 390 × 844 | 20 | **1,122ms** | 1,269ms | Preserved in every sample; 0px scroll/editor-position change. |
+| Desktop, 1440 × 1000 | 20 | **1,023ms** | 1,029ms | Preserved in every sample; 0px scroll/editor-position change. |
+| Mobile, 390 × 844 | 20 | **1,014ms** | 1,023ms | Preserved in every sample; 0px scroll/editor-position change. |
 
-This exposed a real defect: a transient stale request snapshot disabled the
-human-review fieldset and removed keyboard focus. The fix keeps draft editing
+An earlier assay exposed a separate defect: a transient stale snapshot disabled
+the human-review fieldset and removed keyboard focus. The fix keeps draft editing
 available while preserving freshness checks on consequential actions; the final
 40-sample run above retains focus. The measurement covers a local Linux Chromium
 Storybook fixture response-to-render boundary, with reduced motion and external
@@ -336,7 +353,7 @@ supports NFR-PERF-003 at that declared boundary, not a universal service guarant
 The [fast project gate](../evidence/local-delivery/portable-quality-fast.txt)
 passed README drift checks, Oxlint, source and Vue typechecking, and test
 source-contract checking (**434 maintained test files, 1,022 imports, zero
-errors**). All **1,013 files** stayed within the 400-source/450-test code-line
+errors**). All **1,014 files** stayed within the 400-source/450-test code-line
 limits. The architecture suite passed **19 assertions**. Fallow reported zero
 new dead-code or architecture findings and retained its **175 individually
 reviewed baseline findings**; retained findings are not a clean-slate claim.
@@ -348,11 +365,23 @@ and `model-selection.test.mjs` (the frozen selection error now also names the
 authentication mode). After correcting those expectations, the
 [request-projection suite passed all 21 cases](../evidence/local-delivery/portable-request-projection-tests.txt),
 and all four model-selection cases passed in the focused source review above.
-The 15 skips were Windows-specific installer, Git/path and process/environment
-cases. Later admission and filesystem changes have the focused evidence recorded
-above, but a successful aggregate check of the final combined commit is still
-required from CI. These resolving runs are not represented as a rerun of the
-entire broad suite.
+Those resolving runs are not represented as a rerun of the entire broad local
+suite. The 15 local skips were platform- or tool-dependent cases.
+
+The first combined implementation commit, `fe792f4`, subsequently passed
+[Ubuntu aggregate CI](https://github.com/Luis85/production-line/actions/runs/39432878358/job/118662190574):
+**2,812 tests, 2,798 passed, 14 skipped and zero failures**, in 452.84 seconds.
+Skip counts differ with the runner's platform and installed tools. This proves
+the first implementation commit; it does not include the later UI corrections.
+At this evidence snapshot, their aggregate commit-level CI was still pending.
+The focused UI and browser results above record the completed follow-up checks.
+
+The retained packaged installation/interaction journeys also passed with
+[Node on Linux](../evidence/local-delivery/packaged-node-smoke.json) and
+[an actual Docker runtime](../evidence/local-delivery/packaged-docker-smoke.json).
+Their outputs preserve installation, intake, guarded interaction and restart
+observations. Both explicitly report `liveProvider: false`; these protocol-fixture
+smokes do not qualify a real Claude account or native Windows execution.
 
 ### Scoped advisory mutation baseline
 
@@ -384,10 +413,10 @@ boundaries separately.
 | --- | --- | --- |
 | Source/requirement audit | Recorded above; all 69 required IDs mapped | Test assertions inspected; not an execution result. |
 | New local delivery integration tests | 35 recovery/control tests pass; composed request-to-acceptance journey passes | Real journal/Git/check fixtures prove application rules; the model protocol is injected. |
-| Full project quality/build/test gates | Fast gate passes; broad local run 2,778 passed / 2 failed / 15 skipped; both failures pass targeted correction runs | Final combined-commit aggregate CI remains pending; all 15 skips are Windows-specific. |
+| Full project quality/build/test gates | Fast gate passes; first combined commit Ubuntu CI: 2,798 passed / 14 skipped / zero failures | Later UI follow-up has focused evidence; its aggregate commit-level CI was pending at this snapshot. |
 | Advisory mutation baseline | v4: 96.34%; 1,562 killed / 17 timed out / 58 survived / 2 uncovered across 12 modules | All 60 remaining findings retained; scoped working-tree measurement, not whole-project or native-provider qualification. |
 | Application intake benchmark | Final 64KiB startup p95 592ms; save visibility p95 1,593ms | Earlier failures retained; warm Linux drafts only, no browser/reference/pilot claim. |
-| Browser control/replay/focus journey | 22 scenarios and 40 state-visibility samples pass; p95 1,031/1,122ms | Linux Chromium Storybook fixtures; real daemon/network/Windows and assistive technologies remain distinct. |
+| Browser control/replay/focus journey | 50 scenarios and 40 replacement state-visibility samples pass; p95 1,023/1,014ms | Linux Chromium Storybook fixtures; real daemon/network/Windows and assistive technologies remain distinct. |
 | Native Windows with Claude Code pilot | Pending external environment | This managed execution host is Linux and has no authenticated Claude binary. |
 
 ## Reproduce the benchmark and native pilot

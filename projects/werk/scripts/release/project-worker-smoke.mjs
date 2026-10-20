@@ -18,11 +18,11 @@ async function until(check) { for (let i = 0; i < 200; i++) { try { if (await ch
 try {
   const initialized = await docker(['run', '--rm', '--user', `${process.getuid?.() ?? 1000}:${process.getgid?.() ?? 1000}`, '--mount', `type=bind,src=${app},dst=/installer,readonly`, '--mount', `type=bind,src=${project},dst=/project`, '--workdir', '/project', image, 'node', '/installer/cli.mjs', 'init', '--features-dir', 'requests', '--port', String(port)]);
   assert.equal(JSON.parse(initialized.stdout).initialized, true); configured = true;
-  await writeFile(join(project, 'provider-fixture'), '#!/usr/bin/env node\nlet input="";for await(const p of process.stdin)input+=p;const text=input.includes("Implement the requested changes")?JSON.stringify({summary:"Review fixture patch",files:[{path:"approved.txt",content:"proposed\\n"}]}):input.includes("DOCKER_QUESTION_FLOW")&&!input.includes("DOCKER_ANSWER_COMPLETE")?JSON.stringify({werkInteraction:{schemaVersion:1,kind:"question",message:"Which layout should the Docker fixture retain?"}}):"Docker feature protocol fixture completed.";console.log(JSON.stringify({type:"item.completed",item:{type:"agent_message",text}}));\n', { mode: 0o700 });
+  await writeFile(join(project, 'provider-fixture'), '#!/usr/bin/env node\nif(process.argv[2]==="--version"){console.log("codex-cli 0.0.0-fixture");process.exit(0)}if(process.argv[2]==="login"&&process.argv[3]==="status"){console.log("Logged in using ChatGPT");process.exit(0)}let input="";for await(const p of process.stdin)input+=p;const text=input.includes("Implement the requested changes")?JSON.stringify({summary:"Review fixture patch",files:[{path:"approved.txt",content:"proposed\\n"}]}):input.includes("DOCKER_QUESTION_FLOW")&&!input.includes("DOCKER_ANSWER_COMPLETE")?JSON.stringify({werkInteraction:{schemaVersion:1,kind:"question",message:"Which layout should the Docker fixture retain?"}}):"Docker feature protocol fixture completed.";console.log(JSON.stringify({type:"item.completed",item:{type:"agent_message",text}}));\n', { mode: 0o700 });
   await compose('up', '-d', '--wait', '--wait-timeout', '90');
   const token = (await readFile(join(project, '.werk/worker/webview-token'), 'utf8')).trim();
   const call = async (path, body) => { const r = await fetch(`http://127.0.0.1:${port}` + path, { method: body ? 'POST' : 'GET', headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) }); const result = await r.json(); assert.ok(r.ok, result.error); return result; };
-  await call('/api/settings', { provider: { id: 'codex-cli', executable: '/project/provider-fixture' } });
+  await call('/api/settings', { provider: { id: 'codex-cli', executable: '/project/provider-fixture', authenticationMode: 'cli-account' } });
   await writeFile(join(project, 'requests/docker.md'), '---\nschemaVersion: 1\ntitle: Docker folder task\nstatus: ready\n---\nVerify the mounted project feature workflow.\n');
   await until(async () => (await call('/api/features')).records[0]?.result !== undefined);
   const before = (await call('/api/features')).records[0]; assert.match(await readFile(join(project, 'requests', before.result), 'utf8'), /protocol fixture completed/);
@@ -101,13 +101,22 @@ try {
   `);
   await call('/api/settings', { repositories: { pollMs: 1000, items: [{ id: 'project', path: '/project', branch: 'main', remote: 'origin', watch: true }] } });
   assert.equal((await call('/api/repositories')).items[0].state, 'ready');
+  const gitOutput = async (...args) => (await compose('exec', '-T', 'worker', 'git', ...args)).stdout.trim();
+  const checkoutBefore = { head: await gitOutput('rev-parse', 'HEAD'), index: await gitOutput('write-tree') };
   await compose('exec', '-T', 'worker', 'node', '-e', String.raw`
     const fs=require('node:fs'),cp=require('node:child_process');
     const git=(...args)=>cp.execFileSync('git',['-c','user.name=Release smoke','-c','user.email=smoke@example.invalid','-C','/tmp/werk-repo-seed',...args],{stdio:'pipe'});
     fs.writeFileSync('/tmp/werk-repo-seed/approved.txt','remote committed\n');
     git('add','approved.txt');git('commit','-m','Remote fixture update');git('push','origin','main');
   `);
-  await until(async () => (await readFile(join(project, 'approved.txt'), 'utf8')) === 'remote committed\n' && (await call('/api/repositories')).items[0].lastPulledAt !== null);
+  const remoteHead = await gitOutput('--git-dir=/project/.werk/fixture-remote.git', 'rev-parse', 'refs/heads/main');
+  assert.notEqual(remoteHead, checkoutBefore.head);
+  await until(async () => { const status = (await call('/api/repositories')).items[0]; return status.state === 'behind' && status.behind === 1 && status.checkoutPreserved; })
+    .catch(async cause => { throw new Error('Watched repository fetch did not complete: ' + JSON.stringify(await call('/api/repositories')), { cause }); });
+  assert.equal(await gitOutput('rev-parse', 'refs/remotes/origin/main'), remoteHead);
+  assert.equal((await call('/api/repositories')).items[0].lastPulledAt, null, 'Local intake never fast-forwards the developer checkout.');
+  assert.equal(await readFile(join(project, 'approved.txt'), 'utf8'), 'initial committed\n');
+  assert.deepEqual({ head: await gitOutput('rev-parse', 'HEAD'), index: await gitOutput('write-tree') }, checkoutBefore);
   await writeFile(join(project, 'approved.txt'), 'uncommitted operator edit\n');
   const board = await call('/api/taskboard', { title: 'Docker Git worktree', instruction: 'Propose the approved file change.', provider: 'codex-cli', repository: 'project', paths: ['approved.txt'] });
   const taskId = board.tasks.find(task => task.title === 'Docker Git worktree').id;
@@ -115,17 +124,17 @@ try {
   const task = await call('/api/taskboard/detail', { id: taskId });
   assert.equal(task.repositoryId, 'project'); assert.match(task.baseCommit, /^[0-9a-f]{40,64}$/);
   assert.ok(task.worktree.startsWith('/project/.werk/worktrees/'));
-  assert.equal(task.files[0].content, 'remote committed\n'); assert.match(task.patch, /\+proposed/);
+  assert.equal(task.files[0].content, 'initial committed\n'); assert.match(task.patch, /\+proposed/);
   const retainedTree = join(project, task.worktree.slice('/project/'.length));
   assert.match(await readFile(join(retainedTree, '.git'), 'utf8'), /^gitdir: /);
-  assert.equal(await readFile(join(retainedTree, 'approved.txt'), 'utf8'), 'remote committed\n');
+  assert.equal(await readFile(join(retainedTree, 'approved.txt'), 'utf8'), 'initial committed\n');
   assert.equal(await readFile(join(project, 'approved.txt'), 'utf8'), 'uncommitted operator edit\n');
   assert.equal((await call('/api/repositories')).items[0].state, 'dirty');
   await compose('stop'); await compose('up', '-d', '--wait', '--wait-timeout', '90');
   const restoredTask = await call('/api/taskboard/detail', { id: taskId });
   assert.equal(restoredTask.worktree, task.worktree); assert.equal(restoredTask.baseCommit, task.baseCommit); assert.equal(restoredTask.status, 'review');
   assert.equal(await readFile(join(project, 'approved.txt'), 'utf8'), 'uncommitted operator edit\n');
-  console.log(JSON.stringify({ ok: true, journey: 'project-worker-docker', setupInsideContainer: true, mountedFeatureIntake: true, templateInstalled: true, folderReconfigured: true, resultExported: true, restartPreserved: true, duplicateTasks: false, durableRunEvidence: hasRunEvidence, interactionEvidence, watchedRepositoryPull: true, assignedWorktree: true, dirtyCheckoutPreserved: true, worktreeRestartPreserved: true, liveProvider: false }));
+  console.log(JSON.stringify({ ok: true, journey: 'project-worker-docker', setupInsideContainer: true, mountedFeatureIntake: true, templateInstalled: true, folderReconfigured: true, resultExported: true, restartPreserved: true, duplicateTasks: false, durableRunEvidence: hasRunEvidence, interactionEvidence, watchedRepositoryFetch: true, checkoutPreserved: true, assignedWorktree: true, dirtyCheckoutPreserved: true, worktreeRestartPreserved: true, liveProvider: false }));
 } finally {
   if (configured) await compose('down', '--remove-orphans').catch(() => {});
   await rm(project, { recursive: true, force: true });
