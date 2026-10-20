@@ -86,3 +86,13 @@ test('acknowledging an older outbox cannot synchronize a newer unpublished revie
   assert.equal(saved.publishedState, sharedHash(p.remote.files.get(sourcePath)));
   assert.equal(p.f.primaryExecutions, 1); assert.equal(p.f.submits.length, 1); assert.equal(p.f.featureCommits, 1);
 });
+
+
+test('shared delivery publishes passed automated evidence while human acceptance is still pending', async t => {
+  const f = await fixture(t); await f.intake.sync(); await f.complete();
+  f.controls.inspect = execution => ({ ...execution, request: { ...execution.request, phase: 'review' } });
+  await f.intake.sync();
+  const row = f.intake.view().requests[0];
+  assert.equal(row.status, 'ready_for_review'); assert.equal(row.publication, 'synced');
+  assert.ok(row.reviewNote); assert.equal(f.featureCommits, 1);
+});

@@ -1,0 +1,534 @@
+TAP version 13
+# Subtest: canonical exact-file delivery refuses missing files before snapshots or provider preparation
+ok 1 - canonical exact-file delivery refuses missing files before snapshots or provider preparation
+  ---
+  duration_ms: 6.017683
+  type: 'test'
+  ...
+# Subtest: canonical exact-file delivery refuses missing required-check before snapshots or provider preparation
+ok 2 - canonical exact-file delivery refuses missing required-check before snapshots or provider preparation
+  ---
+  duration_ms: 0.691823
+  type: 'test'
+  ...
+# Subtest: canonical exact-file delivery refuses missing enabled-check before snapshots or provider preparation
+ok 3 - canonical exact-file delivery refuses missing enabled-check before snapshots or provider preparation
+  ---
+  duration_ms: 0.723042
+  type: 'test'
+  ...
+# Subtest: canonical exact-file delivery refuses a missing development service
+ok 4 - canonical exact-file delivery refuses a missing development service
+  ---
+  duration_ms: 0.635654
+  type: 'test'
+  ...
+# Subtest: canonical exact-file delivery refuses a missing delivery service
+ok 5 - canonical exact-file delivery refuses a missing delivery service
+  ---
+  duration_ms: 2.99928
+  type: 'test'
+  ...
+# Subtest: canonical exact-file delivery cannot use an ordinary folder without a worktree service
+ok 6 - canonical exact-file delivery cannot use an ordinary folder without a worktree service
+  ---
+  duration_ms: 0.722875
+  type: 'test'
+  ...
+# Subtest: canonical exact-file delivery requires the actual committed baseline: missing-reservation
+ok 7 - canonical exact-file delivery requires the actual committed baseline: missing-reservation
+  ---
+  duration_ms: 1.685327
+  type: 'test'
+  ...
+# Subtest: canonical exact-file delivery requires the actual committed baseline: different-policy
+ok 8 - canonical exact-file delivery requires the actual committed baseline: different-policy
+  ---
+  duration_ms: 0.591941
+  type: 'test'
+  ...
+# Subtest: canonical exact-file delivery requires the actual committed baseline: missing-prepared-commit
+ok 9 - canonical exact-file delivery requires the actual committed baseline: missing-prepared-commit
+  ---
+  duration_ms: 0.585731
+  type: 'test'
+  ...
+# Subtest: canonical exact-file delivery requires the actual committed baseline: different-prepared-commit
+ok 10 - canonical exact-file delivery requires the actual committed baseline: different-prepared-commit
+  ---
+  duration_ms: 0.604118
+  type: 'test'
+  ...
+# Subtest: configuring the required check admits the same exact-file reservation as implementation
+ok 11 - configuring the required check admits the same exact-file reservation as implementation
+  ---
+  duration_ms: 5.209053
+  type: 'test'
+  ...
+# Subtest: interrupted canonical admission retains a failed receipt even after grants and services are removed
+ok 12 - interrupted canonical admission retains a failed receipt even after grants and services are removed
+  ---
+  duration_ms: 0.997461
+  type: 'test'
+  ...
+# Subtest: legacy exact-file proposals keep their existing admission behavior without implementation grants
+ok 13 - legacy exact-file proposals keep their existing admission behavior without implementation grants
+  ---
+  duration_ms: 0.535929
+  type: 'test'
+  ...
+# Subtest: recovery inspection observes the owned candidate without settling its unknown operation
+ok 14 - recovery inspection observes the owned candidate without settling its unknown operation
+  ---
+  duration_ms: 43.037409
+  type: 'test'
+  ...
+# Subtest: recovery inspection refuses active managed controllers and processes before observing files
+ok 15 - recovery inspection refuses active managed controllers and processes before observing files
+  ---
+  duration_ms: 33.040132
+  type: 'test'
+  ...
+# Subtest: recovery inspection rejects replaced worktrees, stale request revisions and concurrent changes
+ok 16 - recovery inspection rejects replaced worktrees, stale request revisions and concurrent changes
+  ---
+  duration_ms: 80.085663
+  type: 'test'
+  ...
+# Subtest: a managed process appearing during inspection prevents the recovery receipt
+ok 17 - a managed process appearing during inspection prevents the recovery receipt
+  ---
+  duration_ms: 52.029119
+  type: 'test'
+  ...
+# Subtest: a failed observed check dispatches bounded repair and preserves both candidate receipts
+ok 18 - a failed observed check dispatches bounded repair and preserves both candidate receipts
+  ---
+  duration_ms: 179.866731
+  type: 'test'
+  ...
+# Subtest: pause after the model step releases the boundary and resumes verification without redispatch
+ok 19 - pause after the model step releases the boundary and resumes verification without redispatch
+  ---
+  duration_ms: 264.653185
+  type: 'test'
+  ...
+# Subtest: repair exhaustion stops deterministically and unchanged reevaluation spends no further calls
+ok 20 - repair exhaustion stops deterministically and unchanged reevaluation spends no further calls
+  ---
+  duration_ms: 147.212676
+  type: 'test'
+  ...
+# Subtest: a model question preserves its durable result and does not run checks or enter repair
+ok 21 - a model question preserves its durable result and does not run checks or enter repair
+  ---
+  duration_ms: 97.022107
+  type: 'test'
+  ...
+# Subtest: explicit recovery resumes interrupted verification without replaying a known model result
+ok 22 - explicit recovery resumes interrupted verification without replaying a known model result
+  ---
+  duration_ms: 229.647277
+  type: 'test'
+  ...
+# Subtest: a failed checkpoint after a paused model result preserves its completed receipt and permits explicit retry
+ok 23 - a failed checkpoint after a paused model result preserves its completed receipt and permits explicit retry
+  ---
+  duration_ms: 145.083064
+  type: 'test'
+  ...
+# Subtest: file question survives restart, duplicate answer executes once, and review leaves approved files unchanged
+ok 24 - file question survives restart, duplicate answer executes once, and review leaves approved files unchanged
+  ---
+  duration_ms: 726.444222
+  type: 'test'
+  ...
+# Subtest: continuation retains the original provider profile and approved snapshots after configuration and checkout edits
+ok 25 - continuation retains the original provider profile and approved snapshots after configuration and checkout edits
+  ---
+  duration_ms: 487.216517
+  type: 'test'
+  ...
+# Subtest: cancelled file question remains cancelled after restart and explicit retry creates one new invocation
+ok 26 - cancelled file question remains cancelled after restart and explicit retry creates one new invocation
+  ---
+  duration_ms: 287.775495
+  type: 'test'
+  ...
+# Subtest: accepted file answer survives a full queue before prepare, restart and explicit resume exactly once
+ok 27 - accepted file answer survives a full queue before prepare, restart and explicit resume exactly once
+  ---
+  duration_ms: 426.965885
+  type: 'test'
+  ...
+# Subtest: validated file result recovers after patch projection failure without another model invocation
+ok 28 - validated file result recovers after patch projection failure without another model invocation
+  ---
+  duration_ms: 170.205475
+  type: 'test'
+  ...
+# Subtest: patch protocol failures record a specific reason in the task and interaction events
+ok 29 - patch protocol failures record a specific reason in the task and interaction events
+  ---
+  duration_ms: 138.212996
+  type: 'test'
+  ...
+# Subtest: a patch object wrapped in prose becomes a minimal review patch
+ok 30 - a patch object wrapped in prose becomes a minimal review patch
+  ---
+  duration_ms: 203.950791
+  type: 'test'
+  ...
+# Subtest: out-of-scope patch output never becomes a durable completed file result
+ok 31 - out-of-scope patch output never becomes a durable completed file result
+  ---
+  duration_ms: 163.440614
+  type: 'test'
+  ...
+# Subtest: a maximum-length approved instruction remains admissible without appended-path overflow
+ok 32 - a maximum-length approved instruction remains admissible without appended-path overflow
+  ---
+  duration_ms: 89.165231
+  type: 'test'
+  ...
+# Subtest: file tasks publish normalized cumulative usage events once without private context
+ok 33 - file tasks publish normalized cumulative usage events once without private context
+  ---
+  duration_ms: 101.971797
+  type: 'test'
+  ...
+# Subtest: validated file result is recorded as a readable transcript message while the raw change set stays evidence
+ok 34 - validated file result is recorded as a readable transcript message while the raw change set stays evidence
+  ---
+  duration_ms: 128.964373
+  type: 'test'
+  ...
+# Subtest: fully prepared queued Feature Request survives repeated restarts and executes once with its frozen intent
+ok 35 - fully prepared queued Feature Request survives repeated restarts and executes once with its frozen intent
+  ---
+  duration_ms: 999.7182
+  type: 'test'
+  ...
+# Subtest: prepared Markdown answer retains its original Feature Request and does not repeat an earlier question
+ok 36 - prepared Markdown answer retains its original Feature Request and does not repeat an earlier question
+  ---
+  duration_ms: 544.322616
+  type: 'test'
+  ...
+# Subtest: queued second Feature Request continues after the first asks for input without replaying it
+ok 37 - queued second Feature Request continues after the first asks for input without replaying it
+  ---
+  duration_ms: 380.288466
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: task start persisted
+ok 38 - restart holds uncertain work: task start persisted
+  ---
+  duration_ms: 127.744296
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: task admission incomplete
+ok 39 - restart holds uncertain work: task admission incomplete
+  ---
+  duration_ms: 153.500276
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: task frozen context differs
+ok 40 - restart holds uncertain work: task frozen context differs
+  ---
+  duration_ms: 143.456649
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: duplicate task ownership
+ok 41 - restart holds uncertain work: duplicate task ownership
+  ---
+  duration_ms: 170.102861
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: catalog running state disagrees
+ok 42 - restart holds uncertain work: catalog running state disagrees
+  ---
+  duration_ms: 145.675604
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: request generation snapshot missing
+ok 43 - restart holds uncertain work: request generation snapshot missing
+  ---
+  duration_ms: 133.716009
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: request generation snapshot differs
+ok 44 - restart holds uncertain work: request generation snapshot differs
+  ---
+  duration_ms: 144.611416
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: request started
+ok 45 - restart holds uncertain work: request started
+  ---
+  duration_ms: 130.697366
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: request execution generation differs
+ok 46 - restart holds uncertain work: request execution generation differs
+  ---
+  duration_ms: 117.767193
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: request accepted input hash differs
+ok 47 - restart holds uncertain work: request accepted input hash differs
+  ---
+  duration_ms: 130.367487
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: request policy hash differs
+ok 48 - restart holds uncertain work: request policy hash differs
+  ---
+  duration_ms: 123.491455
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: request readiness missing
+ok 49 - restart holds uncertain work: request readiness missing
+  ---
+  duration_ms: 103.137678
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: request turn binding generation differs
+ok 50 - restart holds uncertain work: request turn binding generation differs
+  ---
+  duration_ms: 111.915563
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: request execution row missing
+ok 51 - restart holds uncertain work: request execution row missing
+  ---
+  duration_ms: 109.725115
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: interaction started
+ok 52 - restart holds uncertain work: interaction started
+  ---
+  duration_ms: 95.584747
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: interaction dispatch incomplete
+ok 53 - restart holds uncertain work: interaction dispatch incomplete
+  ---
+  duration_ms: 99.974889
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: interaction dispatch changed
+ok 54 - restart holds uncertain work: interaction dispatch changed
+  ---
+  duration_ms: 111.572792
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: interaction usage observed even if zero
+ok 55 - restart holds uncertain work: interaction usage observed even if zero
+  ---
+  duration_ms: 104.185375
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: interaction indexed status disagrees
+ok 56 - restart holds uncertain work: interaction indexed status disagrees
+  ---
+  duration_ms: 99.480227
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: run started
+ok 57 - restart holds uncertain work: run started
+  ---
+  duration_ms: 73.210062
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: run belongs to another request
+ok 58 - restart holds uncertain work: run belongs to another request
+  ---
+  duration_ms: 77.09087
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: run has observed zero usage
+ok 59 - restart holds uncertain work: run has observed zero usage
+  ---
+  duration_ms: 75.680492
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: run indexed status disagrees
+ok 60 - restart holds uncertain work: run indexed status disagrees
+  ---
+  duration_ms: 75.960274
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: interaction missing
+ok 61 - restart holds uncertain work: interaction missing
+  ---
+  duration_ms: 83.337628
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: run missing
+ok 62 - restart holds uncertain work: run missing
+  ---
+  duration_ms: 83.320419
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: task projection missing
+ok 63 - restart holds uncertain work: task projection missing
+  ---
+  duration_ms: 72.395543
+  type: 'test'
+  ...
+# Subtest: restart holds uncertain work: session catalog missing local owner
+ok 64 - restart holds uncertain work: session catalog missing local owner
+  ---
+  duration_ms: 74.208691
+  type: 'test'
+  ...
+# Subtest: recovered queue stays held by consumption until the next UTC window
+ok 65 - recovered queue stays held by consumption until the next UTC window
+  ---
+  duration_ms: 104.909218
+  type: 'test'
+  ...
+# Subtest: recovery does not bypass the current provider availability guard
+ok 66 - recovery does not bypass the current provider availability guard
+  ---
+  duration_ms: 79.25467
+  type: 'test'
+  ...
+# Subtest: a durable request start event vetoes contradictory queued projections
+ok 67 - a durable request start event vetoes contradictory queued projections
+  ---
+  duration_ms: 90.339858
+  type: 'test'
+  ...
+# Subtest: a durable interaction start event vetoes contradictory queued projections
+ok 68 - a durable interaction start event vetoes contradictory queued projections
+  ---
+  duration_ms: 77.792623
+  type: 'test'
+  ...
+# Subtest: interruption during request startup reconciliation cannot make uncertain work runnable
+ok 69 - interruption during request startup reconciliation cannot make uncertain work runnable
+  ---
+  duration_ms: 83.209814
+  type: 'test'
+  ...
+# Subtest: interruption during interaction startup reconciliation cannot make uncertain work runnable
+ok 70 - interruption during interaction startup reconciliation cannot make uncertain work runnable
+  ---
+  duration_ms: 73.340325
+  type: 'test'
+  ...
+# Subtest: missing canonical Feature Request fails startup closed without inventing a new identity
+ok 71 - missing canonical Feature Request fails startup closed without inventing a new identity
+  ---
+  duration_ms: 65.709685
+  type: 'test'
+  ...
+# Subtest: durable attempt pairs preserve unknown/zero coverage, cached subsets, and idempotent finalization
+ok 72 - durable attempt pairs preserve unknown/zero coverage, cached subsets, and idempotent finalization
+  ---
+  duration_ms: 111.725002
+  type: 'test'
+  ...
+# Subtest: restart pairs interrupted attempts with labeled recovery and unavailable duration/CPU delta
+ok 73 - restart pairs interrupted attempts with labeled recovery and unavailable duration/CPU delta
+  ---
+  duration_ms: 32.63749
+  type: 'test'
+  ...
+# Subtest: 125 attempts export through stable cursor pages without silently truncating aggregate totals
+ok 74 - 125 attempts export through stable cursor pages without silently truncating aggregate totals
+  ---
+  duration_ms: 564.553987
+  type: 'test'
+  ...
+# Subtest: storage rejects symlinks and malformed usage never invents measurements
+ok 75 - storage rejects symlinks and malformed usage never invents measurements
+  ---
+  duration_ms: 13.406289
+  type: 'test'
+  ...
+# Subtest: chat before is durable before model invocation; serial queue starts with prior usage totals and deletion retains evidence
+ok 76 - chat before is durable before model invocation; serial queue starts with prior usage totals and deletion retains evidence
+  ---
+  duration_ms: 213.501352
+  type: 'test'
+  ...
+# Subtest: queued local cancellation and retry bind distinct attempts without reusing earlier evidence
+ok 77 - queued local cancellation and retry bind distinct attempts without reusing earlier evidence
+  ---
+  duration_ms: 242.81367
+  type: 'test'
+  ...
+# Subtest: a terminal ledger cannot admit another model invocation
+ok 78 - a terminal ledger cannot admit another model invocation
+  ---
+  duration_ms: 11.181757
+  type: 'test'
+  ...
+# Subtest: patch evidence finalization failure (1) preserves review and a sticky persistence warning
+ok 79 - patch evidence finalization failure (1) preserves review and a sticky persistence warning
+  ---
+  duration_ms: 159.394001
+  type: 'test'
+  ...
+# Subtest: patch evidence finalization failure (2) preserves review and a sticky persistence warning
+ok 80 - patch evidence finalization failure (2) preserves review and a sticky persistence warning
+  ---
+  duration_ms: 128.566282
+  type: 'test'
+  ...
+# {"schemaVersion":1,"time":"2026-10-20T13:35:59.719Z","service":"worker","level":"warn","event":"request_finished","requestId":"904aba4d-4369-4fa9-9d4c-ba61627f562c","method":"POST","route":"/api/runs","status":401,"durationMs":4}
+# {"schemaVersion":1,"time":"2026-10-20T13:35:59.733Z","service":"worker","level":"info","event":"request_finished","requestId":"de57de53-02aa-441c-b325-0d9b1a211bc6","method":"POST","route":"/api/runs","status":200,"durationMs":2}
+# {"schemaVersion":1,"time":"2026-10-20T13:35:59.740Z","service":"worker","level":"info","event":"request_finished","requestId":"af564b95-363a-4af3-85ba-f9bf81459064","method":"POST","route":"/api/runs","status":200,"durationMs":1}
+# {"schemaVersion":1,"time":"2026-10-20T13:35:59.745Z","service":"worker","level":"info","event":"request_finished","requestId":"652f12ec-4460-4384-9791-149fd5b92e94","method":"POST","route":"/api/runs","status":200,"durationMs":1}
+# {"schemaVersion":1,"time":"2026-10-20T13:35:59.751Z","service":"worker","level":"info","event":"request_finished","requestId":"f9c646a8-8bba-4f45-83b4-510f7e2aad3c","method":"POST","route":"/api/runs","status":200,"durationMs":2}
+# {"schemaVersion":1,"time":"2026-10-20T13:35:59.755Z","service":"worker","level":"warn","event":"request_finished","requestId":"e0ea3126-86d9-41e2-9881-6bc593e69423","method":"POST","route":"/api/runs","status":400,"durationMs":1}
+# {"schemaVersion":1,"time":"2026-10-20T13:35:59.758Z","service":"worker","level":"warn","event":"request_finished","requestId":"e6c586f4-6d15-4e52-9b14-b7db7548e114","method":"POST","route":"/api/runs","status":400,"durationMs":1}
+# {"schemaVersion":1,"time":"2026-10-20T13:35:59.761Z","service":"worker","level":"warn","event":"request_finished","requestId":"6ef70d56-3f99-4655-90f1-427de419980f","method":"POST","route":"/api/runs","status":400,"durationMs":1}
+# Subtest: run API requires worker access and validates bounded queries while matching list/export/analysis
+ok 81 - run API requires worker access and validates bounded queries while matching list/export/analysis
+  ---
+  duration_ms: 194.726499
+  type: 'test'
+  ...
+# Subtest: provider-reported consumption survives failed and cancelled chat attempts
+ok 82 - provider-reported consumption survives failed and cancelled chat attempts
+  ---
+  duration_ms: 115.055417
+  type: 'test'
+  ...
+# Subtest: failed before persistence cannot invoke provider and reports an unsaved chat
+ok 83 - failed before persistence cannot invoke provider and reports an unsaved chat
+  ---
+  duration_ms: 71.01974
+  type: 'test'
+  ...
+# Subtest: failed retry reservation retains the cancelled run and exposes saved input as a failed resumable attempt
+ok 84 - failed retry reservation retains the cancelled run and exposes saved input as a failed resumable attempt
+  ---
+  duration_ms: 121.297826
+  type: 'test'
+  ...
+# Subtest: workspace shutdown drains chat before final feature export and disposes ledger last
+ok 85 - workspace shutdown drains chat before final feature export and disposes ledger last
+  ---
+  duration_ms: 304.942698
+  type: 'test'
+  ...
+# Subtest: deferred runner shutdown retains ledger through remote completion and final feature reconciliation
+ok 86 - deferred runner shutdown retains ledger through remote completion and final feature reconciliation
+  ---
+  duration_ms: 185.66465
+  type: 'test'
+  ...
+1..86
+# tests 86
+# suites 0
+# pass 86
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 6039.300282

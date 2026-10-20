@@ -1,3 +1,4 @@
+import { inspectStopped, verifyDelivery } from './delivery-task-review.js';
 import { SerializedOperations } from '../../shared/serialized-operations.js';
 import type { WorkerSettingsPort } from './workspace-ports.js';
 import type { WorkerSessions } from './sessions.js';
@@ -36,7 +37,7 @@ export function createLocalTaskRuntime(settings: WorkerSettingsPort, sessions: W
     completionMessage: (task, summary, reply) => group1.completionMessage(task, summary, reply),
     writePatch: (task, patch) => group1.writePatch(runtime, task, patch),
     input: (task) => group1.input(task),
-    developmentRuntime: (task, limits) => group2.developmentRuntime(runtime, task, limits),
+    developmentRuntime: (task, limits, persistEvidence) => group2.developmentRuntime(runtime, task, limits, persistEvidence),
     assertToolWorkspace: (task, signal, verifyOnly, inspection) => group2.assertToolWorkspace(runtime, task, signal, verifyOnly, inspection),
     removeTaskWorktree: (task, requested, discardChanges) => group2.removeTaskWorktree(runtime, task, requested, discardChanges),
     get active() { return group3.active(runtime); },
@@ -59,6 +60,8 @@ export function createLocalTaskRuntime(settings: WorkerSettingsPort, sessions: W
     admissionInput: (input, submission, frozenDefinition, frozenSelection) => group4.admissionInput(runtime, input, submission, frozenDefinition, frozenSelection),
     createTask: (input, submission, options) => group5.createTask(runtime, input, submission, options),
     executeRequest: (id) => group6.executeRequest(runtime, id),
+    verifyDelivery: (id, expectedRevision) => verifyDelivery(runtime, id, expectedRevision),
+    inspectStopped: (id, expectedRevision) => inspectStopped(runtime, id, expectedRevision),
     executeOwnedRequest: (id) => group6.executeOwnedRequest(runtime, id),
     interact: (body) => group6.interact(runtime, body),
     continueTask: (body) => group6.continueTask(runtime, body),

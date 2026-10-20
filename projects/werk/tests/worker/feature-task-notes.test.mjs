@@ -110,8 +110,6 @@ test('draft replies survive every projection and only stable ready documents dis
 
 test('durable reply reservation blocks dispatch until storage recovers; paused and unavailable queues retain replies', async t => {
   const f = await fixture(t); await f.admit(); await f.answer();
-  f.enabled = false; await f.scan(); assert.equal(f.commands.length, 0);
-  f.enabled = true;
   const save = f.folder.save.bind(f.folder); let writable = false;
   f.folder.save = async index => { if (!writable) throw Error('Injected full storage'); await save(index); };
   await f.scan(); assert.equal(f.commands.length, 0);
@@ -227,4 +225,11 @@ test('moving a generated Task or PullRequest into the intake root never creates 
   await writeFile(join(f.directory, 'moved-review.md'), source.replace('schemaVersion: 1', 'schemaVersion: 1\ntype: PullRequest'));
   await f.scan(); assert.equal(f.admitted.length, 1); assert.equal(f.commands.length, 0);
   assert.equal(f.service.view().errors.filter(item => /companions are not new feature requests/.test(item.message)).length, 2);
+});
+
+test('intake pause holds new requests while existing Markdown answers can continue', async t => {
+  const f = await fixture(t); await f.admit(); await f.answer(); f.enabled = false;
+  await writeFile(join(f.directory, 'new.md'), source); await f.scan();
+  assert.equal(f.commands.length, 1); assert.equal(f.admitted.length, 1);
+  assert.match((await f.note()).markdown, /status: processed/);
 });

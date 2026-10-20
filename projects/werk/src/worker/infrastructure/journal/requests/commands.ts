@@ -1,3 +1,4 @@
+import type { DeliveryStopObservation } from '../../../application/delivery-contracts.js';
 import {
   defaultGatePolicy,
   gateDigest,
@@ -5,11 +6,23 @@ import {
   type RequestCommand,
   type WorkerRequest
 } from "../../../application/request-gates.js";
+import { assertDeliveryAcceptance, assertDeliverySubject } from '../../../application/delivery-review.js';
+import { deliveryCommandActions, requestDeliveryCommand } from './delivery.js';
 import { requestEvaluateInside } from './gates.js';
 import type { RequestStore } from './store.js';
 import { boundedInteger, clone, conflict, identifier, invalid, iso, requestCandidate, requestReserveInside } from './values.js';
 
-export function requestCommand(store: RequestStore, input: RequestCommand): {
+export function requestReplayCommand(store: RequestStore, input: RequestCommand): { request: WorkerRequest; duplicate: true } | undefined {
+  identifier(input.requestId, 'request ID'); identifier(input.operationId, 'operation ID');
+  if (input.note !== undefined && (typeof input.note !== 'string' || input.note.length > 8000)) invalid('Request note must be a bounded string.');
+  const previous = store.database().prepare('SELECT digest FROM request_operations WHERE request_id=? AND operation_id=?').get(input.requestId, input.operationId);
+  if (!previous) return;
+  const digest = gateDigest({ ...input, ...(input.note !== undefined ? { note: input.note.trim() } : {}) });
+  if (previous.digest !== digest) conflict('This operation ID already belongs to different input.');
+  return { request: store.get(input.requestId), duplicate: true };
+}
+
+export function requestCommand(store: RequestStore, input: RequestCommand, stopped?: DeliveryStopObservation): {
   request: WorkerRequest;
   duplicate: boolean;
 } {
@@ -17,12 +30,19 @@ export function requestCommand(store: RequestStore, input: RequestCommand): {
     execute: [],
     evaluate: ["stage"],
     assign: ["assignee"],
-    attest: ["note", "inputHash", "outputDigest"],
+    attest: ['note', 'inputHash', 'outputDigest', 'candidateCommit', 'candidateDigest', 'inputRevision', 'humanOutcomes'],
+    request_changes: ['note', 'inputRevision', 'candidateCommit', 'candidateDigest'],
     resolve_finding: ["findingId", "note"],
     propose: ["input"],
     accept_candidate: ["candidateId"],
     rework: ["stage", "note"],
-    cancel: ["note"],
+    cancel: ['note', 'deliveryRunId', 'inputRevision'],
+    pause_after_step: ['note', 'deliveryRunId', 'inputRevision'],
+    interrupt: ['note', 'deliveryRunId', 'inputRevision'],
+    resume: ['note', 'deliveryRunId', 'inputRevision'],
+    retry: ['note', 'deliveryRunId', 'inputRevision'],
+    reopen: ['note', 'deliveryRunId', 'inputRevision'],
+    confirm_stopped: ['note', 'deliveryRunId', 'inputRevision'],
   };
   if (
     !input ||
@@ -66,8 +86,9 @@ export function requestCommand(store: RequestStore, input: RequestCommand): {
     }
     if (request.revision !== input.expectedRevision)
       conflict("The request changed. Refresh before continuing.");
+    const deliveryControl = deliveryCommandActions.includes(input.action as typeof deliveryCommandActions[number]) || input.action === 'cancel' && !!request.delivery;
     if (
-      request.execution &&
+      !deliveryControl && request.execution &&
       ["prepared", "running"].includes(request.execution.status)
     )
       conflict(
@@ -80,7 +101,9 @@ export function requestCommand(store: RequestStore, input: RequestCommand): {
           (request.execution?.result?.type === "completed"
             ? "done"
             : "ready"));
-    if (input.action === "evaluate" || input.action === "execute") {
+    if (deliveryControl) {
+      requestDeliveryCommand(store, request, normalized, stopped);
+    } else if (input.action === "evaluate" || input.action === "execute") {
       if (
         stage === "ready" &&
         request.execution?.result?.type === "completed"
@@ -88,6 +111,7 @@ export function requestCommand(store: RequestStore, input: RequestCommand): {
         conflict(
           "Evaluate completion or explicitly accept rework before another execution.",
         );
+      if (['cancelled', 'interrupted'].includes(request.phase)) conflict('Use an explicit reopen or resume control before reevaluating this request.');
       requestEvaluateInside(store, request, stage);
     } else if (input.action === "assign") {
       if (!["operator", "llm"].includes(String(input.assignee)))
@@ -105,6 +129,16 @@ export function requestCommand(store: RequestStore, input: RequestCommand): {
         conflict(
           "Operator acceptance must identify the current input and known output, with a note.",
         );
+      if (request.delivery && !request.delivery.review) conflict('Human acceptance requires the verified delivery review package.');
+      if (request.delivery && request.phase !== 'review') conflict('Only the current review-ready candidate can be accepted. Restore verification after candidate changes.');
+      if (request.delivery?.review) {
+        const review = request.delivery.review;
+        if (input.candidateCommit !== review.candidate.candidateCommit) conflict('Acceptance must identify the exact candidate commit.');
+        if (!Array.isArray(input.humanOutcomes) || input.humanOutcomes.length > 128 || input.humanOutcomes.some(item => !item || Object.keys(item).some(key => !['criterionId', 'outcome', 'reason'].includes(key)))) invalid('Human review requires bounded individual criterion outcomes.');
+        const humanOutcomes = input.humanOutcomes.map(item => ({ ...item, actor: 'operator', at: iso() }));
+        assertDeliveryAcceptance(review, { inputRevision: input.inputRevision!, inputHash: request.inputHash, candidateCommit: input.candidateCommit!, candidateDigest: input.candidateDigest!, policyDigest: request.policyDigest, humanOutcomes });
+        request.delivery!.humanOutcomes = humanOutcomes;
+      }
       request.attestation = {
         actor: "operator",
         inputHash: request.inputHash,
@@ -114,6 +148,15 @@ export function requestCommand(store: RequestStore, input: RequestCommand): {
       };
       store.save(request, "operator_attested");
       requestEvaluateInside(store, request, "done");
+    } else if (input.action === 'request_changes') {
+      const review = request.delivery?.review;
+      if (!review || !normalized.note || request.phase !== 'review') conflict('Request changes requires the current review package and explanatory feedback.');
+      if (input.candidateCommit !== review.candidate.candidateCommit) conflict('Changes must target the exact candidate commit.');
+      assertDeliverySubject(review.candidate, { inputRevision: input.inputRevision!, inputHash: request.inputHash, candidateCommit: input.candidateCommit!, candidateDigest: input.candidateDigest!, policyDigest: request.policyDigest });
+      const hold = { code: 'review_changes', reason: normalized.note };
+      request.deliveryHolds = [...(request.deliveryHolds ?? []).filter(item => item.code !== hold.code), hold];
+      request.delivery!.holds = clone(request.deliveryHolds); request.delivery!.status = 'waiting'; request.phase = 'needs_rework';
+      store.save(request, 'review_changes_requested');
     } else if (input.action === "resolve_finding") {
       const finding = request.findings.find((f) => f.id === input.findingId);
       if (!finding || finding.source === "deterministic" || !normalized.note)

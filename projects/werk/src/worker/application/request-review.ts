@@ -306,6 +306,7 @@ export class RequestReviewManager {
             request.input.title,
           provider: dispatch.provider.id,
           model: dispatch.provider.model,
+          ...(dispatch.provider.authenticationMode ? { authenticationMode: dispatch.provider.authenticationMode } : {}),
         })
       ).id;
       release = await this.options.executor.acquire(

@@ -1,3 +1,4 @@
+import { candidateGitTree } from './candidate-git-tree.js';
 import { containsSensitivePatchMaterial } from '../application/review-patch-policy.js';
 import { runApprovedToolProcess } from './tool-process.js';
 import { createHash, randomUUID } from 'node:crypto';
@@ -149,13 +150,17 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
     const outside = [...changed, ...untracked].find(path => !isApproved(path));
     if (outside !== undefined) fail(`The worktree contains changes outside the approved paths, including ${JSON.stringify(outside)}. Inspect them before continuing; they will not be published.`);
     const tracked = await listing(['ls-files', '-z', '--cached'], signal);
+    const indexEntries = await listing(['ls-files', '--stage', '-z'], signal);
+    const executablePaths = new Set(indexEntries.filter(entry => entry.startsWith('100755 ')).map(entry => entry.slice(entry.indexOf('\t') + 1)));
+    const fileMode = (await repositoryGit(root, ['config', '--type=bool', '--default=true', '--get', 'core.filemode'], signal)).trim() === 'true';
+    const tree = candidateGitTree((await repositoryGit(root, ['rev-parse', '--show-object-format'], signal)).trim());
     const flags = await listing(['ls-files', '-v', '-z'], signal);
     if (flags.some(entry => !entry.startsWith('H '))) fail('Candidate index flags changed. Hidden or sparse changes cannot be verified.');
     const paths = [...new Set([...tracked, ...untracked, ...exact])].sort();
     if (paths.length > limits.candidateSourceMaxFiles) fail(`Candidate source has ${count(paths.length)} files; the inspection limit is ${count(limits.candidateSourceMaxFiles)} files (execution.candidateSourceMaxFiles).`);
     const touched = new Set([...changed, ...untracked]), trackedSet = new Set(tracked);
     const reviewed = (path: string) => exact.includes(path) || touched.has(path);
-    const digest = createHash('sha256').update(JSON.stringify(['werk-candidate-v1', scope.baseCommit]));
+    const digest = createHash('sha256').update(JSON.stringify(['werk-candidate-v2', scope.baseCommit]));
     const files: { path: string; hash: string | null }[] = [];
     const additions: { path: string; content: string; mode: number }[] = [];
     const reviewedSizes: Record<string, number> = {};
@@ -166,6 +171,7 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
       const value = await bytes(path, counted ? review.candidateApprovedFileMaxBytes : limits.candidateFileMaxBytes, counted);
       total += value?.body.length ?? 0;
       if (total > limits.candidateSourceMaxBytes) fail(sourceBytesError(total + await sizeOnDisk(paths.slice(index + 1), signal)));
+      if (value) tree.add(path, value.body, trackedSet.has(path) && !fileMode ? executablePaths.has(path) : !!(value.mode & 0o111));
       const fileHash = value ? hash(value.body) : null;
       digest.update(JSON.stringify([path, value?.mode ?? null, fileHash]));
       if (isApproved(path)) files.push({ path, hash: fileHash });
@@ -178,6 +184,8 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
         if (!trackedSet.has(path)) additions.push({ path, content, mode: value.mode });
       }
     }
+    const treeDigest = tree.digest();
+    digest.update(JSON.stringify(['git-tree', treeDigest]));
     // Folder entries are Git directory pathspecs; every changed path below them was approved above (renames are split, so a moved-out source is checked too).
     const patchBytes = Math.max(2 * 1024 * 1024, review.candidateReviewPatchMaxBytes + 1);
     let patch = await repositoryGit(root, ['diff', '--no-ext-diff', '--no-textconv', '--no-color', '--no-renames', '--binary', '--src-prefix=a/', '--dst-prefix=b/', scope.baseCommit, '--', ...approved], signal, 30000, patchBytes).catch(error => {
@@ -195,11 +203,11 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
     // Preserve the same review-leak guard used by legacy proposal patches.
     if (containsSensitivePatchMaterial(patch)) fail('Candidate patch contains sensitive material and cannot be published for review.');
     await rootIdentity(); authorize(signal);
-    return { patch, digest: digest.digest('hex'), changedPaths: [...new Set([...changed, ...additions.map(file => file.path)])].sort(), files, reviewedSizes };
+    return { patch, digest: digest.digest('hex'), treeDigest, changedPaths: [...new Set([...changed, ...additions.map(file => file.path)])].sort(), files, reviewedSizes };
   }
   async function inspect(signal: AbortSignal): Promise<InspectedCandidate> {
     const first = await inspectOnce(signal), second = await inspectOnce(signal);
-    if (first.digest !== second.digest || first.patch !== second.patch) fail('Candidate source changed during inspection. Retry after external edits finish.');
+    if (first.digest !== second.digest || first.patch !== second.patch || first.treeDigest !== second.treeDigest) fail('Candidate source changed during inspection. Retry after external edits finish.');
     return second;
   }
   const editLimit = Math.max(review.candidateApprovedFileMaxBytes, limits.candidateFileMaxBytes);
@@ -213,7 +221,7 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
   function listed(candidate: InspectedCandidate, requested: readonly string[] = []): DevelopmentCandidate {
     if (!Array.isArray(requested) || requested.length > 32 || requested.some(path => typeof path !== 'string' || !isApproved(path))) fail('Request hashes for at most 32 approved paths (approved files or safe files below an approved folder).');
     const shared = publication(candidate);
-    return { patch: candidate.patch, digest: candidate.digest, changedPaths: candidate.changedPaths, ...boundedListing(candidate.files ?? [], candidate.changedPaths, new Set(exact), [...new Set(requested)]), ...(shared ? { sharedPublication: shared } : {}) };
+    return { patch: candidate.patch, digest: candidate.digest, treeDigest: candidate.treeDigest, changedPaths: candidate.changedPaths, ...boundedListing(candidate.files ?? [], candidate.changedPaths, new Set(exact), [...new Set(requested)]), ...(shared ? { sharedPublication: shared } : {}) };
   }
   return {
     evidence: () => structuredClone(state),
@@ -277,7 +285,13 @@ export const createDevelopmentRuntime: DevelopmentFactory = options => {
       const startedAt = new Date().toISOString();
       let receipt: DevelopmentCheckEvidence = { presetId, presetFingerprint: preset.fingerprint, candidateDigest: before.digest, status: 'interrupted', exitCode: null, stdout: '', stderr: '', startedAt, finishedAt: startedAt };
       const retained = () => state.checks.filter(check => check.presetId !== presetId);
-      const unpublishable = publication(before)?.error;
+      const protectedChanges = before.changedPaths.filter(path => approvedPathMatch(scope.verificationInputs ?? [], path));
+      // New regression tests are allowed; only existing gate inputs carry approved baseline meaning.
+      const changedGateInput = protectedChanges.length
+        ? (await listing(['ls-tree', '-r', '--name-only', '-z', scope.baseCommit, '--', ...protectedChanges], signal))[0] : undefined;
+      const unpublishable = changedGateInput
+        ? `Protected verification input ${JSON.stringify(changedGateInput)} changed. Restore the approved gate or have an operator revise the verification policy before running checks.`
+        : publication(before)?.error;
       if (unpublishable) {
         receipt = { ...receipt, status: 'failed', stderr: unpublishable };
         await checkpoint(updated(before, [...retained(), receipt]));

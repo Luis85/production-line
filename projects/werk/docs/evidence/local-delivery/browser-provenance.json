@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "kind": "local-delivery-browser-evidence",
+  "scope": "Linux Chromium with deterministic Storybook fixtures; no model execution, Git change or real human review occurred.",
+  "browser": "Chromium 154.0.8037.57 on Debian GNU/Linux13",
+  "storyInventory": {
+    "version": "0.14.0",
+    "commit": "17ecddf447cee42c115bbd16a2ad22a5d507bddf",
+    "sourceDigest": "755897367792341c78bcf0ca0700d6d56f3a903cc0a2d1e06c6695f1590ee780"
+  },
+  "viewports": [
+    {
+      "name": "desktop",
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "name": "mobile",
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "browser-latency.json",
+      "sha256": "038b40aa71f6e8162b548627ab8ecd2305b18121240bb94b536d85eedd41d2ae"
+    },
+    {
+      "path": "browser-targeted-results.json",
+      "sha256": "8ea1a5b3d364c03022b8d21a8d7643f517931da03f731f7f68ccd56735c7ac2c"
+    },
+    {
+      "path": "recovery-desktop.png",
+      "sha256": "dda27ab2ad842a80ec16854da87271269336aadb82297cb493b6b14dc5795bcc"
+    },
+    {
+      "path": "recovery-mobile.png",
+      "sha256": "8095fe43deecefbe5818d315a2e2efffe14005688d9baeaba88a71b3f87cb7fb"
+    }
+  ]
+}

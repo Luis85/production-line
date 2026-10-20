@@ -3,7 +3,7 @@ import { object, text } from '../../shared/validation.js';
 import type { FeatureInput, FeatureIndex, FeatureQueuePort, FeatureRecord } from './feature-requests.js';
 export interface FeatureDocumentPort {
   read(name: string): Promise<{ name: string; markdown: string; revision: string }>;
-  validate(markdown: string): { input: FeatureInput; id: unknown; status: unknown; managed: boolean; gates?: { requestId: string; revision: number; inputRevision: number; policyDigest: string } };
+  validate(markdown: string): { input: FeatureInput; id: unknown; status: unknown; schema?: string; managed: boolean; gates?: { requestId: string; revision: number; inputRevision: number; policyDigest: string } };
   ready(markdown: string): string;
   write(name: string, markdown: string, revision?: string): Promise<{ name: string; markdown: string; revision: string }>;
   remove(name: string, revision: string): Promise<void>;
@@ -64,7 +64,13 @@ export async function manageFeature(input: unknown, context: FeatureManagementCo
   if (body.revision !== file.revision) throw new DomainError('conflict', 'Supply the current revision from feature get with --if-match.');
   if (atName?.source === 'orchestrator') throw new DomainError('conflict', 'This request is orchestrator-owned. Manage its assignment at the orchestrator.');
   if (action === 'edit' || action === 'submit') {
-    if (atName) throw new DomainError('conflict', 'Accepted input is frozen. Create a new draft for different work.');
+    if (atName) {
+      const markdown = action === 'edit' ? text(body.markdown, 'markdown', 65536) : documents.ready(file.markdown);
+      const parsed = documents.validate(markdown);
+      if (parsed.schema !== 'worker.request/v1') throw new DomainError('conflict', 'Accepted legacy input is frozen. Use the versioned worker.request/v1 contract for same-request revisions.');
+      if (parsed.id !== atName.id) throw new DomainError('conflict', 'Keep the registered request ID when revising its content.');
+      return documents.write(name, markdown, file.revision);
+    }
     const markdown = action === 'edit' ? draft(body.markdown, documents) : documents.ready(draft(file.markdown, documents));
     if (index.records.some(record => record.id === documents.validate(markdown).id)) throw new DomainError('conflict', 'Feature ID is already retained. Use a new ID or omit it.');
     return documents.write(name, markdown, file.revision);

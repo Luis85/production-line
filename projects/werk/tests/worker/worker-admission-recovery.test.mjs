@@ -20,7 +20,7 @@ async function fixture(t, execute) {
   await settings.update({ provider: { id: 'codex-cli', executable: process.execPath, model: 'fixture' } });
   const calls = [];
   const model = connection => !connection.executable ? undefined : ({
-    configuration: { id: connection.id, model: connection.model, instruction: 'Fixture only; no external calls.' },
+    configuration: { id: connection.id, authenticationMode: connection.authenticationMode, model: connection.model, instruction: 'Fixture only; no external calls.' },
     capabilities: modelCapabilities,
     async reply() { throw Error('Typed model required'); },
     async execute(request) {

@@ -1,12 +1,14 @@
 /** Deliberately bounded release signal, not a whole-system mutation score. */
 export const scope = {
-  id: 'worker-ready-review-v3',
+  id: 'worker-local-delivery-v4',
   targets: [
     'src/shared/serialized-operations.ts',
     'src/shared/request-gate.ts',
     'src/shared/http/response-body.ts',
     'src/shared/webview/bounded-polling.ts',
     'src/worker/application/consumption.ts',
+    'src/worker/application/delivery-dependencies.ts',
+    'src/worker/application/delivery-policy.ts',
     'src/worker/infrastructure/journal/consumption.ts',
     'src/worker/infrastructure/responses.ts',
     'src/worker/application/ready-review-protocol.ts',

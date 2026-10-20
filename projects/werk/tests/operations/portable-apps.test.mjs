@@ -124,9 +124,9 @@ test('copied apps operate independently with agent tasks, durable state and late
   // Protocol fixture only: no provider credentials or live LLM calls.
   if (process.platform === 'linux') {
     const executable = join(entries.worker.cwd, 'model-fixture'), audit = join(outer, 'model-events.jsonl');
-    await writeFile(executable, `#!${process.execPath}\nconst fs=require('node:fs');let input='';process.stdin.on('data',p=>input+=p);process.stdin.on('end',()=>{fs.appendFileSync(${JSON.stringify(audit)},JSON.stringify({phase:'start',pid:process.pid})+'\\n');setTimeout(()=>{const reply=input.includes('Approved file snapshots:')?JSON.stringify({summary:'Fixture patch; tests not run',files:[{path:'acceptance.txt',content:'after\\n'}]}):'Protocol fixture response';fs.appendFileSync(${JSON.stringify(audit)},JSON.stringify({phase:'end',pid:process.pid})+'\\n');console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:reply}}));},400);});\n`);
+    await writeFile(executable, `#!${process.execPath}\nif(process.argv.slice(2).join(' ')==='login status'){console.log('Logged in using ChatGPT');process.exit(0);}const fs=require('node:fs');let input='';process.stdin.on('data',p=>input+=p);process.stdin.on('end',()=>{fs.appendFileSync(${JSON.stringify(audit)},JSON.stringify({phase:'start',pid:process.pid})+'\\n');setTimeout(()=>{const reply=input.includes('Approved file snapshots:')?JSON.stringify({summary:'Fixture patch; tests not run',files:[{path:'acceptance.txt',content:'after\\n'}]}):'Protocol fixture response';fs.appendFileSync(${JSON.stringify(audit)},JSON.stringify({phase:'end',pid:process.pid})+'\\n');console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text:reply}}));},400);});\n`);
     await chmod(executable, 0o700);
-    await ok('worker', 'settings set', [], { provider: { id: 'codex-cli', executable } });
+    await ok('worker', 'settings set', [], { provider: { id: 'codex-cli', executable, authenticationMode: 'cli-account' } });
     await ok('worker', 'task create', [], { ...task, id: 'fixture-1' });
     await ok('worker', 'task create', [], { ...task, id: 'fixture-2' });
     await ok('worker', 'settings set', [], { board: { paused: false } });

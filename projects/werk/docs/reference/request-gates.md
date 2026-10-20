@@ -21,7 +21,9 @@ closed, including a `neq` comparison. Advisory prose cannot supply trusted facts
 The default readiness policy requires nonempty bounded text; patch requests also
 need approved files and valid paths. Default completion requires a completed,
 nonempty result without pending input; patches additionally need valid patch
-protocol and a patch artifact. It does not require operator acceptance by default.
+protocol and a patch artifact. The restricted legacy result policy does not itself require operator acceptance.
+Local delivery additionally requires human acceptance of the current candidate:
+automated completion places the Feature Request in review, never directly in done.
 
 ## Policy format
 
@@ -49,6 +51,79 @@ Policy limits include at most 32 rules per stage/kind and a 64 KiB policy. The
 reviewer is enabled by default, uses the same provider and allows one automatic
 review per failed stage/input/policy generation. Explicit rework has a bounded
 budget of up to three attempts.
+
+## Committed local delivery policy
+
+A Git-backed local delivery reads `.werk/delivery-policy.json` from its selected
+committed baseline. Uncommitted edits to this file do not change an admitted run.
+When absent, the worker uses the versioned defaults below. Request-level
+`quality_profile` selects an allowed profile; it cannot replace mandatory worker
+gates or tool authority.
+
+```json
+{
+  "schemaVersion": 1,
+  "version": 1,
+  "defaultProfile": "feature",
+  "reviewDirectory": "feature-reviews",
+  "profiles": [
+    {
+      "id": "feature",
+      "minimumCriteria": 1,
+      "minimumMessageLength": 20,
+      "maxRepairAttempts": 2,
+      "verificationInputs": ["tests/", "test/", "scripts/", "package.json", "package-lock.json", "tsconfig.json"]
+    },
+    {
+      "id": "lightweight",
+      "minimumCriteria": 0,
+      "minimumMessageLength": 1,
+      "maxRepairAttempts": 1,
+      "verificationInputs": ["tests/", "test/", "scripts/", "package.json", "package-lock.json", "tsconfig.json"]
+    }
+  ]
+}
+```
+
+Both `feature` and `lightweight` must exist; up to 16 unique named profiles are
+allowed. Repair allowance is 0–3, minimum criteria 0–64 and minimum message length
+0–8,000 characters. The effective policy, digest, selected profile and baseline
+are recorded with delivery. Settings exposes this effective policy for inspection;
+change the project file through the team's reviewed Git workflow, then commit it
+before using it for new work.
+
+`verificationInputs` protects existing committed check/policy inputs from being
+silently changed by the implementation. New regression files under a protected
+folder can still be added. A deliberate edit to an existing protected test needs
+an explicitly reviewed project policy change; an agent cannot turn a failing check
+into success by removing its assertion. The policy file itself remains protected.
+
+Review notes and sanitized evidence JSON are written under `reviewDirectory`,
+outside the tested worktree; raw check command/output records remain private.
+The default is `feature-reviews`. A complete local candidate identifies its own
+`werk/delivery/...` branch and commit; this does not push a branch or create a
+remote PR. Exemptions and not-applicable outcomes are not granted by the default
+local policy. Unknown, failed or stale required checks remain blocked.
+
+## Delivery criteria and acceptance
+
+Local delivery records a criterion result as `passed`, `failed`, `unknown`,
+`not_applicable`, `pending_human` or `stale`. Deterministic checks retain command,
+content/check-definition binding and environment evidence. Manual criteria stay
+pending until a current-candidate decision records their outcomes. An unavailable
+tool, timeout or missing artifact cannot become a passing result. Exemptions need
+a separate attributable, revision-scoped authorization.
+
+The delivery candidate identifies the request/input revision, run, explicit Git
+baseline, branch, candidate commit/tree, candidate/patch digests and pinned policy
+and check-definition digests. Relevant changes invalidate evidence and acceptance.
+A local review package is an observed local artifact; remote publication remains
+a separate delivery operation. See the [canonical request contract](feature-requests.md#canonical-local-delivery-requests).
+
+The delivery lifecycle (`draft`, `submitted`, `ready`, `in_progress`, `in_review`,
+`done`, `cancelled`) is separate from execution status and phase. Internal gate
+phases below remain diagnostic state and must not be presented as equivalent to
+human acceptance. A delivery run can contain several measured model invocations.
 
 ## States and advisory work
 
@@ -83,7 +158,11 @@ before a new operation.
 
 Authenticated `POST /api/requests` exposes the same contract using canonical
 actions such as `set_policy`, `resolve_finding` and `accept_candidate`, with
-`requestId`, `expectedRevision` and `operationId`. Private request/event content
+`requestId`, `expectedRevision` and `operationId`. Delivery controls also identify
+`deliveryRunId` and `inputRevision`; the UI exposes only compatible actions.
+`pause_after_step`, `interrupt`, `resume`, `retry` and `reopen` use the same operation
+ledger. Repeating an operation never supplies authority to repeat an uncertain
+side effect. Private request/event content
 can include project text; access remains protected.
 
 Command receipt and primary admission are separate checkpoints. The response's

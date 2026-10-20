@@ -1,28 +1,32 @@
+import { reconcileDeliveryReviews } from './delivery-task-review.js';
+import { retainDeliveryCheckpoint } from './delivery-task-checkpoint.js';
+import { providerFailureOutcome } from './provider-outcome.js';
 import { interactionFeatureRequest } from './feature-request-reference.js';
 
-import { developmentVerified, validateDevelopmentState } from './development.js';
+import { DeliverySuspended, deliveryBoundary, runDeliverySteps, taskDelivery } from './delivery-task-steps.js';
 
-import { gateDigest } from "./request-gates.js";
 import { DEFAULT_MAX_RUNTIME_MS } from "./execution-policy.js";
-import { executeModel, ProviderModelError } from "./model-contract.js";
+import { ProviderModelError } from "./model-contract.js";
 
 import { unknownUsage } from "./run-evidence.js";
 
-import { verifyNativeCandidate } from './native-development.js';
 import { localTaskConnection, validateTaskSelection } from "./local-task-selection.js";
 
 
 import { PatchProtocolError } from "./patch-protocol.js";
-import { fingerprint } from './local-task-contracts.js';
 import type { LocalTaskRuntime } from './local-task-runtime-contract.js';
 
-export async function tick(host: Pick<LocalTaskRuntime, "closed" | "sessions" | "settings" | "tasks" | "admissionTaskId" | "preparations" | "running" | "execute">) {
+export async function tick(host: Pick<LocalTaskRuntime, "closed" | "sessions" | "settings" | "tasks" | "admissionTaskId" | "preparations" | "running" | "execute" | "verifyDelivery" | "change" | "evidencePersistenceError" | "trackContinuation">) {
     if (host.closed) return;
+    void host.trackContinuation(reconcileDeliveryReviews(host)).catch(() => { host.evidencePersistenceError = true; });
     host.sessions.executor.wake();
-    if (host.settings.value.board.paused) return;
+    for (const task of host.tasks) {
+      const run = taskDelivery(host, task);
+      if (run?.control && ['interrupt', 'cancel'].includes(run.control.action)) host.running.get(task.id)?.controller.abort();
+    }
     const limit = 1;
     for (const task of host.tasks
-      .filter((item) => item.status === "queued" && item.id !== host.admissionTaskId && !host.preparations.some(preparation => preparation.id === item.id && preparation.state === "preparing"))
+      .filter((item) => { const run = taskDelivery(host, item); const continuing = !!run?.steps.some(step => step.phase === 'implementing' || step.phase === 'repairing'); return (item.status === 'queued' || item.status === 'running' && run?.status === 'queued') && (!host.settings.value.board.paused || continuing) && (!run || !run.control && !run.holds.length && !['paused', 'outcome_unknown', 'interrupted', 'interrupting', 'cancelled', 'failed'].includes(run.status)) && item.id !== host.admissionTaskId && !host.preparations.some(preparation => preparation.id === item.id && preparation.state === "preparing"); })
       .sort(
         (a, b) =>
           (host.settings.value.board.order === "priority"
@@ -34,6 +38,7 @@ export async function tick(host: Pick<LocalTaskRuntime, "closed" | "sessions" | 
       const promise = host.sessions.executor
         .run(task.sessionId, controller.signal, () =>
           host.execute(task.id, controller),
+          { continuation: !!taskDelivery(host, task)?.steps.some(step => ['implementing', 'repairing'].includes(step.phase)) },
         )
         .catch(() => {})
         .finally(() => {
@@ -46,7 +51,7 @@ export async function tick(host: Pick<LocalTaskRuntime, "closed" | "sessions" | 
     }
   }
 
-export async function execute(host: Pick<LocalTaskRuntime, "change" | "executionDetail" | "sessions" | "assertToolWorkspace" | "workspaceController" | "settings" | "developmentRuntime" | "model" | "evidencePersistenceError" | "writePatch" | "validatedPatch" | "outputFacts" | "input" | "completionMessage" | "tasks" | "persistenceError">, id: string, controller: AbortController) {
+export async function execute(host: Pick<LocalTaskRuntime, "change" | "executionDetail" | "sessions" | "assertToolWorkspace" | "workspaceController" | "settings" | "developmentRuntime" | "model" | "evidencePersistenceError" | "writePatch" | "validatedPatch" | "outputFacts" | "input" | "completionMessage" | "tasks" | "persistenceError" | "delivery">, id: string, controller: AbortController) {
     let runId: string | undefined,
       turnId: string | undefined,
       usage = unknownUsage(),
@@ -62,7 +67,8 @@ export async function execute(host: Pick<LocalTaskRuntime, "change" | "execution
     try {
       await host.change((tasks) => {
         const task = tasks.find((item) => item.id === id)!;
-        if (task.status !== "queued") throw Error("Task no longer queued");
+        if (task.status !== 'queued' && !(task.status === 'running' && taskDelivery(host, task)?.status === 'queued')) throw Error('Task no longer queued');
+        deliveryBoundary(host, task);
         task.status = "running";
       });
       const task = host.executionDetail(id);
@@ -91,60 +97,17 @@ export async function execute(host: Pick<LocalTaskRuntime, "change" | "execution
         ),
       ]);
       signal.throwIfAborted();
-      if (task.requestId)
-        host.sessions.requests.startExecution(task.requestId, turnId, runId);
-      host.sessions.interactions.start(task.sessionId, turnId);
-      await host.sessions.runs.start(runId);
-      const result = await executeModel(
-        model,
-        turn.dispatch,
-        signal,
-        (value) => {
-          usage = value;
-          try {
-            host.sessions.runs.observeUsage(runId!, value);
-            host.sessions.interactions.observeUsage(
-              task.sessionId,
-              turnId!,
-              value,
-            );
-          } catch {
-            host.evidencePersistenceError = true;
-          }
-        },
-        {
-          beforeCall() {},
-          observeToolBudget: (evidence) => {
-            try {
-              host.sessions.interactions.observeToolBudget(
-                task.sessionId,
-                turnId!,
-                evidence,
-              );
-            } catch {
-              host.evidencePersistenceError = true;
-            }
-          },
-        },
-      );
-      signal.throwIfAborted();
-      let valid: { summary: string; patch: string; changedFileCount: number } | null = null;
-      if (result.type === 'completed') {
-        if (development && task.implementation) {
-          if (turn.dispatch.policy.tools === 'provider_native') await verifyNativeCandidate(development, task.implementation, signal);
-          const candidate = await development.capture(signal), evidence = development.evidence();
-          validateDevelopmentState(task.implementation, evidence);
-          const verified = developmentVerified(task.implementation, candidate, evidence);
-          const receipt = { turnId, runId, candidateDigest: candidate.digest, patchSha256: fingerprint(candidate.patch), evidenceDigest: gateDigest(evidence), verified };
-          if (candidate.patch) await host.writePatch(task, candidate.patch);
-          await host.change(tasks => { const current = tasks.find(item => item.id === id)!;
-            current.developmentEvidence = structuredClone(evidence); current.developmentCompletion = receipt;
-            current.patch = candidate.patch || null; current.summary = result.text; current.changedFileCount = candidate.changedPaths.length;
-          });
-          Object.assign(task, { developmentEvidence: evidence, developmentCompletion: receipt, patch: candidate.patch, summary: result.text });
-          if (verified) valid = { summary: result.text, patch: candidate.patch, changedFileCount: candidate.changedPaths.length };
-        } else valid = host.validatedPatch(task, result.text);
+      const checkpoint = taskDelivery(host, task)?.steps.findLast(step => ['implementing', 'repairing'].includes(step.phase) && step.turnId === turnId && step.status === 'completed' && step.result);
+      if (!checkpoint) {
+        if (task.requestId) host.sessions.requests.startExecution(task.requestId, turnId, runId);
+        if (turn.status === 'queued') host.sessions.interactions.start(task.sessionId, turnId);
+        await host.sessions.runs.start(runId);
+      } else if (turn.status !== 'running' && !turn.result) {
+        host.sessions.interactions.restoreCheckpoint(task.sessionId, turnId, turn.dispatchDigest!);
       }
+      const delivered = await runDeliverySteps(host, task, model, turn.dispatch, development, signal);
+      const { result, valid } = delivered;
+      usage = delivered.usage;
       outcome =
         result.type === "needs_input"
           ? result.request.kind === "question"
@@ -204,6 +167,7 @@ export async function execute(host: Pick<LocalTaskRuntime, "change" | "execution
         );
       }
     } catch (error) {
+      if (error instanceof DeliverySuspended) return;
       const failed = host.tasks.find((task) => task.id === id);
       if (failed && turnId) {
         const saved = host.sessions.interactions.turn(failed.sessionId, turnId);
@@ -217,11 +181,32 @@ export async function execute(host: Pick<LocalTaskRuntime, "change" | "execution
                 : "escalated";
         }
       }
+      if (failed?.requestId) {
+        const run = taskDelivery(host, failed);
+        if (run?.steps.some(step => step.status === 'running')) {
+          // Adapter settlement is required before this catch executes; unknown process outcomes remain visible.
+          const unknown = error instanceof ProviderModelError && ['process_stop_unconfirmed', 'outcome_unknown'].includes(error.code);
+          host.sessions.requests.deliveryUpdate(failed.requestId, { action: 'stopped', deliveryRunId: run.id, confirmed: !unknown, failure: !controller.signal.aborted, detail: error instanceof Error ? error.message : 'Execution stopped.' });
+          if (!unknown && !host.workspaceController.signal.aborted) {
+            try {
+              const dispatch = turnId ? host.sessions.interactions.turn(failed.sessionId, turnId).dispatch : undefined;
+              const checkpointSignal = AbortSignal.any([host.workspaceController.signal, AbortSignal.timeout(30000)]);
+              await retainDeliveryCheckpoint(host, failed, host.developmentRuntime(failed, dispatch?.policy), checkpointSignal);
+            } catch {
+              host.sessions.requests.deliveryUpdate(failed.requestId, { action: 'hold', code: 'checkpoint_unavailable', reason: 'Stopped source remains in the retained worktree, but its Git checkpoint could not be recorded. Inspect the worktree and Git permissions before retrying.' });
+            }
+          }
+        }
+      }
+      if (failed?.requestId && error instanceof ProviderModelError) {
+        const failure = providerFailureOutcome(error);
+        if (['authentication_required', 'rate_limited', 'quota_exhausted', 'approval_required'].includes(failure.state)) host.sessions.requests.deliveryUpdate(failed.requestId, { action: 'hold', code: 'provider_' + failure.state, reason: failure.message });
+      }
       if (knownResult) persistenceFailed = true;
       else {
-        outcome = controller.signal.aborted ? "cancelled" : "failed";
+        outcome = controller.signal.aborted && taskDelivery(host, failed!)?.control?.action !== 'interrupt' ? 'cancelled' : 'failed';
         const code = controller.signal.aborted
-          ? "operator_cancelled"
+          ? taskDelivery(host, failed!)?.control?.action === 'interrupt' ? 'operator_interrupted' : 'operator_cancelled'
           : signal.aborted
             ? "timeout"
             : error instanceof ProviderModelError || error instanceof PatchProtocolError
@@ -238,7 +223,7 @@ export async function execute(host: Pick<LocalTaskRuntime, "change" | "execution
             host.sessions.requests.failExecution(
               failed.requestId,
               turnId,
-              outcome,
+              taskDelivery(host, failed)?.status === 'interrupted' ? 'interrupted' : outcome,
             );
         }
         const message = controller.signal.aborted

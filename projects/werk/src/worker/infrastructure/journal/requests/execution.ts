@@ -1,3 +1,4 @@
+import { ensureDelivery } from './delivery.js';
 import type {
   ModelResult
 } from "../../../application/model-contract.js";
@@ -15,6 +16,7 @@ export function requestPrepareExecution(store: RequestStore, id: string, turnId:
   identifier(runId, "run ID");
   return store.transaction(() => {
     const request = store.get(id);
+    if (request.phase === 'interrupted' && request.execution?.turnId !== turnId && !request.delivery) request.phase = 'ready';
     requestAssertReady(request);
     const bound = store.database()
       .prepare(
@@ -36,6 +38,8 @@ export function requestPrepareExecution(store: RequestStore, id: string, turnId:
       ["prepared", "running"].includes(request.execution.status)
     )
       conflict("This request already has an admitted execution.");
+    const context = request.input.context;
+    if (request.input.kind === 'patch' && request.owner.taskId && context && typeof context === 'object' && ('implementation' in context || 'deliveryPolicy' in context)) ensureDelivery(request);
     request.execution = {
       turnId,
       runId,

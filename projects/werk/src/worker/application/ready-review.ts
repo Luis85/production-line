@@ -38,7 +38,7 @@ export class ReadyReviewManager implements ReadyReviewPort {
     const context = turn.context as Partial<Context> | null;
     if (context?.kind !== 'feature_ready_review' || gateDigest(context.input) !== gateDigest(input)
       || !context.provider || context.provider.id !== input.provider
-      || input.selection && (context.provider.model !== input.selection.model || context.provider.effort !== input.selection.effort)
+      || input.selection && (context.provider.model !== input.selection.model || context.provider.effort !== input.selection.effort || context.provider.authenticationMode !== input.selection.authenticationMode)
       || typeof context.provider.model !== 'string' || typeof context.provider.instruction !== 'string')
       throw new DomainError('conflict', 'Ready Check evidence does not match the accepted source and provider.');
     if (turn.dispatch && (gateDigest(turn.dispatch.provider) !== gateDigest(context.provider)
@@ -89,7 +89,7 @@ export class ReadyReviewManager implements ReadyReviewPort {
     try {
       signal.throwIfAborted();
       const provider = structuredClone(this.options.profile(input));
-      if (provider.id !== input.provider || input.selection && (provider.model !== input.selection.model || provider.effort !== input.selection.effort))
+      if (provider.id !== input.provider || input.selection && (provider.model !== input.selection.model || provider.effort !== input.selection.effort || provider.authenticationMode !== input.selection.authenticationMode))
         throw new DomainError('conflict', 'Ready Check provider, model and effort do not match the accepted selection.');
       const context: Context = { kind: 'feature_ready_review', input, provider };
       turn = this.options.interactions.accept({ sessionId, operationId: input.operationId, kind: 'message',
@@ -101,7 +101,7 @@ export class ReadyReviewManager implements ReadyReviewPort {
         capabilities: { ...((model as Partial<StructuredModel>).capabilities ?? modelCapabilities), tools: provider.id === 'cursor-cli' ? 'provider_native' : 'none' } } as ConversationModel;
       const dispatch = prepareModelRequest(frozen, [readyReviewMessage(input, turn.createdAt)], 'chat', this.options.maxRuntimeMs?.() ?? DEFAULT_MAX_RUNTIME_MS);
       runId = (await this.options.runs.begin({ sessionId, taskId: sessionId, kind: 'local', purpose: 'gate_review', title: 'Ready Check: ' + input.title,
-        provider: provider.id, model: provider.model })).id;
+        provider: provider.id, model: provider.model, ...(provider.authenticationMode ? { authenticationMode: provider.authenticationMode } : {}) })).id;
       this.options.interactions.prepare(sessionId, turn.id, dispatch, runId);
       signal.throwIfAborted();
       return { attempt: { operationId: input.operationId, sessionId, turnId: turn.id, runId }, model, dispatch };

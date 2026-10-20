@@ -14,6 +14,7 @@ test('subscription Ready Check freezes model and effort, disables tools and reus
   const executable = join(f.directory, 'ready-review-claude-fixture'), log = join(f.directory, 'provider-calls.jsonl');
   await writeFile(executable, '#!' + process.execPath + '\n' + `
 const fs = require('node:fs'), path = require('node:path'), args = process.argv.slice(2);
+if (args.join(' ') === 'auth status') { process.stdout.write(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai' })); process.exit(0); }
 if (args.includes('--version')) { process.stdout.write('2.1.277 (Claude Code)'); process.exit(0); }
 let input = ''; process.stdin.setEncoding('utf8'); process.stdin.on('data', data => input += data);
 process.stdin.on('end', () => {
@@ -26,9 +27,9 @@ process.stdin.on('end', () => {
 });
 `, { mode: 0o700 });
   await f.settings.update({ provider: { id: 'claude-cli', executable, model: 'original-model' } });
-  f.selectedProfile.id = 'claude-cli'; f.selectedProfile.effort = 'medium';
+  f.selectedProfile.id = 'claude-cli'; f.selectedProfile.authenticationMode = 'cli-account'; f.selectedProfile.effort = 'medium';
   const first = input(); first.provider = 'claude-cli';
-  first.selection = { provider: 'claude-cli', model: 'original-model', effort: 'medium' };
+  first.selection = { provider: 'claude-cli', authenticationMode: 'cli-account', model: 'original-model', effort: 'medium' };
   const attempt = await f.schedule(first); await f.settle();
   assert.equal(f.manager.inspect(first).result.passed, false);
   const turn = f.sessions.interactions.turn(attempt.sessionId, attempt.turnId), binding = turn.dispatch.session;

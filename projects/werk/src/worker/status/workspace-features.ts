@@ -1,3 +1,4 @@
+import { featureDeliverySubmission } from './workspace-delivery.js';
 import { admitFeatureRequest, type FeatureAdmissionPorts } from '../application/feature-admission.js';
 import { featureRequestReference, sharedFeatureRequestReference } from '../application/feature-request-reference.js';
 import type { WorkspaceContext } from './workspace-context.js';
@@ -92,7 +93,6 @@ export async function continueFeatureInteraction(workspace: WorkspaceContext, se
     }).view;
   }
   if (!workspace.acceptingTasks || workspace.configurationUpdating || workspace.repositoriesUpdating || workspace.executionProfiles?.pending()) throw new DomainError('unavailable', 'Task response is saved. It will resume after the worker is available.');
-  if (workspace.settings.value.board.paused) throw new DomainError('unavailable', 'Task response is saved. Resume the worker queue to continue.');
   if (workspace.consumption.status().blocked) throw new DomainError('unavailable', 'Task response is saved. The worker consumption limit currently prevents execution.');
   if ((workspace.sessions.admissionActive ?? workspace.sessions.chatActive) + workspace.board.active >= workspace.settings.value.board.queueCapacity) throw new DomainError('unavailable', 'Task response is saved. It will resume when queue capacity is available.');
   return interaction(workspace, command, { fromFeatureNote: true });
@@ -135,13 +135,25 @@ export async function rememberTask(workspace: WorkspaceContext, task: Task){
 
 export async function submitFeature(workspace: WorkspaceContext, record: FeatureRecord){
   return withRepositoryAdmission(workspace, async () => {
+    const repository = resolve(workspace.config.projectDir ?? process.cwd());
+    const submission = record.input?.mode === 'patch' && record.input.requestSchema === 'worker.request/v1' ? await featureDeliverySubmission(workspace, record, repository, workspace.sessions.requests.policy().policy) : undefined;
     await admitFeatureRequest(featureAdmissionPorts(workspace), {
       input: record.input!, taskId: record.taskId, submissionHash: record.inputHash, selection: record.selection,
-      repository: resolve(workspace.config.projectDir ?? process.cwd()),
+      repository, ...(submission ? { submission } : {}),
       reference: record.feature ? { ...record.feature, sourcePath: record.name } : featureRequestReference({ id: record.id, source: 'folder', scope: workspace.features!.view().directory, sourcePath: record.name }),
     });
     await workspace.featureTracking.sync();
   });
+}
+
+/** Priority is scheduling metadata; it never revises requirements or starts another run. */
+export async function reprioritizeFeature(workspace: WorkspaceContext, record: FeatureRecord, priority: number) {
+  if (!workspace.acceptingTasks || workspace.configurationUpdating || workspace.repositoriesUpdating || workspace.executionProfiles?.pending() || record.source !== 'folder' || record.input?.mode !== 'patch') return false;
+  const task = workspace.board.view().tasks.find(item => item.id === record.taskId);
+  if (!task || task.status !== 'queued') return false;
+  if (task.sessionId !== record.sessionId || record.feature && task.feature?.key !== record.feature.key) throw new DomainError('conflict', 'The queued task belongs to another Feature Request.');
+  await workspace.board.action({ action: 'priority', id: task.id, priority });
+  return true;
 }
 
 function executionEvidence(workspace: WorkspaceContext, sessionId: string, runId?: string){

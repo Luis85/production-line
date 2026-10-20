@@ -132,6 +132,15 @@ async function recoverRetainedTask(host: RecoveryHost, task: LocalTask) {
         return;
       }
     }
+    if (task.requestId) {
+      const request = host.sessions.requests.get(task.requestId), run = request.delivery;
+      const checkpoint = run?.steps.findLast(step => ['implementing', 'repairing'].includes(step.phase) && step.turnId === task.currentTurnId && step.status === 'completed' && step.result);
+      if (checkpoint && run && !request.execution?.result && !['completed', 'cancelled', 'failed', 'waiting'].includes(run.status)) {
+        task.status = 'running'; task.finishedAt = null;
+        task.error = run.status === 'outcome_unknown' ? 'An operation outcome needs reconciliation before continuing.' : null;
+        return;
+      }
+    }
     const view = host.sessions.interactions.view(task.sessionId);
     const latest = view.latestTurn
       ? host.sessions.interactions.turn(task.sessionId, view.latestTurn.id)

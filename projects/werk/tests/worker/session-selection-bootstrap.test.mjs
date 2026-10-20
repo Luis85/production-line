@@ -22,10 +22,10 @@ async function fixture(t) {
   /** @type {import('../../src/worker/infrastructure/workspace-services.js').WorkspaceProviderFactory} */
   const factory = connection => connection.model ? {
     capabilities: modelCapabilities,
-    configuration: { id: connection.id, model: connection.model, effort: connection.effort, instruction: '' },
+    configuration: { id: connection.id, authenticationMode: connection.authenticationMode, model: connection.model, effort: connection.effort, instruction: '' },
     async reply() { throw Error('Structured execution required.'); },
     async execute(request) {
-      const selection = { provider: connection.id, model: connection.model, effort: connection.effort ?? 'default' };
+      const selection = { provider: connection.id, authenticationMode: connection.authenticationMode, model: connection.model, effort: connection.effort ?? 'default' };
       const saved = JSON.parse(await readFile(join(directory, 'sessions.json'), 'utf8'));
       assert.deepEqual(saved.records.find(record => record.id === request.session?.logicalSessionId).selection, selection);
       calls.push(selection);
@@ -61,7 +61,7 @@ test('first submission rebuilds the stale placeholder adapter and durably freeze
   // This durable settings update deliberately leaves the display-only adapter cached.
   await f.configure();
   await f.sessions.start('Review this feature'); await f.settle();
-  const accepted = { provider: 'openai-api', model: 'configured-model', effort: 'low' };
+  const accepted = { provider: 'openai-api', authenticationMode: 'api-key', model: 'configured-model', effort: 'low' };
   assert.notEqual(f.sessions.chat, original);
   assert.deepEqual(f.sessions.current.selection, accepted);
   assert.deepEqual(f.calls, [accepted]);
@@ -103,7 +103,7 @@ test('failed first-selection persistence admits no request and retry uses the ne
   assert.deepEqual(f.calls, []);
   await f.configure('retry-model', 'high');
   await f.sessions.start('Retry after repairing storage'); await f.settle();
-  assert.deepEqual(f.calls, [{ provider: 'openai-api', model: 'retry-model', effort: 'high' }]);
+  assert.deepEqual(f.calls, [{ provider: 'openai-api', authenticationMode: 'api-key', model: 'retry-model', effort: 'high' }]);
 });
 
 test('first-selection preparation excludes competing submissions and provider updates', async t => {
@@ -119,7 +119,7 @@ test('first-selection preparation excludes competing submissions and provider up
     assert.deepEqual(f.calls, []);
   } finally { release.resolve(undefined); await first; }
   await f.settle();
-  assert.deepEqual(f.calls, [{ provider: 'openai-api', model: 'configured-model', effort: 'low' }]);
+  assert.deepEqual(f.calls, [{ provider: 'openai-api', authenticationMode: 'api-key', model: 'configured-model', effort: 'low' }]);
 });
 
 
@@ -136,5 +136,5 @@ test('an accepted selection cannot start while a same-tick provider update holds
     assert.deepEqual(f.calls, []);
   } finally { release.resolve(undefined); await updating; }
   await f.sessions.start('Retry with the original selection', id); await f.settle();
-  assert.deepEqual(f.calls, [{ provider: 'openai-api', model: 'configured-model', effort: 'low' }]);
+  assert.deepEqual(f.calls, [{ provider: 'openai-api', authenticationMode: 'api-key', model: 'configured-model', effort: 'low' }]);
 });

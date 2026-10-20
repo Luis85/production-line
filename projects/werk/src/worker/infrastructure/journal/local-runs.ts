@@ -1,3 +1,5 @@
+import { validateAuthenticationMode } from '../../application/provider-capabilities.js';
+import type { ProviderId } from '../../application/provider-contract.js';
 import type { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
@@ -67,6 +69,7 @@ export class WorkerRunJournal {
   }
   private save(run: WorkerRun) { this.db.prepare('UPDATE worker_runs SET outcome=?, payload=? WHERE id=?').run(run.outcome, JSON.stringify(run), run.id); }
   async begin(metadata: RunMetadata): Promise<WorkerRun> {
+    if (metadata.authenticationMode !== undefined) validateAuthenticationMode(metadata.authenticationMode, metadata.provider as ProviderId);
     if (metadata.purpose !== undefined && !['execution', 'gate_review', 'rework'].includes(metadata.purpose)) throw new DomainError('invalid_input', 'Invalid run purpose.');
     if (metadata.requestId !== undefined && (typeof metadata.requestId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(metadata.requestId))) throw new DomainError('invalid_input', 'Invalid request identity.');
     validateRunLineage(metadata, metadata.parentRunId === undefined ? undefined : this.get(metadata.parentRunId));

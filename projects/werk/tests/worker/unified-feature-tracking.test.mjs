@@ -115,7 +115,9 @@ test('configured intake stores generated records under _tasks without rewriting 
   assert.equal(created.featureTracking.directory, join(f.features, '_tasks'));
   await f.workspace.features.tick(true); await f.workspace.features.tick(true); await f.workspace.featureTracking.sync();
   assert.equal(await readFile(join(f.features, 'shared-source.md'), 'utf8'), source);
-  assert.equal(f.workspace.features.view().records.length, 0, 'generated lifecycle notes never enter the intake queue');
+  assert.deepEqual(f.workspace.features.view().records.map(record => record.name), ['interaction-local-projection.md'], 'Only the canonical interaction source enters intake; generated lifecycle notes do not.');
+  assert.equal(f.workspace.features.view().records[0].feature.key, created.session.feature.key);
+  assert.match(await readFile(join(f.features, 'interaction-local-projection.md'), 'utf8'), /schema: worker.request\/v1/);
   assert.equal(f.workspace.sessions.view().records.filter(row => row.id !== 'default').length, 1);
   assert.equal((await readdir(join(f.features, '_tasks'))).filter(name => name.endsWith('.md')).length, 1);
 });

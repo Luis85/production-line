@@ -33,12 +33,12 @@ test('API and unconfigured CLI account checks make no provider request and revea
   assert.equal((await checks.check(provider('claude-cli'))).signedIn, 'unknown');
 });
 test('account probes use fixed read-only arguments, ignore stderr diagnostics and coalesce repeated requests', { skip: process.platform === 'win32' }, async t => {
-  const cli = await executable(t, `const fs=require('node:fs');fs.appendFileSync(__filename+'.calls',JSON.stringify(process.argv.slice(2))+'\\n');if(process.argv.slice(2).join(' ')!=='auth status --json')process.exit(9);console.error('private-startup-diagnostic');console.log(JSON.stringify({loggedIn:true,email:'member@example.com',orgName:'Example team',subscriptionType:'pro',accessToken:'private-oauth-token'}));`);
+  const cli = await executable(t, `const fs=require('node:fs');fs.appendFileSync(__filename+'.calls',JSON.stringify(process.argv.slice(2))+'\\n');if(process.argv.slice(2).join(' ')!=='auth status')process.exit(9);console.error('private-startup-diagnostic');console.log(JSON.stringify({loggedIn:true,email:'member@example.com',orgName:'Example team',subscriptionType:'pro',accessToken:'private-oauth-token'}));`);
   const checks = new ProviderAccountChecks(); t.after(() => checks.close());
   const results = await Promise.all(Array.from({ length: 3 }, () => checks.check(provider('claude-cli', { executable: cli }))));
   assert.equal(results[0].email, 'member@example.com'); assert.equal(results[0].subscription, 'pro'); assert.doesNotMatch(JSON.stringify(results), /private-startup|private-oauth/);
   results[0].email = 'mutated@example.com'; assert.equal((await checks.check(provider('claude-cli', { executable: cli }))).email, 'member@example.com');
-  assert.equal((await readFile(cli + '.calls', 'utf8')).trim(), '["auth","status","--json"]');
+  assert.equal((await readFile(cli + '.calls', 'utf8')).trim(), '["auth","status"]');
 });
 test('unsupported status and excessive stdout or stderr remain unknown without diagnostics', { skip: process.platform === 'win32' }, async t => {
   const checks = new ProviderAccountChecks(); t.after(() => checks.close());

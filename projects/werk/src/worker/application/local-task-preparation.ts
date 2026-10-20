@@ -29,6 +29,7 @@ export async function reserveRun(host: Pick<LocalTaskRuntime, "sessions">, task:
         title: task.title,
         provider: task.provider,
         model: task.model,
+        authenticationMode: task.selection?.authenticationMode,
         requestId: task.requestId,
         purpose: "execution",
       })
@@ -61,6 +62,7 @@ export function ensureRequest(host: Pick<LocalTaskRuntime, "sessions" | "setting
     const profile = {
       id: connection.id,
       model: connection.model,
+      ...(connection.authenticationMode ? { authenticationMode: connection.authenticationMode } : {}),
       ...(task.selection ? { effort: task.selection.effort } : {}),
       instruction: actual?.configuration?.instruction ?? connection.instruction ?? "",
     };
@@ -91,6 +93,8 @@ export function outputFacts(valid: { patch: string; changedFileCount: number } |
 export function taskContext(task: LocalTask) {
     return {
       taskId: task.id,
+      ...(task.deliveryPolicy ? { deliveryPolicy: structuredClone(task.deliveryPolicy) } : {}),
+      ...(task.dependencies ? { dependencies: structuredClone(task.dependencies) } : {}),
       title: task.title,
       instruction: task.instruction,
       ...(task.criteria === undefined ? {} : { criteria: structuredClone(task.criteria) }),

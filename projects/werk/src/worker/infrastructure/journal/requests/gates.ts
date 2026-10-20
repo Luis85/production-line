@@ -81,8 +81,6 @@ export function requestEvaluateInside(
       request.execution?.result?.type !== "completed" &&
       [
         "failed",
-        "cancelled",
-        "interrupted",
         "waiting_input",
         "escalated",
       ].includes(request.phase)
@@ -134,7 +132,7 @@ export function requestEvaluateInside(
   request.phase = verdict.passed
     ? stage === "ready"
       ? "ready"
-      : "done"
+      : request.delivery && facts['operator.accepted'] !== true ? 'review' : 'done'
     : stage === "done" &&
         verdict.rules
           .filter((r) => r.result !== "pass")
@@ -197,7 +195,8 @@ export function requestAssertReady(request: WorkerRequest) {
     evaluation.policyDigest !== request.policyDigest
   )
     conflict("Readiness gate has not passed for this request generation.");
-  if (["needs_rework", "review", "cancelled", "done"].includes(request.phase))
+  if (request.deliveryHolds?.length || request.delivery?.holds.length || request.delivery?.control || request.delivery && ['paused', 'interrupting', 'outcome_unknown', 'reconciling'].includes(request.delivery.status)) conflict('Resolve the delivery hold before another execution.');
+  if (["needs_rework", "review", "cancelled", "done", "interrupted"].includes(request.phase))
     conflict(
       "This request requires explicit rework before another execution.",
     );

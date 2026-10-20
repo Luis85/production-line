@@ -9,37 +9,53 @@ export function intakeOption(value) {
 }
 /** Local folder intake refuses a templateId, so this operator template carries none. */
 export function localRequestTemplate(provider) {
-  return `---
-schemaVersion: 1
-title: Describe the request
-status: draft
+  const template = `---
+schema: worker.request/v1
+id: FR-0001
+title: Describe the feature
+intent: draft
 mode: patch
-provider: ${provider}
-# Local request for an operator-only worker; never add templateId (that marks shared Git intake).
-# Copy this file OUTSIDE the feature folder, edit it, then run feature create --markdown <copy>,
-# feature validate and feature submit. Inside the folder an unedited copy is scanned as a
-# request (an error until paths is set) and stays a second request after feature create.
-# mode: patch needs paths: uncomment it and list the approved project-relative files;
-# only these are supplied to the model. A folder entry ends with / and supplies its files.
-# paths:
-#   - src/example.ts
-#   - docs/
-# Optional instruction profile: definitionRef (stable) or definitionId (worker-local).
-# definitionRef: my-profile
+paths: [src/]
+priority: normal
+quality_profile: feature
+depends_on: []
 ---
-# Goal
+# Describe the feature
 
-Describe the problem and the desired result.
+## Outcome
+
+Describe the desired result and who needs it.
+
+## Scope
+
+Describe the included changes.
 
 ## Acceptance criteria
 
-- [ ] Describe an observable result.
+- AC-01: Describe an observable result.
 
-## Context
+## Boundaries
 
-Add constraints and relevant project details. Chat does not read project files.
-Only the files listed in paths are supplied to the model.
+Describe constraints and excluded changes.
+
+## References
+
+Link relevant project documents.
+
+## Answers
+
+Answer worker questions here using their IDs.
+
+<!-- worker:begin -->
+## Worker
+
+Status: Draft
+<!-- worker:end -->
 `;
+  return template.replace('mode: patch', `mode: patch
+provider: ${JSON.stringify(provider)}
+# Choose a unique request ID and review the approved paths before submission.
+# Local requests have no templateId; shared Git requests use their separate team template.`);
 }
 /** `relative` is the project-relative POSIX path used in the copy-paste commands. */
 export function localIntakeResult(template, relative) {
@@ -47,7 +63,7 @@ export function localIntakeResult(template, relative) {
   return {
     mode: 'local', connectionRequired: false, template,
     source: 'Requests are Markdown files in the feature folder; shared Git intake is intentionally off and repository watching defaults to off.',
-    commands: { copy: `Copy ${relative} to ${draft} outside the feature folder, uncomment and set paths, and edit the title and body.`, create: `${cli} feature create --name ${request} --markdown ${draft}`, validate: `${cli} feature validate --name ${request}`, submit: `${cli} feature submit --name ${request} --if-match REVISION` },
-    next: `Start the worker. Copy ${relative} to ${draft} outside the feature folder and edit it: mode patch needs paths (a folder entry ends with /). Keep the copy outside the feature folder: the folder is scanned, so an unedited copy there is an error and stays a second request after feature create. Then run feature create, feature validate and feature submit (--if-match is the revision from feature validate or feature get). Accept the detected checkout with repository accept --discovery-id ID; it is not watched unless you pass --watch true.`,
+    commands: { copy: `Copy ${relative} to ${draft} outside the feature folder, choose a unique id, review paths, and edit the title and body.`, create: `${cli} feature create --name ${request} --markdown ${draft}`, validate: `${cli} feature validate --name ${request}`, submit: `${cli} feature submit --name ${request} --if-match REVISION` },
+    next: `Start the worker. Copy ${relative} to a new .md note in the feature folder, choose a unique request id, review the approved paths (a folder entry ends with /), and finish its content. Set intent: submit when it is ready. Drafts never run; duplicate IDs block both notes. For CLI intake, keep ${draft} outside the feature folder with intent: draft, then run feature create, feature validate and feature submit (--if-match is the revision from feature validate or feature get). Accept the detected checkout with repository accept --discovery-id ID; it is not watched unless you pass --watch true.`,
   };
 }

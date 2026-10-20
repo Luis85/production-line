@@ -1,8 +1,9 @@
 /** Browser-safe provider results and errors. Execution, hashing and persistence stay outside this module. */
 export interface ModelQuestion { schemaVersion: 1; kind: 'question' | 'escalation'; message: string; choices?: { id: string; label: string }[]; reason?: string; }
 export type ModelResult = { type: 'completed'; text: string } | { type: 'needs_input'; request: ModelQuestion };
-export type ModelErrorCode = 'session_conflict' | 'authentication' | 'rate_limit' | 'quota' | 'invalid_request' | 'tool_access' | 'unavailable' | 'incomplete' | 'protocol' | 'cancelled' | 'refusal' | 'consumption_limit';
+export type ModelErrorCode = 'session_conflict' | 'approval_required' | 'authentication' | 'rate_limit' | 'quota' | 'invalid_request' | 'tool_access' | 'unavailable' | 'incomplete' | 'protocol' | 'cancelled' | 'refusal' | 'consumption_limit';
 const messages: Record<ModelErrorCode, string> = {
+  approval_required: 'Provider approval is required. Review its permission request before starting a new attempt.',
   session_conflict: 'The provider session could not be safely resumed. Inspect its retained checkpoint before retrying.',
   consumption_limit: 'Worker consumption is limited or usage could not be verified. Review Consumption before resuming.',
   authentication: 'Provider authentication failed. Check the saved connection.', rate_limit: 'Provider rate limit reached. Retry later.',

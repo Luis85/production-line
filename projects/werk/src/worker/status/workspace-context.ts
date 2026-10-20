@@ -1,3 +1,5 @@
+import { featureSourceHold, reviseFeatureSource } from './workspace-delivery.js';
+import { requestCommand } from './workspace-requests.js';
 import { modelSelection, selectedConnection } from '../application/model-selection.js';
 import { DomainError } from '../../shared/errors.js';
 import { ReadyReviewManager } from '../application/ready-review.js';
@@ -37,7 +39,7 @@ import type { Status } from "./server.js";
 import { task } from './workspace-tasks.js';
 import { sharedFeatureAdmissionHold } from './workspace-feature-admission.js';
 import { taskboardAction } from './workspace-task-views.js';
-import { featureTrackingSnapshot, inspectSharedFeature, submitSharedFeature, submitFeature, inspectFeature, continueFeatureInteraction } from './workspace-features.js';
+import { featureTrackingSnapshot, inspectSharedFeature, submitSharedFeature, submitFeature, inspectFeature, continueFeatureInteraction, reprioritizeFeature } from './workspace-features.js';
 import { prepareTaskWorkspace, removeTaskWorkspace } from './workspace-repositories.js';
 import type { readHistory } from './workspace-environment.js';
 
@@ -134,7 +136,7 @@ export class WorkspaceContext {
       config.features?.provider,
     );
     this.consumption = new WorkerConsumption(new WorkerConsumptionJournal(config.stateDir), () => this.settings.value.consumption);
-    this.repositories = new RepositoryManager(this.settings.value.repositories, { beforeRepositoryUse: item => this.repositoryDiscovery.assertAllowed(item.path), preserveCheckout: item => this.sharedRuntime?.intake.binding?.repositoryId === item.id || (this.sharedRuntime?.intake.requiredRepositoryIds().includes(item.id) ?? false) });
+    this.repositories = new RepositoryManager(this.settings.value.repositories, { beforeRepositoryUse: item => this.repositoryDiscovery.assertAllowed(item.path), preserveCheckout: item => !!config.features && item.path === (config.projectDir ?? process.cwd()) && !this.sharedRuntime?.intake.binding?.repositoryId || this.sharedRuntime?.intake.binding?.repositoryId === item.id || (this.sharedRuntime?.intake.requiredRepositoryIds().includes(item.id) ?? false) });
     this.repositoryDiscovery = new RepositoryDiscovery(config.stateDir, config.integrationProjectDir ?? config.projectDir ?? process.cwd(), this.repositoryStop.signal, config.codex?.repository, config.features?.intake === 'local' ? false : undefined);
     this.sessions = createWorkerSessions(
       config.stateDir, this.settings, modelFor, undefined, () => this.board.active, this.consumption,
@@ -186,7 +188,7 @@ export class WorkspaceContext {
         const definition = this.definitions.select({ definitionId: input.definitionId, definitionRef: input.definitionRef, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly });
         const current = this.settings.provider(input.provider);
         const connection = input.selection ? selectedConnection(current, input.selection, definition) : definitionConnection(current, definition);
-        return { id: connection.id, model: connection.model, instruction: connection.instruction ?? '', ...(connection.effort === undefined ? {} : { effort: connection.effort }) };
+        return { id: connection.id, model: connection.model, instruction: connection.instruction ?? '', ...(connection.authenticationMode ? { authenticationMode: connection.authenticationMode } : {}), ...(connection.effort === undefined ? {} : { effort: connection.effort }) };
       },
       model: readyReviewModels(config.stateDir, this.settings, this.consumption, this.sessions.runs, this.processObservations),
     });
@@ -241,6 +243,10 @@ export class WorkspaceContext {
         {
           selection: input => modelSelection(this.settings.provider(input.provider), input, this.definitions.select({ ...input })),
           submit: (record) => submitFeature(this, record),
+          reprioritize: (record, priority) => reprioritizeFeature(this, record, priority),
+          source: (record, issue) => featureSourceHold(this, record, issue),
+          revise: (record, input) => reviseFeatureSource(this, record, input),
+          request: (_record, command) => requestCommand(this, command),
           admissionIssue: input => definitionIssue(this, input),
           inspect: (record) => inspectFeature(this, record),
           reference: id => this.sessions.view().records.find(record => record.id === id)?.feature,

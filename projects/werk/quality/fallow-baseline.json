@@ -58,7 +58,6 @@
     "unused-export:src/worker/infrastructure/codex-adapter.ts:providerEnvironment",
     "unused-export:src/worker/infrastructure/feature-authoring.ts:authoringManifestPath",
     "unused-export:src/worker/infrastructure/feature-authoring.ts:authoringScriptPath",
-    "unused-export:src/worker/infrastructure/features/git-io.ts:ordinaryDirectory",
     "unused-export:src/worker/infrastructure/features/git-io.ts:removeLinks",
     "unused-export:src/worker/infrastructure/features/git-repository.ts:GitFeatureError",
     "unused-export:src/worker/infrastructure/features/workflow.ts:featureRequestSections",

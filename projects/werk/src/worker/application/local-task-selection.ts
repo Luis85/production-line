@@ -20,6 +20,6 @@ export function validateTaskSelection(task: LocalTask, request?: WorkerRequest) 
     if (!task.selection || request && (!accepted?.selection || gateDigest(selection) !== gateDigest(validateModelSelection(accepted.selection))))
       throw Error('Saved task model selection differs from the accepted request context.');
   }
-  if (request && request.provider.id !== 'legacy' && (request.provider.id !== selection.provider || request.provider.model !== selection.model || (request.provider.effort ?? 'default') !== selection.effort))
+  if (request && request.provider.id !== 'legacy' && (request.provider.id !== selection.provider || request.provider.model !== selection.model || (request.provider.effort ?? 'default') !== selection.effort || request.provider.authenticationMode !== selection.authenticationMode))
     throw Error('Saved task model selection differs from its accepted dispatch provider.');
 }

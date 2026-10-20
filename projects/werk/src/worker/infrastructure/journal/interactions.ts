@@ -156,6 +156,16 @@ export class WorkerInteractionJournal implements InteractionStore {
     });
   }
 
+  restoreCheckpoint(sessionId: string, turnId: string, dispatchDigest: string) {
+    this.transaction(() => {
+      const turn = this.turn(sessionId, turnId);
+      if (turn.result || turn.status === 'running') return;
+      if (!['interrupted', 'failed'].includes(turn.status) || !turn.dispatch || turn.dispatchDigest !== dispatchDigest) conflict('Recovery requires the exact retained dispatch and a known durable checkpoint.');
+      turn.status = 'running'; turn.errorCode = null; turn.finishedAt = null;
+      this.save(turn); this.state(sessionId, 'running');
+    });
+  }
+
   complete(sessionId: string, turnId: string, result: ModelResult, usage: ProviderUsage) {
     this.transaction(() => {
       const turn = this.turn(sessionId, turnId);

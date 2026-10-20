@@ -22,7 +22,7 @@ const workspaceAction = (...args) => action(...args);
 const request = async () => ({ message: 'Checked', authentication: 'signed-in', checkedAt: '2026-10-14T00:00:00Z' });
 const date = value => value;
 ${script}
-export { providerCommand, accountConnectionKey, provider, executable, model, effort, defaultProvider, defaultBaseline, defaultNotice, defaultDirty, fillDefault, key, clearKey, url, enrollment, busy, checking, message, providerNotice, connectionNotice, editingLocked, dirty, connectionDirty, fillProvider, fillConnection, save };
+export { providerCommand, authenticationMode, accountConnectionKey, provider, executable, model, effort, defaultProvider, defaultBaseline, defaultNotice, defaultDirty, fillDefault, key, clearKey, url, enrollment, busy, checking, message, providerNotice, connectionNotice, editingLocked, dirty, connectionDirty, fillProvider, fillConnection, save };
 `;
   await mkdir(join(root, 'work'), { recursive: true });
   const directory = await mkdtemp(join(root, 'work/settings-editor-')), path = join(directory, 'editor.mjs');
@@ -92,13 +92,13 @@ test('model effort and default provider drafts survive polling and save the expe
 
 test('Cursor optional key save and removal use the guarded provider command and invalidate account evidence', async t => {
   const e = await editor(t), submitted = [];
-  e.state.settings.providers.push({ id: 'cursor-cli', executable: '/bin/agent', model: 'auto', effort: 'default', hasApiKey: false });
+  e.state.settings.providers.push({ id: 'cursor-cli', executable: '/bin/agent', model: 'auto', effort: 'default', hasApiKey: false, authenticationMode: 'cli-account' });
   e.provider.value = 'cursor-cli'; await nextTick(); const before = e.accountConnectionKey.value;
-  e.onSave(async (path, body) => { submitted.push(structuredClone(body)); e.state.settings.providers[1].hasApiKey = !body.provider.clearApiKey; return e.state.settings; });
-  e.key.value = 'illustrative-key'; await e.save(e.providerCommand());
-  assert.deepEqual(submitted[0], { provider: { id: 'cursor-cli', executable: '/bin/agent', model: 'auto', effort: 'default', apiKey: 'illustrative-key', clearApiKey: false } });
+  e.onSave(async (path, body) => { submitted.push(structuredClone(body)); e.state.settings.providers[1].hasApiKey = !body.provider.clearApiKey; e.state.settings.providers[1].authenticationMode = body.provider.authenticationMode; return e.state.settings; });
+  e.authenticationMode.value = 'api-key'; e.key.value = 'illustrative-key'; await e.save(e.providerCommand());
+  assert.deepEqual(submitted[0], { provider: { id: 'cursor-cli', executable: '/bin/agent', model: 'auto', effort: 'default', authenticationMode: 'api-key', apiKey: 'illustrative-key', clearApiKey: false } });
   assert.equal(e.key.value, ''); assert.notEqual(e.accountConnectionKey.value, before); assert.doesNotMatch(e.accountConnectionKey.value, /illustrative-key/);
-  const saved = e.accountConnectionKey.value; e.clearKey.value = true; await e.save(e.providerCommand());
-  assert.equal(submitted[1].provider.clearApiKey, true); assert.equal(submitted[1].provider.apiKey, ''); assert.equal(e.clearKey.value, false);
+  const saved = e.accountConnectionKey.value; e.authenticationMode.value = 'cli-account'; e.clearKey.value = true; await e.save(e.providerCommand());
+  assert.equal(submitted[1].provider.authenticationMode, 'cli-account'); assert.equal(submitted[1].provider.clearApiKey, true); assert.equal(submitted[1].provider.apiKey, ''); assert.equal(e.clearKey.value, false);
   assert.notEqual(e.accountConnectionKey.value, saved);
 });

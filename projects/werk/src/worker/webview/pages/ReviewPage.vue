@@ -11,6 +11,9 @@ import FeatureRequestNote from '../components/FeatureRequestNote.vue';
 import PatchReview from '../components/PatchReview.vue';
 import RequestGatePanel from '../components/RequestGatePanel.vue';
 import RequestGateEvidence from '../components/RequestGateEvidence.vue';
+import DeliveryRunPanel from '../components/DeliveryRunPanel.vue';
+import RequestActivityPanel from '../components/RequestActivityPanel.vue';
+import DeliveryReviewEvidence from '../components/DeliveryReviewEvidence.vue';
 import { buildFeatureReviewView } from '../feature-review';
 import { readFeatureReview, reviewActionHref, reviewIdentity } from '../review-reader';
 import { useWorkerSnapshot } from '../useWorkerSnapshot';
@@ -50,7 +53,7 @@ function requestChanged(value: WorkerRequest | null) {
   <section class="feature-review" aria-labelledby="review-title">
     <nav class="review-breadcrumb" aria-label="Breadcrumb"><RouterLink to="/taskboard"><UIcon name="i-lucide-arrow-left" />Taskboard</RouterLink><span aria-hidden="true">/</span><span>Feature request review</span></nav>
     <header class="review-heading">
-      <div><p class="eyebrow">Feature request review</p><h1 id="review-title" tabindex="-1">{{ data ? review.title : 'Review a feature request' }}</h1></div>
+      <div><h1 id="review-title" tabindex="-1">{{ data ? review.title : 'Review a feature request' }}</h1></div>
       <div class="review-header-actions"><UButton v-if="data" :to="conversation" color="neutral" variant="outline" icon="i-lucide-message-circle">Open conversation</UButton><UButton color="neutral" variant="ghost" icon="i-lucide-refresh-cw" :loading="refreshing" :disabled="!state.unlocked" @click="refresh">Refresh review</UButton></div>
     </header>
     <p v-if="!state.unlocked" class="review-notice" role="status">Unlock the worker to inspect private request evidence.</p>
@@ -66,7 +69,8 @@ function requestChanged(value: WorkerRequest | null) {
       <ol class="review-stages" aria-label="Feature request progress">
         <li v-for="(stage, index) in review.stages" :key="stage.id" :class="'stage-' + stage.state"><span class="stage-number" aria-hidden="true"><UIcon v-if="stage.state === 'complete'" name="i-lucide-check" /><template v-else>{{ index + 1 }}</template></span><div><strong>{{ stage.label }}</strong><span class="stage-state">{{ stageLabels[stage.state] }}</span><p>{{ stage.detail }}</p></div></li>
       </ol>
-      <nav class="review-sections" aria-label="Review sections"><a href="#review-goal">Accepted request</a><a href="#review-changes">{{ data.task ? 'Changes' : 'Result' }}</a><a href="#review-checks">Checks</a><a href="#review-decision">Decision</a><a v-if="data.shared" href="#review-handoff">Team handoff</a></nav>
+      <nav class="review-sections" aria-label="Review sections"><a href="#review-goal">Accepted request</a><a v-if="data.request?.delivery" href="#review-progress">Delivery progress</a><a href="#review-changes">{{ data.task ? 'Changes' : 'Result' }}</a><a href="#review-checks">Checks</a><a href="#review-decision">Decision</a><a v-if="data.request?.delivery" href="#review-activity">Activity</a><a v-if="data.shared" href="#review-handoff">Team handoff</a></nav>
+      <DeliveryRunPanel v-if="data.request?.delivery" :request="data.request" />
       <section id="review-goal" class="review-section" aria-labelledby="review-goal-title">
         <div class="section-heading"><h2 id="review-goal-title">Accepted request</h2><span v-if="data.request" class="section-caption">Scope revision {{ data.request.inputRevision }}</span></div>
         <AcceptedModelSelection :selection="review.selection" />
@@ -85,6 +89,7 @@ function requestChanged(value: WorkerRequest | null) {
         <h2 id="review-checks-title">Checks and evidence</h2>
         <CandidateEvidence v-if="data.task" :task="data.task" />
         <p v-else class="section-caption">This request has no repository candidate checks.</p>
+        <DeliveryReviewEvidence v-if="data.request?.delivery?.review" :review="data.request.delivery.review" />
         <RequestGateEvidence stage="ready" :evaluation="review.evidence.ready ?? undefined" /><RequestGateEvidence stage="done" :evaluation="review.evidence.done ?? undefined" />
         <RouterLink class="text-link" :to="'/history?view=runs&runSession=' + encodeURIComponent(data.session.id)">Inspect execution attempts<UIcon name="i-lucide-arrow-up-right" /></RouterLink>
       </section>
@@ -101,6 +106,7 @@ function requestChanged(value: WorkerRequest | null) {
         <p class="section-caption">The team reviews the shared notes and feature branch before merging. Publication does not merge changes.</p>
       </section>
       <FeatureRequestNote :key="data.session.id" :session="data.session" />
+      <RequestActivityPanel v-if="data.request?.delivery" :request-id="data.request.id" :revision="data.request.revision" />
       <details class="review-technical"><summary>Technical identity and retained context</summary><dl class="review-identities"><div v-for="(value, key) in review.identity" :key="key"><dt>{{ key }}</dt><dd>{{ value || 'Not recorded' }}</dd></div><div v-if="data.task?.worktree"><dt>Worktree</dt><dd>{{ data.task.worktree }}</dd></div><div v-if="data.task?.baseCommit"><dt>Base commit</dt><dd>{{ data.task.baseCommit }}</dd></div></dl></details>
     </template>
   </section>
@@ -113,7 +119,7 @@ function requestChanged(value: WorkerRequest | null) {
 .review-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-6); }
 .review-heading > div:first-child { min-width: 0; flex: 1; }
 .eyebrow { color: var(--ui-text-muted); font-size: .8125rem; font-weight: 600; margin: 0 0 var(--space-2); }
-h1 { font-size: clamp(1.5rem, 3vw, 2rem); line-height: 1.25; letter-spacing: -.025em; overflow-wrap: anywhere; margin: 0; }
+h1 { font-size: 2rem; line-height: 1.25; letter-spacing: -.025em; overflow-wrap: anywhere; margin: 0; }
 h2 { font-size: 1.125rem; line-height: 1.4; font-weight: 650; margin: 0 0 var(--space-3); }
 h3 { font-size: .9375rem; font-weight: 600; margin: var(--space-6) 0 var(--space-2); }
 .review-next p:not(.eyebrow) { color: var(--ui-text-muted); line-height: 1.65; margin: var(--space-2) 0 0; }

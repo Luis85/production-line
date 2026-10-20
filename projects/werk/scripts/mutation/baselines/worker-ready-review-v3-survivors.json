@@ -1,0 +1,333 @@
+{
+  "schemaVersion": 1,
+  "scopeId": "worker-ready-review-v3",
+  "reportDigest": "0a2f65b3069a276fcc7a9917518f957e275b6b74df86583f4f0fe8ba85b05501",
+  "sourceDigest": "8860a7dfb8aa93b42e11ef3034c709e61d69a45d3ac5ce5d1ad2b3a177488d2b",
+  "compiledSourceDigest": "d6941842a4fd485f99a3c3248603f72e2eaa8c6a878695068db15f9b5bb1cf5c",
+  "testDigest": "2c8c0b62e3a350896f5d53a41c2f85810b759c6c60aec13b04184988d0189634",
+  "configurationDigest": "0eff89ec2b09c55c1a7df4ce2ef4dd78d35aaa8459e4aae06bbe9706a28ef5ae",
+  "reviewedAt": "2026-10-18T21:16:27.605Z",
+  "policy": "All surviving and uncovered mutants remain in the raw report and denominator. Classifications explain remaining evidence limits; no mutator exclusions or score adjustments are applied.",
+  "findings": [
+    {
+      "file": "src/shared/request-gate.ts",
+      "id": "59",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 33,
+      "replacement": "false",
+      "classification": "equivalent_candidate",
+      "rationale": "Strict enum membership already rejects every non-string stage; removing the separate typeof guard does not admit another value."
+    },
+    {
+      "file": "src/shared/request-gate.ts",
+      "id": "66",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 35,
+      "replacement": "false",
+      "classification": "equivalent_candidate",
+      "rationale": "Strict enum membership already rejects every non-string status; removing the separate typeof guard does not admit another value."
+    },
+    {
+      "file": "src/shared/request-gate.ts",
+      "id": "100",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 47,
+      "replacement": "false",
+      "classification": "equivalent_candidate",
+      "rationale": "Both rule counts are nonnegative safe integers and their sum is bounded by 33, which already bounds each count by 33."
+    },
+    {
+      "file": "src/shared/webview/bounded-polling.ts",
+      "id": "172",
+      "status": "Survived",
+      "mutator": "UpdateOperator",
+      "line": 26,
+      "replacement": "generation--",
+      "classification": "equivalent_candidate",
+      "rationale": "Generation is an opaque equality token. Incrementing and decrementing both distinguish obsolete asynchronous completions from the current activation."
+    },
+    {
+      "file": "src/worker/application/consumption.ts",
+      "id": "242",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 19,
+      "replacement": "false",
+      "classification": "equivalent_candidate",
+      "rationale": "Other checks require a positive reservation no larger than the worker allowance and a positive worker percentage; zero or negative allowance cannot satisfy them."
+    },
+    {
+      "file": "src/worker/application/consumption.ts",
+      "id": "246",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 19,
+      "replacement": "false",
+      "classification": "equivalent_candidate",
+      "rationale": "Other checks require a positive reservation no larger than the worker allowance and a positive allowance; zero or negative worker percentage cannot satisfy them."
+    },
+    {
+      "file": "src/worker/application/consumption.ts",
+      "id": "291",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 74,
+      "replacement": "true",
+      "classification": "equivalent_candidate",
+      "rationale": "Number.isSafeInteger already requires a number and does not coerce strings or other input types."
+    },
+    {
+      "file": "src/worker/application/consumption.ts",
+      "id": "315",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 82,
+      "replacement": "false",
+      "classification": "equivalent_candidate",
+      "rationale": "With bounded nonnegative counters, Math.max(null, b) equals b; when both counters are null the retained b-null branch returns null."
+    },
+    {
+      "file": "src/worker/application/consumption.ts",
+      "id": "318",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 82,
+      "replacement": "false",
+      "classification": "equivalent_candidate",
+      "rationale": "With bounded nonnegative counters, Math.max(a, null) equals a; when a is null the retained a-null branch returns b unchanged."
+    },
+    {
+      "file": "src/worker/application/consumption.ts",
+      "id": "327",
+      "status": "Survived",
+      "mutator": "LogicalOperator",
+      "line": 85,
+      "replacement": "typeof cost === 'number' || Number.isFinite(cost)",
+      "classification": "equivalent_candidate",
+      "rationale": "The remaining inclusive numeric bounds reject NaN and infinities; Number.isFinite cannot admit a non-number. Replacing this conjunction leaves the accepted values unchanged."
+    },
+    {
+      "file": "src/worker/application/consumption.ts",
+      "id": "328",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 85,
+      "replacement": "true",
+      "classification": "equivalent_candidate",
+      "rationale": "Number.isFinite already requires a numeric value, so the preceding typeof check is redundant."
+    },
+    {
+      "file": "src/worker/infrastructure/responses.ts",
+      "id": "1197",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 28,
+      "replacement": "\"\"",
+      "classification": "equivalent_candidate",
+      "rationale": "The thrown diagnostic is inside a catch boundary that always replaces it with the same fixed public assignment error."
+    },
+    {
+      "file": "src/worker/infrastructure/responses.ts",
+      "id": "1205",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 30,
+      "replacement": "\"\"",
+      "classification": "equivalent_candidate",
+      "rationale": "The thrown diagnostic is inside a catch boundary that always replaces it with the same fixed public assignment error."
+    },
+    {
+      "file": "src/worker/infrastructure/responses.ts",
+      "id": "1206",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 30,
+      "replacement": "\"\"",
+      "classification": "equivalent_candidate",
+      "rationale": "The thrown diagnostic is inside a catch boundary that always replaces it with the same fixed public assignment error."
+    },
+    {
+      "file": "src/worker/infrastructure/responses.ts",
+      "id": "1220",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 35,
+      "replacement": "\"\"",
+      "classification": "equivalent_candidate",
+      "rationale": "The thrown diagnostic is inside a catch boundary that always replaces it with the same fixed public assignment error."
+    },
+    {
+      "file": "src/worker/infrastructure/responses.ts",
+      "id": "1223",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 36,
+      "replacement": "\"\"",
+      "classification": "equivalent_candidate",
+      "rationale": "Optional repository input has already passed canonical identifier validation before the task-input projection; omitting this repeated validation admits no additional repository."
+    },
+    {
+      "file": "src/worker/infrastructure/responses.ts",
+      "id": "1233",
+      "status": "Survived",
+      "mutator": "MethodExpression",
+      "line": 37,
+      "replacement": "keys",
+      "classification": "equivalent_candidate",
+      "rationale": "The intake validator treats absent optional fields and present fields with value undefined identically; required fields are checked before projection."
+    },
+    {
+      "file": "src/worker/infrastructure/responses.ts",
+      "id": "1235",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 37,
+      "replacement": "true",
+      "classification": "equivalent_candidate",
+      "rationale": "The intake validator treats absent optional fields and present fields with value undefined identically; required fields are checked before projection."
+    },
+    {
+      "file": "src/worker/application/ready-review-protocol.ts",
+      "id": "513",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 6,
+      "replacement": "true",
+      "classification": "equivalent_candidate",
+      "rationale": "Within transported JSON, required fields reject primitives and the separate array guard rejects arrays. Removing the object typeof clause does not admit another JSON result."
+    },
+    {
+      "file": "src/worker/application/ready-review-protocol.ts",
+      "id": "594",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 15,
+      "replacement": "false",
+      "classification": "equivalent_candidate",
+      "rationale": "Strict includes(raw.kind) independently rejects nonstring finding kinds without coercion. Removing only the separate typeof guard does not admit arrays, objects or other nonstring JSON values; both ordinary and mutation regressions reject the previously accepted array-kind bypass."
+    },
+    {
+      "file": "src/worker/application/ready-review-protocol.ts",
+      "id": "630",
+      "status": "Survived",
+      "mutator": "BlockStatement",
+      "line": 25,
+      "replacement": "{}",
+      "classification": "equivalent_candidate",
+      "rationale": "An empty JSON parse-error catch leaves value undefined; the structured parser then raises the same protocol error."
+    },
+    {
+      "file": "src/worker/application/ready-review-protocol.ts",
+      "id": "635",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 29,
+      "replacement": "false",
+      "classification": "defensive_contract",
+      "rationale": "A valid ModelResult.request passed to parseModelResult yields needs_input or throws. Removing this guard differs for an absent request outside that typed boundary, but still fails closed; no equivalence claim for malformed in-process objects."
+    },
+    {
+      "file": "src/worker/application/shared-ready-review.ts",
+      "id": "671",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 13,
+      "replacement": "\"\"",
+      "classification": "equivalent_candidate",
+      "rationale": "The operation prefix is opaque within the dedicated review session. Removing it preserves the deterministic identity and remains within the identifier contract; the raw mutant is retained."
+    },
+    {
+      "file": "src/worker/application/shared-ready-review.ts",
+      "id": "672",
+      "status": "Survived",
+      "mutator": "MethodExpression",
+      "line": 13,
+      "replacement": "sharedHash(feature.key + generation + featureInputHash(record.accepted) + prompt.sha256)",
+      "classification": "equivalent_candidate",
+      "rationale": "Keeping all 64 digest characters instead of 48 preserves deterministic operation identity and remains below the 100-character identifier limit. Exact hash truncation is not a product contract."
+    },
+    {
+      "file": "src/worker/application/shared-ready-review.ts",
+      "id": "754",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 54,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing the separator between multiple readiness diagnostics changes spacing, while each diagnostic and the admission rejection remain intact. No exact-wording equivalence is claimed."
+    },
+    {
+      "file": "src/worker/application/shared-ready-review.ts",
+      "id": "771",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 66,
+      "replacement": "false",
+      "classification": "defensive_guard",
+      "rationale": "The remote receipt comparison repeats the accompanying rendered-state fence in the exercised lifecycle states. It remains an explicit independent acknowledgment defense; tests do not manufacture an otherwise unreachable partial in-memory receipt."
+    },
+    {
+      "file": "src/worker/infrastructure/features/review-eligibility.ts",
+      "id": "979",
+      "status": "NoCoverage",
+      "mutator": "StringLiteral",
+      "line": 25,
+      "replacement": "\"\"",
+      "classification": "redundant_defense",
+      "rationale": "The earlier validateApprovedPaths call rejects case-insensitive duplicates, leaving this repeated diagnostic branch uncovered."
+    },
+    {
+      "file": "src/worker/infrastructure/features/review-eligibility.ts",
+      "id": "1035",
+      "status": "NoCoverage",
+      "mutator": "StringLiteral",
+      "line": 38,
+      "replacement": "\"\"",
+      "classification": "defensive_fallback",
+      "rationale": "Current parsing and validation paths throw Error objects. The uncovered fallback handles a non-Error throw from a future or substituted dependency; it is retained without fabricated coverage."
+    },
+    {
+      "file": "src/worker/infrastructure/features/review-eligibility.ts",
+      "id": "910",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 11,
+      "replacement": "\"\"",
+      "classification": "equivalent_candidate",
+      "rationale": "The internal DomainError code is not projected. The outer catch always returns feature_review_structure with the original message."
+    },
+    {
+      "file": "src/worker/infrastructure/features/review-eligibility.ts",
+      "id": "972",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 24,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing the Approved path label changes diagnostic wording while retaining the repository-relative path rejection. This remains a surviving wording change, not a killed mutant."
+    },
+    {
+      "file": "src/worker/infrastructure/features/review-eligibility.ts",
+      "id": "974",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 25,
+      "replacement": "false",
+      "classification": "equivalent_candidate",
+      "rationale": "validateApprovedPaths already rejects case-insensitive duplicate paths before this repeated check."
+    },
+    {
+      "file": "src/worker/infrastructure/features/review-eligibility.ts",
+      "id": "1002",
+      "status": "Survived",
+      "mutator": "MethodExpression",
+      "line": 30,
+      "replacement": "match?.[1]",
+      "classification": "equivalent_candidate",
+      "rationale": "Greedy list and checkbox whitespace expressions consume whitespace-only captures. The returned criterion still trims text, so removing trim only from the nonempty predicate preserves the parsed criteria."
+    }
+  ]
+}

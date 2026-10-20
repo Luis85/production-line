@@ -5,6 +5,33 @@ Start with an installed project worker and a configured provider. The
 installation and request submission. This guide uses the portable worker CLI;
 Chat exposes the same guarded interaction actions.
 
+## Answer through the canonical request
+
+For a local `worker.request/v1` request, open the original Feature Request and
+read its worker-managed questions and current blocker. Write the decision under
+the user-owned `## Answers` section, using the question's ID. Preserve the ID and
+worker-region markers. A material answer is a new semantic revision of the same
+request; the worker reassesses readiness before dispatching more work. Review
+questions and resulting history in the webview's request detail as well.
+
+Do not put credentials in an answer, and do not edit generated status to indicate
+that a check passed. If the source reports an edit conflict, missing file or
+changed requirement while execution is active, resolve that hold before asking
+for another action.
+
+For canonical delivery, **Resume work** continues a compatible paused or
+interrupted run. **Retry failed work** requires a known preceding outcome and
+remaining limits. A cancelled or accepted request requires **Reopen request**;
+ordinary editing or leaving `intent: submit` in place cannot reopen it. The
+[Markdown command contract](../reference/feature-requests.md#candidate-decisions-and-execution-controls)
+provides the equivalent run-targeted commands and replay rules.
+
+Shared Git requests continue to use their linked Task response: answer it, mark
+it ready, then commit and push it to the watched branch. Legacy local Task notes
+use stable local saves. The CLI interaction examples below describe those saved
+session checkpoints; they do not bypass a canonical request's terminal lifecycle
+or unresolved source/gate holds.
+
 ## Inspect a question
 
 A structured clarification changes the request to `waiting_input`; an escalation
@@ -46,9 +73,9 @@ remain explicit flags; the JSON file cannot replace them.
 An accepted answer is persisted before continuation. It starts a new run in the
 same session, using the saved request and answer. Patch requests retain their
 original approved-file snapshots; inspect and review the resulting patch before
-applying it. Editing the accepted feature Markdown does not answer its question.
+applying it. For legacy requests, use the linked Task or this interaction command; editing arbitrary prose in the accepted body does not answer that saved checkpoint.
 
-## Resume after failure, cancellation or restart
+## Resume a legacy checkpoint after failure or restart
 
 Read the latest interaction and inspect its checkpoint:
 
@@ -89,8 +116,9 @@ node bin/apps/worker/cli.mjs interaction cancel --id SESSION_ID --question-id PE
 node bin/apps/worker/cli.mjs interaction events --id SESSION_ID --after 0 --limit 100
 ```
 
-Cancellation preserves the historical question and consumption. A later explicit
-resume creates another invocation. Normal worker shutdown preserves a pending
+Cancellation preserves the historical question and consumption. A later permitted
+legacy checkpoint resume creates another invocation; canonical terminal requests
+first require explicit reopening. Normal worker shutdown preserves a pending
 question for answering after restart.
 
 For automation, process event pages in sequence, save `nextAfter`, and drain

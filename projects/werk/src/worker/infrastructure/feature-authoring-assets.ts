@@ -74,6 +74,27 @@ description: Create Feature Request — author, validate, and explicitly queue a
 
 # Create Feature Request
 
+First inspect .werk/worker.json when present. If features.intake is local, use
+this local workflow instead of the shared Git steps below:
+
+1. Read the configured feature folder's _templates/local-request.md. Copy it as
+   a new request in that folder, choose a unique stable id, and keep intent: draft.
+   Use schema: worker.request/v1, mode: patch, explicit approved paths, and the
+   project quality_profile. Clarify Outcome, Scope, Acceptance criteria,
+   Boundaries and References; never invent missing decisions or broaden scope.
+2. When the author explicitly submits the work, set intent: submit. No running
+   worker connection or webview is needed to author or save the note. Its local
+   worker observes the note when running; it retains one Feature Request identity.
+3. Follow the same note's Worker region. Answer stable question IDs in Answers.
+   Editing requirements or answers creates a reassessed revision; leave generated
+   status/evidence untouched. Done/cancelled requests require a fresh control
+   command_id with action: reopen. An ordinary edit never reopens them.
+4. Inspect the candidate-linked review note. A review command must name the exact
+   request_revision and candidate_commit and record required human_checks. Use a
+   new command_id for each decision; never fabricate test outcomes or acceptance.
+
+For a shared Git project, retain the existing shared template and workflow:
+
 Work from the repository root. Read .werk/feature-workflow.json, its editable
 template, fr-ready-check.json and fr-done-check.json (or their configured paths).
 Also read readyPrompt and donePrompt when configured; these Markdown or text files
@@ -122,7 +143,7 @@ ready request is committed and pushed to the worker’s configured intake branch
    A blocked diagnostic Task describes operator work; marking it ready cannot
    grant tools, attest completion or bypass a gate.
 
-Never change an accepted feature request or worker-owned note identity/evidence,
+For the legacy shared workflow, never change an accepted feature request or worker-owned note identity/evidence,
 forge execution/review evidence, supply secrets in a request or response, or
 weaken checks to pass a request. Create a new successor draft for changed work.
 Completion checks and review notes describe evidence; a model response or a checked

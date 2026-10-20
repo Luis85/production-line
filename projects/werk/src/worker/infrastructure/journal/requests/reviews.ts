@@ -76,9 +76,10 @@ export function requestStartReview(
     if (
       dispatch.provider.id !== intent.provider.id ||
       dispatch.provider.model !== intent.provider.model ||
-      (dispatch.provider.effort ?? 'default') !== (intent.provider.effort ?? 'default')
+      (dispatch.provider.effort ?? 'default') !== (intent.provider.effort ?? 'default') ||
+      dispatch.provider.authenticationMode !== intent.provider.authenticationMode
     )
-      conflict("Reviewer dispatch changed its frozen provider or model or effort.");
+      conflict("Reviewer dispatch changed its frozen provider, model, effort or authentication mode.");
     intent.status = "running";
     intent.runId = runId;
     intent.dispatch = clone(dispatch);

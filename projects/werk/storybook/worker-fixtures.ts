@@ -88,10 +88,10 @@ export function installWorkerFixture(variant: WorkerFixture = 'populated') {
   const selected = empty ? '' : admissionFailed || variant === 'file-reply' ? 'file' : variant === 'checkpoint' ? 'decision' : running ? 'running' : variant === 'failed' ? 'failed' : 'completed';
   const current = records.find(item => item.id === selected);
   const providers = [
-    { id: 'codex-cli', label: 'Codex CLI', executable: '/example/bin/codex', model: 'gpt-fixture', configured: true, hasApiKey: false, authentication: 'Host CLI login; not verified' },
-    { id: 'claude-cli', label: 'Claude CLI', executable: '', model: '', configured: false, hasApiKey: false, authentication: 'Host CLI login; not verified' },
-    { id: 'openai-api', label: 'OpenAI API', executable: '', model: '', configured: false, hasApiKey: false, authentication: 'Private API key' },
-    { id: 'anthropic-api', label: 'Anthropic API', executable: '', model: '', configured: false, hasApiKey: false, authentication: 'Private API key' },
+    { id: 'codex-cli', label: 'Codex CLI', executable: '/example/bin/codex', model: 'gpt-fixture', configured: true, hasApiKey: false, authenticationMode: 'cli-account', authentication: 'Host CLI login; not verified' },
+    { id: 'claude-cli', label: 'Claude CLI', executable: '', model: '', configured: false, hasApiKey: false, authenticationMode: 'cli-account', authentication: 'Host CLI login; not verified' },
+    { id: 'openai-api', label: 'OpenAI API', executable: '', model: '', configured: false, hasApiKey: false, authenticationMode: 'api-key', authentication: 'Private API key' },
+    { id: 'anthropic-api', label: 'Anthropic API', executable: '', model: '', configured: false, hasApiKey: false, authenticationMode: 'api-key', authentication: 'Private API key' },
   ];
   const repositories = { pollMs: 30000, items: empty ? [] : [
     { id: 'web', path: '/example/projects/web', remote: 'origin', branch: 'main', watch: true },

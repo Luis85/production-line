@@ -1,3 +1,4 @@
+import { deliveryLifecycle, refreshDelivery } from '../../../application/delivery-behavior.js';
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from 'node:sqlite';
 import { DomainError } from "../../../../shared/errors.js";
@@ -55,6 +56,10 @@ export class RequestStore {
           request.phase = "interrupted";
           changed = true;
         }
+        if (request.delivery) {
+          for (const step of request.delivery.steps) if (step.status === 'running') { step.status = 'outcome_unknown'; step.detail = 'Worker restarted before the operation outcome was recorded.'; changed = true; }
+          if (request.delivery.steps.some(step => step.status === 'outcome_unknown')) { request.delivery.status = 'outcome_unknown'; changed = true; }
+        }
         for (const review of request.reviews)
           if (review.status === "running") {
             review.status = "interrupted";
@@ -103,8 +108,10 @@ export class RequestStore {
   save(
     request: WorkerRequest,
     type: string,
-    detail: Pick<RequestEvent, "evaluationId" | "turnId" | "runId"> = {},
+    detail: Pick<RequestEvent, "evaluationId" | "turnId" | "runId" | "deliveryRunId" | "deliveryStepId"> = {},
   ) {
+    refreshDelivery(request);
+    request.lifecycle = deliveryLifecycle(request);
     request.revision++;
     request.updatedAt = iso();
     const payload = JSON.stringify(request);
@@ -149,6 +156,7 @@ export class RequestStore {
       phase: request.phase,
       at: request.updatedAt,
       inputRevision: request.inputRevision,
+      ...(request.delivery ? { deliveryRunId: request.delivery.id } : {}),
       ...detail,
     };
     const result = this.database()

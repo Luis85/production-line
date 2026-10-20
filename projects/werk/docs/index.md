@@ -17,7 +17,7 @@ This organization follows [Diátaxis](https://diataxis.fr/).
 
 ## Tutorials — learn by running one task
 
-- [Local proposal request](tutorials/worker-feature-lifecycle.md): try the separate local folder intake and inspect its execution metrics without shared Git publication.
+- [Local delivery request](tutorials/worker-feature-lifecycle.md): submit Markdown, inspect isolated implementation and accept an exact tested candidate without shared Git publication.
 - [Local worker run metrics](reference/worker-run-metrics.md): paired snapshots, usage coverage, durable history and paginated export.
 
 - [Prepare a Linux VM deployment](tutorials/linux-vm-first-task.md): Ubuntu cloud-init, verified artifacts and SSH access.
@@ -93,6 +93,8 @@ This organization follows [Diátaxis](https://diataxis.fr/).
 - [Factory mutation idempotency](reference/factory-idempotency.md)
 
 ## Explanation — understand the system
+
+- [Local delivery worker](explanation/local-delivery-worker.md): canonical Markdown, committed quality profiles, durable execution, recovery and human acceptance.
 
 - [Twelve-factor principles and stateful boundaries](explanation/twelve-factor.md)
 

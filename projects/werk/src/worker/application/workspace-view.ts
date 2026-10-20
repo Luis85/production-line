@@ -1,3 +1,4 @@
+import type { ProviderCapabilities, ProviderAuthenticationMode } from './provider-capabilities.js';
 import type { ModelSelection, ModelEffort } from './model-selection.js';
 import type { FeatureRequestReference } from './feature-request-reference.js';
 import type { FeatureTrackingRecord, FeatureTrackingStatus } from './feature-tracking.js';
@@ -27,7 +28,7 @@ export interface WorkerSettingsView {
   resources: ResourcePolicy;
   consumption: ConsumptionPolicy;
   execution: ExecutionPolicy;
-  providers: Array<Omit<ProviderConnection, 'apiKey'> & { label: string; configured: boolean; hasApiKey: boolean; authentication: string }>;
+  providers: Array<Omit<ProviderConnection, 'apiKey'> & { label: string; configured: boolean; hasApiKey: boolean; authentication: string; authenticationConfigured?: boolean; supportedAuthenticationModes?: Array<Exclude<ProviderAuthenticationMode, 'legacy'>>; capabilities?: ProviderCapabilities }>;
   connection: { enabled: boolean; url: string; hasEnrollmentToken: boolean };
   board: WorkerBoardSettings;
 }

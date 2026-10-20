@@ -14,10 +14,10 @@ const windows = job.steps.find(step => step.name === 'Run full check (Windows)')
 test('full checks retain their platform shells, bounded job budgets, and failure diagnostics', () => {
   assert.deepEqual(job.strategy.matrix.os, ['ubuntu-latest', 'windows-latest', 'macos-latest']);
   assert.equal(job.strategy['fail-fast'], false);
-  assert.equal(job['timeout-minutes'], "${{ matrix.os == 'windows-latest' && 60 || matrix.os == 'macos-latest' && 25 || 15 }}");
+  assert.equal(job['timeout-minutes'], "${{ matrix.os == 'windows-latest' && 60 || 25 }}");
   assert.equal(posix.if, "matrix.os != 'windows-latest'");
   assert.equal(windows.if, "matrix.os == 'windows-latest'");
-  assert.equal(posix['timeout-minutes'], "${{ matrix.os == 'macos-latest' && 20 || 11 }}");
+  assert.equal(posix['timeout-minutes'], 20);
   assert.equal(windows['timeout-minutes'], 55);
   assert.equal(workflow.defaults?.run?.shell, undefined);
   for (const step of [posix, windows]) {

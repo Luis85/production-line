@@ -1,3 +1,4 @@
+import { authenticationDescription, providerCapabilities, validateAuthenticationMode } from '../application/provider-capabilities.js';
 import { validateModelEffort, validateModelName } from '../application/model-effort.js';
 import { defaultConsumptionPolicy, validateConsumptionPolicy, type ConsumptionPolicy } from '../application/consumption.js';
 import type { WorkerSettingsView } from '../application/workspace-view.js';
@@ -30,7 +31,7 @@ export class WorkerSettings {
   private executionSource: 'environment' | 'saved_settings' | 'default' = 'default';
   constructor(directory: string, url = '', enrollmentToken = '', executable = '', repositories = defaultRepositoryConfiguration(), defaultProvider = 'codex-cli') {
     this.directory = directory;
-    this.value = { defaultProvider: defaultProvider as ProviderId, repositories: validateRepositoryConfiguration(repositories), resources: defaultResourcePolicy(), execution: defaultExecutionPolicy(), consumption: defaultConsumptionPolicy(), providers: providerIds.map(id => ({ id, executable: id === 'codex-cli' ? executable : '', model: '', apiKey: '' })), connection: { enabled: !!url, url, enrollmentToken }, board: { paused: false, maxParallel: 1, queueCapacity: 16, orchestratorQueue: 0, order: 'fifo' } };
+    this.value = { defaultProvider: defaultProvider as ProviderId, repositories: validateRepositoryConfiguration(repositories), resources: defaultResourcePolicy(), execution: defaultExecutionPolicy(), consumption: defaultConsumptionPolicy(), providers: providerIds.map(id => ({ id, executable: id === 'codex-cli' ? executable : '', model: '', apiKey: '', authenticationMode: id.endsWith('-cli') ? 'cli-account' : 'api-key' })), connection: { enabled: !!url, url, enrollmentToken }, board: { paused: false, maxParallel: 1, queueCapacity: 16, orchestratorQueue: 0, order: 'fifo' } };
   }
   async init() {
     const configured = process.env.WERK_WORKER_MAX_RUNTIME_MS;
@@ -72,7 +73,7 @@ export class WorkerSettings {
     });
     this.writing = operation; await operation; return this.toolAccess();
   }
-  publicView(): WorkerSettingsView { return { defaultProvider: this.value.defaultProvider, repositories: structuredClone(this.value.repositories), executionSource: this.executionSource, resources: { ...this.value.resources }, consumption: { ...this.value.consumption }, execution: { ...this.value.execution }, providers: this.value.providers.map(({ apiKey, ...provider }) => ({ ...provider, label: providerLabels[provider.id], configured: providerReady({ ...provider, apiKey }), hasApiKey: !!apiKey, authentication: provider.id.endsWith('-cli') ? 'Host CLI login; not verified' : 'Private API key' })), connection: { enabled: this.value.connection.enabled, url: this.value.connection.url, hasEnrollmentToken: !!this.value.connection.enrollmentToken }, board: { ...this.value.board } }; }
+  publicView(): WorkerSettingsView { return { defaultProvider: this.value.defaultProvider, repositories: structuredClone(this.value.repositories), executionSource: this.executionSource, resources: { ...this.value.resources }, consumption: { ...this.value.consumption }, execution: { ...this.value.execution }, providers: this.value.providers.map(({ apiKey, ...provider }) => ({ ...provider, label: providerLabels[provider.id], configured: providerReady({ ...provider, apiKey }), hasApiKey: !!apiKey, authentication: authenticationDescription(provider.authenticationMode), authenticationConfigured: provider.authenticationMode !== 'legacy', supportedAuthenticationModes: providerCapabilities(provider.id).authenticationModes, capabilities: providerCapabilities(provider.id) })), connection: { enabled: this.value.connection.enabled, url: this.value.connection.url, hasEnrollmentToken: !!this.value.connection.enrollmentToken }, board: { ...this.value.board } }; }
   provider(id: string) { const value = this.value.providers.find(item => item.id === id); if (!value) throw new DomainError('invalid_input', 'Choose a supported provider.'); return value; }
   async update(input: unknown) {
     const operation = this.writing.catch(() => {}).then(async () => {
@@ -141,8 +142,9 @@ export class WorkerSettings {
       if (body.defaultProvider !== undefined) next.defaultProvider = body.defaultProvider as ProviderId;
       if (body.consumption !== undefined) next.consumption = validateConsumptionPolicy(body.consumption);
       if (body.provider) {
-        const p = object(body.provider, 'Provider', ['id', 'executable', 'model', 'effort', 'apiKey', 'clearApiKey']);
+        const p = object(body.provider, 'Provider', ['id', 'executable', 'model', 'effort', 'apiKey', 'clearApiKey', 'authenticationMode']);
         const target = next.providers.find(item => item.id === p.id); if (!target) throw new DomainError('invalid_input', 'Unknown provider');
+        if (p.authenticationMode !== undefined) target.authenticationMode = validateAuthenticationMode(p.authenticationMode, target.id);
         if (p.executable !== undefined) target.executable = p.executable as string;
         if (p.model !== undefined) target.model = validateModelName(p.model);
         if (p.effort !== undefined) target.effort = validateModelEffort(p.effort, target.id);
@@ -182,6 +184,8 @@ export class WorkerSettings {
     if (value.defaultProvider === undefined) value.defaultProvider = this.value.defaultProvider;
     if (!providerIds.includes(value.defaultProvider)) throw new DomainError('invalid_input', 'Choose a supported default model connection.');
     for (const p of value.providers) {
+      // Old CLI credentials may have used inherited keys: never guess their billing mode.
+      p.authenticationMode = validateAuthenticationMode(p.authenticationMode ?? (p.id.endsWith('-cli') ? 'legacy' : 'api-key'), p.id);
       validateModelName(p.model);
       if (p.effort !== undefined) p.effort = validateModelEffort(p.effort, p.id);
       if (!providerIds.includes(p.id as ProviderId) || typeof p.executable !== 'string' || (p.executable && (!isAbsolute(p.executable) || /[\x00-\x1f]/.test(p.executable))) || p.executable.length > 4096 || typeof p.model !== 'string' || p.model.length > 200 || typeof p.apiKey !== 'string' || p.apiKey.length > 4096 || /[\r\n]/.test(p.apiKey)) throw new DomainError('invalid_input', 'Use an absolute CLI path and valid model/key.');

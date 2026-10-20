@@ -8,6 +8,7 @@ import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 const calls = ${JSON.stringify(callsPath)}, lock = ${JSON.stringify(lockPath)};
 const args = process.argv.slice(2);
+if (args.join(' ') === 'auth status') { console.log(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai' })); process.exit(0); }
 if (args.includes('--version')) { console.log('2.1.277 (Claude Code labelled fixture)'); process.exit(0); }
 const resumed = args.includes('--resume'), nativeFlag = resumed ? '--resume' : '--session-id';
 assert.ok(args.includes(nativeFlag), 'Expected worker-owned native session binding.');

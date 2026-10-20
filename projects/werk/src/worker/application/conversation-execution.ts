@@ -43,6 +43,8 @@ export async function executeConversation(host: Pick<ConversationRuntime, 'evide
           if (request.provider.id !== "legacy") {
             metadata.provider = request.provider.id;
             metadata.model = request.provider.model;
+            if (request.provider.authenticationMode) metadata.authenticationMode = request.provider.authenticationMode;
+            else delete metadata.authenticationMode;
           }
           try {
             runId = (await host.evidence.journal.begin(metadata)).id;

@@ -14,6 +14,8 @@ import {
 import { buildFeatureReviewView, currentRequestEvaluation } from '../feature-review';
 import { requestDrafts, requestOperations } from "./request-gate-drafts";
 import type { GateActionCommand } from "../request-gate-controller";
+import type { DeliveryControl } from "../../application/delivery-contracts";
+import { deliveryHumanOutcomes, deliveryHumanReviewReady } from '../delivery-human-review';
 
 /** Owns this page's state, actions and lifecycle; the Vue component owns rendering. */
 export function useRequestGatePanel(props: { requestId?: string; sessionId?: string; featureSource?: string; disabled?: boolean }, emit: (event: "change", value: WorkerRequest | null) => void) {
@@ -88,6 +90,7 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
     !!view.value?.execution?.outputDigest &&
     view.value.execution.result?.type === 'completed' &&
     view.value.execution.inputRevision === view.value.inputRevision &&
+    (!view.value.delivery?.review || view.value.lifecycle === 'in_review') &&
     review.value.evidence.attestationRequired && !review.value.evidence.attested &&
     !['done', 'cancelled'].includes(view.value.phase),
   );
@@ -103,6 +106,7 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
   function setDraft(part: string, value: string) {
     requestDrafts.set(draftKey(part), value);
   }
+  const humanReviewReady = computed(() => !view.value?.delivery?.review || deliveryHumanReviewReady(view.value.delivery.review, draft));
   const proposedMessage = computed({
     get: () =>
       requestDrafts.get(draftKey("candidate")) ?? view.value?.input.message ?? "",
@@ -153,8 +157,8 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
       'assignee' in fields ? fields.assignee : 'stage' in fields ? fields.stage : undefined;
     return fields.action + (detail ? ':' + detail : '');
   }
-  async function perform(key: string, action: string, invoke: () => Promise<void>) {
-    if (props.disabled || busy.value || !allowed(action)) return;
+  async function perform(key: string, action: string, invoke: () => Promise<void>, retainedRetry = false) {
+    if (props.disabled && !retainedRetry || busy.value || !retainedRetry && !allowed(action)) return;
     const attempt = Symbol(key);
     pendingAttempt = attempt;
     pendingKey.value = key;
@@ -162,7 +166,16 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
     finally { if (pendingAttempt === attempt) pendingKey.value = ''; }
   }
   const command = (fields: GateCommandFields) => perform(actionKey(fields), fields.action, () => controller.mutate(fields));
-  const send = (value: GateActionCommand) => perform('retry', value.action, () => controller.send(value));
+  async function deliveryCommand(action: DeliveryControl, note?: string) {
+    const delivery = view.value?.delivery;
+    if (!delivery || !delivery.allowedControls.includes(action)) return;
+    if (action === 'confirm_stopped' && !note?.trim()) return;
+    await command({ action, deliveryRunId: delivery.id, inputRevision: delivery.inputRevision, ...(action === 'confirm_stopped' ? { note: note!.trim() } : {}) });
+  }
+  const send = (value: GateActionCommand) => {
+    if (value.requestId !== identity.value || requestOperations.get(identity.value)?.operationId !== value.operationId) return;
+    return perform('retry', value.action, () => controller.send(value), true);
+  };
   async function propose() {
     if (!scopeMutable.value || !mutable.value || !view.value || !proposedMessage.value.trim()) return;
     if (proposedMessage.value === view.value.input.message) {
@@ -187,6 +200,7 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
     if (
       !mutable.value ||
       !canAttest.value ||
+      !humanReviewReady.value ||
       !note ||
       !view.value?.execution?.outputDigest
     )
@@ -196,6 +210,12 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
       action: "attest",
       inputHash: view.value.inputHash,
       outputDigest: view.value.execution.outputDigest,
+      ...(view.value.delivery?.review ? {
+        inputRevision: view.value.inputRevision,
+        candidateCommit: view.value.delivery.review.candidate.candidateCommit,
+        candidateDigest: view.value.delivery.review.candidate.candidateDigest,
+        humanOutcomes: deliveryHumanOutcomes(view.value.delivery.review, draft),
+      } : {}),
       note,
     });
     if (view.value?.id === requestId && !error.value && review.value.evidence.attested) {
@@ -206,6 +226,18 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
       document.getElementById('request-acceptance-recorded')?.focus();
     }
   }
+  async function requestChanges() {
+    const viewValue = view.value, review = viewValue?.delivery?.review, note = draft('attestation').trim();
+    if (!viewValue || !review || !mutable.value || !note) return;
+    const observations = deliveryHumanOutcomes(review, draft).filter(outcome => outcome.outcome === 'failed');
+    const feedback = [note, ...observations.map(outcome => `${outcome.criterionId}: ${outcome.reason}`)].join('\n\n');
+    if (feedback.length > 8000) { error.value = 'The review note and criterion observations must total 8,000 characters or fewer.'; return; }
+    await command({
+      action: 'request_changes', inputRevision: viewValue.inputRevision,
+      candidateCommit: review.candidate.candidateCommit, candidateDigest: review.candidate.candidateDigest,
+      note: feedback,
+    });
+  }
   function chooseRequest(id: string) {
     void controller.select(id);
   }
@@ -214,7 +246,7 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
     controller.invalidate();
     if (state.unlocked) void load(true);
   });
-  useBoundedPolling(() => load(), computed(() => state.paused || !state.unlocked || !active.value), 2500);
+  useBoundedPolling(() => load(), computed(() => state.paused || !state.unlocked || !active.value), 1000);
   onMounted(() => { void load(true); });
   onDeactivated(() => { active.value = false; controller.suspend(); });
   onActivated(() => { if (!active.value) { active.value = true; controller.resume(); void load(true); } });
@@ -235,10 +267,12 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
     command,
     currentEvaluation,
     date,
+    deliveryCommand,
     draft,
     error,
     gateLabel,
     gateState,
+    humanReviewReady,
     identity,
     load,
     loading,
@@ -252,6 +286,7 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
     propose,
     proposedMessage,
     resolveFinding,
+    requestChanges,
     rows,
     send,
     setDraft,

@@ -12,7 +12,7 @@ contracts, and explanations describe the system and its limits.
 
 ## Tutorials
 
-- [Local proposal request](tutorials/worker-feature-lifecycle.md): try the separate local folder intake and inspect its execution metrics without shared Git publication.
+- [Local delivery request](tutorials/worker-feature-lifecycle.md): submit Markdown, inspect isolated implementation and accept an exact tested candidate without shared Git publication.
 - [Local worker run metrics](reference/worker-run-metrics.md): paired snapshots, usage coverage, durable history and paginated export.
 
 - [Prepare a Linux VM deployment](tutorials/linux-vm-first-task.md): Ubuntu cloud-init, verified artifacts and SSH access.
@@ -73,6 +73,8 @@ contracts, and explanations describe the system and its limits.
 - [Security and authority boundaries](reference/security.md)
 
 ## Explanation
+
+- [Local delivery worker](explanation/local-delivery-worker.md): canonical Markdown, committed quality profiles, durable execution, recovery and human acceptance.
 
 - [Twelve-factor principles and stateful boundaries](explanation/twelve-factor.md)
 

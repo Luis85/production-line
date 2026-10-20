@@ -1,3 +1,5 @@
+import type { DeliveryHumanOutcome } from './delivery-review-contracts.js';
+import type { DeliveryLifecycle, DeliveryRun, DeliveryStopObservation, DeliveryUpdate } from './delivery-contracts.js';
 import type {
   ModelProvider,
   ModelResult,
@@ -163,6 +165,10 @@ export interface RequestExecution {
   facts: GateFactSnapshot;
 }
 export interface WorkerRequest {
+  lifecycle?: DeliveryLifecycle;
+  delivery?: DeliveryRun;
+  deliveryHistory?: DeliveryRun[];
+  deliveryHolds?: { code: string; reason: string }[];
   schemaVersion: 1;
   id: string;
   owner: RequestOwner;
@@ -193,6 +199,8 @@ export interface WorkerRequest {
   } | null;
 }
 export interface RequestSummary {
+  lifecycle?: DeliveryLifecycle;
+  delivery?: Pick<DeliveryRun, 'id' | 'status' | 'phase' | 'decision' | 'allowedControls'>;
   id: string;
   owner: RequestOwner;
   revision: number;
@@ -206,6 +214,8 @@ export interface RequestSummary {
   updatedAt: string;
 }
 export interface RequestEvent {
+  deliveryRunId?: string;
+  deliveryStepId?: string;
   schemaVersion: 1;
   id: string;
   sequence: number;
@@ -229,10 +239,22 @@ export interface RequestCommand {
     | "propose"
     | "accept_candidate"
     | "rework"
-    | "cancel";
+    | "cancel"
+    | "pause_after_step"
+    | "interrupt"
+    | "resume"
+    | "retry"
+    | "reopen"
+    | "request_changes"
+    | "confirm_stopped";
   requestId: string;
   expectedRevision: number;
   operationId: string;
+  candidateCommit?: string;
+  candidateDigest?: string;
+  humanOutcomes?: Omit<DeliveryHumanOutcome, 'actor' | 'at'>[];
+  deliveryRunId?: string;
+  inputRevision?: number;
   stage?: GateStage;
   assignee?: "operator" | "llm";
   note?: string;
@@ -250,6 +272,8 @@ export interface RequestGatePort {
     policy?: GatePolicy;
   }): WorkerRequest;
   get(id: string): WorkerRequest;
+  deliveryUpdate(id: string, update: DeliveryUpdate): WorkerRequest;
+  reviseInput(id: string, input: GateInput): WorkerRequest;
   forTurn(sessionId: string, turnId: string): WorkerRequest | undefined;
   forSession(sessionId: string): WorkerRequest | undefined;
   hasActiveReview(sessionId: string): boolean;
@@ -270,7 +294,8 @@ export interface RequestGatePort {
     turnId: string,
     status: "failed" | "cancelled" | "interrupted",
   ): WorkerRequest;
-  command(input: RequestCommand): {
+  replayCommand(input: RequestCommand): { request: WorkerRequest; duplicate: true } | undefined;
+  command(input: RequestCommand, stopped?: DeliveryStopObservation): {
     request: WorkerRequest;
     duplicate: boolean;
   };

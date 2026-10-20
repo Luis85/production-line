@@ -50,6 +50,8 @@ export function validateFeatureGates(record: FeatureRecord) {
     projection.gaps !== base + "gaps.md"
   )
     throw Error("Invalid feature request gate projection.");
+  const run = projection.delivery;
+  if (run && (!gateIdentifier(run.runId) || [run.status, run.phase, run.reason].some(value => typeof value !== 'string' || value.length > 4000) || run.waitingFor !== null && typeof run.waitingFor !== 'string' || !Array.isArray(run.controls) || run.controls.some(value => typeof value !== 'string') || run.checkpoint && (typeof run.checkpoint.branch !== 'string' || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(run.checkpoint.candidateCommit)))) throw Error('Invalid delivery checkpoint projection.');
 }
 function currentEvaluation(
   request: WorkerRequest,
@@ -136,6 +138,10 @@ export async function exportFeatureGates(
     questions: base + "questions.md",
     gaps: base + "gaps.md",
   };
+  if (request.delivery) {
+    const run = request.delivery, checkpoint = run.checkpoints?.at(-1);
+    projection.delivery = { runId: run.id, status: run.status, phase: run.phase, reason: run.decision.reason, waitingFor: run.decision.waitingFor, controls: [...run.allowedControls], ...(checkpoint ? { checkpoint: { branch: checkpoint.branch, candidateCommit: checkpoint.candidateCommit } } : {}) };
+  }
   validateFeatureGates({ ...record, gates: projection });
   const root = join(directory, "_gates", record.id);
   await ensureDirectory(root);
@@ -157,6 +163,7 @@ export async function exportFeatureGates(
     note +
     `\nRequest phase: ${request.phase}\nModel execution outcome: ${request.execution?.outcome ?? "not recorded"}\nRework owner: ${request.assignee}\n\n## Ready gate\n\n` +
     evaluationText(ready) +
+    (projection.delivery ? `\n## Delivery run\n\nRun ID: ${projection.delivery.runId}\nStatus: ${projection.delivery.status}\nPhase: ${projection.delivery.phase}\nReason: ${projection.delivery.reason}\nWaiting for: ${projection.delivery.waitingFor ?? 'No external event'}\nAvailable controls: ${projection.delivery.controls.join(', ') || 'None'}\n` + (projection.delivery.checkpoint ? `\nInspectable checkpoint (not a verification pass): ${projection.delivery.checkpoint.candidateCommit} on ${projection.delivery.checkpoint.branch}\n` : '') : '') +
     "\n## Done gate\n\n" +
     evaluationText(done) +
     "\n## Questions, issues and gaps\n\n" +

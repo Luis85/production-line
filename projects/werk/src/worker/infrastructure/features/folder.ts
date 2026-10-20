@@ -11,7 +11,9 @@ import { resolve, join, parse, relative, isAbsolute, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { stringify } from 'yaml';
 import { atomicWrite, readBoundedFile } from '../journal/files.js';
-import { parseFeature, featureInput, renderFeature, featureId, requestName, digest, featureTemplate } from './document.js';
+import { submissionIntent, markdownCommands, managedBody } from './markdown-contract.js';
+import { replaceFeatureFile } from './recoverable-write.js';
+import { parseFeature, featureInput, renderFeature, featureId, requestName, digest, deliveryFeatureTemplate } from './document.js';
 import type { FeatureFolderPort, FeatureFile, FeatureRecord, FeatureIndex, FeatureExecutionEvidence } from '../../application/feature-requests.js';
 
 export async function realDirectory(path: string, create = false) {
@@ -32,6 +34,7 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
   private state: string; private lock?: Awaited<ReturnType<typeof open>>;
   private defaultProvider: string | (() => string);
   private acceptedProviders = new Map<string, string>();
+  private parsedSources = new Map<string, { provider: string; file: FeatureFile }>();
   constructor(directory: string, state: string, defaultProvider: string | (() => string), project: string) {
     this.defaultProvider = defaultProvider;
     this.directory = resolve(directory); this.state = resolve(state);
@@ -44,6 +47,8 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
       const index = JSON.parse(await readBoundedFile(join(this.state, 'feature-index.json'), 16777216));
       if (index.version !== 1 || typeof index.owner !== 'string' || !featureId.test(index.owner) || !Array.isArray(index.records) || index.records.length > 1000 || new Set(index.records.map((r: FeatureRecord) => r.id)).size !== index.records.length) throw Error('Invalid feature index.');
       for (const record of index.records) if (!record || !featureId.test(record.id) || !requestName(record.name) || !['folder', 'orchestrator'].includes(record.source) || typeof record.submitted !== 'boolean' || typeof record.inputHash !== 'string' || typeof record.taskId !== 'string' || typeof record.sessionId !== 'string' || !record.submitted && !record.input) throw Error('Invalid feature index record.');
+      if (index.intakeReceipts !== undefined && (!Array.isArray(index.intakeReceipts) || index.intakeReceipts.length > 1000 || new Set(index.intakeReceipts.map((receipt: { id: string }) => receipt.id)).size !== index.intakeReceipts.length)) throw Error('Invalid interaction intake history.');
+      for (const receipt of index.intakeReceipts ?? []) if (!receipt || typeof receipt.id !== 'string' || !/^[a-z0-9-]{1,80}$/.test(receipt.id) || receipt.name !== 'interaction-' + receipt.id + '.md' || receipt.taskId !== receipt.id || ![receipt.id, 'local-' + receipt.id].includes(receipt.sessionId) || !/^[a-f0-9]{64}$/.test(receipt.inputHash) || receipt.created !== undefined && typeof receipt.created !== 'boolean') throw Error('Invalid interaction intake receipt.');
       for (const record of index.records) {
         if (record.feature) { const reference = validateFeatureRequestReference(record.feature); if (record.source === 'folder' && (reference.source !== 'folder' || reference.id !== record.id)) throw Error('Invalid feature parent identity.'); }
         if (record.selection !== undefined) {
@@ -81,7 +86,7 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
       await realDirectory(join(this.directory, '_templates'), true); await realDirectory(join(this.directory, '_results'), true);
       const template = join(this.directory, '_templates/feature-request.md');
       const existing = await lstat(template).catch(error => { if (error.code !== 'ENOENT') throw error; });
-      if (!existing) { const file = await open(template, 'wx', 0o600); try { await file.writeFile(featureTemplate); } finally { await file.close(); } }
+      if (!existing) { const file = await open(template, 'wx', 0o600); try { await file.writeFile(deliveryFeatureTemplate); } finally { await file.close(); } }
       else if (!existing.isFile() || existing.isSymbolicLink()) throw Error('Feature template must be a regular file.');
     } catch (error) { await this.close(); throw error; }
   }
@@ -89,12 +94,21 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
     await realDirectory(this.directory);
     const names = (await readdir(this.directory)).filter(requestName).sort();
     if (names.length > 1000) throw Error('Feature folder holds more than 1,000 Markdown requests.');
-    const files: FeatureFile[] = [];
+    const files: FeatureFile[] = [], currentNames = new Set(names);
+    for (const name of this.parsedSources.keys()) if (!currentNames.has(name)) this.parsedSources.delete(name);
+    const fallbackProvider = typeof this.defaultProvider === 'function' ? this.defaultProvider() : this.defaultProvider;
     for (const name of names) {
       try {
-        const raw = await readBoundedFile(join(this.directory, name), 65536), parsed = parseFeature(raw), d = parsed.data, shared = Object.hasOwn(d, 'templateId');
-        files.push({ name, revision: digest(raw), ...(typeof d.id === 'string' ? { id: d.id } : {}), status: d.status === undefined ? undefined : String(d.status), source: String(d.source ?? 'folder'), shared, ...(shared || d.source === 'orchestrator' ? {} : { input: featureInput(parsed, typeof d.id === 'string' && this.acceptedProviders.get(d.id) || (typeof this.defaultProvider === 'function' ? this.defaultProvider() : this.defaultProvider)) }) });
+        // Always read and hash complete current bytes. Cache only parsing, never file existence or access checks.
+        const raw = await readBoundedFile(join(this.directory, name), 65536), revision = digest(raw), cached = this.parsedSources.get(name);
+        const provider = cached?.file.id && this.acceptedProviders.get(cached.file.id) || fallbackProvider;
+        if (cached?.file.revision === revision && cached.provider === provider) { files.push(structuredClone(cached.file)); continue; }
+        const parsed = parseFeature(raw), d = parsed.data, shared = Object.hasOwn(d, 'templateId');
+        const selectedProvider = typeof d.id === 'string' && this.acceptedProviders.get(d.id) || fallbackProvider;
+        const file: FeatureFile = { name, revision, ...(typeof d.id === 'string' ? { id: d.id } : {}), status: d.status === undefined ? undefined : String(d.status), intent: submissionIntent(d), ...(typeof d.schema === 'string' ? { schema: d.schema } : {}), commands: markdownCommands(parsed), ...(managedBody(parsed.body) ? { managedHash: digest(managedBody(parsed.body)!) } : {}), source: String(d.source ?? 'folder'), shared, ...(shared || d.source === 'orchestrator' ? {} : { input: featureInput(parsed, selectedProvider) }) };
+        this.parsedSources.set(name, { provider: selectedProvider, file: structuredClone(file) }); files.push(file);
       } catch (error) {
+        this.parsedSources.delete(name);
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
         // Parse/validation messages contain no source contents or YAML parser diagnostics.
         files.push({ name, revision: '', error: error instanceof Error ? error.message.slice(0, 500) : 'Request could not be read.' });
@@ -110,11 +124,14 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
     if (current === null || digest(current) !== file.revision) return false;
     const parsed = parseFeature(current);
     if (Object.hasOwn(parsed.data, 'templateId')) return false;
-    const next = renderFeature(parsed, record.id, record.status, { archived: record.archived ?? false, source: record.source, taskId: record.taskId, sessionId: record.sessionId, submittedAt: record.createdAt, updatedAt: record.updatedAt, inputHash: record.inputHash, ...(record.attempt !== undefined ? { attempt: record.attempt } : {}), ...(record.error ? { error: record.error } : {}), ...(record.result ? { result: record.result } : {}), ...(record.patch ? { patch: record.patch } : {}), ...(record.execution ? { execution: record.execution } : {}), ...(record.executionDirectory ? { executionDirectory: record.executionDirectory } : {}), ...(record.interaction ? { interaction: record.interaction } : {}), ...(record.taskNote ? { task: { link: record.taskNote.link, status: record.taskNote.submission?.outcome ?? 'open' } } : {}), ...(record.attention ? { attention: record.attention } : {}), ...(record.gates ? { gates: record.gates, requestPhase: record.gates.phase, executionStatus: record.executionStatus } : {}), ...(inputChanged ? { inputChanged: true, note: 'Accepted input is frozen. Copy to a new filename and remove id/werk to request different work.' } : {}) });
+    const next = renderFeature(parsed, record.id, record.status, { semanticRevision: record.semanticRevision ?? 1, sourceIssue: record.sourceIssue, commandReceipts: record.commandReceipts?.map(({ commandId, outcome, message }) => ({ commandId, outcome, message })), questions: record.questions, archived: record.archived ?? false, source: record.source, taskId: record.taskId, sessionId: record.sessionId, submittedAt: record.createdAt, updatedAt: record.updatedAt, inputHash: record.inputHash, ...(record.attempt !== undefined ? { attempt: record.attempt } : {}), ...(record.error ? { error: record.error } : {}), ...(record.result ? { result: record.result } : {}), ...(record.patch ? { patch: record.patch } : {}), ...(record.execution ? { execution: record.execution } : {}), ...(record.executionDirectory ? { executionDirectory: record.executionDirectory } : {}), ...(record.interaction ? { interaction: record.interaction } : {}), ...(record.taskNote ? { task: { link: record.taskNote.link, status: record.taskNote.submission?.outcome ?? 'open' } } : {}), ...(record.attention ? { attention: record.attention } : {}), ...(record.gates ? { gates: record.gates, requestPhase: record.gates.phase, executionStatus: record.executionStatus } : {}), ...(inputChanged ? { inputChanged: true, note: 'The source changed. Work is held until this revision is reassessed; terminal requests need an explicit reopen command.' } : {}) });
     if (next === current) return true;
     // Optimistic editor protection; a changed observation is retried on the next scan.
     if (await readBoundedFile(path, 65536) !== current) return false;
-    await atomicWrite(path, next); return true;
+    await realDirectory(join(this.directory, '_conflicts'), true);
+    const replaced = await replaceFeatureFile(path, current, next, join(this.directory, '_conflicts'));
+    if (replaced && managedBody(parseFeature(next).body)) record.managedHash = digest(managedBody(parseFeature(next).body)!);
+    return replaced;
   }
   async createRemote(record: FeatureRecord, title: string, markdown: string) {
     if (!requestName(record.name)) throw Error('Invalid remote feature filename.');
@@ -165,7 +182,7 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
   async report(value: { records: FeatureRecord[]; errors: { file: string; message: string }[] }) {
     const escape = (s: string) => s.replace(/[\r\n|]/g, ' ');
     const missing = new Set((await readdir(this.directory)).filter(requestName));
-    const rows = value.records.map(record => `| ${escape(record.name)} | ${record.status} | ${record.source} | ${record.execution ? `[Run ${record.execution.attempt}](${encodeURI(record.execution.before)})` + (record.execution.after ? ` · [after](${encodeURI(record.execution.after)})` : ' · after not recorded') : 'Not recorded'} | ${missing.has(record.name) ? escape(record.error ?? '') : 'File missing; accepted work is not cancelled.'} |`);
+    const rows = value.records.map(record => `| ${escape(record.name)} | ${record.status} | ${record.source} | ${record.execution ? `[Run ${record.execution.attempt}](${encodeURI(record.execution.before)})` + (record.execution.after ? ` · [after](${encodeURI(record.execution.after)})` : ' · after not recorded') : 'Not recorded'} | ${missing.has(record.name) ? escape(record.error ?? '') : 'File missing; restore the canonical source to release its execution hold.'} |`);
     const text = '# Worker feature queue\n\nGenerated by the worker. Underscore-prefixed files and folders are not ingested.\n\n| Request | State | Source | Execution evidence | Note |\n| --- | --- | --- | --- | --- |\n' + rows.join('\n') + '\n\n## Intake errors\n\n' + (value.errors.length ? value.errors.map(error => '- ' + escape(error.file) + ': ' + escape(error.message)).join('\n') : 'None.') + '\n';
     await realDirectory(this.directory); await this.writeChanged(join(this.directory, '_worker-status.md'), text);
   }

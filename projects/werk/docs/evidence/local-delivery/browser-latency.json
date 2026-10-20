@@ -1,0 +1,346 @@
+{
+  "scope": "Linux Chromium Storybook fixture response revision to rendered worker review status. No real daemon, provider, Windows, network latency, or production load qualification. After the coherent fixture boundary is established, twenty sequential1s-polling updates per viewport; human observation draft, focus and scroll checked after every update.",
+  "measuredAt": "2026-10-20T13:17:17.157Z",
+  "results": [
+    {
+      "viewport": "desktop",
+      "sampleCount": 20,
+      "p95Milliseconds": 1031,
+      "maximumMilliseconds": 1040,
+      "passed": true,
+      "samples": [
+        {
+          "index": 1,
+          "milliseconds": 908,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 2,
+          "milliseconds": 940,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 3,
+          "milliseconds": 1012,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 4,
+          "milliseconds": 990,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 5,
+          "milliseconds": 1001,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 6,
+          "milliseconds": 974,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 7,
+          "milliseconds": 999,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 8,
+          "milliseconds": 1031,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 9,
+          "milliseconds": 956,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 10,
+          "milliseconds": 1040,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 11,
+          "milliseconds": 960,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 12,
+          "milliseconds": 1001,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 13,
+          "milliseconds": 1022,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 14,
+          "milliseconds": 977,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 15,
+          "milliseconds": 993,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 16,
+          "milliseconds": 997,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 17,
+          "milliseconds": 1002,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 18,
+          "milliseconds": 999,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 19,
+          "milliseconds": 995,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 20,
+          "milliseconds": 1000,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        }
+      ],
+      "errors": []
+    },
+    {
+      "viewport": "mobile",
+      "sampleCount": 20,
+      "p95Milliseconds": 1122,
+      "maximumMilliseconds": 1269,
+      "passed": true,
+      "samples": [
+        {
+          "index": 1,
+          "milliseconds": 997,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 2,
+          "milliseconds": 1122,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 3,
+          "milliseconds": 871,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 4,
+          "milliseconds": 1020,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 5,
+          "milliseconds": 964,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 6,
+          "milliseconds": 1005,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 7,
+          "milliseconds": 978,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 8,
+          "milliseconds": 989,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 9,
+          "milliseconds": 1024,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 10,
+          "milliseconds": 1012,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 11,
+          "milliseconds": 963,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 12,
+          "milliseconds": 1043,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 13,
+          "milliseconds": 1269,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 14,
+          "milliseconds": 696,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 15,
+          "milliseconds": 966,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 16,
+          "milliseconds": 1003,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 17,
+          "milliseconds": 983,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 18,
+          "milliseconds": 981,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 19,
+          "milliseconds": 999,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        },
+        {
+          "index": 20,
+          "milliseconds": 998,
+          "focusPreserved": true,
+          "draftPreserved": true,
+          "scrollDelta": 0,
+          "editorViewportDelta": 0
+        }
+      ],
+      "errors": []
+    }
+  ]
+}

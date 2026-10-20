@@ -139,10 +139,9 @@ export function admissionInput(host: Pick<LocalTaskRuntime, "sessions" | "settin
     const allowedPaths = validateApprovedPaths(body.paths, 'Approved paths', { folders: true });
     if (
       body.priority !== undefined &&
-      body.priority !== 1 &&
-      body.priority !== 2
+      (!Number.isInteger(body.priority) || ![0, 1, 2, 3].includes(Number(body.priority)))
     )
-      throw new DomainError("invalid_input", "Priority must be 1 or 2");
+      throw new DomainError("invalid_input", "Priority must be 0 (low), 1 (normal), 2 (high) or 3 (urgent)");
     if (assignment && !host.workspaces)
       throw new DomainError(
         "unavailable",

@@ -3,6 +3,8 @@ import type { SessionView, LocalTaskboardView } from '../application/workspace-v
 import type { FeatureRequests } from '../application/feature-requests';
 import type { WorkerRun } from '../application/run-evidence';
 import type { WorkerWorkspace } from '../status/workspace';
+import type { RequestSummary } from '../application/request-gates';
+import { deliveryLifecycleLabels, deliveryPhaseLabels, deliveryStatusLabels } from './delivery-view';
 
 export type TaskOverviewSource = 'chat' | 'file' | 'assigned' | 'project';
 export type TaskOverviewGroup = 'attention' | 'running' | 'queued' | 'completed' | 'draft';
@@ -23,6 +25,7 @@ export interface TaskOverviewInput {
   history?: History | null;
   runs?: readonly WorkerRun[] | null;
   sharedRequests?: readonly SharedFeatureView[] | null;
+  requests?: readonly RequestSummary[] | null;
 }
 export interface TaskOverviewFilter {
   search?: string;
@@ -60,6 +63,11 @@ export interface TaskOverviewItem {
   remote: boolean;
   primaryAction: TaskOverviewAction;
   evidenceHref: string;
+  deliveryRunId?: string;
+  deliveryPhaseLabel?: string;
+  lifecycleLabel?: string;
+  nextEvent?: string | null;
+  priority?: number;
 }
 export interface TaskOverview {
   items: TaskOverviewItem[];
@@ -83,8 +91,9 @@ const labels: Record<string, string> = {
   readiness: 'Readiness check', ready: 'Ready for intake', waiting: 'Waiting for admission',
   simulated: 'Simulated · not implemented', incomplete: 'Incomplete evidence',
   unconfirmed: 'Execution state needs refresh', gate_blocked: 'Gate blocked',
+  source_blocked: 'Request source needs attention',
 };
-const attention = new Set(['waiting_input', 'escalated', 'needs_rework', 'readiness', 'review', 'failed', 'interrupted', 'incomplete', 'unconfirmed', 'gate_blocked']);
+const attention = new Set(['waiting_input', 'escalated', 'needs_rework', 'readiness', 'review', 'failed', 'interrupted', 'incomplete', 'unconfirmed', 'gate_blocked', 'source_blocked']);
 const timestamp = (value?: string | null) => value && Number.isFinite(Date.parse(value)) ? Date.parse(value) : 0;
 function latest(...values: (string | null | undefined)[]): string | null {
   return values.filter((value): value is string => !!value && !!timestamp(value)).sort((a, b) => timestamp(b) - timestamp(a))[0] ?? null;
@@ -119,6 +128,8 @@ function stateFor(evidence: Evidence, currentSessionId: string | null): string {
   // A real follow-up owns an interaction turn and must retain its own outcome.
   if (history && session?.kind === 'orchestrator' && ['completed', 'done', 'draft'].includes(status) && !session.interaction?.latestTurn) status = historyStatus(history);
   if (featureFile?.error && status === 'draft') status = 'needs_rework';
+  if ((feature?.sourceIssue || featureFile?.sourceIssue) && !['done', 'cancelled'].includes(status)) status = 'source_blocked';
+  if (status === 'waiting' && (feature?.error || feature?.attention)) status = 'gate_blocked';
   // Only the shared executor can establish that a task currently owns the single execution permit.
   return status === 'running' ? 'unconfirmed' : status;
 }
@@ -126,6 +137,8 @@ function summarize(evidence: Evidence, status: string): string {
   const { session, file, feature, featureFile, history } = evidence;
   const interaction = session?.interaction ?? file?.interaction;
   if (['waiting_input', 'escalated'].includes(status) && interaction?.pending) return interaction.pending.message;
+  if (feature?.sourceIssue || featureFile?.sourceIssue) return feature?.sourceIssue?.reason ?? featureFile?.sourceIssue?.reason ?? '';
+  if (feature?.attention) return feature.attention;
   if (status === 'unconfirmed') return 'The retained task state and shared execution slot differ. Refresh to confirm.';
   if (status === 'simulated') return 'Simulation evidence is available. No implementation or applied change is claimed.';
   if (file?.error || feature?.error || featureFile?.error || history?.error) return file?.error || feature?.error || featureFile?.error || history?.error || '';
@@ -176,7 +189,7 @@ function project(evidence: Evidence, currentSessionId: string | null, runs: read
     model, modelBasis: basis, modelSnapshot,
     createdAt: session?.createdAt ?? file?.createdAt ?? feature?.createdAt ?? history?.startedAt ?? null,
     updatedAt: latest(interaction?.latestTurn?.finishedAt, interaction?.latestTurn?.createdAt, feature?.updatedAt, file?.finishedAt, history?.finishedAt, session?.createdAt, file?.createdAt),
-    archived: !!(session?.archived || file?.archived || feature?.archived || featureFile?.archived), remote,
+    archived: !!(session?.archived || file?.archived || feature?.archived || featureFile?.archived), remote, priority: file?.priority ?? feature?.priority ?? featureFile?.priority,
     primaryAction: primaryAction({ ...actionFields, sessionId: session || file || feature?.submitted ? sessionId : undefined }),
     evidenceHref: sessionId ? '/history?view=runs&runSession=' + encodeURIComponent(sessionId) : '/history',
   };
@@ -203,6 +216,27 @@ function projectReadyReview(request: SharedFeatureView, currentSessionId: string
     createdAt: null, updatedAt: request.updatedAt, archived: false, remote: false,
     primaryAction: { kind: 'feature', label: 'Inspect Ready Check', href: '/settings#shared-intake' },
     evidenceHref: run ? '/history?view=runs&runSession=' + encodeURIComponent(run.sessionId) : '/settings#shared-intake',
+  };
+}
+function withDelivery(item: TaskOverviewItem, requests: readonly RequestSummary[], currentSessionId: string | null): TaskOverviewItem {
+  const request = requests.find(row => row.id === item.requestId);
+  const run = request?.delivery;
+  if (!request || !run) return item;
+  const lifecycle = request.lifecycle;
+  const working = ['running', 'pause_pending', 'interrupting', 'reconciling'].includes(run.status);
+  const group: TaskOverviewGroup = lifecycle === 'done' || lifecycle === 'cancelled' ? 'completed'
+    : lifecycle === 'in_review' ? 'attention' : run.status === 'queued' ? 'queued'
+      : working && item.sessionId === currentSessionId ? 'running' : 'attention';
+  const needsAnswer = ['waiting_input', 'escalated'].includes(item.status);
+  const status = lifecycle === 'done' ? 'done' : lifecycle === 'in_review' ? 'review' : needsAnswer ? item.status : run.status;
+  const query = new URLSearchParams({ session: item.sessionId ?? request.owner.sessionId });
+  if (item.localTaskId) query.set('fileId', item.localTaskId);
+  return { ...item, status, group, updatedAt: request.updatedAt,
+    statusLabel: lifecycle === 'in_review' || lifecycle === 'done' ? deliveryLifecycleLabels[lifecycle] : needsAnswer ? item.statusLabel : deliveryStatusLabels[run.status],
+    summary: needsAnswer ? item.summary : run.decision.reason,
+    lifecycleLabel: lifecycle ? deliveryLifecycleLabels[lifecycle] : undefined,
+    deliveryRunId: run.id, deliveryPhaseLabel: deliveryPhaseLabels[run.phase], nextEvent: run.decision.waitingFor,
+    primaryAction: needsAnswer ? item.primaryAction : { kind: 'review', label: lifecycle === 'in_review' ? 'Review candidate' : 'Inspect request', sessionId: item.sessionId, href: '/review?' + query },
   };
 }
 /** Pure projection: never dispatches work, mutates snapshots, or treats configuration as execution evidence. */
@@ -238,7 +272,7 @@ export function buildTaskOverview(input: TaskOverviewInput, filter: TaskOverview
   const currentSessionId = input.sessions?.execution.currentSessionId ?? null;
   const search = filter.search?.trim().toLocaleLowerCase() ?? '';
   const reviews = (input.sharedRequests ?? []).filter(request => request.isLocal && request.readyReview && !request.taskId).map(request => projectReadyReview(request, currentSessionId, input.runs ?? []));
-  const items = [...evidence.map(item => project(item, currentSessionId, input.runs ?? [])), ...reviews].filter(item =>
+  const items = [...evidence.map(item => withDelivery(project(item, currentSessionId, input.runs ?? []), input.requests ?? [], currentSessionId)), ...reviews].filter(item =>
     (filter.includeArchived || !item.archived) && (!filter.source || filter.source === 'all' || item.source === filter.source) &&
     (!search || [item.title, item.taskId, item.sessionId, item.localTaskId, item.requestId, item.featureName, item.sourceLabel, item.statusLabel, item.provider, item.model].join(' ').toLocaleLowerCase().includes(search)),
   );
@@ -247,7 +281,7 @@ export function buildTaskOverview(input: TaskOverviewInput, filter: TaskOverview
   const attentionOrder = ['waiting_input', 'escalated', 'needs_rework', 'readiness', 'review', 'failed', 'interrupted', 'incomplete', 'unconfirmed', 'gate_blocked'];
   for (const [name, rows] of Object.entries(groups)) rows.sort((a, b) =>
     (name === 'attention' ? attentionOrder.indexOf(a.status) - attentionOrder.indexOf(b.status) : 0) ||
-    (name === 'queued' ? timestamp(a.createdAt) - timestamp(b.createdAt) : timestamp(b.updatedAt) - timestamp(a.updatedAt)) || a.id.localeCompare(b.id),
+    (name === 'queued' ? (b.priority ?? 1) - (a.priority ?? 1) || timestamp(a.createdAt) - timestamp(b.createdAt) : timestamp(b.updatedAt) - timestamp(a.updatedAt)) || a.id.localeCompare(b.id),
   );
   return { items, groups, counts: { total: items.length, attention: groups.attention.length, running: groups.running.length, queued: groups.queued.length, completed: groups.completed.length, draft: groups.draft.length }, currentSessionId };
 }

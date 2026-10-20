@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import ts from 'typescript';
 import { computed, effectScope, nextTick, reactive, ref, watch } from 'vue';
-import { stripTypeScriptTypes } from 'node:module';
+import { frontend } from '../ui/helpers/frontend-loader.mjs';
 
-const overviewSource = await readFile(new URL('../../src/worker/webview/task-overview.ts', import.meta.url), 'utf8');
-const { buildTaskOverview } = await import('data:text/javascript;base64,' + Buffer.from(stripTypeScriptTypes(overviewSource)).toString('base64'));
+const { buildTaskOverview } = await frontend('src/worker/webview/task-overview.ts');
+const { readRequestSummaries } = await frontend('src/worker/webview/request-summary-reader.ts');
 const source = await readFile(new URL('../../src/worker/webview/pages/TaskboardPage.vue', import.meta.url), 'utf8');
 const script = source.split('<script setup lang="ts">')[1].split('</script>')[0];
 const parsed = ts.createSourceFile('page.ts', script, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
@@ -17,9 +17,14 @@ function fixture(t) {
   const calls = [], state = reactive({ unlocked: true, workspaceBusy: false, sessionsReadAt: at, environment: null, board: null, history: null,
     sessions: { selected: '', records: [], execution: { currentSessionId: 'ready-review-one' } } });
   const run = { id: 'review-run', sessionId: 'ready-review-one', title: 'Ready Check: Improve search', purpose: 'gate_review', provider: 'codex-cli', model: 'review-model', startedAt: at, after: null, usage: { inputTokens: 300, outputTokens: 80 } };
-  const read = async (path, method, body) => { calls.push({ path, method, body }); return path === '/api/features' ? { enabled: false } : { total: 1, rows: [run] }; };
+  const read = async (path, method, body) => {
+    calls.push({ path, method, body });
+    if (path === '/api/features') return { enabled: false };
+    if (path === '/api/requests') return { schemaVersion: 1, rows: [], total: 0, nextOffset: null };
+    return { total: 1, rows: [run] };
+  };
   const bindings = { computed, ref, watch, nextTick, onActivated() {}, onDeactivated() {}, useRoute: () => ({ path: '/taskboard', query: {} }), useRouter: () => ({}), state, request: read,
-    buildTaskOverview, buildWorkerCapacityView: () => ({ state: 'busy', stale: false }), getCapacityFreshness: () => 'fresh' };
+    buildTaskOverview, readRequestSummaries, buildWorkerCapacityView: () => ({ state: 'busy', stale: false }), getCapacityFreshness: () => 'fresh' };
   const scope = effectScope(); t.after(() => scope.stop());
   const result = scope.run(() => new Function(...Object.keys(bindings), javascript + '\nreturn { readEvidence, activeRun, currentExecutionId, currentSession, runProvider, runModel, runElapsed, usage, canStop };')(...Object.values(bindings)));
   return { ...result, state, run, calls };

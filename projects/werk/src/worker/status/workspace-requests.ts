@@ -1,3 +1,5 @@
+import { serviceActive } from '../application/service-policy.js';
+import { effectiveDeliveryPolicy } from './workspace-delivery.js';
 import { minimumClaudeVersion } from '../infrastructure/provider-version.js';
 import { delegationLimits } from '../application/delegation-policy.js';
 import { isSharedFeatureSession } from './workspace-feature-authoring.js';
@@ -85,6 +87,7 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
     "candidateId",
     "inputHash",
     "outputDigest",
+    "deliveryRunId", "inputRevision", "candidateCommit", "candidateDigest", "humanOutcomes",
   ]);
   const action = String(initial.action);
   const reads: Record<string, string[]> = {
@@ -93,6 +96,7 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
     events: ["action", "requestId", "after", "limit"],
     schema: ["action"],
     policy: ["action"],
+    delivery_policy: ["action"],
     set_policy: ["action", "policy", "expectedRevision", "operationId"],
     execute: ["action", "requestId", "expectedRevision", "operationId"],
   };
@@ -118,6 +122,7 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
         "explicit_operator_decision_not_proof_of_human_identity",
     };
   if (action === "policy") return gates.policy();
+  if (action === "delivery_policy") return effectiveDeliveryPolicy(workspace);
   if (action === "list")
     return gates.list({
       sessionId: initial.sessionId as string | undefined,
@@ -132,9 +137,13 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
       initial.after as number | undefined,
       initial.limit as number | undefined,
     );
+  if (action !== "set_policy") {
+    const replay = gates.replayCommand(initial as unknown as RequestCommand);
+    if (replay) return { ...replay, dispatch: requestDispatchStatus(replay.request, action) };
+  }
   if (!workspace.acceptingTasks)
     throw new DomainError("unavailable", "Worker is stopping.");
-  if (action !== "cancel" && (workspace.configurationUpdating || workspace.executionProfiles?.pending()))
+  if (!["cancel", "interrupt", "pause_after_step", "confirm_stopped"].includes(action) && (workspace.configurationUpdating || workspace.executionProfiles?.pending()))
     throw new DomainError("conflict", "Finish the execution profile change before starting new work.");
   if (action === "set_policy")
     return gates.setPolicy({
@@ -155,15 +164,23 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
       "Remote assignments require an explicit upstream successor with a fresh lease and pinned context.",
     );
   if (['propose', 'accept_candidate', 'execute'].includes(action)) assertTaskCanContinue(workspace, before.owner.sessionId);
-  const result = gates.command(initial as unknown as RequestCommand);
+  if (["attest", "request_changes"].includes(action) && before.delivery?.review) await workspace.board.verifyDelivery(requestId, before.revision);
+  const assertNoLiveServices = () => {
+    if (workspace.processes?.status().services.some(service => service.sessionId === before.owner.sessionId && serviceActive(service.state)))
+      throw new DomainError('conflict', 'Stop this request’s managed development services before confirming stopped processes.');
+  };
+  if (action === "confirm_stopped") assertNoLiveServices();
+  const stopObservation = action === "confirm_stopped" ? await workspace.board.inspectStopped(requestId, before.revision) : undefined;
+  if (action === "confirm_stopped") assertNoLiveServices();
+  const result = gates.command(initial as unknown as RequestCommand, stopObservation);
   if (!result.duplicate && action === "cancel")
     workspace.reviews.cancel(requestId);
   if (
     !result.duplicate &&
-    (action === "execute" || action === "accept_candidate")
+    (["execute", "accept_candidate", "resume", "retry"].includes(action))
   ) {
     const current = gates.get(requestId);
-    if (current.phase === "ready") {
+    if (current.phase === "ready" || ["resume", "retry"].includes(action)) {
       try {
         if (current.input.kind === "patch") await workspace.board.executeRequest(requestId);
         else await workspace.sessions.executeRequest(requestId);

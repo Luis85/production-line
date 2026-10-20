@@ -126,6 +126,7 @@ test('review permits omitted scope and headings, portable Unicode names, and mea
   assert.equal(omitted.valid, true); assert.deepEqual(omitted.input.paths, []); assert.deepEqual(omitted.input.sections, { goal: '', context: '', verificationPlan: '' });
   const offline = eligible(source, { configuration, template }); assert.equal(offline.valid, true);
   const names = eligible(source.replace('paths: []', 'paths: [src/straße.ts, src/strasse.ts]')); assert.equal(names.valid, true);
+  const folder = eligible(source.replace('paths: []', 'paths: [src/]')); assert.equal(folder.valid, true); assert.deepEqual(folder.input.paths, ['src/']);
   const markdown = source.replace('## Acceptance criteria', '## Acceptance criteria\n  -   [X] First  \n* [x]Second\n+ [ ] Third\n- [q] Literal bracket\n-    \nprefix - Not a list item\n    - Indented code');
   assert.deepEqual(eligible(markdown).input.criteria, ['First', 'Second', 'Third', '[q] Literal bracket']);
   for (const separator of ['\u2028', '\u2029', '\r']) assert.deepEqual(eligible(source.replace('## Acceptance criteria', '## Acceptance criteria\n- First' + separator + 'Second')).input.criteria, [], 'A criterion must not be silently truncated at an embedded line separator.');

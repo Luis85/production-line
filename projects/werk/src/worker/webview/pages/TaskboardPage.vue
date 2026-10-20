@@ -10,6 +10,8 @@ import { buildWorkerCapacityView } from '../worker-capacity';
 import RepositoryDiscovery from '../components/RepositoryDiscovery.vue';
 import OverviewTaskCard from '../components/OverviewTaskCard.vue';
 import { buildTaskOverview, type TaskOverviewInput, type TaskOverviewItem } from '../task-overview';
+import { readRequestSummaries } from '../request-summary-reader';
+import type { RequestSummary } from '../../application/request-gates';
 import type { RunPage, WorkerRun } from '../../application/run-evidence';
 import { state, request, workspaceAction, refresh, date, getCapacityFreshness, refreshFromUser } from '../store';
 
@@ -18,9 +20,10 @@ const interaction = ref<InstanceType<typeof TaskInteraction> | null>(null);
 const search = ref(''), view = ref<'board' | 'list'>('board');
 const interactionBusy = ref(false), opening = ref(false), queueBusy = ref(false), stopping = ref(false), actionError = ref('');
 const features = ref<TaskOverviewInput['features']>(null), activeRun = ref<WorkerRun | null>(null), evidenceError = ref('');
-let active = true, evidenceRevision = 0;
-const allTasks = computed(() => buildTaskOverview({ sessions: state.sessions, board: state.board, history: state.history, features: features.value, sharedRequests: state.environment?.sharedIntake?.requests, runs: activeRun.value ? [activeRun.value] : [] }));
-const overview = computed(() => buildTaskOverview({ sessions: state.sessions, board: state.board, history: state.history, features: features.value, sharedRequests: state.environment?.sharedIntake?.requests, runs: activeRun.value ? [activeRun.value] : [] }, { search: search.value }));
+const requests = ref<RequestSummary[]>([]);
+let active = true, evidenceRevision = 0, evidencePending = false;
+const allTasks = computed(() => buildTaskOverview({ sessions: state.sessions, board: state.board, history: state.history, features: features.value, requests: requests.value, sharedRequests: state.environment?.sharedIntake?.requests, runs: activeRun.value ? [activeRun.value] : [] }));
+const overview = computed(() => buildTaskOverview({ sessions: state.sessions, board: state.board, history: state.history, features: features.value, requests: requests.value, sharedRequests: state.environment?.sharedIntake?.requests, runs: activeRun.value ? [activeRun.value] : [] }, { search: search.value }));
 const running = computed(() => allTasks.value.groups.running[0]);
 const capacity = computed(() => buildWorkerCapacityView(state.sessions?.capacity, getCapacityFreshness()));
 const selectedSession = computed(() => state.sessions?.records.find(item => item.id === state.sessions?.selected));
@@ -29,8 +32,8 @@ const queueNote = computed(() => capacity.value.stale || capacity.value.state ==
 const currentExecutionId = computed(() => state.sessions?.execution.currentSessionId);
 const currentSession = computed(() => state.sessions?.records.find(item => item.id === currentExecutionId.value));
 const originalAssignment = computed(() => currentSession.value?.kind === 'orchestrator' && ['queued', 'running'].includes(currentSession.value.taskState ?? ''));
-const activePurpose = computed(() => activeRun.value?.purpose === 'gate_review' ? (running.value?.id.startsWith('shared-feature:') ? 'Feature Request Ready Check' : 'Advisory review') : activeRun.value?.purpose === 'rework' ? 'Rework proposal' : originalAssignment.value && state.status?.mode === 'mock' ? 'Simulation · no implementation' : 'Task execution');
-const canStop = computed(() => !!activeRun.value && activeRun.value.sessionId === currentSession.value?.id && (!activeRun.value.purpose || activeRun.value.purpose === 'execution') && !originalAssignment.value);
+const activePurpose = computed(() => running.value?.deliveryPhaseLabel ?? (activeRun.value?.purpose === 'gate_review' ? (running.value?.id.startsWith('shared-feature:') ? 'Feature Request Ready Check' : 'Advisory review') : activeRun.value?.purpose === 'rework' ? 'Rework proposal' : originalAssignment.value && state.status?.mode === 'mock' ? 'Simulation · no implementation' : 'Task execution'));
+const canStop = computed(() => !running.value?.deliveryRunId && !!activeRun.value && activeRun.value.sessionId === currentSession.value?.id && (!activeRun.value.purpose || activeRun.value.purpose === 'execution') && !originalAssignment.value);
 const selectionBusy = computed(() => interactionBusy.value || opening.value || stopping.value || state.workspaceBusy);
 const runModel = computed(() => activeRun.value && activeRun.value.sessionId === currentExecutionId.value ? activeRun.value.model || 'Provider default' : 'Not yet recorded');
 const runProvider = computed(() => activeRun.value && activeRun.value.sessionId === currentExecutionId.value ? activeRun.value.provider : currentSession.value?.provider ?? 'Connection unavailable');
@@ -51,14 +54,17 @@ const groups = computed(() => [
 ] as const);
 
 async function readEvidence() {
-  if (!active || !state.unlocked) return;
+  if (!active || !state.unlocked || evidencePending) return;
+  evidencePending = true;
   const revision = ++evidenceRevision;
   const sessionId = currentExecutionId.value;
   if (activeRun.value?.sessionId !== sessionId) activeRun.value = null;
   const results = await Promise.allSettled([
     request('/api/features'),
     sessionId ? request('/api/runs', 'POST', { action: 'list', sessionId, outcome: 'running', limit: 2 }) : Promise.resolve(null),
+    readRequestSummaries(request),
   ]);
+  evidencePending = false;
   if (revision !== evidenceRevision || !active || !state.unlocked) return;
   const notes: string[] = [];
   if (results[0].status === 'fulfilled') features.value = results[0].value;
@@ -68,6 +74,8 @@ async function readEvidence() {
     const run = page?.total === 1 && page.rows.length === 1 ? page.rows[0] : null;
     activeRun.value = run?.startedAt && !run.after && run.sessionId === sessionId && currentExecutionId.value === sessionId ? run : null;
   } else { activeRun.value = null; notes.push('Current attempt evidence is unavailable.'); }
+  if (results[2].status === 'fulfilled') requests.value = results[2].value;
+  else notes.push('Request lifecycle details could not be refreshed. Their last view may be stale.');
   evidenceError.value = notes.join(' ');
 }
 async function openSession(id: string, controls = false) {
@@ -155,9 +163,9 @@ onDeactivated(() => { active = false; evidenceRevision++; });
         <template v-if="currentExecutionId">
           <div class="active-run-content"><div class="active-run-title"><button v-if="currentSession" :disabled="selectionBusy" @click="openSession(currentSession.id)">{{ running?.title ?? currentSession.title }}<UIcon name="i-lucide-arrow-up-right" /></button><RouterLink v-else :to="running?.primaryAction.href ?? '/history?view=runs'">{{ running?.title ?? activeRun?.title ?? 'Worker execution' }}<UIcon name="i-lucide-arrow-up-right" /></RouterLink></div>
           <div class="active-run-meta"><span>{{ activePurpose }}</span><span>{{ runProvider }}</span><span>{{ runModel }}</span><span>{{ runElapsed }}</span></div>
-          <p class="active-run-readout">{{ usage }} · {{ capacity.stale ? 'Activity needs refresh' : 'Updates every 3s' }}</p>
+          <p class="active-run-readout">{{ usage }} · {{ capacity.stale ? 'Activity needs refresh' : 'Checks for updates every second' }}</p>
           <p v-if="originalAssignment" class="active-run-empty">Managed by its owning orchestrator.</p></div>
-          <div class="active-run-actions"><UButton v-if="canStop" color="error" variant="outline" icon="i-lucide-square" :loading="stopping" :disabled="selectionBusy" @click="stopTask">Stop task</UButton><UButton v-else-if="currentSession && !originalAssignment" color="neutral" variant="outline" :disabled="selectionBusy" @click="openSession(currentSession.id, true)">Open task controls</UButton><RouterLink :to="running?.evidenceHref ?? '/history?view=runs&runSession=' + encodeURIComponent(currentExecutionId)">Inspect attempt</RouterLink></div>
+          <div class="active-run-actions"><UButton v-if="running?.deliveryRunId" :to="running.primaryAction.href + '#review-decision'" color="neutral" variant="outline">Delivery controls</UButton><UButton v-else-if="canStop" color="error" variant="outline" icon="i-lucide-square" :loading="stopping" :disabled="selectionBusy" @click="stopTask">Stop task</UButton><UButton v-else-if="currentSession && !originalAssignment" color="neutral" variant="outline" :disabled="selectionBusy" @click="openSession(currentSession.id, true)">Open task controls</UButton><RouterLink :to="running?.evidenceHref ?? '/history?view=runs&runSession=' + encodeURIComponent(currentExecutionId)">Inspect attempt</RouterLink></div>
         </template>
       </section>
       <p v-if="actionError" class="board-error" role="alert">{{ actionError }}</p>

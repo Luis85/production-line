@@ -1,3 +1,5 @@
+import { ProviderAuthenticationChanged } from './model-selection.js';
+import type { ProviderConnection } from './provider-contract.js';
 import { sessionFeatureRequest } from './feature-request-reference.js';
 import { WorkerConversation } from './conversation.js';
 import { sessionConnection } from './session-model-selection.js';
@@ -27,8 +29,18 @@ interface SessionConversationContext {
 
 export async function loadSessionConversation(context: SessionConversationContext, record: SessionRecord) {
     const store = await context.storage.conversation(record.id);
-    const model = context.model(
-      sessionConnection(context.settings, record),
+    let connection: ProviderConnection, billingChanged = false;
+    try {
+      connection = sessionConnection(context.settings, record);
+      if (record.continuationBlockedReason === new ProviderAuthenticationChanged().message) delete record.continuationBlockedReason;
+    } catch (error) {
+      if (!(error instanceof ProviderAuthenticationChanged)) throw error;
+      // Historical transcripts remain inspectable when a billing route requires explicit readmission.
+      connection = { ...context.settings.provider(record.provider), model: record.selection?.model ?? '', authenticationMode: 'legacy' };
+      record.continuationBlockedReason = error.message; billingChanged = true;
+    }
+    const model = billingChanged ? undefined : context.model(
+      connection,
       { sessionId: record.id, feature: sessionFeatureRequest(record) },
     );
     const conversation = new WorkerConversation(
@@ -52,10 +64,11 @@ export async function loadSessionConversation(context: SessionConversationContex
             throw new DomainError("conflict", "Worker task queue is full.");
         },
         provider: () => {
-          const connection = sessionConnection(context.settings, record);
+          // The loaded conversation and its accepted dispatch share one immutable billing choice.
           return {
             id: connection.id,
             model: connection.model,
+            ...(connection.authenticationMode ? { authenticationMode: connection.authenticationMode } : {}),
             ...(record.selection ? { effort: record.selection.effort } : {}),
             instruction: connection.instruction ?? "",
           };
@@ -67,7 +80,8 @@ export async function loadSessionConversation(context: SessionConversationContex
           kind: record.kind,
           title: record.title,
           provider: record.provider,
-          model: sessionConnection(context.settings, record).model,
+          model: connection.model,
+          ...(record.selection?.authenticationMode ? { authenticationMode: record.selection.authenticationMode } : {}),
         }),
       },
     );

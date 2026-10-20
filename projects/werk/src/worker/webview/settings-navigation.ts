@@ -6,6 +6,7 @@ export const settingsSections = [
   { id: 'tool-access', label: 'Tools & MCP', hint: 'Permissions and connections', icon: 'i-lucide-wrench' },
   { id: 'repositories', label: 'Repositories', hint: 'Checkouts and worktrees', icon: 'i-lucide-git-branch' },
   { id: 'shared-intake', label: 'Shared request intake', hint: 'Team feature requests', icon: 'i-lucide-inbox' },
+  { id: 'delivery-policy', label: 'Project delivery', hint: 'Quality profiles and review rules', icon: 'i-lucide-list-checks' },
   { id: 'execution-profiles', label: 'Execution profiles', hint: 'Available execution identities', icon: 'i-lucide-sliders-horizontal' },
   { id: 'agent-definitions', label: 'Agent definitions', hint: 'Reusable task instructions', icon: 'i-lucide-bot' },
   { id: 'integrations', label: 'Project integration', hint: 'Local authoring files', icon: 'i-lucide-folder-cog' },

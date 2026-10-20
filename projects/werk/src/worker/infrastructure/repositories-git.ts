@@ -59,6 +59,8 @@ export interface RepositoryWorktree {
   repository: string;
   path: string;
   baseCommit: string;
+  /** The execution branch remains at its baseline; immutable delivery checkpoints use separate refs. */
+  branch?: string;
   reused: boolean;
   pristine?: boolean;
 }
@@ -131,7 +133,7 @@ async function configuredStorage(root: RepositoryRoot, configured: string, exclu
   return directory(parent, name);
 }
 
-interface Ownership { version: 1; repositoryId?: string; repository: string; taskKey: string; path: string; baseCommit: string; }
+interface Ownership { version: 1; repositoryId?: string; repository: string; taskKey: string; path: string; baseCommit: string; branch?: string; branchOwned?: true; }
 const commitId = (value: unknown): value is string => typeof value === 'string' && /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(value);
 const managedName = (value: string) => /^[A-Za-z0-9_-]{1,24}-{1,2}[a-f0-9]{32}$/.test(value);
 /** Bound both checkout and Git administration paths on Windows without losing the full assignment identity. */
@@ -147,6 +149,8 @@ async function readOwnership(marker: string): Promise<Ownership | undefined> {
   let owner: Ownership;
   try { owner = JSON.parse(await readFile(marker, 'utf8')); } catch { throw new WorktreeProblem('Task worktree ownership metadata is invalid.'); }
   if (!owner || owner.version !== 1 || typeof owner.taskKey !== 'string' || typeof owner.repository !== 'string' || typeof owner.path !== 'string' || !commitId(owner.baseCommit)) throw new WorktreeProblem('Task worktree ownership metadata is invalid.');
+  if (owner.branch !== undefined && owner.branch !== `werk/workspaces/${basename(owner.path)}`) throw new WorktreeProblem('Task worktree branch ownership is invalid.');
+  if (owner.branchOwned !== undefined && (owner.branchOwned !== true || !owner.branch)) throw new WorktreeProblem('Task branch creation receipt is invalid.');
   return owner;
 }
 /** A retained worktree stays at its recorded location, which must still be a normalized path with its managed name. */
@@ -175,7 +179,7 @@ async function ownedWorktree(path: string, owner: Ownership, root: RepositoryRoo
   if (observed.commonDirectory !== root.commonDirectory) throw new WorktreeProblem('Existing task worktree belongs to another repository.');
   const head = (await repositoryGit(path, ['rev-parse', '--verify', 'HEAD'], signal, timeoutMs)).trim();
   const branch = (await repositoryGit(path, ['rev-parse', '--abbrev-ref', 'HEAD'], signal, timeoutMs)).trim();
-  if (head !== owner.baseCommit || branch !== 'HEAD') throw new WorktreeProblem('Existing task worktree base changed; retained work requires review.');
+  if (head !== owner.baseCommit || branch !== (owner.branch ?? 'HEAD')) throw new WorktreeProblem('Existing task worktree base changed; retained work requires review.');
 }
 // Parallel checkout writes independent files concurrently; on Windows NTFS this
 // measured about 2.5x faster for a 12,000-file tree. Git before 2.32 ignores it.
@@ -213,7 +217,7 @@ export async function createRepositoryWorktree(root: RepositoryRoot, repositoryI
     const index = await listing(['ls-files', '-v', '-z']);
     const ordinaryIndex = index.split('\0').filter(Boolean).every(entry => entry.startsWith('H '));
     const pristine = ordinaryIndex && !(await listing(['status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignored'])).length;
-    return { repositoryId, repository: root.path, path, baseCommit: owner.baseCommit, reused: true, pristine };
+    return { repositoryId, repository: root.path, path, baseCommit: owner.baseCommit, ...(owner.branch ? { branch: owner.branch } : {}), reused: true, pristine };
   }
   if (options.reuseOnly) throw new WorktreeProblem('The retained task worktree is missing.');
   const configured = options.directory === undefined ? undefined : join(await configuredStorage(root, options.directory, options.excludedDirectories), name);
@@ -230,13 +234,24 @@ export async function createRepositoryWorktree(root: RepositoryRoot, repositoryI
   if (!owner) {
     const commit = (await repositoryGit(root.path, ['rev-parse', '--verify', `${baseCommit ?? 'HEAD'}^{commit}`], signal, timeoutMs)).trim();
     if (!commitId(commit)) throw new WorktreeProblem('Repository base commit is invalid.');
-    owner = { version: 1, repositoryId, repository: root.path, taskKey, path, baseCommit: commit };
+    const branch = `werk/workspaces/${name}`;
+    if ((await repositoryGit(root.path, ['for-each-ref', '--format=%(refname)', `refs/heads/${branch}`], signal, timeoutMs)).trim()) throw new WorktreeProblem('The task workspace branch already exists without verified ownership. Preserve it and choose a new task identity.');
+    owner = { version: 1, repositoryId, repository: root.path, taskKey, path, baseCommit: commit, branch };
     await writeFile(marker, JSON.stringify(owner) + '\n', { flag: 'wx', mode: 0o600 });
   }
   signal.throwIfAborted();
-  await repositoryGit(root.path, ['-c', `checkout.workers=${checkoutWorkers(root, name)}`, 'worktree', 'add', '--detach', '--', argument, owner.baseCommit], signal, Math.max(timeoutMs, options.checkoutTimeoutMs ?? timeoutMs));
+  await repositoryGit(root.path, ['-c', `checkout.workers=${checkoutWorkers(root, name)}`, '-c', 'core.autocrlf=false', '-c', 'core.eol=lf', 'worktree', 'add', ...(owner.branch ? ['-b', owner.branch] : ['--detach']), '--', argument, owner.baseCommit], signal, Math.max(timeoutMs, options.checkoutTimeoutMs ?? timeoutMs));
   await ownedWorktree(path, owner, root, signal, timeoutMs);
-  return { repositoryId, repository: root.path, path, baseCommit: owner.baseCommit, reused: false };
+  if (owner.branch) {
+    // Only a successful branch creation may authorize its later removal. A crash leaves it retained.
+    const receipt = await open(marker, constants.O_WRONLY | constants.O_NOFOLLOW);
+    try {
+      const info = await receipt.stat();
+      if (!info.isFile() || info.nlink !== 1) throw new WorktreeProblem('Task ownership metadata changed during branch creation.');
+      await receipt.truncate(0); await receipt.writeFile(JSON.stringify({ ...owner, branchOwned: true }) + '\n'); await receipt.sync();
+    } finally { await receipt.close(); }
+  }
+  return { repositoryId, repository: root.path, path, baseCommit: owner.baseCommit, ...(owner.branch ? { branch: owner.branch } : {}), reused: false };
 }
 
 /** Backwards-compatible local Git admission; assignment watchers are deliberately separate. */
@@ -308,7 +323,7 @@ export interface RemovalOptions {
 /**
  * Remove one owned task worktree through Git and then its ownership record. Never
  * deletes an unregistered directory, follows links, discards commits made on the
- * detached task HEAD, or overrides an operator's lock.
+ * task HEAD, or overrides an operator's lock.
  */
 export async function removeRepositoryWorktree(root: RepositoryRoot, name: string, signal: AbortSignal, timeoutMs = 30000, options: RemovalOptions = {}): Promise<WorktreeRemoval> {
   if (!managedName(name)) throw new WorktreeProblem('Unknown task worktree.');
@@ -345,6 +360,7 @@ export async function removeRepositoryWorktree(root: RepositoryRoot, name: strin
   if (options.dryRun) return { name, path, outcome: 'would_remove', ...(changes === undefined ? {} : { changes }) };
   if (listed) await repositoryGit(root.path, ['worktree', 'remove', ...Array(forced).fill('--force'), '--', argument], signal, removeTimeout);
   if (await lstat(path).then(() => true, () => false)) throw new WorktreeProblem('Git did not remove the task worktree.');
+  if (owner.branchOwned && owner.branch) await repositoryGit(root.path, ['update-ref', '-d', `refs/heads/${owner.branch}`, owner.baseCommit], signal, timeoutMs);
   const info = await lstat(marker);
   if (info.isFile() && !info.isSymbolicLink()) await unlink(marker);
   return { name, path, outcome: 'removed', ...(changes === undefined ? {} : { changes }) };

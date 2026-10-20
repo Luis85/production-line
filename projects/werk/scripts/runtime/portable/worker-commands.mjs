@@ -63,7 +63,7 @@ export function workerCommands(catalog) {
         { name: "name", "if-match": "revision" },
       ),
       input:
-        "Frontmatter + Markdown from --markdown PATH or - (stdin), at most 64 KiB; status: draft.",
+        "Frontmatter + Markdown from --markdown PATH or - (stdin), at most 64 KiB; intent: draft (legacy: status: draft).",
     };
   for (const name of ['prepare', 'publish']) catalog['feature ' + name] = {
     ...action('/api/features', name, [], true), timeoutMs: GIT_REQUEST_TIMEOUT_MS,
@@ -77,7 +77,7 @@ export function workerCommands(catalog) {
     mutating: false,
     outputFormat: "markdown",
     description:
-      "Print an editable draft frontmatter + Markdown request without a running worker. Save it to a file, finish it, then feature create/validate/submit.",
+      "Print an editable draft frontmatter + Markdown request without a running worker. Choose a unique id and approved paths, finish the draft, then feature create/validate/submit or set intent: submit in its intake note.",
   };
   catalog["definition ref"] = {
     method: "POST", path: "/api/definitions", required: ["id", "ref"], mutating: true,

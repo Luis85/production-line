@@ -166,11 +166,11 @@ agent status
 agent models
 ```
 
-Cursor also accepts `CURSOR_API_KEY` in the worker process environment. A saved
-Cursor API key in the provider editor is passed privately to the subprocess;
-keep it out of request notes and command arguments. An arbitrary key in the
-project `.env` is not automatically loaded: that file reads only its documented
-Werk launch keys. See [Cursor authentication](https://cursor.com/docs/cli/reference/authentication).
+For Cursor API billing, explicitly select `api-key` and save the Cursor key in
+the private provider editor. Werk passes that selected key privately to the
+subprocess. Account mode uses the supported CLI login and excludes API-key
+fallback. Keep credentials out of request notes and command arguments. Project
+`.env` files contain only their documented Werk launch keys. See [Cursor authentication](https://cursor.com/docs/cli/reference/authentication).
 
 Select **Cursor CLI** in **Settings → Providers & accounts**, save its executable,
 default model and optional key, then use **Check sign-in**. The bounded status and
@@ -198,6 +198,31 @@ including native subagent usage, are unavailable in this adapter. Metrics show
 unknown usage; an enabled consumption limiter can hold subsequent work until
 unverified usage is resolved through the existing controls. An account login or
 successful reply does not establish a remaining allowance.
+
+### Choose authentication explicitly
+
+Each provider connection records its authentication/billing mode. Use
+`cli-account` for the supported official CLI login or `api-key` with a privately
+saved key. API adapters accept `api-key` only. Existing connections marked
+`legacy` require an explicit selection before new dispatch. A failed account
+connection does not fall back to an environment or saved API key.
+
+Read the runtime/version, connection result and capability diagnostics before
+submitting work. A supported interface can still lack isolation, interactive
+approval or detailed usage; the UI reports those limits. A successful diagnostic
+is not a successful model invocation or proof of available quota.
+
+For the Windows/Claude pilot, run this read-only preflight from the source checkout
+with the actual installed executable path:
+
+```powershell
+node scripts/runtime/provider-diagnostics.mjs --provider claude-cli --executable "C:\path\to\claude.exe" --authentication-mode cli-account
+```
+
+It emits sanitized environment/runtime/capability information and
+`liveInferenceQualified: false`. Complete the disposable-repository implementation,
+verification, interruption and review journey before claiming native qualification;
+see the [acceptance ledger](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reports/2026-10-20-local-delivery-acceptance.md).
 
 ## Choose provider, model and effort
 
@@ -438,16 +463,21 @@ complete saved bytes. Markdown summaries and criteria remain readable. Required
 checks show whether their evidence belongs to the current candidate; unavailable,
 failed and outdated checks never imply successful implementation.
 
-When configured policy requires human acceptance, inspect the evidence and record
-an acceptance note. Acceptance applies to the saved output revision; changing the
-scope or output requires fresh evaluation. Completing a model turn, passing checks,
+Local delivery requires human acceptance. Inspect the current candidate and
+record the required manual criterion outcomes with supporting notes before
+accepting. The decision identifies the request input revision and candidate Git
+commit; changing requirements, code, baseline or check definitions requires fresh
+evidence. A legacy request may additionally expose its configured acceptance gate. Completing a model turn, passing checks,
 recording acceptance and merging Git changes remain separate actions. Shared
 requests show publication and the PullRequest Markdown review note. That note does
 not mean a Git-hosting pull request has been created or merged.
 
 **Open conversation** returns to the same request to answer or resume a checkpoint.
-For new scope, create a new Feature Request. Request-text rework proposes revised
-instructions and consumes model allowance; it does not repair files. Other-worker
+Use a new Feature Request for unrelated work. Canonical local requirement changes
+reassess the same request; terminal work needs **Reopen request**. Shared-owned
+scope continues to require its upstream successor workflow. Request-text rework
+proposes revised instructions and consumes model allowance; implementation repair
+is a separate bounded delivery step with fresh verification. Other-worker
 ownership or inconsistent request identity keeps decisions unavailable.
 
 History’s retained file detail uses the same patch and check components and links
@@ -464,6 +494,28 @@ Run your project's tests after applying. Patches use captured input, so a change
 checkout may no longer accept a patch. **Retry saved input** retains the original
 snapshots; start a new task to capture current files. Terminal results are saved
 locally, with review artifacts under `local-review/`.
+
+## Follow and control a delivery run
+
+Request detail shows the Feature Request lifecycle separately from the delivery
+run's status and phase. **Execution complete** means the run finished;
+**Accepted** means a person accepted its current candidate. The behaviour panel
+explains the selected action, evaluated conditions, reason and next expected
+event. Ordered activity correlates request events and step receipts with their
+recorded identities.
+
+Use **Pause after this step** to finish the current bounded step and wait before
+the next. **Interrupt now** requests cessation; **Cancel request** also closes
+work once execution has stopped. Pending/unknown stop outcomes remain visible.
+**Resume work**, **Retry failed work** and **Reopen request** appear only when the
+recorded state permits them. These controls do not erase checkpoints or bypass
+missing answers, source conflicts, permissions or mandatory gates.
+
+The project queue's pause control holds new starts and is separate from a
+selected run's step pause. Closing or refreshing the webview does not stop the
+daemon. Reconnect and inspect the current run before issuing a new command;
+repeat an uncertain command with its saved identity instead of creating duplicate
+work. Background reads retain focus and unsubmitted answers.
 
 ## Configure the taskboard and orchestrator queue
 
@@ -629,7 +681,7 @@ personal use outside the worker remains unmeasured. Follow
 [set a worker consumption limit](worker-consumption-limits.md) for setup and
 recovery from incomplete usage.
 
-Pages refresh every three seconds while visible; header controls pause readings
+Visible pages poll for current observations; header controls pause readings
 or refresh manually. Failed reads retain the last observation with a stale-data
 warning; successful reads still update independently. A successful action remains
 accepted if its follow-up refresh fails, avoiding a misleading retry prompt.
@@ -642,8 +694,8 @@ Read its reason/choices, enter your response and submit through the pending-inpu
 control. Generic follow-up sending is held until that decision is resolved.
 Taskboard and History identify requests needing input and link back to the selected task on the taskboard.
 
-Inspect the saved checkpoint before resuming a failed, cancelled or interrupted
-turn. Continuation replays saved context in a fresh invocation and may consume
+Inspect the saved checkpoint before resuming a compatible failed or interrupted
+turn. Canonical cancelled or accepted requests require explicit reopening. Continuation replays saved context in a fresh invocation and may consume
 additional tokens. Restart alone does not repeat ambiguous work. Latest-turn
 consumption shows measured values and unavailable fields; a reported estimate is
 not a billed amount. See [answer and resume](answer-and-resume-worker.md) for the

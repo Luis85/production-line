@@ -1,3 +1,5 @@
+import type { DeliveryStopObservation } from './delivery-contracts.js';
+import type { LocalDeliveryPort } from './delivery-review-contracts.js';
 import type { ModelSelection } from './model-selection.js';
 import type { ProcessObservation } from './process-observation.js';
 import type { SerializedOperations } from '../../shared/serialized-operations.js';
@@ -16,6 +18,7 @@ import type { RepositoryAssignment } from './repositories.js';
 import type { LocalTask, LocalTaskPreparation, LocalTaskSubmission, LocalTaskWorkspaces } from './local-task-contracts.js';
 
 export interface LocalTaskDependencies {
+  delivery?: (repository: string) => LocalDeliveryPort;
   model: ModelFactory;
   storage: LocalTaskStorage;
   files: ApprovedTaskFiles;
@@ -74,7 +77,7 @@ export interface LocalTaskRuntime extends LocalTaskDependencies, LocalTaskState 
   context(task: LocalTask): Record<string, unknown>;
   originalPrompt(task: LocalTask): string;
   preparedRequest(task: LocalTask, turn: InteractionTurn, model: ConversationModel): ModelRequest;
-  developmentRuntime(task: LocalTask, limits?: DevelopmentLimits): DevelopmentRuntime | undefined;
+  developmentRuntime(task: LocalTask, limits?: DevelopmentLimits, persistEvidence?: boolean): DevelopmentRuntime | undefined;
   restoredDevelopment(task: LocalTask, turn: InteractionTurn): ValidatedPatch | null;
   assertToolWorkspace(task: LocalTask, signal: AbortSignal, verifyOnly?: boolean, inspection?: DevelopmentLimits): Promise<void>;
   assertAcceptedSnapshots(task: LocalTask): void;
@@ -103,6 +106,8 @@ export interface LocalTaskRuntime extends LocalTaskDependencies, LocalTaskState 
   createTask(input: unknown, submission?: LocalTaskSubmission, options?: AdmissionOptions): Promise<LocalTaskboardView>;
   trackContinuation<T>(operation: Promise<T>): Promise<T>;
   executeRequest(id: string): Promise<LocalTaskboardView>;
+  verifyDelivery(requestId: string, expectedRevision?: number): Promise<string>;
+  inspectStopped(requestId: string, expectedRevision?: number): Promise<DeliveryStopObservation>;
   executeOwnedRequest(id: string): Promise<LocalTaskboardView>;
   interact(body: InteractionCommand): Promise<InteractionView>;
   continueTask(body: InteractionCommand): Promise<InteractionView>;

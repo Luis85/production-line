@@ -19,6 +19,7 @@ merging.
 | You want to… | Start here |
 | --- | --- |
 | Install a worker in your project | [Project-worker quick start](#install-a-project-worker) |
+| Work locally from Markdown with review before merge | [Local delivery worker](explanation/local-delivery-worker.md) |
 | Let a team submit requests through Git and Obsidian | [Shared Markdown queue](how-to/shared-feature-intake.md) |
 | Design features by day and implement them overnight | [Evening handoff and morning review](how-to/shared-feature-intake.md#work-during-the-day-implement-overnight) |
 | Create and follow requests in the browser | [Worker webview](how-to/use-worker-webview.md) |
@@ -130,6 +131,19 @@ it does not grant new permissions. The developer checkout stays untouched by
 shared implementation and publication. See the
 [shared workflow guide](how-to/shared-feature-intake.md) for ownership,
 retries, conflicts and human review.
+
+### Working locally
+
+For a worker that watches your own folder, choose `init --intake local`. New
+`worker.request/v1` notes start as drafts; set `intent: submit` after writing the
+acceptance criteria and approved paths. The worker pins the committed project
+policy, implements in an owned worktree, runs required checks and creates a local
+review note. Accept the exact candidate through Markdown or the webview before
+merging it yourself. This mode does not push branches or notes to a remote.
+
+The [local delivery guide](explanation/local-delivery-worker.md) explains quality
+profiles, dependencies, pause and interruption recovery. Both intake modes retain
+the same Feature Request throughout execution and review.
 
 ## Create requests through Markdown or chat
 

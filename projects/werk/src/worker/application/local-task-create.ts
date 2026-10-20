@@ -12,7 +12,7 @@ import { DomainError } from "../../shared/errors.js";
 import { ADMISSION_TIMEOUT_MS, submissionContextHash, type LocalTask, type LocalTaskWorkspaces, type LocalTaskPreparation, type LocalTaskSubmission } from './local-task-contracts.js';
 import type { LocalTaskRuntime } from './local-task-runtime-contract.js';
 
-export async function createTask(host: Pick<LocalTaskRuntime, "model" | "closed" | "tasks" | "view" | "admissionInput" | "assertAdmissionCapacity" | "admissionReserved" | "admissionTaskId" | "workspaceController" | "workspaces" | "files" | "development" | "settings" | "change" | "sessions" | "input" | "ensureRequest" | "context" | "prepareTurn" | "persistenceError">, input: unknown, submission?: LocalTaskSubmission, options: { id?: string; budgetMs?: number; preparation?: LocalTaskPreparation; signal?: AbortSignal; definition?: DefinitionSnapshot | null; selection?: ModelSelection } = {}) {
+export async function createTask(host: Pick<LocalTaskRuntime, "model" | "closed" | "tasks" | "view" | "admissionInput" | "assertAdmissionCapacity" | "admissionReserved" | "admissionTaskId" | "workspaceController" | "workspaces" | "files" | "development" | "delivery" | "settings" | "change" | "sessions" | "input" | "ensureRequest" | "context" | "prepareTurn" | "persistenceError">, input: unknown, submission?: LocalTaskSubmission, options: { id?: string; budgetMs?: number; preparation?: LocalTaskPreparation; signal?: AbortSignal; definition?: DefinitionSnapshot | null; selection?: ModelSelection } = {}) {
     if (host.closed) throw new DomainError("unavailable", "Worker is stopping");
     if (submission) {
       const existing = host.tasks.find((task) => task.id === submission.id);
@@ -32,7 +32,7 @@ export async function createTask(host: Pick<LocalTaskRuntime, "model" | "closed"
     // Reserve capacity before preparing a durable worktree. Chat admission reads
     // board.active, so a concurrent chat cannot consume this task's queue slot.
     // Refuse folder approvals before preparing a worktree when this worker cannot run an implementation.
-    assertFolderApprovals(allowedPaths, host.settings.toolPolicy(), host.development ? undefined : false);
+    if (!submission?.deliveryPolicy) assertFolderApprovals(allowedPaths, host.settings.toolPolicy(), host.development ? undefined : false);
     host.assertAdmissionCapacity(host.tasks);
     host.admissionReserved = true;
     const id = submission?.id ?? options.id ?? randomUUID();
@@ -82,7 +82,17 @@ export async function createTask(host: Pick<LocalTaskRuntime, "model" | "closed"
       );
     const interruptedWorktree = prepared.reused && prepared.pristine !== true;
     // Shared intake publishes the candidate through Git, so its implementation scope freezes the publisher's bounds.
-    const implementation = !interruptedWorktree && host.development ? freezeDevelopmentScope(prepared.baseCommit, allowedPaths, host.settings.toolPolicy(), { sharedPublication: submission?.feature?.source === 'shared_git' }) : undefined;
+    const implementation = !interruptedWorktree && host.development ? freezeDevelopmentScope(prepared.baseCommit, allowedPaths, host.settings.toolPolicy(), { sharedPublication: submission?.feature?.source === 'shared_git', verificationInputs: submission?.verificationInputs }) : undefined;
+    if (!interruptedWorktree && submission?.deliveryPolicy) {
+      // Canonical delivery must never silently become a legacy patch proposal.
+      // Check after reuse inspection so interrupted admission retains its failed receipt.
+      if (!host.workspaces || !host.development || !host.delivery)
+        throw new DomainError('unavailable', 'Local delivery requires the repository worktree, development and delivery services. Restore these worker services, then retry this Feature Request.');
+      if (!submission.baseCommit || submission.baseCommit !== submission.deliveryPolicy.baseline || prepared.baseCommit !== submission.deliveryPolicy.baseline)
+        throw new DomainError('conflict', 'Local delivery requires a worktree pinned to the committed request and policy baseline. Inspect the assigned repository, then retry this Feature Request.');
+      if (!implementation)
+        throw new DomainError('invalid_input', 'Local delivery requires repository file access and at least one enabled required verification check. Configure tool access in Settings, then retry this Feature Request.');
+    }
     if (!interruptedWorktree) assertFolderApprovals(allowedPaths, host.settings.toolPolicy(), !!implementation);
     // Never turn modified or unverifiable retained contents into a fresh approval.
     // A durable failed receipt lets the operator leave an otherwise endless retry.
@@ -96,6 +106,8 @@ export async function createTask(host: Pick<LocalTaskRuntime, "model" | "closed"
       ...(submission?.selection ? { selectionReserved: true } : {}),
       ...(submission ? { submissionHash: submission.hash, submissionContextHash: submissionContextHash(submission) } : {}),
       ...(submission?.definitionPrompts ? { definitionPrompts: structuredClone(submission.definitionPrompts) } : {}),
+      ...(submission?.deliveryPolicy ? { deliveryPolicy: structuredClone(submission.deliveryPolicy) } : {}),
+      ...(submission?.dependencies ? { dependencies: structuredClone(submission.dependencies) } : {}),
       ...(submission?.policy ? { gatePolicy: structuredClone(submission.policy) } : {}),
       ...(submission?.criteria === undefined ? {} : { criteria: structuredClone(submission.criteria) }),
       ...(definition ? { definition } : {}),

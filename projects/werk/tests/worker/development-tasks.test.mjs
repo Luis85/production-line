@@ -205,7 +205,9 @@ test('shared intake admission freezes the publication bounds that candidate stat
   const local = f.board.view().tasks.find(task => task.id !== shared).id;
   assert.equal(Object.hasOwn(f.board.executionDetail(local).implementation, 'sharedPublication'), false);
   await f.settle(local, 'needs_rework');
-  assert.deepEqual(reported, [{ patchMaxBytes: 131072, changedFilesMax: 32, patchBytes: 0, changedFileCount: 0 }, undefined]);
+  assert.deepEqual(reported[0], { patchMaxBytes: 131072, changedFilesMax: 32, patchBytes: 0, changedFileCount: 0 });
+  assert.equal(reported.length, 5, 'The local candidate uses its bounded three repair attempts.');
+  assert.ok(reported.slice(1).every(item => item === undefined));
 });
 
 test('proposal requests keep exact files: a folder approval is refused before a worktree is prepared', { timeout: testTimeoutMs }, async t => {
@@ -216,14 +218,13 @@ test('proposal requests keep exact files: a folder approval is refused before a 
 
 const incomplete = {
   unchanged: async () => {},
-  'missing checks': async ({ runtime, signal }) => { await edit(runtime, signal); },
   'failed checks': async ({ runtime, signal }) => { await edit(runtime, signal, 'broken\n'); await check(runtime, signal, true); },
   'source changed after a passing check': async ({ runtime, signal, task }) => { await edit(runtime, signal); await check(runtime, signal); await writeFile(join(task.worktree, 'approved.txt'), 'unchecked later edit\n'); },
 };
 for (const [label, attempt] of Object.entries(incomplete)) test(`${label} cannot turn a model completion claim into review`, { timeout: testTimeoutMs }, async t => {
   const f = await fixture(t, async context => { await attempt(context); return complete('The model claims everything is complete.'); });
   const id = await f.create(), task = await f.settle(id, 'needs_rework');
-  assert.equal(f.invocations, 1);
+  assert.equal(f.invocations, 4);
   assert.equal(task.developmentCompletion.verified, false);
   assert.equal(f.request(id).execution.facts['output.verificationPassed'], false);
   assert.notEqual(f.request(id).phase, 'done');
@@ -231,7 +232,7 @@ for (const [label, attempt] of Object.entries(incomplete)) test(`${label} cannot
   assert.equal(await readFile(join(f.repository, 'approved.txt'), 'utf8'), 'before\n');
   await f.restart();
   await f.board.tick();
-  assert.equal(f.board.executionDetail(id).status, 'needs_rework'); assert.equal(f.invocations, 1);
+  assert.equal(f.board.executionDetail(id).status, 'needs_rework'); assert.equal(f.invocations, 4);
 });
 
 test('known verified completion restores its review projection after restart without another provider call', { timeout: testTimeoutMs }, async t => {
@@ -311,7 +312,7 @@ function useMinimalDonePolicy(f) {
 }
 
 test('custom completion rules cannot mark unverified implementation work done or hide shared rework', { timeout: testTimeoutMs }, async t => {
-  const f = await fixture(t, async ({ runtime, signal }) => { await edit(runtime, signal); return complete('A nonempty summary without required checks.'); });
+  const f = await fixture(t, async ({ runtime, signal }) => { await edit(runtime, signal, 'broken\n'); return complete('A nonempty summary despite failed source behavior.'); });
   useMinimalDonePolicy(f);
   const id = await f.create(), task = await f.settle(id, 'needs_rework'), request = f.request(id);
   assert.equal(request.phase, 'needs_rework');
@@ -347,7 +348,7 @@ test('custom completion rules cannot mark unverified implementation work done or
   assert.equal(writes.length, 1);
   assert.equal(JSON.parse(writes[0].request.content).status, 'needs_rework');
   await f.restart();
-  assert.equal(f.request(id).phase, 'needs_rework'); assert.equal(f.invocations, 1);
+  assert.equal(f.request(id).phase, 'needs_rework'); assert.equal(f.invocations, 4);
 });
 
 test('verified implementation satisfies a custom completion policy after its required check passes', { timeout: testTimeoutMs }, async t => {
@@ -356,7 +357,7 @@ test('verified implementation satisfies a custom completion policy after its req
   const id = await f.create(); await f.settle(id, 'review');
   const request = f.request(id);
   assert.equal(request.execution.facts['output.verificationPassed'], true);
-  assert.equal(request.phase, 'done');
+  assert.equal(request.phase, 'review', 'Passing automated checks does not imply human acceptance.');
   assert.equal(request.evaluations.filter(item => item.stage === 'done').at(-1).passed, true);
 });
 
@@ -407,4 +408,37 @@ test('native provider edits are verified by the worker before the same Feature R
   assert.equal(f.request(id).owner.featureId, task.feature.key);
   assert.equal(await readFile(join(f.repository, 'approved.txt'), 'utf8'), 'before\n');
   await f.restart(); await f.board.tick(); assert.equal(f.invocations, 1);
+});
+
+
+test('worker verification establishes evidence when the model omits checks', { timeout: testTimeoutMs }, async t => {
+  const f = await fixture(t, async ({ runtime, signal }) => { await edit(runtime, signal); return complete('Implemented source; worker must verify it.'); });
+  const id = await f.create(), task = await f.settle(id, 'review');
+  assert.equal(f.invocations, 1); assert.equal(task.developmentCompletion.verified, true);
+  assert.equal(task.developmentEvidence.checks[0].status, 'passed');
+  assert.match(task.developmentEvidence.checks[0].stdout, /actual edited source/);
+  assert.equal(f.request(id).phase, 'review');
+});
+
+test('live review verification rejects a changed worktree and acceptance binds the real local commit', { timeout: testTimeoutMs }, async t => {
+  const f = await fixture(t, async ({ runtime, signal }) => { await edit(runtime, signal); await check(runtime, signal); return complete('Verified source change for human review.'); });
+  const id = await f.create(['approved.txt'], { id: 'review-acceptance-task', hash: 'e'.repeat(64), criteria: ['Confirm the approved source behavior.'] });
+  const task = await f.settle(id, 'review');
+  let request = f.request(id);
+  const review = request.delivery.review;
+  assert.ok(review); assert.equal(request.phase, 'review');
+  assert.equal(await git(f.repository, 'rev-parse', review.candidate.branch), review.candidate.candidateCommit);
+  assert.equal(await f.board.verifyDelivery(request.id, request.revision), review.candidate.candidateDigest);
+  await writeFile(join(task.worktree, 'approved.txt'), 'unreviewed change\n');
+  await assert.rejects(f.board.verifyDelivery(request.id, request.revision), /changed/);
+  assert.equal(f.request(id).phase, 'review');
+  await writeFile(join(task.worktree, 'approved.txt'), 'after\n');
+  request = f.request(id);
+  await f.board.verifyDelivery(request.id, request.revision);
+  const command = { action: 'attest', requestId: request.id, expectedRevision: request.revision, operationId: 'accept-reviewed-candidate', inputRevision: request.inputRevision,
+    inputHash: request.inputHash, outputDigest: request.execution.outputDigest, candidateCommit: review.candidate.candidateCommit, candidateDigest: review.candidate.candidateDigest,
+    note: 'Inspected the exact local candidate.', humanOutcomes: review.criteria.filter(item => item.evaluator === 'human').map(item => ({ criterionId: item.id, outcome: 'passed', reason: 'Observed approved.txt containing the required after value.' })) };
+  assert.equal(f.sessions.requests.command(command).request.phase, 'done');
+  assert.equal(f.sessions.requests.replayCommand(command).duplicate, true);
+  assert.equal(await git(f.repository, 'rev-parse', 'HEAD'), f.baseCommit, 'Acceptance does not merge into the project baseline.');
 });

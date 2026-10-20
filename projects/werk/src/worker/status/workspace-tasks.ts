@@ -1,3 +1,4 @@
+import { usesLocalFeatureIntake, createLocalFeatureInteraction } from './workspace-local-feature-intake.js';
 import { stopSessionProcesses } from './workspace-processes.js';
 import { admitFeatureRequest } from '../application/feature-admission.js';
 import { interactionFeatureRequest, sessionFeatureRequest, type FeatureRequestReference } from '../application/feature-request-reference.js';
@@ -15,6 +16,7 @@ import { withRepositoryAdmission } from './workspace-settings.js';
 
 /** Address sessions directly; automation never changes the browser's selected task. */
 export async function task(workspace: WorkspaceContext, input: unknown, reference?: FeatureRequestReference, trustedSelection?: ModelSelection){
+  if (!reference && usesLocalFeatureIntake(workspace, input)) return createLocalFeatureInteraction(workspace, input);
   const operation = workspace.taskRequests
     .catch(() => {})
     .then(async () => {

@@ -75,7 +75,7 @@ test('dirty, ahead, divergent and wrong-branch base checkouts are never overwrit
 test('task worktrees remain isolated and retain immutable bases and edits across synchronization and restart', async t => {
   const f = await fixtures(t), manager = f.manager(), repo = f.repositories[0];
   const first = await manager.prepareWorktree(repo.id, 'first task', signal());
-  assert.equal(first.reused, false); assert.equal(git(first.path, 'rev-parse', '--abbrev-ref', 'HEAD'), 'HEAD');
+  assert.equal(first.reused, false); assert.equal(git(first.path, 'rev-parse', '--abbrev-ref', 'HEAD'), first.branch); assert.match(first.branch, /^werk\/workspaces\//);
   assert.equal((await lstat(join(first.path, '.git'))).isFile(), true);
   await writeFile(join(first.path, 'file.txt'), 'work in progress\n');
   const freshCommit = await f.publish(0, 'latest base\n'); await manager.sync();

@@ -8,7 +8,7 @@ import { DomainError } from "../../shared/errors.js";
 import { BACKGROUND_ADMISSION_TIMEOUT_MS, type LocalTask } from './local-task-contracts.js';
 import type { LocalTaskRuntime } from './local-task-runtime-contract.js';
 
-export function developmentRuntime(host: Pick<LocalTaskRuntime, "settings" | "development" | "assertToolWorkspace" | "change">, task: LocalTask, limits: DevelopmentLimits = {}): DevelopmentRuntime | undefined {
+export function developmentRuntime(host: Pick<LocalTaskRuntime, "settings" | "development" | "assertToolWorkspace" | "change">, task: LocalTask, limits: DevelopmentLimits = {}, persistEvidence = true): DevelopmentRuntime | undefined {
     if (!task.implementation) return;
     validateDevelopmentState(task.implementation, task.developmentEvidence);
     assertDevelopmentPolicy(task.implementation, host.settings.toolPolicy());
@@ -17,8 +17,9 @@ export function developmentRuntime(host: Pick<LocalTaskRuntime, "settings" | "de
       initialEvidence: task.developmentEvidence, commandTimeoutMs: limits.commandTimeoutMs,
       candidateSourceMaxBytes: limits.candidateSourceMaxBytes, candidateSourceMaxFiles: limits.candidateSourceMaxFiles, candidateFileMaxBytes: limits.candidateFileMaxBytes,
       candidateApprovedFileMaxBytes: limits.candidateApprovedFileMaxBytes, candidateApprovedTotalMaxBytes: limits.candidateApprovedTotalMaxBytes, candidateReviewPatchMaxBytes: limits.candidateReviewPatchMaxBytes,
-      verifyWorkspace: signal => host.assertToolWorkspace(task, signal, false, limits), currentPolicy: () => host.settings.toolPolicy(),
+      verifyWorkspace: signal => host.assertToolWorkspace(task, signal, !persistEvidence, limits), currentPolicy: () => host.settings.toolPolicy(),
       checkpoint: async evidence => {
+        if (!persistEvidence) return;
         validateDevelopmentState(task.implementation, evidence);
         await host.change(tasks => { const current = tasks.find(item => item.id === task.id);
           if (!current || current.currentTurnId !== task.currentTurnId || current.status !== 'running') throw new DomainError('conflict', 'This implementation attempt no longer owns its worktree.');

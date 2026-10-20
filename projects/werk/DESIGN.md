@@ -152,6 +152,20 @@ The Running now strip follows the shared executor's current session. Completed
 and Drafts are secondary disclosures. The layout does not use several apparently
 active columns to imply parallel execution.
 
+Request detail is the delivery workspace: request input/revision, questions,
+activity, changes, verification and human decision remain attached to one Feature
+Request. Show lifecycle separately from run status and phase. A completed model
+invocation or delivery run is never labelled Accepted without a current-candidate
+human decision. Blocked views identify the reason, responsible actor and next
+available action without requiring transcript inspection.
+
+The behaviour inspector is read-only. It presents the selected branch/action,
+conditions, wait reason and bounded repair allowance. Pause intake and pause after
+step have distinct scope; interruption and cancellation remain pending until the
+actual outcome is known. Reconnect reconstructs durable state, and background
+polling preserves focus and typed answers. Markdown and webview commands share
+operation identity, source/revision guards and candidate evidence rules.
+
 The right-hand panel offers New request and Follow up for the selected task.
 Instructions, provider/agent choices and optional repository-file approval belong
 to this one interaction. Create request establishes a worker-owned session and

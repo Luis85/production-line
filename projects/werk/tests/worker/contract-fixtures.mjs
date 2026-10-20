@@ -72,7 +72,7 @@ export function snapshotFixture(overrides = {}) {
  * @returns {import('../../src/worker/application/model-contract.js').StructuredModel} */
 export function structuredReply(connection, reply) {
   return {
-    configuration: { id: connection.id, model: connection.model, instruction: connection.instruction ?? '' },
+    configuration: { id: connection.id, model: connection.model, authenticationMode: connection.authenticationMode, effort: connection.effort, instruction: connection.instruction ?? '' },
     capabilities: modelCapabilities, reply,
     async execute(request, signal, usage) {
       return { type: 'completed', text: await reply(request.messages, signal, usage) };

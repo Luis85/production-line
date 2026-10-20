@@ -1,3 +1,4 @@
+import { verificationInputs } from './delivery-policy.js';
 import { callTimeout } from './tool-limits.js';
 import { classifyDevelopmentEvidence } from './development-verification.js';
 import { createHash } from 'node:crypto';
@@ -12,7 +13,7 @@ import { sharedFeaturePublicationIssue, sharedFeaturePublicationLimits, type Sha
 /** Frozen authority for a new repository implementation. Never inferred for saved proposal tasks. */
 export interface DevelopmentCheck { id: string; name: string; executable: string; args: string[]; fingerprint: string; timeoutMs?: number; }
 /** `sharedPublication` is frozen for requests admitted through shared intake: the publisher's patch and changed-file bounds. */
-export interface DevelopmentScope { schemaVersion: 1; mode: 'worktree'; baseCommit: string; approvedPaths: string[]; checks: DevelopmentCheck[]; sharedPublication?: SharedFeaturePublicationLimits; }
+export interface DevelopmentScope { schemaVersion: 1; mode: 'worktree'; baseCommit: string; approvedPaths: string[]; checks: DevelopmentCheck[]; verificationInputs?: string[]; sharedPublication?: SharedFeaturePublicationLimits; }
 export interface DevelopmentCheckEvidence {
   presetId: string; presetFingerprint: string; candidateDigest: string;
   status: 'passed' | 'failed' | 'interrupted'; exitCode: number | null;
@@ -28,7 +29,7 @@ export interface SharedPublicationStatus extends SharedFeaturePublicationLimits 
  * `changedPaths` is always complete. `files` is a byte-bounded listing with hashes; changed paths beyond its budget are
  * listed without hashes, then counted, and `omittedFiles` counts unchanged files below approved folders left out.
  */
-export interface DevelopmentCandidate { patch: string; digest: string; changedPaths: string[]; files?: DevelopmentListedFile[]; changedPathsWithoutHashes?: string[]; omittedChangedPaths?: number; omittedFiles?: number; sharedPublication?: SharedPublicationStatus; }
+export interface DevelopmentCandidate { patch: string; digest: string; /** Exact Git tree of inspected raw source bytes; required for new local delivery. */ treeDigest?: string; changedPaths: string[]; files?: DevelopmentListedFile[]; changedPathsWithoutHashes?: string[]; omittedChangedPaths?: number; omittedFiles?: number; sharedPublication?: SharedPublicationStatus; }
 export interface DevelopmentRuntime {
   /** Validate the retained workspace and durably invalidate earlier checks before a native provider may edit. */
   prepareNative?(signal: AbortSignal): Promise<void>;
@@ -50,16 +51,16 @@ export interface DevelopmentFactoryOptions extends DevelopmentLimits {
 export type DevelopmentFactory = (options: DevelopmentFactoryOptions) => DevelopmentRuntime;
 export type DevelopmentScopeView = Omit<DevelopmentScope, 'checks'> & { checks: Array<Pick<DevelopmentCheck, 'id' | 'name' | 'fingerprint'>> };
 export function developmentScopeView(scope: DevelopmentScope): DevelopmentScopeView {
-  return { schemaVersion: 1, mode: 'worktree', baseCommit: scope.baseCommit, approvedPaths: [...scope.approvedPaths], checks: scope.checks.map(({ id, name, fingerprint }) => ({ id, name, fingerprint })), ...(scope.sharedPublication ? { sharedPublication: { ...scope.sharedPublication } } : {}) };
+  return { schemaVersion: 1, mode: 'worktree', baseCommit: scope.baseCommit, approvedPaths: [...scope.approvedPaths], checks: scope.checks.map(({ id, name, fingerprint }) => ({ id, name, fingerprint })), ...(scope.verificationInputs ? { verificationInputs: [...scope.verificationInputs] } : {}), ...(scope.sharedPublication ? { sharedPublication: { ...scope.sharedPublication } } : {}) };
 }
 /** Names participate so edits to the operator's frozen verification plan require a new request. */
 export function developmentCheckFingerprint(check: Pick<ToolCommandPreset, 'id' | 'name' | 'executable' | 'args' | 'timeoutMs'>): string {
   return gateDigest({ id: check.id, name: check.name, executable: check.executable, args: check.args, ...(check.timeoutMs === undefined ? {} : { timeoutMs: check.timeoutMs }) });
 }
-export function freezeDevelopmentScope(baseCommit: string | undefined, approvedPaths: readonly string[], policy: ToolPolicy, options: { sharedPublication?: boolean } = {}): DevelopmentScope | undefined {
+export function freezeDevelopmentScope(baseCommit: string | undefined, approvedPaths: readonly string[], policy: ToolPolicy, options: { sharedPublication?: boolean; verificationInputs?: string[] } = {}): DevelopmentScope | undefined {
   const checks = policy.builtins.commands.filter(item => item.enabled && item.verification).map(item => ({ id: item.id, name: item.name, executable: item.executable, args: [...item.args], fingerprint: developmentCheckFingerprint(item), ...(item.timeoutMs === undefined ? {} : { timeoutMs: item.timeoutMs }) })).sort((a, b) => a.id.localeCompare(b.id));
   if (!baseCommit || !policy.builtins.files || !checks.length) return;
-  const scope: DevelopmentScope = { schemaVersion: 1, mode: 'worktree', baseCommit, approvedPaths: [...approvedPaths], checks, ...(options.sharedPublication ? { sharedPublication: { ...sharedFeaturePublicationLimits } } : {}) };
+  const scope: DevelopmentScope = { schemaVersion: 1, mode: 'worktree', baseCommit, approvedPaths: [...approvedPaths], checks, ...(options.verificationInputs ? { verificationInputs: verificationInputs(options.verificationInputs) } : {}), ...(options.sharedPublication ? { sharedPublication: { ...sharedFeaturePublicationLimits } } : {}) };
   validateDevelopmentState(scope);
   return scope;
 }
@@ -101,6 +102,7 @@ export function validateDevelopmentState(scope: unknown, evidence?: unknown): as
   const invalid = () => new DomainError('conflict', 'Saved implementation authority or verification evidence is invalid. Retained files require inspection.');
   if (!object(scope) || scope.schemaVersion !== 1 || scope.mode !== 'worktree' || typeof scope.baseCommit !== 'string' || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(scope.baseCommit) || !Array.isArray(scope.checks) || !scope.checks.length || scope.checks.length > 32) throw invalid();
   try { validateApprovedPaths(scope.approvedPaths, 'Approved paths', { folders: true }); for (const check of scope.checks) if (object(check)) callTimeout(check.timeoutMs, 'Required check'); } catch { throw invalid(); }
+  if (scope.verificationInputs !== undefined) { try { verificationInputs(scope.verificationInputs); } catch { throw invalid(); } }
   if (scope.sharedPublication !== undefined && !validSharedPublication(scope.sharedPublication)) throw invalid();
   if (scope.checks.some(check => !object(check) || typeof check.id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(check.id) || typeof check.name !== 'string' || !check.name.trim() || check.name.length > 120 || typeof check.executable !== 'string' || !check.executable.trim() || check.executable.length > 4096 || !Array.isArray(check.args) || check.args.length > 64 || check.args.some(arg => typeof arg !== 'string' || arg.length > 4000 || arg.includes('\0')) || !hash(check.fingerprint) || developmentCheckFingerprint(check as unknown as DevelopmentCheck) !== check.fingerprint) || new Set(scope.checks.map(check => check.id)).size !== scope.checks.length) throw invalid();
   if (evidence === undefined) return;

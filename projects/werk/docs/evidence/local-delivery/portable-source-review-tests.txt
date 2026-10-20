@@ -1,0 +1,42 @@
+✔ draft and missing intent/status never dispatch; explicit legacy ready remains compatible (95.070585ms)
+✔ missing/invalid/duplicate source holds retained work and renames retain its identity (122.607111ms)
+✔ material edits hold before safe revision, retain identity, and do not reopen terminal work (125.085914ms)
+✔ guarded note replacement keeps displaced user content recoverable and rejects stale writes (14.289885ms)
+✔ browser intake persists one canonical source and keeps its original polling identity through replay (62.795823ms)
+✔ portable execution IDs preserve uppercase identity without merging differently cased requests (0.443183ms)
+✔ priority-only edits reorder queued requests without revising input or dispatching again (99.603408ms)
+✔ repeated scans re-read bytes and provider context without exposing cached object mutations (19.180553ms)
+✔ an unsupported hard-link filesystem leaves the source in place before any displacement (14.752192ms)
+✔ a late editor save wins publication while the accepted source stays recoverable (8.194818ms)
+✔ a colliding preflight path is never removed as if the worker owned it (4.17008ms)
+✔ canonical Markdown request delivers a real local candidate, human acceptance and restart without redispatch (4026.862538ms)
+✔ priority-only Markdown edits reorder a paused queue without accepting another input or invoking a model (3019.88603ms)
+✔ removing acceptance criteria from canonical Markdown clears stale criteria and blocks the same request at readiness (3190.219735ms)
+✔ an external candidate edit withdraws review readiness without another model call or stale acceptance (5520.511431ms)
+✖ an exact-file canonical request waits for a required check and retries the same source once configured (478.330216ms)
+✔ selection gives authored values precedence over compatible profile and connection defaults (3.297076ms)
+✔ accepted defaults stay fixed with rotated credentials and changed settings or profile models (0.512299ms)
+✔ provider effort capabilities reject unsupported levels and permit native defaults without inventing a model (0.806439ms)
+✔ prepared request and reviewer journal retain effort and reject a changed reviewed selection (33.148526ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 19
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 17424.671278
+
+✖ failing tests:
+
+test at tests/worker/local-delivery-workspace.test.mjs:246:1
+✖ an exact-file canonical request waits for a required check and retries the same source once configured (478.330216ms)
+  Error [DomainError]: Pause new starts before changing tool access.
+      at updateToolAccess (file:///workspace/production-line/projects/werk/src/worker/dist/worker/status/workspace-settings.js:37:22)
+      at WorkerWorkspace.updateToolAccess (file:///workspace/production-line/projects/werk/src/worker/dist/worker/status/workspace.js:116:45)
+      at Object.configureChecks (file:///workspace/production-line/projects/werk/tests/worker/local-delivery-workspace.test.mjs:113:18)
+      at TestContext.<anonymous> (file:///workspace/production-line/projects/werk/tests/worker/local-delivery-workspace.test.mjs:254:11)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    code: 'conflict'
+  }

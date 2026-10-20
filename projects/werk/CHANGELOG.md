@@ -7,6 +7,24 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+### Added
+
+- Local delivery uses canonical `worker.request/v1` Markdown notes with explicit draft/submission intent, stable identity, scoped edits and dependency checks. Local chat intake writes the same notes and follows the same Feature Request lifecycle.
+- Committed `.werk/delivery-policy.json` selects quality profiles, bounded repair attempts and protected verification inputs. Each request retains the policy and repository baseline accepted at admission.
+- Durable delivery runs expose real execution steps, pause after a step, interruption, guarded recovery and append-only attempt evidence. Local candidate branches and review notes bind automated checks and per-criterion human acceptance to the exact candidate.
+- The worker review workspace shows delivery progress, blockers, scope, effective policy and candidate evidence. Provider settings expose explicit CLI-account/API-key selection, capabilities and diagnostics without silently switching billing authority.
+
+### Changed
+
+- Local authoring templates, CLI submission and documentation guide the request from draft to human acceptance. Legacy and shared Git intake remain supported.
+- Advisory release mutation testing adds delivery-policy and dependency contracts under a new scope baseline. Ordinary development remains independent of mutation runs.
+
+### Fixed
+
+- Source reconciliation preserves user-authored Markdown, handles renamed and duplicate request identities, fences unsafe revisions and replays acknowledged commands without duplicate execution.
+- Candidate verification includes raw Git tree identity and protects approved verification inputs. Retained worktree ownership checks preserve existing branches during cleanup.
+- Review controls preserve an exact pending command after a lost acknowledgement while preventing new actions against stale state.
+
 ## [0.14.0] - 2026-10-19
 
 ### Added

@@ -171,7 +171,10 @@ test('a rejected folder identity collision preserves the original request and su
   await f.workspace.featureTracking.sync();
   const tracking = await f.workspace.featureTrackingCommand({ action: 'get', sessionId: created.session.id });
   assert.equal(parseFeature(tracking.markdown).data.featureRequestKey, created.session.feature.key);
-  assert.equal(parseFeature(tracking.markdown).data.type, 'feature-request');
+  assert.equal(parseFeature(tracking.markdown).data.type, 'FeatureRequestProgress');
+  assert.equal(created.session.feature.source, 'folder');
+  const canonical = parseFeature(await readFile(join(f.project, 'legacy-features', 'interaction-feature-collision.md'), 'utf8'));
+  assert.equal(canonical.data.schema, 'worker.request/v1'); assert.equal(canonical.data.id, 'feature-collision');
   await f.restart();
   assert.equal(f.workspace.sessions.detail(created.session.id).session.feature.key, created.session.feature.key);
   assert.equal(f.workspace.features.view().records.find(item => item.id === 'collision').submitted, false);

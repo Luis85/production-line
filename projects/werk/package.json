@@ -41,7 +41,9 @@
     "typecheck:tests": "node scripts/quality/typecheck-tests.mjs",
     "readme:generate": "node scripts/storybook/readme-source.mjs generate",
     "readme:check": "node scripts/storybook/readme-source.mjs check",
-    "release:readme": "node scripts/release/readme-package.mjs"
+    "release:readme": "node scripts/release/readme-package.mjs",
+    "diagnostics:provider": "node scripts/runtime/provider-diagnostics.mjs",
+    "benchmark:intake": "node scripts/quality/local-intake-benchmark.mjs"
   },
   "devDependencies": {
     "@iconify-json/lucide": "1.2.143",

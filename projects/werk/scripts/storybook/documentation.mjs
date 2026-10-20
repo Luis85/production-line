@@ -18,6 +18,7 @@ const entrypoints = [
   ['docker-setup', 'Start with Docker', 'docs/tutorials/docker-first-task.md', 1],
   ['team-requests', 'Create and answer requests with your team', 'docs/how-to/team-feature-authoring.md', 2],
   ['implement-feature', 'Implement and review a feature', 'docs/how-to/implement-feature.md', 2],
+  ['local-delivery', 'Understand the local delivery worker', 'docs/explanation/local-delivery-worker.md', 2],
   ['worker-workspace', 'Use the optional worker webview', 'docs/how-to/use-worker-webview.md', 2],
   ['tool-access', 'Manage tools and MCP connections', 'docs/how-to/manage-model-tools.md', 2],
   ['consumption', 'Set capacity and consumption limits', 'docs/how-to/worker-consumption-limits.md', 3],
