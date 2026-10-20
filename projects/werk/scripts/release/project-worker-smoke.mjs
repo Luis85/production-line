@@ -100,7 +100,8 @@ try {
     git('clone','/project/.werk/fixture-remote.git','/tmp/werk-repo-seed');
   `);
   await call('/api/settings', { repositories: { pollMs: 1000, items: [{ id: 'project', path: '/project', branch: 'main', remote: 'origin', watch: true }] } });
-  assert.equal((await call('/api/repositories')).items[0].state, 'ready');
+  await until(async () => (await call('/api/repositories')).items[0].state === 'ready')
+    .catch(async cause => { throw new Error('Assigned repository did not become ready: ' + JSON.stringify(await call('/api/repositories')), { cause }); });
   const gitOutput = async (...args) => (await compose('exec', '-T', 'worker', 'git', ...args)).stdout.trim();
   const checkoutBefore = { head: await gitOutput('rev-parse', 'HEAD'), index: await gitOutput('write-tree') };
   await compose('exec', '-T', 'worker', 'node', '-e', String.raw`
@@ -128,8 +129,10 @@ try {
   const retainedTree = join(project, task.worktree.slice('/project/'.length));
   assert.match(await readFile(join(retainedTree, '.git'), 'utf8'), /^gitdir: /);
   assert.equal(await readFile(join(retainedTree, 'approved.txt'), 'utf8'), 'initial committed\n');
+  await until(async () => (await call('/api/repositories')).items[0].state === 'dirty')
+    .catch(async cause => { throw new Error('Watched repository did not report the preserved dirty checkout: ' + JSON.stringify(await call('/api/repositories')), { cause }); });
   assert.equal(await readFile(join(project, 'approved.txt'), 'utf8'), 'uncommitted operator edit\n');
-  assert.equal((await call('/api/repositories')).items[0].state, 'dirty');
+  assert.deepEqual({ head: await gitOutput('rev-parse', 'HEAD'), index: await gitOutput('write-tree') }, checkoutBefore);
   await compose('stop'); await compose('up', '-d', '--wait', '--wait-timeout', '90');
   const restoredTask = await call('/api/taskboard/detail', { id: taskId });
   assert.equal(restoredTask.worktree, task.worktree); assert.equal(restoredTask.baseCommit, task.baseCommit); assert.equal(restoredTask.status, 'review');
