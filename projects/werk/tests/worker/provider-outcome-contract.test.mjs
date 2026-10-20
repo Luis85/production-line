@@ -32,14 +32,14 @@ for (const provider of /** @type {const} */ (['codex', 'claude', 'cursor'])) {
     assert.equal(parseModelResult(JSON.stringify({ werkInteraction: { schemaVersion: 1, kind: 'question', message: 'Which target?' } })).type, 'needs_input');
   });
 
-  test(`${provider} cancellation stays pending until the contained process exits`, { timeout: 10000 }, async t => {
-    const root = await directory(t), started = join(root, 'started'), controller = new AbortController();
-    const pending = providerCommand(process.execPath, ['-e', `require('node:fs').writeFileSync(${JSON.stringify(started)},String(process.pid));setInterval(()=>{},1000);`], root, controller.signal, undefined, true, provider);
+  test(`${provider} cancellation retains partial files and stays pending until the contained process exits`, { timeout: 10000 }, async t => {
+    const root = await directory(t), started = join(root, 'started'), partial = join(root, 'partial.txt'), controller = new AbortController();
+    const pending = providerCommand(process.execPath, ['-e', `require('node:fs').writeFileSync(${JSON.stringify(partial)},'partial implementation');require('node:fs').writeFileSync(${JSON.stringify(started)},String(process.pid));setInterval(()=>{},1000);`], root, controller.signal, undefined, true, provider);
     const rejected = assert.rejects(pending, error => { assert.equal(providerFailureOutcome(error).state, 'interrupted'); return true; });
     let pid;
     while (!pid) { t.signal.throwIfAborted(); pid = Number(await readFile(started, 'utf8').catch(() => '')); if (!pid) await delay(10); }
     controller.abort(); await rejected;
-    assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+    assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' }); assert.equal(await readFile(partial, 'utf8'), 'partial implementation');
   });
 }
 
@@ -49,4 +49,8 @@ test('unknown diagnostic text stays generic and model prose cannot manufacture a
   assert.equal(structuredProviderFailure({ type: 'item.completed', item: { type: 'agent_message', text: 'permission_denied' } }), undefined);
   assert.equal(structuredProviderFailure({ type: 'result', is_error: false, permission_denials: [{ tool_name: 'Bash', tool_input: 'private' }] }).code, 'approval_required');
   assert.equal(providerFailureOutcome(Object.assign(new ProviderModelError('authentication'), { message: 'private diagnostic' })).message, 'Provider authentication failed. Check the saved connection.');
+});
+
+test('unknown response or process cessation remains distinct from known failure and never permits automatic retry', () => {
+  for (const code of /** @type {const} */ (['outcome_unknown', 'process_stop_unconfirmed'])) { const outcome = providerFailureOutcome(new ProviderModelError(code)); assert.equal(outcome.state, 'outcome_unknown'); assert.equal(outcome.automaticRetry, false); }
 });

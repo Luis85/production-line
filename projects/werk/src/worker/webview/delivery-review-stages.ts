@@ -1,3 +1,5 @@
+import { currentCriterionDecision, criterionObservedPassed } from './delivery-criterion-view';
+import { acceptedDeliveryPolicy } from './delivery-policy-view';
 import type { WorkerRequest } from '../application/request-gates';
 import { deliveryStatusLabels } from './delivery-view';
 
@@ -21,8 +23,10 @@ export function deliveryReviewStages(request: WorkerRequest) {
   else if (verificationStep?.status === 'failed') Object.assign(verification, { state: 'blocked', detail: 'This delivery run recorded a failed verification step.' });
   if (review) {
     const required = review.criteria.filter(criterion => criterion.mandatory && criterion.evaluator === 'check');
-    const passed = required.every(criterion => review.results.some(result => result.criterionId === criterion.id && result.status === 'passed'));
-    Object.assign(verification, { state: passed ? 'complete' : 'blocked', detail: passed ? required.length ? 'Required automated criteria passed for this exact candidate. Human acceptance is separate.' : 'No automated criteria are required for this candidate. Human acceptance is separate.' : 'Required automated criteria have not passed for this exact candidate.' });
+    const authority = { policy: acceptedDeliveryPolicy(request.input.context)?.profile.exceptions, decisions: run.criterionDecisions };
+    const observedPassed = required.every(criterion => criterionObservedPassed(review, criterion.id));
+    const passed = required.every(criterion => criterionObservedPassed(review, criterion.id) || !!currentCriterionDecision(review, criterion.id, authority));
+    Object.assign(verification, { state: passed ? 'complete' : 'blocked', detail: passed ? !observedPassed ? 'Verification eligibility includes disclosed, policy-authorized criterion decisions. Observed failures remain visible in the evidence.' : required.length ? 'Required automated criteria passed for this exact candidate. Human acceptance is separate.' : 'No automated criteria are required for this candidate. Human acceptance is separate.' : 'Required automated criteria have not passed for this exact candidate.' });
     Object.assign(handoff, { state: passed ? 'complete' : 'blocked', detail: passed ? 'The current candidate has a local review package. Human acceptance, remote publication and merge are separate.' : 'The candidate package has unmet automated criteria. A review handoff is not established.' });
   }
   return { execution, verification, handoff, review };

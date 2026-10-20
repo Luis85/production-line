@@ -78,7 +78,7 @@ test('shared, private and Factory response adapters retain their separate byte l
   assert.equal(current.cancelled(), 1); assert.equal(current.body.locked, false);
 });
 
-test('provider API preserves response limits, HTTP classification and cancellation without remote diagnostics', async () => {
+test('provider API bounds responses and distinguishes undispatched cancellation from unknown dispatched outcomes', async () => {
   /** @type {import('../../src/worker/application/provider-contract.ts').ProviderConnection} */
   const connection = { id: 'openai-api', apiKey: 'private', model: 'fixture', executable: '' };
   const model = { configuration: { id: 'openai-api', model: 'fixture', instruction: '' }, async reply() { return ''; } };
@@ -88,8 +88,12 @@ test('provider API preserves response limits, HTTP classification and cancellati
   assert.equal(large.cancelled(), 1); assert.equal(large.body.locked, false);
   await assert.rejects(apiReply(connection, request, controller.signal, async () => new Response('PRIVATE_REMOTE_DIAGNOSTIC', { status: 401 })), error => testErrorCode(error) === 'authentication' && !testErrorMessage(error).includes('PRIVATE_REMOTE_DIAGNOSTIC'));
   const failed = new ReadableStream({ start(controller) { controller.error(Error('PRIVATE_STREAM_ERROR')); } });
-  // Abort after transport admission so the response-reader path performs the classification.
-  const lateController = new AbortController();
-  await assert.rejects(apiReply(connection, request, lateController.signal, async () => { lateController.abort(); return new Response(failed); }), error => testErrorCode(error) === 'cancelled' && !testErrorMessage(error).includes('PRIVATE_STREAM_ERROR'));
+  // A stopped local reader does not establish that the remote model stopped.
+  const lateController = new AbortController(); let dispatched = 0;
+  await assert.rejects(apiReply(connection, request, lateController.signal, async () => { dispatched++; lateController.abort(); return new Response(failed); }), error => testErrorCode(error) === 'outcome_unknown' && !testErrorMessage(error).includes('PRIVATE_STREAM_ERROR'));
+  assert.equal(dispatched, 1, 'an uncertain dispatched operation is never retried');
   assert.equal(failed.locked, false);
+  const beforeDispatch = new AbortController(); beforeDispatch.abort();
+  await assert.rejects(apiReply(connection, request, beforeDispatch.signal, async () => { dispatched++; return Response.json({}); }), error => testErrorCode(error) === 'cancelled');
+  assert.equal(dispatched, 1, 'pre-dispatch cancellation never invokes transport');
 });

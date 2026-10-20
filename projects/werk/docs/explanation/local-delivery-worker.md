@@ -8,7 +8,7 @@ This document records the implementation direction for [PRD-LDW-001](https://git
 
 | Decision | Reason and boundary |
 | --- | --- |
-| Implement R1 inside Werk | Reuse the TypeScript daemon, Vue webview, durable request journal, workspaces and provider ports. The PRD's Rust suggestion is optional. |
+| Implement the complete PRD inside Werk | Reuse the TypeScript daemon, Vue webview, durable request journal, workspaces and provider ports. The PRD's Rust suggestion is optional. |
 | Preserve existing providers and shared Git intake | Local delivery adds a mode to the central request workflow. Existing remote ownership, publication and provider constraints continue to apply. |
 | Pilot Windows with Claude Code | The user selected this combination. Linux fixture execution does not qualify native Windows or a real Claude account. |
 | Keep human acceptance separate from successful checks | A verified implementation is ready for review. Only a valid decision about the current revision and candidate can complete the request. |
@@ -36,6 +36,16 @@ The canonical local format is `worker.request/v1`, with explicit `id` and `inten
 Control and review commands carry a unique ID. Repeated saves acknowledge the recorded result; reusing that ID for a different payload is rejected. The webview submits the same validated application commands. Review decisions also identify the request revision and candidate commit; required manual criteria need their own recorded outcomes.
 
 Concurrent editing must preserve user text or a recoverable conflict copy. Managed-note updates require a writable local volume with hard-link support (such as NTFS); unsupported volumes are rejected before the original note is displaced. Missing, malformed or ambiguous active sources need reconciliation before further new task actions. The current artifact and scale boundaries are recorded in the acceptance ledger rather than inferred from illustrative PRD configuration.
+
+## Project policies, providers and capacity
+
+The [project policy reference](../reference/delivery-policy.md) documents the supported configuration. The complete iteration adds named execution profiles and request overrides, a separately configured completion reviewer, explicit fallback/handoff permissions, reusable bounded behavior profiles, versioned check packs, multiple project intakes and bounded concurrency. These extend the same request journal and provider adapters. A profile cannot expand machine grants, and a project policy must receive a local operator approval for its exact committed configuration before expanded capabilities run.
+
+A request can select `execution_profile`; allowed routing and defaults are resolved before dispatch and retained. Authentication and billing modes are explicit. A fallback starts a fresh authorized provider session from known work and findings; a vendor session handle is never treated as portable. Unknown invocation outcomes and missing authentication do not authorize automatic fallback spending. Cursor uses its native permissions and hooks; adapter capability limitations remain visible.
+
+The machine execution ceiling and each project's concurrency limit bound active work. Separate projects retain distinct identities even when their Markdown IDs match. Dependencies may refer to `projectId:requestId`; acceptance alone is not proof that prerequisite code is integrated into the relevant baseline. The worker records conservative Git incorporation evidence and waits when it cannot establish that fact.
+
+New authoring kits include required semantic readiness in their versioned starter policy; old snapshots without it remain compatible. See [configure readiness and criterion decisions](../how-to/configure-delivery-readiness.md) for structured conditions, committed references, explicit interpretations and narrowly authorized exceptions.
 
 ## Execution and evidence
 
@@ -69,9 +79,21 @@ Use a new command ID for a new decision. Repeated saves replay the first receipt
 changing the note under the same ID is rejected. After confirmation, use a
 separate `resume` command only when the preserved work is safe to continue.
 
-Evidence identifies its request, requirement revision, candidate, check definition, evaluator, environment and observation time. A relevant code, baseline, requirement or check-definition change makes earlier evidence stale. Automated criteria and manual criteria have separate outcomes; unavailable observations do not become zero-cost or passing results.
+Readiness, advisory-review and older provider attempts can also stop with an unknown outcome before a delivery run owns them. Their reserved execution capacity survives restart. Taskboard's **Provider processes need inspection** panel records an explicit operator-confirmed stop after checking current controllers, owned processes and development services. That action releases the reservation; it does not complete a model result, fill missing usage or continue the request. Use the ordinary Ready Check retry or request continuation separately. A request aborted before dispatch makes no provider call; aborting an already dispatched API request cannot prove the provider stopped and retains an unknown outcome. See [provider-attempt recovery](../reference/portable-apps.md#recover-an-uncertain-provider-attempt) for the authenticated headless commands.
+
+Evidence identifies its request, requirement revision, candidate, check definition, evaluator, environment and observation time. A relevant code, baseline, requirement or check-definition change makes earlier evidence stale. Automated criteria and manual criteria have separate outcomes; unavailable observations do not become zero-cost or passing results. Baseline checks run separately and distinguish observed regressions, resolved failures and pre-existing failures. A known baseline failure never exempts the candidate automatically. Exact policy-permitted criterion decisions are disclosed separately from the original check observations.
 
 The worker uses its own Git workspace and preserves the developer's checkout and staging area. Candidate packaging must not mutate the very code tree it claims was verified. Unaccepted work and its evidence remain inspectable after a failure, interruption or cancellation.
+
+## Monitoring and retention
+
+The metrics view separates canonical delivery measures from provider invocation statistics. It exposes cohort, time window, project and profile filters; clarification cycles, actionable-feedback timing, observed check outcomes, explicit human failures and review effort, recovery and integrity observations, blocker durations and consumption retain their denominators and missing-data coverage. New observations include eligible local and shared submissions waiting for readiness, setup or admission, before an implementation run exists. Admission correlates the same feature and session so it does not count the request twice. Actual Ready Check invocation records contribute provider time and consumption; recorded answers complete their corresponding clarification cycles.
+
+Historical submission times that were never observed remain unknown: **All time** includes those requests, while dated filters exclude them and report the excluded count. Missing or truncated history cannot imply a completed question cycle, zero cost or an invented final wait duration. A zero integrity-incident count is not an assurance that an unobserved host had no incidents.
+
+Temporary service logs have a bounded retention setting. Accepted delivery evidence and unaccepted work use an explicit preserve policy; an expired temporary log must not erase the candidate, its decisions or its review package. The run inspector shows the selected behavior path, conditions, wait reason and accepted runtime/repair limits. Bounded policy authoring edits declarative configuration; it does not execute arbitrary behavior code or silently approve the resulting policy.
+
+Optional [remote candidate publication](../how-to/publish-worker-candidates.md) records push and PR creation separately and reconciles an unknown acknowledgement before another mutation. Existing orchestrator and factory views remain the fleet surfaces; they do not manufacture integrated success from independent worker branches.
 
 ## Qualification and further reading
 

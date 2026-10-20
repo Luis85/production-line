@@ -18,7 +18,7 @@ function render(policy: boolean, legacy = false) { return () => ({ setup() {
   const fetchFixture: typeof fetch = (input, init) => {
     const path = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, location.href).pathname;
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) : {};
-    if (path === '/api/requests' && body.action === 'delivery_policy') return Promise.resolve(Response.json({ schemaVersion: 1, baseline: 'a'.repeat(40), configurationDigest: 'example-committed-policy', configuration: { schemaVersion: 1, version: 1, defaultProfile: 'feature', reviewDirectory: 'feature-reviews', profiles }, profile: profiles[0] }));
+    if (path === '/api/requests' && body.action === 'delivery_policy') return Promise.resolve(Response.json({ repositoryId: null, approvalRequired: false, approved: true, approvedAt: null, approvalRevision: 0, machineMaxParallel: 1, schemaVersion: 1, baseline: 'a'.repeat(40), configurationDigest: 'example-committed-policy', configuration: { schemaVersion: 1, version: 1, defaultProfile: 'feature', reviewDirectory: 'feature-reviews', profiles }, profile: profiles[0] }));
     return fixture.fetchFixture(input, init);
   };
   (window as unknown as { __WERK_STORY_FETCH__: typeof fetch }).__WERK_STORY_FETCH__ = fetchFixture;

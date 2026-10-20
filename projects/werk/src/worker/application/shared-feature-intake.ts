@@ -1,3 +1,6 @@
+import { appendFeatureIntake, observeFeatureIntake, featureIntakeBlocker, featureIntakeReadiness, featureIntakeHold, type FeatureIntakeMeasurement } from './feature-intake-measurement.js';
+import { observeSharedIntake } from './shared-intake-measurement.js';
+import { validateFeaturePreparation, type FeaturePreparation } from './feature-preparation.js';
 import { sharedFeatureInputHash, assertSharedFeatureSelection } from './shared-feature-selection.js';
 import { sharedReviewCheckpoint } from './shared-ready-review.js';
 import { sharedFeatureRequestReference } from './feature-request-reference.js';
@@ -18,6 +21,7 @@ export class SharedFeatureIntake {
   private state: SharedFeatureState = { schemaVersion: 1, workerId: '', revision: 0, config: defaultSharedIntakeConfig(), records: [] };
   private lifecycle: SharedFeatureLifecycle;
   private discovered: SharedFeatureView[] = [];
+  private dependencyCatalog: { id: string; repositoryId: string; dependsOn: string[] }[] = [];
   private snapshot: FeatureWorkflowSnapshot | null = null;
   private fault: string | null = null;
   private syncedAt: string | null = null;
@@ -28,7 +32,8 @@ export class SharedFeatureIntake {
   private configuring = false;
   private responses = 0;
   private readonly configureWork = new SerializedOperations();
-  constructor(ports: SharedIntakePorts) { this.ports = ports; this.lifecycle = new SharedFeatureLifecycle(ports, () => this.save()); }
+  constructor(ports: SharedIntakePorts) { this.ports = { ...ports, observeMetric: (record, update) => observeSharedIntake(this.state, record, update) }; this.lifecycle = new SharedFeatureLifecycle(this.ports, () => this.save()); }
+  measurements(): FeatureIntakeMeasurement[] { return structuredClone(this.state.measurements ?? []); }
   get enabled() { return this.initialized && this.state.config.enabled; }
   get busy() { return !!this.syncing || this.configuring || this.responses > 0; }
   requiredRepositoryIds(): string[] { return [...new Set([...(this.enabled ? [this.state.config.repositoryId] : []), ...this.state.records.filter(record => !sharedTerminal(record.status) || sharedTaskActive(record) || this.lifecycle.publication(record) !== 'synced').map(record => record.binding.repositoryId)])]; }
@@ -43,9 +48,17 @@ export class SharedFeatureIntake {
     const reference = sharedFeatureRequestReference(record);
     return record.submitted || reference.key === existingKey ? reference : undefined;
   }
+  dependencyInputs(): { id: string; repositoryId: string; dependsOn: string[]; sessionId?: string }[] { const retained = this.state.records.map(record => ({ id: record.id, repositoryId: record.binding.repositoryId, dependsOn: record.accepted.dependsOn ?? [], sessionId: 'local-' + record.taskId })); return structuredClone([...retained, ...this.dependencyCatalog.filter(node => !retained.some(record => record.repositoryId === node.repositoryId && record.id === node.id))]); }
   readyReviewSessionIds(): string[] { return [...new Set(this.state.records.flatMap(record => record.readyReviewState?.sessionIds ?? []))]; }
   get binding() { return this.initialized ? structuredClone(this.state.config) : undefined; }
-  async init() { this.state = await this.ports.load(); this.refreshPublications(); this.initialized = true; }
+  async init() {
+    this.state = await this.ports.load();
+    const previous = JSON.stringify(this.state.measurements);
+    for (const record of this.state.records) observeSharedIntake(this.state, record);
+    // Local telemetry migration never changes the accepted lifecycle or synchronizes Git.
+    if (JSON.stringify(this.state.measurements) !== previous) await this.ports.save(this.state);
+    this.refreshPublications(); this.initialized = true;
+  }
   start() { if (!this.timer && !this.stopping.signal.aborted) this.schedule(); }
   private schedule() {
     if (this.stopping.signal.aborted) return;
@@ -53,7 +66,7 @@ export class SharedFeatureIntake {
     this.timer.unref();
   }
   private refreshPublications() { for (const record of this.state.records) record.publication = this.lifecycle.publication(record); }
-  private save() { this.refreshPublications(); return this.ports.save(this.state); }
+  private save() { this.refreshPublications(); for (const record of this.state.records) observeSharedIntake(this.state, record); return this.ports.save(this.state); }
   view(blockedReason: string | null = null): SharedIntakeView {
     const workflow = this.snapshot;
     const locals = this.state.records.filter(record => bindingKey(record.binding) === bindingKey(this.state.config)).map(record => this.publicRecord(record));
@@ -147,6 +160,7 @@ export class SharedFeatureIntake {
     this.discovered = [];
     const ids = new Map<string, number>();
     const observed = files.map(file => { try { const source = this.ports.source(file); if (source.id) ids.set(source.id, (ids.get(source.id) ?? 0) + 1); return { file, source }; } catch { return { file, source: null }; } });
+    this.dependencyCatalog = observed.flatMap(({ source }) => source?.id ? [{ id: source.id, repositoryId: config.repositoryId, dependsOn: source.dependsOn ?? [] }] : []);
     const diagnosticErrors: string[] = [];
     const diagnostic = async (file: Parameters<typeof publishIntakeDiagnostic>[0]['file'], issues: string[], hold?: SharedAdmissionHold) => {
       try { return await publishIntakeDiagnostic({ repository, workflow: snapshot, file, owner: this.state.workerId, issues, hold, signal }); }
@@ -170,16 +184,20 @@ export class SharedFeatureIntake {
       const existing = this.state.records.find(record => record.id === source.id && bindingKey(record.binding) === bindingKey(config));
       if (existing) continue;
       if (source.status !== 'ready') { this.discovered.push(this.unclaimed(file.name, source.id ?? '', source.title, source.status, commit)); continue; }
+      const metric = source.id ? observeFeatureIntake(this.state, sharedFeatureRequestReference({ id: source.id, sourcePath: file.path, binding: config }), file.revision, { projectId: config.repositoryId }) : undefined;
+      await this.save();
       const ready = snapshot.readyReview
         ? this.ports.readyReviewEligible?.(file.content, snapshot) ?? { valid: false, errors: [{ code: 'ready_review_unavailable', message: 'Update the worker to support the configured Feature Request Ready Check.' }] }
         : this.ports.ready(file.content, snapshot);
-      if (!ready.valid || !ready.input || !ready.inputHash) { const issues = ready.errors.map(e => e.message); const taskNote = await diagnostic(file, issues); this.discovered.push({ ...this.unclaimed(file.name, source.id ?? '', source.title, 'needs_rework', commit, issues), taskNote }); continue; }
+      if (!ready.valid || !ready.input || !ready.inputHash) { if (metric) appendFeatureIntake(metric, { inputRevision: file.revision, phase: 'waiting_input', feedback: true, blockers: [{ code: 'readiness', category: 'requirements' }], observations: featureIntakeReadiness(metric, file.revision, ready.errors) }); await this.save(); const issues = ready.errors.map(e => e.message); const taskNote = await diagnostic(file, issues); this.discovered.push({ ...this.unclaimed(file.name, source.id ?? '', source.title, 'needs_rework', commit, issues), taskNote }); continue; }
       let issue = this.ports.admissionIssue?.(ready.input);
-      let selection: SharedFeatureRecord['selection'];
-      try { selection = this.ports.resolveSelection?.(ready.input); assertSharedFeatureSelection({ accepted: ready.input, selection }); }
-      catch (error) { issue = error instanceof Error ? error.message : 'The selected model configuration is unavailable.'; }
-      if (issue) { const taskNote = await diagnostic(file, [issue]); this.discovered.push({ ...this.unclaimed(file.name, ready.input.id, ready.input.title, 'ready', commit, []), error: issue.slice(0, 500), taskNote }); continue; }
+      let blocker = { code: 'definition', category: 'provider' as const } as ReturnType<typeof featureIntakeBlocker>;
+      let selection: SharedFeatureRecord['selection'], preparation: FeaturePreparation = {};
+      try { preparation = structuredClone(await this.ports.prepare?.(ready.input, config, commit) ?? {}); validateFeaturePreparation(preparation); selection = preparation.selection ?? this.ports.resolveSelection?.(ready.input); assertSharedFeatureSelection({ accepted: ready.input, selection }); }
+      catch (error) { issue = error instanceof Error ? error.message : 'The selected model configuration is unavailable.'; blocker = featureIntakeBlocker(error); }
+      if (issue) { if (metric) appendFeatureIntake(metric, { inputRevision: ready.inputHash, phase: 'waiting_input', feedback: true, blockers: [blocker] }); await this.save(); const taskNote = await diagnostic(file, [issue]); this.discovered.push({ ...this.unclaimed(file.name, ready.input.id, ready.input.title, 'ready', commit, []), error: issue.slice(0, 500), taskNote }); continue; }
       const waiting = async (hold: SharedAdmissionHold) => {
+        if (metric) appendFeatureIntake(metric, { inputRevision: ready.inputHash!, phase: 'waiting_input', feedback: true, blockers: [featureIntakeHold(hold.code)] }); await this.save();
         const taskNote = await diagnostic(file, [], hold);
         this.discovered.push({ ...this.unclaimed(file.name, ready.input!.id, ready.input!.title, 'ready', commit, []), error: hold.message.slice(0, 500), taskNote });
       };
@@ -195,10 +213,11 @@ export class SharedFeatureIntake {
         ready: snapshot.readyReview ? null : { passed: true, issues: [] }, done: null, featureBranch: null, reviewNote: null, publication: 'pending', error: null,
         taskId: 'shared-feature-' + sharedHash(ready.input.id + bindingKey(config)).slice(0, 32),
         binding: config, sourcePath: file.path, sourceMarkdown: file.content, remoteRevision: file.revision,
-        accepted: ready.input, ...(selection ? { selection: structuredClone(selection) } : {}), inputHash: '', workflow: structuredClone(snapshot), claimed: false, submitted: false,
+        accepted: structuredClone(ready.input), ...preparation, ...(selection ? { selection: structuredClone(selection) } : {}), inputHash: '', workflow: structuredClone(snapshot), claimed: false, submitted: false,
       };
       record.inputHash = sharedFeatureInputHash(record);
       if (snapshot.readyReview) { record.readyReviewState = sharedReviewCheckpoint(record); record.progress = 'Feature Request Ready Check is queued before Definition of Ready.'; }
+      if (metric) appendFeatureIntake(metric, { inputRevision: record.inputHash, phase: 'readiness', blockers: [], ...(!snapshot.readyReview ? { feedback: true as const, observations: featureIntakeReadiness(metric, record.inputHash) } : {}) });
       this.state.records.push(record);
       await this.save();
       await this.lifecycle.reconcile(record, signal);

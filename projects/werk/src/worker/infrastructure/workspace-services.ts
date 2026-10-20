@@ -1,3 +1,4 @@
+import type { LocalTaskDependencies } from '../application/local-task-runtime-contract.js';
 import { createLocalDelivery } from './local-delivery.js';
 import { workspaceProcessTools, type WorkspaceProcessTools } from './workspace-process-tools.js';
 import { workspaceDelegation } from './workspace-delegation.js';
@@ -94,10 +95,11 @@ export function createWorkerSessions(directory: string, settings: WorkerSettings
     definitions: createWorkerDefinitions(directory), activeOutsideChat, auxiliary,
   });
 }
-export function createLocalTaskboard(directory: string, settings: WorkerSettingsPort, sessions: WorkerSessions, modelOrWorkspaces: WorkspaceProviderFactory | LocalTaskWorkspaces = modelFor, workspaces?: LocalTaskWorkspaces, consumption?: ConsumptionRuntime, processes?: WorkspaceProcessTools) {
+export function createLocalTaskboard(directory: string, settings: WorkerSettingsPort, sessions: WorkerSessions, modelOrWorkspaces: WorkspaceProviderFactory | LocalTaskWorkspaces = modelFor, workspaces?: LocalTaskWorkspaces, consumption?: ConsumptionRuntime, processes?: WorkspaceProcessTools, authorizeDelivery?: LocalTaskDependencies['authorizeDelivery']) {
   const model = typeof modelOrWorkspaces === 'function' ? modelOrWorkspaces : modelFor;
   return new LocalTaskboard(settings, sessions, {
     model: workspaceModelFactory(directory, settings, model, consumption, sessions.runs, processes), storage: localTaskStorage(directory), files: approvedTaskFiles, development: createDevelopmentRuntime, delivery: repository => createLocalDelivery({ repository, stateDirectory: directory }), observations: processes?.observations,
+    authorizeDelivery,
     workspaces: typeof modelOrWorkspaces === 'function' ? workspaces : modelOrWorkspaces,
   });
 }

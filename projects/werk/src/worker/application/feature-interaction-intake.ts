@@ -1,10 +1,10 @@
 import { DomainError } from '../../shared/errors.js';
-import { featureInputHash } from './feature-markdown.js';
+import { featureInputHash, featureTaskIdentity } from './feature-markdown.js';
 import type { FeatureIndex, FeatureInput } from './feature-requests.js';
 import type { FeatureDocumentPort } from './feature-management.js';
 export interface FeatureIntakeReceipt { id: string; inputHash: string; name: string; taskId: string; sessionId: string; created?: boolean; }
 /** Reserve browser intake before publishing its canonical source; subsequent observation owns admission. */
-export async function publishFeatureInteraction(index: FeatureIndex, documents: FeatureDocumentPort, id: string, input: FeatureInput, markdown: string, persist: () => Promise<void>) {
+export async function publishFeatureInteraction(index: FeatureIndex, documents: FeatureDocumentPort, id: string, input: FeatureInput, markdown: string, persist: () => Promise<void>, projectId?: string) {
   const parsed = documents.validate(markdown), inputHash = featureInputHash(input);
   if (parsed.id !== id || featureInputHash(parsed.input) !== inputHash || parsed.status !== 'submit') throw new DomainError('invalid_input', 'Canonical interaction source does not match its submitted input.');
   index.intakeReceipts ??= [];
@@ -15,7 +15,8 @@ export async function publishFeatureInteraction(index: FeatureIndex, documents: 
     const name = 'interaction-' + id + '.md';
     try { await documents.read(name); throw new DomainError('conflict', 'A source note already occupies this interaction filename.'); }
     catch (error) { if (!(error instanceof DomainError) || error.code !== 'not_found') throw error; }
-    receipt = { id, inputHash, name, taskId: id, sessionId: input.mode === 'patch' ? 'local-' + id : id };
+    const identity = projectId ? featureTaskIdentity(id, input.mode, projectId) : { taskId: id, sessionId: input.mode === 'patch' ? 'local-' + id : id };
+    receipt = { id, inputHash, name, ...identity };
     index.intakeReceipts.push(receipt); await persist();
   }
   try {

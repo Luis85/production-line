@@ -1,3 +1,5 @@
+import { appendFeatureIntake, observeFeatureIntake, featureIntakeBlocker, type FeatureIntakeMeasurement } from './feature-intake-measurement.js';
+import { validateFeaturePreparation, type FeaturePreparation } from './feature-preparation.js';
 import { validateModelSelection, type ModelSelection, type ModelEffort } from './model-selection.js';
 import { featureRequestReference, validateFeatureRequestReference, type FeatureRequestReference } from './feature-request-reference.js';
 import { SerializedOperations } from '../../shared/serialized-operations.js';
@@ -14,6 +16,7 @@ import { featureInputHash, acceptedFeatureHash, featureTaskIdentity, type Featur
 import type { RequestCommand } from './request-gates.js';
 
 export interface FeatureGateProjection {
+  publications?: import('./remote-delivery-contracts.js').RemotePublication[];
   delivery?: { runId: string; status: string; phase: string; reason: string; waitingFor: string | null; controls: string[]; checkpoint?: { branch: string; candidateCommit: string } };
   requestId: string; revision: number; inputRevision: number; phase: RequestPhase;
   policyId: string; policyVersion: number; policyDigest: string;
@@ -28,9 +31,9 @@ export interface FeatureExecutionLinks {
   runId: string; attempt: number; before: string; after?: string; completedAt?: string;
   result?: string; patch?: string;
 }
-export interface FeatureInput { title: string; mode: 'chat' | 'patch'; provider: string; model?: string; effort?: ModelEffort; message: string; paths?: string[]; priority: number; definitionId?: string; definitionRef?: string; agent?: string; useInstructionsOnly?: boolean; requestSchema?: 'worker.request/v1'; qualityProfile?: string; dependsOn?: string[]; criteria?: string[]; sectionNames?: string[]; }
-export interface FeatureRecord { questions?: { id: string; message: string; blocking: boolean; criterionId?: string; active?: boolean }[]; semanticRevision?: number; sourceRevision?: string; sourceIssue?: FeatureSourceIssue; pendingInput?: FeatureInput; pendingInputHash?: string; commandReceipts?: FeatureCommandReceipt[]; managedHash?: string; selection?: ModelSelection; feature?: FeatureRequestReference; id: string; name: string; source: 'folder' | 'orchestrator'; taskId: string; sessionId: string; input?: FeatureInput; inputHash: string; submitted: boolean; status: string; createdAt: string; updatedAt: string; error?: string; result?: string; patch?: string; attempt?: number; archived?: boolean; taskNote?: FeatureTaskProjection; attention?: string; execution?: FeatureExecutionLinks; executionDirectory?: string; gates?: FeatureGateProjection; executionStatus?: string; interaction?: { phase: string; revision: number; pendingId?: string; link?: string }; }
-export interface FeatureIndex { intakeReceipts?: FeatureIntakeReceipt[]; version: 1; owner: string; records: FeatureRecord[]; }
+export interface FeatureInput { title: string; mode: 'chat' | 'patch'; provider: string; providerExplicit?: boolean; executionProfile?: string; model?: string; effort?: ModelEffort; message: string; paths?: string[]; priority: number; definitionId?: string; definitionRef?: string; agent?: string; useInstructionsOnly?: boolean; requestSchema?: 'worker.request/v1'; qualityProfile?: string; dependsOn?: string[]; criteria?: string[]; sectionNames?: string[]; }
+export interface FeatureRecord extends Omit<FeaturePreparation, 'selection'> { questions?: { id: string; message: string; blocking: boolean; criterionId?: string; active?: boolean }[]; semanticRevision?: number; sourceRevision?: string; sourceIssue?: FeatureSourceIssue; pendingInput?: FeatureInput; pendingInputHash?: string; commandReceipts?: FeatureCommandReceipt[]; managedHash?: string; selection?: ModelSelection; feature?: FeatureRequestReference; id: string; name: string; source: 'folder' | 'orchestrator'; taskId: string; sessionId: string; input?: FeatureInput; inputHash: string; submitted: boolean; status: string; createdAt: string; updatedAt: string; error?: string; result?: string; patch?: string; attempt?: number; archived?: boolean; taskNote?: FeatureTaskProjection; attention?: string; execution?: FeatureExecutionLinks; executionDirectory?: string; gates?: FeatureGateProjection; executionStatus?: string; interaction?: { phase: string; revision: number; pendingId?: string; link?: string }; }
+export interface FeatureIndex { measurements?: FeatureIntakeMeasurement[]; intakeReceipts?: FeatureIntakeReceipt[]; version: 1; owner: string; records: FeatureRecord[]; }
 export interface FeatureFile { intent?: 'draft' | 'submit'; schema?: string; commands?: FeatureMarkdownCommand[]; managedHash?: string; name: string; revision: string; id?: string; status?: string; source?: string; shared?: boolean; input?: FeatureInput; error?: string; }
 export interface FeatureFolderPort {
   directory: string;
@@ -50,11 +53,13 @@ export interface FeatureFolderPort {
   close(): Promise<void>;
 }
 export interface FeatureQueuePort {
+  projectId?(): string;
   reprioritize?(record: FeatureRecord, priority: number): Promise<boolean>;
   source?(record: FeatureRecord, issue: FeatureSourceIssue | null): Promise<void>;
   revise?(record: FeatureRecord, input: FeatureInput, semanticHash: string): Promise<boolean>;
   request?(record: FeatureRecord, command: RequestCommand): Promise<unknown>;
   selection?(input: FeatureInput): ModelSelection;
+  prepare?(input: FeatureInput): Promise<FeaturePreparation>;
   reference?(sessionId: string): FeatureRequestReference | undefined;
   interact?(record: FeatureRecord, command: InteractionCommand): Promise<unknown>;
   control?(record: FeatureRecord, action: 'cancel' | 'retry'): Promise<unknown>;
@@ -72,15 +77,17 @@ export class FeatureRequests {
   private observed = new Map<string, string>();
   private scannedFiles: FeatureFile[] = [];
   private dependencies: { id: string; dependsOn: string[] }[] = [];
+  measurements() { return structuredClone(this.index.measurements ?? []); }
   dependencyInputs() { return structuredClone(this.dependencies); }
   private errors: { file: string; message: string }[] = [];
   private readonly work = new SerializedOperations(); private scanning?: Promise<void>; private stopped = false;
   private initialized = false; private lastScan = 0; private lastSaved = ''; private fault: string | null = null;
   private folder: FeatureFolderPort; private queue: FeatureQueuePort; private pollMs: number; private canAdmit: () => boolean;
-  constructor(folder: FeatureFolderPort, queue: FeatureQueuePort, pollMs = 1000, canAdmit = () => true) { this.folder = folder; this.queue = queue; if (folder.taskNotes) this.notes = new FeatureTaskNotes(folder.taskNotes, queue); this.pollMs = pollMs; this.canAdmit = canAdmit; }
+  private projectId?: string;
+  constructor(folder: FeatureFolderPort, queue: FeatureQueuePort, pollMs = 1000, canAdmit = () => true, projectId?: string) { this.projectId = projectId; this.folder = folder; this.queue = queue; if (folder.taskNotes) this.notes = new FeatureTaskNotes(folder.taskNotes, queue); this.pollMs = pollMs; this.canAdmit = canAdmit; }
   private reference(record: FeatureRecord): FeatureRequestReference {
     const reference = record.feature ?? (record.source === 'orchestrator' ? this.queue.reference?.(record.sessionId) : undefined);
-    return reference ? { ...validateFeatureRequestReference(reference), sourcePath: record.name } : featureRequestReference({ id: record.source === 'orchestrator' ? record.taskId : record.id, source: record.source === 'orchestrator' ? 'orchestrator' : 'folder', scope: record.source === 'orchestrator' ? 'legacy-worker-assignment' : this.folder.directory, sourcePath: record.name });
+    return reference ? { ...validateFeatureRequestReference(reference), sourcePath: record.name } : featureRequestReference({ id: record.source === 'orchestrator' ? record.taskId : record.id, source: record.source === 'orchestrator' ? 'orchestrator' : 'folder', scope: record.source === 'orchestrator' ? 'legacy-worker-assignment' : this.folder.directory, sourcePath: record.name, ...(this.projectId ? { repositoryId: this.projectId } : {}) });
   }
   referenceForSession(sessionId: string, existingKey?: string) {
     const record = this.index.records.find(item => item.sessionId === sessionId);
@@ -88,8 +95,18 @@ export class FeatureRequests {
     const reference = this.reference(record);
     return record.submitted || reference.key === existingKey ? reference : undefined;
   }
-  publishInteraction(id: string, input: FeatureInput, markdown: string) { return this.exclusive(() => publishFeatureInteraction(this.index, this.folder.documents, id, input, markdown, () => this.persist())); }
-  async init() { this.index = await this.folder.load(); this.lastSaved = JSON.stringify(this.index); await this.folder.open(this.index.owner); this.initialized = true; }
+  publishInteraction(id: string, input: FeatureInput, markdown: string) { return this.exclusive(() => publishFeatureInteraction(this.index, this.folder.documents, id, input, markdown, () => this.persist(), this.projectId)); }
+  async init() {
+    this.index = await this.folder.load(); this.lastSaved = JSON.stringify(this.index); await this.folder.open(this.index.owner);
+    try {
+      for (const record of this.index.records) if (record.source === 'folder' && record.input) this.measure(record, true);
+      await this.persist(); this.initialized = true;
+    } catch (error) { await this.folder.close(); throw error; }
+  }
+  private measure(record: FeatureRecord, historical = false) {
+    return observeFeatureIntake(this.index, this.reference(record), record.input ? fingerprint(record.input) : record.inputHash || 'unknown',
+      { projectId: this.queue.projectId?.() ?? this.projectId, profileId: record.deliveryPolicy?.profile.id ?? record.input?.qualityProfile, sessionId: record.sessionId, historical });
+  }
   view() { return { enabled: true, directory: this.folder.directory, pollMs: this.pollMs, error: this.fault, errors: structuredClone(this.errors), records: this.index.records.map(({ input, taskNote, ...record }) => ({ ...record, priority: input?.priority, feature: this.reference(record), ...(taskNote ? { taskNote: { identity: { ...taskNote.identity }, link: taskNote.link, status: taskNote.submission?.outcome ?? 'open' } } : {}) })) }; }
   async list() { await this.tick(true); return { ...this.view(), files: (this.index.records.length ? await this.folder.scan() : this.scannedFiles).map(({ input, ...file }) => ({ ...file, status: this.index.records.find(item => item.name === file.name)?.status ?? file.status ?? (file.intent === 'submit' ? 'ready' : file.intent), sourceIssue: this.index.records.find(item => item.name === file.name)?.sourceIssue, title: input?.title, priority: input?.priority, mode: input?.mode, provider: input?.provider, archived: this.index.records.find(item => item.name === file.name)?.archived ?? false })) }; }
   async action(input: unknown): Promise<FeatureActionResult> {
@@ -117,7 +134,12 @@ export class FeatureRequests {
   private exclusive<T>(action: () => Promise<T>) {
     return this.work.run(action);
   }
-  private async persist() { const serialized = JSON.stringify(this.index); if (serialized !== this.lastSaved) { await this.folder.save(this.index); this.lastSaved = serialized; } }
+  private async persist() {
+    for (const record of this.index.records) if (record.source === 'folder' && (record.submitted || record.status === 'cancelled')) {
+      const metric = this.measure(record, true);
+      if (metric.events.at(-1)?.phase !== 'queued' && metric.events.at(-1)?.phase !== 'cancelled') appendFeatureIntake(metric, { inputRevision: record.inputHash || 'unknown', phase: record.status === 'cancelled' ? 'cancelled' : 'queued', blockers: [] });
+    }
+    const serialized = JSON.stringify(this.index); if (serialized !== this.lastSaved) { await this.folder.save(this.index); this.lastSaved = serialized; } }
   private change(record: FeatureRecord, status: string, error?: string) {
     if (record.status !== status || record.error !== error) { record.status = status; record.error = error; record.updatedAt = new Date().toISOString(); }
   }
@@ -158,15 +180,17 @@ export class FeatureRequests {
         if (file.source === 'orchestrator' || !(file.intent || ['draft', 'ready'].includes(file.status ?? ''))) { this.errors.push({ file: file.name, message: 'Unrecognized lifecycle record. New requests need intent: draft or submit (legacy: explicit status: draft or ready).' }); continue; }
         if (!admit || (file.intent ? file.intent !== 'submit' : file.status !== 'ready') || previous !== file.revision) continue;
         if (!file.input) continue;
+        const measurement = file.id ? observeFeatureIntake(this.index, featureRequestReference({ id: file.id, source: 'folder', scope: this.folder.directory, sourcePath: file.name, ...(this.projectId ? { repositoryId: this.projectId } : {}) }), fingerprint(file.input), { projectId: this.queue.projectId?.() ?? this.projectId, profileId: file.input.qualityProfile }) : undefined;
+        await this.persist();
         const issue = this.queue.admissionIssue?.(file.input);
-        if (issue) { this.errors.push({ file: file.name, message: issue.slice(0, 500) }); continue; }
+        if (issue) { if (measurement) appendFeatureIntake(measurement, { inputRevision: fingerprint(file.input), phase: 'waiting_input', feedback: true, blockers: [{ code: 'definition', category: 'provider' }] }); await this.persist(); this.errors.push({ file: file.name, message: issue.slice(0, 500) }); continue; }
         if (this.index.records.length >= 1000) { this.errors.push({ file: file.name, message: 'Feature index reached 1,000 records. Use a new worker state and folder for further requests.' }); continue; }
-        let selection: ModelSelection | undefined;
-        try { if (this.queue.selection) selection = validateModelSelection(this.queue.selection(file.input)); }
-        catch (error) { this.errors.push({ file: file.name, message: error instanceof Error ? error.message : 'Choose a configured model before accepting this request.' }); continue; }
+        let selection: ModelSelection | undefined, preparation: FeaturePreparation = {};
+        try { preparation = structuredClone(await this.queue.prepare?.(file.input) ?? {}); validateFeaturePreparation(preparation); selection = preparation.selection ?? (this.queue.selection ? validateModelSelection(this.queue.selection(file.input)) : undefined); }
+        catch (error) { if (measurement) appendFeatureIntake(measurement, { inputRevision: fingerprint(file.input), phase: 'waiting_input', feedback: true, blockers: [featureIntakeBlocker(error)] }); await this.persist(); this.errors.push({ file: file.name, message: error instanceof Error ? error.message : 'Choose a configured model before accepting this request.' }); continue; }
         const id = file.id ?? randomUUID(), at = new Date().toISOString();
-        record = { id, ...(selection ? { selection } : {}), feature: featureRequestReference({ id, source: 'folder', scope: this.folder.directory, sourcePath: file.name }), name: file.name, source: 'folder', ...featureTaskIdentity(id, file.input.mode), ...(this.index.intakeReceipts?.find(receipt => receipt.id === id) ? { taskId: this.index.intakeReceipts.find(receipt => receipt.id === id)!.taskId, sessionId: this.index.intakeReceipts.find(receipt => receipt.id === id)!.sessionId } : {}), input: structuredClone(file.input), inputHash: fingerprint(file.input), submitted: false, semanticRevision: 1, sourceRevision: file.revision, status: 'waiting', createdAt: at, updatedAt: at };
-        this.index.records.push(record); await this.persist();
+        record = { id, ...preparation, ...(selection ? { selection } : {}), feature: featureRequestReference({ id, source: 'folder', scope: this.folder.directory, sourcePath: file.name, ...(this.projectId ? { repositoryId: this.projectId } : {}) }), name: file.name, source: 'folder', ...featureTaskIdentity(id, file.input.mode, this.projectId), ...(this.index.intakeReceipts?.find(receipt => receipt.id === id) ? { taskId: this.index.intakeReceipts.find(receipt => receipt.id === id)!.taskId, sessionId: this.index.intakeReceipts.find(receipt => receipt.id === id)!.sessionId } : {}), input: structuredClone(file.input), inputHash: fingerprint(file.input), submitted: false, semanticRevision: 1, sourceRevision: file.revision, status: 'waiting', createdAt: at, updatedAt: at };
+        this.index.records.push(record); const metric = this.measure(record); appendFeatureIntake(metric, { inputRevision: fingerprint(file.input), phase: 'readiness', blockers: [] }); await this.persist();
       }
       record.name = file.name;
       const changed = record.source === 'folder' && !!file.input && fingerprint(file.input) !== acceptedFeatureHash(record);
@@ -177,7 +201,7 @@ export class FeatureRequests {
         // Publish the durable ID before admitting work; an interrupted save can be retried safely.
         if (!await this.folder.update(file, record, changed)) continue;
         try { await this.queue.submit(record); record.submitted = true; this.change(record, 'queued'); }
-        catch (error) { this.change(record, 'waiting', error instanceof Error ? error.message.slice(0, 500) : 'Task could not enter the queue.'); }
+        catch (error) { this.change(record, 'waiting', error instanceof Error ? error.message.slice(0, 500) : 'Task could not enter the queue.'); appendFeatureIntake(this.measure(record), { inputRevision: fingerprint(record.input!), phase: 'waiting_input', feedback: true, blockers: [featureIntakeBlocker(error)] }); }
         await this.persist();
       }
     }

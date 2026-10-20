@@ -1,3 +1,6 @@
+import { validateFeatureIntakeMeasurements } from '../../application/feature-intake-measurement.js';
+import { validateFeaturePreparation } from '../../application/feature-preparation.js';
+import { featureTaskIdentity } from '../../application/feature-markdown.js';
 import { validateModelSelection } from '../../application/model-selection.js';
 import { validateFeatureRequestReference } from '../../application/feature-request-reference.js';
 import { MarkdownFeatureTaskNotes } from './task-documents.js';
@@ -35,7 +38,9 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
   private defaultProvider: string | (() => string);
   private acceptedProviders = new Map<string, string>();
   private parsedSources = new Map<string, { provider: string; file: FeatureFile }>();
-  constructor(directory: string, state: string, defaultProvider: string | (() => string), project: string) {
+  private projectId?: string;
+  constructor(directory: string, state: string, defaultProvider: string | (() => string), project: string, projectId?: string) {
+    this.projectId = projectId;
     this.defaultProvider = defaultProvider;
     this.directory = resolve(directory); this.state = resolve(state);
     this.taskNotes = new MarkdownFeatureTaskNotes(this.directory, path => realDirectory(path, true));
@@ -48,12 +53,14 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
       if (index.version !== 1 || typeof index.owner !== 'string' || !featureId.test(index.owner) || !Array.isArray(index.records) || index.records.length > 1000 || new Set(index.records.map((r: FeatureRecord) => r.id)).size !== index.records.length) throw Error('Invalid feature index.');
       for (const record of index.records) if (!record || !featureId.test(record.id) || !requestName(record.name) || !['folder', 'orchestrator'].includes(record.source) || typeof record.submitted !== 'boolean' || typeof record.inputHash !== 'string' || typeof record.taskId !== 'string' || typeof record.sessionId !== 'string' || !record.submitted && !record.input) throw Error('Invalid feature index record.');
       if (index.intakeReceipts !== undefined && (!Array.isArray(index.intakeReceipts) || index.intakeReceipts.length > 1000 || new Set(index.intakeReceipts.map((receipt: { id: string }) => receipt.id)).size !== index.intakeReceipts.length)) throw Error('Invalid interaction intake history.');
-      for (const receipt of index.intakeReceipts ?? []) if (!receipt || typeof receipt.id !== 'string' || !/^[a-z0-9-]{1,80}$/.test(receipt.id) || receipt.name !== 'interaction-' + receipt.id + '.md' || receipt.taskId !== receipt.id || ![receipt.id, 'local-' + receipt.id].includes(receipt.sessionId) || !/^[a-f0-9]{64}$/.test(receipt.inputHash) || receipt.created !== undefined && typeof receipt.created !== 'boolean') throw Error('Invalid interaction intake receipt.');
+      for (const receipt of index.intakeReceipts ?? []) if (!receipt || typeof receipt.id !== 'string' || !/^[a-z0-9-]{1,80}$/.test(receipt.id) || receipt.name !== 'interaction-' + receipt.id + '.md' || receipt.taskId !== (this.projectId ? featureTaskIdentity(receipt.id, 'chat', this.projectId).taskId : receipt.id) || ![receipt.taskId, 'local-' + receipt.taskId].includes(receipt.sessionId) || !/^[a-f0-9]{64}$/.test(receipt.inputHash) || receipt.created !== undefined && typeof receipt.created !== 'boolean') throw Error('Invalid interaction intake receipt.');
+      validateFeatureIntakeMeasurements(index.measurements);
       for (const record of index.records) {
+        validateFeaturePreparation(record);
         if (record.feature) { const reference = validateFeatureRequestReference(record.feature); if (record.source === 'folder' && (reference.source !== 'folder' || reference.id !== record.id)) throw Error('Invalid feature parent identity.'); }
         if (record.selection !== undefined) {
           const selection = validateModelSelection(record.selection), input = record.input;
-          if (input && (selection.provider !== input.provider || input.model !== undefined && input.model !== '' && selection.model !== input.model || input.effort !== undefined && selection.effort !== input.effort))
+          if (input && ((!record.deliveryExecution || input.providerExplicit !== false) && selection.provider !== input.provider || input.model !== undefined && input.model !== '' && selection.model !== input.model || input.effort !== undefined && selection.effort !== input.effort))
             throw Error('Feature model selection differs from accepted input.');
         }
         validateFeatureTaskProjection(record, index.owner);

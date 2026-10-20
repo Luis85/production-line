@@ -70,7 +70,7 @@ export async function task(workspace: WorkspaceContext, input: unknown, referenc
           : retained?.submissionHash && workspace.sessions.detail(retained.id).chat.messages.length > 0;
         // A confirmed legacy receipt may be replayed after shared intake is configured.
         // Exact input and identity are still checked below; an empty session cannot admit new work.
-        if (!admitted) assertDirectFeatureCreation(workspace);
+        if (!admitted) assertDirectFeatureCreation(workspace, body);
       }
       if (body.action === "get") return workspace.sessions.detail(id);
       if (body.action === "cancel") { const result = await workspace.sessions.cancelTask(id); await stopSessionProcesses(workspace, id); return result; }

@@ -43,7 +43,8 @@
     "readme:check": "node scripts/storybook/readme-source.mjs check",
     "release:readme": "node scripts/release/readme-package.mjs",
     "diagnostics:provider": "node scripts/runtime/provider-diagnostics.mjs",
-    "benchmark:intake": "node scripts/quality/local-intake-benchmark.mjs"
+    "benchmark:intake": "node scripts/quality/local-intake-benchmark.mjs",
+    "pilot:provider": "node scripts/runtime/provider-pilot.mjs"
   },
   "devDependencies": {
     "@iconify-json/lucide": "1.2.143",

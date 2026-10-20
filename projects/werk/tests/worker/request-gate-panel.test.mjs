@@ -6,6 +6,8 @@ import * as vue from 'vue';
 import { frontend, deferred } from '../ui/helpers/frontend-loader.mjs';
 const projection = await frontend('src/worker/webview/feature-review.ts');
 const controller = await frontend('src/worker/webview/request-gate-controller.ts');
+const acceptedPolicy = await frontend('src/worker/webview/delivery-policy-view.ts');
+const readiness = await frontend('src/worker/webview/delivery-readiness-view.ts');
 const humanReview = await frontend('src/worker/webview/delivery-human-review.ts');
 const source = await readFile(new URL('../../src/worker/webview/components/useRequestGatePanel.ts', import.meta.url), 'utf8');
 const javascript = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
@@ -33,6 +35,8 @@ function fixture(api = async (_command) => undefined, overrides = {}) {
     '../request-gate-controller': controller,
     '../feature-review': projection,
     '../delivery-human-review': humanReview,
+    '../delivery-policy-view': acceptedPolicy,
+    '../delivery-readiness-view': readiness,
     './request-gate-drafts': { requestDrafts: vue.reactive(new Map()), requestOperations: operations },
   };
   const usePanel = new Function('require', 'exports', 'document', javascript + '; return exports.useRequestGatePanel;')(id => {

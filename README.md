@@ -27,6 +27,7 @@ merging.
 | Let a team submit requests through Git and Obsidian | [Shared Markdown queue](projects/werk/docs/how-to/shared-feature-intake.md) |
 | Design features by day and implement them overnight | [Evening handoff and morning review](projects/werk/docs/how-to/shared-feature-intake.md#work-during-the-day-implement-overnight) |
 | Create and follow requests in the browser | [Worker webview](projects/werk/docs/how-to/use-worker-webview.md) |
+| Configure provider routing, project capacity and delivery checks | [Project delivery policy](projects/werk/docs/reference/delivery-policy.md) |
 | Assign your worker to an Orchestrator | [Connect the next building block](#connect-your-worker-to-an-orchestrator) |
 | Bring production lines together in a Factory | [Grow into a Factory](#introduce-a-factory) |
 | Build or extend the frontend | [Storybook and frontend reference](#documentation-and-frontend-reference) |
@@ -91,8 +92,13 @@ Before submitting shared work:
    the repository, remote and shared intake branch.
 3. Review the model's file, command and MCP permissions and the required project
    checks. A provider login does not grant tool access.
-4. Commit and push the shared template, authoring kit and ready/done rules, then
-   connect shared intake using the [setup guide](projects/werk/docs/how-to/shared-feature-intake.md#connect-the-worker).
+4. Review and commit the generated `.werk/delivery-policy.json` with the shared
+   template, authoring kit and ready/done rules. Approve the exact committed policy
+   in **Settings → Project delivery**. New project policies require a structured
+   readiness assessment before implementation.
+5. Push the shared setup files, then connect shared intake using the
+   [setup guide](projects/werk/docs/how-to/shared-feature-intake.md#connect-the-worker). For local intake,
+   commit and approve the policy before submitting canonical requests as well.
 
 All setup controls are also available through the CLI. The
 [project-worker guide](projects/werk/docs/how-to/project-worker.md) covers browser-free setup,

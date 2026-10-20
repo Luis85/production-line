@@ -1,7 +1,9 @@
 import { identifier, object, text } from '../../shared/contracts.js';
+import { featureWorkflowPath } from './feature-workflow.js';
 import { ValidationError } from '../../shared/errors.js';
 
-export interface RepositoryAssignment { id: string; path: string; remote: string; branch?: string; watch: boolean; }
+export interface RepositoryFeatureIntake { directory: string; pollMs: number; }
+export interface RepositoryAssignment { id: string; path: string; remote: string; branch?: string; watch: boolean; features?: RepositoryFeatureIntake; }
 /** `worktreeDirectory` is an optional absolute folder outside every checkout for new task worktrees. */
 export interface RepositoryConfiguration { pollMs: number; items: RepositoryAssignment[]; worktreeDirectory?: string; }
 export const defaultRepositoryConfiguration = (): RepositoryConfiguration => ({ pollMs: 30000, items: [] });
@@ -16,7 +18,7 @@ export function validateRepositoryConfiguration(input: unknown, normalizePath: (
   if (!Array.isArray(entries) || entries.length > 64) throw new ValidationError('repositories.items must contain at most 64 repositories.');
   const ids = new Set<string>(), paths = new Set<string>();
   const items = entries.map(entry => {
-    const item = object(entry, 'Repository', ['id', 'path', 'remote', 'branch', 'watch']);
+    const item = object(entry, 'Repository', ['id', 'path', 'remote', 'branch', 'watch', 'features']);
     const id = identifier(item.id, 'Repository id');
     const sourcePath = text(item.path, 'Repository path', 4096);
     if (/[\x00-\x1f\x7f]/.test(sourcePath)) throw new ValidationError('Repository path must not contain control characters.');
@@ -35,8 +37,17 @@ export function validateRepositoryConfiguration(input: unknown, normalizePath: (
     }
     if (ids.has(id)) throw new ValidationError('Repository ids must be unique.');
     if (paths.has(path)) throw new ValidationError('Repository paths must be unique.');
+    let features: RepositoryFeatureIntake | undefined;
+    if (item.features !== undefined) {
+      const intake = object(item.features, 'Repository feature intake', ['directory', 'pollMs']);
+      const directory = featureWorkflowPath(intake.directory, 'Feature intake directory');
+      if (directory.toLowerCase().split('/').some(part => ['.werk', '.agents', '.claude', '.codex'].includes(part))) throw new ValidationError('Feature intake must stay outside private worker and provider configuration.');
+      const pollMs = intake.pollMs ?? 1000;
+      if (!Number.isSafeInteger(pollMs) || Number(pollMs) < 1000 || Number(pollMs) > 300000) throw new ValidationError('Feature intake interval must be 1,000–300,000 milliseconds.');
+      features = { directory, pollMs: Number(pollMs) };
+    }
     ids.add(id); paths.add(path);
-    return { id, path, remote, ...(branch ? { branch } : {}), watch };
+    return { id, path, remote, ...(branch ? { branch } : {}), watch, ...(features ? { features } : {}) };
   });
   let worktreeDirectory: string | undefined;
   if (value.worktreeDirectory !== undefined && value.worktreeDirectory !== '') {

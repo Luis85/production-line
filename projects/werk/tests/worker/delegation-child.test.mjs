@@ -11,7 +11,7 @@ import { WorkerRunJournal } from '../../src/worker/dist/worker/infrastructure/jo
 import { WorkerConsumptionJournal } from '../../src/worker/dist/worker/infrastructure/journal/consumption.js';
 import { WorkerConsumption, defaultConsumptionPolicy } from '../../src/worker/dist/worker/application/consumption.js';
 import { unknownUsage } from '../../src/worker/dist/worker/application/run-evidence.js';
-import { modelCapabilities } from '../../src/worker/dist/worker/application/model-contract.js';
+import { modelCapabilities, ProviderModelError } from '../../src/worker/dist/worker/application/model-contract.js';
 import { ToolAccessError } from '../../src/worker/dist/worker/application/tool-runtime.js';
 import { createDelegationChildRunner } from '../../src/worker/dist/worker/infrastructure/delegation-child.js';
 import { FileModelSessionStore } from '../../src/worker/dist/worker/infrastructure/model-session-store.js';
@@ -269,4 +269,18 @@ for (const tool of ['werk_file_read', 'werk_candidate_status', 'werk_candidate_a
   const result = JSON.parse(response.content[0].text).children[0];
   assert.equal(result.state, 'completed', result.error); assert.equal(requests, 1);
   assert.deepEqual(parent.manifest.limits.candidateInspection, captured, 'narrowing never mutates the parent evidence');
+});
+
+for (const failure of ['usage', 'run_finish', 'consumption_finish']) test(`unknown child outcome survives ${failure} persistence failure and parent abort`, async t => {
+  const controller = new AbortController();
+  const f = await fixture(t, factory(async (_request, _signal, observe, control) => {
+    control?.beforeCall(); observe?.(usage()); controller.abort(); throw new ProviderModelError('process_stop_unconfirmed');
+  }));
+  if (failure === 'usage') t.mock.method(f.runs, 'observeUsage', () => { throw Error('Usage persistence failed.'); });
+  if (failure === 'run_finish') t.mock.method(f.runs, 'finish', async () => { throw Error('Run persistence failed.'); });
+  if (failure === 'consumption_finish') t.mock.method(f.consumption, 'finish', () => { throw Error('Consumption persistence failed.'); });
+  await assert.rejects(f.run(input({ signal: controller.signal })), { code: 'process_stop_unconfirmed' });
+  assert.equal(f.runs.get(f.parent.id).outcome, 'running', 'the parent owns recovery, never a second child workflow');
+  assert.equal(f.runs.list().rows.length, 2);
+  if (failure !== 'run_finish') assert.equal(f.runs.list().rows[1].outcome, 'failed', 'aborted signal never relabels uncertainty as confirmed cancellation');
 });

@@ -31,7 +31,7 @@ Run the export tests.
 Keep the finance review requirement.
 `;
 test('plain request details read the configured Markdown without exposing metadata as form content', () => {
-  assert.deepEqual(readFeatureDetails(markdown), { selection: { provider: undefined, model: '', effort: '' }, fields: { goal: 'Export orders.', context: 'Existing order management.', 'acceptance criteria': 'A CSV download is available.', 'verification plan': 'Run the export tests.' }, title: 'Export orders', paths: 'src/export.ts' });
+  assert.deepEqual(readFeatureDetails(markdown), { selection: { provider: undefined, model: '', effort: '' }, executionProfile: '', qualityProfile: '', priority: 2, dependsOn: '', fields: { goal: 'Export orders.', context: 'Existing order management.', 'acceptance criteria': 'A CSV download is available.', 'verification plan': 'Run the export tests.' }, title: 'Export orders', paths: 'src/export.ts' });
 });
 test('editing a standard field preserves canonical identity, custom fields and unrelated template sections', () => {
   const changed = writeFeatureDetail(markdown, 'context', 'Finance needs a monthly export.');
@@ -84,4 +84,16 @@ test('a request inheriting its provider retains a valid explicit effort in struc
   const edited = writeFeatureDetail(inherited, 'goal', 'Export approved orders.');
   assert.equal(readFeatureDetails(edited).fields.goal, 'Export approved orders.'); assert.doesNotMatch(edited, /^provider:/m);
   assert.throws(() => readFeatureDetails(writeFeatureDetail(markdown, 'effort', 'invented')), /Correct the provider or effort/);
+});
+
+test('named execution profiles remove conflicting legacy overrides and preserve qualified dependency IDs', () => {
+  let updated = writeFeatureDetail(markdown, 'provider', 'claude-cli');
+  updated = writeFeatureDetail(updated, 'model', 'legacy');
+  updated = writeFeatureDetail(updated, 'execution_profile', 'implementation');
+  updated = writeFeatureDetail(updated, 'depends_on', 'FR-1\nshared:FR-2');
+  updated = writeFeatureDetail(updated, 'priority', '0');
+  const value = readFeatureDetails(updated);
+  assert.equal(value.executionProfile, 'implementation'); assert.equal(value.selection.provider, undefined); assert.equal(value.selection.model, '');
+  assert.equal(value.dependsOn, 'FR-1\nshared:FR-2'); assert.equal(value.priority, 0);
+  assert.equal(readFeatureDetails(writeFeatureDetail(updated, 'execution_profile', '')).executionProfile, '');
 });

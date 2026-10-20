@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 1,
+  "kind": "local-delivery-intake-benchmark",
+  "begunAt": "2026-10-20T17:53:43.773Z",
+  "completedAt": "2026-10-20T17:54:24.562Z",
+  "qualification": "host_measurement_only",
+  "environment": {
+    "platform": "linux",
+    "architecture": "x64",
+    "osRelease": "6.18.55",
+    "node": "v24.19.0",
+    "logicalCpus": 5,
+    "availableParallelism": 4,
+    "visibleTotalMemoryBytes": 18882674688,
+    "containerCpuMax": "400000 100000",
+    "containerMemoryMax": "17179869184",
+    "storageType": "unverified"
+  },
+  "implementation": [
+    {
+      "path": "src/worker/dist/worker/application/feature-requests.js",
+      "sha256": "4223ac34bc2b46ea1f95f5b934b2e5e1460b17cb58633dc3db3a91b54b680c51"
+    },
+    {
+      "path": "src/worker/dist/worker/application/feature-markdown.js",
+      "sha256": "75fedd60e483403292917e86510c3f9aa937b18ba1c5dbb6fcfe698d315a1c06"
+    },
+    {
+      "path": "src/worker/dist/worker/infrastructure/features/folder.js",
+      "sha256": "a205d533936ff9b801dbad3c8e59af190b8a8c5141525bfc16ee35826278762e"
+    },
+    {
+      "path": "src/worker/dist/worker/infrastructure/features/document.js",
+      "sha256": "b961ac5824ff4101b14b994f7e3b5e2cb6160e86053a92bae0182bae98944344"
+    }
+  ],
+  "dataset": {
+    "requests": 1000,
+    "bytesPerFile": 65536,
+    "totalBytes": 65536000,
+    "format": "worker.request/v1",
+    "state": "draft",
+    "padding": "YAML comment before the closing frontmatter delimiter",
+    "implementationAdmission": "disabled"
+  },
+  "method": {
+    "samples": 20,
+    "unmeasuredWarmups": 1,
+    "filesystemCache": "warm; not dropped",
+    "observation": "FeatureRequests.list() including reconciliation and MarkdownFeatureFolder.scan()",
+    "schedulingDelayMs": 1000,
+    "percentile": "nearest rank ceil(0.95 × n)"
+  },
+  "startup": {
+    "samplesMs": [
+      510.5602329999999,
+      472.3539490000003,
+      479.470597,
+      403.18431899999996,
+      433.72093799999993,
+      584.2688529999996,
+      464.2233550000001,
+      461.4031049999994,
+      442.2478179999998,
+      504.10421100000076,
+      448.2030990000003,
+      450.0245930000001,
+      450.4567619999998,
+      441.04083000000173,
+      440.9825629999996,
+      469.93799899999976,
+      440.99496,
+      431.7900010000012,
+      442.9270039999992,
+      461.13179800000034
+    ],
+    "p95Ms": 510.5602329999999,
+    "minimumMs": 403.18431899999996,
+    "maximumMs": 584.2688529999996,
+    "targetMs": 10000,
+    "withinTargetOnThisHost": true
+  },
+  "stableSaveVisibility": {
+    "samplesMs": [
+      1232.448973999999,
+      1245.3567399999993,
+      1245.7621770000005,
+      1247.6445759999988,
+      1250.8848720000024,
+      1255.6426290000018,
+      1307.106037999998,
+      1249.510581999999,
+      1251.4634880000012,
+      1257.3043289999987,
+      1249.3185799999992,
+      1243.715140999997,
+      1261.4803310000025,
+      1248.5614330000026,
+      1300.8208379999996,
+      1255.4145810000045,
+      1252.6393850000022,
+      1253.2792750000008,
+      1245.3215370000034,
+      1244.578720999998
+    ],
+    "p95Ms": 1300.8208379999996,
+    "minimumMs": 1232.448973999999,
+    "maximumMs": 1307.106037999998,
+    "targetMs": 3000,
+    "withinTargetOnThisHost": true
+  },
+  "invalidFiles": 0,
+  "providerInvocations": 0,
+  "exclusions": [
+    "browser render/state-to-visible latency",
+    "filesystem watcher notification delivery",
+    "real provider execution/authentication",
+    "native Windows qualification",
+    "4-core/16GB/local-SSD reference equivalence",
+    "1000 simultaneous submitted requests"
+  ]
+}

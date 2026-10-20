@@ -260,7 +260,7 @@ export async function runLockedWorker(
     const bound = status.address();
     if (bound && typeof bound !== "string") await dependencies.ready?.(bound);
     localTimer = setInterval(() => {
-      void workspace.features?.tick();
+      void workspace.tickFeatures();
       void workspace.featureTracking.sync();
       workspace.executor.wake();
       workspace.reviews.tick();

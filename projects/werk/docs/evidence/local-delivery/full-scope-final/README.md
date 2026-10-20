@@ -1,0 +1,27 @@
+# Final expanded local delivery browser evidence
+
+This snapshot supersedes the earlier [88-case working-tree capture](../full-scope/README.md) for targeted UI coverage. It retains the exact [90-case result](results.json), [40 visibility samples](latency.json), [build provenance](provenance.json) and [source inventory](source.json). Fifteen expanded-delivery/recovery stories, 25 retained delivery/review stories and five shared-authoring stories passed at both desktop and mobile viewports. This includes the final operator-recovery controls, unknown-submission-time metrics and persistent project selection after a saved request.
+
+The measured source digest is `c7e54ba4b7a050a3578a5ef5ff127a19a5f17d33faae8bb4bd7ab9a4c218707d`; the inventory SHA-256 is `a85a42cd467e3f389cf5780a12c5913ca30722d9a3bb0bc20a9820a5b422604c`. The build contains changes beyond base commit `8fc99c379c219b430f432d5fe16a2950d7eef0c4`; that commit alone is not the tested implementation. The inventory contains 110 components and 73 documentation pages. This is targeted working-tree evidence, not the final committed-HEAD full-catalogue qualification.
+
+Chromium 154.0.8037.57 on Debian 13 rendered offline fixture responses. Desktop p95 was 1,051ms (maximum 1,061ms); mobile p95 was 1,189ms (maximum 1,238ms). Each viewport has 20 sequential samples, all preserving the review draft, focus, page scroll and editor viewport position. Worker builds, quality checks and browser capture overlapped the measurement. It is not a quiet reference-machine benchmark and does not qualify the real daemon, network, provider, native Windows or assistive technology.
+
+An earlier 90-case attempt recorded 88 passes and two fixture errors: the new recovery fixture threw an intentional lost-acknowledgement error which the preview error collector correctly reported. The replacement uses the established HTTP 503 fixture response, and the final saved result verifies exact-command retry after the uncertain response. No passing result is claimed for that earlier attempt.
+
+Selected images from this final run are retained below. The raw result names the complete scratch capture set; only these selected screenshots are packaged here. Their visible captions identify the simulation.
+
+- [Recovery after confirmation on desktop](worker-execution-recovery--uncertain-reviewer-stop-desktop.png) and [mobile](worker-execution-recovery--uncertain-reviewer-stop-mobile.png): the operator receipt preserves the unknown model result and requires separate continuation; no actual process was inspected or stopped.
+- [Direct project request after save](worker-project-intake--direct-project-request-desktop.png): the chosen project remains selected; the request body was captured offline and no request was dispatched.
+- [Shared project draft on mobile](worker-project-intake--shared-project-automatic-routing-mobile.png): structured context/verification fields and automatic profile routing; the intentionally incomplete draft remains blocked from publication.
+- [Delivery metrics](worker-project-delivery--unknown-outcome-metrics-desktop.png): missing coverage remains explicit.
+- [Shared machine capacity](worker-project-delivery--shared-machine-capacity-desktop.png): machine and project occupancy remain distinct.
+
+The [acceptance ledger](../../../reports/2026-10-20-local-delivery-acceptance.md) separately records aggregate tests, mutation results, committed-catalogue qualification and remaining native/live-provider limits.
+
+## Later frozen-runtime local evidence
+
+The browser inventory above identifies the targeted UI capture. The later backend/build observations have their own [validation record](validation.json), [fast quality log](check-fast.txt), [worker build/package log](worker-build.txt) and [99-case rebuilt regression log](rebuilt-regressions.txt). The preceding [broad run failed ten cases](broad-test-failures.txt); all ten passed in the rebuilt targeted run, but a final broad local rerun is not claimed. The failure excerpt omits preceding passing output and removes trailing whitespace; its provenance retains the original full-log and unnormalized excerpt hashes. Exact-commit CI remains a separate gate on [PR #50](https://github.com/Luis85/production-line/pull/50).
+
+The [fresh 1,000 × 64KiB draft benchmark](intake-1000-65536.json) retains twenty samples per observation, runtime hashes and host details. Startup p95 was 511ms and stable-save visibility p95 was 1,301ms including the 1,000ms polling delay. This later measurement ran with a quiet local workload and warm filesystem cache; it did not exercise ready admission or its telemetry writes. Linux container CPU/memory limits and unverified storage do not establish native Windows or the specified reference-machine qualification.
+
+The first frozen v5 mutation attempt is retained as [incomplete metadata](mutation-v5-incomplete.json) and [tool output](mutation-v5-incomplete.txt): the time cap stopped it before a readable final report. Missing report/provenance entries do not prove runtime source changes. No score or completed mutant counts are claimed; a valid bounded rerun remains pending.

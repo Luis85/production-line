@@ -1,3 +1,5 @@
+import { validateDeliveryReadinessReferences, type DeliveryReadinessReference } from './delivery-readiness.js';
+import { validateDeliveryExecutionSnapshot, type DeliveryExecutionSnapshot } from './delivery-execution-snapshot.js';
 import { verificationInputs, validateDeliveryPolicySnapshot, type DeliveryPolicySnapshot } from './delivery-policy.js';
 import type { DeliveryDependencyReceipt } from './delivery-dependencies.js';
 import { validateModelSelection, type ModelSelection } from './model-selection.js';
@@ -65,6 +67,8 @@ export interface LocalTaskPreparation {
 /** Trusted coordinator reservation; these fields are never accepted from a task HTTP body. */
 export interface LocalTaskSubmission {
   deliveryPolicy?: DeliveryPolicySnapshot;
+  readinessReferences?: DeliveryReadinessReference[];
+  deliveryExecution?: DeliveryExecutionSnapshot;
   dependencies?: DeliveryDependencyReceipt[];
   verificationInputs?: string[];
   selection?: ModelSelection;
@@ -78,7 +82,7 @@ export interface LocalTaskSubmission {
   baseCommit?: string;
 }
 export function freezeSubmission(input: LocalTaskSubmission): LocalTaskSubmission {
-  const value = object(input, "Task reservation", ["id", "hash", "policy", "criteria", "repositoryId", "baseCommit", "feature", "definitionPrompts", "selection", "deliveryPolicy", "dependencies", "verificationInputs"]);
+  const value = object(input, "Task reservation", ["id", "hash", "policy", "criteria", "repositoryId", "baseCommit", "feature", "definitionPrompts", "selection", "deliveryPolicy", "readinessReferences", "deliveryExecution", "dependencies", "verificationInputs"]);
   if (typeof value.id !== "string" || !/^[a-z0-9-]{1,90}$/.test(value.id) ||
       typeof value.hash !== "string" || !/^[a-f0-9]{64}$/.test(value.hash))
     throw new DomainError("invalid_input", "Invalid feature task identity.");
@@ -92,8 +96,15 @@ export function freezeSubmission(input: LocalTaskSubmission): LocalTaskSubmissio
   // Ready Check answers may advance the implementation base while retaining the original workflow guidance.
   if (definitionPrompts && value.baseCommit === undefined)
     throw new DomainError("invalid_input", "Definition prompts require a reserved task source commit.");
+  const execution = value.deliveryExecution === undefined ? undefined : validateDeliveryExecutionSnapshot(value.deliveryExecution);
+  const policy = value.deliveryPolicy === undefined ? undefined : validateDeliveryPolicySnapshot(value.deliveryPolicy);
+  if (policy?.configuration.execution && !execution) throw new DomainError('conflict', 'The accepted project execution policy requires a frozen profile catalog.');
+  if (execution && (!policy?.configuration.execution || gateDigest(execution.policy) !== gateDigest(policy.configuration.execution) || value.selection !== undefined && gateDigest(value.selection) !== gateDigest(execution.selection)))
+    throw new DomainError('conflict', 'The reserved execution profile does not match the accepted project policy and model selection.');
   return {
-    ...(value.deliveryPolicy === undefined ? {} : { deliveryPolicy: validateDeliveryPolicySnapshot(value.deliveryPolicy) }),
+    ...(execution ? { deliveryExecution: execution } : {}),
+    ...(policy ? { deliveryPolicy: policy } : {}),
+    ...(value.readinessReferences === undefined ? {} : { readinessReferences: validateDeliveryReadinessReferences(value.readinessReferences) }),
     ...(value.dependencies === undefined ? {} : { dependencies: structuredClone(value.dependencies) as DeliveryDependencyReceipt[] }),
     ...(value.verificationInputs === undefined ? {} : { verificationInputs: verificationInputs(value.verificationInputs) }),
     id: value.id,
@@ -108,7 +119,7 @@ export function freezeSubmission(input: LocalTaskSubmission): LocalTaskSubmissio
   };
 }
 export function submissionContextHash(submission?: LocalTaskSubmission) {
-  const context = { deliveryPolicy: submission?.deliveryPolicy, dependencies: submission?.dependencies, verificationInputs: submission?.verificationInputs, policy: submission?.policy, criteria: submission?.criteria, repositoryId: submission?.repositoryId, baseCommit: submission?.baseCommit, definitionPrompts: submission?.definitionPrompts, selection: submission?.selection };
+  const context = { deliveryPolicy: submission?.deliveryPolicy, ...(submission?.readinessReferences ? { readinessReferences: submission.readinessReferences.map(({ observedAt: _observedAt, ...reference }) => reference) } : {}), deliveryExecution: submission?.deliveryExecution, dependencies: submission?.dependencies, verificationInputs: submission?.verificationInputs, policy: submission?.policy, criteria: submission?.criteria, repositoryId: submission?.repositoryId, baseCommit: submission?.baseCommit, definitionPrompts: submission?.definitionPrompts, selection: submission?.selection };
   return Object.values(context).some(value => value !== undefined) ? gateDigest(context) : undefined;
 }
 export interface TaskFile {
@@ -118,6 +129,8 @@ export interface TaskFile {
 }
 export interface LocalTask {
   deliveryPolicy?: DeliveryPolicySnapshot;
+  readinessReferences?: DeliveryReadinessReference[];
+  deliveryExecution?: DeliveryExecutionSnapshot;
   dependencies?: DeliveryDependencyReceipt[];
   /** Resolved once at admission; absent only on legacy records. */
   selection?: ModelSelection;

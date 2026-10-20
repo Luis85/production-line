@@ -39,13 +39,20 @@ async function consumeCommands(record: FeatureRecord, file: FeatureFile, queue: 
       const request = queue.inspect(record)?.request;
       if (!request) throw Error('Request history is unavailable; the command cannot be safely consumed.');
       if (value.requestRevision !== undefined && value.requestRevision !== request.inputRevision) throw Error('Command targets a stale request revision. Inspect the current review and use a new command_id.');
+      const candidate = value.action === 'criterion_decision' ? request.delivery?.review?.candidate ?? request.delivery?.checkpoints?.at(-1) : request.delivery?.review?.candidate;
+      if (value.action === 'criterion_decision' && value.candidateCommit && candidate?.candidateCommit !== value.candidateCommit) throw Error('Command targets a different candidate commit. Inspect the current candidate and use a new command_id.');
       const command: RequestCommand = {
         action: value.action === 'accept' ? 'attest' : value.action,
         requestId: request.id, expectedRevision: request.revision, operationId: value.commandId,
         inputRevision: value.requestRevision ?? request.inputRevision,
+        ...(value.publicationOperationId ? { publicationOperationId: value.publicationOperationId } : {}),
         ...(value.runId ? { deliveryRunId: value.runId } : value.action === 'reopen' && request.delivery ? { deliveryRunId: request.delivery.id } : {}),
         ...(value.feedback ? { note: value.feedback } : value.action === 'accept' ? { note: 'Accepted through the canonical Feature Request.' } : {}),
-        ...(value.candidateCommit ? { candidateCommit: value.candidateCommit, candidateDigest: request.delivery?.review?.candidate.candidateDigest } : {}),
+        ...(value.candidateCommit ? { candidateCommit: value.candidateCommit, candidateDigest: candidate?.candidateDigest } : {}),
+        ...(value.action === 'readiness_decision' ? { inputHash: value.inputHash, assessmentId: value.assessmentId, proposalId: value.proposalId, decision: value.decision } : {}),
+        ...(value.criterionDecision ? { criterionDecision: value.criterionDecision } : {}),
+        ...(value.reviewDurationMinutes !== undefined ? { reviewDurationMinutes: value.reviewDurationMinutes } : {}),
+        ...(['accept', 'request_changes'].includes(value.action) && value.humanChecks ? { humanOutcomes: value.humanChecks.map(check => ({ criterionId: check.criterionId, outcome: check.outcome === 'pass' ? 'passed' as const : check.outcome === 'fail' ? 'failed' as const : 'exempted' as const, reason: check.note })) } : {}),
         ...(value.action === 'accept' ? { inputHash: request.inputHash, outputDigest: request.execution?.outputDigest ?? undefined,
           humanOutcomes: (value.humanChecks ?? []).map(check => ({ criterionId: check.criterionId, outcome: check.outcome === 'pass' ? 'passed' : check.outcome === 'fail' ? 'failed' : 'exempted', reason: check.note })) } : {}),
       };

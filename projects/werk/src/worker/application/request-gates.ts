@@ -284,8 +284,9 @@ export function evaluateGate(
     } as GateRuleResult;
   });
   // Candidate verification is execution authority, not an optional custom policy rule.
-  // Absence preserves legacy proposal/chat behavior; only the coordinator emits false.
-  if (stage === "done" && facts["output.verificationPassed"] === false)
+  // Absence preserves legacy proposal/chat behavior. Eligibility is a separate trusted coordinator fact
+  // requiring exact candidate-bound, policy-permitted decisions; it never changes the observed result.
+  if (stage === "done" && facts["output.verificationPassed"] === false && facts["output.verificationEligible"] !== true)
     rules.push({
       ruleId: "worker-required-verification",
       fact: "output.verificationPassed",

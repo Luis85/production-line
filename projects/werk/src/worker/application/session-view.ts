@@ -26,22 +26,23 @@ export function sessionView(context: SessionViewContext): SessionView {
     return {
       ...(tracking ? { featureTracking: { directory: tracking.directory, lastSyncedAt: tracking.lastSyncedAt, error: tracking.error } } : {}),
       ...(context.capacityContext ? { capacity: workerCapacitySnapshot({
-        capturedAt: new Date().toISOString(), currentSessionId: context.executor.current,
+        capturedAt: new Date().toISOString(), currentSessionId: context.executor.current, activeSessions: context.executor.executions, reservedExecutions: context.executor.reservedExecutions,
         localUsed: context.chatActive + context.activeOutsideChat(), settings: context.settings.value.board,
         remote: context.capacityContext.remote(), consumption: context.capacityContext.consumption(),
       }) } : {}),
       selected: context.catalog.selected,
       execution: {
         currentSessionId: context.executor.current,
+        activeSessions: context.executor.executions,
         queued: context.executor.waiting,
-        maxParallel: 1,
+        maxParallel: context.executor.limit,
       },
       records: context.catalog.records.map((record) => {
         const conversation = context.instances.get(record.id)?.snapshot(),
           last = conversation?.messages.at(-1);
         const interaction = context.interactions.view(record.id);
         const active =
-          context.executor.current === record.id ||
+          context.executor.has(record.id) ||
           conversation?.busy ||
           ["queued", "running"].includes(record.taskState ?? "");
         const failedInteraction = interaction.phase === "failed" && !active;
@@ -51,7 +52,7 @@ export function sessionView(context: SessionViewContext): SessionView {
             interaction.phase,
           )
             ? interaction.phase
-            : context.executor.current === record.id
+            : context.executor.has(record.id)
               ? "running"
               : conversation?.busy
                 ? "queued"

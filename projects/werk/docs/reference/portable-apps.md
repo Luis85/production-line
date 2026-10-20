@@ -397,8 +397,10 @@ that input conflicts. Omitting ID generates a new task, so do not automatically 
 an ambiguous create without an explicit ID. Follow-up sends are not idempotent;
 inspect the transcript before retrying an ambiguous response. Task acceptance does
 not mean completion: inspect `session.status`, `chat.busy` and message outcomes.
-All chat, file work and remote assignments execute serially. Queue places add waiting
-capacity; multiple isolated worker instances provide parallel execution.
+Provider work shares the machine execution ceiling, defaulting to one slot.
+Approved project delivery can use configured parallel slots within its project
+limit; unscoped Chat, legacy work and remote assignments remain exclusive. Queue
+places add waiting capacity and never bypass execution ownership.
 
 Every task also receives an automatically synchronized Markdown feature-request
 record. Follow-ups, checkpoints and retries retain that session's record. Source
@@ -595,9 +597,12 @@ explicit IDs and do not change the webview selection, except `session select`.
 | `queue pause`, `queue resume` | Pause/resume execution and new orchestrator claims. Running work finishes; queued work is retained. |
 | `queue configure` | `--file PATH\|-`; e.g. `{"board":{"queueCapacity":16,"orchestratorQueue":4,"order":"fifo"}}`. |
 
-Workers always execute serially. Local capacity is 1–64; orchestrator queue
-capacity is 0–64. Setting the latter to zero disables remote queuing beyond the
-worker's existing immediate capacity behavior. Pausing does not delete queued work.
+Local admission capacity is 1–64; the orchestrator waiting buffer is 0–64.
+The machine ceiling is `board.maxParallel` (1–8, default 1), further limited by
+the approved project's `coordination.maxActiveRequests`. Unscoped legacy work
+remains exclusive. Setting the remote buffer to zero disables extra remote
+queuing; pausing preserves accepted work. Unknown provider attempts reserve
+capacity across restart until explicitly reconciled.
 Existing `session action`, `file-task action`, settings, provider checks, agent
 definitions, environment, monitoring and history remain available. Feature-file
 management is documented in the [feature-request reference](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/feature-requests.md#cli-management-contract).
@@ -606,6 +611,49 @@ Input/API rejection exits 2; operational failure exits 1. CLI commands never
 prompt. A successful `wait` means a stopped or operator-action state was observed.
 Callers must inspect status and pending input before treating output as work success.
 
+
+## Recover an uncertain provider attempt
+
+Ready Check, advisory-review and older provider attempts may retain an unknown
+outcome without a delivery-owned recovery command. Inspect them through the
+authenticated requests API. Save `{"action":"execution_recovery"}` in
+`inspect-recovery.json`, then run:
+
+```sh
+node bin/apps/worker/cli.mjs api --path /api/requests --method POST --file inspect-recovery.json
+```
+
+After inspecting the host and stopping any surviving processes and development
+services, create `confirm-stop.json` using the returned run ID and its
+`executionRecovery.revision` (not a Feature Request revision):
+
+```json
+{
+  "action": "confirm_execution_stopped",
+  "runId": "00000000-0000-4000-8000-000000000000",
+  "expectedRevision": 1,
+  "operationId": "inspected-stop-001",
+  "note": "I inspected the host and stopped this attempt's remaining processes."
+}
+```
+
+Replace the example identity and revision with the inspected values. The note
+must be nonempty and at most 4,000 characters; the operation ID allows letters,
+digits, underscores and hyphens, up to 100 characters. Submit it with:
+
+```sh
+node bin/apps/worker/cli.mjs api --path /api/requests --method POST --file confirm-stop.json
+```
+
+The worker checks the exact recovery revision and refuses a live controller,
+owned process or managed service, including ownership by a parent attempt.
+After an uncertain acknowledgement, repeat the identical payload and operation
+ID; changing its content conflicts. This is an operator attestation that releases
+the reservation, not evidence of model completion or recovered billing. Retry
+the Ready Check or continue the request through its normal action separately.
+An abort before provider dispatch makes no call; aborting an already dispatched
+API request retains an unknown outcome because the remote operation may continue.
+Delivery-owned work uses its existing exact-run recovery controls instead.
 
 ## Worker consumption limits
 

@@ -4,6 +4,9 @@ import type { WorkerRequest } from '../../application/request-gates';
 import { deliveryControlNotice, deliveryLifecycleLabels, deliveryPhaseLabels, deliveryStatusLabels } from '../delivery-view';
 import { date } from '../store';
 import MessageContent from './MessageContent.vue';
+import DeliveryPlanPanel from './DeliveryPlanPanel.vue';
+import DeliveryProviderPanel from './DeliveryProviderPanel.vue';
+import DeliveryBehaviorInspector from './DeliveryBehaviorInspector.vue';
 import { acceptedDeliveryPolicy } from '../delivery-policy-view';
 
 const props = defineProps<{ request: WorkerRequest }>();
@@ -19,7 +22,7 @@ const stepStatus = { running: 'Running', completed: 'Completed', failed: 'Failed
     <dl class="delivery-state">
       <div v-if="request.lifecycle"><dt>Feature Request</dt><dd>{{ deliveryLifecycleLabels[request.lifecycle] }}</dd></div>
       <div><dt>Run status</dt><dd>{{ deliveryStatusLabels[run.status] }}</dd></div>
-      <div><dt>Current phase</dt><dd>{{ deliveryPhaseLabels[run.phase] }}</dd></div>
+      <div><dt>{{ ['completed', 'cancelled', 'failed', 'interrupted', 'paused'].includes(run.status) ? 'Last phase' : 'Current phase' }}</dt><dd>{{ deliveryPhaseLabels[run.phase] }}</dd></div>
     </dl>
     <p class="delivery-reason">{{ run.decision.reason }}</p>
     <p v-if="run.decision.waitingFor"><strong>Next expected event:</strong> {{ run.decision.waitingFor }}</p>
@@ -27,12 +30,9 @@ const stepStatus = { running: 'Running', completed: 'Completed', failed: 'Failed
     <ul v-if="run.holds.length" class="delivery-holds" aria-label="Reasons work is held"><li v-for="hold in run.holds" :key="hold.code">{{ hold.reason }}</li></ul>
     <p class="delivery-caption">Started {{ date(run.startedAt) }}<template v-if="run.finishedAt"> · Finished {{ date(run.finishedAt) }}</template> · Repair attempts {{ run.repairAttempts }} of {{ run.maxRepairAttempts }}</p>
     <details v-if="policy" class="delivery-policy"><summary>Accepted quality profile and baseline</summary><dl class="delivery-identities"><div><dt>Quality profile</dt><dd>{{ policy.profile.id }}</dd></div><div><dt>Baseline commit</dt><dd>{{ policy.baseline }}</dd></div><div><dt>Repair budget</dt><dd>{{ policy.profile.maxRepairAttempts }} attempts</dd></div><div><dt>Review notes directory</dt><dd>{{ policy.configuration.reviewDirectory }}</dd></div></dl><h3>Protected verification inputs</h3><ul><li v-for="path in policy.profile.verificationInputs" :key="path"><code>{{ path }}</code></li></ul><p class="delivery-caption">These accepted settings remain tied to this run. Later project policy changes do not rewrite its evidence.</p></details>
-    <details class="delivery-behavior">
-      <summary>Why the worker chose this action</summary>
-      <dl class="delivery-identities"><div><dt>Selected action</dt><dd>{{ run.decision.selectedAction.replaceAll('_', ' ') }}</dd></div><div><dt>Behavior profile</dt><dd>{{ run.decision.profileId }} · version {{ run.decision.profileVersion }}</dd></div><div><dt>Delivery run</dt><dd>{{ run.id }}</dd></div><div><dt>Accepted request revision</dt><dd>{{ run.inputRevision }}</dd></div></dl>
-      <ul v-if="run.decision.conditions.length" class="delivery-conditions" aria-label="Evaluated behavior conditions"><li v-for="condition in run.decision.conditions" :key="condition.nodeId"><span>{{ condition.condition.replaceAll('_', ' ') }}</span><strong>{{ condition.result ? 'Met' : 'Not met' }}</strong></li></ul>
-      <p v-else class="delivery-caption">No evaluated conditions are retained for this decision.</p>
-    </details>
+    <DeliveryPlanPanel :subject="request" />
+    <DeliveryProviderPanel :subject="request" />
+    <DeliveryBehaviorInspector :run="run" />
     <details v-if="run.checkpoints?.length" class="delivery-checkpoints"><summary>Retained Git checkpoints · {{ run.checkpoints.length }}</summary><p class="delivery-caption">These local commits preserve observed source for inspection or recovery. A checkpoint does not establish passed checks or human acceptance.</p><ol class="delivery-steps"><li v-for="checkpoint in run.checkpoints" :key="checkpoint.candidateCommit"><p class="delivery-caption">{{ date(checkpoint.createdAt) }} · Request revision {{ checkpoint.inputRevision }}</p><dl class="delivery-identities"><div><dt>Local checkpoint branch</dt><dd>{{ checkpoint.branch }}</dd></div><div><dt>Checkpoint commit</dt><dd>{{ checkpoint.candidateCommit }}</dd></div><div><dt>Baseline commit</dt><dd>{{ checkpoint.baseline }}</dd></div><div><dt>Observed source digest</dt><dd>{{ checkpoint.candidateDigest }}</dd></div></dl></li></ol></details>
     <details v-if="run.recoveries?.length" class="delivery-recovery-history"><summary>Operator process confirmations · {{ run.recoveries.length }}</summary><ol class="delivery-steps"><li v-for="receipt in run.recoveries" :key="receipt.operationId"><strong>Operator-attested stop</strong><p class="delivery-caption">{{ date(receipt.at) }} · The operator inspected and stopped remaining processes. This does not establish the previous operation’s result.</p><MessageContent :text="receipt.note" /><dl class="delivery-identities"><div><dt>Observed workspace digest</dt><dd>{{ receipt.candidateDigest }}</dd></div><div><dt>Confirmation operation</dt><dd>{{ receipt.operationId }}</dd></div></dl></li></ol></details>
     <div class="delivery-step-heading"><h3>Recorded steps</h3><div><label for="delivery-step-filter">Show phase</label><select id="delivery-step-filter" v-model="filter"><option value="all">All phases</option><option v-for="(label, phase) in deliveryPhaseLabels" :key="phase" :value="phase">{{ label }}</option></select></div></div>

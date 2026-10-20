@@ -155,6 +155,7 @@ export async function continueTask(host: Pick<LocalTaskRuntime, "closed" | "sess
         if (!task)
           throw new DomainError("not_found", "File-task session not found.");
         host.assertAcceptedSnapshots(task);
+        if (!host.sessions.interactions.operation(task.sessionId, body.operationId)) host.sessions.executor.assertResolved(task.sessionId, { projectId: task.repositoryId ?? task.repository });
         const prior =
           body.turnId ??
           host.sessions.interactions.view(task.sessionId).pending?.turnId;
@@ -205,6 +206,8 @@ export async function continueTask(host: Pick<LocalTaskRuntime, "closed" | "sess
                 "Resume the saved approved-file task context."),
           context: host.context(task),
         });
+        if (request && accepted.turn.kind === 'answer' && accepted.turn.priorTurnId && (!accepted.duplicate || request.execution?.turnId === accepted.turn.priorTurnId && request.execution.inputRevision === request.inputRevision))
+          host.sessions.requests.bindTurn(request.id, accepted.turn.id, request.inputRevision, accepted.turn.priorTurnId);
         if (accepted.duplicate) return;
         taskForFailure = task;
         if (

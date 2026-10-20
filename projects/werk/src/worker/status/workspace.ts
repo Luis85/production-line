@@ -51,7 +51,7 @@ export class WorkerWorkspace {
   }
   private observed<T>(operation: () => T): T { return this.context.processObservations.run({}, operation); }
   get executionProfiles() { return this.context.executionProfiles; }
-  get features() { return this.context.features; }
+  tickFeatures(force = false) { return this.context.featureProjects.tick(force); }
   get featureTracking() { return this.context.featureTracking; }
   get sharedRuntime() { return this.context.sharedRuntime; }
   get repositories() { return this.context.repositories; }
@@ -87,23 +87,24 @@ export class WorkerWorkspace {
   init() { return this.observed(() => init(this.context)); }
   providerStatus(input: unknown) { return providerStatus(this.context, input); }
   providerAccount(input: unknown) { return providerAccount(this.context, input); }
-  sharedIntakeView() { return sharedIntakeView(this.context); }
+  sharedIntakeView(projectId?: string) { return sharedIntakeView(this.context, projectId); }
   sharedIntakeCommand(input: unknown) { return this.observed(() => sharedIntakeCommand(this.context, input)); }
-  featureView() { return featureView(this.context); }
-  featureList() { return featureList(this.context); }
+  featureView(projectId?: string) { return featureView(this.context, projectId); }
+  featureList(projectId?: string) { return featureList(this.context, projectId); }
   featureCommand(input: FeatureAuthoringCommand): Promise<FeatureAuthoringResult>;
+  featureCommand(input: { action: 'dependency_plan'; projectId?: string; id: string }): Promise<import('../application/delivery-dependency-plan.js').DeliveryDependencyPlan>;
   featureCommand(input: unknown): Promise<FeatureActionResult>;
   featureCommand(input: unknown) {
     const action = (input as { action?: unknown } | null)?.action;
     return this.observed(() => action === 'prepare' || action === 'publish' ? authorFeature(this.context, input) : featureCommand(this.context, input));
   }
   createTaskboard(input: unknown) {
-    assertDirectFeatureCreation(this.context);
+    assertDirectFeatureCreation(this.context, input);
     return this.observed(() => withRepositoryAdmission(this.context, () => this.board.create(input)));
   }
   async sessionCommand(input: unknown) {
     const body = input as { action?: unknown; id?: unknown } | null;
-    if (body?.action === 'create') assertDirectFeatureCreation(this.context);
+    if (body?.action === 'create') assertDirectFeatureCreation(this.context, input);
     if (body?.action === 'rename' && typeof body.id === 'string' && isSharedFeatureSession(this.context, body.id))
       throw new DomainError('conflict', 'This title belongs to the published Feature Request. Its accepted scope and title remain fixed.');
     const result = await this.sessions.action(input);

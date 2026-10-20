@@ -1,3 +1,4 @@
+import { requestClarificationAnswers } from './clarifications.js';
 import { randomUUID } from "node:crypto";
 import type {
   ModelProvider
@@ -104,7 +105,7 @@ export function requestEnsure(store: RequestStore, input: {
   });
 }
 
-export function requestBindTurn(store: RequestStore, id: string, turnId: string, inputRevision?: number) {
+export function requestBindTurn(store: RequestStore, id: string, turnId: string, inputRevision?: number, answeredTurnId?: string) {
   identifier(turnId, "turn ID");
   return store.transaction(() => {
     const request = store.get(id),
@@ -116,12 +117,21 @@ export function requestBindTurn(store: RequestStore, id: string, turnId: string,
         "SELECT request_id,input_revision FROM request_turns WHERE session_id=? AND turn_id=?",
       )
       .get(request.owner.sessionId, turnId);
+    let observations: ReturnType<typeof requestClarificationAnswers> = [];
+    if (answeredTurnId !== undefined) {
+      identifier(answeredTurnId, 'answered question turn ID');
+      const row = store.database().prepare('SELECT payload FROM request_executions WHERE request_id=? AND turn_id=?').get(id, answeredTurnId);
+      const execution = row ? JSON.parse(String(row.payload)) as NonNullable<WorkerRequest['execution']> : undefined;
+      if (!execution || execution.inputRevision !== revision || execution.result?.type !== 'needs_input') conflict("Only an explicitly accepted answer to this request generation’s known question can complete a clarification cycle.");
+      if (execution.result.request.kind === 'question') observations = requestClarificationAnswers(store, id, answeredTurnId);
+    }
     if (existing) {
       if (
         existing.request_id !== id ||
         Number(existing.input_revision) !== revision
       )
         conflict("This turn already belongs to another request generation.");
+      if (observations.length) store.save(request, 'clarification_answered', { turnId, observations });
       return request;
     }
     store.database()
@@ -129,7 +139,7 @@ export function requestBindTurn(store: RequestStore, id: string, turnId: string,
         "INSERT INTO request_turns(session_id,turn_id,request_id,input_revision) VALUES(?,?,?,?)",
       )
       .run(request.owner.sessionId, turnId, id, revision);
-    store.save(request, "turn_bound", { turnId });
+    store.save(request, "turn_bound", { turnId, ...(observations.length ? { observations } : {}) });
     return request;
   });
 }

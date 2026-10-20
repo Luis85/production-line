@@ -1,3 +1,6 @@
+import type { DeliveryMetricObservation } from '../../../application/delivery-metrics-contracts.js';
+import { recordReadinessReview } from './readiness.js';
+import { requestEvaluateInside } from './gates.js';
 import { randomUUID } from "node:crypto";
 import type {
   ModelRequest
@@ -125,7 +128,7 @@ export function requestCompleteReview(
   if (
     !result ||
     Object.keys(result).some(
-      (key) => !["summary", "findings", "candidate"].includes(key),
+      (key) => !["summary", "findings", "candidate", "readiness"].includes(key),
     ) ||
     typeof result.summary !== "string" ||
     result.summary.length > 4000 ||
@@ -169,15 +172,19 @@ export function requestCompleteReview(
       intent.policyDigest === request.policyDigest;
     if (result.candidate && current)
       requestCandidate(request, result.candidate, "reviewer");
+    if (current) recordReadinessReview(request, intent, result);
     intent.result = clone(result);
     intent.usage = normalizeUsage(usage);
     intent.status = "completed";
     intent.finishedAt = iso();
     intent.errorCode = null;
+    const observations: DeliveryMetricObservation[] = [];
     if (current)
-      for (const finding of result.findings)
+      for (const finding of result.findings) {
+        const findingId = randomUUID();
+        if (finding.kind === 'question' && finding.blocking) observations.push({ kind: 'clarification', answerTracking: true, questionId: findingId, cycleId: intent.id, cause: intent.stage === 'ready' ? 'readiness' : 'completion' });
         request.findings.push({
-          id: randomUUID(),
+          id: findingId,
           kind: finding.kind,
           message: finding.message,
           blocking: finding.blocking ?? false,
@@ -185,11 +192,14 @@ export function requestCompleteReview(
           evaluationId: intent.evaluationId,
           status: "open",
         });
+      }
     // Advisory text is never a gate pass or an operator attestation.
     store.save(request, "review_completed", {
+      observations,
       evaluationId: intent.evaluationId,
       ...(intent.runId ? { runId: intent.runId } : {}),
     });
+    if (current && result.readiness) requestEvaluateInside(store, request, 'ready');
     return request;
   });
 }

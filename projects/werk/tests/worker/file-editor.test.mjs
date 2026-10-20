@@ -18,7 +18,7 @@ async function editorFixture(action, sourceTransform = source => source) {
   const state = reactive({ draftEpoch: 0, unlocked: true, workspaceBusy: false, environment: {}, draft: 'Existing follow-up draft', actionError: '', settings: { repositories: { items: [] }, providers: [{ id: 'codex-cli', configured: true }, { id: 'claude-cli', configured: true }] }, sessions: { selected: 'one', records: [{ id: 'one', provider: 'codex-cli' }, { id: 'two', provider: 'claude-cli' }] }, definitions: [], toolAccess: null });
   const javascript = ts.transpile(scripts, { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS });
   const focused = [], events = [];
-  const ports = { _defineComponent: defineComponent, reactive, ref, computed, watch, watchPrivateDraft: watch, nextTick, state, workerState: state, createFeatureRequest: action, providerSupportsDefinition, validateApprovedPaths, buildWorkerCapacityView, getCapacityFreshness: () => 'fresh', document: { getElementById: id => ({ focus: () => focused.push(id) }) }, UButton: null, UInput: null, USelect: null, UTextarea: null, RunTask: null, SharedFeatureComposer: null, ModelSelectionFields: null };
+  const ports = { _defineComponent: defineComponent, reactive, ref, computed, watch, watchPrivateDraft: watch, nextTick, state, workerState: state, createFeatureRequest: action, providerSupportsDefinition, validateApprovedPaths, buildWorkerCapacityView, getCapacityFreshness: () => 'fresh', document: { getElementById: id => ({ focus: () => focused.push(id) }) }, UButton: null, UInput: null, USelect: null, UTextarea: null, RunTask: null, SharedFeatureComposer: null, ModelSelectionFields: null, ProjectExecutionSelection: null };
   // The emit closure is deliberately injected as part of the component's real setup context.
   const result = new Function(...Object.keys(ports), 'events', `${javascript}\nreturn EditorComponent.setup({}, { expose() {}, emit(...args) { events.push(args); } });`)(...Object.values(ports), events);
   Object.assign(result.intake, { message: 'Clarify the navigation.', title: 'Change', repository: '/project', paths: 'src/a.ts' });
@@ -191,4 +191,13 @@ test('new requests reset selection while active and explicitly chosen drafts sur
   f.intake.message = 'A started draft'; Object.assign(f.state.settings, { defaultProvider: 'claude-cli' }); await nextTick(); assert.equal(f.intake.provider, 'codex-cli');
   f.intake.message = ''; f.intake.selectionEdited = true; Object.assign(f.state.settings, { defaultProvider: 'codex-cli' }); await nextTick();
   Object.assign(f.state.settings, { defaultProvider: 'claude-cli' }); await nextTick(); assert.equal(f.intake.provider, 'codex-cli');
+});
+
+test('project profile admission omits inherited raw settings and retains the exact project/profile on retry', async () => {
+  const commands = []; let fail = true;
+  const f = await editorFixture(async command => { commands.push(structuredClone(command)); if (fail) throw Error('Lost acknowledgement'); return { session: { id: 'profile-request' }, chat: {} }; });
+  f.projectProfiles.value = true; f.projectProfile.value = { id: 'project-profile', provider: 'claude-cli', model: 'project-model', effort: 'high', authenticationMode: 'cli-account', boundary: 'worker_grants' };
+  f.intake.repository = 'secondary'; f.intake.executionProfile = 'project-profile'; f.intake.model = 'old-worker-model'; f.intake.effort = 'low';
+  await f.create(); assert.equal(commands[0].projectId, 'secondary'); assert.equal(commands[0].executionProfile, 'project-profile'); for (const key of ['provider', 'model', 'effort', 'definitionId', 'agent']) assert.equal(key in commands[0], false, key);
+  f.intake.repository = 'other'; f.intake.executionProfile = 'later-profile'; fail = false; await f.create(); assert.deepEqual(commands[1], commands[0]); assert.equal(f.intake.pending, null);
 });

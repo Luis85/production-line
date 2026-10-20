@@ -1,3 +1,5 @@
+import type { ExecutionStopObservation } from './execution-recovery.js';
+import type { ReservedExecutionPermit } from './serial-executor.js';
 import type { InteractionStore } from './interactions.js';
 import type { RequestGatePort, RequestSummary, RequestEvent, GatePolicy, GateStage, GateReviewIntent, WorkerRequest } from './request-gates.js';
 import type { RequestReviewPort } from './request-review.js';
@@ -13,6 +15,7 @@ export interface FeatureIdentityJournal { bindFeature(sessionId: string, feature
 export interface RequestJournal extends RemoteRequestGatePort, RequestCatalog, RequestReviewPort, FeatureIdentityJournal {
   init(): Promise<void>;
   close(): void;
+  unresolvedExecutions(): ReservedExecutionPermit[];
   events(id: string, after?: number, limit?: number): { schemaVersion: 1; requestId: string; events: RequestEvent[]; nextAfter: number; hasMore: boolean };
   policy(): { schemaVersion: 1; revision: number; policy: GatePolicy; digest: string };
   setPolicy(input: { policy: unknown; expectedRevision: number; operationId: string }): ReturnType<RequestJournal['policy']> & { duplicate: boolean };
@@ -26,7 +29,10 @@ export interface InteractionJournal extends InteractionStore {
   resultForRun(id: string): RecoveredRunResult | undefined;
 }
 export interface RunJournal extends RunEvidence {
-  init(recovery?: (id: string) => RecoveredRunResult | undefined): Promise<void>;
+  init(recovery?: (id: string) => RecoveredRunResult | undefined, deliveryOwns?: (run: WorkerRun) => boolean): Promise<void>;
+  uncertainExecutions(): WorkerRun[];
+  recoveryReplay(input: unknown): WorkerRun | undefined;
+  confirmExecutionStopped(input: unknown, observation: ExecutionStopObservation): WorkerRun;
   close(): void;
   observeUsage(id: string, usage: ProviderUsage): void;
   get(id: string): WorkerRun;

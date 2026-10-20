@@ -120,7 +120,7 @@ export function createLocalDelivery(options: { repository: string; stateDirector
       const privateEvidence = await ordinaryDirectory(join(options.stateDirectory, 'delivery-evidence'), true);
       await writeArtifact(join(privateEvidence, name + '.json'), JSON.stringify(review, null, 2) + '\n');
       const publicChecks = review.checks.map(({ stdout, stderr, command, ...receipt }) => ({ ...receipt, commandFingerprint: receipt.presetFingerprint, stdoutDigest: hash(stdout), stderrDigest: hash(stderr) }));
-      await writeArtifact(join(reviews, name + '.evidence.json'), JSON.stringify({ candidate: review.candidate, criteria: review.criteria, results: review.results, checks: publicChecks }, null, 2) + '\n');
+      await writeArtifact(join(reviews, name + '.evidence.json'), JSON.stringify({ candidate: review.candidate, criteria: review.criteria, results: review.results, checks: publicChecks, ...(review.assessments ? { assessments: review.assessments } : {}), ...(review.requestDetails ? { requestDetails: review.requestDetails } : {}), ...(review.criterionDecisions ? { criterionDecisions: review.criterionDecisions } : {}), ...(review.baseline ? { baseline: review.baseline } : {}), baselineComparison: review.baselineComparison }, null, 2) + '\n');
       signal.throwIfAborted(); await writeArtifact(path, review.markdown); await verify(input.candidate, signal);
       return { ...review, reviewNotePath: path };
     }),

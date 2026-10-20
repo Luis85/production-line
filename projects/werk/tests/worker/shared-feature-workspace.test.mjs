@@ -1,3 +1,4 @@
+import { workspaceContext } from './runtime-fixtures.mjs';
 import { workerStatus } from '../helpers/worker-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -35,9 +36,9 @@ test('a disabled shared binding suppresses legacy folder admission and mutations
     assert.equal(hinted(workspace.sharedIntakeView()).intake, undefined, 'A saved shared binding overrides the local setup preset, even while paused and after restart.');
     assert.equal(hinted(workspace.sharedIntakeView()).hint, undefined);
     // The runner invokes tick directly; suppressing only the panel or GET route cannot satisfy this assertion.
-    await workspace.features.tick(true); await workspace.features.tick(true);
+    await workspaceContext(workspace).features.tick(true); await workspaceContext(workspace).features.tick(true);
     assert.equal(workspace.board.view().tasks.length, 0);
-    assert.equal(workspace.features.view().records.length, 0);
+    assert.equal(workspaceContext(workspace).features.view().records.length, 0);
     assert.equal(workspace.featureView().enabled, false); assert.equal((await workspace.featureList()).enabled, false);
     for (const action of ['submit', 'retry', 'edit', 'create', 'cancel', 'archive', 'restore', 'delete']) {
       await assert.rejects(workspace.featureCommand({ action, name: 'draft.md', revision, markdown: draft }), /Shared Git intake/);
@@ -50,7 +51,7 @@ test('a disabled shared binding suppresses legacy folder admission and mutations
   await remainsDisabled(); await close(); await open(); assert.ok(workspace); await remainsDisabled();
   const current = workspace.sharedIntakeView(); assert.equal(current.config.enabled, false); assert.equal(current.config.repositoryId, 'shared');
   await workspace.sharedIntakeCommand({ action: 'configure', expectedRevision: current.revision, config: { ...binding, repositoryId: '' } });
-  await workspace.features.tick(true); await workspace.features.tick(true);
+  await workspaceContext(workspace).features.tick(true); await workspaceContext(workspace).features.tick(true);
   assert.equal(hinted(workspace.sharedIntakeView()).intake, 'local');
   assert.equal(hinted(await workspace.featureList()).intake, 'local');
   assert.equal(workspace.featureView().enabled, true); assert.equal(workspace.board.view().tasks.length, 1);

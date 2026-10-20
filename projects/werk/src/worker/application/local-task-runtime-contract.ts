@@ -18,6 +18,7 @@ import type { RepositoryAssignment } from './repositories.js';
 import type { LocalTask, LocalTaskPreparation, LocalTaskSubmission, LocalTaskWorkspaces } from './local-task-contracts.js';
 
 export interface LocalTaskDependencies {
+  authorizeDelivery?: (task: LocalTask) => void;
   delivery?: (repository: string) => LocalDeliveryPort;
   model: ModelFactory;
   storage: LocalTaskStorage;
@@ -107,6 +108,7 @@ export interface LocalTaskRuntime extends LocalTaskDependencies, LocalTaskState 
   trackContinuation<T>(operation: Promise<T>): Promise<T>;
   executeRequest(id: string): Promise<LocalTaskboardView>;
   verifyDelivery(requestId: string, expectedRevision?: number): Promise<string>;
+  verifyDeliveryCheckpoint(requestId: string, expectedRevision?: number): Promise<string>;
   inspectStopped(requestId: string, expectedRevision?: number): Promise<DeliveryStopObservation>;
   executeOwnedRequest(id: string): Promise<LocalTaskboardView>;
   interact(body: InteractionCommand): Promise<InteractionView>;

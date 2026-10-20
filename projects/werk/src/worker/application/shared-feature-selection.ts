@@ -6,18 +6,18 @@ import { validateModelSelection } from './model-selection.js';
 import type { SharedFeatureRecord } from './shared-feature-state.js';
 
 /** Legacy reservations retain their exact digest; new claims bind the resolved model selection. */
-export function sharedFeatureInputHash(record: Pick<SharedFeatureRecord, 'accepted' | 'workflow' | 'sourceCommit' | 'sourceMarkdown' | 'selection'>): string {
+export function sharedFeatureInputHash(record: Pick<SharedFeatureRecord, 'accepted' | 'workflow' | 'sourceCommit' | 'sourceMarkdown' | 'selection' | 'deliveryPolicy' | 'deliveryExecution'>): string {
   return sharedHash(featureInputHash(record.accepted) + record.workflow.policyDigest + record.sourceCommit + sharedHash(record.sourceMarkdown)
-    + (record.selection ? gateDigest(record.selection) : ''));
+    + (record.selection ? gateDigest(record.selection) : '') + (record.deliveryPolicy ? gateDigest(record.deliveryPolicy) : '') + (record.deliveryExecution ? gateDigest(record.deliveryExecution) : ''));
 }
 export function assertSharedFeatureSelection(record: Pick<SharedFeatureRecord, 'accepted' | 'selection'>): void {
   if (!record.selection) return;
   const selection = validateModelSelection(record.selection), input = record.accepted;
-  if (selection.provider !== input.provider || input.model !== undefined && input.model !== '' && input.model !== selection.model || input.effort !== undefined && input.effort !== selection.effort)
+  if (input.providerExplicit !== false && selection.provider !== input.provider || input.model !== undefined && input.model !== '' && input.model !== selection.model || input.effort !== undefined && input.effort !== selection.effort)
     throw new DomainError('conflict', 'The accepted model selection does not match this Feature Request.');
 }
-/** Replies may clarify work, but may not silently replace the already accepted provider/model/effort. */
+/** Replies may clarify work, but cannot replace accepted model, profile or definition authority. */
 export function assertSharedFeatureReplySelection(record: SharedFeatureRecord, input: SharedFeatureInput): void {
-  if (record.selection && (input.provider !== record.accepted.provider || input.model !== record.accepted.model || input.effort !== record.accepted.effort))
-    throw new DomainError('conflict', 'Keep the accepted provider, model and effort unchanged when answering. Create a new Feature Request to use a different model selection.');
+  if ((record.selection || record.deliveryExecution) && ['provider', 'model', 'effort', 'executionProfile', 'definitionId', 'definitionRef', 'agent', 'useInstructionsOnly'].some(key => input[key as keyof SharedFeatureInput] !== record.accepted[key as keyof SharedFeatureInput]))
+    throw new DomainError('conflict', 'Keep the accepted provider, model and effort unchanged when answering, including the execution profile and agent definition. Create a new Feature Request to use a different model selection.');
 }

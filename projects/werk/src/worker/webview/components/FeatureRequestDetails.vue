@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import UInput from '@nuxt/ui/components/Input.vue';
+import ProjectExecutionSelection from './ProjectExecutionSelection.vue';
 import ModelSelectionFields from './ModelSelectionFields.vue';
 import { state } from '../store';
 import UTextarea from '@nuxt/ui/components/Textarea.vue';
 import { featureDetailFields, readFeatureDetails, writeFeatureDetail, type FeatureDetailField, type FeatureModelField } from '../feature-authoring-fields';
 const markdown = defineModel<string>({ required: true });
-defineProps<{ disabled: boolean }>();
+defineProps<{ disabled: boolean; projectId?: string }>();
+const projectProfiles = ref(false);
 const error = ref('');
 const details = computed(() => {
   try { return { value: readFeatureDetails(markdown.value), error: '' }; }
@@ -22,7 +24,9 @@ function update(key: FeatureDetailField | FeatureModelField | 'paths' | 'title',
     <legend>Request details</legend>
     <template v-if="details.value">
       <div class="feature-field"><label for="feature-detail-title">Request name</label><UInput id="feature-detail-title" :model-value="details.value.title" :maxlength="120" class="w-full" @update:model-value="update('title', $event)" /></div>
-      <details class="request-model-options"><summary>Provider, model &amp; effort</summary><ModelSelectionFields id="feature-detail" :provider="details.value.selection.provider ?? state.settings?.defaultProvider" :model="details.value.selection.model" :effort="details.value.selection.effort" :providers="state.settings?.providers ?? []" :disabled="disabled" @update:provider="update('provider', $event)" @update:model="update('model', $event)" @update:effort="update('effort', $event)" /></details>
+      <ProjectExecutionSelection id="feature-detail" :model-value="details.value.executionProfile" :project-id="projectId" :quality-profile="details.value.qualityProfile || undefined" mode="patch" :priority="details.value.priority" :disabled="disabled" @configured="projectProfiles = $event" @update:model-value="update('execution_profile', $event)" />
+      <div class="feature-field"><label for="feature-detail-quality">Quality profile · optional project profile name</label><UInput id="feature-detail-quality" :model-value="details.value.qualityProfile" @update:model-value="update('quality_profile', $event)" /><label for="feature-detail-priority">Queue priority</label><select id="feature-detail-priority" :value="details.value.priority" @change="update('priority', ($event.target as HTMLSelectElement).value)"><option :value="0">Urgent</option><option :value="1">High</option><option :value="2">Normal</option><option :value="3">Low</option></select><label for="feature-detail-dependencies">Dependencies · one Feature Request ID per line</label><UTextarea id="feature-detail-dependencies" :model-value="details.value.dependsOn" :rows="3" @update:model-value="update('depends_on', $event)" /><p>Use FR-ID for this project or repositoryId:FR-ID for another project. Acceptance and incorporation into the execution baseline are checked separately.</p></div>
+      <details v-if="!projectProfiles" class="request-model-options"><summary>Provider, model &amp; effort</summary><ModelSelectionFields id="feature-detail" :provider="details.value.selection.provider ?? state.settings?.defaultProvider" :model="details.value.selection.model" :effort="details.value.selection.effort" :providers="state.settings?.providers ?? []" :disabled="disabled" @update:provider="update('provider', $event)" @update:model="update('model', $event)" @update:effort="update('effort', $event)" /></details>
       <div v-for="field in featureDetailFields" :key="field.key" class="feature-field">
         <label :for="'feature-detail-' + field.key.replaceAll(' ', '-')">{{ field.label }}</label>
         <UTextarea :id="'feature-detail-' + field.key.replaceAll(' ', '-')" :model-value="details.value.fields[field.key]" :rows="field.rows" :maxrows="12" autoresize :maxlength="8000" class="w-full" :aria-describedby="'feature-help-' + field.key.replaceAll(' ', '-')" @update:model-value="update(field.key, $event)" />
@@ -47,6 +51,7 @@ function update(key: FeatureDetailField | FeatureModelField | 'paths' | 'title',
 .feature-details { padding: 0; margin: 20px 0; border: 0; min-width: 0; }
 legend { font-size: 1rem; font-weight: 650; margin-bottom: 16px; }
 .feature-field { margin-bottom: 20px; }
+select { min-height:44px;width:100%;background:var(--ui-bg);color:var(--ui-text);border:1px solid var(--ui-border);padding-inline:12px;border-radius:6px; }
 label { display: block; margin-bottom: 8px; font-size: .875rem; font-weight: 600; }
 p { margin: 8px 0 12px; color: var(--ui-text-muted); font-size: .75rem; line-height: 1.6; }
 :deep(textarea) { background: #111e26; line-height: 1.6; }

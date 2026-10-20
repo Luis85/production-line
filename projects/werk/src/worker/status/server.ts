@@ -73,19 +73,19 @@ export async function statusServer(
               200,
               await workspace.integrations(await readJson(req)),
             );
-          if (req.method === "GET" && req.url === "/api/shared-intake")
-            return json(res, 200, workspace.sharedIntakeView());
+          if (req.method === "GET" && (req.url === "/api/shared-intake" || req.url?.startsWith("/api/shared-intake?")))
+            return json(res, 200, workspace.sharedIntakeView(new URL(req.url!, 'http://worker.invalid').searchParams.get('projectId') ?? undefined));
           if (req.method === "POST" && req.url === "/api/shared-intake")
             return json(res, 200, await workspace.sharedIntakeCommand(await readJson(req)));
           if (req.method === 'GET' && req.url === '/api/feature-tracking')
             return json(res, 200, await workspace.featureTracking.sync());
           if (req.method === 'POST' && req.url === '/api/feature-tracking')
             return json(res, 200, await workspace.featureTrackingCommand(await readJson(req)));
-          if (req.method === "GET" && req.url === "/api/features")
+          if (req.method === "GET" && (req.url === "/api/features" || req.url?.startsWith("/api/features?")))
             return json(
               res,
               200,
-              await workspace.featureList(),
+              await workspace.featureList(new URL(req.url!, 'http://worker.invalid').searchParams.get('projectId') ?? undefined),
             );
           if (req.method === "POST" && req.url === "/api/features") {
             return json(

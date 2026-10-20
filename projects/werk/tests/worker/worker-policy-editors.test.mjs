@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { reactive, nextTick } from 'vue';
 import { frontend, deferred } from '../ui/helpers/frontend-loader.mjs';
 const { createQueueSettingsEditor, createDurationSettingsEditor, queuePolicy, durationPolicy } = await frontend('src/worker/webview/worker-policy-editors.ts');
-const queue = (overrides = {}) => ({ queueCapacity: 16, orchestratorQueue: 0, order: 'fifo', ...overrides });
+const queue = (overrides = {}) => ({ maxParallel: 1, queueCapacity: 16, orchestratorQueue: 0, order: 'fifo', ...overrides });
 const inspection = (overrides = {}) => ({ candidateSourceMaxBytes: 64 * 1024 * 1024, candidateSourceMaxFiles: 20000, candidateFileMaxBytes: 8 * 1024 * 1024, ...overrides });
 const duration = (overrides = {}) => ({ longRunningMs: 3600000, maxRuntimeMs: 21600000, maxToolCalls: 128, commandTimeoutMs: 300000, ...inspection(), fromEnvironment: false, ...overrides });
 function editor(t, kind = 'queue', initial) {
@@ -183,4 +183,11 @@ test('a refreshed saved inspection policy confirms a lost acknowledgement withou
   e.onWrite(async () => { throw Error('Response lost'); }); await e.save(); assert.ok(e.draft.uncertain);
   e.state.saved = durationPolicy({ resources: { longRunningMs: 3600000 }, execution: { maxRuntimeMs: 21600000, maxToolCalls: 128, commandTimeoutMs: 300000, ...inspection({ candidateSourceMaxBytes: 128 * 1048576 }) } });
   await nextTick(); assert.equal(e.draft.uncertain, null); assert.equal(e.dirty.value, false); assert.equal(e.commands.length, 1);
+});
+
+test('execution capacity is bounded and submitted with the exact machine baseline', async t => {
+  const e = editor(t);
+  for (const value of ['', 0, 9, 1.5]) { e.draft.values.maxParallel = value; assert.match(e.validation.value, /1 to 8/); await e.save(); }
+  assert.equal(e.commands.length, 0); e.draft.values.maxParallel = 3; await e.save();
+  assert.equal(e.commands[0].board.maxParallel, 3); assert.equal(e.commands[0].expectedBoard.maxParallel, 1);
 });

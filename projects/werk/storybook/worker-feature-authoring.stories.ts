@@ -16,9 +16,10 @@ const initialMarkdown = ['---', 'schemaVersion: 1', 'id: fr-csv-export', 'templa
 /** Fictional API replies demonstrate presentation only; no Git publication or model call occurs. */
 function installAuthoringFixture(reviewRequired = false) {
   const base = installWorkerFixture('empty');
-  state.environment!.sharedIntake = { revision: 1, workerId: 'example-worker', config: { ...binding, enabled: true, pollMs: 15_000 }, canEdit: true, blockedReason: null, state: 'idle', error: null, lastSyncedAt: null, sourceCommit: null, workflow: null, requests: [] };
+  state.environment!.sharedIntake = { dependencyPlans: [], selectedProjectId: 'demo', projects: [{id:'demo',label:'Demo project',enabled:true}], revision: 1, workerId: 'example-worker', config: { ...binding, enabled: true, pollMs: 15_000 }, canEdit: true, blockedReason: null, state: 'idle', error: null, lastSyncedAt: null, sourceCommit: null, workflow: null, requests: [] };
   const fetchFixture: typeof fetch = async (input, init) => {
     const path = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, location.href).pathname;
+    if (path === '/api/shared-intake') return Response.json(state.environment!.sharedIntake);
     if (path !== '/api/features' || init?.method !== 'POST') return base.fetchFixture(input, init);
     const command: FeatureAuthoringCommand = JSON.parse(String(init.body));
     if (command.action !== 'prepare') throw Error('This example only prepares a draft.');

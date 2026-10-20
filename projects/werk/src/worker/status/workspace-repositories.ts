@@ -136,7 +136,7 @@ export async function pruneWorktrees(workspace: WorkspaceContext, input: unknown
   if (!workspace.acceptingTasks || workspace.repositoriesUpdating || workspace.configurationUpdating || workspace.executionProfiles?.pending())
     throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
   // Running work and admissions may be creating or using a worktree that no task records yet.
-  if (!dryRun && (workspace.repositoryPreparations || workspace.sessions.busy || workspace.board.active || workspace.sharedRuntime.intake.busy || workspace.get().activeTasks.length || workspace.get().queuedTasks?.length))
+  if (!dryRun && (workspace.repositoryPreparations || workspace.sessions.busy || workspace.board.active || workspace.featureProjects.busy || workspace.get().activeTasks.length || workspace.get().queuedTasks?.length))
     throw new DomainError("conflict", "Finish or cancel queued and running tasks before pruning task worktrees; a dry run is available now.");
   // Reserve synchronously before listing: all admission and configuration paths use this gate.
   if (!dryRun) workspace.configurationUpdating = true;

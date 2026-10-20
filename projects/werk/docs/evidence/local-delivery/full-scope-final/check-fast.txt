@@ -1,0 +1,66 @@
+
+> software-fabrik@0.14.0 check:fast
+> npm run readme:check && npm run check:loc && npm run lint:oxlint && npm run analyze:fallow && npm run check:architecture && npm run typecheck && npm run typecheck:tests
+
+
+> software-fabrik@0.14.0 readme:check
+> node scripts/storybook/readme-source.mjs check
+
+README matches maintained content.
+
+> software-fabrik@0.14.0 check:loc
+> node scripts/quality/loc.mjs
+
+LOC: 1139 files checked; 0 exceed their limits (source 400, tests/helpers 450).
+
+> software-fabrik@0.14.0 lint:oxlint
+> oxlint --deny-warnings src scripts storybook .storybook tests werk.mjs stryker.config.mjs
+
+
+> software-fabrik@0.14.0 analyze:fallow
+> node scripts/quality/fallow.mjs
+
+Generated import contracts: 1196 source mappings verified without building.
+Fallow dead-code: 0 new findings.
+Fallow architecture: 0 new findings.
+Fallow retained baseline: 177 reviewed findings; see quality/fallow-baseline-review.json. New findings and stale entries fail.
+
+> software-fabrik@0.14.0 check:architecture
+> node --test tests/architecture/architecture-boundaries.test.mjs tests/architecture/dependency-graph.test.mjs
+
+✔ service packages, pure contracts and worker application ports enforce dependency direction (1176.971584ms)
+✔ boundary rejects sibling dependency through declaration (9.781087ms)
+✔ boundary rejects sibling dependency through type declaration (1.213472ms)
+✔ boundary rejects sibling dependency through reexport (1.063751ms)
+✔ boundary rejects sibling dependency through import type expression (1.779351ms)
+✔ boundary rejects sibling dependency through dynamic string (2.197166ms)
+✔ boundary rejects sibling dependency through dynamic template (1.066084ms)
+✔ boundary rejects sibling dependency through CommonJS (1.445575ms)
+✔ boundary rejects sibling dependency through import equals (1.18274ms)
+✔ boundary rejects sibling dependency through createRequire alias (1.74863ms)
+✔ boundary rejects sibling dependency through package alias (1.005371ms)
+✔ boundary rejects sibling dependency through configured alias (0.731808ms)
+✔ boundary rejects sibling dependency through absolute path (0.615767ms)
+✔ boundary rejects sibling dependency through file URL (0.70979ms)
+✔ application rejects concrete adapters including type-only, shared transport and direct I/O (2.435985ms)
+✔ pure contracts reject adapter reached through another contract and computed loading (1.187004ms)
+✔ composition may load configured dependencies; pure application uses contracts and deterministic helpers (2.065012ms)
+✔ Vue ordinary and setup scripts both enforce boundaries, with type-only edge metadata (6.737687ms)
+✔ Factory and root orchestrator application files reject adapters without restricting composition (1.698779ms)
+ℹ tests 19
+ℹ suites 0
+ℹ pass 19
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1676.169569
+
+> software-fabrik@0.14.0 typecheck
+> tsc --noEmit && vue-tsc --noEmit -p tsconfig.webviews.json
+
+
+> software-fabrik@0.14.0 typecheck:tests
+> node scripts/quality/typecheck-tests.mjs
+
+Test types: 477 maintained files, 1200 imports checked against source, 0 errors.

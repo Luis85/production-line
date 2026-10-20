@@ -1,3 +1,8 @@
+import { deliveryVerificationEligibility } from './delivery-verification-eligibility.js';
+import type { DevelopmentScopeView } from './development.js';
+import type { DeliveryPolicySnapshot } from './delivery-policy.js';
+import { remotePublicationPending } from './remote-delivery-contracts.js';
+import { gateDigest } from './request-gates.js';
 import type { DeliveryBlackboard, DeliveryCondition, DeliveryControl, DeliveryDecision, DeliveryNode, DeliveryProfile, DeliveryRun } from './delivery-contracts.js';
 import type { WorkerRequest } from './request-gate-contracts.js';
 
@@ -16,6 +21,7 @@ export const defaultDeliveryProfile: DeliveryProfile = {
     branch('needs_prepare', 'prepare', 'Verify the isolated workspace and pinned authority.'),
     branch('needs_implementation', 'implement', 'Implement the accepted request.'),
     branch('needs_verification', 'verify', 'Run the required checks for this candidate.'),
+    branch('needs_review', 'review_candidate', 'Assess the verified candidate with the accepted review profile.'),
     branch('repair_available', 'repair', 'Repair failed checks within the pinned attempt limit.'),
     branch('repair_exhausted', 'wait', 'The bounded repair allowance is exhausted.', 'Operator input or explicit retry'),
     branch('needs_package', 'package', 'Prepare the verified candidate for human review.'),
@@ -32,7 +38,14 @@ export function deliveryBlackboard(request: WorkerRequest): DeliveryBlackboard {
   const run = request.delivery;
   const last = (phase: DeliveryRun['phase']) => run?.steps.findLast(step => step.phase === phase);
   const implementation = run?.steps.findLast(step => ['implementing', 'repairing'].includes(step.phase) && step.turnId === request.execution?.turnId);
-  const verification = last('verifying');
+  const verification = run?.steps.findLast(step => step.phase === 'verifying' && step.purpose !== 'candidate_review');
+  const context = request.input.context as { deliveryExecution?: { policy?: { reviewProfile?: string } }; deliveryPolicy?: DeliveryPolicySnapshot; implementation?: DevelopmentScopeView } | undefined;
+  const eligible = context?.implementation?.mode === 'worktree' && Array.isArray(context.implementation.checks) && Array.isArray(context.implementation.approvedPaths) && deliveryVerificationEligibility(context.implementation, verification?.evidence, run?.checkpoints?.at(-1), run?.criterionDecisions, context.deliveryPolicy?.profile.exceptions).eligible;
+  const reviewRequired = !!context?.deliveryExecution?.policy?.reviewProfile;
+  const assessment = run?.assessments?.findLast(item => item.profileId === context?.deliveryExecution?.policy?.reviewProfile
+    && item.candidate.inputRevision === request.inputRevision && item.candidate.inputHash === request.inputHash
+    && item.candidate.policyDigest === request.policyDigest && item.candidate.candidateDigest === verification?.evidence?.candidateDigest
+    && item.evidenceDigest === gateDigest(verification?.evidence));
   const implementationIndex = implementation ? run!.steps.indexOf(implementation) : -1;
   const verificationCurrent = !!verification && run!.steps.indexOf(verification) > implementationIndex;
   return {
@@ -45,8 +58,9 @@ export function deliveryBlackboard(request: WorkerRequest): DeliveryBlackboard {
     ready: !!request.evaluations.findLast(e => e.stage === 'ready' && e.inputRevision === request.inputRevision)?.passed,
     planned: last('planning')?.status === 'completed', prepared: last('preparing')?.status === 'completed',
     implemented: implementation?.status === 'completed' && implementation.result?.type === 'completed',
-    verified: verificationCurrent && verification?.status === 'completed',
-    verificationFailed: verificationCurrent && verification?.status === 'failed',
+    verified: verificationCurrent && (verification?.status === 'completed' || eligible),
+    reviewRequired, reviewed: !reviewRequired || !!assessment?.passed, reviewFailed: !!assessment && !assessment.passed,
+    verificationFailed: verificationCurrent && verification?.status === 'failed' && !eligible,
     repairAvailable: !!run && run.repairAttempts < run.maxRepairAttempts,
     packaged: last('packaging')?.status === 'completed',
   };
@@ -58,9 +72,10 @@ export function evaluateDeliveryBehavior(board: DeliveryBlackboard, profile = de
     held: board.held, paused: board.paused, active_step: board.activeStep, needs_ready: !board.ready,
     needs_plan: !board.planned, needs_prepare: !board.prepared, needs_implementation: !board.implemented,
     needs_verification: board.implemented && !board.verified && !board.verificationFailed,
-    repair_available: board.verificationFailed && board.repairAvailable,
-    repair_exhausted: board.verificationFailed && !board.repairAvailable,
-    needs_package: board.verified && !board.packaged, reviewable: board.packaged,
+    needs_review: board.verified && !!board.reviewRequired && !board.reviewed && !board.reviewFailed,
+    repair_available: (board.verificationFailed || !!board.reviewFailed) && board.repairAvailable,
+    repair_exhausted: (board.verificationFailed || !!board.reviewFailed) && !board.repairAvailable,
+    needs_package: board.verified && (!board.reviewRequired || !!board.reviewed) && !board.packaged, reviewable: board.packaged,
   };
   let selected: Extract<DeliveryNode, { type: 'action' }> | undefined;
   let visited = 0;
@@ -78,6 +93,7 @@ export function evaluateDeliveryBehavior(board: DeliveryBlackboard, profile = de
   return { profileId: profile.id, profileVersion: profile.version, selectedNode: selected?.id ?? 'no-action', selectedAction: selected?.action ?? 'wait', reason: selected?.reason ?? 'No permitted next action.', waitingFor: selected?.waitingFor ?? null, conditions };
 }
 function deliveryControls(run: DeliveryRun, terminal = false): DeliveryControl[] {
+  if (remotePublicationPending(run)) return run.control?.action === 'cancel' ? [] : ['cancel'];
   if (terminal) return ['reopen'];
   if (['outcome_unknown', 'reconciling'].includes(run.status)) return run.control?.action === 'cancel' ? ['confirm_stopped'] : ['confirm_stopped', 'cancel'];
   if (run.control?.action === 'cancel') return [];
@@ -92,6 +108,7 @@ function deliveryControls(run: DeliveryRun, terminal = false): DeliveryControl[]
 export function refreshDelivery(request: WorkerRequest): void {
   if (!request.delivery) return;
   request.delivery.decision = evaluateDeliveryBehavior(deliveryBlackboard(request), request.delivery.profile);
+  if (remotePublicationPending(request.delivery)) request.delivery.decision = { ...request.delivery.decision, selectedAction: 'reconcile', reason: 'A saved remote publication has an unresolved outcome. Reconcile its branch or pull request receipt before continuing.', waitingFor: 'Read-only remote publication reconciliation' };
   request.delivery.allowedControls = deliveryControls(request.delivery, ['cancelled', 'done'].includes(request.phase));
 }
 export function deliveryLifecycle(request: WorkerRequest): NonNullable<WorkerRequest['lifecycle']> {

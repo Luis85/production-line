@@ -122,25 +122,25 @@ async function fixture(t, { paused = false, requiredCheck = true, exactFile = fa
   await worker.updateSettings({ board: { paused } });
   await writeFile(join(intake, 'FR-0042.md'), exactFile ? markdown.replace('paths: [src/]', 'paths: [src/value.mjs]') : markdown);
   const current = () => {
-    const record = worker.features.view().records.find(item => item.id === 'FR-0042');
+    const record = workspaceContext(worker).features.view().records.find(item => item.id === 'FR-0042');
     return { record, request: record ? worker.sessions.requests.forSession(record.sessionId) : undefined };
   };
   async function settle(phase) {
     const until = performance.now() + (process.platform === 'win32' ? 150000 : 30000);
     do {
-      await worker.features.tick(true); await worker.board.tick();
+      await workspaceContext(worker).features.tick(true); await worker.board.tick();
       const value = current();
       if (modelFailures.length) throw modelFailures[0];
       if (value.request?.phase === phase && value.record?.result && !worker.sessions.executor.busy && worker.board.active === 0) return value;
       if (value.record?.error) throw Error('Folder intake: ' + value.record.error);
       await delay(20);
     } while (performance.now() < until && !t.signal.aborted);
-    assert.fail('Expected phase ' + phase + ': ' + JSON.stringify({ ...current(), folder: worker.features.view(), tasks: worker.board.view() }));
+    assert.fail('Expected phase ' + phase + ': ' + JSON.stringify({ ...current(), folder: workspaceContext(worker).features.view(), tasks: worker.board.view() }));
   }
   async function observe(check) {
     const until = performance.now() + (process.platform === 'win32' ? 150000 : 15000);
     do {
-      await worker.features.tick(true); await worker.board.tick();
+      await workspaceContext(worker).features.tick(true); await worker.board.tick();
       if (modelFailures.length) throw modelFailures[0];
       const value = current(); if (check(value)) return value;
       await delay(20);
@@ -223,7 +223,7 @@ test('removing acceptance criteria from canonical Markdown clears stale criteria
   assert.equal(revised.request.attestation, null);
   assert.equal(revised.request.deliveryHistory.at(-1).review.candidate.candidateCommit, initial.request.delivery.review.candidate.candidateCommit);
   assert.notEqual(revised.request.phase, 'review');
-  assert.equal(f.worker.features.view().error, null); assert.equal(revised.record.result, undefined);
+  assert.equal(workspaceContext(f.worker).features.view().error, null); assert.equal(revised.record.result, undefined);
   assert.equal(await readFile(historicalPath, 'utf8'), historical, 'Prior generation review remains immutable while the new generation waits.');
 });
 

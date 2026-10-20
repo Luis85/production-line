@@ -1,0 +1,26 @@
+import type { DeliveryMetricRate, DeliveryMetricsReport } from '../application/delivery-metrics-contracts';
+import { executionInterval, type ExecutionWindow } from './metrics-execution';
+const count = (value: number | null) => value === null ? 'Unavailable' : new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(value);
+export const deliveryMetricDuration = (value: number | null) => value === null ? 'Unavailable' : value < 1000 ? count(value) + ' ms' : value < 60_000 ? count(value / 1000) + ' sec' : value < 3_600_000 ? count(value / 60_000) + ' min' : count(value / 3_600_000) + ' hr';
+const percent = (rate: DeliveryMetricRate) => rate.percent === null ? 'Unavailable' : count(rate.percent) + '%';
+const coverage = (rate: DeliveryMetricRate) => `${rate.numerator} of ${rate.denominator} measured · ${rate.unknown} unknown`;
+export function deliveryMetricInterval(window: ExecutionWindow, now: number) { return window === 'all' ? {} : executionInterval(window, now); }
+export function deliverySubmissionCoverage(cohort: Pick<DeliveryMetricsReport['cohort'], 'unknownSubmissionTimes' | 'excludedUnknownSubmissionTimes'>): string | null {
+  const count = cohort.unknownSubmissionTimes, excluded = cohort.excludedUnknownSubmissionTimes;
+  if (!count) return null;
+  const subject = `${count} retained ${count === 1 ? 'request has' : 'requests have'} an unknown submission time.`;
+  return subject + (excluded ? ` ${excluded} ${excluded === 1 ? 'is' : 'are'} excluded by this dated submission filter.` : ' These requests are included without an inferred submission date.');
+}
+export function deliveryMetricCards(report: DeliveryMetricsReport) {
+  return [
+    { id: 'MET-01', title: 'Reached review autonomously', value: percent(report.autonomousReview), coverage: coverage(report.autonomousReview), description: 'No recorded manual orchestration before first review. Clarification and acceptance are separate.' },
+    { id: 'MET-02', title: 'First actionable feedback · p95', value: deliveryMetricDuration(report.firstFeedback.p95Ms), coverage: `${report.firstFeedback.samples} measured · ${report.firstFeedback.unknown} unknown`, description: `Submission to readiness, a question or execution status. Recorded provider portion p95: ${deliveryMetricDuration(report.firstFeedback.providerPortion.p95Ms)}.` },
+    { id: 'MET-03', title: 'Completed clarification cycles', value: report.clarification.completionMeasuredRequests || report.clarification.completedCycles ? count(report.clarification.completedCycles) : 'Unavailable', coverage: `${report.clarification.completionMeasuredRequests} complete measured histories · ${report.clarification.unknownCompletionRequests} unknown`, description: `${report.clarification.cycles} recorded question rounds · ${report.clarification.pendingCycles} pending answers · ${report.clarification.unknownCycles} with unknown completion. A completed cycle requires explicit answers to every question in its round.` },
+    { id: 'MET-04', title: 'Required verification · first pass', value: percent(report.verification.firstPass), coverage: coverage(report.verification.firstPass), description: `Eventual pass: ${percent(report.verification.eventualPass)}. ${report.verification.humanFailures} recorded failures from ${report.verification.humanReviewedRequests} requests with human observations.` },
+    { id: 'MET-05', title: 'Human review effort · p50', value: deliveryMetricDuration(report.review.effort.p50Ms), coverage: `${report.review.effort.samples} measured · ${report.review.effort.unknown} unknown`, description: `Explicitly reported or instrumented time. Changes requested: ${percent(report.review.changesRequested)} (${report.review.changesRequested.denominator} measured).` },
+    { id: 'MET-06', title: 'Verified recovery', value: percent(report.recovery), coverage: coverage(report.recovery), description: 'A recorded known outcome and an explicit check for duplicate consequential actions are required.' },
+    { id: 'MET-07', title: 'Recorded integrity incidents', value: report.integrity.auditedRequests || report.integrity.incidents ? count(report.integrity.incidents) : 'Unavailable', coverage: `${report.integrity.auditedRequests} requests audited · ${report.integrity.unknownRequests} unaudited`, description: `${report.integrity.releaseAudits} release-acceptance audit records. No recorded incident is not proof that an unaudited request had none.` },
+    { id: 'MET-08', title: 'Observed blocker time', value: report.blockerCoverage.measuredRequests || report.blockers.length ? deliveryMetricDuration(report.blockers.reduce((sum, row) => sum + row.totalMs, 0)) : 'Unavailable', coverage: `${report.blockerCoverage.measuredRequests} complete measured histories · ${report.blockerCoverage.unknownRequests} incomplete`, description: 'Measured intervals by cause. Concurrent causes can overlap; their sum is not elapsed request time.' },
+    { id: 'MET-09', title: 'Tokens per accepted request', value: count(report.consumption.meanTokens), coverage: `${report.consumption.measuredRequests} complete of ${report.consumption.acceptedRequests} accepted · ${report.consumption.partialRequests} partial`, description: 'Mean from requests with complete direct-invocation usage. Delegation and missing usage prevent a complete total.' },
+  ];
+}

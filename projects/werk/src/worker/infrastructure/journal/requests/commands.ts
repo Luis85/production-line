@@ -1,3 +1,10 @@
+import { requestClarificationAnswers } from './clarifications.js';
+import { validateDeliveryPolicySnapshot } from '../../../application/delivery-policy.js';
+import { humanReviewOutcomes, humanReviewObservations } from '../../../application/delivery-human-review.js';
+import { requestReadinessDecision } from './readiness.js';
+import { requestCriterionDecision } from './criterion-decisions.js';
+import { remotePublicationCommands, remotePublicationPending } from '../../../application/remote-delivery-contracts.js';
+import { requestPublicationCommand } from './publication.js';
 import type { DeliveryStopObservation } from '../../../application/delivery-contracts.js';
 import {
   defaultGatePolicy,
@@ -27,11 +34,13 @@ export function requestCommand(store: RequestStore, input: RequestCommand, stopp
   duplicate: boolean;
 } {
   const fields: Record<string, string[]> = {
+    readiness_decision: ['inputRevision', 'inputHash', 'assessmentId', 'proposalId', 'decision', 'note'],
+    criterion_decision: ['deliveryRunId', 'inputRevision', 'candidateCommit', 'candidateDigest', 'criterionDecision'],
     execute: [],
     evaluate: ["stage"],
     assign: ["assignee"],
-    attest: ['note', 'inputHash', 'outputDigest', 'candidateCommit', 'candidateDigest', 'inputRevision', 'humanOutcomes'],
-    request_changes: ['note', 'inputRevision', 'candidateCommit', 'candidateDigest'],
+    attest: ['note', 'inputHash', 'outputDigest', 'candidateCommit', 'candidateDigest', 'inputRevision', 'humanOutcomes', 'reviewDurationMinutes'],
+    request_changes: ['note', 'inputRevision', 'candidateCommit', 'candidateDigest', 'humanOutcomes', 'reviewDurationMinutes'],
     resolve_finding: ["findingId", "note"],
     propose: ["input"],
     accept_candidate: ["candidateId"],
@@ -43,6 +52,9 @@ export function requestCommand(store: RequestStore, input: RequestCommand, stopp
     retry: ['note', 'deliveryRunId', 'inputRevision'],
     reopen: ['note', 'deliveryRunId', 'inputRevision'],
     confirm_stopped: ['note', 'deliveryRunId', 'inputRevision'],
+    push_candidate: ['deliveryRunId', 'inputRevision', 'candidateCommit', 'candidateDigest'],
+    create_pull_request: ['deliveryRunId', 'inputRevision', 'candidateCommit', 'candidateDigest'],
+    reconcile_publication: ['deliveryRunId', 'inputRevision', 'candidateCommit', 'candidateDigest', 'publicationOperationId'],
   };
   if (
     !input ||
@@ -86,6 +98,7 @@ export function requestCommand(store: RequestStore, input: RequestCommand, stopp
     }
     if (request.revision !== input.expectedRevision)
       conflict("The request changed. Refresh before continuing.");
+    if (remotePublicationPending(request.delivery) && !['cancel', 'reconcile_publication'].includes(input.action)) conflict('Reconcile the saved remote publication before changing or continuing this request.');
     const deliveryControl = deliveryCommandActions.includes(input.action as typeof deliveryCommandActions[number]) || input.action === 'cancel' && !!request.delivery;
     if (
       !deliveryControl && request.execution &&
@@ -101,7 +114,13 @@ export function requestCommand(store: RequestStore, input: RequestCommand, stopp
           (request.execution?.result?.type === "completed"
             ? "done"
             : "ready"));
-    if (deliveryControl) {
+    if (remotePublicationCommands.includes(input.action as typeof remotePublicationCommands[number])) {
+      requestPublicationCommand(store, request, normalized);
+    } else if (input.action === 'readiness_decision') {
+      requestReadinessDecision(store, request, normalized); requestEvaluateInside(store, request, 'ready');
+    } else if (input.action === 'criterion_decision') {
+      requestCriterionDecision(store, request, normalized);
+    } else if (deliveryControl) {
       requestDeliveryCommand(store, request, normalized, stopped);
     } else if (input.action === "evaluate" || input.action === "execute") {
       if (
@@ -119,6 +138,7 @@ export function requestCommand(store: RequestStore, input: RequestCommand, stopp
       request.assignee = input.assignee!;
       store.save(request, "assigned");
     } else if (input.action === "attest") {
+      if (input.reviewDurationMinutes !== undefined && (typeof input.reviewDurationMinutes !== 'number' || !Number.isFinite(input.reviewDurationMinutes) || input.reviewDurationMinutes < 0 || input.reviewDurationMinutes > 1440)) invalid('Reported review effort must be between 0 and 1,440 minutes.');
       if (
         !request.execution?.result ||
         request.execution.result.type !== "completed" ||
@@ -134,9 +154,10 @@ export function requestCommand(store: RequestStore, input: RequestCommand, stopp
       if (request.delivery?.review) {
         const review = request.delivery.review;
         if (input.candidateCommit !== review.candidate.candidateCommit) conflict('Acceptance must identify the exact candidate commit.');
-        if (!Array.isArray(input.humanOutcomes) || input.humanOutcomes.length > 128 || input.humanOutcomes.some(item => !item || Object.keys(item).some(key => !['criterionId', 'outcome', 'reason'].includes(key)))) invalid('Human review requires bounded individual criterion outcomes.');
-        const humanOutcomes = input.humanOutcomes.map(item => ({ ...item, actor: 'operator', at: iso() }));
-        assertDeliveryAcceptance(review, { inputRevision: input.inputRevision!, inputHash: request.inputHash, candidateCommit: input.candidateCommit!, candidateDigest: input.candidateDigest!, policyDigest: request.policyDigest, humanOutcomes });
+        const humanOutcomes = humanReviewOutcomes(input.humanOutcomes, review, iso());
+        const context = request.input.context as { deliveryPolicy?: unknown } | undefined;
+        const exceptionPolicy = context?.deliveryPolicy ? validateDeliveryPolicySnapshot(context.deliveryPolicy).profile.exceptions : undefined;
+        assertDeliveryAcceptance(review, { inputRevision: input.inputRevision!, inputHash: request.inputHash, candidateCommit: input.candidateCommit!, candidateDigest: input.candidateDigest!, policyDigest: request.policyDigest, humanOutcomes, criterionDecisions: request.delivery.criterionDecisions, exceptionPolicy });
         request.delivery!.humanOutcomes = humanOutcomes;
       }
       request.attestation = {
@@ -146,17 +167,20 @@ export function requestCommand(store: RequestStore, input: RequestCommand, stopp
         note: normalized.note,
         at: iso(),
       };
-      store.save(request, "operator_attested");
+      store.save(request, "operator_attested", { observations: humanReviewObservations(request.delivery?.humanOutcomes ?? [], input.candidateDigest ?? '', input.reviewDurationMinutes) });
       requestEvaluateInside(store, request, "done");
     } else if (input.action === 'request_changes') {
       const review = request.delivery?.review;
       if (!review || !normalized.note || request.phase !== 'review') conflict('Request changes requires the current review package and explanatory feedback.');
       if (input.candidateCommit !== review.candidate.candidateCommit) conflict('Changes must target the exact candidate commit.');
       assertDeliverySubject(review.candidate, { inputRevision: input.inputRevision!, inputHash: request.inputHash, candidateCommit: input.candidateCommit!, candidateDigest: input.candidateDigest!, policyDigest: request.policyDigest });
+      const outcomes = input.humanOutcomes === undefined ? [] : humanReviewOutcomes(input.humanOutcomes, review, iso());
+      const observations = humanReviewObservations(outcomes, review.candidate.candidateDigest, input.reviewDurationMinutes);
+      if (input.humanOutcomes !== undefined) request.delivery!.humanOutcomes = outcomes;
       const hold = { code: 'review_changes', reason: normalized.note };
       request.deliveryHolds = [...(request.deliveryHolds ?? []).filter(item => item.code !== hold.code), hold];
       request.delivery!.holds = clone(request.deliveryHolds); request.delivery!.status = 'waiting'; request.phase = 'needs_rework';
-      store.save(request, 'review_changes_requested');
+      store.save(request, 'review_changes_requested', { observations });
     } else if (input.action === "resolve_finding") {
       const finding = request.findings.find((f) => f.id === input.findingId);
       if (!finding || finding.source === "deterministic" || !normalized.note)
@@ -169,7 +193,7 @@ export function requestCommand(store: RequestStore, input: RequestCommand, stopp
         note: normalized.note,
         at: iso(),
       };
-      store.save(request, "finding_resolved");
+      store.save(request, "finding_resolved", { observations: requestClarificationAnswers(store, request.id, finding.id) });
     } else if (input.action === "propose") {
       requestCandidate(request, input.input!, "operator");
       store.save(request, "candidate_proposed");

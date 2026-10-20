@@ -138,7 +138,7 @@ export function requestRecordResult(
     if (result.type === "needs_input") {
       request.phase =
         result.request.kind === "question" ? "waiting_input" : "escalated";
-      store.save(request, "input_requested", { turnId, runId });
+      store.save(request, "input_requested", { turnId, runId, ...(result.request.kind === 'question' ? { observations: [{ kind: 'clarification' as const, questionId: turnId, cycleId: 'execution:' + turnId, cause: 'implementation', answerTracking: true as const }] } : {}) });
     } else {
       store.save(request, "result_recorded", { turnId, runId });
       requestEvaluateInside(store, request, "done");

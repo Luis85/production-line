@@ -1,3 +1,4 @@
+import type { SharedFeatureIntake } from '../application/shared-feature-intake.js';
 import type { WorkspaceContext } from './workspace-context.js';
 import type { InteractionCommand } from "../application/interactions.js";
 import { object, text, identifier } from "../../shared/contracts.js";
@@ -131,9 +132,10 @@ export async function interaction(workspace: WorkspaceContext, input: unknown, o
   const command = body as unknown as InteractionCommand;
   const local = workspace.board.view().tasks.find(task => task.sessionId === sessionId);
   if (isSharedFeatureSession(workspace, sessionId)) {
-    if (!local || !workspace.sharedRuntime.intake.sourceForTask(local.id))
+    if (!local || !workspace.featureProjects.sharedForTask(local.id)?.source)
       throw new DomainError('conflict', 'This shared Feature Request’s execution history is unavailable. Restore its owning task history before continuing, or create a successor Feature Request.');
-    if (!options.fromFeatureNote) return workspace.sharedRuntime.intake.respond(local.id, command);
+    const intake: SharedFeatureIntake = workspace.featureProjects.sharedForTask(local.id)!.project.sharedRuntime.intake;
+    if (!options.fromFeatureNote) return intake.respond(local.id, command);
   }
   const interactions = workspace.sessions.interactions;
   const view = interactions.view(sessionId);

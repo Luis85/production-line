@@ -1,3 +1,4 @@
+import { unknownProviderOutcome } from '../application/provider-outcome.js';
 import type { ProcessObservation } from '../application/process-observation.js';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -82,8 +83,10 @@ export function createDelegationChildRunner(options: DelegationChildOptions): De
       });
       if (evidenceError) throw evidenceError;
     } catch (error) {
-      await options.runs.finish(run.id, input.signal.aborted ? 'cancelled' : 'failed', usage);
-      throw evidenceError ?? error;
+      const unknown = unknownProviderOutcome(error);
+      try { await options.runs.finish(run.id, unknown ? 'failed' : input.signal.aborted ? 'cancelled' : 'failed', usage); }
+      catch (writeError) { if (!unknown) throw writeError; }
+      throw unknown ? new ProviderModelError(unknown) : evidenceError ?? error;
     }
     await options.runs.finish(run.id, result.type === 'completed' ? 'completed' : result.request.kind === 'escalation' ? 'escalated' : 'waiting_input', usage);
     return { sessionId, result, usage };

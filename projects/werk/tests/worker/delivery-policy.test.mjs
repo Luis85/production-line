@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { deliveryDependencies } from '../../src/worker/dist/worker/application/delivery-dependencies.js';
+import { planDeliveryDependencies } from '../../src/worker/dist/worker/application/delivery-dependency-plan.js';
 import { defaultDeliveryProjectPolicy, validateDeliveryProjectPolicy, deliveryGatePolicy, deliveryPolicySnapshot, validateDeliveryPolicySnapshot } from '../../src/worker/dist/worker/application/delivery-policy.js';
 import { defaultGatePolicy, evaluateGate, inputGateFacts } from '../../src/worker/dist/worker/application/request-gates.js';
 import { readDeliveryPolicy, deliveryCommitInBaseline } from '../../src/worker/dist/worker/infrastructure/delivery-policy.js';
@@ -29,19 +29,25 @@ test('named profiles add proportional readiness without dropping trusted mandato
   assert.ok(config.profiles.every(profile => profile.verificationInputs.includes('.werk/delivery-policy.json')));
 });
 
-test('dependency graph rejects unknown, cyclic, ambiguous and accepted-but-unintegrated predecessors', async () => {
+test('dependency graph reports unknown, cyclic, ambiguous and accepted-but-unintegrated predecessors', async () => {
   const accepted = id => ({ id, requestId: 'request-' + id, inputRevision: 2, candidateCommit: 'b'.repeat(40), includesCode: true });
   const ports = { accepted, incorporated: async () => true };
-  await assert.rejects(deliveryDependencies('child', [{ id: 'child', dependsOn: ['missing'] }], baseline, ports), /Unknown.*missing/);
-  await assert.rejects(deliveryDependencies('child', [{ id: 'child', dependsOn: ['parent'] }, { id: 'parent', dependsOn: ['child'] }], baseline, ports), /cycle/);
-  await assert.rejects(deliveryDependencies('child', [{ id: 'child', dependsOn: [] }, { id: 'child', dependsOn: [] }], baseline, ports), /Duplicate/);
+  /** @type {Array<[import('../../src/worker/application/delivery-dependencies.js').DeliveryDependencyNode[], string]>} */
+  const cases = [
+    [[{ id: 'child', dependsOn: ['missing'] }], 'unknown'],
+    [[{ id: 'child', dependsOn: ['parent'] }, { id: 'parent', dependsOn: ['child'] }], 'cycle'],
+    [[{ id: 'child', dependsOn: [] }, { id: 'child', dependsOn: [] }], 'duplicate'],
+  ];
+  for (const [nodes, code] of cases) { const plan = await planDeliveryDependencies('child', nodes, baseline, ports); assert.equal(plan.ready, false); assert.equal(plan.blockers[0].code, code); }
   const graph = [{ id: 'child', dependsOn: ['parent'] }, { id: 'parent', dependsOn: [] }];
-  await assert.rejects(deliveryDependencies('child', graph, baseline, { ...ports, accepted: () => undefined }), /human acceptance/);
-  await assert.rejects(deliveryDependencies('child', graph, baseline, { ...ports, incorporated: async () => false }), /not confirmed in the selected baseline/);
-  const receipts = await deliveryDependencies('child', graph, baseline, ports);
-  assert.deepEqual(receipts, [{ ...accepted('parent'), baseline }]);
-  const noCode = await deliveryDependencies('child', graph, baseline, { accepted: id => ({ id, requestId: id, inputRevision: 1, includesCode: false }), incorporated: async () => { throw Error('Non-code acceptance must not invent a commit.'); } });
-  assert.equal(noCode[0].includesCode, false);
+  const unaccepted = await planDeliveryDependencies('child', graph, baseline, { ...ports, accepted: () => undefined });
+  assert.equal(unaccepted.ready, false); assert.equal(unaccepted.blockers[0].code, 'unaccepted');
+  const unintegrated = await planDeliveryDependencies('child', graph, baseline, { ...ports, incorporated: async () => false });
+  assert.equal(unintegrated.ready, false); assert.equal(unintegrated.blockers[0].code, 'not_integrated');
+  const result = await planDeliveryDependencies('child', graph, baseline, ports);
+  assert.equal(result.ready, true); assert.deepEqual(result.nodes.flatMap(node => node.receipt ? [node.receipt] : []), [{ ...accepted('parent'), baseline }]);
+  const noCode = await planDeliveryDependencies('child', graph, baseline, { accepted: id => ({ id, requestId: id, inputRevision: 1, includesCode: false }), incorporated: async () => { throw Error('Non-code acceptance must not invent a commit.'); } });
+  assert.equal(noCode.ready, true); assert.equal(noCode.nodes[0].receipt.includesCode, false);
 });
 
 test('project policy and dependency proofs read only committed baseline; dirty checkout is preserved', async t => {

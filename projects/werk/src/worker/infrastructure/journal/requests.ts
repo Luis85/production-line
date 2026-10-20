@@ -21,7 +21,7 @@ import { requestBindFeature, requestBindTurn, requestEnsure } from './requests/a
 import { requestCommand, requestPolicy, requestReplayCommand, requestSetPolicy } from './requests/commands.js';
 import { requestFailExecution, requestPrepareExecution, requestRecordResult, requestStartExecution } from './requests/execution.js';
 import { requestEvaluate, requestHoldRecovery } from './requests/gates.js';
-import { requestEvents, requestExecution, requestForSession, requestForTurn, requestHasActiveReview, requestList } from './requests/queries.js';
+import { requestEvents, requestExecution, requestForSession, requestForTurn, requestHasActiveReview, requestUnresolvedExecutions, requestList } from './requests/queries.js';
 import { requestCompleteReview, requestFailReview, requestObserveReviewUsage, requestQueuedReviews, requestReserveReview, requestStartReview } from './requests/reviews.js';
 import { RequestStore } from './requests/store.js';
 
@@ -45,6 +45,7 @@ export class WorkerRequestJournal implements RequestGatePort, FeatureIdentityJou
   }
   deliveryUpdate(id: string, update: DeliveryUpdate): WorkerRequest { return requestDeliveryUpdate(this.store, id, update); }
   reviseInput(id: string, input: GateInput): WorkerRequest { return requestReviseInput(this.store, id, input); }
+  unresolvedExecutions() { return requestUnresolvedExecutions(this.store); }
   get(id: string): WorkerRequest {
     return this.store.get(id);
   }
@@ -82,8 +83,8 @@ export class WorkerRequestJournal implements RequestGatePort, FeatureIdentityJou
   }): WorkerRequest {
     return requestEnsure(this.store, input);
   }
-  bindTurn(id: string, turnId: string, inputRevision?: number) {
-    return requestBindTurn(this.store, id, turnId, inputRevision);
+  bindTurn(id: string, turnId: string, inputRevision?: number, answeredTurnId?: string) {
+    return requestBindTurn(this.store, id, turnId, inputRevision, answeredTurnId);
   }
   evaluate(id: string, stage: GateStage) {
     return requestEvaluate(this.store, id, stage);

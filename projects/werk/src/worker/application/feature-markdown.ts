@@ -3,11 +3,18 @@ import type { FeatureInput } from './feature-requests.js';
 
 export interface FeatureMarkdownCommand {
   commandId: string;
-  action: 'accept' | 'request_changes' | 'reopen' | 'pause_after_step' | 'interrupt' | 'cancel' | 'resume' | 'retry' | 'confirm_stopped';
+  action: import('./remote-delivery-contracts.js').RemotePublicationCommand | 'readiness_decision' | 'criterion_decision' | 'accept' | 'request_changes' | 'reopen' | 'pause_after_step' | 'interrupt' | 'cancel' | 'resume' | 'retry' | 'confirm_stopped';
   requestRevision?: number;
   candidateCommit?: string;
   runId?: string;
+  publicationOperationId?: string;
   feedback?: string;
+  inputHash?: string;
+  assessmentId?: string;
+  proposalId?: string;
+  decision?: 'accepted' | 'rejected';
+  criterionDecision?: import('./delivery-criterion-decisions.js').DeliveryCriterionDecisionInput;
+  reviewDurationMinutes?: number;
   humanChecks?: { criterionId: string; outcome: 'pass' | 'fail' | 'exempt'; note: string }[];
 }
 export interface FeatureCommandReceipt {
@@ -29,7 +36,7 @@ function semanticMarkdown(value: string) {
   }).join('\n').trim();
 }
 export function featureInputHash(input: FeatureInput) {
-  const { priority: _priority, ...semantic } = input;
+  const { priority: _priority, providerExplicit: _providerExplicit, ...semantic } = input;
   return createHash('sha256').update(JSON.stringify({ ...semantic, message: semanticMarkdown(input.message) })).digest('hex');
 }
 export const featureCommandDigest = (command: FeatureMarkdownCommand) => createHash('sha256').update(JSON.stringify(command)).digest('hex');
@@ -38,7 +45,7 @@ export function acceptedFeatureHash(record: { semanticRevision?: number; inputHa
   return record.semanticRevision === undefined && record.input ? featureInputHash(record.input) : record.inputHash;
 }
 
-export function featureTaskIdentity(id: string, mode: 'chat' | 'patch') {
-  const taskId = 'feature-' + (/^[a-z0-9-]+$/.test(id) ? id : createHash('sha256').update(id).digest('hex').slice(0, 40));
+export function featureTaskIdentity(id: string, mode: 'chat' | 'patch', projectId?: string) {
+  const taskId = 'feature-' + (projectId ? createHash('sha256').update(JSON.stringify([projectId, id])).digest('hex').slice(0, 40) : /^[a-z0-9-]+$/.test(id) ? id : createHash('sha256').update(id).digest('hex').slice(0, 40));
   return { taskId, sessionId: mode === 'patch' ? 'local-' + taskId : taskId };
 }

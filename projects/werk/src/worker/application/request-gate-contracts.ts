@@ -1,3 +1,6 @@
+import type { DeliveryReadinessState, DeliveryReadinessResult, deliveryReadinessView } from './delivery-readiness.js';
+import type { DeliveryCriterionDecisionInput } from './delivery-criterion-decisions.js';
+import type { DeliveryEventMeasurement } from './delivery-metrics-contracts.js';
 import type { DeliveryHumanOutcome } from './delivery-review-contracts.js';
 import type { DeliveryLifecycle, DeliveryRun, DeliveryStopObservation, DeliveryUpdate } from './delivery-contracts.js';
 import type {
@@ -34,6 +37,7 @@ export const gateFacts = {
   "output.patchPresent": "boolean",
   "output.changedFileCount": "number",
   "output.verificationPassed": "boolean",
+  "output.verificationEligible": "boolean",
   "output.requiredCheckCount": "number",
   "output.candidateDigest": "string",
   "execution.recoverySafe": "boolean",
@@ -91,6 +95,7 @@ export interface GateRuleResult {
   result: "pass" | "fail" | "unknown";
 }
 export interface GateEvaluation {
+  readiness?: ReturnType<typeof deliveryReadinessView>;
   id: string;
   stage: GateStage;
   inputRevision: number;
@@ -141,6 +146,7 @@ export interface GateReviewIntent {
       blocking?: boolean;
     }[];
     summary: string;
+    readiness?: DeliveryReadinessResult;
     candidate?: GateInput;
   } | null;
   usage: ProviderUsage | null;
@@ -165,6 +171,7 @@ export interface RequestExecution {
   facts: GateFactSnapshot;
 }
 export interface WorkerRequest {
+  readiness?: DeliveryReadinessState;
   lifecycle?: DeliveryLifecycle;
   delivery?: DeliveryRun;
   deliveryHistory?: DeliveryRun[];
@@ -214,6 +221,7 @@ export interface RequestSummary {
   updatedAt: string;
 }
 export interface RequestEvent {
+  measurement?: DeliveryEventMeasurement;
   deliveryRunId?: string;
   deliveryStepId?: string;
   schemaVersion: 1;
@@ -246,10 +254,21 @@ export interface RequestCommand {
     | "retry"
     | "reopen"
     | "request_changes"
-    | "confirm_stopped";
+    | "confirm_stopped"
+    | "readiness_decision"
+    | "criterion_decision"
+    | "push_candidate"
+    | "create_pull_request"
+    | "reconcile_publication";
   requestId: string;
   expectedRevision: number;
   operationId: string;
+  publicationOperationId?: string;
+  assessmentId?: string;
+  proposalId?: string;
+  decision?: 'accepted' | 'rejected';
+  criterionDecision?: DeliveryCriterionDecisionInput;
+  reviewDurationMinutes?: number;
   candidateCommit?: string;
   candidateDigest?: string;
   humanOutcomes?: Omit<DeliveryHumanOutcome, 'actor' | 'at'>[];
@@ -277,7 +296,7 @@ export interface RequestGatePort {
   forTurn(sessionId: string, turnId: string): WorkerRequest | undefined;
   forSession(sessionId: string): WorkerRequest | undefined;
   hasActiveReview(sessionId: string): boolean;
-  bindTurn(id: string, turnId: string, inputRevision?: number): WorkerRequest;
+  bindTurn(id: string, turnId: string, inputRevision?: number, answeredTurnId?: string): WorkerRequest;
   evaluate(id: string, stage: GateStage): GateEvaluation;
   prepareExecution(id: string, turnId: string, runId: string): WorkerRequest;
   startExecution(id: string, turnId: string, runId: string): WorkerRequest;

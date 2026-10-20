@@ -1,3 +1,4 @@
+import { currentCriterionDecision, criterionObservedPassed, type CriterionAuthority } from './delivery-criterion-view';
 import type { DeliveryHumanOutcome, DeliveryReviewPackage } from '../application/delivery-review-contracts';
 
 export const humanReviewDraftKey = (review: DeliveryReviewPackage, criterionId: string, field: 'outcome' | 'reason') =>
@@ -11,9 +12,9 @@ export function deliveryHumanOutcomes(review: DeliveryReviewPackage, read: (key:
   });
 }
 /** The form cannot turn a checkbox or missing receipt into acceptance evidence. */
-export function deliveryHumanReviewReady(review: DeliveryReviewPackage, read: (key: string) => string): boolean {
+export function deliveryHumanReviewReady(review: DeliveryReviewPackage, read: (key: string) => string, authority: CriterionAuthority = {}): boolean {
   const outcomes = deliveryHumanOutcomes(review, read);
-  return review.criteria.filter(criterion => criterion.mandatory).every(criterion => criterion.evaluator === 'human'
+  return review.criteria.filter(criterion => criterion.mandatory).every(criterion => !!currentCriterionDecision(review, criterion.id, authority) || (criterion.evaluator === 'human'
     ? outcomes.some(outcome => outcome.criterionId === criterion.id && outcome.outcome === 'passed')
-    : review.results.some(result => result.criterionId === criterion.id && result.status === 'passed'));
+    : criterionObservedPassed(review, criterion.id)));
 }

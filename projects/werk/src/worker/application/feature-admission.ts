@@ -22,9 +22,10 @@ export interface FeatureAdmissionPorts {
 export async function admitFeatureRequest(ports: FeatureAdmissionPorts, admission: FeatureAdmission): Promise<void> {
   const { input } = admission, feature = validateFeatureRequestReference(admission.reference);
   const selection = {
-    title: input.title, provider: input.provider, ...(input.model === undefined ? {} : { model: input.model }), ...(input.effort === undefined ? {} : { effort: input.effort }), definitionId: input.definitionId,
+    title: input.title, provider: admission.selection?.provider ?? input.provider, ...(input.model === undefined ? {} : { model: input.model }), ...(input.effort === undefined ? {} : { effort: input.effort }), definitionId: input.definitionId,
     definitionRef: input.definitionRef, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly,
   };
+  if (admission.selection) Object.assign(selection, { provider: admission.selection.provider, model: admission.selection.model, effort: admission.selection.effort });
   if (input.mode === 'patch') {
     if (!admission.repository) throw new DomainError('invalid_input', 'A file implementation needs its accepted repository.');
     await ports.patch({ ...selection, instruction: input.message, repository: admission.repository,

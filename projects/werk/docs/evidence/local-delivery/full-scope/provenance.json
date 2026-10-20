@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "scope": "Offline Linux Chromium UI fixtures, working-tree build; exact-HEAD full catalog qualification occurs separately.",
+  "baseCommitAtBuild": "8fc99c379c219b430f432d5fe16a2950d7eef0c4",
+  "workingTreeDirty": true,
+  "sourceDigest": "233c99b6869f748f9cee7381d2442435f5944495129a0a667e28adbc117878a4",
+  "inventorySha256": "332dd3656575f9e4b264707f593b9070a7af59a3129f86c7498a047d750e4be3",
+  "browser": "Chromium154.0.8037.57 on Debian13",
+  "components": 109,
+  "documents": 73
+}

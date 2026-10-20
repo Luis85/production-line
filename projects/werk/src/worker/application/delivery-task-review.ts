@@ -21,6 +21,27 @@ export async function verifyDelivery(host: Pick<LocalTaskRuntime, 'sessions' | '
   return captured.digest;
 }
 
+/** Re-observe a failed or passing checkpoint without requiring a review package. */
+export async function verifyDeliveryCheckpoint(host: Pick<LocalTaskRuntime, 'sessions' | 'tasks' | 'running' | 'developmentRuntime' | 'assertToolWorkspace' | 'delivery' | 'workspaceController'>, requestId: string, expectedRevision?: number): Promise<string> {
+  const request = host.sessions.requests.get(requestId), run = request.delivery, candidate = run?.checkpoints?.at(-1);
+  const task = host.tasks.find(item => item.requestId === requestId);
+  const inactive = () => !task || host.running.has(task.id) || !run || ['running', 'interrupting', 'outcome_unknown', 'reconciling'].includes(run.status) || run.steps.some(step => ['running', 'outcome_unknown'].includes(step.status));
+  if (!candidate || !task?.implementation || !host.delivery || inactive()) throw new DomainError('conflict', 'Wait for a retained, inactive checkpoint with a known outcome before recording a criterion decision.');
+  if (expectedRevision !== undefined && request.revision !== expectedRevision) throw new DomainError('conflict', 'The request changed. Refresh before recording a criterion decision.');
+  if (candidate.requestId !== request.id || candidate.runId !== run!.id) throw new DomainError('conflict', 'The checkpoint belongs to a different request or delivery run.');
+  const signal = AbortSignal.any([host.workspaceController.signal, AbortSignal.timeout(30000)]);
+  const turn = task.currentTurnId ? host.sessions.interactions.turn(task.sessionId, task.currentTurnId) : undefined;
+  await host.assertToolWorkspace(task, signal, true, turn?.dispatch?.policy);
+  const development = host.developmentRuntime(task, turn?.dispatch?.policy, false);
+  if (!development) throw new DomainError('conflict', 'The checkpoint workspace is unavailable for verification.');
+  const captured = await development.capture(signal);
+  assertDeliverySubject(candidate, { inputRevision: request.inputRevision, inputHash: request.inputHash, candidateCommit: candidate.candidateCommit, candidateDigest: captured.digest, policyDigest: request.policyDigest, baseline: task.implementation.baseCommit });
+  await host.delivery(task.repository).verify(candidate, signal);
+  const current = host.sessions.requests.get(requestId);
+  if (current.revision !== request.revision || current.delivery?.id !== run!.id || current.delivery?.checkpoints?.at(-1)?.candidateCommit !== candidate.candidateCommit || host.running.has(task.id)) throw new DomainError('conflict', 'The checkpoint changed during verification. Refresh before continuing.');
+  return captured.digest;
+}
+
 /** Verify managed inactivity and record a candidate observation, leaving cessation of orphaned processes to the operator. */
 export async function inspectStopped(host: Pick<LocalTaskRuntime, 'sessions' | 'tasks' | 'running' | 'developmentRuntime' | 'assertToolWorkspace' | 'workspaceController' | 'observations'>, requestId: string, expectedRevision?: number) {
   const request = host.sessions.requests.get(requestId), run = request.delivery;

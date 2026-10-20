@@ -1,3 +1,4 @@
+import type { ExecutionRecovery, UnknownExecutionReason } from './execution-recovery.js';
 import type { ProviderAuthenticationMode } from './provider-capabilities.js';
 import { DomainError } from '../../shared/errors.js';
 
@@ -19,6 +20,7 @@ export interface RunResources { scope: 'worker_process'; processInstanceId: stri
 export interface RunSnapshot { measurement: 'execution_boundary' | 'recovery' | 'cancellation'; capturedAt: string; state: RunOutcome; resources: RunResources; consumption: ConsumptionTotals; }
 export interface WorkerRun extends RunMetadata {
   schemaVersion: 1; id: string; sequence: number; attempt: number; outcome: RunOutcome;
+  executionRecovery?: ExecutionRecovery;
   acceptedAt: string; before: RunSnapshot | null; after: RunSnapshot | null; startedAt: string | null;
   durationMs: number | null; queueDurationMs: number | null; usage: ProviderUsage;
   resourceDelta: { scope: 'worker_process_between_snapshots'; cpuUserMicros: number | null; cpuSystemMicros: number | null };
@@ -36,6 +38,7 @@ export interface RunAnalysis {
 export interface RunEvidence {
   begin(metadata: RunMetadata): Promise<WorkerRun>;
   start(id: string): Promise<void>;
+  reserveUnknown(id: string, reason: UnknownExecutionReason): void;
   observeUsage?(id: string, usage: ProviderUsage): void;
   finish(id: string, outcome: Exclude<RunOutcome, 'queued' | 'running'>, usage?: ProviderUsage): Promise<WorkerRun>;
 }

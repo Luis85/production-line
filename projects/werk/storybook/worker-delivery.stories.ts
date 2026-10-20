@@ -93,7 +93,7 @@ export const ReviewDraftSurvivesRefresh: Story = {
   parameters: { storymap: storymap('The candidate-scoped observation draft remains in the same field during polling, so reviewing evidence does not interrupt typing.', true) }, render: render('review'),
   play: async ({ canvasElement }) => {
     await loaded(canvasElement); const query = within(canvasElement), input = query.getByLabelText('What you checked or what needs to change') as HTMLTextAreaElement;
-    await userEvent.type(input, 'Inspecting equal-date behavior.'); input.focus(); fixture.refreshObservation(); await query.findByText('An updated worker observation; your review draft is retained.', { exact: false });
+    await userEvent.type(input, 'Inspecting equal-date behavior.'); input.focus(); fixture.refreshObservation(); const observation = await query.findByText('An updated worker observation; your review draft is retained.', { exact: false, selector: '.delivery-run > p' }); if (!observation.checkVisibility()) throw Error('The current observation must be visible outside the inspector.');
     if (query.getByLabelText('What you checked or what needs to change') !== input || input.value !== 'Inspecting equal-date behavior.' || document.activeElement !== input) throw Error('Quiet refresh disrupted the human review draft.');
     await ready(canvasElement);
   },

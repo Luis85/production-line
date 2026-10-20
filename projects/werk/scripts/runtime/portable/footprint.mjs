@@ -61,8 +61,10 @@ async function projectLayout(root, project) {
 async function generatedAuthoring(root, layout) {
   const assets = await dist(root, 'worker/infrastructure/feature-authoring-assets.js');
   const { defaultFeatureCheck } = await dist(root, 'worker/application/feature-workflow.js');
+  const { newDeliveryProjectPolicy } = await dist(root, 'worker/application/delivery-policy-template.js');
   const workflow = layout.workflow, result = new Map();
   if (!workflow) return result;
+  result.set('.werk/delivery-policy.json', json(newDeliveryProjectPolicy()));
   result.set(workflow.template, assets.authoringTemplateFor(layout.provider));
   result.set(workflow.base, assets.authoringBase(workflow));
   result.set(workflow.readyCheck, json(defaultFeatureCheck('ready')));
@@ -109,7 +111,8 @@ async function authoringBundleOwnership(root, project) {
     if (lf(await smallText(join(folder, '.gitignore'))) !== 'write.lock\n') return kept;
     const sha256 = createHash('sha256').update(lf(script)).digest('hex');
     const manifest = { schemaVersion: 1, files: { '.werk/authoring/feature-request.mjs': { sha256 } } };
-    return isDeepStrictEqual(await readJson(join(folder, 'manifest.json')), manifest) ? { managed: true } : kept;
+    const actual = await readJson(join(folder, 'manifest.json'));
+    return isDeepStrictEqual(actual, manifest) || isDeepStrictEqual(actual, { ...manifest, requiresCommittedDeliveryPolicy: true }) ? { managed: true } : kept;
   } catch { return kept; }
 }
 async function environmentDetails(project) {
@@ -135,6 +138,8 @@ async function candidates(root, project, state) {
   for (const name of ['worker.json', 'worker-project.json', 'compose.worker.yaml', '.gitignore']) add('configuration', '.werk/' + name);
   const generated = await generatedAuthoring(root, layout);
   add('authoring', '.werk/feature-workflow.json'); add('authoring', '.werk/authoring', await authoringBundleOwnership(root, project));
+  const deliveryPolicy = '.werk/delivery-policy.json';
+  add('authoring', deliveryPolicy, generated.has(deliveryPolicy) ? await ownership(resolve(project, deliveryPolicy), generated.get(deliveryPolicy)) : { managed: false, note: 'Project policy ownership could not be established; kept as your work.' });
   if (layout.workflow) for (const path of [layout.workflow.template, layout.workflow.base, layout.workflow.readyCheck, layout.workflow.doneCheck, layout.workflow.readyPrompt, layout.workflow.donePrompt, layout.workflow.readyReviewPrompt]) if (path) add('authoring', path, await ownership(resolve(project, path), generated.get(path)));
   if (layout.features && layout.worker?.features?.intake === 'local') { const path = layout.features + '/' + localTemplateName; add('authoring', path, await ownership(resolve(project, path), localRequestTemplate(layout.provider))); }
   for (const path of new Set([layout.features, layout.workflow?.reviewDirectory, layout.tasks].filter(Boolean))) add('requests', path);

@@ -1,5 +1,9 @@
+import { executionRecoveryCommand } from './workspace-execution-recovery.js';
+import { deliveryPolicyActions, deliveryPolicyCommand } from './workspace-delivery-policy.js';
+import { deliveryMetrics } from './workspace-delivery-metrics.js';
+import { publicationView, publishRequest } from './workspace-publication.js';
+import { remotePublicationCommands } from '../application/remote-delivery-contracts.js';
 import { serviceActive } from '../application/service-policy.js';
-import { effectiveDeliveryPolicy } from './workspace-delivery.js';
 import { minimumClaudeVersion } from '../infrastructure/provider-version.js';
 import { delegationLimits } from '../application/delegation-policy.js';
 import { isSharedFeatureSession } from './workspace-feature-authoring.js';
@@ -69,6 +73,10 @@ export function capabilities(workspace: WorkspaceContext){
 }
 
 export async function requestCommand(workspace: WorkspaceContext, input: unknown){
+  const selectedAction = input && typeof input === 'object' && !Array.isArray(input) ? (input as { action?: unknown }).action : undefined;
+  if (deliveryPolicyActions.some(action => action === selectedAction)) return deliveryPolicyCommand(workspace, input);
+  if (selectedAction === 'metrics') return deliveryMetrics(workspace, input);
+  if (selectedAction === 'execution_recovery' || selectedAction === 'confirm_execution_stopped') return executionRecoveryCommand(workspace, input);
   const initial = object(input, "Request command", [
     "action",
     "sessionId",
@@ -88,6 +96,7 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
     "inputHash",
     "outputDigest",
     "deliveryRunId", "inputRevision", "candidateCommit", "candidateDigest", "humanOutcomes",
+    "assessmentId", "proposalId", "decision", "criterionDecision", "reviewDurationMinutes", "publicationOperationId",
   ]);
   const action = String(initial.action);
   const reads: Record<string, string[]> = {
@@ -96,7 +105,7 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
     events: ["action", "requestId", "after", "limit"],
     schema: ["action"],
     policy: ["action"],
-    delivery_policy: ["action"],
+    publication: ["action", "requestId"],
     set_policy: ["action", "policy", "expectedRevision", "operationId"],
     execute: ["action", "requestId", "expectedRevision", "operationId"],
   };
@@ -122,7 +131,7 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
         "explicit_operator_decision_not_proof_of_human_identity",
     };
   if (action === "policy") return gates.policy();
-  if (action === "delivery_policy") return effectiveDeliveryPolicy(workspace);
+  if (action === "publication") return publicationView(workspace, identifier(initial.requestId, "requestId"));
   if (action === "list")
     return gates.list({
       sessionId: initial.sessionId as string | undefined,
@@ -153,6 +162,7 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
     });
   const requestId = identifier(initial.requestId, "requestId");
   const before = gates.get(requestId);
+  if (remotePublicationCommands.includes(action as typeof remotePublicationCommands[number])) return publishRequest(workspace, initial as unknown as RequestCommand);
   if (isSharedFeatureSession(workspace, before.owner.sessionId) && ['propose', 'accept_candidate', 'rework', 'execute'].includes(action))
     throw new DomainError('conflict', 'This Feature Request retains its published scope and checks. Use its Task answer or resume control to continue; publish a new Feature Request for a scope change.');
   if (
@@ -164,6 +174,7 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
       "Remote assignments require an explicit upstream successor with a fresh lease and pinned context.",
     );
   if (['propose', 'accept_candidate', 'execute'].includes(action)) assertTaskCanContinue(workspace, before.owner.sessionId);
+  if (action === "criterion_decision") await workspace.board.verifyDeliveryCheckpoint(requestId, before.revision);
   if (["attest", "request_changes"].includes(action) && before.delivery?.review) await workspace.board.verifyDelivery(requestId, before.revision);
   const assertNoLiveServices = () => {
     if (workspace.processes?.status().services.some(service => service.sessionId === before.owner.sessionId && serviceActive(service.state)))
@@ -177,7 +188,7 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
     workspace.reviews.cancel(requestId);
   if (
     !result.duplicate &&
-    (["execute", "accept_candidate", "resume", "retry"].includes(action))
+    (["execute", "accept_candidate", "resume", "retry", "criterion_decision", "readiness_decision"].includes(action))
   ) {
     const current = gates.get(requestId);
     if (current.phase === "ready" || ["resume", "retry"].includes(action)) {

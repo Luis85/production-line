@@ -36,7 +36,7 @@ export interface SessionView {
   featureTracking?: Pick<FeatureTrackingStatus, 'directory' | 'lastSyncedAt' | 'error'>;
   capacity?: WorkerCapacitySnapshot;
   selected: string;
-  execution: { currentSessionId: string | null; queued: number; maxParallel: number };
+  execution: { currentSessionId: string | null; queued: number; maxParallel: number; activeSessions?: import('./serial-executor.js').ActiveExecutionPermit[] };
   records: Array<SessionRecord & { featureRequest?: FeatureTrackingRecord; requestId?: string; requestPhase?: RequestPhase; requestRevision?: number; status: string; interaction: InteractionView; busy: boolean; messages: number }>;
 }
 /** Shared public task fields are an allowlist, independent of the private execution aggregate. */

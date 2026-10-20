@@ -2,7 +2,7 @@ import { modelCapabilities } from '../../src/worker/dist/worker/application/mode
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { workerStatus } from '../helpers/worker-status.mjs';
-import { sessionInstances } from './runtime-fixtures.mjs';
+import { workspaceContext, sessionInstances } from './runtime-fixtures.mjs';
 import { WorkerConversation } from '../../src/worker/dist/worker/application/conversation.js';
 import { WorkerRequestJournal } from '../../src/worker/dist/worker/infrastructure/journal/requests.js';
 import { WorkerRunJournal } from '../../src/worker/dist/worker/infrastructure/journal/local-runs.js';
@@ -152,8 +152,8 @@ test('workspace shutdown preserves staged remote evidence and completes all clea
     features: { directory: join(directory, 'features'), provider: 'openai-api', pollMs: 1000 } }, journal, workerStatus);
   workspace.featureTracking.close = async () => { events.push('tracking'); await trackingFlush; events.push('tracking flushed'); return workspace.featureTracking.status(); };
   workspace.consumption.close = () => { events.push('consumption'); };
-  workspace.features.stopIntake = async () => { events.push('intake'); throw failure; };
-  workspace.features.close = async () => { events.push('feature evidence'); };
+  workspaceContext(workspace).features.stopIntake = async () => { events.push('intake'); throw failure; };
+  workspaceContext(workspace).features.close = async () => { events.push('feature evidence'); };
   workspace.sharedRuntime.close = async () => { events.push('shared'); };
   workspace.resources.close = async () => { events.push('resources'); };
   workspace.sessions.close = async options => { assert.equal(options.retainEvidence, true); events.push('sessions'); };

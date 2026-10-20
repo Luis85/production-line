@@ -13,7 +13,7 @@ registerHooks({
     } catch (error) {
       if (
         specifier.startsWith(".") &&
-        /(?:\/webview\/|\/src\/worker\/application\/)/.test(context.parentURL ?? "")
+        /(?:\/webview\/|\/src\/worker\/application\/|\/src\/shared\/)/.test(context.parentURL ?? "")
       ) {
         for (const candidate of [
           specifier.replace(/\.js$/, ".ts"),

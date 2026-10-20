@@ -1,3 +1,7 @@
+import type { DeliveryCandidateAssessment, DeliveryProviderHandoff } from './delivery-provider-contracts.js';
+import type { DeliveryPlan, DeliveryEffectiveLimits } from './delivery-plan.js';
+import type { DeliveryCriterionDecision } from './delivery-criterion-decisions.js';
+import type { RemotePublication, RemotePublicationUpdate } from './remote-delivery-contracts.js';
 import type { DevelopmentEvidence } from './development.js';
 import type { DeliveryCandidate, DeliveryHumanOutcome, DeliveryReviewPackage } from './delivery-review-contracts.js';
 import type { ModelRequest, ModelResult } from './model-contract.js';
@@ -7,8 +11,8 @@ export type DeliveryLifecycle = 'draft' | 'submitted' | 'ready' | 'in_progress' 
 export type DeliveryStatus = 'queued' | 'running' | 'waiting' | 'pause_pending' | 'paused' | 'interrupting' | 'interrupted' | 'reconciling' | 'outcome_unknown' | 'failed' | 'completed' | 'cancelled';
 export type DeliveryPhase = 'assessing' | 'planning' | 'preparing' | 'implementing' | 'verifying' | 'repairing' | 'packaging';
 export type DeliveryControl = 'pause_after_step' | 'interrupt' | 'cancel' | 'resume' | 'retry' | 'reopen' | 'confirm_stopped';
-export type DeliveryAction = 'cancel' | 'reconcile' | 'wait' | 'observe' | 'assess' | 'plan' | 'prepare' | 'implement' | 'verify' | 'repair' | 'package' | 'review';
-export type DeliveryCondition = 'cancel_requested' | 'unknown_outcome' | 'input_changed' | 'held' | 'paused' | 'active_step' | 'needs_ready' | 'needs_plan' | 'needs_prepare' | 'needs_implementation' | 'needs_verification' | 'repair_available' | 'repair_exhausted' | 'needs_package' | 'reviewable';
+export type DeliveryAction = 'cancel' | 'reconcile' | 'wait' | 'observe' | 'assess' | 'plan' | 'prepare' | 'implement' | 'verify' | 'repair' | 'package' | 'review' | 'review_candidate';
+export type DeliveryCondition = 'cancel_requested' | 'unknown_outcome' | 'input_changed' | 'held' | 'paused' | 'active_step' | 'needs_ready' | 'needs_plan' | 'needs_prepare' | 'needs_implementation' | 'needs_verification' | 'repair_available' | 'repair_exhausted' | 'needs_package' | 'reviewable' | 'needs_review';
 export type DeliveryNode =
   | { id: string; type: 'selector' | 'sequence'; children: DeliveryNode[] }
   | { id: string; type: 'condition'; condition: DeliveryCondition }
@@ -20,7 +24,7 @@ export interface DeliveryDecision {
   conditions: { nodeId: string; condition: DeliveryCondition; result: boolean }[];
 }
 export interface DeliveryStep {
-  id: string; phase: DeliveryPhase;
+  id: string; phase: DeliveryPhase; purpose?: 'candidate_review'; profileId?: string; handoffId?: string;
   status: 'running' | 'completed' | 'failed' | 'interrupted' | 'outcome_unknown';
   turnId: string | null; invocationRunId: string | null;
   startedAt: string; finishedAt: string | null;
@@ -45,6 +49,9 @@ export interface DeliveryRun {
   repairAttempts: number; maxRepairAttempts: number;
   startedAt: string; finishedAt: string | null;
   review?: DeliveryReviewPackage;
+  plan?: DeliveryPlan; effectiveLimits?: DeliveryEffectiveLimits;
+  criterionDecisions?: DeliveryCriterionDecision[]; publications?: RemotePublication[];
+  assessments?: DeliveryCandidateAssessment[]; handoffs?: DeliveryProviderHandoff[];
   humanOutcomes?: DeliveryHumanOutcome[];
   recoveries?: DeliveryRecoveryReceipt[];
   checkpoints?: DeliveryCandidate[];
@@ -53,7 +60,11 @@ export interface DeliveryRun {
 }
 /** Trusted runtime port. External commands always pass through the request operation ledger. */
 export type DeliveryUpdate =
-  | { action: 'start'; deliveryRunId: string; stepId: string; phase: DeliveryPhase; turnId?: string; invocationRunId?: string; dispatch?: ModelRequest }
+  | RemotePublicationUpdate
+  | { action: 'plan'; deliveryRunId: string; plan: DeliveryPlan; effectiveLimits: DeliveryEffectiveLimits }
+  | { action: 'assessment'; deliveryRunId: string; assessment: DeliveryCandidateAssessment }
+  | { action: 'handoff'; deliveryRunId: string; handoff: DeliveryProviderHandoff }
+  | { action: 'start'; purpose?: 'candidate_review'; profileId?: string; handoffId?: string; deliveryRunId: string; stepId: string; phase: DeliveryPhase; turnId?: string; invocationRunId?: string; dispatch?: ModelRequest }
   | { action: 'finish'; deliveryRunId: string; stepId: string; status: 'completed' | 'failed' | 'interrupted' | 'outcome_unknown'; result?: ModelResult; usage?: ProviderUsage; detail?: string; evidenceDigest?: string; evidence?: DevelopmentEvidence }
   | { action: 'hold'; code: string; reason: string }
   | { action: 'clear_hold'; code: string }
@@ -65,5 +76,6 @@ export interface DeliveryBlackboard {
   cancelRequested: boolean; outcomeUnknown: boolean; inputChanged: boolean;
   held: boolean; paused: boolean; activeStep: boolean; ready: boolean;
   planned: boolean; prepared: boolean; implemented: boolean; verified: boolean;
+  reviewRequired?: boolean; reviewed?: boolean; reviewFailed?: boolean;
   verificationFailed: boolean; repairAvailable: boolean; packaged: boolean;
 }

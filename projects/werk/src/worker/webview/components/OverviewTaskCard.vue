@@ -8,7 +8,7 @@ defineEmits<{ open: [TaskOverviewItem] }>();
 </script>
 <template>
   <article class="overview-card" :class="[{ selected, compact }, 'task-group-' + item.group]" :aria-label="item.title">
-    <div class="overview-card-meta"><span class="task-source">{{ item.sourceLabel }}</span><span v-if="item.priority !== undefined">{{ taskPriorityLabel(item.priority) }} priority</span><span v-if="selected" class="task-selected">Selected</span></div>
+    <div class="overview-card-meta"><span class="task-source">{{ item.sourceLabel }}</span><span v-if="item.projectId">{{ item.projectId }}</span><span v-if="item.priority !== undefined">{{ taskPriorityLabel(item.priority) }} priority</span><span v-if="selected" class="task-selected">Selected</span></div>
     <div class="overview-card-title"><h3>{{ item.title }}</h3><span v-if="item.taskId" class="task-identity" :title="item.taskId" :aria-label="'Task ID: ' + item.taskId">{{ item.taskId }}</span></div>
     <div class="overview-status"><UIcon :name="item.group === 'attention' ? 'i-lucide-circle-alert' : item.group === 'completed' ? 'i-lucide-circle-check' : item.group === 'queued' ? 'i-lucide-clock-3' : 'i-lucide-file-pen-line'" />{{ item.statusLabel }}</div>
     <p v-if="item.deliveryPhaseLabel" class="overview-phase">{{ item.deliveryPhaseLabel }}<template v-if="item.lifecycleLabel && item.lifecycleLabel !== item.statusLabel"> · {{ item.lifecycleLabel }}</template></p>

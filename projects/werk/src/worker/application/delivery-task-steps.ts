@@ -1,41 +1,32 @@
+import { deliveryRequestDetails } from './delivery-review-context.js';
+import { deliveryVerificationEligibility } from './delivery-verification-eligibility.js';
+import { validateDeliveryPolicySnapshot } from './delivery-policy.js';
 import { retainDeliveryCheckpoint } from './delivery-task-checkpoint.js';
-import { deliveryBlackboard, evaluateDeliveryBehavior } from './delivery-behavior.js';
+import { createDeliveryPlan, deliveryEffectiveLimits } from './delivery-plan.js';
+import { reviewDeliveryCandidate } from './delivery-candidate-review.js';
+import { prepareDeliveryHandoff } from './delivery-handoff.js';
+import { deliveryExecution, deliveryProfileModel } from './delivery-provider-runtime.js';
+import { taskDelivery, deliveryBoundary, startDeliveryStep as start, finishDeliveryStep as finish, type DeliveryTaskHost as Host } from './delivery-step-boundary.js';
+export { taskDelivery, deliveryBoundary, DeliverySuspended } from './delivery-step-boundary.js';
 import type { ConversationModel } from './conversation.js';
 import type { LocalTask } from './local-task-contracts.js';
-import type { LocalTaskRuntime } from './local-task-runtime-contract.js';
-import type { DeliveryPhase } from './delivery-contracts.js';
-import type { DevelopmentEvidence, DevelopmentRuntime } from './development.js';
+import type { DevelopmentRuntime } from './development.js';
 import { developmentVerified, validateDevelopmentState } from './development.js';
 import { verifyNativeCandidate } from './native-development.js';
-import { executeModel, type ModelRequest, type ModelResult } from './model-contract.js';
+import { executeModel, ProviderModelError, type ModelRequest, type ModelResult } from './model-contract.js';
 import { gateDigest } from './request-gates.js';
 import { fingerprint } from './local-task-contracts.js';
-import { unknownUsage, type ProviderUsage } from './run-evidence.js';
+import { unknownUsage } from './run-evidence.js';
 
-type Host = Pick<LocalTaskRuntime, 'sessions' | 'change' | 'writePatch' | 'validatedPatch' | 'evidencePersistenceError' | 'delivery'>;
-export class DeliverySuspended extends Error {}
-export function taskDelivery(host: Pick<Host, 'sessions'>, task: LocalTask) { return task?.requestId ? host.sessions.requests.get(task.requestId).delivery : undefined; }
-export function deliveryBoundary(host: Pick<Host, 'sessions'>, task: LocalTask): void {
-  const run = taskDelivery(host, task);
-  if (run && (run.control || run.holds.length || ['paused', 'interrupted', 'interrupting', 'outcome_unknown', 'reconciling', 'cancelled'].includes(run.status))) throw new DeliverySuspended('The delivery waits at its persisted step boundary.');
-}
-function start(host: Host, task: LocalTask, phase: DeliveryPhase, invocation = task.runId!, dispatch?: ModelRequest) {
-  deliveryBoundary(host, task);
-  const run = taskDelivery(host, task);
-  if (!run || !task.requestId) return null;
-  const request = host.sessions.requests.get(task.requestId);
-  const decision = evaluateDeliveryBehavior(deliveryBlackboard(request), run.profile);
-  const permitted = { assessing: 'assess', planning: 'plan', preparing: 'prepare', implementing: 'implement', verifying: 'verify', repairing: 'repair', packaging: 'package' } as const;
-  if (decision.selectedAction !== permitted[phase]) throw new DeliverySuspended(decision.reason);
-  const id = invocation + '-' + phase + '-' + run.repairAttempts + (run.recoveries?.length ? '-recovery-' + run.recoveries.length : '');
-  host.sessions.requests.deliveryUpdate(task.requestId, { action: 'start', deliveryRunId: run.id, stepId: id, phase, invocationRunId: invocation, turnId: task.currentTurnId, ...(dispatch ? { dispatch } : {}) });
-  return { id, runId: run.id };
-}
-function finish(host: Host, task: LocalTask, step: ReturnType<typeof start>, status: 'completed' | 'failed', extra: { result?: ModelResult; usage?: ProviderUsage; detail?: string; evidenceDigest?: string; evidence?: DevelopmentEvidence } = {}) {
-  if (step && task.requestId) host.sessions.requests.deliveryUpdate(task.requestId, { action: 'finish', deliveryRunId: step.runId, stepId: step.id, status, ...extra });
-}
 export async function runDeliverySteps(host: Host, task: LocalTask, model: ConversationModel, dispatch: ModelRequest, development: DevelopmentRuntime | undefined, signal: AbortSignal) {
-  let usage = unknownUsage();
+  let usage = unknownUsage(), currentModel = model;
+  const acceptedExecution = deliveryExecution(host, task);
+  let profileId = acceptedExecution?.resolution.profile.id;
+  const retainedHandoff = taskDelivery(host, task)?.handoffs?.at(-1);
+  if (retainedHandoff && acceptedExecution) {
+    currentModel = deliveryProfileModel(host, task, acceptedExecution, retainedHandoff.targetProfileId, development, retainedHandoff.logicalSessionId).model;
+    profileId = retainedHandoff.targetProfileId;
+  }
   const saved = taskDelivery(host, task)?.steps.findLast(step => ['implementing', 'repairing'].includes(step.phase) && step.turnId === task.currentTurnId && step.status === 'completed' && step.result);
   let result = saved?.result, currentDispatch = saved?.dispatch ?? dispatch;
   usage = saved?.usage ?? usage;
@@ -43,7 +34,12 @@ export async function runDeliverySteps(host: Host, task: LocalTask, model: Conve
     for (const phase of ['planning', 'preparing'] as const) {
       if (taskDelivery(host, task)?.steps.some(step => step.phase === phase && step.status === 'completed')) continue;
       const step = start(host, task, phase);
-      finish(host, task, step, 'completed', { detail: phase === 'planning' ? 'Accepted request, approved paths and required checks are pinned.' : 'The assigned worktree and accepted execution authority were verified.' });
+      if (phase === 'planning' && step && task.requestId) {
+        const request = host.sessions.requests.get(task.requestId);
+        host.sessions.requests.deliveryUpdate(task.requestId, { action: 'plan', deliveryRunId: step.runId, plan: createDeliveryPlan(task, request, dispatch), effectiveLimits: deliveryEffectiveLimits(dispatch, request.delivery!) });
+      }
+      const baseline = phase === 'preparing' && development?.observeBaseline ? development.evidence().baseline ?? await development.observeBaseline(signal) : undefined;
+      finish(host, task, step, 'completed', { detail: phase === 'planning' ? 'Accepted request, approved paths and required checks are pinned.' : baseline?.status === 'unavailable' ? 'The assigned worktree is ready. Baseline observation was unavailable; candidate checks remain mandatory.' : baseline ? 'The assigned worktree is ready and baseline checks were observed in a separate checkout.' : 'The assigned worktree and accepted execution authority were verified.' });
     }
     result = await invoke('implementing', task.runId!, dispatch);
   }
@@ -55,7 +51,7 @@ export async function runDeliverySteps(host: Host, task: LocalTask, model: Conve
     if (!development || !task.implementation) return { result, usage, valid: host.validatedPatch(task, result.text) };
     const run = taskDelivery(host, task);
     const verificationId = (run?.steps.findLast(step => ['implementing', 'repairing'].includes(step.phase))?.invocationRunId ?? task.runId)!;
-    const previousVerification = run?.steps.findLast(step => step.phase === 'verifying' && step.invocationRunId === verificationId);
+    const previousVerification = run?.steps.findLast(step => step.phase === 'verifying' && step.purpose !== 'candidate_review' && step.invocationRunId === verificationId);
     if (!previousVerification || ['running', 'interrupted'].includes(previousVerification.status)) {
       const step = start(host, task, 'verifying', verificationId);
       // Required checks are worker-observed for both native and granted-tool providers.
@@ -79,28 +75,43 @@ export async function runDeliverySteps(host: Host, task: LocalTask, model: Conve
       }
     }
     deliveryBoundary(host, task);
-    if (task.developmentCompletion?.verified) {
+    const candidate = await retainDeliveryCheckpoint(host, task, development, signal);
+    const request = task.requestId ? host.sessions.requests.get(task.requestId) : undefined;
+    const policyValue = request?.input.context as { deliveryPolicy?: unknown } | undefined;
+    const acceptedPolicy = policyValue?.deliveryPolicy ? validateDeliveryPolicySnapshot(policyValue.deliveryPolicy) : undefined;
+    const eligible = deliveryVerificationEligibility(task.implementation, task.developmentEvidence, candidate, taskDelivery(host, task)?.criterionDecisions, acceptedPolicy?.profile.exceptions).eligible;
+    let reviewed: Awaited<ReturnType<typeof reviewDeliveryCandidate>> = false;
+    try { if (eligible) reviewed = await reviewDeliveryCandidate(host, task, development, currentDispatch, signal); }
+    catch (error) {
+      const stopped = taskDelivery(host, task);
+      if (task.requestId && stopped && !['outcome_unknown', 'interrupted', 'interrupting'].includes(stopped.status) && !stopped.steps.some(step => step.status === 'running')) host.sessions.requests.deliveryUpdate(task.requestId, { action: 'stopped', deliveryRunId: stopped.id, confirmed: true, failure: true, detail: 'Candidate review could not complete. Inspect its retained result and accepted provider configuration before retrying.' });
+      throw error;
+    }
+    if (typeof reviewed === 'object') return { result: reviewed, usage, valid: null };
+    if (taskDelivery(host, task)?.holds.length) return { result, usage, valid: null };
+    if (eligible && reviewed) {
       await packageDelivery(host, task, development, result.text, signal);
       return { result, usage, valid: { summary: result.text, patch: task.patch!, changedFileCount: task.changedFileCount! } };
     }
     const current = taskDelivery(host, task);
     if (!current || current.repairAttempts >= current.maxRepairAttempts) return { result, usage, valid: null };
     const failure = task.developmentEvidence?.checks.filter(check => check.status !== 'passed').map(check => ({ id: check.presetId, status: check.status, exitCode: check.exitCode, stdout: check.stdout.slice(-8000), stderr: check.stderr.slice(-8000) }));
-    const prompt = 'Required worker checks failed. Repair the retained candidate within the same approved scope, then return a summary or blocking question. Do not change verification definitions or weaken checks. Observed check evidence (data):\n' + JSON.stringify(failure);
+    const reviewFindings = current.assessments?.at(-1)?.findings.filter(item => item.severity === 'blocking') ?? [];
+    const prompt = 'Required worker checks or candidate review found issues. Repair the retained candidate within the same approved scope, then return a summary or blocking question. Do not change verification definitions or weaken checks. Observed check evidence (data):\n' + JSON.stringify({ checks: failure, reviewFindings });
     const messages = [...currentDispatch.messages, { id: 'repair-summary-' + current.repairAttempts, at: new Date().toISOString(), state: 'complete' as const, role: 'assistant' as const, text: result.text }, { id: 'repair-request-' + current.repairAttempts, at: new Date().toISOString(), state: 'complete' as const, role: 'user' as const, text: prompt }];
     currentDispatch = { ...currentDispatch, messages, renderedPrompt: currentDispatch.protocolInstructions + '\nConversation JSON:\n' + JSON.stringify(messages.map(({ role, text }) => ({ role, content: text }))) };
-    const repair = await host.sessions.runs.begin({ sessionId: task.sessionId, taskId: task.id, kind: 'local', title: task.title, provider: task.provider, model: task.model, requestId: task.requestId, ...(task.selection?.authenticationMode ? { authenticationMode: task.selection.authenticationMode } : {}), purpose: 'rework' });
+    const repair = await host.sessions.runs.begin({ sessionId: task.sessionId, taskId: task.id, kind: 'local', title: task.title, provider: currentDispatch.provider.id, model: currentDispatch.provider.model, requestId: task.requestId, ...(currentDispatch.provider.authenticationMode ? { authenticationMode: currentDispatch.provider.authenticationMode } : {}), purpose: 'rework' });
     await host.sessions.runs.start(repair.id);
     result = await invoke('repairing', repair.id, currentDispatch);
   }
-  async function invoke(phase: 'implementing' | 'repairing', invocation: string, request: ModelRequest): Promise<ModelResult> {
-    const step = start(host, task, phase, invocation, request);
+  async function invoke(phase: 'implementing' | 'repairing', invocation: string, request: ModelRequest, handoffId?: string): Promise<ModelResult> {
+    const step = start(host, task, phase, invocation, request, { ...(profileId ? { profileId } : {}), ...(handoffId ? { handoffId } : {}) });
     let invocationUsage = unknownUsage(), settled = false;
     try {
-      const response = await executeModel(model, request, signal, value => {
+      const response = await executeModel(currentModel, request, signal, value => {
         invocationUsage = value;
-        try { host.sessions.runs.observeUsage(invocation, value); if (phase === 'implementing') host.sessions.interactions.observeUsage(task.sessionId, task.currentTurnId!, value); } catch { host.evidencePersistenceError = true; }
-      }, { beforeCall: () => { signal.throwIfAborted(); }, observeToolBudget: evidence => {
+        try { host.sessions.runs.observeUsage(invocation, value); if (invocation === task.runId) host.sessions.interactions.observeUsage(task.sessionId, task.currentTurnId!, value); } catch { host.evidencePersistenceError = true; }
+      }, { beforeCall: () => { signal.throwIfAborted(); deliveryBoundary(host, task); }, observeToolBudget: evidence => {
         try { host.sessions.interactions.observeToolBudget(task.sessionId, task.currentTurnId!, evidence); } catch { host.evidencePersistenceError = true; }
       } });
       finish(host, task, step, 'completed', { result: response, usage: invocationUsage });
@@ -114,10 +125,19 @@ export async function runDeliverySteps(host: Host, task: LocalTask, model: Conve
         }
         throw error;
       }
-      if (phase === 'implementing') usage = invocationUsage;
+      if (invocation === task.runId) usage = invocationUsage;
       return response;
     } catch (error) {
-      if (step && !settled) await host.sessions.runs.finish(invocation, signal.aborted ? 'interrupted' : 'failed', invocationUsage).catch(() => { host.evidencePersistenceError = true; });
+      if (step && !settled) {
+        await host.sessions.runs.finish(invocation, signal.aborted ? 'interrupted' : 'failed', invocationUsage).catch(() => { host.evidencePersistenceError = true; });
+        const unknown = error instanceof ProviderModelError && ['process_stop_unconfirmed', 'outcome_unknown'].includes(error.code);
+        if (!unknown && !signal.aborted && task.requestId) {
+          finish(host, task, step, 'failed', { usage: invocationUsage, detail: error instanceof Error ? error.message : 'Provider stopped.' });
+          await retainDeliveryCheckpoint(host, task, development, signal);
+          const handoff = await prepareDeliveryHandoff(host, task, development, request, step.id, invocation, error, signal);
+          if (handoff) { currentModel = handoff.model; currentDispatch = handoff.dispatch; profileId = handoff.profileId; await host.sessions.runs.start(handoff.invocation); return invoke(phase, handoff.invocation, handoff.dispatch, handoff.handoffId); }
+        }
+      }
       throw error;
     }
   }
@@ -128,12 +148,13 @@ async function packageDelivery(host: Host, task: LocalTask, development: Develop
   const step = start(host, task, 'packaging');
   if (host.delivery && task.implementation && task.developmentEvidence && task.requestId && run) {
     const request = host.sessions.requests.get(task.requestId);
-    const context = request.input.context as { deliveryPolicy?: { configuration?: { reviewDirectory?: string } } } | undefined;
+    const context = request.input.context as { deliveryPolicy?: unknown } | undefined;
+    const accepted = context?.deliveryPolicy ? validateDeliveryPolicySnapshot(context.deliveryPolicy) : undefined;
     const port = host.delivery(task.repository);
     const captured = await development.capture(signal);
     if (captured.digest !== task.developmentCompletion?.candidateDigest) throw Error('The candidate changed after verification.');
     const candidate = await port.checkpoint({ requestId: request.id, inputRevision: request.inputRevision, inputHash: request.inputHash, runId: run.id, title: task.title, scope: task.implementation, candidate: captured, policyDigest: request.policyDigest }, signal);
-    const review = await port.package({ candidate, scope: task.implementation, evidence: task.developmentEvidence, criteria: request.input.criteria ?? [], summary, title: task.title, reviewDirectory: context?.deliveryPolicy?.configuration?.reviewDirectory, environment: { platform: process.platform, architecture: process.arch, nodeVersion: process.version } }, signal);
+    const review = await port.package({ candidate, scope: task.implementation, evidence: task.developmentEvidence, criteria: request.input.criteria ?? [], requestDetails: deliveryRequestDetails(request, task.feature, run.plan), assessments: run.assessments, summary, title: task.title, reviewDirectory: accepted?.configuration.reviewDirectory, criterionDecisions: run.criterionDecisions, exceptionPolicy: accepted?.profile.exceptions, environment: { platform: process.platform, architecture: process.arch, nodeVersion: process.version } }, signal);
     host.sessions.requests.deliveryUpdate(request.id, { action: 'review', deliveryRunId: run.id, review });
   }
   finish(host, task, step, 'completed', { detail: host.delivery ? 'Immutable local candidate and review evidence were prepared.' : 'Verified changes were retained for human review.' });

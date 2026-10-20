@@ -60,6 +60,7 @@ export function installReviewFixture(variant: ReviewFixture = 'verified') {
     if (path === '/api/taskboard/detail') return Response.json(task);
     if (path === '/api/shared-intake') return Response.json({ requests: [shared] });
     if (path === '/api/requests') {
+      if (body.action === 'publication') return Response.json({ configured: false, authorized: false, reason: null, target: null, candidate: null, canPush: false, canCreatePullRequest: false, canReconcile: false, publications: [] });
       if (body.action === 'list') return Response.json({ schemaVersion: 1, rows: [{ ...request, title: request.input.title, kind: request.input.kind }], total: 1, nextOffset: null });
       if (body.action === 'get') return Response.json(request);
       mutations.push(clone(body));

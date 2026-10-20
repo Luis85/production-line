@@ -1,3 +1,4 @@
+import { remotePublicationMarkdown } from '../../application/remote-publication-markdown.js';
 import { parseModelEffort, validateModelEffort, validateModelName } from '../../application/model-effort.js';
 import { providerIds, type ProviderId } from '../../application/provider-contract.js';
 import { parseDocument, isAlias, isMap, isSeq, visit, type Document } from 'yaml';
@@ -6,6 +7,7 @@ import { authorBody, markdownCommands, requestSchema, managedBegin, managedEnd, 
 import type { FeatureInput, FeatureGateProjection } from '../../application/feature-requests.js';
 
 export const featureId = /^[A-Za-z0-9][A-Za-z0-9-]{0,79}$/;
+export const dependencyId = /^(?:[A-Za-z0-9_-]{1,100}:)?[A-Za-z0-9][A-Za-z0-9-]{0,79}$/;
 export const requestName = (name: string) => !name.startsWith('_') && /^[^/\\\x00-\x1f]{1,196}\.md$/i.test(name);
 export const digest = (value: string) => createHash('sha256').update(value).digest('hex');
 export interface FeatureDocument { document: Document; body: string; raw: string; data: Record<string, unknown>; }
@@ -53,8 +55,9 @@ export function featureInput(parsed: FeatureDocument, defaultProvider: string, o
   const priorities: Record<string, number> = { low: 0, normal: 1, high: 2, urgent: 3 };
   const priority = d.schema === requestSchema ? priorities[String(d.priority ?? 'normal')] : d.priority ?? 1;
   if (typeof priority !== 'number' || (d.schema !== requestSchema && ![1, 2].includes(priority))) throw Error('priority must be low, normal, high or urgent (legacy: 1 or 2).');
+  if (d.execution_profile !== undefined && (typeof d.execution_profile !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(d.execution_profile))) throw Error('execution_profile must name an allowed project execution profile.');
   if (d.quality_profile !== undefined && (typeof d.quality_profile !== 'string' || !/^[a-z][a-z0-9_-]{0,79}$/.test(d.quality_profile))) throw Error('quality_profile must name a project quality profile.');
-  if (d.depends_on !== undefined && (!Array.isArray(d.depends_on) || d.depends_on.length > 100 || d.depends_on.some(value => typeof value !== 'string' || !featureId.test(value) || value === d.id) || new Set(d.depends_on).size !== d.depends_on.length)) throw Error('depends_on must contain unique other request IDs (at most 100).');
+  if (d.depends_on !== undefined && (!Array.isArray(d.depends_on) || d.depends_on.length > 100 || d.depends_on.some(value => typeof value !== 'string' || !dependencyId.test(value) || value === d.id) || new Set(d.depends_on).size !== d.depends_on.length)) throw Error('depends_on must contain unique other request IDs or projectId:requestId references (at most 100).');
   const commands = markdownCommands(parsed);
   const feedback = commands.find(command => command.action === 'request_changes')?.feedback;
   const message = body.trim() + (feedback && typeof (d.review as Record<string, unknown>)?.feedback === 'string' ? '\n\n## Review feedback\n\n' + feedback : '');
@@ -62,11 +65,11 @@ export function featureInput(parsed: FeatureDocument, defaultProvider: string, o
   const sections = [...body.matchAll(/^#{1,6} +(.+?)\s*#*$/gm)].map(match => match[1]!.trim());
   const criteriaBody = /^## Acceptance criteria[^\n]*\n([\s\S]*?)(?=^## |$(?![\s\S]))/im.exec(body)?.[1] ?? '';
   const criteria = [...criteriaBody.matchAll(/^\s*[-*+] +(?:\[[ xX]\] +)?(.+)$/gm)].map(match => match[1]!.trim());
-  return { ...(d.schema === requestSchema ? { requestSchema: requestSchema as 'worker.request/v1', criteria, sectionNames: sections } : {}), title: title.trim(), mode: mode as 'chat' | 'patch', provider: String(provider), ...(d.model === undefined ? {} : { model: d.model as string }), ...(effort === undefined ? {} : { effort }), message, ...(d.paths ? { paths: (d.paths as string[]).map(path => path.normalize('NFC')) } : {}), priority, ...(d.quality_profile ? { qualityProfile: String(d.quality_profile) } : {}), ...(d.depends_on ? { dependsOn: [...d.depends_on as string[]].sort() } : {}), ...(d.definitionId ? { definitionId: String(d.definitionId) } : {}), ...(d.definitionRef ? { definitionRef: String(d.definitionRef) } : {}), ...(d.agent ? { agent: String(d.agent) } : {}), ...(d.useInstructionsOnly !== undefined ? { useInstructionsOnly: d.useInstructionsOnly } : {}) };
+  return { ...(d.schema === requestSchema ? { requestSchema: requestSchema as 'worker.request/v1', criteria, sectionNames: sections } : {}), title: title.trim(), mode: mode as 'chat' | 'patch', provider: String(provider), providerExplicit: d.provider !== undefined, ...(d.execution_profile ? { executionProfile: String(d.execution_profile) } : {}), ...(d.model === undefined ? {} : { model: d.model as string }), ...(effort === undefined ? {} : { effort }), message, ...(d.paths ? { paths: (d.paths as string[]).map(path => path.normalize('NFC')) } : {}), priority, ...(d.quality_profile ? { qualityProfile: String(d.quality_profile) } : {}), ...(d.depends_on ? { dependsOn: [...d.depends_on as string[]].sort() } : {}), ...(d.definitionId ? { definitionId: String(d.definitionId) } : {}), ...(d.definitionRef ? { definitionRef: String(d.definitionRef) } : {}), ...(d.agent ? { agent: String(d.agent) } : {}), ...(d.useInstructionsOnly !== undefined ? { useInstructionsOnly: d.useInstructionsOnly } : {}) };
 }
 /** Additional template fields are author data; rendering never promotes them into policy. */
 export function featureRequestContext(data: Record<string, unknown>, base: FeatureInput) {
-  const standard = ['schema', 'intent', 'quality_profile', 'depends_on', 'review', 'control', 'werk', 'schemaVersion', 'id', 'templateId', 'title', 'status', 'mode', 'paths', 'provider', 'model', 'effort', 'priority', 'definitionId', 'definitionRef', 'agent', 'useInstructionsOnly'];
+  const standard = ['schema', 'intent', 'execution_profile', 'quality_profile', 'depends_on', 'readiness_decision', 'criterion_decision', 'review', 'control', 'publication', 'werk', 'schemaVersion', 'id', 'templateId', 'title', 'status', 'mode', 'paths', 'provider', 'model', 'effort', 'priority', 'definitionId', 'definitionRef', 'agent', 'useInstructionsOnly'];
   const metadata = Object.fromEntries(Object.entries(data).filter(([key]) => !standard.includes(key)));
   function finite(value: unknown): boolean { return typeof value === 'number' ? Number.isFinite(value) : Array.isArray(value) ? value.every(finite) : value && typeof value === 'object' ? Object.values(value).every(finite) : true; }
   if (!finite(metadata)) throw Error('Feature metadata must contain finite JSON values.');
@@ -84,6 +87,7 @@ export function renderFeature(parsed: FeatureDocument, id: string, status: strin
       lines.push(`Run ID: ${run.runId}`, `Execution: ${run.status} · ${run.phase}`, `Reason: ${run.reason.replaceAll('<!--', '&lt;!--')}`, `Waiting for: ${(run.waitingFor ?? 'No external event').replaceAll('<!--', '&lt;!--')}`, `Available controls: ${run.controls.join(', ') || 'None'}`);
       if (run.checkpoint) lines.push(`Inspectable checkpoint (not a verification pass): ${run.checkpoint.candidateCommit} on ${run.checkpoint.branch}`);
     }
+    if (gates?.publications?.length) lines.push(remotePublicationMarkdown(gates.publications));
     if (metadata.error) lines.push(`Attention: ${String(metadata.error).replaceAll('<!--', '&lt;!--')}`);
     if (Array.isArray(metadata.questions)) for (const question of metadata.questions as { id: string; message: string; blocking: boolean; criterionId?: string; active?: boolean }[]) lines.push(`### ${question.id}\n\n${question.message.replaceAll('<!--', '&lt;!--')}\n\n${question.active === false ? 'Earlier question, retained for context' : question.blocking ? 'Blocks execution' : 'Nonblocking'}${question.criterionId ? ' · Criterion: ' + question.criterionId : ''}. Answer in the Answers section using this ID.`);
     if (metadata.result) lines.push(`Review: [${['review', 'done', 'completed'].includes(status) ? 'Open result' : 'Earlier result'}](${encodeURI(String(metadata.result))})`);

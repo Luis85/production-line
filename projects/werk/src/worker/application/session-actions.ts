@@ -101,7 +101,7 @@ export async function sessionAction(context: SessionActionContext, input: unknow
             );
           if (
             context.instances.get(record.id)?.snapshot().busy ||
-            context.executor.current === record.id ||
+            context.executor.has(record.id) ||
             ["queued", "running"].includes(record.taskState ?? "")
           )
             throw new DomainError("conflict", "Stop the reply first.");

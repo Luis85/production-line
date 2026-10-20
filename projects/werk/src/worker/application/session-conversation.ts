@@ -57,6 +57,7 @@ export async function loadSessionConversation(context: SessionConversationContex
         notifyRequest: (id) => context.notifyRequest(id),
         admit: () => {
           context.assertCanContinue(record.id);
+          context.executor.assertResolved(record.id);
           if (
             context.chatActive() + context.activeOutsideChat() >=
             context.settings.value.board.queueCapacity

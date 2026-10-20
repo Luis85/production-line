@@ -1,16 +1,21 @@
+import type { DeliveryMetricObservation } from '../../../application/delivery-metrics-contracts.js';
+import { selectedDeliveryBehavior } from '../../../application/delivery-behavior-policy.js';
+import { deliveryProviderUpdate, validateDeliveryProfileStep } from './delivery-provider.js';
+import { remotePublicationPending } from '../../../application/remote-delivery-contracts.js';
+import { requestPublicationResult } from './publication.js';
 import { validateDeliveryPolicySnapshot } from '../../../application/delivery-policy.js';
 import { randomUUID } from 'node:crypto';
 import type { DeliveryRun, DeliveryStopObservation, DeliveryUpdate } from '../../../application/delivery-contracts.js';
-import { defaultDeliveryProfile, refreshDelivery } from '../../../application/delivery-behavior.js';
+import { refreshDelivery } from '../../../application/delivery-behavior.js';
 import { gateDigest, type GateInput, type RequestCommand, type WorkerRequest } from '../../../application/request-gates.js';
 import type { RequestStore } from './store.js';
 import { clone, conflict, identifier, invalid, iso, requestCandidate } from './values.js';
 
 export function ensureDelivery(request: WorkerRequest): DeliveryRun {
   if (request.delivery?.inputRevision === request.inputRevision) return request.delivery;
-  const profile = clone(defaultDeliveryProfile);
   const context = request.input.context;
   const acceptedPolicy = context && typeof context === 'object' && 'deliveryPolicy' in context ? validateDeliveryPolicySnapshot(context.deliveryPolicy) : undefined;
+  const profile = selectedDeliveryBehavior(acceptedPolicy?.configuration.behaviors);
   const run: DeliveryRun = {
     schemaVersion: 1, id: randomUUID(), inputRevision: request.inputRevision, inputHash: request.inputHash, policyDigest: request.policyDigest,
     profile, profileDigest: gateDigest(profile), status: 'queued', phase: 'preparing', control: null,
@@ -40,6 +45,8 @@ export function requestDeliveryUpdate(store: RequestStore, id: string, update: D
     }
     const run = request.delivery;
     if (!run || run.id !== update.deliveryRunId) conflict('The delivery run changed. Refresh its current identity.');
+    if (update.action === 'publication_result') return requestPublicationResult(store, request, update);
+    if (update.action === 'plan' || update.action === 'assessment' || update.action === 'handoff') return deliveryProviderUpdate(store, request, update as Extract<DeliveryUpdate, { action: 'plan' | 'assessment' | 'handoff' }>);
     if (update.action === 'checkpoint') {
       const candidate = update.candidate;
       if (candidate.requestId !== request.id || candidate.runId !== run.id || candidate.inputRevision !== request.inputRevision || candidate.inputHash !== request.inputHash || candidate.policyDigest !== request.policyDigest) conflict('The checkpoint does not match the accepted delivery.');
@@ -69,29 +76,32 @@ export function requestDeliveryUpdate(store: RequestStore, id: string, update: D
     }
     if (update.action === 'stopped') {
       const active = run.steps.filter(step => step.status === 'running' || step.status === 'outcome_unknown');
+      const observations: DeliveryMetricObservation[] = !update.confirmed || active.some(step => step.status === 'outcome_unknown') || run.control && ['interrupt', 'cancel'].includes(run.control.action)
+        ? [{ kind: 'recovery', operationId: run.control?.operationId ?? run.id + ':' + (active[0]?.id ?? 'stop'), outcome: update.confirmed ? 'known' : 'unknown', duplicateActions: null }] : [];
       for (const step of active) { step.status = update.confirmed ? update.failure && (!run.control || run.control.action === 'pause_after_step') ? 'failed' : 'interrupted' : 'outcome_unknown'; step.finishedAt = update.confirmed ? iso() : null; step.detail = update.detail ?? null; }
       run.status = !update.confirmed ? 'outcome_unknown' : run.control?.action === 'cancel' ? 'cancelled' : update.failure && (!run.control || run.control.action === 'pause_after_step') ? 'failed' : 'interrupted';
       if (run.status === 'cancelled') { request.phase = 'cancelled'; run.finishedAt = iso(); }
-      store.save(request, update.confirmed ? 'delivery_stopped' : 'delivery_stop_unknown', active.length === 1 ? { deliveryStepId: active[0]!.id } : {});
+      store.save(request, update.confirmed ? 'delivery_stopped' : 'delivery_stop_unknown', { ...(active.length === 1 ? { deliveryStepId: active[0]!.id } : {}), observations });
       return request;
     }
     identifier(update.stepId, 'delivery step ID');
     const previous = run.steps.find(step => step.id === update.stepId);
     if (update.action === 'start') {
+      validateDeliveryProfileStep(request, update);
       if (previous) {
-        if (previous.phase !== update.phase || previous.turnId !== (update.turnId ?? null) || previous.invocationRunId !== (update.invocationRunId ?? null)) conflict('A delivery step ID already belongs to another operation.');
+        if (previous.phase !== update.phase || previous.turnId !== (update.turnId ?? null) || previous.invocationRunId !== (update.invocationRunId ?? null) || previous.purpose !== update.purpose || previous.handoffId !== update.handoffId || gateDigest(previous.dispatch ?? null) !== gateDigest(update.dispatch ?? null)) conflict('A delivery step ID already belongs to another operation.');
         return request;
       }
       if (run.inputRevision !== request.inputRevision || run.inputHash !== request.inputHash || run.policyDigest !== request.policyDigest) conflict('Reconcile changed request inputs before starting another step.');
       if (run.control || run.holds.length || request.recoveryHold || ['paused', 'interrupting', 'interrupted', 'outcome_unknown', 'reconciling', 'cancelled', 'completed'].includes(run.status)) conflict('Delivery is held. Resolve its control or prerequisite before starting another step.');
       if (run.steps.some(step => ['running', 'outcome_unknown'].includes(step.status))) conflict('Observe the existing step before starting another operation.');
       if (run.steps.length >= 64) conflict('The bounded delivery step history is full.');
-      if (update.phase === 'repairing') {
+      if (update.phase === 'repairing' && !update.handoffId) {
         if (run.repairAttempts >= run.maxRepairAttempts) conflict('The pinned repair allowance is exhausted.');
         run.repairAttempts++;
       }
       run.phase = update.phase; run.status = 'running';
-      run.steps.push({ id: update.stepId, phase: update.phase, status: 'running', turnId: update.turnId ?? null, invocationRunId: update.invocationRunId ?? null, startedAt: iso(), finishedAt: null, detail: null, ...(update.dispatch ? { dispatch: clone(update.dispatch) } : {}) });
+      run.steps.push({ id: update.stepId, phase: update.phase, status: 'running', turnId: update.turnId ?? null, invocationRunId: update.invocationRunId ?? null, startedAt: iso(), finishedAt: null, detail: null, ...(update.purpose ? { purpose: update.purpose } : {}), ...(update.profileId ? { profileId: update.profileId } : {}), ...(update.handoffId ? { handoffId: update.handoffId } : {}), ...(update.dispatch ? { dispatch: clone(update.dispatch) } : {}) });
       store.save(request, 'delivery_step_started', { turnId: update.turnId, runId: update.invocationRunId, deliveryStepId: update.stepId });
       return request;
     }
@@ -117,7 +127,7 @@ export function requestDeliveryCommand(store: RequestStore, request: WorkerReque
   if (!run || input.deliveryRunId !== run.id || input.inputRevision !== request.inputRevision) conflict('Control must identify the current delivery run and request input revision.');
   refreshDelivery(request);
   if (!run.allowedControls.includes(input.action as typeof run.allowedControls[number])) conflict('This control is not available for the current delivery state.');
-  const active = run.steps.some(step => step.status === 'running' || step.status === 'outcome_unknown');
+  const active = remotePublicationPending(run) || run.steps.some(step => step.status === 'running' || step.status === 'outcome_unknown');
   const recoveryStep = run.steps.findLast(step => step.status === 'outcome_unknown')?.id;
   if (input.action === 'pause_after_step' || input.action === 'interrupt' || input.action === 'cancel') {
     run.control = { action: input.action, operationId: input.operationId, at: iso() };
@@ -146,7 +156,7 @@ export function requestDeliveryCommand(store: RequestStore, request: WorkerReque
   } else if (input.action === 'retry') {
     if (active) conflict('Confirm that the failed operation stopped before retrying.');
     request.deliveryHistory = [...(request.deliveryHistory ?? []), clone(run)].slice(-16);
-    delete request.delivery; request.deliveryHolds = (request.deliveryHolds ?? []).filter(hold => !['provider_authentication_required', 'provider_rate_limited', 'provider_quota_exhausted', 'provider_approval_required', 'verification_unavailable', 'candidate_changed', 'checkpoint_unavailable'].includes(hold.code));
+    delete request.delivery; request.deliveryHolds = (request.deliveryHolds ?? []).filter(hold => !['provider_authentication_required', 'provider_rate_limited', 'provider_quota_exhausted', 'provider_approval_required', 'verification_unavailable', 'candidate_changed', 'checkpoint_unavailable', 'candidate_review_input', 'candidate_review_protocol'].includes(hold.code));
     request.execution = null; request.attestation = null; request.phase = 'ready';
     ensureDelivery(request);
   } else {
@@ -154,11 +164,12 @@ export function requestDeliveryCommand(store: RequestStore, request: WorkerReque
     run.control = null; run.status = 'queued'; run.finishedAt = null;
     if (['failed', 'interrupted'].includes(request.phase)) request.phase = 'ready';
   }
-  store.save(request, 'delivery_' + input.action, input.action === 'confirm_stopped' ? { deliveryStepId: recoveryStep } : {});
+  store.save(request, 'delivery_' + input.action, input.action === 'confirm_stopped' ? { deliveryStepId: recoveryStep, observations: [{ kind: 'recovery', operationId: run.control?.operationId ?? run.id + ':' + (recoveryStep ?? 'stop'), outcome: 'unknown', duplicateActions: null }] } : {});
 }
 export function requestReviseInput(store: RequestStore, id: string, input: GateInput): WorkerRequest {
   return store.transaction(() => {
     const request = store.get(id);
+    if (remotePublicationPending(request.delivery)) conflict('Reconcile the saved remote publication before accepting a changed request revision.');
     if (request.execution && ['running', 'prepared'].includes(request.execution.status) || request.delivery?.steps.some(step => ['running', 'outcome_unknown'].includes(step.status))) conflict('Stop the active operation before accepting a changed request revision.');
     if (['done', 'cancelled'].includes(request.phase)) conflict('Reopen the request explicitly before accepting a revision.');
     requestCandidate(request, input, 'operator');

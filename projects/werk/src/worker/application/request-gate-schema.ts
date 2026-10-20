@@ -168,6 +168,7 @@ export const requestGateSchema = {
                 "output.protocolValid",
                 "output.patchPresent",
                 "output.verificationPassed",
+                "output.verificationEligible",
                 "operator.accepted",
                 "tests.passed",
                 "build.passed",

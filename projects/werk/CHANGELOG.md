@@ -14,16 +14,26 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 - Durable delivery runs expose real execution steps, pause after a step, interruption, guarded recovery and append-only attempt evidence. Local candidate branches and review notes bind automated checks and per-criterion human acceptance to the exact candidate.
 - The worker review workspace shows delivery progress, blockers, scope, effective policy and candidate evidence. Provider settings expose explicit CLI-account/API-key selection, capabilities and diagnostics without silently switching billing authority.
 
+- Project delivery adds named provider profiles, allowed request overrides, ordered routing, a separate candidate reviewer and explicitly authorized bounded handoffs across Claude Code, Codex and Cursor adapters.
+- Multiple assigned projects retain isolated intake and request identities, with a shared execution ceiling, approved per-project concurrency and dependency plans that require accepted code to be incorporated into the relevant baseline.
+- Structured readiness retains committed references and explicit assumptions. Versioned check packs, baseline failure comparisons and exact-candidate criterion decisions preserve original observations while producing a complete human review package.
+- Project settings provide guarded policy draft editing and exact-version approval/revocation. Optional GitHub branch push and PR creation retain separate authorization and reconciliation receipts; human acceptance and merge remain separate.
+- Canonical request metrics show feedback, completed clarification cycles, verification, review effort, recovery, integrity, blockers and consumption with explicit coverage. Run views expose retained plans, behavior decisions, provider assessments and unresolved capacity.
+
 ### Changed
 
+- New authoring installations require their starter delivery policy to be committed and approved before canonical work begins. Existing legacy installations and accepted policy snapshots retain their previous meaning.
+- Temporary service-log retention is configurable independently of preserved candidate artifacts and unfinished work.
 - Local authoring templates, CLI submission and documentation guide the request from draft to human acceptance. Legacy and shared Git intake remain supported.
-- Advisory release mutation testing adds delivery-policy and dependency contracts under a new scope baseline. Ordinary development remains independent of mutation runs.
+- Advisory release mutation testing expands the delivery authority, execution selection, coordination, readiness and verification contracts under a new scope baseline. Ordinary development remains independent of mutation runs.
 
 ### Fixed
 
 - Source reconciliation preserves user-authored Markdown, handles renamed and duplicate request identities, fences unsafe revisions and replays acknowledged commands without duplicate execution.
 - Candidate verification includes raw Git tree identity and protects approved verification inputs. Retained worktree ownership checks preserve existing branches during cleanup.
 - Review controls preserve an exact pending command after a lost acknowledgement while preventing new actions against stale state.
+- Restart recovery preserves immutable failed-check evidence when an exact authorized exception permits review, and unresolved execution reserves capacity across every model dispatch path.
+- Queued readiness reviews retain accepted definitions and billing choices; fresh permission checks after asynchronous preparation prevent revoked authority from launching tools, services or publication. Strict enum validation rejects coerced action and outcome values.
 
 ## [0.14.0] - 2026-10-19
 

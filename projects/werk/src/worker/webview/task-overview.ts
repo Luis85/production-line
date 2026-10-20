@@ -28,6 +28,7 @@ export interface TaskOverviewInput {
   requests?: readonly RequestSummary[] | null;
 }
 export interface TaskOverviewFilter {
+  projectId?: string;
   search?: string;
   source?: TaskOverviewSource | 'all';
   includeArchived?: boolean;
@@ -39,6 +40,7 @@ export interface TaskOverviewAction {
   sessionId?: string;
 }
 export interface TaskOverviewItem {
+  projectId?: string;
   /** Stable presentation identity, separate from retained task/session identifiers. */
   id: string;
   taskId: string;
@@ -180,7 +182,7 @@ function project(evidence: Evidence, currentSessionId: string | null, runs: read
   const taskId = feature?.taskId ?? file?.id ?? history?.taskId ?? session?.taskId ?? featureFile?.id ?? '';
   const actionFields = { sessionId, localTaskId: file?.id, featureName: feature?.name ?? featureFile?.name, status };
   return {
-    id: identity, taskId, ...actionFields,
+    id: identity, taskId, ...actionFields, projectId: file?.repositoryId ?? session?.feature?.repositoryId,
     requestId: session?.requestId ?? file?.requestId ?? feature?.gates?.requestId,
     title: session?.title || file?.title || featureFile?.title || history?.title || feature?.name || featureFile?.name || taskId,
     summary: summarize(evidence, status), source, sourceLabel: sourceLabels[source], status,
@@ -209,7 +211,7 @@ function projectReadyReview(request: SharedFeatureView, currentSessionId: string
     : review.status === 'passed' ? 'The review and Definition of Ready checks passed. Waiting for implementation admission, capacity, and start conditions.'
     : 'Waiting for the worker’s shared execution slot and start conditions. Implementation has not started.';
   return {
-    id: 'shared-feature:' + (request.feature?.key ?? request.id), taskId: '', featureName: request.name,
+    id: 'shared-feature:' + (request.feature?.key ?? request.id), projectId: request.feature?.repositoryId, taskId: '', featureName: request.name,
     title: request.title, summary, source: 'project', sourceLabel: 'Project request', status, statusLabel, group: groupFor(status),
     provider: run?.provider ?? null, model: run?.model || null, modelBasis: run ? 'recorded' : 'unavailable',
     modelSnapshot: run ? { provider: run.provider, model: run.model, runId: run.id, recordedAt: run.acceptedAt, purpose: run.purpose } : null,
@@ -270,11 +272,13 @@ export function buildTaskOverview(input: TaskOverviewInput, filter: TaskOverview
     else evidence.push({ history: row });
   }
   const currentSessionId = input.sessions?.execution.currentSessionId ?? null;
+  const activeIds = new Set(input.sessions?.execution.activeSessions?.map(item => item.sessionId) ?? (currentSessionId ? [currentSessionId] : []));
+  const currentFor = (sessionId: string | undefined) => sessionId && activeIds.has(sessionId) ? sessionId : null;
   const search = filter.search?.trim().toLocaleLowerCase() ?? '';
-  const reviews = (input.sharedRequests ?? []).filter(request => request.isLocal && request.readyReview && !request.taskId).map(request => projectReadyReview(request, currentSessionId, input.runs ?? []));
-  const items = [...evidence.map(item => withDelivery(project(item, currentSessionId, input.runs ?? []), input.requests ?? [], currentSessionId)), ...reviews].filter(item =>
-    (filter.includeArchived || !item.archived) && (!filter.source || filter.source === 'all' || item.source === filter.source) &&
-    (!search || [item.title, item.taskId, item.sessionId, item.localTaskId, item.requestId, item.featureName, item.sourceLabel, item.statusLabel, item.provider, item.model].join(' ').toLocaleLowerCase().includes(search)),
+  const reviews = (input.sharedRequests ?? []).filter(request => request.isLocal && request.readyReview && !request.taskId).map(request => projectReadyReview(request, currentFor(request.readyReview?.sessionId ?? undefined), input.runs ?? []));
+  const items = [...evidence.map(item => withDelivery(project(item, currentFor(item.session?.id ?? item.file?.sessionId ?? item.feature?.sessionId), input.runs ?? []), input.requests ?? [], currentFor(item.session?.id ?? item.file?.sessionId ?? item.feature?.sessionId))), ...reviews].filter(item =>
+    (filter.includeArchived || !item.archived) && (!filter.projectId || item.projectId === filter.projectId) && (!filter.source || filter.source === 'all' || item.source === filter.source) &&
+    (!search || [item.title, item.taskId, item.sessionId, item.localTaskId, item.requestId, item.featureName, item.projectId, item.sourceLabel, item.statusLabel, item.provider, item.model].join(' ').toLocaleLowerCase().includes(search)),
   );
   const groups: TaskOverview['groups'] = { attention: [], running: [], queued: [], completed: [], draft: [] };
   for (const item of items) groups[item.group].push(item);

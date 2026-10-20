@@ -1,3 +1,4 @@
+import { workspaceContext } from './runtime-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -165,8 +166,8 @@ test('a rejected folder identity collision preserves the original request and su
   await f.api('/api/tasks', { action: 'cancel', id: created.session.id });
   const runs = f.workspace.sessions.runs.list().total;
   await writeFile(join(f.project, 'legacy-features', 'collision.md'), '---\nschemaVersion: 1\nid: collision\ntitle: Export orders\nstatus: ready\nmode: chat\nprovider: openai-api\n---\n' + seed.message + '\n');
-  await f.workspace.features.tick(true); await f.workspace.features.tick(true);
-  const record = f.workspace.features.view().records.find(item => item.id === 'collision');
+  await workspaceContext(f.workspace).features.tick(true); await workspaceContext(f.workspace).features.tick(true);
+  const record = workspaceContext(f.workspace).features.view().records.find(item => item.id === 'collision');
   assert.ok(record); assert.equal(record.submitted, false); assert.match(record.error, /another Feature Request/);
   await f.workspace.featureTracking.sync();
   const tracking = await f.workspace.featureTrackingCommand({ action: 'get', sessionId: created.session.id });
@@ -177,6 +178,6 @@ test('a rejected folder identity collision preserves the original request and su
   assert.equal(canonical.data.schema, 'worker.request/v1'); assert.equal(canonical.data.id, 'feature-collision');
   await f.restart();
   assert.equal(f.workspace.sessions.detail(created.session.id).session.feature.key, created.session.feature.key);
-  assert.equal(f.workspace.features.view().records.find(item => item.id === 'collision').submitted, false);
+  assert.equal(workspaceContext(f.workspace).features.view().records.find(item => item.id === 'collision').submitted, false);
   assert.equal(f.workspace.sessions.runs.list().total, runs);
 });

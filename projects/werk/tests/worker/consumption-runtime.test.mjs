@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { WorkerConsumption } from '../../src/worker/dist/worker/application/consumption.js';
 import { WorkerConsumptionJournal } from '../../src/worker/dist/worker/infrastructure/journal/consumption.js';
 import { consumptionModel, withConsumption } from '../../src/worker/dist/worker/application/consumption-model.js';
-import { prepareModelRequest, executeModel } from '../../src/worker/dist/worker/application/model-contract.js';
+import { prepareModelRequest, executeModel, ProviderModelError } from '../../src/worker/dist/worker/application/model-contract.js';
 import { modelFor } from '../../src/worker/dist/worker/infrastructure/providers.js';
 import { providerUsage } from '../../src/worker/dist/worker/infrastructure/provider-usage.js';
 import { SerialExecutor } from '../../src/worker/dist/worker/application/serial-executor.js';
@@ -150,4 +150,18 @@ for (const disable of [false, true]) test('API continuation observes a consumpti
   }
   else await assert.rejects(execution, { code: 'consumption_limit' });
   assert.equal(requests, disable ? 2 : 1); assert.equal(f.runtime.status().measuredTokens, disable ? 100 : 50); assert.equal(f.runtime.status().uncertainInvocations, 0);
+});
+
+for (const code of /** @type {const} */ (['outcome_unknown', 'process_stop_unconfirmed'])) test(`${code} survives an accounting observer failure and failed final ledger write`, async t => {
+  const f = await fixture(t);
+  const save = f.journal.save.bind(f.journal);
+  f.journal.save = record => { if (record.usage.source === 'provider_reported') throw Error('Accounting write failed.'); save(record); };
+  t.mock.method(f.runtime, 'finish', () => { throw Error('Final accounting write failed.'); });
+  let aborted = false;
+  await assert.rejects(withConsumption(f.runtime, 'openai-api', signal(), async (bounded, observe, control) => {
+    control.beforeCall(); observe(providerUsage('openai', { usage: { input_tokens: 3, output_tokens: 2 } }));
+    aborted = bounded.aborted; throw new ProviderModelError(code);
+  }), { code });
+  assert.equal(aborted, true);
+  assert.equal(f.runtime.status().accountingAvailable, false);
 });

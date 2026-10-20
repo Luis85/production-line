@@ -91,24 +91,24 @@ test('compressed authentication and rate-limit errors retain safe provider class
 test('provider transport rejects redirects without forwarding credentials or retrying inference', async t => {
   const target = await fixture(t, (_req, res) => res.end(JSON.stringify(result('openai-api'))));
   const origin = await fixture(t, (_req, res) => { res.writeHead(307, { location: target.url }); res.end(); });
-  await assert.rejects(invoke(origin.url), error => testErrorCode(error) === 'unavailable');
+  await assert.rejects(invoke(origin.url), error => testErrorCode(error) === 'outcome_unknown');
   assert.equal(origin.calls.length, 1); assert.equal(target.calls.length, 0);
   await origin.drained();
 });
 
-test('cancelled and broken provider responses remain distinct and drain sockets', async t => {
+test('cancelled dispatched and broken provider responses remain unknown and drain sockets', async t => {
   await t.test('cancelled body', async t => {
     let started;
     const headersSent = new Promise(resolve => { started = () => resolve(undefined); });
     const f = await fixture(t, (_req, res) => { res.writeHead(200, { 'content-encoding': 'gzip' }); res.flushHeaders(); started(); });
     const controller = new AbortController();
-    const assertion = assert.rejects(invoke(f.url, { signal: controller.signal }), error => testErrorCode(error) === 'cancelled');
+    const assertion = assert.rejects(invoke(f.url, { signal: controller.signal }), error => testErrorCode(error) === 'outcome_unknown');
     await headersSent; controller.abort(); await assertion;
     assert.equal(f.calls.length, 1); await f.drained();
   });
   await t.test('broken socket', async t => {
     const f = await fixture(t, (req) => req.socket.destroy());
-    await assert.rejects(invoke(f.url), error => testErrorCode(error) === 'unavailable');
+    await assert.rejects(invoke(f.url), error => testErrorCode(error) === 'outcome_unknown');
     assert.equal(f.calls.length, 1); await f.drained();
   });
 });

@@ -27,6 +27,10 @@ export interface ToolBudgetEvidence { reason: 'calls' | 'window'; maxCalls: numb
 export interface ToolBudget { maxCalls: number; windowMs: number; callsUsed: number; refusedCalls: number; exhausted: ToolBudgetEvidence | null; }
 export interface ToolRuntime {
   readonly manifest: ToolManifest;
+  /** Fatal child uncertainty cancels the parent invocation and remains observable during cleanup. */
+  readonly failureSignal?: AbortSignal;
+  /** Private broker boundary: fence parent admission immediately, before child cleanup settles. */
+  stopUncertain?(reason: 'outcome_unknown' | 'process_stop_unconfirmed'): void;
   /** Private, revalidated implementation workspace for an explicitly selected native provider. */
   nativeWorkspace?(signal: AbortSignal): Promise<string>;
   /** Invocation-frozen execution ceilings; omitted by legacy adapter fixtures. */

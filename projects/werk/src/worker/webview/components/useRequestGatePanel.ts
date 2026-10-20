@@ -15,6 +15,8 @@ import { buildFeatureReviewView, currentRequestEvaluation } from '../feature-rev
 import { requestDrafts, requestOperations } from "./request-gate-drafts";
 import type { GateActionCommand } from "../request-gate-controller";
 import type { DeliveryControl } from "../../application/delivery-contracts";
+import { acceptedDeliveryPolicy } from '../delivery-policy-view';
+import { reportedReviewMinutes } from '../delivery-readiness-view';
 import { deliveryHumanOutcomes, deliveryHumanReviewReady } from '../delivery-human-review';
 
 /** Owns this page's state, actions and lifecycle; the Vue component owns rendering. */
@@ -110,7 +112,7 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
   function setDraft(part: string, value: string) {
     requestDrafts.set(draftKey(part), value);
   }
-  const humanReviewReady = computed(() => !view.value?.delivery?.review || deliveryHumanReviewReady(view.value.delivery.review, draft));
+  const humanReviewReady = computed(() => !view.value?.delivery?.review || deliveryHumanReviewReady(view.value.delivery.review, draft, { policy: acceptedDeliveryPolicy(view.value.input.context)?.profile.exceptions, decisions: view.value.delivery.criterionDecisions }));
   const proposedMessage = computed({
     get: () =>
       requestDrafts.get(draftKey("candidate")) ?? view.value?.input.message ?? "",
@@ -200,9 +202,9 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
     await command({ action: "resolve_finding", findingId, note });
   }
   async function attest() {
-    const note = draft("attestation").trim();
+    const note = draft("attestation").trim(), effort = reportedReviewMinutes(draft("review-minutes"));
     if (
-      !mutable.value ||
+      !mutable.value || !effort.valid ||
       !canAttest.value ||
       !humanReviewReady.value ||
       !note ||
@@ -211,7 +213,7 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
       return;
     const requestId = view.value.id;
     await command({
-      action: "attest",
+      action: "attest", ...(effort.minutes === undefined ? {} : { reviewDurationMinutes: effort.minutes }),
       inputHash: view.value.inputHash,
       outputDigest: view.value.execution.outputDigest,
       ...(view.value.delivery?.review ? {
@@ -232,14 +234,15 @@ export function useRequestGatePanel(props: { requestId?: string; sessionId?: str
   }
   async function requestChanges() {
     const viewValue = view.value, review = viewValue?.delivery?.review, note = draft('attestation').trim();
-    if (!viewValue || !review || !mutable.value || !note) return;
+    const effort = reportedReviewMinutes(draft('review-minutes'));
+    if (!viewValue || !review || !mutable.value || !note || !effort.valid) return;
     const observations = deliveryHumanOutcomes(review, draft).filter(outcome => outcome.outcome === 'failed');
     const feedback = [note, ...observations.map(outcome => `${outcome.criterionId}: ${outcome.reason}`)].join('\n\n');
     if (feedback.length > 8000) { error.value = 'The review note and criterion observations must total 8,000 characters or fewer.'; return; }
     await command({
       action: 'request_changes', inputRevision: viewValue.inputRevision,
       candidateCommit: review.candidate.candidateCommit, candidateDigest: review.candidate.candidateDigest,
-      note: feedback,
+      note: feedback, humanOutcomes: observations, ...(effort.minutes === undefined ? {} : { reviewDurationMinutes: effort.minutes }),
     });
   }
   function chooseRequest(id: string) {

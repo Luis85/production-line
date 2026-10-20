@@ -1,4 +1,4 @@
-import { inspectStopped, verifyDelivery } from './delivery-task-review.js';
+import { inspectStopped, verifyDelivery, verifyDeliveryCheckpoint } from './delivery-task-review.js';
 import { SerializedOperations } from '../../shared/serialized-operations.js';
 import type { WorkerSettingsPort } from './workspace-ports.js';
 import type { WorkerSessions } from './sessions.js';
@@ -26,11 +26,11 @@ export function createLocalTaskRuntime(settings: WorkerSettingsPort, sessions: W
     reserveRun: (task) => group1.reserveRun(runtime, task),
     gateInput: (task) => group1.gateInput(runtime, task),
     ensureRequest: (task) => group1.ensureRequest(runtime, task),
-    outputFacts: (valid, task) => group1.outputFacts(valid, task),
+    outputFacts: (valid, task) => group1.outputFacts(valid, task, task?.requestId ? sessions.requests.get(task.requestId) : undefined),
     context: (task) => group1.taskContext(task),
     originalPrompt: (task) => group1.originalPrompt(task),
     preparedRequest: (task, turn, model) => group1.preparedRequest(runtime, task, turn, model),
-    restoredDevelopment: (task, turn) => group1.restoredDevelopment(task, turn),
+    restoredDevelopment: (task, turn) => group1.restoredDevelopment(task, turn, task.requestId ? sessions.requests.get(task.requestId) : undefined),
     assertAcceptedSnapshots: (task) => group1.assertAcceptedSnapshots(task),
     prepareTurn: (task, turn, admission) => group1.prepareTurn(runtime, task, turn, admission),
     validatedPatch: (task, reply) => group1.validatedPatch(task, reply),
@@ -61,6 +61,7 @@ export function createLocalTaskRuntime(settings: WorkerSettingsPort, sessions: W
     createTask: (input, submission, options) => group5.createTask(runtime, input, submission, options),
     executeRequest: (id) => group6.executeRequest(runtime, id),
     verifyDelivery: (id, expectedRevision) => verifyDelivery(runtime, id, expectedRevision),
+    verifyDeliveryCheckpoint: (id, expectedRevision) => verifyDeliveryCheckpoint(runtime, id, expectedRevision),
     inspectStopped: (id, expectedRevision) => inspectStopped(runtime, id, expectedRevision),
     executeOwnedRequest: (id) => group6.executeOwnedRequest(runtime, id),
     interact: (body) => group6.interact(runtime, body),

@@ -1,3 +1,4 @@
+import { deliveryOwnsRun } from '../../application/execution-recovery.js';
 import type { LocalTask } from '../../application/local-task-contracts.js';
 import type { WorkerSettingsPort } from '../../application/workspace-ports.js';
 import { restoreSessionCatalog } from '../../application/session-catalog.js';
@@ -25,6 +26,6 @@ export async function initializeLocalEvidence(directory: string, settings: Worke
     }
     requests.recover(requestIds);
     interactions.recover(turnIds);
-    await runs.recover(id => interactions.resultForRun(id), runIds);
+    await runs.recover(id => interactions.resultForRun(id), runIds, run => deliveryOwnsRun(run, requests.forSession(run.parentSessionId ?? run.sessionId)));
   } catch (error) { requests.close(); interactions.close(); runs.close(); throw error; }
 }

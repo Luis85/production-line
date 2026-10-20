@@ -1,3 +1,4 @@
+import { recordTaskResult } from './local-task-completion.js';
 import { localTaskSelection, validateTaskSelection } from './local-task-selection.js';
 import { validateFeatureDefinitionPrompts } from './feature-workflow.js';
 import { interactionFeatureRequest } from './feature-request-reference.js';
@@ -167,8 +168,8 @@ async function recoverRetainedTask(host: RecoveryHost, task: LocalTask) {
       );
       if (turn.result?.type === "needs_input") {
         if (task.requestId && turn.runId)
-          host.sessions.requests.recordResult(
-            task.requestId,
+          recordTaskResult(
+            host.sessions.requests, task.requestId,
             turn.id,
             turn.runId,
             turn.result,
@@ -187,8 +188,8 @@ async function recoverRetainedTask(host: RecoveryHost, task: LocalTask) {
       if (turn.result?.type === "completed") {
         const valid = task.implementation ? host.restoredDevelopment(task, turn) : host.validatedPatch(task, turn.result.text);
         if (task.requestId && turn.runId)
-          host.sessions.requests.recordResult(
-            task.requestId,
+          recordTaskResult(
+            host.sessions.requests, task.requestId,
             turn.id,
             turn.runId,
             turn.result,

@@ -114,9 +114,9 @@ export function admissionInput(host: Pick<LocalTaskRuntime, "sessions" | "settin
       throw new DomainError("invalid_input", "background must be true or false.");
     const title = text(body.title, "Title", 200),
       instruction = text(body.instruction, "Instruction", 8000);
-    const definition = frozenDefinition === undefined ? host.sessions.definitions.select(body) : frozenDefinition ?? undefined;
-    const connection = host.settings.provider(String(body.provider ?? frozenSelection?.provider ?? submission?.selection?.provider ?? host.settings.value.defaultProvider ?? 'codex-cli'));
-    const selection = frozenSelection ?? submission?.selection ?? modelSelection(connection, body, definition);
+    const definition = frozenDefinition === undefined ? submission?.deliveryExecution ? submission.deliveryExecution.definition : host.sessions.definitions.select(body) : frozenDefinition ?? undefined;
+    const connection = host.settings.provider(String(body.provider ?? frozenSelection?.provider ?? submission?.deliveryExecution?.selection.provider ?? submission?.selection?.provider ?? host.settings.value.defaultProvider ?? 'codex-cli'));
+    const selection = frozenSelection ?? submission?.deliveryExecution?.selection ?? submission?.selection ?? modelSelection(connection, body, definition);
     const provider = selectedConnection(connection, selection, definition);
     const selector = text(body.repository, "Repository", 4096);
     const assignments = host.settings.value.repositories.items;

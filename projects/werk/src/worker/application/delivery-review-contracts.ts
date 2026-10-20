@@ -1,3 +1,8 @@
+import type { DeliveryCandidateAssessment } from './delivery-provider-contracts.js';
+import type { deliveryRequestDetails } from './delivery-review-context.js';
+import type { DevelopmentBaselineEvidence } from './development-baseline.js';
+import type { compareBaselineChecks } from './development-baseline-comparison.js';
+import type { DeliveryCriterionDecision, DeliveryCriterionExceptionPolicy } from './delivery-criterion-decisions.js';
 import type { DevelopmentCheckEvidence, DevelopmentScope, DevelopmentEvidence, DevelopmentCandidate } from './development.js';
 
 /** Exact source and authority reviewed by a person; unrelated newer attempts cannot inherit acceptance. */
@@ -28,6 +33,8 @@ export interface DeliveryCriterionResult {
   criterionId: string;
   status: DeliveryCriterionStatus;
   evidenceRefs: string[];
+  decisionRef?: string;
+  observedStatus?: DeliveryCriterionStatus;
   detail?: string;
 }
 export interface DeliveryHumanOutcome {
@@ -43,6 +50,11 @@ export interface DeliveryCheckReceipt extends DevelopmentCheckEvidence {
   environment: { platform: string; architecture: string; nodeVersion: string };
 }
 export interface DeliveryReviewPackage {
+  requestDetails?: ReturnType<typeof deliveryRequestDetails>;
+  assessments?: DeliveryCandidateAssessment[];
+  baseline?: Omit<DevelopmentBaselineEvidence, 'checks' | 'retainedWorktree'> & { checks: (Omit<DevelopmentCheckEvidence, 'stdout' | 'stderr'> & { stdoutDigest: string; stderrDigest: string })[] };
+  baselineComparison?: ReturnType<typeof compareBaselineChecks>;
+  criterionDecisions?: DeliveryCriterionDecision[];
   schemaVersion: 1;
   candidate: DeliveryCandidate;
   criteria: DeliveryCriterion[];
@@ -53,6 +65,10 @@ export interface DeliveryReviewPackage {
   publication: 'local_only';
 }
 export interface DeliveryReviewInput {
+  requestDetails?: ReturnType<typeof deliveryRequestDetails>;
+  assessments?: DeliveryCandidateAssessment[];
+  criterionDecisions?: DeliveryCriterionDecision[];
+  exceptionPolicy?: DeliveryCriterionExceptionPolicy;
   candidate: DeliveryCandidate;
   scope: DevelopmentScope;
   evidence: DevelopmentEvidence;

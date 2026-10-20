@@ -3,11 +3,11 @@
   "toolVersion": "3.33.1",
   "reviewedAt": "2026-10-20",
   "configSha256": "0bac7ec8d31b572f48cc61057c353ea00d5c9990219bb1c2df27e756049ee4b6",
-  "baselineSha256": "eeb7106290310187a8e5f4b21d8cae52c143abbba257ae92532308ded2a8dc76",
-  "scope": "Maintained application, CLI, build, runtime, documentation and test entrypoints. Final source-tree scan after architecture and typed-fixture refactors; service boundaries run separately without a baseline. Local-delivery review removed only the now-used ordinaryDirectory export identified by fallow prune; no new debt was added.",
+  "baselineSha256": "94b00ff11d8eda9c38d27b58f6999c014c515095f436b6f15c7f9d755488539c",
+  "scope": "Maintained application, CLI, build, runtime, documentation and test entrypoints. Final source-tree scan after architecture and typed-fixture refactors; service boundaries run separately without a baseline. Local-delivery review removed only the now-used ordinaryDirectory export identified by fallow prune; no new debt was added. Expanded-delivery review pruned the stale request-review.ts parser export after module extraction and retained only the proven SharedFeatureIntake.start interface-dispatch finding; other new registry findings were resolved through explicit typed composition and removal of test-only facades. Durable permit review replaced the now-resolved SerialExecutor.run finding with the exact RequestJournal.unresolvedExecutions interface dispatch used to retain capacity across ambiguous outcomes and restarts. Auxiliary execution recovery review retains exactly two WorkerRunJournal interface dispatches for unresolved execution enumeration and inspected stop confirmation; their actual application/transport callers and persistence regressions are documented individually.",
   "counts": {
     "unused_files": 0,
-    "unused_exports": 72,
+    "unused_exports": 71,
     "unused_types": 27,
     "private_type_leaks": 0,
     "deprecated_exports_in_use": 0,
@@ -18,7 +18,7 @@
     "package_cycles": 0,
     "unused_optional_dependencies": 0,
     "unused_enum_members": 0,
-    "unused_class_members": 62,
+    "unused_class_members": 65,
     "unused_store_members": 0,
     "unprovided_injects": 0,
     "unrendered_components": 0,
@@ -292,12 +292,6 @@
       "identity": "unused-export:src/worker/application/readable-reply.ts:readableMarkdown",
       "classification": "compiled-test-consumer",
       "rationale": "Named imports in tests/worker/readable-reply.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
-    },
-    {
-      "category": "unused_exports",
-      "identity": "unused-export:src/worker/application/request-review.ts:parseAdvisoryReview",
-      "classification": "compiled-test-consumer",
-      "rationale": "Named imports in tests/worker/request-review-schema.test.mjs exercise this export through generated application paths. Source-target validation and the source-aware test typecheck protect these consumers; the syntactic Fallow graph does not bridge compiled paths."
     },
     {
       "category": "unused_exports",
@@ -763,12 +757,6 @@
     },
     {
       "category": "unused_class_members",
-      "identity": "unused-class-member:src/worker/application/serial-executor.ts:SerialExecutor:run",
-      "classification": "interface-dispatch",
-      "rationale": "src/worker/application/serial-executor.ts retains SerialExecutor:run on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
-    },
-    {
-      "category": "unused_class_members",
       "identity": "unused-class-member:src/worker/application/serial-executor.ts:SerialExecutor:startedAt",
       "classification": "interface-dispatch",
       "rationale": "src/worker/application/serial-executor.ts retains SerialExecutor:startedAt on its existing owning class. Worker journals are invoked through application ports; sessions/taskboards and lifecycle services through composition state and callbacks. The focused regression suite and source-aware test typecheck cover these operations; the syntactic instance graph is incomplete."
@@ -1102,6 +1090,30 @@
       "identity": "dev-dependency-in-production:package.json:vue",
       "classification": "build-or-qualification-dependency",
       "rationale": "Browser build dependency bundled into generated public assets; downloaded service distributions do not resolve this package at runtime."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/application/shared-feature-intake.ts:SharedFeatureIntake:start",
+      "classification": "interface-dispatch",
+      "rationale": "Fallow 3.33.1 syntactic trace resolves SharedFeatureIntake construction only through infrastructure/features/shared-intake-runtime.ts. Real typed production calls remain in status/workspace-projects.ts WorkspaceProjectIntakes.start (starts every configured intake during workspace lifecycle) and configure (starts newly configured projects while the worker is running). The method owns bounded background polling, and removing it would stop shared Git intake. Source typecheck and shared-intake lifecycle tests verify these callers; no generic member suppression was added."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/requests.ts:WorkerRequestJournal:unresolvedExecutions",
+      "classification": "interface-dispatch",
+      "rationale": "application/sessions.ts constructs SerialExecutor with a callback to this.requests.unresolvedExecutions() through the RequestJournal application port. infrastructure/journal/requests.ts delegates to requestUnresolvedExecutions in requests/queries.ts, which scans durable unresolved delivery execution evidence. The permit reservation regression restarts the real SQLite journal and proves that unresolved outcomes still consume machine/project capacity. Fallow 3.33.1 syntactic member resolution does not connect this interface callback to its concrete journal; no wider class suppression is applied."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/local-runs.ts:WorkerRunJournal:uncertainExecutions",
+      "classification": "interface-dispatch",
+      "rationale": "application/sessions.ts supplies SerialExecutor with this.runs.uncertainExecutions() through the RunJournal application port, retaining machine capacity for unresolved provider execution across restarts. status/workspace-execution-recovery.ts also reads the same port for operator inspection. infrastructure/journal/local-runs.ts queries the durable executionRecovery.state in SQLite without a page limit; execution-recovery.test.mjs verifies 105 retained reservations and restart behavior, and reviewer-unknown-execution.test.mjs verifies reviewer reservations. Fallow 3.33.1 does not resolve these interface calls to WorkerRunJournal. The application port remains independent of its persistence adapter."
+    },
+    {
+      "category": "unused_class_members",
+      "identity": "unused-class-member:src/worker/infrastructure/journal/local-runs.ts:WorkerRunJournal:confirmExecutionStopped",
+      "classification": "interface-dispatch",
+      "rationale": "status/workspace-execution-recovery.ts invokes runs.confirmExecutionStopped(command, observation) through the RunJournal application port only after checking the retained revision, active controllers, owned processes and managed development services, with synchronous rechecks after the final await. infrastructure/journal/local-runs.ts applies the attestation transactionally and retains an idempotency receipt. execution-recovery.test.mjs verifies stale/absent observations, exact replay, restart and unknown outcomes; execution-recovery-transport.test.mjs covers the transport boundary. Fallow 3.33.1 does not resolve the port dispatch to this concrete journal method; removing it would prevent safe release of an unresolved execution reservation."
     }
   ]
 }

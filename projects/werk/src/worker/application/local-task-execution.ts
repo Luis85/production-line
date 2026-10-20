@@ -1,6 +1,9 @@
+import type { SerialExecutor } from './serial-executor.js';
+import { recordTaskResult } from './local-task-completion.js';
+import { effectiveProjectConcurrency } from './delivery-coordination.js';
 import { reconcileDeliveryReviews } from './delivery-task-review.js';
 import { retainDeliveryCheckpoint } from './delivery-task-checkpoint.js';
-import { providerFailureOutcome } from './provider-outcome.js';
+import { providerFailureOutcome, unknownProviderOutcome } from './provider-outcome.js';
 import { interactionFeatureRequest } from './feature-request-reference.js';
 
 import { DeliverySuspended, deliveryBoundary, runDeliverySteps, taskDelivery } from './delivery-task-steps.js';
@@ -19,12 +22,13 @@ import type { LocalTaskRuntime } from './local-task-runtime-contract.js';
 export async function tick(host: Pick<LocalTaskRuntime, "closed" | "sessions" | "settings" | "tasks" | "admissionTaskId" | "preparations" | "running" | "execute" | "verifyDelivery" | "change" | "evidencePersistenceError" | "trackContinuation">) {
     if (host.closed) return;
     void host.trackContinuation(reconcileDeliveryReviews(host)).catch(() => { host.evidencePersistenceError = true; });
-    host.sessions.executor.wake();
+    const executor: SerialExecutor = host.sessions.executor;
+    executor.wake();
     for (const task of host.tasks) {
       const run = taskDelivery(host, task);
       if (run?.control && ['interrupt', 'cancel'].includes(run.control.action)) host.running.get(task.id)?.controller.abort();
     }
-    const limit = 1;
+    const limit = executor.limit;
     for (const task of host.tasks
       .filter((item) => { const run = taskDelivery(host, item); const continuing = !!run?.steps.some(step => step.phase === 'implementing' || step.phase === 'repairing'); return (item.status === 'queued' || item.status === 'running' && run?.status === 'queued') && (!host.settings.value.board.paused || continuing) && (!run || !run.control && !run.holds.length && !['paused', 'outcome_unknown', 'interrupted', 'interrupting', 'cancelled', 'failed'].includes(run.status)) && item.id !== host.admissionTaskId && !host.preparations.some(preparation => preparation.id === item.id && preparation.state === "preparing"); })
       .sort(
@@ -33,12 +37,16 @@ export async function tick(host: Pick<LocalTaskRuntime, "closed" | "sessions" | 
             ? b.priority - a.priority
             : 0) || a.createdAt.localeCompare(b.createdAt),
       )) {
-      if (host.running.size >= limit || host.running.has(task.id)) break;
+      if (host.running.has(task.id)) continue;
+      if (host.running.size >= limit) break;
+      const projectId = task.repositoryId ?? task.repository, projectLimit = effectiveProjectConcurrency(task.deliveryPolicy?.configuration.coordination, limit);
+      const continuation = !!taskDelivery(host, task)?.steps.some(step => ['implementing', 'repairing'].includes(step.phase));
+      if (!executor.canStart(task.sessionId, { continuation, projectId, projectLimit })) continue;
       const controller = new AbortController();
-      const promise = host.sessions.executor
+      const promise = executor
         .run(task.sessionId, controller.signal, () =>
           host.execute(task.id, controller),
-          { continuation: !!taskDelivery(host, task)?.steps.some(step => ['implementing', 'repairing'].includes(step.phase)) },
+          { continuation, projectId, projectLimit },
         )
         .catch(() => {})
         .finally(() => {
@@ -51,11 +59,11 @@ export async function tick(host: Pick<LocalTaskRuntime, "closed" | "sessions" | 
     }
   }
 
-export async function execute(host: Pick<LocalTaskRuntime, "change" | "executionDetail" | "sessions" | "assertToolWorkspace" | "workspaceController" | "settings" | "developmentRuntime" | "model" | "evidencePersistenceError" | "writePatch" | "validatedPatch" | "outputFacts" | "input" | "completionMessage" | "tasks" | "persistenceError" | "delivery">, id: string, controller: AbortController) {
+export async function execute(host: Pick<LocalTaskRuntime, "change" | "executionDetail" | "sessions" | "assertToolWorkspace" | "workspaceController" | "settings" | "developmentRuntime" | "model" | "evidencePersistenceError" | "writePatch" | "validatedPatch" | "outputFacts" | "input" | "completionMessage" | "tasks" | "persistenceError" | "delivery" | "authorizeDelivery">, id: string, controller: AbortController) {
     let runId: string | undefined,
       turnId: string | undefined,
       usage = unknownUsage(),
-      persistenceFailed = false;
+      persistenceFailed = false, retainPermit = false;
     let outcome:
       | "review"
       | "failed"
@@ -124,14 +132,7 @@ export async function execute(host: Pick<LocalTaskRuntime, "change" | "execution
         usage,
       );
       knownResult = true;
-      if (task.requestId)
-        host.sessions.requests.recordResult(
-          task.requestId,
-          turnId,
-          runId,
-          result,
-          host.outputFacts(valid, task),
-        );
+      if (task.requestId) recordTaskResult(host.sessions.requests, task.requestId, turnId, runId, result, host.outputFacts(valid, task));
       if (valid && result.type === "completed") {
         await host.writePatch(task, valid.patch);
         await host.change((tasks) => {
@@ -181,11 +182,15 @@ export async function execute(host: Pick<LocalTaskRuntime, "change" | "execution
                 : "escalated";
         }
       }
+      const unknown = unknownProviderOutcome(error);
+      if (!knownResult && unknown && runId && failed && !taskDelivery(host, failed)) {
+        try { host.sessions.runs.reserveUnknown(runId, unknown); }
+        catch { const executor: SerialExecutor = host.sessions.executor; retainPermit = true; host.evidencePersistenceError = true; executor.retainUncertain(failed.sessionId); }
+      }
       if (failed?.requestId) {
         const run = taskDelivery(host, failed);
         if (run?.steps.some(step => step.status === 'running')) {
           // Adapter settlement is required before this catch executes; unknown process outcomes remain visible.
-          const unknown = error instanceof ProviderModelError && ['process_stop_unconfirmed', 'outcome_unknown'].includes(error.code);
           host.sessions.requests.deliveryUpdate(failed.requestId, { action: 'stopped', deliveryRunId: run.id, confirmed: !unknown, failure: !controller.signal.aborted, detail: error instanceof Error ? error.message : 'Execution stopped.' });
           if (!unknown && !host.workspaceController.signal.aborted) {
             try {
@@ -204,14 +209,14 @@ export async function execute(host: Pick<LocalTaskRuntime, "change" | "execution
       }
       if (knownResult) persistenceFailed = true;
       else {
-        outcome = controller.signal.aborted && taskDelivery(host, failed!)?.control?.action !== 'interrupt' ? 'cancelled' : 'failed';
-        const code = controller.signal.aborted
+        outcome = !unknown && controller.signal.aborted && taskDelivery(host, failed!)?.control?.action !== 'interrupt' ? 'cancelled' : 'failed';
+        const code = unknown ?? (controller.signal.aborted
           ? taskDelivery(host, failed!)?.control?.action === 'interrupt' ? 'operator_interrupted' : 'operator_cancelled'
           : signal.aborted
             ? "timeout"
             : error instanceof ProviderModelError || error instanceof PatchProtocolError
               ? error.code
-              : "execution_failed";
+              : "execution_failed");
         if (failed && turnId) {
           host.sessions.interactions.fail(
             failed.sessionId,
@@ -226,7 +231,7 @@ export async function execute(host: Pick<LocalTaskRuntime, "change" | "execution
               taskDelivery(host, failed)?.status === 'interrupted' ? 'interrupted' : outcome,
             );
         }
-        const message = controller.signal.aborted
+        const message = unknown && error instanceof Error ? error.message : controller.signal.aborted
           ? "Task stopped."
           : signal.aborted
             ? "This attempt reached its configured execution time limit. Resume explicitly from saved context to make another attempt."
@@ -255,7 +260,8 @@ export async function execute(host: Pick<LocalTaskRuntime, "change" | "execution
       }
     }
     // Ledger/projection failure cannot relabel a durably known result or trigger another model call.
-    if (runId)
+    const finishedTask = host.tasks.find(item => item.id === id);
+    if (runId && !retainPermit && (!finishedTask || !taskDelivery(host, finishedTask)?.handoffs?.length))
       await host.sessions.runs.finish(runId, outcome, usage).catch(() => {
         host.evidencePersistenceError = true;
       });

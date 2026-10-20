@@ -5,6 +5,7 @@ import UAlert from '@nuxt/ui/components/Alert.vue';
 import MetricsConsumptionPanel from '../components/MetricsConsumptionPanel.vue';
 import MetricsResourcesPanel from '../components/MetricsResourcesPanel.vue';
 import MetricsExecutionPanel from '../components/MetricsExecutionPanel.vue';
+import DeliveryMetricsPanel from '../components/DeliveryMetricsPanel.vue';
 import MetricsProcessesPanel from '../components/MetricsProcessesPanel.vue';
 import { state, date, getCapacityFreshness } from '../store';
 import { buildWorkerCapacityView } from '../worker-capacity';
@@ -48,7 +49,7 @@ const uptime = computed(() => {
           <p class="activity-description">{{ activity.description }}</p>
         </div>
         <dl class="activity-counts">
-          <div><dt>Execution slot</dt><dd>{{ capacity ? capacity.execution.inUse + ' / 1' : 'Unavailable' }}<small>One task at a time</small></dd></div>
+          <div><dt>Execution slots</dt><dd>{{ capacity ? capacity.execution.inUse + ' / ' + capacity.execution.limit : 'Unavailable' }}<small>Shared execution capacity</small></dd></div>
           <div><dt>Local places</dt><dd>{{ capacity ? capacity.local.used + ' / ' + capacity.local.limit : 'Unavailable' }}<small>Includes queued, active &amp; preparing</small></dd></div>
           <div v-if="remoteVisible"><dt>Accepted assignments</dt><dd>{{ capacity?.remote.accepted == null ? 'Unavailable' : capacity.remote.accepted + ' / ' + (capacity.remote.extraQueuePlaces + 1) }}<small>Separate remote buffer</small></dd></div>
         </dl>
@@ -60,6 +61,7 @@ const uptime = computed(() => {
         <MetricsResourcesPanel />
       </div>
       <MetricsProcessesPanel />
+      <DeliveryMetricsPanel />
       <MetricsExecutionPanel />
 
       <details class="metrics-diagnostics">

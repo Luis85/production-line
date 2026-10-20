@@ -1,8 +1,10 @@
 /** Browser-safe provider results and errors. Execution, hashing and persistence stay outside this module. */
 export interface ModelQuestion { schemaVersion: 1; kind: 'question' | 'escalation'; message: string; choices?: { id: string; label: string }[]; reason?: string; }
 export type ModelResult = { type: 'completed'; text: string } | { type: 'needs_input'; request: ModelQuestion };
-export type ModelErrorCode = 'session_conflict' | 'approval_required' | 'authentication' | 'rate_limit' | 'quota' | 'invalid_request' | 'tool_access' | 'unavailable' | 'incomplete' | 'protocol' | 'cancelled' | 'refusal' | 'consumption_limit';
+export type ModelErrorCode = 'outcome_unknown' | 'process_stop_unconfirmed' | 'session_conflict' | 'approval_required' | 'authentication' | 'rate_limit' | 'quota' | 'invalid_request' | 'tool_access' | 'unavailable' | 'incomplete' | 'protocol' | 'cancelled' | 'refusal' | 'consumption_limit';
 const messages: Record<ModelErrorCode, string> = {
+  outcome_unknown: 'The provider response was lost after dispatch. Its remote outcome is unknown; reconcile before starting another attempt.',
+  process_stop_unconfirmed: 'The provider process could not be confirmed stopped. Reconcile its execution before starting another attempt.',
   approval_required: 'Provider approval is required. Review its permission request before starting a new attempt.',
   session_conflict: 'The provider session could not be safely resumed. Inspect its retained checkpoint before retrying.',
   consumption_limit: 'Worker consumption is limited or usage could not be verified. Review Consumption before resuming.',

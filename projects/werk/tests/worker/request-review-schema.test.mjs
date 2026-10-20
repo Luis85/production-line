@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { testErrorCode } from '../helpers/typed-boundaries.mjs';
-import { parseAdvisoryReview } from '../../src/worker/dist/worker/application/request-review.js';
-import { input, valid } from './request-review-fixtures.mjs';
+import { advisoryResult } from '../../src/worker/dist/worker/application/request-review-protocol.js';
+import { reviewerInput as input, valid } from './request-review-fixtures.mjs';
 
 test("strict advisory schema forbids authority, approved-file changes and unbounded output", () => {
-  const parsed = parseAdvisoryReview(valid, input, "ready");
+  const parsed = advisoryResult({ type: "completed", text: valid }, input, "ready", "review");
   assert.equal(parsed.findings[0].blocking, true);
   assert.equal(parsed.candidate.message, "Revised request text");
   for (const key of ["kind", "title", "criteria", "files", "context"])
@@ -43,15 +43,15 @@ test("strict advisory schema forbids authority, approved-file changes and unboun
   ];
   for (const candidate of candidates)
     assert.throws(
-      () => parseAdvisoryReview(JSON.stringify(candidate), input, "ready"),
+      () => advisoryResult({ type: "completed", text: JSON.stringify(candidate) }, input, "ready", "review"),
       (error) => testErrorCode(error) === "protocol",
     );
   assert.throws(
-    () => parseAdvisoryReview("Arbitrary prose", input, "ready"),
+    () => advisoryResult({ type: "completed", text: "Arbitrary prose" }, input, "ready", "review"),
     (error) => testErrorCode(error) === "protocol",
   );
   assert.throws(
-    () => parseAdvisoryReview("x".repeat(262145), input, "ready"),
+    () => advisoryResult({ type: "completed", text: "x".repeat(262145) }, input, "ready", "review"),
     (error) => testErrorCode(error) === "protocol",
   );
 });

@@ -1,3 +1,4 @@
+import { featureIntakeBlocker, featureIntakeHold } from './feature-intake-measurement.js';
 import { sharedFeaturePublicationIssue } from './shared-feature-publication-limits.js';
 import { SharedReadyReviewLifecycle } from './shared-ready-review.js';
 import { sharedFeatureRequestReference } from './feature-request-reference.js';
@@ -108,10 +109,11 @@ export class SharedFeatureLifecycle {
       if (!record.submitted) {
         const hold = this.ports.admissionHold?.();
         if (hold && !this.ports.inspect(record.taskId!)) {
+          this.ports.observeMetric?.(record, { phase: 'waiting_input', feedback: true, blockers: [featureIntakeHold(hold.code)] });
           await this.admissionDiagnostic(record, repository, signal, hold.message, true);
           return;
         }
-        if (!this.ports.canAdmit()) return;
+        if (!this.ports.canAdmit()) { this.ports.observeMetric?.(record, { phase: 'waiting_input', feedback: true, blockers: [featureIntakeHold('capacity')] }); await this.save(); return; }
         const head = await repository.head(signal);
         const current = await repository.readBlob(head, record.sourcePath, signal);
         if (current === null || sharedHash(current) !== record.remoteRevision) throw Error('The remotely claimed request changed before admission. Restore its claimed content or resolve the change before execution.');
@@ -122,6 +124,7 @@ export class SharedFeatureLifecycle {
           // submission on the next sync rather than publishing a false failure.
           if (this.ports.inspect(record.taskId!)) throw error;
           const hold = this.ports.admissionHold?.();
+          this.ports.observeMetric?.(record, { phase: 'waiting_input', feedback: true, blockers: [hold ? featureIntakeHold(hold.code) : featureIntakeBlocker(error)] });
           const reason = hold?.message ?? (error instanceof Error ? error.message.slice(0, 500) : 'Request preparation could not be confirmed.');
           await this.admissionDiagnostic(record, repository, signal, reason, !!hold);
           return;
@@ -136,6 +139,7 @@ export class SharedFeatureLifecycle {
       await this.progress(record, repository, execution, signal);
     } catch (error) {
       if (signal.aborted) return;
+      this.ports.observeMetric?.(record, { phase: 'waiting_input', feedback: true, blockers: [featureIntakeBlocker(error)] });
       record.publication = 'error';
       record.error = error instanceof Error ? error.message.slice(0, 500) : 'Shared progress could not be published.';
       await this.save();

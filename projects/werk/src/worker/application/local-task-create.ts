@@ -1,3 +1,4 @@
+import { selectedDeliveryCheckPacks } from './delivery-check-packs.js';
 import type { ModelSelection } from './model-selection.js';
 import { loadTaskProjectContext } from './local-task-preparation.js';
 import { interactionFeatureRequest } from './feature-request-reference.js';
@@ -82,7 +83,7 @@ export async function createTask(host: Pick<LocalTaskRuntime, "model" | "closed"
       );
     const interruptedWorktree = prepared.reused && prepared.pristine !== true;
     // Shared intake publishes the candidate through Git, so its implementation scope freezes the publisher's bounds.
-    const implementation = !interruptedWorktree && host.development ? freezeDevelopmentScope(prepared.baseCommit, allowedPaths, host.settings.toolPolicy(), { sharedPublication: submission?.feature?.source === 'shared_git', verificationInputs: submission?.verificationInputs }) : undefined;
+    const implementation = !interruptedWorktree && host.development ? freezeDevelopmentScope(prepared.baseCommit, allowedPaths, host.settings.toolPolicy(), { sharedPublication: submission?.feature?.source === 'shared_git', verificationInputs: submission?.verificationInputs, ...(submission?.deliveryPolicy ? { checkPacks: selectedDeliveryCheckPacks(submission.deliveryPolicy.configuration, submission.deliveryPolicy.profile) } : {}) }) : undefined;
     if (!interruptedWorktree && submission?.deliveryPolicy) {
       // Canonical delivery must never silently become a legacy patch proposal.
       // Check after reuse inspection so interrupted admission retains its failed receipt.
@@ -106,7 +107,9 @@ export async function createTask(host: Pick<LocalTaskRuntime, "model" | "closed"
       ...(submission?.selection ? { selectionReserved: true } : {}),
       ...(submission ? { submissionHash: submission.hash, submissionContextHash: submissionContextHash(submission) } : {}),
       ...(submission?.definitionPrompts ? { definitionPrompts: structuredClone(submission.definitionPrompts) } : {}),
+      ...(submission?.deliveryExecution ? { deliveryExecution: structuredClone(submission.deliveryExecution) } : {}),
       ...(submission?.deliveryPolicy ? { deliveryPolicy: structuredClone(submission.deliveryPolicy) } : {}),
+      ...(submission?.readinessReferences ? { readinessReferences: structuredClone(submission.readinessReferences) } : {}),
       ...(submission?.dependencies ? { dependencies: structuredClone(submission.dependencies) } : {}),
       ...(submission?.policy ? { gatePolicy: structuredClone(submission.policy) } : {}),
       ...(submission?.criteria === undefined ? {} : { criteria: structuredClone(submission.criteria) }),

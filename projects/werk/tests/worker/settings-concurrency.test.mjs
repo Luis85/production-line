@@ -167,3 +167,14 @@ test('guarded inspection saves remain editable under environment duration withou
   assert.equal(saved.maxRuntimeMs, 7200000); assert.equal(saved.candidateSourceMaxBytes, 128 * 1048576);
   const restarted = new WorkerSettings(directory); await restarted.init(); assert.deepEqual(inspection(restarted), inspection(overridden));
 });
+
+
+test('configured worker parallelism survives restart and rejects stale or incomplete capacity edits', async t => {
+  const { directory, settings } = await fixture(t), expectedBoard = { ...queue(settings), maxParallel: 1 };
+  await settings.update({ board: { maxParallel: 3 }, expectedBoard });
+  assert.equal(settings.value.board.maxParallel, 3);
+  await assert.rejects(settings.update({ board: { maxParallel: 4 }, expectedBoard }), /changed in another session/);
+  await assert.rejects(settings.update({ board: { maxParallel: 4 }, expectedBoard: queue(settings) }), /complete queue settings baseline/);
+  const restarted = new WorkerSettings(directory); await restarted.init(); assert.equal(restarted.value.board.maxParallel, 3);
+  for (const maxParallel of [0, 9, 1.5]) await assert.rejects(settings.update({ board: { maxParallel } }), /concurrency/);
+});

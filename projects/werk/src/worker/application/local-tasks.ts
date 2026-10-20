@@ -35,6 +35,7 @@ export class LocalTaskboard {
   create(input: unknown, submission?: LocalTaskSubmission) {
     return this.runtime.create(input, submission);
   }
+  verifyDeliveryCheckpoint(requestId: string, expectedRevision?: number) { return this.runtime.verifyDeliveryCheckpoint(requestId, expectedRevision); }
   verifyDelivery(requestId: string, expectedRevision?: number) { return this.runtime.verifyDelivery(requestId, expectedRevision); }
   inspectStopped(requestId: string, expectedRevision?: number) { return this.runtime.inspectStopped(requestId, expectedRevision); }
   executeRequest(id: string) {

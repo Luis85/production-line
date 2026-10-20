@@ -1,3 +1,4 @@
+import { readinessContextMessages } from './delivery-readiness-context.js';
 import { withSessionRecovery } from './model-session-recovery.js';
 import type { WorkerRequest } from "./request-gates.js";
 import type { StructuredModel } from "./model-contract.js";
@@ -106,7 +107,7 @@ export function prepareConversationRequest(host: Pick<ConversationRuntime, 'time
               executionPolicy: (model as Partial<StructuredModel>).executionPolicy,
               } as ConversationModel)
             : model,
-          next.messages.filter((item) => item.state === "complete"),
+          [...next.messages.filter((item) => item.state === "complete"), ...readinessContextMessages(gateRequest)],
           "chat",
           maxRuntimeMs,
         );

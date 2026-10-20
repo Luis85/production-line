@@ -79,7 +79,7 @@ export async function startChat(workspace: WorkspaceContext, message: unknown){
   const id = workspace.sessions.current.id;
   if (isSharedFeatureSession(workspace, id))
     throw new DomainError('conflict', 'Use this Feature Request’s current Task checkpoint to answer or resume. Create a new Feature Request for new scope.');
-  if (!workspace.sessions.detail(id).chat.messages.length) assertDirectFeatureCreation(workspace);
+  if (!workspace.sessions.detail(id).chat.messages.length) assertDirectFeatureCreation(workspace, { id });
   assertTaskCanContinue(workspace, id);
   await withFeatureTracking(workspace, () => workspace.sessions.start(message, id));
   return chatSnapshot(workspace, id);

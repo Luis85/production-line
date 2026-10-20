@@ -6,7 +6,7 @@ import { defaultGatePolicy } from '../../src/worker/dist/worker/application/requ
 import { modelCapabilities } from '../../src/worker/dist/worker/application/model-contract.js';
 
 /** @type {import('../../src/worker/application/run-evidence.js').ProviderUsage} */
-export const usage = {
+export const requestReviewUsage = {
   ...unknownUsage(),
   inputTokens: 12,
   outputTokens: 4,
@@ -14,7 +14,7 @@ export const usage = {
   reason: null,
 };
 /** @type {import('../../src/worker/application/request-gates.js').GateInput} */
-export const input = {
+export const reviewerInput = {
   kind: "patch",
   title: "Improve clarity",
   message: "Original request",
@@ -27,7 +27,7 @@ export const valid = JSON.stringify({
   findings: [{ kind: "gap", message: "Specify the target.", blocking: true }],
   candidate: { message: "Revised request text" },
 });
-export const wait = async (check) => {
+export const waitForRequestReview = async (check) => {
   for (let n = 0; n < 200; n++) {
     if (check()) return;
     await new Promise((resolve) => setTimeout(resolve, 2));
@@ -35,7 +35,7 @@ export const wait = async (check) => {
   throw Error("Fixture did not settle.");
 };
 /** @param {{kind?: 'review' | 'rework'; model?: import('../../src/worker/application/model-contract.js').StructuredModel['execute'] | null; startFailure?: boolean; completeFailure?: boolean; finishFailure?: boolean; runtimeMs?: number}} [options] */
-export function fixture({
+export function reviewerFixture({
   kind = "review",
   model,
   startFailure = false,
@@ -73,7 +73,7 @@ export function fixture({
     reworkCount: 0, candidates: [], execution: null, attestation: null,
     id: "request-1",
     owner: { sessionId: "session-1", rootTurnId: "turn-1", taskId: "task-1" },
-    input: structuredClone(input),
+    input: structuredClone(reviewerInput),
     inputRevision: 1,
     inputHash: "input-1",
     policyDigest: "policy-1",
@@ -131,6 +131,7 @@ export function fixture({
   };
   /** @type {import('../../src/worker/application/run-evidence.js').RunEvidence} */
   const runs = {
+    reserveUnknown() { throw Error('This fixture has no durable unknown-outcome storage.'); },
     async begin(metadata) {
       records.push({ ...metadata, schemaVersion: 1, id: "run-1", outcome: "queued",
         sequence: 1, attempt: 1, acceptedAt: intent.createdAt, before: null, after: null,

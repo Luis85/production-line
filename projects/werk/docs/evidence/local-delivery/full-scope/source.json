@@ -1,0 +1,1948 @@
+{
+  "schemaVersion": 1,
+  "version": "0.14.0",
+  "commit": "8fc99c379c219b430f432d5fe16a2950d7eef0c4",
+  "sourceDigest": "233c99b6869f748f9cee7381d2442435f5944495129a0a667e28adbc117878a4",
+  "components": [
+    {
+      "path": "src/factory/webview/App.vue",
+      "name": "App",
+      "app": "Factory",
+      "imports": [
+        "src/factory/webview/components/FactoryDashboard.vue",
+        "src/factory/webview/components/FactoryIntake.vue",
+        "src/factory/webview/components/FactoryTaskboard.vue",
+        "src/factory/webview/components/LineDashboard.vue",
+        "src/factory/webview/components/RegistryEditor.vue",
+        "src/shared/webview/components/AccessPanel.vue",
+        "src/shared/webview/components/ConnectionStatus.vue",
+        "src/shared/webview/components/OnboardingTour.vue",
+        "src/shared/webview/components/PageHeading.vue",
+        "src/shared/webview/components/WerkShell.vue"
+      ],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/factory/webview/components/FactoryDashboard.vue",
+      "name": "FactoryDashboard",
+      "app": "Factory",
+      "imports": [
+        "src/shared/webview/components/SpatialMap.vue"
+      ],
+      "props": [
+        "{ store: FactoryStore }"
+      ],
+      "events": [
+        "{ navigate: [scope: string, lineId?: string] }"
+      ]
+    },
+    {
+      "path": "src/factory/webview/components/FactoryIntake.vue",
+      "name": "FactoryIntake",
+      "app": "Factory",
+      "imports": [],
+      "props": [
+        "{ store: FactoryStore }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/factory/webview/components/FactoryTaskboard.vue",
+      "name": "FactoryTaskboard",
+      "app": "Factory",
+      "imports": [
+        "src/shared/webview/components/TaskKanban.vue"
+      ],
+      "props": [
+        "{ store: FactoryStore }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/factory/webview/components/LineDashboard.vue",
+      "name": "LineDashboard",
+      "app": "Factory",
+      "imports": [
+        "src/shared/webview/components/LineInteractionPanel.vue",
+        "src/shared/webview/components/SpatialMap.vue"
+      ],
+      "props": [
+        "{ store: FactoryStore }"
+      ],
+      "events": [
+        "{ tour: [] }"
+      ]
+    },
+    {
+      "path": "src/factory/webview/components/RegistryEditor.vue",
+      "name": "RegistryEditor",
+      "app": "Factory",
+      "imports": [],
+      "props": [
+        "{ store: FactoryStore }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/guide/webview/GuideApp.vue",
+      "name": "GuideApp",
+      "app": "Guide",
+      "imports": [
+        "src/shared/webview/components/SpatialMap.vue"
+      ],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/orchestrator/webview/App.vue",
+      "name": "App",
+      "app": "Orchestrator",
+      "imports": [
+        "src/shared/webview/components/AccessPanel.vue",
+        "src/shared/webview/components/ConnectionStatus.vue",
+        "src/shared/webview/components/LineInteractionPanel.vue",
+        "src/shared/webview/components/OnboardingTour.vue",
+        "src/shared/webview/components/PageHeading.vue",
+        "src/shared/webview/components/WerkShell.vue"
+      ],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/orchestrator/webview/components/Pagination.vue",
+      "name": "Pagination",
+      "app": "Orchestrator",
+      "imports": [],
+      "props": [
+        "{ page: Page; busy?: boolean; label?: string; limit?: number }"
+      ],
+      "events": [
+        "{ move: [direction: \"next\" | \"previous\"]; refresh: [] }"
+      ]
+    },
+    {
+      "path": "src/orchestrator/webview/concept/ConceptApp.vue",
+      "name": "ConceptApp",
+      "app": "Concept",
+      "imports": [
+        "src/orchestrator/webview/concept/components/ConceptBoard.vue",
+        "src/orchestrator/webview/concept/components/ConceptDashboard.vue",
+        "src/orchestrator/webview/concept/components/ConceptDocumentation.vue",
+        "src/orchestrator/webview/concept/components/ConceptFactory.vue",
+        "src/orchestrator/webview/concept/components/ConceptIntake.vue",
+        "src/orchestrator/webview/concept/components/ConceptProviders.vue",
+        "src/orchestrator/webview/concept/components/ConceptTaskDetail.vue",
+        "src/shared/webview/components/SpatialMap.vue"
+      ],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/orchestrator/webview/concept/components/ConceptAgentDelivery.vue",
+      "name": "ConceptAgentDelivery",
+      "app": "Concept",
+      "imports": [],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/orchestrator/webview/concept/components/ConceptBoard.vue",
+      "name": "ConceptBoard",
+      "app": "Concept",
+      "imports": [
+        "src/shared/webview/components/TaskKanban.vue"
+      ],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/orchestrator/webview/concept/components/ConceptDashboard.vue",
+      "name": "ConceptDashboard",
+      "app": "Concept",
+      "imports": [],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/orchestrator/webview/concept/components/ConceptDocumentation.vue",
+      "name": "ConceptDocumentation",
+      "app": "Concept",
+      "imports": [
+        "src/orchestrator/webview/concept/components/ConceptSystem.vue"
+      ],
+      "props": [
+        "{ view: string }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/orchestrator/webview/concept/components/ConceptFactory.vue",
+      "name": "ConceptFactory",
+      "app": "Concept",
+      "imports": [
+        "src/shared/webview/components/SpatialMap.vue"
+      ],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/orchestrator/webview/concept/components/ConceptIntake.vue",
+      "name": "ConceptIntake",
+      "app": "Concept",
+      "imports": [],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/orchestrator/webview/concept/components/ConceptProviders.vue",
+      "name": "ConceptProviders",
+      "app": "Concept",
+      "imports": [],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/orchestrator/webview/concept/components/ConceptRepositoryWorkflow.vue",
+      "name": "ConceptRepositoryWorkflow",
+      "app": "Concept",
+      "imports": [],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/orchestrator/webview/concept/components/ConceptRuntimeBoundaries.vue",
+      "name": "ConceptRuntimeBoundaries",
+      "app": "Concept",
+      "imports": [],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/orchestrator/webview/concept/components/ConceptSystem.vue",
+      "name": "ConceptSystem",
+      "app": "Concept",
+      "imports": [
+        "src/orchestrator/webview/concept/components/ConceptAgentDelivery.vue",
+        "src/orchestrator/webview/concept/components/ConceptRepositoryWorkflow.vue",
+        "src/orchestrator/webview/concept/components/ConceptRuntimeBoundaries.vue"
+      ],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/orchestrator/webview/concept/components/ConceptTaskDetail.vue",
+      "name": "ConceptTaskDetail",
+      "app": "Concept",
+      "imports": [],
+      "props": [
+        "{ taskId: number | null }"
+      ],
+      "events": [
+        "{ close: []; closeAutoFocus: [event: Event] }"
+      ]
+    },
+    {
+      "path": "src/orchestrator/webview/pages/DashboardPage.vue",
+      "name": "DashboardPage",
+      "app": "Orchestrator",
+      "imports": [
+        "src/shared/webview/components/SpatialMap.vue"
+      ],
+      "props": [
+        "{ store: OrchestratorStore }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/orchestrator/webview/pages/IntakePage.vue",
+      "name": "IntakePage",
+      "app": "Orchestrator",
+      "imports": [],
+      "props": [
+        "{ store: OrchestratorStore }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/orchestrator/webview/pages/MetricsPage.vue",
+      "name": "MetricsPage",
+      "app": "Orchestrator",
+      "imports": [],
+      "props": [
+        "{ store: OrchestratorStore }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/orchestrator/webview/pages/TasksPage.vue",
+      "name": "TasksPage",
+      "app": "Orchestrator",
+      "imports": [
+        "src/orchestrator/webview/components/Pagination.vue",
+        "src/shared/webview/components/TaskKanban.vue"
+      ],
+      "props": [
+        "{ store: OrchestratorStore }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/orchestrator/webview/pages/WorkersPage.vue",
+      "name": "WorkersPage",
+      "app": "Orchestrator",
+      "imports": [
+        "src/orchestrator/webview/components/Pagination.vue",
+        "src/shared/webview/components/SpatialMap.vue"
+      ],
+      "props": [
+        "{ store: OrchestratorStore }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/shared/webview/components/AccessPanel.vue",
+      "name": "AccessPanel",
+      "app": "Shared",
+      "imports": [],
+      "props": [
+        "{\n    title: string;\n    lead?: string;\n    helpTitle?: string;\n    caption?: string;\n  }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/shared/webview/components/AsyncState.vue",
+      "name": "AsyncState",
+      "app": "Shared",
+      "imports": [],
+      "props": [
+        "{\n    loading?: boolean;\n    error?: string | null;\n    empty?: boolean;\n    emptyTitle?: string;\n    emptyDescription?: string;\n  }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/shared/webview/components/ConnectionStatus.vue",
+      "name": "ConnectionStatus",
+      "app": "Shared",
+      "imports": [],
+      "props": [
+        "{ healthy?: boolean; label: string; detail?: string }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/shared/webview/components/LineInteractionPanel.vue",
+      "name": "LineInteractionPanel",
+      "app": "Shared",
+      "imports": [
+        "src/shared/webview/components/MessageContent.vue"
+      ],
+      "props": [
+        "{\n    open: boolean;\n    title: string;\n    project?: string;\n    canWrite: boolean;\n    request: InteractionRequest;\n    submit: (task: InteractionTask, key: string) => Promise<LineSubmissionReceipt>;\n  }"
+      ],
+      "events": [
+        "{ \"update:open\": [value: boolean] }"
+      ]
+    },
+    {
+      "path": "src/shared/webview/components/MessageContent.vue",
+      "name": "MessageContent",
+      "app": "Shared",
+      "imports": [],
+      "props": [
+        "{ text: string; markdown?: boolean }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/shared/webview/components/OnboardingTour.vue",
+      "name": "OnboardingTour",
+      "app": "Shared",
+      "imports": [],
+      "props": [
+        "{ title: string; steps: TourStep[]; locale?: \"en\" | \"de\" }",
+        "{ \"open\"?: boolean }"
+      ],
+      "events": [
+        "{ \"update:open\": [value: boolean] }"
+      ]
+    },
+    {
+      "path": "src/shared/webview/components/PageHeading.vue",
+      "name": "PageHeading",
+      "app": "Shared",
+      "imports": [],
+      "props": [
+        "{ title: string; description?: string }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/shared/webview/components/SettingsSaveFeedback.vue",
+      "name": "SettingsSaveFeedback",
+      "app": "Shared",
+      "imports": [],
+      "props": [
+        "{\n  state: SaveState;\n  unlocked: boolean;\n  unavailable?: boolean;\n  notice?: string;\n  showRefresh?: boolean;\n  refreshLabel?: string;\n  uncertainMessage?: string;\n}"
+      ],
+      "events": [
+        "{ retry: []; reload: []; refresh: [] }"
+      ]
+    },
+    {
+      "path": "src/shared/webview/components/SpatialMap.vue",
+      "name": "SpatialMap",
+      "app": "Shared",
+      "imports": [],
+      "props": [
+        "{\n    nodes: SpatialNode[];\n    edges?: SpatialEdge[];\n    caption?: string;\n    legend?: string;\n    label?: string;\n    english?: boolean;\n    selectedId?: string;\n  }"
+      ],
+      "events": [
+        "{\n  select: [id: string];\n  action: [value: { nodeId: string; actionId?: string }];\n}"
+      ]
+    },
+    {
+      "path": "src/shared/webview/components/StatCard.vue",
+      "name": "StatCard",
+      "app": "Shared",
+      "imports": [],
+      "props": [
+        "{ value: string | number; label: string; detail?: string }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/shared/webview/components/TaskKanban.vue",
+      "name": "TaskKanban",
+      "app": "Shared",
+      "imports": [],
+      "props": [
+        "{\n    tasks: KanbanTask[];\n    columns: KanbanColumn[];\n    scopeLabel: string;\n    loading?: boolean;\n    emptyText?: string;\n    selectable?: boolean;\n    statusLabels?: Record<string, string>;\n    copy?: Partial<{\n      emptyColumn: string;\n      refreshing: string;\n      unknownGate: string;\n      priority: string;\n      other: string;\n      scrollHint: string;\n      jump: string;\n      loadedTasks: string;\n    }>;\n  }"
+      ],
+      "events": [
+        "{ open: [task: KanbanTask] }"
+      ]
+    },
+    {
+      "path": "src/shared/webview/components/WerkShell.vue",
+      "name": "WerkShell",
+      "app": "Shared",
+      "imports": [],
+      "props": [
+        "{\n    links?: NavigationLink[];\n    homePath?: string;\n    homeLabel?: string;\n    navLabel?: string;\n  }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/App.vue",
+      "name": "App",
+      "app": "Worker",
+      "imports": [
+        "src/shared/webview/components/AccessPanel.vue",
+        "src/shared/webview/components/ConnectionStatus.vue",
+        "src/shared/webview/components/OnboardingTour.vue",
+        "src/worker/webview/components/WorkerShell.vue"
+      ],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/AcceptedModelSelection.vue",
+      "name": "AcceptedModelSelection",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ selection?: ModelSelection | null }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/AssistantMessage.vue",
+      "name": "AssistantMessage",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/MessageContent.vue"
+      ],
+      "props": [
+        "{ text: string; patchTaskId?: string; fileTask?: ReplyContext['fileTask'] }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/CandidateEvidence.vue",
+      "name": "CandidateEvidence",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ task: DevelopmentTaskView; showReviewLink?: boolean }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/CliToolsEditor.vue",
+      "name": "CliToolsEditor",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ editor: ToolAccessEditor }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/ConsumptionPanel.vue",
+      "name": "ConsumptionPanel",
+      "app": "Worker",
+      "imports": [
+        "src/shared/webview/components/SettingsSaveFeedback.vue"
+      ],
+      "props": [
+        "{ readonly?: boolean; editorOpen?: boolean }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/DefinitionPanel.vue",
+      "name": "DefinitionPanel",
+      "app": "Worker",
+      "imports": [],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/DeliveryBehaviorInspector.vue",
+      "name": "DeliveryBehaviorInspector",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ run: DeliveryRun }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/DeliveryControls.vue",
+      "name": "DeliveryControls",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ run: DeliveryRun; disabled: boolean; pending: (action: string) => boolean }"
+      ],
+      "events": [
+        "{ command: [action: DeliveryControl, note?: string] }"
+      ]
+    },
+    {
+      "path": "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+      "name": "DeliveryCriterionDecisions",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ subject: WorkerRequest; disabled: boolean; draft: (key: string) => string }"
+      ],
+      "events": [
+        "{ command: [GateCommandFields]; update: [key: string, value: string] }"
+      ]
+    },
+    {
+      "path": "src/worker/webview/components/DeliveryDependencyPanel.vue",
+      "name": "DeliveryDependencyPanel",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ requestId: string; projectId?: string }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/DeliveryExecutionPolicy.vue",
+      "name": "DeliveryExecutionPolicy",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ policy: DeliveryExecutionPolicy }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/DeliveryHumanReview.vue",
+      "name": "DeliveryHumanReview",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/MessageContent.vue"
+      ],
+      "props": [
+        "{ review: DeliveryReviewPackage; disabled: boolean; draft: (key: string) => string }"
+      ],
+      "events": [
+        "{ update: [key: string, value: string] }"
+      ]
+    },
+    {
+      "path": "src/worker/webview/components/DeliveryMetricsPanel.vue",
+      "name": "DeliveryMetricsPanel",
+      "app": "Worker",
+      "imports": [],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/DeliveryPlanPanel.vue",
+      "name": "DeliveryPlanPanel",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/MessageContent.vue"
+      ],
+      "props": [
+        "{ subject: WorkerRequest }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/DeliveryPolicyDraftEditor.vue",
+      "name": "DeliveryPolicyDraftEditor",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ projectId: string }"
+      ],
+      "events": [
+        "{ dirty: [boolean]; saved: [] }"
+      ]
+    },
+    {
+      "path": "src/worker/webview/components/DeliveryPolicyPanel.vue",
+      "name": "DeliveryPolicyPanel",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/DeliveryExecutionPolicy.vue",
+        "src/worker/webview/components/DeliveryPolicyDraftEditor.vue"
+      ],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/DeliveryProviderPanel.vue",
+      "name": "DeliveryProviderPanel",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/MessageContent.vue"
+      ],
+      "props": [
+        "{ subject: WorkerRequest }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/DeliveryPublicationPanel.vue",
+      "name": "DeliveryPublicationPanel",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ subject: WorkerRequest; disabled: boolean; pending: (action: string) => boolean }"
+      ],
+      "events": [
+        "{ command: [GateCommandFields] }"
+      ]
+    },
+    {
+      "path": "src/worker/webview/components/DeliveryReadinessPanel.vue",
+      "name": "DeliveryReadinessPanel",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/MessageContent.vue"
+      ],
+      "props": [
+        "{ subject: WorkerRequest; evaluation?: GateEvaluation | null; disabled: boolean; draft: (key: string) => string }"
+      ],
+      "events": [
+        "{ command: [GateCommandFields]; update: [key: string, value: string] }"
+      ]
+    },
+    {
+      "path": "src/worker/webview/components/DeliveryReviewEvidence.vue",
+      "name": "DeliveryReviewEvidence",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/MessageContent.vue"
+      ],
+      "props": [
+        "{ review: DeliveryReviewPackage }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/DeliveryRunPanel.vue",
+      "name": "DeliveryRunPanel",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/DeliveryBehaviorInspector.vue",
+        "src/worker/webview/components/DeliveryPlanPanel.vue",
+        "src/worker/webview/components/DeliveryProviderPanel.vue",
+        "src/worker/webview/components/MessageContent.vue"
+      ],
+      "props": [
+        "{ request: WorkerRequest }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/DurationSettingsPanel.vue",
+      "name": "DurationSettingsPanel",
+      "app": "Worker",
+      "imports": [
+        "src/shared/webview/components/SettingsSaveFeedback.vue"
+      ],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/ExecutionProfilesPanel.vue",
+      "name": "ExecutionProfilesPanel",
+      "app": "Worker",
+      "imports": [],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/FeatureRequestDetails.vue",
+      "name": "FeatureRequestDetails",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/ModelSelectionFields.vue",
+        "src/worker/webview/components/ProjectExecutionSelection.vue"
+      ],
+      "props": [
+        "{ \"modelValue\": string }",
+        "{ disabled: boolean; projectId?: string }"
+      ],
+      "events": [
+        "{ \"update:modelValue\": [value: string] }"
+      ]
+    },
+    {
+      "path": "src/worker/webview/components/FeatureRequestNote.vue",
+      "name": "FeatureRequestNote",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/MessageContent.vue"
+      ],
+      "props": [
+        "{ session: SessionView['records'][number] }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/FeatureRequestsPanel.vue",
+      "name": "FeatureRequestsPanel",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/DeliveryDependencyPanel.vue",
+        "src/worker/webview/components/MessageContent.vue"
+      ],
+      "props": [
+        "{ compact?: boolean }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/InteractionPanel.vue",
+      "name": "InteractionPanel",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/MessageContent.vue"
+      ],
+      "props": [
+        "{ currentStatus?: string }"
+      ],
+      "events": [
+        "{ change: [InteractionView | null]; busy: [boolean] }"
+      ]
+    },
+    {
+      "path": "src/worker/webview/components/McpConnectionsEditor.vue",
+      "name": "McpConnectionsEditor",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ editor: ToolAccessEditor }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/MessageContent.vue",
+      "name": "MessageContent",
+      "app": "Worker",
+      "imports": [
+        "src/shared/webview/components/MessageContent.vue"
+      ],
+      "props": [
+        "{ text: string; markdown?: boolean }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/MetricsConsumptionPanel.vue",
+      "name": "MetricsConsumptionPanel",
+      "app": "Worker",
+      "imports": [],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/MetricsExecutionPanel.vue",
+      "name": "MetricsExecutionPanel",
+      "app": "Worker",
+      "imports": [],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/MetricsProcessesPanel.vue",
+      "name": "MetricsProcessesPanel",
+      "app": "Worker",
+      "imports": [],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/MetricsResourcesPanel.vue",
+      "name": "MetricsResourcesPanel",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/ResourceMonitorPanel.vue"
+      ],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/ModelSelectionFields.vue",
+      "name": "ModelSelectionFields",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ id: string; provider?: ProviderId; providers: WorkerSettingsView['providers']; disabled?: boolean; defaults?: boolean; definitionModel?: string; showProvider?: boolean }",
+        "{ \"model\": string }",
+        "{ \"effort\": ModelEffort | '' }"
+      ],
+      "events": [
+        "{ 'update:provider': [ProviderId] }",
+        "{ \"update:model\": [value: string] }",
+        "{ \"update:effort\": [value: ModelEffort | ''] }"
+      ]
+    },
+    {
+      "path": "src/worker/webview/components/NewTask.vue",
+      "name": "NewTask",
+      "app": "Worker",
+      "imports": [],
+      "props": [],
+      "events": [
+        "{ created: []; close: []; setup: []; definitions: [] }"
+      ]
+    },
+    {
+      "path": "src/worker/webview/components/OverviewTaskCard.vue",
+      "name": "OverviewTaskCard",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ item: TaskOverviewItem; selected?: boolean; disabled?: boolean; compact?: boolean }"
+      ],
+      "events": [
+        "{ open: [TaskOverviewItem] }"
+      ]
+    },
+    {
+      "path": "src/worker/webview/components/PatchReview.vue",
+      "name": "PatchReview",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ patch: string; taskId?: string }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/ProjectExecutionSelection.vue",
+      "name": "ProjectExecutionSelection",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ id: string; projectId?: string; disabled?: boolean; qualityProfile?: string; mode?: 'chat' | 'patch'; priority?: number }",
+        "{ \"modelValue\"?: string }"
+      ],
+      "events": [
+        "{ \"update:modelValue\": [value: string] }",
+        "{ configured: [boolean]; resolved: [DeliveryExecutionProfile | null] }"
+      ]
+    },
+    {
+      "path": "src/worker/webview/components/ProjectIntegrationsPanel.vue",
+      "name": "ProjectIntegrationsPanel",
+      "app": "Worker",
+      "imports": [],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/ProviderAccountPanel.vue",
+      "name": "ProviderAccountPanel",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ providerId: ProviderId; authenticationMode?: ProviderAuthenticationMode; connectionKey: string; enabled: boolean }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/ProviderCapabilitiesPanel.vue",
+      "name": "ProviderCapabilitiesPanel",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ capabilities?: ProviderCapabilities; runtimeVersion?: string | null }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/QueueSettingsPanel.vue",
+      "name": "QueueSettingsPanel",
+      "app": "Worker",
+      "imports": [
+        "src/shared/webview/components/SettingsSaveFeedback.vue"
+      ],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/RepositoryDiscovery.vue",
+      "name": "RepositoryDiscovery",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ reconsider?: boolean }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/RepositoryPanel.vue",
+      "name": "RepositoryPanel",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/RepositoryDiscovery.vue"
+      ],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/RequestActivityPanel.vue",
+      "name": "RequestActivityPanel",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ requestId: string; revision: number }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/RequestGateEvidence.vue",
+      "name": "RequestGateEvidence",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ stage: GateStage; evaluation?: GateEvaluation }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/RequestGatePanel.vue",
+      "name": "RequestGatePanel",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/DeliveryControls.vue",
+        "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+        "src/worker/webview/components/DeliveryHumanReview.vue",
+        "src/worker/webview/components/DeliveryPublicationPanel.vue",
+        "src/worker/webview/components/DeliveryReadinessPanel.vue",
+        "src/worker/webview/components/MessageContent.vue",
+        "src/worker/webview/components/RequestGateEvidence.vue"
+      ],
+      "props": [
+        "{ requestId?: string; sessionId?: string; featureSource?: string; summary?: boolean; disabled?: boolean }"
+      ],
+      "events": [
+        "{ change: [WorkerRequest | null] }"
+      ]
+    },
+    {
+      "path": "src/worker/webview/components/RequestPolicyPanel.vue",
+      "name": "RequestPolicyPanel",
+      "app": "Worker",
+      "imports": [],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/ResourceMonitorPanel.vue",
+      "name": "ResourceMonitorPanel",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ compact?: boolean; resourceReport?: ResourceStatus | null; alertsOnly?: boolean }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/RunEvidencePanel.vue",
+      "name": "RunEvidencePanel",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ compact?: boolean }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/RunTask.vue",
+      "name": "RunTask",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ \"enabled\": boolean }",
+        "{ \"repository\": string }",
+        "{ \"paths\": string }"
+      ],
+      "events": [
+        "{ \"update:enabled\": [value: boolean] }",
+        "{ \"update:repository\": [value: string] }",
+        "{ \"update:paths\": [value: string] }"
+      ]
+    },
+    {
+      "path": "src/worker/webview/components/ServicePresetsEditor.vue",
+      "name": "ServicePresetsEditor",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ editor: ToolAccessEditor }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/SessionPanel.vue",
+      "name": "SessionPanel",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ disabled?: boolean }"
+      ],
+      "events": [
+        "{ newTask: [] }"
+      ]
+    },
+    {
+      "path": "src/worker/webview/components/SettingsPanel.vue",
+      "name": "SettingsPanel",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/ModelSelectionFields.vue",
+        "src/worker/webview/components/ProviderAccountPanel.vue",
+        "src/worker/webview/components/ProviderCapabilitiesPanel.vue"
+      ],
+      "props": [
+        "{ providerOnly?: boolean; connectionOnly?: boolean }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/SharedFeatureComposer.vue",
+      "name": "SharedFeatureComposer",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/FeatureRequestDetails.vue",
+        "src/worker/webview/components/MessageContent.vue",
+        "src/worker/webview/components/ModelSelectionFields.vue",
+        "src/worker/webview/components/ProjectExecutionSelection.vue"
+      ],
+      "props": [],
+      "events": [
+        "{ created: [sessionId: string, previousSessionId: string]; busy: [boolean] }"
+      ]
+    },
+    {
+      "path": "src/worker/webview/components/SharedIntakePanel.vue",
+      "name": "SharedIntakePanel",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/AcceptedModelSelection.vue",
+        "src/worker/webview/components/MessageContent.vue"
+      ],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/TaskConversationHistory.vue",
+      "name": "TaskConversationHistory",
+      "app": "Worker",
+      "imports": [],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/TaskIntake.vue",
+      "name": "TaskIntake",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/ModelSelectionFields.vue",
+        "src/worker/webview/components/ProjectExecutionSelection.vue",
+        "src/worker/webview/components/RunTask.vue",
+        "src/worker/webview/components/SharedFeatureComposer.vue"
+      ],
+      "props": [],
+      "events": [
+        "{ created: [sessionId: string, previousSessionId: string]; busy: [boolean] }"
+      ]
+    },
+    {
+      "path": "src/worker/webview/components/TaskInteraction.vue",
+      "name": "TaskInteraction",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/AssistantMessage.vue",
+        "src/worker/webview/components/FeatureRequestNote.vue",
+        "src/worker/webview/components/InteractionPanel.vue",
+        "src/worker/webview/components/MessageContent.vue",
+        "src/worker/webview/components/TaskIntake.vue"
+      ],
+      "props": [],
+      "events": [
+        "{ busy: [boolean]; board: [] }"
+      ]
+    },
+    {
+      "path": "src/worker/webview/components/Taskboard.vue",
+      "name": "Taskboard",
+      "app": "Worker",
+      "imports": [
+        "src/shared/webview/components/TaskKanban.vue",
+        "src/worker/webview/components/CandidateEvidence.vue",
+        "src/worker/webview/components/MessageContent.vue",
+        "src/worker/webview/components/PatchReview.vue",
+        "src/worker/webview/components/RequestGatePanel.vue"
+      ],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/ToolAccessPanel.vue",
+      "name": "ToolAccessPanel",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/CliToolsEditor.vue",
+        "src/worker/webview/components/McpConnectionsEditor.vue",
+        "src/worker/webview/components/ServicePresetsEditor.vue"
+      ],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/components/WorkerCapacityPanel.vue",
+      "name": "WorkerCapacityPanel",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ view: WorkerCapacityView; remaining?: number; showRemote?: boolean; consumptionBlocked?: boolean; refreshing?: boolean; refreshDisabled?: boolean; projects?: Array<{ projectId: string; limit: number; inUse: number }> }"
+      ],
+      "events": [
+        "{ refresh: [] }"
+      ]
+    },
+    {
+      "path": "src/worker/webview/components/WorkerShell.vue",
+      "name": "WorkerShell",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ links: NavigationLink[]; homePath: string; homeLabel: string; navLabel: string }"
+      ],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/pages/ChatPage.vue",
+      "name": "ChatPage",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/AssistantMessage.vue",
+        "src/worker/webview/components/DefinitionPanel.vue",
+        "src/worker/webview/components/InteractionPanel.vue",
+        "src/worker/webview/components/MessageContent.vue",
+        "src/worker/webview/components/NewTask.vue",
+        "src/worker/webview/components/RequestGatePanel.vue",
+        "src/worker/webview/components/ResourceMonitorPanel.vue",
+        "src/worker/webview/components/SessionPanel.vue",
+        "src/worker/webview/components/SettingsPanel.vue"
+      ],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/pages/HistoryPage.vue",
+      "name": "HistoryPage",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/FeatureRequestsPanel.vue",
+        "src/worker/webview/components/RunEvidencePanel.vue",
+        "src/worker/webview/components/TaskConversationHistory.vue",
+        "src/worker/webview/components/Taskboard.vue"
+      ],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/pages/MonitoringPage.vue",
+      "name": "MonitoringPage",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/DeliveryMetricsPanel.vue",
+        "src/worker/webview/components/MetricsConsumptionPanel.vue",
+        "src/worker/webview/components/MetricsExecutionPanel.vue",
+        "src/worker/webview/components/MetricsProcessesPanel.vue",
+        "src/worker/webview/components/MetricsResourcesPanel.vue"
+      ],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/pages/ReviewPage.vue",
+      "name": "ReviewPage",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/AcceptedModelSelection.vue",
+        "src/worker/webview/components/AssistantMessage.vue",
+        "src/worker/webview/components/CandidateEvidence.vue",
+        "src/worker/webview/components/DeliveryReviewEvidence.vue",
+        "src/worker/webview/components/DeliveryRunPanel.vue",
+        "src/worker/webview/components/FeatureRequestNote.vue",
+        "src/worker/webview/components/MessageContent.vue",
+        "src/worker/webview/components/PatchReview.vue",
+        "src/worker/webview/components/RequestActivityPanel.vue",
+        "src/worker/webview/components/RequestGateEvidence.vue",
+        "src/worker/webview/components/RequestGatePanel.vue"
+      ],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/pages/SettingsPage.vue",
+      "name": "SettingsPage",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/ConsumptionPanel.vue",
+        "src/worker/webview/components/DefinitionPanel.vue",
+        "src/worker/webview/components/DeliveryPolicyPanel.vue",
+        "src/worker/webview/components/DurationSettingsPanel.vue",
+        "src/worker/webview/components/ExecutionProfilesPanel.vue",
+        "src/worker/webview/components/ProjectIntegrationsPanel.vue",
+        "src/worker/webview/components/QueueSettingsPanel.vue",
+        "src/worker/webview/components/RepositoryPanel.vue",
+        "src/worker/webview/components/RequestPolicyPanel.vue",
+        "src/worker/webview/components/SettingsPanel.vue",
+        "src/worker/webview/components/SharedIntakePanel.vue",
+        "src/worker/webview/components/ToolAccessPanel.vue"
+      ],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/pages/TaskboardPage.vue",
+      "name": "TaskboardPage",
+      "app": "Worker",
+      "imports": [
+        "src/worker/webview/components/OverviewTaskCard.vue",
+        "src/worker/webview/components/RepositoryDiscovery.vue",
+        "src/worker/webview/components/TaskInteraction.vue",
+        "src/worker/webview/components/WorkerCapacityPanel.vue"
+      ],
+      "props": [],
+      "events": []
+    },
+    {
+      "path": "src/worker/webview/status/StatusApp.vue",
+      "name": "StatusApp",
+      "app": "Worker",
+      "imports": [],
+      "props": [
+        "{ initial: unknown }"
+      ],
+      "events": []
+    }
+  ],
+  "routes": [
+    {
+      "app": "factory",
+      "path": "/",
+      "source": "src/factory/webview/main.ts"
+    },
+    {
+      "app": "factory",
+      "path": "/factories/:id",
+      "source": "src/factory/webview/main.ts"
+    },
+    {
+      "app": "factory",
+      "path": "/:pathMatch(.*)*",
+      "source": "src/factory/webview/main.ts",
+      "redirect": "\"/\""
+    },
+    {
+      "app": "orchestrator",
+      "path": "/",
+      "source": "src/orchestrator/webview/main.ts",
+      "redirect": "\"/system\""
+    },
+    {
+      "app": "orchestrator",
+      "path": "/system",
+      "source": "src/orchestrator/webview/main.ts"
+    },
+    {
+      "app": "orchestrator",
+      "path": "/intake",
+      "source": "src/orchestrator/webview/main.ts"
+    },
+    {
+      "app": "orchestrator",
+      "path": "/tasks",
+      "source": "src/orchestrator/webview/main.ts"
+    },
+    {
+      "app": "orchestrator",
+      "path": "/workers",
+      "source": "src/orchestrator/webview/main.ts"
+    },
+    {
+      "app": "orchestrator",
+      "path": "/metrics",
+      "source": "src/orchestrator/webview/main.ts"
+    },
+    {
+      "app": "orchestrator",
+      "path": "/:pathMatch(.*)*",
+      "source": "src/orchestrator/webview/main.ts",
+      "redirect": "\"/system\""
+    },
+    {
+      "app": "worker",
+      "path": "/",
+      "source": "src/worker/webview/main.ts",
+      "redirect": "'/taskboard'"
+    },
+    {
+      "app": "worker",
+      "path": "/taskboard",
+      "source": "src/worker/webview/main.ts"
+    },
+    {
+      "app": "worker",
+      "path": "/review",
+      "source": "src/worker/webview/main.ts"
+    },
+    {
+      "app": "worker",
+      "path": "/chat",
+      "source": "src/worker/webview/main.ts",
+      "redirect": "to => ({ path: '/taskboard', query: to.query, hash: to.hash })"
+    },
+    {
+      "app": "worker",
+      "path": "/history",
+      "source": "src/worker/webview/main.ts"
+    },
+    {
+      "app": "worker",
+      "path": "/dashboard",
+      "source": "src/worker/webview/main.ts"
+    },
+    {
+      "app": "worker",
+      "path": "/settings",
+      "source": "src/worker/webview/main.ts"
+    },
+    {
+      "app": "worker",
+      "path": "/monitoring-status",
+      "source": "src/worker/webview/main.ts",
+      "redirect": "'/dashboard'"
+    },
+    {
+      "app": "worker",
+      "path": "/:pathMatch(.*)*",
+      "source": "src/worker/webview/main.ts",
+      "redirect": "'/taskboard'"
+    }
+  ],
+  "documents": [
+    {
+      "id": "start",
+      "title": "Start here",
+      "source": "docs/handbook.md",
+      "chapter": "Start here",
+      "path": "handbook/start.html"
+    },
+    {
+      "id": "project-overview",
+      "title": "From one worker to a Factory",
+      "source": "docs/overview.md",
+      "chapter": "Start here",
+      "path": "handbook/project-overview.html"
+    },
+    {
+      "id": "execution-modes",
+      "title": "Choose an execution mode",
+      "source": "docs/explanation/modes.md",
+      "chapter": "Start here",
+      "path": "handbook/execution-modes.html"
+    },
+    {
+      "id": "install-worker",
+      "title": "Install a local worker",
+      "source": "docs/how-to/project-worker.md",
+      "chapter": "Set up your workspace",
+      "path": "handbook/install-worker.html"
+    },
+    {
+      "id": "shared-intake",
+      "title": "Connect the shared Markdown queue",
+      "source": "docs/how-to/shared-feature-intake.md",
+      "chapter": "Set up your workspace",
+      "path": "handbook/shared-intake.html"
+    },
+    {
+      "id": "first-feature",
+      "title": "Try a local proposal request",
+      "source": "docs/tutorials/worker-feature-lifecycle.md",
+      "chapter": "Set up your workspace",
+      "path": "handbook/first-feature.html"
+    },
+    {
+      "id": "system-setup",
+      "title": "Set up a complete system",
+      "source": "docs/tutorials/system-from-yaml.md",
+      "chapter": "Set up your workspace",
+      "path": "handbook/system-setup.html"
+    },
+    {
+      "id": "docker-setup",
+      "title": "Start with Docker",
+      "source": "docs/tutorials/docker-first-task.md",
+      "chapter": "Set up your workspace",
+      "path": "handbook/docker-setup.html"
+    },
+    {
+      "id": "team-requests",
+      "title": "Create and answer requests with your team",
+      "source": "docs/how-to/team-feature-authoring.md",
+      "chapter": "Work with requests",
+      "path": "handbook/team-requests.html"
+    },
+    {
+      "id": "implement-feature",
+      "title": "Implement and review a feature",
+      "source": "docs/how-to/implement-feature.md",
+      "chapter": "Work with requests",
+      "path": "handbook/implement-feature.html"
+    },
+    {
+      "id": "local-delivery",
+      "title": "Understand the local delivery worker",
+      "source": "docs/explanation/local-delivery-worker.md",
+      "chapter": "Work with requests",
+      "path": "handbook/local-delivery.html"
+    },
+    {
+      "id": "delivery-readiness",
+      "title": "Configure readiness and criterion decisions",
+      "source": "docs/how-to/configure-delivery-readiness.md",
+      "chapter": "Work with requests",
+      "path": "handbook/delivery-readiness.html"
+    },
+    {
+      "id": "delivery-publication",
+      "title": "Publish a reviewed worker candidate",
+      "source": "docs/how-to/publish-worker-candidates.md",
+      "chapter": "Work with requests",
+      "path": "handbook/delivery-publication.html"
+    },
+    {
+      "id": "worker-workspace",
+      "title": "Use the optional worker webview",
+      "source": "docs/how-to/use-worker-webview.md",
+      "chapter": "Work with requests",
+      "path": "handbook/worker-workspace.html"
+    },
+    {
+      "id": "tool-access",
+      "title": "Manage tools and MCP connections",
+      "source": "docs/how-to/manage-model-tools.md",
+      "chapter": "Work with requests",
+      "path": "handbook/tool-access.html"
+    },
+    {
+      "id": "delivery-policy",
+      "title": "Configure project delivery policy",
+      "source": "docs/reference/delivery-policy.md",
+      "chapter": "Operate the system",
+      "path": "handbook/delivery-policy.html"
+    },
+    {
+      "id": "consumption",
+      "title": "Set capacity and consumption limits",
+      "source": "docs/how-to/worker-consumption-limits.md",
+      "chapter": "Operate the system",
+      "path": "handbook/consumption.html"
+    },
+    {
+      "id": "run-metrics",
+      "title": "Understand run metrics",
+      "source": "docs/reference/worker-run-metrics.md",
+      "chapter": "Operate the system",
+      "path": "handbook/run-metrics.html"
+    },
+    {
+      "id": "monitor-worker",
+      "title": "Monitor and recover a worker",
+      "source": "docs/how-to/monitor-long-running-worker.md",
+      "chapter": "Operate the system",
+      "path": "handbook/monitor-worker.html"
+    },
+    {
+      "id": "backup-upgrade",
+      "title": "Back up and upgrade",
+      "source": "docs/how-to/upgrade-backup.md",
+      "chapter": "Operate the system",
+      "path": "handbook/backup-upgrade.html"
+    },
+    {
+      "id": "access-control",
+      "title": "Manage access and credentials",
+      "source": "docs/how-to/manage-access.md",
+      "chapter": "Operate the system",
+      "path": "handbook/access-control.html"
+    },
+    {
+      "id": "how-to-answer-and-resume-worker",
+      "title": "Answer a worker question and resume a stopped request",
+      "source": "docs/how-to/answer-and-resume-worker.md",
+      "chapter": "Operate the system",
+      "path": "handbook/how-to-answer-and-resume-worker.html"
+    },
+    {
+      "id": "how-to-assemble-independent-components",
+      "title": "Assemble independent components",
+      "source": "docs/how-to/assemble-independent-components.md",
+      "chapter": "Operate the system",
+      "path": "handbook/how-to-assemble-independent-components.html"
+    },
+    {
+      "id": "how-to-docker-agent",
+      "title": "Docker Agent compatibility",
+      "source": "docs/how-to/docker-agent.md",
+      "chapter": "Operate the system",
+      "path": "handbook/how-to-docker-agent.html"
+    },
+    {
+      "id": "how-to-factory",
+      "title": "Factory, lines and independent orchestrators",
+      "source": "docs/how-to/factory.md",
+      "chapter": "Operate the system",
+      "path": "handbook/how-to-factory.html"
+    },
+    {
+      "id": "how-to-generate-readme",
+      "title": "Generate the READMEs and their screenshots",
+      "source": "docs/how-to/generate-readme.md",
+      "chapter": "Operate the system",
+      "path": "handbook/how-to-generate-readme.html"
+    },
+    {
+      "id": "how-to-pinned-iteration-import",
+      "title": "Import an iteration into a bound line",
+      "source": "docs/how-to/pinned-iteration-import.md",
+      "chapter": "Operate the system",
+      "path": "handbook/how-to-pinned-iteration-import.html"
+    },
+    {
+      "id": "how-to-maintain-runtime",
+      "title": "Maintain the installed runtime",
+      "source": "docs/how-to/maintain-runtime.md",
+      "chapter": "Operate the system",
+      "path": "handbook/how-to-maintain-runtime.html"
+    },
+    {
+      "id": "how-to-manage-worker-processes",
+      "title": "Manage development services and worker processes",
+      "source": "docs/how-to/manage-worker-processes.md",
+      "chapter": "Operate the system",
+      "path": "handbook/how-to-manage-worker-processes.html"
+    },
+    {
+      "id": "how-to-monitor-runtime",
+      "title": "Monitor a runtime and diagnose failures",
+      "source": "docs/how-to/monitor-runtime.md",
+      "chapter": "Operate the system",
+      "path": "handbook/how-to-monitor-runtime.html"
+    },
+    {
+      "id": "how-to-operate-project-worker",
+      "title": "Operate a project worker",
+      "source": "docs/how-to/operate-project-worker.md",
+      "chapter": "Operate the system",
+      "path": "handbook/how-to-operate-project-worker.html"
+    },
+    {
+      "id": "how-to-operations",
+      "title": "Operate source-checkout fleets",
+      "source": "docs/how-to/operations.md",
+      "chapter": "Operate the system",
+      "path": "handbook/how-to-operations.html"
+    },
+    {
+      "id": "how-to-operate-with-agents",
+      "title": "Operate Werk from an agent or script",
+      "source": "docs/how-to/operate-with-agents.md",
+      "chapter": "Operate the system",
+      "path": "handbook/how-to-operate-with-agents.html"
+    },
+    {
+      "id": "how-to-operate-linux-vm",
+      "title": "Operate, back up and replace a Linux VM",
+      "source": "docs/how-to/operate-linux-vm.md",
+      "chapter": "Operate the system",
+      "path": "handbook/how-to-operate-linux-vm.html"
+    },
+    {
+      "id": "how-to-rework-worker-requests",
+      "title": "Rework a held worker request",
+      "source": "docs/how-to/rework-worker-requests.md",
+      "chapter": "Operate the system",
+      "path": "handbook/how-to-rework-worker-requests.html"
+    },
+    {
+      "id": "how-to-run-codex-task",
+      "title": "Run a Codex task and review its patch",
+      "source": "docs/how-to/run-codex-task.md",
+      "chapter": "Operate the system",
+      "path": "handbook/how-to-run-codex-task.html"
+    },
+    {
+      "id": "how-to-project-agent-integrations",
+      "title": "Use Werk from Claude Code or Codex",
+      "source": "docs/how-to/project-agent-integrations.md",
+      "chapter": "Operate the system",
+      "path": "handbook/how-to-project-agent-integrations.html"
+    },
+    {
+      "id": "how-to-worker-retention",
+      "title": "Worker journal retention",
+      "source": "docs/how-to/worker-retention.md",
+      "chapter": "Operate the system",
+      "path": "handbook/how-to-worker-retention.html"
+    },
+    {
+      "id": "frontend",
+      "title": "Frontend architecture and state",
+      "source": "docs/reference/webview-architecture.md",
+      "chapter": "Frontend reference",
+      "path": "handbook/frontend.html"
+    },
+    {
+      "id": "storybook",
+      "title": "Develop components and stories",
+      "source": "docs/how-to/generate-storybook.md",
+      "chapter": "Frontend reference",
+      "path": "handbook/storybook.html"
+    },
+    {
+      "id": "development",
+      "title": "Develop and test from source",
+      "source": "docs/how-to/development.md",
+      "chapter": "Frontend reference",
+      "path": "handbook/development.html"
+    },
+    {
+      "id": "code-quality",
+      "title": "Code quality and architecture checks",
+      "source": "docs/reference/code-quality.md",
+      "chapter": "Frontend reference",
+      "path": "handbook/code-quality.html"
+    },
+    {
+      "id": "mutation-testing",
+      "title": "Mutation testing and warnings",
+      "source": "docs/how-to/mutation-testing.md",
+      "chapter": "Frontend reference",
+      "path": "handbook/mutation-testing.html"
+    },
+    {
+      "id": "architecture",
+      "title": "System architecture",
+      "source": "docs/explanation/architecture.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/architecture.html"
+    },
+    {
+      "id": "api",
+      "title": "CLI and HTTP API",
+      "source": "docs/reference/api.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/api.html"
+    },
+    {
+      "id": "configuration",
+      "title": "Environment and configuration",
+      "source": "docs/reference/configuration.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/configuration.html"
+    },
+    {
+      "id": "releases",
+      "title": "Release contents and qualification",
+      "source": "docs/reference/releases.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/releases.html"
+    },
+    {
+      "id": "reference-access-control",
+      "title": "Access control and mutation auditing",
+      "source": "docs/reference/access-control.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/reference-access-control.html"
+    },
+    {
+      "id": "explanation-adr-001-client-server-boundaries",
+      "title": "ADR 001 — Independently deployable server and worker applications",
+      "source": "docs/explanation/adr-001-client-server-boundaries.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/explanation-adr-001-client-server-boundaries.html"
+    },
+    {
+      "id": "reference-updates",
+      "title": "Automatic updates",
+      "source": "docs/reference/updates.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/reference-updates.html"
+    },
+    {
+      "id": "explanation-pagination-ui",
+      "title": "Bounded task, worker and event views",
+      "source": "docs/explanation/pagination-ui.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/explanation-pagination-ui.html"
+    },
+    {
+      "id": "reference-pinned-context",
+      "title": "Commit-pinned requirement context",
+      "source": "docs/reference/pinned-context.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/reference-pinned-context.html"
+    },
+    {
+      "id": "reference-agent-definitions",
+      "title": "Docker Agent definitions in a worker",
+      "source": "docs/reference/agent-definitions.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/reference-agent-definitions.html"
+    },
+    {
+      "id": "reference-factory-idempotency",
+      "title": "Durable Factory mutation retries",
+      "source": "docs/reference/factory-idempotency.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/reference-factory-idempotency.html"
+    },
+    {
+      "id": "explanation-core-entities",
+      "title": "Feature Requests, Factory, production lines and workers",
+      "source": "docs/explanation/core-entities.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/explanation-core-entities.html"
+    },
+    {
+      "id": "reference-infrastructure",
+      "title": "Infrastructure renderer",
+      "source": "docs/reference/infrastructure.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/reference-infrastructure.html"
+    },
+    {
+      "id": "reference-feature-requests",
+      "title": "Markdown feature requests",
+      "source": "docs/reference/feature-requests.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/reference-feature-requests.html"
+    },
+    {
+      "id": "reference-observability",
+      "title": "Observability and monitoring contracts",
+      "source": "docs/reference/observability.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/reference-observability.html"
+    },
+    {
+      "id": "reference-portable-apps",
+      "title": "Portable Node applications",
+      "source": "docs/reference/portable-apps.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/reference-portable-apps.html"
+    },
+    {
+      "id": "tutorials-linux-vm-first-task",
+      "title": "Prepare a Linux VM deployment",
+      "source": "docs/tutorials/linux-vm-first-task.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/tutorials-linux-vm-first-task.html"
+    },
+    {
+      "id": "tutorials-local-first-task",
+      "title": "Run your first local task",
+      "source": "docs/tutorials/local-first-task.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/tutorials-local-first-task.html"
+    },
+    {
+      "id": "reference-runtime-cli",
+      "title": "Runtime operator CLI",
+      "source": "docs/reference/runtime-cli.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/reference-runtime-cli.html"
+    },
+    {
+      "id": "reference-security",
+      "title": "Security and authority boundaries",
+      "source": "docs/reference/security.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/reference-security.html"
+    },
+    {
+      "id": "reference-shared-feature-intake",
+      "title": "Shared Git feature intake contract",
+      "source": "docs/reference/shared-feature-intake.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/reference-shared-feature-intake.html"
+    },
+    {
+      "id": "reference-system-definition",
+      "title": "System YAML definition",
+      "source": "docs/reference/system-definition.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/reference-system-definition.html"
+    },
+    {
+      "id": "explanation-twelve-factor",
+      "title": "Twelve-factor principles and Werk's stateful boundary",
+      "source": "docs/explanation/twelve-factor.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/explanation-twelve-factor.html"
+    },
+    {
+      "id": "explanation-ui-journey",
+      "title": "UI journey and layout contract",
+      "source": "docs/explanation/ui-journey.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/explanation-ui-journey.html"
+    },
+    {
+      "id": "documentation-index",
+      "title": "Werk documentation",
+      "source": "docs/index.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/documentation-index.html"
+    },
+    {
+      "id": "explanation-runtime-layout",
+      "title": "Why the runtime has separate services",
+      "source": "docs/explanation/runtime-layout.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/explanation-runtime-layout.html"
+    },
+    {
+      "id": "reference-worker-context",
+      "title": "Worker pinned context verification",
+      "source": "docs/reference/worker-context.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/reference-worker-context.html"
+    },
+    {
+      "id": "reference-request-gates",
+      "title": "Worker request gates",
+      "source": "docs/reference/request-gates.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/reference-request-gates.html"
+    },
+    {
+      "id": "explanation-snapshots",
+      "title": "Worker snapshots and time-series semantics",
+      "source": "docs/explanation/snapshots.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/explanation-snapshots.html"
+    },
+    {
+      "id": "reference-model-interaction",
+      "title": "Worker–model interaction contract",
+      "source": "docs/reference/model-interaction.md",
+      "chapter": "Architecture and contracts",
+      "path": "handbook/reference-model-interaction.html"
+    }
+  ],
+  "system": {
+    "packages": [
+      {
+        "name": "@werk/factory",
+        "source": "src/factory/package.json",
+        "directory": "src/factory"
+      },
+      {
+        "name": "@werk/orchestrator",
+        "source": "src/orchestrator/package.json",
+        "directory": "src/orchestrator"
+      },
+      {
+        "name": "@werk/shared",
+        "source": "src/shared/package.json",
+        "directory": "src/shared"
+      },
+      {
+        "name": "@werk/worker",
+        "source": "src/worker/package.json",
+        "directory": "src/worker"
+      }
+    ],
+    "flows": [
+      {
+        "from": "Factory",
+        "to": "Orchestrator",
+        "purpose": "Route an intake request to a production line"
+      },
+      {
+        "from": "Orchestrator",
+        "to": "Worker",
+        "purpose": "Dispatch a queued task to a matching worker"
+      },
+      {
+        "from": "Worker",
+        "to": "Model provider",
+        "purpose": "Execute the selected model within request controls"
+      },
+      {
+        "from": "Worker",
+        "to": "Human review",
+        "purpose": "Resolve checkpoints and review file changes"
+      },
+      {
+        "from": "Worker",
+        "to": "Orchestrator",
+        "purpose": "Report the attempt outcome and evidence"
+      }
+    ],
+    "note": "UI fixtures illustrate contracts; screenshots are not evidence of live model execution. The Worker can also accept tasks independently."
+  }
+}

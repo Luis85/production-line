@@ -1,3 +1,5 @@
+import { unknownProviderOutcome } from '../application/provider-outcome.js';
+import { ProviderModelError } from '../application/model-contract.js';
 import { createHash } from 'node:crypto';
 import { lstatSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -112,7 +114,12 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
   const catalog = new Map(operations.map(operation => [operation.definition.name, operation]));
   if (catalog.size !== operations.length) throw new ToolAccessError('Tool names are not unique.');
   const manifest: ToolManifest = freeze({ revision: policy.revision, tools: structuredClone(operations.map(operation => operation.definition)), limits: manifestLimits(policy, operations.map(operation => operation.definition.name), mcpTimeouts, resolved, options) });
-  const lifetime = new AbortController();
+  const lifetime = new AbortController(), failure = new AbortController();
+  let fatal: ProviderModelError | undefined;
+  const stopUncertain = (reason: 'outcome_unknown' | 'process_stop_unconfirmed') => {
+    if (!fatal || reason === 'process_stop_unconfirmed') fatal = new ProviderModelError(reason);
+    failure.abort(fatal);
+  };
   const pending = new Set<Promise<ToolResult>>();
   let calls = 0, refused = 0, startedAt = 0, deadline: AbortSignal | undefined, closed = false, exhausted: ToolBudgetEvidence['reason'] | undefined;
   let previous: Promise<unknown> = Promise.resolve();
@@ -127,6 +134,7 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
     }
   };
   const authorize = (signal: AbortSignal) => {
+    if (fatal) throw fatal;
     if (closed || signal.aborted) throw new ToolAccessError('Tool execution was cancelled or its invocation ended.');
     grants();
   };
@@ -142,7 +150,7 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
     return note ? { ...result, content: [...result.content, { type: 'text', text: note }] } : result;
   };
   return {
-    manifest,
+    manifest, failureSignal: failure.signal, stopUncertain,
     limits: Object.freeze({ maxCalls, maxRuntimeMs, commandTimeoutMs }),
     assertAvailable: authorize,
     ...(options.worktree && pinnedWorktree && options.development?.prepareNative ? {
@@ -164,9 +172,9 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
         calls++;
         if (Buffer.byteLength(JSON.stringify(args) ?? '') > 65536) throw new ToolAccessError('Tool arguments exceeded the 64 KiB limit.');
         input = structuredClone(args);
-      } catch (error) { return Promise.reject(error instanceof ToolAccessError ? error : new ToolAccessError('Invalid tool arguments.')); }
+      } catch (error) { return Promise.reject(unknownProviderOutcome(error) || error instanceof ToolAccessError ? error : new ToolAccessError('Invalid tool arguments.')); }
       if (!deadline) { startedAt = Date.now(); deadline = AbortSignal.timeout(maxRuntimeMs); }
-      const combined = AbortSignal.any([signal, lifetime.signal, deadline]);
+      const combined = AbortSignal.any([signal, lifetime.signal, failure.signal, deadline]);
       // Serialize calls so command side effects and file reads have a defined order.
       const concurrent = catalog.get(name)!.concurrent === true;
       const operation = (concurrent ? Promise.resolve() : previous).then(async (): Promise<ToolResult> => {
@@ -179,6 +187,9 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
           if (!result || !Array.isArray(result.content) || result.content.some(item => !item || item.type !== 'text' || typeof item.text !== 'string') || Buffer.byteLength(JSON.stringify(result)) > 131072) throw new BuiltinToolError('Tool result exceeded the 128 KiB limit or had an unsupported format.');
           return noted(result);
         } catch (error) {
+          const unknown = unknownProviderOutcome(error);
+          if (unknown) { stopUncertain(unknown); throw fatal; }
+          if (fatal) throw fatal;
           if (windowEnded(signal)) { grants(); return refuse('window', true); }
           authorize(combined);
           const text = error instanceof BuiltinToolError ? error.message : 'Tool execution failed. Check the saved connection, command, or worktree and try again.' + (workspaceTools.has(name) ? ' ' + chatWorkspaceHint : '');
@@ -190,6 +201,6 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
       void operation.then(() => pending.delete(operation), () => pending.delete(operation));
       return operation;
     },
-    async close() { closed = true; lifetime.abort(); await Promise.allSettled([...pending]); }
+    async close() { closed = true; lifetime.abort(); await Promise.allSettled([...pending]); if (fatal) throw fatal; }
   };
 }

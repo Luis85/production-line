@@ -5,7 +5,11 @@ import USelect from '@nuxt/ui/components/Select.vue';
 import UTextarea from '@nuxt/ui/components/Textarea.vue';
 import UAlert from '@nuxt/ui/components/Alert.vue';
 import RequestGateEvidence from './RequestGateEvidence.vue';
+import DeliveryReadinessPanel from './DeliveryReadinessPanel.vue';
+import DeliveryCriterionDecisions from './DeliveryCriterionDecisions.vue';
+import { reportedReviewMinutes } from '../delivery-readiness-view';
 import DeliveryControls from './DeliveryControls.vue';
+import DeliveryPublicationPanel from './DeliveryPublicationPanel.vue';
 import DeliveryHumanReview from './DeliveryHumanReview.vue';
 import MessageContent from './MessageContent.vue';
 import type { WorkerRequest } from '../../application/request-gates';
@@ -57,6 +61,8 @@ const {
         <UButton variant="outline" :loading="isPending('retry')" :disabled="busy" @click="send(operation)">Retry saved action</UButton>
       </div>
       <DeliveryControls v-if="view.delivery" :run="view.delivery" :disabled="busy || loading || gateState.stale || !!operation || !!props.disabled" :pending="isPending" @command="deliveryCommand" />
+      <DeliveryReadinessPanel :subject="view" :evaluation="currentEvaluation('ready')" :disabled="!mutable" :draft="draft" @update="setDraft" @command="command" />
+      <DeliveryCriterionDecisions :subject="view" :disabled="!mutable" :draft="draft" @update="setDraft" @command="command" />
       <form v-if="canAttest" id="request-attestation" class="request-attestation" @submit.prevent="attest">
         <h3>Record your review</h3>
         <p>This request requires human acceptance. Review its result and evidence, then record your review for this exact input and output.</p>
@@ -71,15 +77,17 @@ const {
           :readonly="busy"
           @update:model-value="setDraft('attestation', String($event))"
         />
+        <label for="request-review-minutes">Time spent reviewing · optional minutes</label><input id="request-review-minutes" type="number" min="0" max="1440" step="any" :value="draft('review-minutes')" :readonly="busy" @input="setDraft('review-minutes', ($event.target as HTMLInputElement).value)" /><p v-if="!reportedReviewMinutes(draft('review-minutes')).valid" class="error-text">Enter a number from 0 to 1,440 minutes, or leave it blank.</p><p class="request-gate-note">Recorded as your estimate, separately from elapsed time with this page open.</p>
         <p class="request-gate-note">Recording acceptance re-evaluates the saved completion evidence. It does not run verification commands or merge changes.</p>
-        <p v-if="view.delivery?.review && !humanReviewReady" class="request-gate-note">Acceptance requires passing recorded checks and an explicit passing observation for every required human criterion.</p>
-        <div class="request-gate-actions"><UButton type="submit" :disabled="!mutable || !draft('attestation').trim() || !humanReviewReady" :loading="isPending('attest')">Record acceptance</UButton><UButton v-if="view.delivery?.review" type="button" color="neutral" variant="outline" :disabled="!mutable || !draft('attestation').trim()" :loading="isPending('request_changes')" @click="requestChanges">Request changes</UButton></div>
+        <p v-if="view.delivery?.review && !humanReviewReady" class="request-gate-note">Acceptance requires recorded passing evidence or a separate current policy-authorized decision for each required criterion. Record explicit observations for remaining human criteria.</p>
+        <div class="request-gate-actions"><UButton type="submit" :disabled="!mutable || !reportedReviewMinutes(draft('review-minutes')).valid || !draft('attestation').trim() || !humanReviewReady" :loading="isPending('attest')">Record acceptance</UButton><UButton v-if="view.delivery?.review" type="button" color="neutral" variant="outline" :disabled="!mutable || !reportedReviewMinutes(draft('review-minutes')).valid || !draft('attestation').trim()" :loading="isPending('request_changes')" @click="requestChanges">Request changes</UButton></div>
       </form>
       <div v-else-if="review.evidence.attested" id="request-acceptance-recorded" class="request-attestation-recorded" tabindex="-1">
         <h3>Acceptance recorded for this result</h3>
         <p>Your note is saved for the current input and output. {{ currentEvaluation('done')?.passed ? 'The configured completion rules passed; merge remains a separate human action.' : 'Completion still needs attention. Inspect the remaining findings before evaluating again.' }}</p>
         <details><summary>Read acceptance note</summary><MessageContent :text="view.attestation!.note" /></details>
       </div>
+      <DeliveryPublicationPanel v-if="view.delivery" :subject="view" :disabled="busy || loading || gateState.stale || !!operation || !!props.disabled" :pending="isPending" @command="command" />
       <p v-if="pendingModel">The model is waiting for input. Answer its checkpoint in the interaction or the linked Task note.</p>
       <p v-if="activeExecution && !view.delivery">The worker is {{ view.execution?.status === 'prepared' ? 'queued' : 'running' }} with its accepted scope. Its task controls can stop the invocation.</p>
       <p v-if="activeReview && !view.delivery" role="status">An instruction review or proposal is queued or running. It cannot accept its own proposal or satisfy verified checks.</p>

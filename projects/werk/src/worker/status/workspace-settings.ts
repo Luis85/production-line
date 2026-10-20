@@ -1,3 +1,4 @@
+import type { RepositoryAssignment } from '../application/repositories.js';
 import type { WorkspaceContext } from './workspace-context.js';
 import type { ToolAccessView } from '../application/tool-policy.js';
 import { BuiltinToolError, chatToolDirectory } from '../infrastructure/builtin-tools.js';
@@ -72,7 +73,7 @@ export async function discoverToolAccess(workspace: WorkspaceContext, input: unk
 }
 
 export async function withIdleConfiguration<T>(workspace: WorkspaceContext, operation: () => Promise<T>): Promise<T>{
-  if (!workspace.acceptingTasks || workspace.configurationUpdating || workspace.sharedRuntime.intake.busy || !workspace.settings.value.board.paused || workspace.repositoriesUpdating || workspace.repositoryPreparations || workspace.sessions.busy || workspace.board.active || workspace.get().activeTasks.length || workspace.get().queuedTasks?.length)
+  if (!workspace.acceptingTasks || workspace.configurationUpdating || workspace.featureProjects.busy || !workspace.settings.value.board.paused || workspace.repositoriesUpdating || workspace.repositoryPreparations || workspace.sessions.busy || workspace.board.active || workspace.get().activeTasks.length || workspace.get().queuedTasks?.length)
     throw new DomainError("conflict", "Pause intake and finish or cancel queued tasks and active replies before changing execution profiles.");
   workspace.configurationUpdating = true;
   try { return await operation(); } finally { workspace.configurationUpdating = false; }
@@ -135,18 +136,15 @@ export async function updateSettings(workspace: WorkspaceContext, body: unknown)
   };
   if (input?.repositories !== undefined) {
     const proposed = (input.repositories as { items?: { id?: unknown; path?: unknown }[] })?.items;
-    if (workspace.sharedRuntime.intake.busy) throw new DomainError('conflict', 'Wait for shared synchronization before changing repository assignments.');
-    if (Array.isArray(proposed)) for (const id of workspace.sharedRuntime.intake.requiredRepositoryIds()) {
-      const current = workspace.settings.value.repositories.items.find(item => item.id === id);
-      const next = proposed.find(item => item.id === id);
-      if (!next || next.path !== current?.path) throw new DomainError('conflict', 'Keep the repository assignment while shared intake is enabled or owns unfinished publication.');
-    }
+    if (workspace.featureProjects.busy) throw new DomainError('conflict', 'Wait for shared synchronization before changing repository assignments.');
+    if (Array.isArray(proposed)) workspace.featureProjects.assertAssignments(proposed as RepositoryAssignment[]);
     assertRepositoryChangeAllowed(workspace);
     workspace.repositoriesUpdating = true;
     try {
       const result = await update();
       await workspace.repositoryDiscovery.assignmentsChanged(workspace.settings.value.repositories.items);
       await workspace.repositories.configure(workspace.settings.value.repositories);
+      await workspace.featureProjects.configure();
       await workspace.processes?.reconcileGrants();
       return result;
     } finally { workspace.repositoriesUpdating = false; }

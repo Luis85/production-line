@@ -1,36 +1,75 @@
 import { DomainError } from '../../shared/errors.js';
-/** One worker owns exactly one execution permit across every task source. */
+import { MAX_WORKER_PARALLEL } from './delivery-coordination.js';
+export interface ExecutionPermitOptions { continuation?: boolean; projectId?: string; projectLimit?: number; }
+export interface ReservedExecutionPermit { sessionId: string; projectId: string | null; projectLimit: number; }
+export interface ActiveExecutionPermit { sessionId: string; projectId: string | null; projectLimit: number; startedAt: number; monotonicStartedAt: number; }
+interface WaitingPermit extends ExecutionPermitOptions { id: string; signal: AbortSignal; grant: (release: () => void) => void; reject: (error: unknown) => void; cancel: () => void; }
+/** One authority owns all execution permits. Unscoped legacy operations remain exclusive. */
 export class SerialExecutor {
-  private active: string | null = null;
-  private acquiredAt: number | null = null;
-  private acquiredMonotonicAt: number | null = null;
+  private readonly active = new Map<string, ActiveExecutionPermit>();
+  private readonly retained = new Set<string>();
   private readonly paused: () => boolean;
-  private queue: { continuation: boolean; id: string; signal: AbortSignal; grant: (release: () => void) => void; reject: (error: unknown) => void; cancel: () => void }[] = [];
-  constructor(paused: () => boolean = () => false) { this.paused = paused; }
-  get current() { return this.active; }
-  get startedAt() { return this.acquiredAt; }
-  get startedMonotonicAt() { return this.acquiredMonotonicAt; }
-  get busy() { return this.active !== null || this.queue.length > 0; }
+  private readonly configuredLimit: () => number;
+  private queue: WaitingPermit[] = [];
+  private readonly unresolved: () => ReservedExecutionPermit[];
+  constructor(paused: () => boolean = () => false, limit: () => number = () => 1, unresolved: () => ReservedExecutionPermit[] = () => []) { this.paused = paused; this.configuredLimit = limit; this.unresolved = unresolved; }
+  get limit() { const value = this.configuredLimit(); return Number.isSafeInteger(value) ? Math.max(1, Math.min(MAX_WORKER_PARALLEL, value)) : 1; }
+  get executions(): ActiveExecutionPermit[] { return [...this.active.values()].map(item => ({ ...item })); }
+  get reservedExecutions(): ReservedExecutionPermit[] { return [...new Map(this.unresolved().filter(item => !this.active.has(item.sessionId)).map(item => [item.sessionId, { ...item }])).values()]; }
+  private get occupancy() { return [...this.active.values(), ...this.reservedExecutions]; }
+  get current() { return this.active.keys().next().value ?? null; }
+  get startedAt() { return this.active.values().next().value?.startedAt ?? null; }
+  get startedMonotonicAt() { return this.active.values().next().value?.monotonicStartedAt ?? null; }
+  get busy() { return this.occupancy.length > 0 || this.queue.length > 0; }
   get waiting() { return this.queue.length; }
-  async acquire(id: string, signal: AbortSignal, options: { continuation?: boolean } = {}): Promise<() => void> {
+  has(id: string) { return this.active.has(id); }
+  /** A failed durable uncertainty write keeps its live permit until restart recovery can inspect the run. */
+  retainUncertain(id: string): void { if (this.active.has(id)) this.retained.add(id); }
+  assertResolved(id: string, options: ExecutionPermitOptions = {}): void {
+    if (this.reservedExecutions.some(item => item.sessionId === id || item.projectId === null || !options.projectId)) throw new DomainError('conflict', 'Reconcile the unresolved execution before starting or resuming model work.');
+  }
+  async acquire(id: string, signal: AbortSignal, options: ExecutionPermitOptions = {}): Promise<() => void> {
     signal.throwIfAborted();
+    if (options.projectId !== undefined && (!options.projectId.trim() || options.projectId.length > 4096) || options.projectLimit !== undefined && (!Number.isSafeInteger(options.projectLimit) || options.projectLimit < 1 || options.projectLimit > MAX_WORKER_PARALLEL)) throw new DomainError('invalid_input', 'Execution permits require a project identity and a limit from 1 to 8.');
+    this.assertResolved(id, options);
     if (this.queue.length >= 64) throw new DomainError('conflict', 'Worker queue is full. Wait for a task to finish.');
     return new Promise((grant, reject) => {
-      const entry = { id, signal, continuation: options.continuation === true, grant, reject, cancel: () => { const index = this.queue.indexOf(entry); if (index >= 0) { this.queue.splice(index, 1); reject(signal.reason); } } };
+      const entry: WaitingPermit = { ...options, id, signal, continuation: options.continuation === true, grant, reject, cancel: () => { const index = this.queue.indexOf(entry); if (index >= 0) { this.queue.splice(index, 1); reject(signal.reason); this.wake(); } } };
       signal.addEventListener('abort', entry.cancel, { once: true }); this.queue.push(entry); this.wake();
     });
   }
-  wake() {
-    if (this.active !== null) return;
-    const index = this.paused() ? this.queue.findIndex(entry => entry.continuation) : 0;
-    if (index < 0) return;
-    const entry = this.queue.splice(index, 1)[0]; if (!entry) return;
-    entry.signal.removeEventListener('abort', entry.cancel);
-    if (entry.signal.aborted) { entry.reject(entry.signal.reason); this.wake(); return; }
-    this.active = entry.id; this.acquiredAt = Date.now(); this.acquiredMonotonicAt = performance.now(); let released = false;
-    entry.grant(() => { if (released) return; released = true; this.active = null; this.acquiredAt = null; this.acquiredMonotonicAt = null; this.wake(); });
+  canStart(id: string, options: ExecutionPermitOptions = {}): boolean {
+    return (!this.paused() || options.continuation === true) && this.occupancy.length < this.limit &&
+      !this.queue.some(entry => !entry.projectId && (!this.paused() || entry.continuation)) && this.permitted({ id, ...options });
   }
-  async run<T>(id: string, signal: AbortSignal, action: () => Promise<T>, options: { continuation?: boolean } = {}): Promise<T> {
+  private permitted(entry: Pick<WaitingPermit, 'id' | 'projectId' | 'projectLimit'>): boolean {
+    const occupied = this.occupancy;
+    if (occupied.some(item => item.sessionId === entry.id)) return false;
+    if (!entry.projectId || occupied.some(item => item.projectId === null)) return occupied.length === 0;
+    const project = occupied.filter(item => item.projectId === entry.projectId);
+    const limit = Math.min(entry.projectLimit ?? 1, ...project.map(item => item.projectLimit));
+    return project.length < limit;
+  }
+  wake() {
+    while (this.occupancy.length < this.limit) {
+      let index = -1;
+      for (let i = 0; i < this.queue.length; i++) {
+        const entry = this.queue[i];
+        if (this.paused() && !entry.continuation) continue;
+        if (this.permitted(entry)) { index = i; break; }
+        // Drain existing work before the next unscoped operation; later work cannot starve it.
+        if (!entry.projectId) break;
+      }
+      if (index < 0) return;
+      const entry = this.queue.splice(index, 1)[0];
+      entry.signal.removeEventListener('abort', entry.cancel);
+      if (entry.signal.aborted) { entry.reject(entry.signal.reason); continue; }
+      this.active.set(entry.id, { sessionId: entry.id, projectId: entry.projectId ?? null, projectLimit: entry.projectLimit ?? 1, startedAt: Date.now(), monotonicStartedAt: performance.now() });
+      let released = false;
+      entry.grant(() => { if (released || this.retained.has(entry.id)) return; released = true; this.active.delete(entry.id); this.wake(); });
+    }
+  }
+  async run<T>(id: string, signal: AbortSignal, action: () => Promise<T>, options: ExecutionPermitOptions = {}): Promise<T> {
     const release = await this.acquire(id, signal, options);
     try { signal.throwIfAborted(); return await action(); } finally { release(); }
   }

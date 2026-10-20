@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "kind": "local-delivery-final-local-validation",
+  "recordedAt": "2026-10-20T17:58:54.246Z",
+  "qualification": "frozen-working-tree-local-evidence",
+  "platform": "Linux",
+  "baseCommit": "8fc99c379c219b430f432d5fe16a2950d7eef0c4",
+  "baseCommitAloneDoesNotIdentifyTestedSource": true,
+  "logs": {
+    "check-fast.txt": {
+      "source": "check-fast-frozen-prd.log",
+      "sha256": "daed9bb65aa449055b8da676b0193fb93ccd008440b6ed1692abe5062910519d",
+      "retained": "complete"
+    },
+    "worker-build.txt": {
+      "source": "worker-full-prd-final-build.log",
+      "sha256": "18b858e510d05e900f0f7743e36ef55aed870a8c2fb835d325a3c71085fbc06b",
+      "retained": "complete"
+    },
+    "rebuilt-regressions.txt": {
+      "source": "rebuilt-final-regressions.log",
+      "sha256": "7c7d274772ffb4e461fe38269562e1836157240cfe7ad6e2f9bab3a4eab96567",
+      "retained": "complete"
+    },
+    "broad-test-failures.txt": {
+      "source": "full-test-full-prd.log",
+      "fullLogSha256": "dbe50a94b60c794d88b02540e4b845ae0446c2cd82cdb001e5e09b1b6480e992",
+      "sha256": "2a686e5bd27edec25e29ac04755f561bc232c767ef915f515b15db9158562c1a",
+      "retained": "final count and failure-detail excerpt; preceding passing output omitted; trailing spaces and tabs removed from line ends",
+      "originalExcerptSha256": "9c4010b4ebe53bcc214387ce0dc82f6aa6ec60444cab9df726659a400a429bd6"
+    }
+  },
+  "checks": {
+    "workerBuildAndPortablePackage": "passed",
+    "fast": {
+      "passed": true,
+      "maintainedTestFiles": 477,
+      "sourceImports": 1200,
+      "testTypeErrors": 0,
+      "locFiles": 1139,
+      "locViolations": 0,
+      "architectureTestsPassed": 19,
+      "fallowSourceMappings": 1196,
+      "fallowNewFindings": 0,
+      "fallowArchitectureNewFindings": 0,
+      "fallowReviewedRetainedFindings": 177
+    },
+    "broadBeforeFinalRebuild": {
+      "tests": 3066,
+      "passed": 3041,
+      "failed": 10,
+      "skipped": 15,
+      "durationMs": 637696.433541,
+      "status": "failed",
+      "failureCategories": {
+        "addedTestsWithStaleDistribution": 5,
+        "migrationFixturesAndInitIdempotency": 3,
+        "apiSemanticExpectation": 1,
+        "durableSettlementFixtureRace": 1
+      }
+    },
+    "rebuiltTargetedRegressions": {
+      "tests": 99,
+      "passed": 99,
+      "failed": 0,
+      "skipped": 0,
+      "durationMs": 6631.973751,
+      "coversAllTenEarlierFailures": true
+    },
+    "finalAggregateLocalRerun": false
+  },
+  "benchmark": {
+    "path": "intake-1000-65536.json",
+    "sha256": "3268b57a5411e1b94046dac10ba93a3c48842f586b5bdc77e5331ac3347c8b57",
+    "hostWorkload": "quiet after builds, tests and browser activity completed",
+    "readyAdmissionAndTelemetryWrites": "not exercised; canonical drafts with admission disabled"
+  },
+  "remoteCI": {
+    "status": "not yet qualified in this snapshot",
+    "pullRequest": "https://github.com/Luis85/production-line/pull/50"
+  },
+  "limitations": [
+    "Targeted suites overlap and are not summed into an aggregate pass count.",
+    "The final local aggregate was not rerun after all corrections.",
+    "Native Windows, live Claude and the real three-provider compatibility matrix remain unqualified.",
+    "No live GitHub publication was exercised.",
+    "The browser source digest applies to its independently retained browser snapshot, not these later backend observations."
+  ]
+}

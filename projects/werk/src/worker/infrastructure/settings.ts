@@ -1,3 +1,4 @@
+import { MAX_WORKER_PARALLEL } from '../application/delivery-coordination.js';
 import { authenticationDescription, providerCapabilities, validateAuthenticationMode } from '../application/provider-capabilities.js';
 import { validateModelEffort, validateModelName } from '../application/model-effort.js';
 import { defaultConsumptionPolicy, validateConsumptionPolicy, type ConsumptionPolicy } from '../application/consumption.js';
@@ -36,7 +37,7 @@ export class WorkerSettings {
   async init() {
     const configured = process.env.WERK_WORKER_MAX_RUNTIME_MS;
     if (configured !== undefined) this.executionOverride = validateExecutionPolicy({ maxRuntimeMs: /^\d+$/.test(configured) ? Number(configured) : NaN });
-    try { const saved = JSON.parse(await readBoundedFile(join(this.directory, 'workspace-settings.json'), 65536)); if (saved?.board) saved.board.maxParallel = 1; if (saved?.execution !== undefined) this.executionSource = 'saved_settings'; this.value = this.validate(saved); this.savedExecution = { ...this.value.execution }; await this.persist(this.value); }
+    try { const saved = JSON.parse(await readBoundedFile(join(this.directory, 'workspace-settings.json'), 65536)); if (saved?.execution !== undefined) this.executionSource = 'saved_settings'; this.value = this.validate(saved); this.savedExecution = { ...this.value.execution }; await this.persist(this.value); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       for (const provider of this.value.providers) if (provider.id.endsWith('-cli') && !provider.executable) provider.executable = await findExecutable(provider.id === 'codex-cli' ? 'codex' : provider.id === 'cursor-cli' ? 'agent' : 'claude');
       this.value = this.validate(this.value); await this.persist(this.value);
@@ -88,13 +89,14 @@ export class WorkerSettings {
       if (body.expectedBoard !== undefined) {
         if (body.board === undefined) throw new DomainError('invalid_input', 'A queue baseline requires queue settings to save.');
         const fields = ['queueCapacity', 'orchestratorQueue', 'order'] as const;
+        const supported = [...fields, 'maxParallel'];
         // Pause is an independent operational action, never part of a queue editor's stale snapshot.
-        const patch = object(body.board, 'Queue settings', [...fields]);
-        if (!fields.some(key => patch[key] !== undefined)) throw new DomainError('invalid_input', 'A queue baseline requires queue settings to save.');
-        const expected = object(body.expectedBoard, 'Queue settings baseline', [...fields]);
-        if (fields.some(key => expected[key] === undefined)) throw new DomainError('invalid_input', 'Use the complete queue settings baseline before saving.');
+        const patch = object(body.board, 'Queue settings', supported);
+        if (!supported.some(key => patch[key] !== undefined)) throw new DomainError('invalid_input', 'A queue baseline requires queue settings to save.');
+        const expected = object(body.expectedBoard, 'Queue settings baseline', supported);
+        if (fields.some(key => expected[key] === undefined) || patch.maxParallel !== undefined && expected.maxParallel === undefined) throw new DomainError('invalid_input', 'Use the complete queue settings baseline before saving.');
         this.validateBoard({ ...this.value.board, ...expected });
-        if (fields.some(key => expected[key] !== this.value.board[key]))
+        if (fields.some(key => expected[key] !== this.value.board[key]) || expected.maxParallel !== undefined && expected.maxParallel !== this.value.board.maxParallel)
           throw new DomainError('conflict', 'Queue settings changed in another session. Reload the current queue settings before saving.');
       }
       if (body.expectedDuration !== undefined) {
@@ -204,6 +206,6 @@ export class WorkerSettings {
     return value;
   }
   private validateBoard(b: WorkspaceSettings['board']) {
-    if (!b || typeof b.paused !== 'boolean' || !['fifo', 'priority'].includes(b.order) || !Number.isInteger(b.maxParallel) || b.maxParallel !== 1 || !Number.isInteger(b.queueCapacity) || b.queueCapacity < 1 || b.queueCapacity > 64 || !Number.isInteger(b.orchestratorQueue) || b.orchestratorQueue < 0 || b.orchestratorQueue > 64) throw new DomainError('invalid_input', 'Workers execute one task at a time; local queue: 1–64; orchestrator queue: 0–64.');
+    if (!b || typeof b.paused !== 'boolean' || !['fifo', 'priority'].includes(b.order) || !Number.isInteger(b.maxParallel) || (b.maxParallel < 1 || b.maxParallel > MAX_WORKER_PARALLEL) || !Number.isInteger(b.queueCapacity) || b.queueCapacity < 1 || b.queueCapacity > 64 || !Number.isInteger(b.orchestratorQueue) || b.orchestratorQueue < 0 || b.orchestratorQueue > 64) throw new DomainError('invalid_input', 'Worker concurrency: 1–8; local queue: 1–64; orchestrator queue: 0–64.');
   }
 }
