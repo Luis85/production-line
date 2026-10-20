@@ -103,21 +103,22 @@ test('Windows preserves empty, quoted and Unicode arguments and raw stdin withou
 });
 
 test('Windows status and account checks stay bounded when exited providers leave descendants holding output pipes', { ...windows, timeout: 45000 }, async t => {
-  const accounts = new ProviderAccountChecks(); t.after(() => accounts.close());
+  const accounts = new ProviderAccountChecks(), checks = new ProviderStatusChecks();
+  t.after(() => { accounts.close(); checks.close(); });
   const f = await treeFixture(t), scriptFile = join(f.directory, 'status.js');
   await writeFile(scriptFile, `const {spawn}=require('node:child_process');const c=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:['ignore','inherit','inherit']});c.unref();require('node:fs').appendFileSync(${JSON.stringify(f.pidFile)},String(c.pid)+'\\n');require('node:fs').appendFileSync(${JSON.stringify(f.pidFile + '.args')},JSON.stringify(process.argv.slice(2))+'\\n');process.stdout.write(process.argv.includes('--version')?'2.1.257\\n':JSON.stringify({loggedIn:true,email:'member@example.com',orgName:'Fixture team',subscriptionType:'pro',authMethod:'claude.ai',accessToken:'private-fixture-token'}));`);
   const executable = join(f.directory, 'status-fixture.exe'), source = join(f.directory, 'status-fixture.cs');
   await writeFile(source, `using System;using System.Diagnostics;public class Fixture {public static int Main(string[] args) {var start=new ProcessStartInfo {FileName=${JSON.stringify(process.execPath)},Arguments=${JSON.stringify('"' + scriptFile + '" ')}+String.Join(" ",args),UseShellExecute=false};using(var child=Process.Start(start)){child.WaitForExit();return child.ExitCode;}}}`);
   const powershell = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
   await executeFile(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '$ErrorActionPreference="Stop"; Add-Type -Path $env:WERK_TEST_SOURCE -OutputAssembly $env:WERK_TEST_EXE -OutputType ConsoleApplication'], { env: { ...process.env, WERK_TEST_SOURCE: source, WERK_TEST_EXE: executable }, timeout: 20000, windowsHide: true });
-  const result = await bounded(new ProviderStatusChecks().check(connection('claude-cli', { executable })));
+  const result = await bounded(checks.check(connection('claude-cli', { executable })));
   assert.equal(result.authentication, 'authenticated');
   const account = await bounded(accounts.check(connection('claude-cli', { executable })));
   assert.equal(account.signedIn, true); assert.equal(account.email, 'member@example.com');
   assert.equal(account.organization, 'Fixture team'); assert.equal(account.subscription, 'pro');
   assert.doesNotMatch(JSON.stringify(account), /private-fixture-token/);
   const calls = (await readFile(f.pidFile + '.args', 'utf8')).trim().split('\n').map(value => JSON.parse(value));
-  assert.deepEqual(calls, [['--version'], ['auth', 'status'], ['auth', 'status', '--json']]);
+  assert.deepEqual(calls, [['--version'], ['auth', 'status'], ['auth', 'status']]);
   const pids = await f.pids(); assert.equal(pids.length, 3, 'version, auth, and structured account probes all ran');
   await waitFor(() => pids.every(pid => !alive(pid)));
 });

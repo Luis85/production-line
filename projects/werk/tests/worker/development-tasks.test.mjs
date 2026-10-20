@@ -16,10 +16,11 @@ import { SharedFeatureLifecycle } from '../../src/worker/dist/worker/application
 import { sharedFeatureRequestReference } from '../../src/worker/dist/worker/application/feature-request-reference.js';
 
 const run = promisify(execFile), delay = ms => new Promise(resolve => setTimeout(resolve, ms));
-const attemptSettleTimeoutMs = 20000;
-// Native Windows containment adds process startup cost to each Git/check operation.
-const settleTimeoutMs = process.platform === 'win32' ? 120000 : attemptSettleTimeoutMs;
+// Native Windows containment adds process startup cost to every attempt's Git/check operations.
+const attemptSettleTimeoutMs = process.platform === 'win32' ? 120000 : 20000;
 const testTimeoutMs = process.platform === 'win32' ? 180000 : 120000;
+// Four bounded attempts plus fixture setup, restart and cleanup.
+const repairTestTimeoutMs = Math.max(testTimeoutMs, (defaultGatePolicy().rework.maxAttempts + 2) * attemptSettleTimeoutMs);
 const multiPhaseTimeoutMs = process.platform === 'win32' ? 240000 : testTimeoutMs;
 const complete = text => ({ type: 'completed', text });
 const checkSource = "import assert from 'node:assert/strict'; import { readFileSync } from 'node:fs'; assert.equal(readFileSync('approved.txt', 'utf8'), 'after\\n'); console.log('Checked the actual edited source.');";
@@ -95,7 +96,7 @@ async function fixture(t, execute, { verification = true, native = false, observ
       // Exhaustion includes a real check and Git checkpoint for every frozen repair attempt.
       const requestId = board.executionDetail(id).requestId;
       const repairAttempts = expected === 'needs_rework' && requestId ? sessions.requests.get(requestId).delivery?.maxRepairAttempts ?? 0 : 0;
-      const budgetMs = Math.max(settleTimeoutMs, attemptSettleTimeoutMs * (repairAttempts + 1));
+      const budgetMs = attemptSettleTimeoutMs * (repairAttempts + 1);
       const started = performance.now(), deadline = started + budgetMs;
       await board.tick();
       for (;;) {
@@ -201,6 +202,7 @@ test('shared intake admission freezes the publication bounds that candidate stat
     await edit(runtime, signal); await check(runtime, signal);
     return complete('Verified within the frozen bounds.');
   });
+  useRepairLimit(f, 0); // This test compares publication authority, not repair exhaustion.
   const feature = sharedFeatureRequestReference({ id: 'shared-change', sourcePath: 'features/shared-change.md', binding: { repositoryId: 'project', remote: 'origin', branch: 'main', workflowPath: 'werk/workflow.json' } });
   const shared = await f.create(['approved.txt'], { id: 'shared-change-task', hash: 'b'.repeat(64), feature });
   assert.equal(shared, 'shared-change-task');
@@ -211,7 +213,7 @@ test('shared intake admission freezes the publication bounds that candidate stat
   assert.equal(Object.hasOwn(f.board.executionDetail(local).implementation, 'sharedPublication'), false);
   await f.settle(local, 'needs_rework');
   assert.deepEqual(reported[0], { patchMaxBytes: 131072, changedFilesMax: 32, patchBytes: 0, changedFileCount: 0 });
-  assert.equal(reported.length, 5, 'The local candidate uses its bounded three repair attempts.');
+  assert.equal(reported.length, 2, 'Each request inspects its publication scope once.');
   assert.ok(reported.slice(1).every(item => item === undefined));
 });
 
@@ -226,7 +228,7 @@ const incomplete = {
   'failed checks': async ({ runtime, signal }) => { await edit(runtime, signal, 'broken\n'); await check(runtime, signal, true); },
   'source changed after a passing check': async ({ runtime, signal, task }) => { await edit(runtime, signal); await check(runtime, signal); await writeFile(join(task.worktree, 'approved.txt'), 'unchecked later edit\n'); },
 };
-for (const [label, attempt] of Object.entries(incomplete)) test(`${label} cannot turn a model completion claim into review`, { timeout: testTimeoutMs }, async t => {
+for (const [label, attempt] of Object.entries(incomplete)) test(`${label} cannot turn a model completion claim into review`, { timeout: repairTestTimeoutMs }, async t => {
   const f = await fixture(t, async context => { await attempt(context); return complete('The model claims everything is complete.'); });
   const id = await f.create(), task = await f.settle(id, 'needs_rework');
   assert.equal(f.invocations, 4);
@@ -312,6 +314,12 @@ test('implementation questions preserve candidate work and immutable result fact
   assert.equal(await readFile(join(f.repository, 'approved.txt'), 'utf8'), 'before\n');
 });
 
+function useRepairLimit(f, maxAttempts) {
+  const { policy, revision } = f.sessions.requests.policy();
+  policy.rework.maxAttempts = maxAttempts;
+  f.sessions.requests.setPolicy({ policy, expectedRevision: revision, operationId: 'fixture-repair-limit' });
+}
+
 function useMinimalDonePolicy(f) {
   const policy = defaultGatePolicy();
   policy.done.patch = [{ id: 'summary-present', fact: 'output.nonEmpty', op: 'eq', value: true }];
@@ -321,6 +329,7 @@ function useMinimalDonePolicy(f) {
 test('custom completion rules cannot mark unverified implementation work done or hide shared rework', { timeout: testTimeoutMs }, async t => {
   const f = await fixture(t, async ({ runtime, signal }) => { await edit(runtime, signal, 'broken\n'); return complete('A nonempty summary despite failed source behavior.'); });
   useMinimalDonePolicy(f);
+  useRepairLimit(f, 0); // Exercise mandatory verification independently of automatic repair.
   const id = await f.create(), task = await f.settle(id, 'needs_rework'), request = f.request(id);
   assert.equal(request.phase, 'needs_rework');
   assert.equal(request.execution.facts['output.nonEmpty'], true);
@@ -355,7 +364,7 @@ test('custom completion rules cannot mark unverified implementation work done or
   assert.equal(writes.length, 1);
   assert.equal(JSON.parse(writes[0].request.content).status, 'needs_rework');
   await f.restart();
-  assert.equal(f.request(id).phase, 'needs_rework'); assert.equal(f.invocations, 4);
+  assert.equal(f.request(id).phase, 'needs_rework'); assert.equal(f.invocations, 1);
 });
 
 test('verified implementation satisfies a custom completion policy after its required check passes', { timeout: testTimeoutMs }, async t => {

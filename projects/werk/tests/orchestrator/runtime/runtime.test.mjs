@@ -100,7 +100,7 @@ test('iteration importer reads committed ready notes, deduplicates, and flags ch
 });
 const waitFor=async(fn,timeout=10000)=>{const end=Date.now()+timeout;while(Date.now()<end){const x=await fn();if(x)return x;await new Promise(r=>setTimeout(r,60));}throw Error('Timed out');};
 function cli(path,args,env,stdin){return new Promise((resolve,reject)=>{const p=spawn(process.execPath,[path,...args],{env:{...process.env,...env},stdio:['pipe','pipe','pipe']});let stdout='',stderr='';p.stdout.on('data',x=>stdout+=x);p.stderr.on('data',x=>stderr+=x);p.once('error',reject);p.once('close',code=>resolve({code,stdout,stderr}));p.stdin.end(stdin??'');});}
-test('HTTP intake, stdin CLI and three real worker processes complete a mock fleet', {timeout:process.platform==='win32'?45000:20000}, async()=>{
+test('HTTP intake, stdin CLI and three real worker processes complete a mock fleet', {timeout:process.platform==='win32'?90000:20000}, async()=>{
   const dir=await mkdtemp(join(tmpdir(),'werk-api-'));const children=[];let app;
   const admin='a'.repeat(48),enroll='e'.repeat(48);
   try{
@@ -120,8 +120,9 @@ test('HTTP intake, stdin CLI and three real worker processes complete a mock fle
       const p=spawn(process.execPath,[wc,'run','--url',url,'--state-dir',join(dir,'worker'+n),'--status-port','0','--poll-ms','100','--mock-ms','180'],{env:{...process.env,WERK_ENROLLMENT_TOKEN:enroll},stdio:['ignore','ignore','pipe']});
       let log='';p.stderr.on('data',x=>log+=x);children.push({p,getLog:()=>log});
     }
-    // Cold Windows workers are still publishing successful snapshots at the old 10s boundary.
-    try { await waitFor(()=>app.store.list().every(t=>t.status==='simulated'),process.platform==='win32'?30000:10000); }
+    // Nine tasks need three waves of serial work. Windows CI completed two waves in 30s; allow 20s per wave.
+    const completionTimeoutMs=process.platform==='win32'?Math.ceil(9/3)*20000:10000;
+    try { await waitFor(()=>app.store.list().every(t=>t.status==='simulated'),completionTimeoutMs); }
     catch (cause) {
       const progress={tasks:app.store.list().map(task=>({status:task.status,attempt:task.attempt,assigned:Boolean(task.workerId)})),workers:app.store.workers().length,snapshots:app.store.snapshots().length,children:children.map(({p})=>({exitCode:p.exitCode,signal:p.signalCode}))};
       throw new Error('Mock fleet did not complete: '+JSON.stringify(progress),{cause});

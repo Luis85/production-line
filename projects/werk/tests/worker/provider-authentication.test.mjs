@@ -17,7 +17,15 @@ import { providerReady } from '../../src/worker/dist/worker/application/provider
 import { modelFor, claudeArguments } from '../../src/worker/dist/worker/infrastructure/providers.js';
 import { prepareModelRequest } from '../../src/worker/dist/worker/application/model-contract.js';
 
-async function directory(t) { const root = await mkdtemp(join(tmpdir(), 'werk-provider-auth-')); t.after(() => rm(root, { recursive: true, force: true })); return root; }
+/** @param {import('node:test').TestContext} t @param {{close(): void | Promise<void>}[]} resources */
+async function directory(t, resources = []) {
+  const root = await mkdtemp(join(tmpdir(), 'werk-provider-auth-'));
+  t.after(async () => {
+    await Promise.all(resources.map(resource => resource.close()));
+    await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  });
+  return root;
+}
 test('old CLI settings require a billing choice; saved keys are retained privately and clearing never falls back', async t => {
   const root = await directory(t), initial = new WorkerSettings(root); await initial.init();
   const saved = JSON.parse(await readFile(join(root, 'workspace-settings.json'), 'utf8'));
@@ -79,15 +87,15 @@ test('Claude account billing rejects a Console/API login before inference; diagn
 });
 
 test('accepted billing survives restart; changing it holds continuation while keeping transcripts inspectable', async t => {
-  const root = await directory(t), settings = new WorkerSettings(root); await settings.init();
+  const resources = [];
+  const root = await directory(t, resources), settings = new WorkerSettings(root); await settings.init();
   const model = () => ({ async reply() { return 'Saved fixture answer'; } });
-  const first = WorkerSessions(root, settings, model); await first.init();
-  t.after(() => first.close());
+  const first = WorkerSessions(root, settings, model); resources.push(first); await first.init();
   await first.start('Remember this feature request');
   while (first.busy) { t.signal.throwIfAborted(); await delay(10); }
   assert.equal(first.current.selection.authenticationMode, 'cli-account');
   await first.close();
-  const resumed = WorkerSessions(root, settings, model); await resumed.init(); t.after(() => resumed.close());
+  const resumed = WorkerSessions(root, settings, model); resources.push(resumed); await resumed.init();
   assert.equal(resumed.detail('default').chat.messages.at(-1).text, 'Saved fixture answer');
   await resumed.updateProviders(() => settings.update({ provider: { id: 'codex-cli', authenticationMode: 'api-key', apiKey: 'private-fixture-key' } }));
   assert.equal(resumed.detail('default').chat.messages.at(-1).text, 'Saved fixture answer');
@@ -97,7 +105,8 @@ test('accepted billing survives restart; changing it holds continuation while ke
 });
 
 test('billing provenance remains in the durable run and cannot change for delegated work', async t => {
-  const root = await directory(t), journal = new WorkerRunJournal(root); await journal.init(); t.after(() => journal.close());
+  const resources = [];
+  const root = await directory(t, resources), journal = new WorkerRunJournal(root); resources.push(journal); await journal.init();
   const run = await journal.begin({ sessionId: 'session', taskId: 'task', kind: 'local', title: 'Fixture', provider: 'claude-cli', model: 'fixture', authenticationMode: 'cli-account' });
   await journal.start(run.id);
   const saved = journal.get(run.id); assert.equal(saved.authenticationMode, 'cli-account');
@@ -118,17 +127,17 @@ test('capabilities preserve provider-native Cursor authority and truthful remote
 
 
 test('remote session restart recovers upstream billing provenance without inferring local account defaults', async t => {
-  const root = await directory(t), settings = new WorkerSettings(root); await settings.init();
+  const resources = [];
+  const root = await directory(t, resources), settings = new WorkerSettings(root); await settings.init();
   let dispatches = 0;
   const model = () => ({ async reply() { dispatches++; return 'Unexpected model invocation.'; } });
-  const first = WorkerSessions(root, settings, model); await first.init();
-  t.after(() => first.close());
+  const first = WorkerSessions(root, settings, model); resources.push(first); await first.init();
   await first.ensureTask('upstream-task', 'orchestrator', 'Accepted remote request', 'codex-cli');
   assert.equal(first.detail('upstream-task').session.selection.authenticationMode, 'cli-account');
   const accepted = first.requests.ensure({ owner: { sessionId: 'upstream-task', rootTurnId: 'remote-turn', taskId: 'upstream-task' },
     provider: { id: 'codex-cli', model: '', instruction: '' }, input: { kind: 'chat', title: 'Accepted remote request', message: 'Inspect the retained upstream result.' } });
   await first.close();
-  const restarted = WorkerSessions(root, settings, model); await restarted.init(); t.after(() => restarted.close());
+  const restarted = WorkerSessions(root, settings, model); resources.push(restarted); await restarted.init();
   assert.deepEqual(restarted.detail('upstream-task').session.selection, { provider: 'codex-cli', model: '', effort: 'default' });
   assert.equal(restarted.requests.get(accepted.id).provider.authenticationMode, undefined);
   assert.match(restarted.detail('upstream-task').session.continuationBlockedReason, /authentication and billing changed/);

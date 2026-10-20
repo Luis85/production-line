@@ -348,6 +348,15 @@ network blocked. It excludes a real daemon, provider, native Windows, network
 latency, production load and assistive-technology qualification. The p95 result
 supports NFR-PERF-003 at that declared boundary, not a universal service guarantee.
 
+Full Storybook catalogue qualification subsequently passed at committed UI
+revision [90d44f7](https://github.com/Luis85/production-line/commit/90d44f7792122cf03bc9fc84ca997f84558e5a65):
+**98/98 components, 238 stories and 476 desktop/mobile screenshots**. Documentation
+checks passed for **70 pages and 6,573 links**, with zero qualification errors.
+Its source digest, `20cce8a446c7875951a41f68424023f2469fc14234f3706203351730849aa25a`,
+matches the retained targeted-browser evidence above. This qualifies the UI code
+at `90d44f7`; the later platform-test fixture corrections below are a separate
+follow-up and are not claimed to have existed in that captured commit.
+
 ### Project quality gates and remaining aggregate validation
 
 The [fast project gate](../evidence/local-delivery/portable-quality-fast.txt)
@@ -375,6 +384,23 @@ Skip counts differ with the runner's platform and installed tools. This proves
 the first implementation commit; it does not include the later UI corrections.
 At this evidence snapshot, their aggregate commit-level CI was still pending.
 The focused UI and browser results above record the completed follow-up checks.
+
+The same first implementation commit's
+[Windows aggregate CI](https://github.com/Luis85/production-line/actions/runs/39432878358/job/118662190821)
+finished with **2,812 tests: 2,699 passed, 9 failed and 104 skipped**, in 42m23s.
+The subsequent corrections are confined to test fixtures: close provider resources
+before deleting their files, recognize Claude's default JSON authentication-status
+output, use bounded per-attempt Windows execution budgets, and allow the mock
+fleet's three bounded execution waves. Dedicated repair guards still assert four
+invocations, three repairs and no replay; unrelated guards explicitly disable
+repairs they do not test.
+
+After these corrections, local Linux regressions passed **18/18 development
+cases**, **9/9 orchestrator runtime cases**, and **11 provider cases with 7 Windows-only
+skips**. The fast gate passed again with the same file/import counts above.
+These results do not replace the Windows run: corrected native Windows CI was
+still pending at this snapshot, and a live Windows/Claude account pilot remains
+unqualified. No runtime or UI code changed in this fixture follow-up.
 
 The retained packaged installation/interaction journeys also passed with
 [Node on Linux](../evidence/local-delivery/packaged-node-smoke.json) and
@@ -413,10 +439,11 @@ boundaries separately.
 | --- | --- | --- |
 | Source/requirement audit | Recorded above; all 69 required IDs mapped | Test assertions inspected; not an execution result. |
 | New local delivery integration tests | 35 recovery/control tests pass; composed request-to-acceptance journey passes | Real journal/Git/check fixtures prove application rules; the model protocol is injected. |
-| Full project quality/build/test gates | Fast gate passes; first combined commit Ubuntu CI: 2,798 passed / 14 skipped / zero failures | Later UI follow-up has focused evidence; its aggregate commit-level CI was pending at this snapshot. |
+| Full project quality/build/test gates | Fast gate passes; initial Ubuntu CI passes; initial Windows CI records 9 failures followed by locally passing fixture corrections | Corrected native Windows CI and the live Windows/Claude pilot remain pending at this snapshot. |
 | Advisory mutation baseline | v4: 96.34%; 1,562 killed / 17 timed out / 58 survived / 2 uncovered across 12 modules | All 60 remaining findings retained; scoped working-tree measurement, not whole-project or native-provider qualification. |
 | Application intake benchmark | Final 64KiB startup p95 592ms; save visibility p95 1,593ms | Earlier failures retained; warm Linux drafts only, no browser/reference/pilot claim. |
 | Browser control/replay/focus journey | 50 scenarios and 40 replacement state-visibility samples pass; p95 1,023/1,014ms | Linux Chromium Storybook fixtures; real daemon/network/Windows and assistive technologies remain distinct. |
+| Full Storybook catalogue | At `90d44f7`: 98/98 components, 238 stories, 476 screenshots, 70 documentation pages and 6,573 link checks pass | Same measured UI source digest; later test-fixture changes have separate CI qualification. |
 | Native Windows with Claude Code pilot | Pending external environment | This managed execution host is Linux and has no authenticated Claude binary. |
 
 ## Reproduce the benchmark and native pilot
