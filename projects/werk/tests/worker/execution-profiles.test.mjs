@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, rm, stat, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -11,6 +12,8 @@ import { configuration } from '../../src/worker/dist/worker/config.js';
 import { runWorker } from '../../src/worker/dist/worker/runner.js';
 import { Store } from '../../src/orchestrator/dist/orchestrator/persistence/store.js';
 import { cleanup } from './fixture-cleanup.mjs';
+// Profile-management scenarios begin after native setup; cold startup is tested separately.
+prepareNativeProcessFixture();
 const base = 'a'.repeat(64);
 /** @type {import('../../src/shared/domain.ts').Profile[]} */
 const initial = [{ id: 'codex-original', provider: 'codex', mode: 'mock', maxParallel: 1 }];
@@ -90,6 +93,12 @@ async function boot(t, path, config, gateway, now) {
       throw new Error('Profile fixture request failed: ' + request.label, {cause});
     } finally { pending.delete(request); }
   };
+  // The HTTP ready callback must return before the runner can begin its native startup phase.
+  await until(async () => {
+    const repositories = await api('/api/repositories');
+    assert.equal(repositories.status, 200);
+    return repositories.value.nativeWork.state === 'ready';
+  });
   return {api,endpoint,completed:run,stop:shutdown};
 }
 

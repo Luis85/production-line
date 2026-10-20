@@ -96,6 +96,20 @@ async function fixture(t, features = false) {
         assert.equal(outcome, undefined, "Worker exited before becoming ready: " + logs);
         return logs.includes('"event":"status_listening"');
       }, "Worker did not publish its status listener.");
+      const announcement = logs.split("\n").find(line => line.includes('"event":"status_listening"'));
+      assert.ok(announcement, "Worker must announce its listener before reporting readiness.");
+      const listening = JSON.parse(announcement);
+      const token = (await readFile(join(state, "webview-token"), "utf8")).trim();
+      // HTTP opens before repository startup; arm the slow transport only after initial synchronization.
+      await until(async () => {
+        assert.equal(outcome, undefined, "Worker exited before repository readiness: " + logs);
+        const response = await fetch(`http://127.0.0.1:${listening.address.port}/api/repositories`, {
+          headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(1000),
+        });
+        assert.equal(response.status, 200);
+        const view = await response.json();
+        return view.nativeWork.state === "ready" && view.items.some(item => item.id === "assigned" && item.state === "ready" && item.lastCheckedAt);
+      }, "Worker did not finish initial assignment synchronization.");
     },
     async transportStarted() {
       await until(async () => {

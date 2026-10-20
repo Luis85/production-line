@@ -6,6 +6,7 @@ import { mkdtemp, readFile, writeFile, realpath, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ownWorkspace } from '../helpers/workspace-processes.mjs';
+import { waitForInstalledNativeWork } from '../helpers/native-cli-readiness.mjs';
 const execute = promisify(execFile), installer = resolve('bin/apps/worker/cli.mjs');
 
 test('installed worker retains repository consent and edited profiles, then uses an owned task worktree', { timeout: 120000 }, async t => {
@@ -30,6 +31,8 @@ test('installed worker retains repository consent and edited profiles, then uses
   assert.equal((await cli('repository', 'decline', '--discovery-id', detected.discovery.id)).discovery.decision, 'declined');
   await cli('stop'); running = false; await cli('start', '--port', '0'); running = true;
   assert.equal((await cli('repository', 'status')).discovery.decision, 'declined');
+  const ready = await waitForInstalledNativeWork(entry, cwd, t.signal);
+  assert.equal(ready.discovery.decision, 'declined'); assert.equal(ready.items.length, 0);
   const accepted = await cli('repository', 'accept', '--discovery-id', detected.discovery.id);
   assert.equal(accepted.discovery.decision, 'accepted'); assert.equal(accepted.items.length, 1);
   assert.equal(accepted.items[0].watch, false);
@@ -52,6 +55,8 @@ test('installed worker retains repository consent and edited profiles, then uses
   await cli('settings', 'set', '--file', settingsFile);
   const taskFile = join(cwd, 'task.json');
   await writeFile(taskFile, JSON.stringify({ title: 'Review in worktree', instruction: 'Describe approved input', provider: 'openai-api', repository: accepted.items[0].id, paths: ['approved.txt'] }));
+  await waitForInstalledNativeWork(entry, cwd, t.signal);
+  assert.equal((await cli('queue', 'settings')).board.paused, true);
   await cli('file-task', 'create', '--file', taskFile);
   const board = await cli('file-task', 'list'), task = board.tasks[0];
   const detail = await cli('file-task', 'get', '--id', task.id);

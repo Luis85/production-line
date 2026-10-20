@@ -122,7 +122,8 @@ test('runner mirrors orchestrator assignments into the feature folder without lo
   const gateway = { async register() { return { id: 'worker-one', token: 'fixture-token', project: 'alpha' }; }, connect() { return client; } };
   /** @type {import('../../src/shared/contracts.js').Adapter} */
   const adapter = { mode: 'mock', async run() { executions++; return { kind: 'simulated', summary: 'Remote fixture evidence' }; } };
-  run = runWorker({ ...config, stateDir, url: 'http://orchestrator.invalid', enrollmentToken: 'fixture-enrollment', statusHost: '127.0.0.1', statusPort: 0 }, stop.signal, { gateway, adapter });
+  // This projection fixture has only a mock adapter and local notes; separate cold-start tests own native setup.
+  run = runWorker({ ...config, stateDir, url: 'http://orchestrator.invalid', enrollmentToken: 'fixture-enrollment', statusHost: '127.0.0.1', statusPort: 0 }, stop.signal, { gateway, adapter, prepareProcessRuntime: async () => {} });
   const path = join(featureDir, 'remote-folder-assignment.md'); let body = '';
   await until(async () => { body = await readFile(path, 'utf8').catch(() => ''); return body.includes('status: completed'); });
   assert.equal(executions, 1); assert.match(body, /source: orchestrator/); assert.match(body, /Keep one authoritative assignment/); assert.ok(!body.includes(task.lease));

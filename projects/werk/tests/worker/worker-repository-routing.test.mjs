@@ -1,5 +1,6 @@
 import { testErrorCode } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -7,6 +8,9 @@ import { tmpdir } from 'node:os';
 import { configuration } from '../../src/worker/dist/worker/config.js';
 import { runWorker } from '../../src/worker/dist/worker/runner.js';
 import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';
+
+// Routing scenarios begin after native setup; cold startup ownership is covered separately.
+prepareNativeProcessFixture();
 
 /** @param {WorkerWorkspace} workspace */
 function context(workspace) {
@@ -63,7 +67,7 @@ test('claims refresh saved assignments, withdraw removed repositories, and reuse
   };
   const launch = () => runWorker({ ...config, stateDir: join(root, 'state'), url: 'http://orchestrator.invalid', enrollmentToken: 'fixture', statusHost: '127.0.0.1', statusPort: 0 }, stop.signal, { gateway });
   run = launch();
-  await until(() => claims.length);
+  await until(() => claims.length && workspace?.nativeWorkReady);
   assert.deepEqual(claims.at(-1), { repositoryIds: ['web', 'api'], legacyRepository: false });
   await updateRepositoriesWhenIdle(workspace, [items[1]]);
   await until(() => claims.at(-1).repositoryIds.join(',') === 'api');
@@ -72,7 +76,7 @@ test('claims refresh saved assignments, withdraw removed repositories, and reuse
   stop.abort(); await run;
   const identity = await readFile(join(root, 'state', 'identity.json'), 'utf8');
   claims.length = 0; stop = new AbortController(); run = launch();
-  await until(() => claims.length);
+  await until(() => claims.length && workspace?.nativeWorkReady);
   assert.deepEqual(claims.at(-1), { repositoryIds: [], legacyRepository: false });
   assert.equal(registrations, 1, 'repository changes do not force re-enrollment');
   assert.equal(await readFile(join(root, 'state', 'identity.json'), 'utf8'), identity);
@@ -141,7 +145,7 @@ for (const pendingOperation of ['currentAssignments', 'claim']) {
       return { kind: 'simulated', summary: 'Repository selection observed without changing files.' };
     } };
     run = runWorker({ ...config, stateDir: join(root, 'state'), url: 'http://orchestrator.invalid', enrollmentToken: 'fixture', statusHost: '127.0.0.1', statusPort: 0 }, stop.signal, { gateway, adapter });
-    await until(() => entered);
+    await until(() => entered && workspace?.nativeWorkReady);
     assert.ok(workspace);
     await assert.rejects(workspace.updateSettings({ repositories: { items: [replacement] } }), error => testErrorCode(error) === 'conflict');
     assert.equal(workspace.settings.value.repositories.items[0].path, initial.path);
