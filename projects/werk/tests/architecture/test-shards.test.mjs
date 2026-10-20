@@ -1,9 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from 'yaml';
-import { collectTestFiles, planTestShards, testPatterns, testShardManifest } from '../../scripts/quality/test-shard.mjs';
+import { collectTestFiles, planTestShards, testPatterns, testShardManifest, testShardArguments } from '../../scripts/quality/test-shard.mjs';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 
 test('four Windows shards cover every maintained npm-test file exactly once, deterministically', () => {
@@ -37,4 +40,20 @@ test('Windows workflow runs every planned shard with preserved exit status and r
   assert.match(commands, /test-shard\.mjs --shard/); assert.match(commands, /matrix\.shard/); assert.match(commands, /\/4/); assert.match(commands, /exit \$LASTEXITCODE/);
   assert.ok(workflow.jobs.windows.steps.some(step => step.if === 'always()' && step.with?.path?.includes('werk-test-shard.json')));
   assert.deepEqual(workflow.jobs.check.strategy.matrix.os, ['ubuntu-latest', 'macos-latest']);
+});
+
+
+test('shard failures include assertion diagnostics before a later result is reported', t => {
+  const directory = mkdtempSync(join(tmpdir(), 'werk-shard-reporter-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const file = join(directory, 'reporter.test.mjs');
+  writeFileSync(file, "import test from 'node:test'; import assert from 'node:assert/strict';\ntest('first assertion', () => assert.equal('actual', 'expected'));\ntest('later result', () => {});\n");
+  const args = testShardArguments([file]);
+  assert.deepEqual(args.filter(arg => arg.startsWith('--test-concurrency=')), ['--test-concurrency=2']);
+  const environment = { ...process.env }; delete environment.NODE_TEST_CONTEXT;
+  const result = spawnSync(process.execPath, args, { env: environment, encoding: 'utf8', windowsHide: true, timeout: 10000 });
+  assert.ifError(result.error); assert.equal(result.status, 1);
+  assert.match(result.stdout, /TAP version 13/); assert.match(result.stdout, /ERR_ASSERTION/);
+  const diagnostic = result.stdout.indexOf('error:'), later = result.stdout.indexOf('ok 2 - later result');
+  assert.ok(diagnostic >= 0 && later > diagnostic, 'Failure details must survive cancellation before the suite summary.');
 });

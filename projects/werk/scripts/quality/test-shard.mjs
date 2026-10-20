@@ -25,13 +25,15 @@ export function testShardManifest(root, index, count) {
   return { schemaVersion: 1, shard: index, shards: count, patterns: testPatterns, totalFiles: files.length,
     suiteDigest: createHash('sha256').update(JSON.stringify(files)).digest('hex'), files: shards[index - 1] };
 }
+/** TAP writes each failure diagnostic with its result, even when a later test prevents the final summary. */
+export const testShardArguments = files => ['--test', '--test-reporter=tap', '--test-concurrency=2', ...files];
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2), match = /^(\d+)\/(\d+)$/.exec(args[1] ?? '');
   if (args[0] !== '--shard' || !match || ![2, 4].includes(args.length) || args.length === 4 && args[2] !== '--manifest') throw Error('Usage: node scripts/quality/test-shard.mjs --shard 1/4 [--manifest path]');
   const root = fileURLToPath(new URL('../../', import.meta.url)), manifest = testShardManifest(root, Number(match[1]), Number(match[2]));
   if (args[3]) writeFileSync(args[3], JSON.stringify(manifest, null, 2) + '\n');
   console.log(`Test shard ${manifest.shard}/${manifest.shards}: ${manifest.files.length}/${manifest.totalFiles} files; complete suite ${manifest.suiteDigest}`);
-  const result = spawnSync(process.execPath, ['--test', '--test-concurrency=2', ...manifest.files], { cwd: root, stdio: 'inherit', windowsHide: true });
+  const result = spawnSync(process.execPath, testShardArguments(manifest.files), { cwd: root, stdio: 'inherit', windowsHide: true });
   if (result.error) console.error(result.error.message);
   process.exitCode = result.status ?? 1;
 }
