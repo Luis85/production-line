@@ -3,8 +3,8 @@ import { testErrorCode, testErrorMessage } from '../helpers/typed-boundaries.mjs
 import { withProviderTools } from '../../src/worker/dist/worker/infrastructure/provider-tool-session.js';
 import { withCliToolBridge } from '../../src/worker/dist/worker/infrastructure/cli-tool-bridge.js';
 import { providerCommand } from '../../src/worker/dist/worker/infrastructure/codex-adapter.js';
-import test, { before, describe } from 'node:test';
-import { prepareProcessRuntime } from '../../src/worker/dist/shared/process/launcher.js';
+import test, { describe } from 'node:test';
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, rm, access } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -124,9 +124,9 @@ if(${JSON.stringify(id)}==='claude-cli')console.log(JSON.stringify({type:'result
 });
 
 describe('contained CLI bridge operations', () => {
+  // Wire-only bridge probes run in the checkout, outside the supervisor's private cache storage.
   // Native setup is separate from each unchanged test and bridge-operation deadline.
-  // Allow 45 s for native initialization and 5 s for cancellation cleanup.
-  before(async t => prepareProcessRuntime(process.cwd(), t.signal), { timeout: 50000 });
+  prepareNativeProcessFixture();
 
 test('private CLI bridge speaks MCP through the contained launcher on every platform', { timeout: 30000 }, async () => {
   const observed = { calls: [], closed: 0 }, runtime = runtimeFactory(observed)();
@@ -135,7 +135,7 @@ test('private CLI bridge speaks MCP through the contained launcher on every plat
     const output = await withCliToolBridge(runtime, AbortSignal.timeout(20000), async bridge => {
       privateFile = bridge.args[1];
       const input = [{ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } }, { jsonrpc: '2.0', id: 2, method: 'tools/list' }, { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'fixture_read', arguments: { path: 'README.md' } } }].map(value => JSON.stringify(value)).join('\n') + '\n';
-      return providerCommand(bridge.command, bridge.args, tmpdir(), AbortSignal.timeout(15000), input, true, 'claude');
+      return providerCommand(bridge.command, bridge.args, process.cwd(), AbortSignal.timeout(15000), input, true, 'claude');
     });
     const responses = output.toString('utf8').trim().split('\n').map(value => JSON.parse(value));
     assert.equal(responses[0].result.protocolVersion, '2025-06-18');
@@ -163,7 +163,7 @@ test('cancelled CLI tool invocation holds execution until tool cleanup completes
   const pending = withProviderTools(prepareModelRequest(model, messages), controller.signal, () => runtime, (tools, signal) => withCliToolBridge(tools, signal, bridge => {
     privateFile = bridge.args[1];
     const input = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'fixture_read', arguments: { path: 'README.md' } } }) + '\n';
-    return providerCommand(bridge.command, bridge.args, tmpdir(), signal, input, true, 'claude');
+    return providerCommand(bridge.command, bridge.args, process.cwd(), signal, input, true, 'claude');
   }));
   const assertion = assert.rejects(pending, { code: 'cancelled' }); pending.then(() => { settled = true; }, () => { settled = true; });
   try {

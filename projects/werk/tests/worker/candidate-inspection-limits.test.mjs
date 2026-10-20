@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import test from 'node:test';
 import fs from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
@@ -18,6 +19,8 @@ import { freezeDevelopmentScope } from '../../src/worker/dist/worker/application
 import { defaultExecutionPolicy, validateExecutionPolicy } from '../../src/worker/dist/worker/application/execution-policy.js';
 import { prepareModelRequest, requireModelRequest } from '../../src/worker/dist/worker/application/model-contract.js';
 import { cleanup } from './fixture-cleanup.mjs';
+
+prepareNativeProcessFixture();
 
 const MiB = 1024 * 1024;
 const signal = () => new AbortController().signal;

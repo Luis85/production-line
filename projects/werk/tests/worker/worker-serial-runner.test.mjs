@@ -32,13 +32,15 @@ test('remote execution shares the session gate, retains waiting leases while pau
   let run, completed = false, executions = 0, renewals = 0, startupElapsed = 0;
   const now = () => Date.now() + startupElapsed;
   const originalInit = WorkerWorkspace.prototype.init;
-  WorkerWorkspace.prototype.init = async function () {
-    await originalInit.call(this);
+  WorkerWorkspace.prototype.init = async function (options) {
+    await originalInit.call(this, options);
+    // Synthetic occupancy models an existing owner; this fixture never dispatches a model during startup.
+    releaseChat = await this.executor.acquire('default', stop.signal, { startupIndependent: true });
     // Startup may outlast a short lease on CI; advance the injected clock without sleeping.
     startupElapsed = 60000;
-    workspace = this; releaseChat = await this.executor.acquire('default', stop.signal);
+    workspace = this;
   };
-  t.after(async () => { stop.abort(); releaseChat?.(); await run; WorkerWorkspace.prototype.init = originalInit; await rm(directory, { recursive: true, force: true }); });
+  t.after(async () => { stop.abort(); releaseChat?.(); try { await run; } finally { WorkerWorkspace.prototype.init = originalInit; await rm(directory, { recursive: true, force: true }); } });
   /** @type {import('../../src/shared/domain.js').Task} */
   const task = { id: 'serial-task', project: 'alpha', title: 'Keep the actual request', criteria: ['Record the outcome'], wikilinks: [], provider: 'codex', priority: 1, status: 'running', attempt: 1, workerId: 'worker-one', lease: 'serial-lease', expiresAt: 0, createdAt: now(), profile: config.profiles[0].id };
   let claimed = false;
@@ -79,7 +81,7 @@ test('failed initial lease renewal cancels the prepared session when the assignm
   let workspace;
   let run, claimed = false, polls = 0, executions = 0, heartbeats = 0;
   const originalInit = WorkerWorkspace.prototype.init;
-  WorkerWorkspace.prototype.init = async function () { await originalInit.call(this); workspace = this; };
+  WorkerWorkspace.prototype.init = async function (options) { await originalInit.call(this, options); workspace = this; };
   t.after(async () => { stop.abort(); await run; WorkerWorkspace.prototype.init = originalInit; await rm(directory, { recursive: true, force: true }); });
   /** @type {import('../../src/shared/domain.js').Task} */
   const task = { id: 'withdrawn-task', project: 'alpha', title: 'Withdrawn before execution', criteria: ['Never execute'], wikilinks: [], provider: 'codex', priority: 1, status: 'running', attempt: 1, workerId: 'worker-one', lease: 'withdrawn-lease', expiresAt: 0, createdAt: Date.now(), profile: config.profiles[0].id };

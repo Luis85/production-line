@@ -1,3 +1,4 @@
+import { assertNativeWorkReady, nativeWorkStatus } from './workspace-native-work.js';
 import type { RepositoryAssignment } from '../application/repositories.js';
 import type { WorkspaceContext } from './workspace-context.js';
 import type { ToolAccessView } from '../application/tool-policy.js';
@@ -27,6 +28,8 @@ export function toolAccess(workspace: WorkspaceContext): ToolAccessView{
 
 export function toolAccessBlockedReason(workspace: WorkspaceContext): string | null{
   if (!workspace.acceptingTasks) return 'Worker is stopping.';
+  const native = nativeWorkStatus(workspace);
+  if (native.message) return native.message;
   if (workspace.configurationUpdating || workspace.repositoriesUpdating || workspace.executionProfiles?.pending()) return 'Finish the current worker configuration change first.';
   if (!workspace.settings.value.board.paused) return 'Pause new starts before changing tool access.';
   if (workspace.repositoryPreparations || workspace.sessions.busy || workspace.board.active || workspace.get().activeTasks.length || workspace.get().queuedTasks?.length) return 'Finish or cancel queued work and active replies before changing tool access.';
@@ -73,6 +76,7 @@ export async function discoverToolAccess(workspace: WorkspaceContext, input: unk
 }
 
 export async function withIdleConfiguration<T>(workspace: WorkspaceContext, operation: () => Promise<T>): Promise<T>{
+  assertNativeWorkReady(workspace);
   if (!workspace.acceptingTasks || workspace.configurationUpdating || workspace.featureProjects.busy || !workspace.settings.value.board.paused || workspace.repositoriesUpdating || workspace.repositoryPreparations || workspace.sessions.busy || workspace.board.active || workspace.get().activeTasks.length || workspace.get().queuedTasks?.length)
     throw new DomainError("conflict", "Pause intake and finish or cancel queued tasks and active replies before changing execution profiles.");
   workspace.configurationUpdating = true;

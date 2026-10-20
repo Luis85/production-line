@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -6,6 +7,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { repositoryRoot } from '../../src/worker/dist/worker/infrastructure/repositories-git.js';
 import { FeatureGitIo, removeLinks } from '../../src/worker/dist/worker/infrastructure/features/git-io.js';
+
+prepareNativeProcessFixture();
 
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'user.name=Link Fixture', '-c', 'user.email=fixture@example.invalid', ...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 const exists = path => lstat(path).then(() => true, () => false);

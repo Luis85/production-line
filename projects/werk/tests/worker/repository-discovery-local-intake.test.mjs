@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import { workerStatus } from '../helpers/worker-status.mjs';
 import { cleanup } from './fixture-cleanup.mjs';
 import test from 'node:test';
@@ -10,6 +11,8 @@ import { configuration } from '../../src/worker/dist/worker/config.js';
 import { RepositoryDiscovery } from '../../src/worker/dist/worker/infrastructure/repository-discovery.js';
 import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';
 import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
+
+prepareNativeProcessFixture();
 
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'user.name=Werk Fixture', '-c', 'user.email=fixture@example.invalid', ...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 /** A checkout with a branch and a remote: the shape that is watched by default. */

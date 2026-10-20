@@ -1,4 +1,4 @@
-import test, { before } from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
@@ -10,10 +10,9 @@ import { defaultToolPolicy, updateToolPolicy } from '../../src/worker/dist/worke
 import { createToolRuntime } from '../../src/worker/dist/worker/infrastructure/tool-runtime.js';
 import { bridgeToolTimeoutMs, withCliToolBridge } from '../../src/worker/dist/worker/infrastructure/cli-tool-bridge.js';
 import { claudeToolEnvironment } from '../../src/worker/dist/worker/infrastructure/providers.js';
-import { prepareProcessRuntime } from '../../src/worker/dist/shared/process/launcher.js';
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 // Establish native process readiness before testing the unchanged per-operation deadlines.
-// Allow 45 s for native initialization and 5 s for cancellation cleanup.
-before(async t => prepareProcessRuntime(process.cwd(), t.signal), { timeout: 50000 });
+prepareNativeProcessFixture();
 
 const signal = () => new AbortController().signal;
 const manifest = { revision: 1, tools: [{ name: 'fixture', description: 'Fixture', inputSchema: { type: 'object' } }] };

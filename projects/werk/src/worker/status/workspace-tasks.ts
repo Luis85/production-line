@@ -1,3 +1,4 @@
+import { assertNativeWorkReady } from './workspace-native-work.js';
 import { usesLocalFeatureIntake, createLocalFeatureInteraction } from './workspace-local-feature-intake.js';
 import { stopSessionProcesses } from './workspace-processes.js';
 import { admitFeatureRequest } from '../application/feature-admission.js';
@@ -99,6 +100,7 @@ export async function task(workspace: WorkspaceContext, input: unknown, referenc
       const message = text(requestMessage, "message", 8000);
       if (body.action === "create") {
         const files = body.files === undefined ? undefined : object(body.files, 'Approved task files', ['repository', 'paths']);
+        if (files) assertNativeWorkReady(workspace);
         const approved = files ? { repository: text(files.repository, 'repository', 4096), paths: validateApprovedPaths(files.paths, 'Approved paths', { folders: true }) } : undefined;
         // File request IDs and their generated session IDs share the task namespace.
         const aliasesPendingPreparation = (!approved && workspace.board.preparation(id)) ||

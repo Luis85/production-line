@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, rm, symlink } from 'node:fs/promises';
@@ -10,6 +11,8 @@ import { DeliveryPolicyApprovals } from '../../src/worker/dist/worker/infrastruc
 import { readDeliveryPolicyDraft, saveDeliveryPolicyDraft } from '../../src/worker/dist/worker/infrastructure/delivery-policy-draft.js';
 import { readDeliveryPolicy } from '../../src/worker/dist/worker/infrastructure/delivery-policy.js';
 import { cleanup } from './fixture-cleanup.mjs';
+
+prepareNativeProcessFixture();
 
 const at = '2026-10-20T10:00:00.000Z';
 const expanded = () => ({ ...defaultDeliveryProjectPolicy(), coordination: { maxActiveRequests: 2, dependencyPlanning: /** @type {const} */ ('topological') } });

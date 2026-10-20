@@ -1,3 +1,4 @@
+import { assertNativeWorkReady } from './workspace-native-work.js';
 import { FeatureIntakeBlocked } from '../application/feature-intake-measurement.js';
 import { DomainError } from '../../shared/errors.js';
 import { assertDeliveryPolicyApproved } from '../application/delivery-policy-approval.js';
@@ -16,6 +17,7 @@ export async function prepareFeatureExecution(workspace: WorkspaceContext, input
     if (input.executionProfile) throw new DomainError('invalid_input', 'Named project execution profiles require a repository implementation request.');
     return legacy();
   }
+  assertNativeWorkReady(workspace);
   const signal = AbortSignal.any([workspace.repositoryStop.signal, AbortSignal.timeout(30000)]);
   const policy = await readDeliveryPolicy(repository, signal, input.qualityProfile, baseline);
   const execution = policy.configuration.execution;

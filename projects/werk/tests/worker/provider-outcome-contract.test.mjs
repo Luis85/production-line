@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -8,6 +9,8 @@ import { providerCommand } from '../../src/worker/dist/worker/infrastructure/pro
 import { structuredProviderFailure, cliFailure } from '../../src/worker/dist/worker/infrastructure/provider-failures.js';
 import { providerFailureOutcome } from '../../src/worker/dist/worker/application/provider-outcome.js';
 import { ProviderModelError, parseModelResult } from '../../src/worker/dist/worker/application/model-result.js';
+
+prepareNativeProcessFixture();
 
 const formats = {
   codex: code => ({ type: 'turn.failed', error: { code, message: 'private provider details' } }),

@@ -1,3 +1,4 @@
+import { assertNativeWorkReady } from './workspace-native-work.js';
 import { DomainError } from '../../shared/errors.js';
 import { remoteDeliverySubject, remotePublicationContent, remotePublicationView } from '../application/remote-delivery-view.js';
 import { runRemotePublication } from '../application/remote-delivery-runtime.js';
@@ -27,6 +28,7 @@ export async function publicationView(workspace: WorkspaceContext, requestId: st
 }
 /** Composition keeps remote processes bounded and tracked; the canonical journal owns every intent. */
 export async function publishRequest(workspace: WorkspaceContext, input: RequestCommand, injected?: { port: RemoteDeliveryPort; authority: RemotePublicationAuthorization }) {
+  assertNativeWorkReady(workspace);
   const running = operations(workspace);
   if (running.has(input.requestId)) throw new DomainError('conflict', 'This request already has an active remote observation. Wait for its recorded result.');
   // Register before any await, including policy or candidate inspection.

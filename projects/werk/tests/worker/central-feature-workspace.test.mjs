@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import { workspaceContext } from './runtime-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,6 +13,8 @@ import { defaultFeatureWorkflow, defaultFeatureCheck, featureContentHash } from 
 import { authoringTemplateFor, authoringBase } from '../../src/worker/dist/worker/infrastructure/feature-authoring-assets.js';
 import { parseFeature } from '../../src/worker/dist/worker/infrastructure/features/document.js';
 import { workerStatus } from '../helpers/worker-status.mjs';
+
+prepareNativeProcessFixture();
 
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.autocrlf=false', '-c', 'user.name=Werk Fixture', '-c', 'user.email=fixture@example.invalid', ...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000 }).trim();
 const binding = { enabled: true, repositoryId: 'project', remote: 'origin', branch: 'main', workflowPath: '.werk/feature-workflow.json', pollMs: 300000 };

@@ -1,3 +1,4 @@
+import { assertNativeWorkReady } from './workspace-native-work.js';
 import { resolve } from 'node:path';
 import { DomainError } from '../../shared/errors.js';
 import { FeatureRequests, type FeatureInput } from '../application/feature-requests.js';
@@ -31,7 +32,7 @@ export function createProjectFeatureRuntime(workspace: WorkspaceContext, config:
       if (config.id && id !== config.id) throw new DomainError('conflict', 'Shared intake must use the selected project repository.');
       return workspace.repositories.resolve(id);
     },
-    allowed: path => workspace.repositoryDiscovery.assertAllowed(path),
+    allowed: path => { assertNativeWorkReady(workspace); return workspace.repositoryDiscovery.assertAllowed(path); },
     canAdmit: () => !sharedFeatureAdmissionHold(workspace),
     admissionHold: () => sharedFeatureAdmissionHold(workspace),
     submit: record => submitSharedFeature(workspace, record),
@@ -65,7 +66,7 @@ export function attachProjectFeatureFolder(workspace: WorkspaceContext, project:
       interact: (record, command) => continueFeatureInteraction(workspace, record.sessionId, command),
       control: (record, action) => record.input?.mode === 'patch'
         ? taskboardAction(workspace, { id: record.taskId, action }) : task(workspace, { id: record.sessionId, action }),
-    }, project.pollMs, () => !project.sharedRuntime.intake.binding?.repositoryId, project.id,
+    }, project.pollMs, () => workspace.nativeWorkState === 'ready' && !project.sharedRuntime.intake.binding?.repositoryId, project.id,
   );
   return project.features;
 }

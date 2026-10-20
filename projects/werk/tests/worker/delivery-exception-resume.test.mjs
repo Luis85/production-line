@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import { restorableDeliveryCompletion } from '../../src/worker/dist/worker/application/local-task-completion.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,6 +14,8 @@ import { prepareRepositoryWorktree } from '../../src/worker/dist/worker/infrastr
 import { defaultDeliveryProjectPolicy, deliveryPolicySnapshot, deliveryGatePolicy } from '../../src/worker/dist/worker/application/delivery-policy.js';
 import { defaultGatePolicy } from '../../src/worker/dist/worker/application/request-gates.js';
 import { modelCapabilities } from '../../src/worker/dist/worker/application/model-contract.js';
+
+prepareNativeProcessFixture();
 const timeout = process.platform === 'win32' ? 180000 : 60000;
 
 test('an exact authorized failed-check decision resumes the same candidate into review without rewriting invocation facts', { timeout }, async t => {

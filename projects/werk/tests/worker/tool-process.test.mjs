@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, realpath, rm } from 'node:fs/promises';
@@ -6,6 +7,8 @@ import { tmpdir } from 'node:os';
 import { cleanup } from './fixture-cleanup.mjs';
 import { runApprovedToolProcess } from '../../src/worker/dist/worker/infrastructure/tool-process.js';
 import { ProcessRunError } from '../../src/worker/dist/shared/process/launcher.js';
+
+prepareNativeProcessFixture();
 
 test('approved tool processes preserve literal arguments, private environment and caller color opt-in', { timeout: 60000 }, async t => {
   const cwd = await realpath(await mkdtemp(join(tmpdir(), 'werk-tool-process-')));

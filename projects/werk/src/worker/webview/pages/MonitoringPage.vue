@@ -16,7 +16,7 @@ const env = computed(() => state.environment), worker = computed(() => state.sta
 const capacity = computed(() => state.sessions?.capacity);
 const activity = computed(() => {
   void now.value;
-  return buildWorkerCapacityView(capacity.value, getCapacityFreshness());
+  return buildWorkerCapacityView(capacity.value, getCapacityFreshness(), state.environment?.repositories?.nativeWork);
 });
 const activeTask = computed(() => state.sessions?.records.find(session => session.id === capacity.value?.execution.sessionId)?.title);
 const identity = computed(() => worker.value?.workerId || env.value?.hostname || 'This worker');

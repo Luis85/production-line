@@ -1,3 +1,4 @@
+import { assertNativeWorkReady } from './workspace-native-work.js';
 import { defaultDeliveryRetention } from '../application/delivery-retention.js';
 import { readDeliveryPolicyDraft, saveDeliveryPolicyDraft } from '../infrastructure/delivery-policy-draft.js';
 import type { LocalTask } from '../application/local-task-contracts.js';
@@ -24,6 +25,7 @@ export function authorizeDeliveryPolicy(workspace: WorkspaceContext, repositoryI
     throw new DomainError('conflict', 'This exact project delivery policy is not approved on this worker. Review it in Settings → Project delivery.');
 }
 async function deliveryPolicyView(workspace: WorkspaceContext, projectId?: unknown) {
+  assertNativeWorkReady(workspace);
   const repository = selectedRepository(workspace, projectId);
   const snapshot = await readDeliveryPolicy(repository?.path ?? resolve(workspace.config.projectDir ?? process.cwd()), signalFor(workspace));
   const state = workspace.deliveryApprovals.view(), approval = state.approvals.find(item => item.repositoryId === repository?.id && item.configurationDigest === snapshot.configurationDigest);
@@ -41,6 +43,7 @@ export async function deliveryPolicyCommand(workspace: WorkspaceContext, input: 
   }
   if (raw.action === 'delivery_policy') { object(input, 'Project delivery policy', ['action', 'projectId']); return deliveryPolicyView(workspace, raw.projectId); }
   if (raw.action === 'delivery_policy_draft' || raw.action === 'save_delivery_policy_draft') {
+    assertNativeWorkReady(workspace);
     object(input, 'Project delivery draft', raw.action === 'delivery_policy_draft' ? ['action', 'projectId'] : ['action', 'projectId', 'expectedFileDigest', 'configuration']);
     const repository = selectedRepository(workspace, raw.projectId);
     if (!repository) throw new DomainError('conflict', 'Assign this repository before editing its delivery policy.');

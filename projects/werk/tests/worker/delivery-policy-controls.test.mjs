@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -9,6 +10,8 @@ import { defaultGatePolicy } from '../../src/worker/dist/worker/application/requ
 import { readDeliveryPolicy } from '../../src/worker/dist/worker/infrastructure/delivery-policy.js';
 import { DeliveryPolicyApprovals } from '../../src/worker/dist/worker/infrastructure/delivery-policy-approvals.js';
 import { deliveryPolicyCommand, authorizeTaskDelivery, authorizeDeliveryPolicy } from '../../src/worker/dist/worker/status/workspace-delivery-policy.js';
+
+prepareNativeProcessFixture();
 
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-C', cwd, ...args], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
 async function setup(t) {

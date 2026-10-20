@@ -1,3 +1,4 @@
+import { assertNativeWorkReady } from './workspace-native-work.js';
 import { readyReviewProfile } from '../application/ready-review-selection.js';
 import { authorizeDeliveryPolicy, authorizeTaskDelivery } from './workspace-delivery-policy.js';
 import type { SharedFeatureIntake } from '../application/shared-feature-intake.js';
@@ -75,6 +76,8 @@ export class WorkspaceContext {
   configurationUpdating = false;
   repositoryPreparations = 0;
   repositoriesUpdating = false;
+  nativeWorkState: 'preparing' | 'starting' | 'ready' = 'ready';
+  releaseNativeWork?: () => void;
   repositoryStop = new AbortController();
   readonly resources: WorkerResourceMonitor;
   processes?: ProcessSupervisor;
@@ -132,7 +135,7 @@ export class WorkspaceContext {
       config.features?.provider,
     );
     this.consumption = new WorkerConsumption(new WorkerConsumptionJournal(config.stateDir), () => this.settings.value.consumption);
-    this.repositories = new RepositoryManager(this.settings.value.repositories, { beforeRepositoryUse: item => this.repositoryDiscovery.assertAllowed(item.path), preserveCheckout: item => this.featureProjects?.preservesCheckout(item) ?? false });
+    this.repositories = new RepositoryManager(this.settings.value.repositories, { beforeRepositoryUse: item => { if (this.nativeWorkState === 'preparing') assertNativeWorkReady(this); return this.repositoryDiscovery.assertAllowed(item.path); }, preserveCheckout: item => this.featureProjects?.preservesCheckout(item) ?? false });
     this.repositoryDiscovery = new RepositoryDiscovery(config.stateDir, config.integrationProjectDir ?? config.projectDir ?? process.cwd(), this.repositoryStop.signal, config.codex?.repository, config.features?.intake === 'local' ? false : undefined);
     this.sessions = createWorkerSessions(
       config.stateDir, this.settings, modelFor, undefined, () => this.board.active, this.consumption,

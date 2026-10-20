@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -8,6 +9,8 @@ import { tmpdir } from 'node:os';
 import { inspectDeliveryReadinessReferences } from '../../src/worker/dist/worker/infrastructure/delivery-readiness-references.js';
 import { submissionContextHash } from '../../src/worker/dist/worker/application/local-task-contracts.js';
 import { cleanup } from './fixture-cleanup.mjs';
+
+prepareNativeProcessFixture();
 const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' }).trim();
 test('readiness references inspect the pinned committed bytes and safely classify missing, directories and oversized files', async t => {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-readiness-reference-')));

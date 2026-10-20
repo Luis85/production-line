@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -10,6 +11,8 @@ import { FeatureGitIo } from '../../src/worker/dist/worker/infrastructure/featur
 import { publicationMarker } from '../../src/worker/dist/worker/application/remote-delivery-runtime.js';
 import { publication, target } from './remote-delivery-fixtures.mjs';
 import { cleanup } from './fixture-cleanup.mjs';
+
+prepareNativeProcessFixture();
 
 const signal = () => new AbortController().signal;
 const git = (directory, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-C', directory, ...args], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();

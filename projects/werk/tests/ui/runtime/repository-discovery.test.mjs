@@ -81,3 +81,19 @@ test('an older background read cannot resurrect pending consent after a successf
   assert.equal(view.visible.value, false); assert.equal(store.state.environment.repositories.discovery.decision, 'accepted');
   assert.equal(store.state.settings.repositories.items[0].id, 'web');
 });
+
+
+test('native startup blocks adoption until ready but still permits declining discovery', async t => {
+  const { view, dashboard, requests } = setup(t, (_, body) => Response.json(result(body.action)));
+  for (const state of /** @type {const} */ (['preparing', 'starting'])) {
+    store.state.environment.repositories.nativeWork = { state, message: 'Preparing native work.' };
+    await view.choose('accept'); assert.equal(requests.length, 0); assert.equal(view.visible.value, true);
+  }
+  await view.choose('decline'); assert.equal(requests.length, 1); assert.equal(dashboard.visible.value, true);
+  // The persisted decline response may omit additive status, as older workers do.
+  store.state.environment.repositories.nativeWork = { state: 'starting', message: 'Checking repositories.' };
+  await dashboard.choose('accept'); assert.equal(requests.length, 1);
+  store.state.environment.repositories.nativeWork = { state: 'ready', message: null };
+  await dashboard.choose('accept'); assert.equal(requests.length, 2);
+  assert.equal(dashboard.visible.value, false); assert.match(dashboard.notice.value, /Repository added/);
+});

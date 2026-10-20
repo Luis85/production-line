@@ -1,6 +1,6 @@
 import { DomainError } from '../../shared/errors.js';
 import { MAX_WORKER_PARALLEL } from './delivery-coordination.js';
-export interface ExecutionPermitOptions { continuation?: boolean; projectId?: string; projectLimit?: number; }
+export interface ExecutionPermitOptions { /** Trusted remote simulations only; never supplied by model or user input. */ startupIndependent?: boolean; continuation?: boolean; projectId?: string; projectLimit?: number; }
 export interface ReservedExecutionPermit { sessionId: string; projectId: string | null; projectLimit: number; }
 export interface ActiveExecutionPermit { sessionId: string; projectId: string | null; projectLimit: number; startedAt: number; monotonicStartedAt: number; }
 interface WaitingPermit extends ExecutionPermitOptions { id: string; signal: AbortSignal; grant: (release: () => void) => void; reject: (error: unknown) => void; cancel: () => void; }
@@ -11,6 +11,12 @@ export class SerialExecutor {
   private readonly paused: () => boolean;
   private readonly configuredLimit: () => number;
   private queue: WaitingPermit[] = [];
+  private nativeStartupHolds = 0;
+  /** Native initialization holds real work, including continuations, without changing saved pause policy. */
+  suspendNativeWork(): () => void {
+    this.nativeStartupHolds++; let released = false;
+    return () => { if (released) return; released = true; this.nativeStartupHolds--; this.wake(); };
+  }
   private readonly unresolved: () => ReservedExecutionPermit[];
   constructor(paused: () => boolean = () => false, limit: () => number = () => 1, unresolved: () => ReservedExecutionPermit[] = () => []) { this.paused = paused; this.configuredLimit = limit; this.unresolved = unresolved; }
   get limit() { const value = this.configuredLimit(); return Number.isSafeInteger(value) ? Math.max(1, Math.min(MAX_WORKER_PARALLEL, value)) : 1; }
@@ -39,8 +45,8 @@ export class SerialExecutor {
     });
   }
   canStart(id: string, options: ExecutionPermitOptions = {}): boolean {
-    return (!this.paused() || options.continuation === true) && this.occupancy.length < this.limit &&
-      !this.queue.some(entry => !entry.projectId && (!this.paused() || entry.continuation)) && this.permitted({ id, ...options });
+    return (this.nativeStartupHolds === 0 || options.startupIndependent === true) && (!this.paused() || options.continuation === true) && this.occupancy.length < this.limit &&
+      !this.queue.some(entry => !entry.projectId && (!this.nativeStartupHolds || entry.startupIndependent === true) && (!this.paused() || entry.continuation)) && this.permitted({ id, ...options });
   }
   private permitted(entry: Pick<WaitingPermit, 'id' | 'projectId' | 'projectLimit'>): boolean {
     const occupied = this.occupancy;
@@ -55,7 +61,7 @@ export class SerialExecutor {
       let index = -1;
       for (let i = 0; i < this.queue.length; i++) {
         const entry = this.queue[i];
-        if (this.paused() && !entry.continuation) continue;
+        if (this.nativeStartupHolds && entry.startupIndependent !== true || this.paused() && !entry.continuation) continue;
         if (this.permitted(entry)) { index = i; break; }
         // Drain existing work before the next unscoped operation; later work cannot starve it.
         if (!entry.projectId) break;

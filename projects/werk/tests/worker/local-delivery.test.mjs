@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -15,6 +16,8 @@ import { cleanup } from './fixture-cleanup.mjs';
 import { fixture as journalFixture, provider } from './request-gate-fixtures.mjs';
 import { retainDeliveryCheckpoint } from '../../src/worker/dist/worker/application/delivery-task-checkpoint.js';
 import { defaultGatePolicy } from '../../src/worker/dist/worker/application/request-gates.js';
+
+prepareNativeProcessFixture();
 
 const git = (directory, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-C', directory, ...args], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
 const signal = () => new AbortController().signal;

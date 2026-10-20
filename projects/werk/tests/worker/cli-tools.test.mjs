@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import { cleanup } from './fixture-cleanup.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -10,6 +11,8 @@ import { WorkerSettings } from '../../src/worker/dist/worker/infrastructure/sett
 import { createToolRuntime } from '../../src/worker/dist/worker/infrastructure/tool-runtime.js';
 import { toolAccessBody, workerBody } from '../../scripts/runtime/portable/worker-commands.mjs';
 import { commands } from '../../scripts/runtime/portable/commands.mjs';
+
+prepareNativeProcessFixture();
 
 const harness = (extra = {}) => ({
   id: 'harness', name: 'Project harness', description: 'Reads the project backlog.', enabled: true,

@@ -1,3 +1,4 @@
+import { assertNativeWorkReady } from './workspace-native-work.js';
 import { defaultDeliveryRetention } from '../application/delivery-retention.js';
 import { authorizeTaskDelivery } from './workspace-delivery-policy.js';
 import { lstat, realpath } from 'node:fs/promises';
@@ -83,6 +84,7 @@ export async function processCommand(workspace: WorkspaceContext, input: unknown
   }
   if (!['stop', 'restart'].includes(String(body.action)) || body.after !== undefined || body.limit !== undefined || !Number.isSafeInteger(body.expectedRevision) || Number(body.expectedRevision) < 1) throw new DomainError('invalid_input', 'Use stop or restart with the current service revision and a unique operation ID.');
   const command = { id, expectedRevision: Number(body.expectedRevision), operationId: identifier(body.operationId, 'operation ID') };
+  if (body.action === 'restart') assertNativeWorkReady(workspace);
   const record = body.action === 'stop' ? await supervisor.stop(command) : await supervisor.restart(command);
   return { service: await projectService(workspace, record) };
 }

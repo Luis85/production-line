@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -14,6 +15,8 @@ import { featureDeliverySubmission } from '../../src/worker/dist/worker/status/w
 import { parseFeature } from '../../src/worker/dist/worker/infrastructure/features/document.js';
 import { workerStatus } from '../helpers/worker-status.mjs';
 import { taskboardRuntime, workspaceContext } from './runtime-fixtures.mjs';
+
+prepareNativeProcessFixture();
 
 const timeout = process.platform === 'win32' ? 300000 : 120000;
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.autocrlf=false', ...args], { cwd, encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000 }).trim();

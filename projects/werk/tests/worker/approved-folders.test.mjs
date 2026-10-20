@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -13,6 +14,8 @@ import { assertFolderApprovals, developmentVerified, freezeDevelopmentScope, val
 import { validateFeatureWorkflowApprovedPaths } from '../../src/worker/dist/worker/infrastructure/features/workflow.js';
 import { defaultFeatureWorkflow } from '../../src/worker/dist/worker/application/feature-workflow.js';
 import { cleanup } from './fixture-cleanup.mjs';
+
+prepareNativeProcessFixture();
 
 const signal = () => new AbortController().signal;
 const git = (directory, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-C', directory, ...args], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();

@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import { workspaceContext } from './runtime-fixtures.mjs';
 import { workerStatus } from '../helpers/worker-status.mjs';
 import { testErrorCode } from '../helpers/typed-boundaries.mjs';
@@ -16,6 +17,8 @@ import { gateDigest } from '../../src/worker/dist/worker/application/request-gat
 import { defaultSharedIntakeConfig } from '../../src/worker/dist/worker/application/shared-feature-state.js';
 import { defaultFeatureWorkflow, defaultFeatureCheck, featureWorkflowPolicy, featureContentHash } from '../../src/worker/dist/worker/application/feature-workflow.js';
 import { publicTaskConversation } from '../../src/worker/dist/worker/application/public-task-transcript.js';
+
+prepareNativeProcessFixture();
 
 /** @param {import('../../src/worker/application/local-tasks.js').LocalTaskboard} board */
 function localRuntime(board) {

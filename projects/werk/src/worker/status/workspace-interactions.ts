@@ -1,3 +1,4 @@
+import { assertNativeWorkReady } from './workspace-native-work.js';
 import type { SharedFeatureIntake } from '../application/shared-feature-intake.js';
 import type { WorkspaceContext } from './workspace-context.js';
 import type { InteractionCommand } from "../application/interactions.js";
@@ -131,6 +132,7 @@ export async function interaction(workspace: WorkspaceContext, input: unknown, o
   assertTaskCanContinue(workspace, sessionId);
   const command = body as unknown as InteractionCommand;
   const local = workspace.board.view().tasks.find(task => task.sessionId === sessionId);
+  if (local) assertNativeWorkReady(workspace);
   if (isSharedFeatureSession(workspace, sessionId)) {
     if (!local || !workspace.featureProjects.sharedForTask(local.id)?.source)
       throw new DomainError('conflict', 'This shared Feature Request’s execution history is unavailable. Restore its owning task history before continuing, or create a successor Feature Request.');

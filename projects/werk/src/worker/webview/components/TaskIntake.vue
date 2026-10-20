@@ -31,7 +31,7 @@ const projectProfiles = ref(false), projectProfile = ref<DeliveryExecutionProfil
 const preparation = ref<FeatureRequestPreparation | null>(null);
 const preparationNote = computed(() => preparation.value?.phase === 'waiting' ? 'Waiting for an earlier request to finish preparation…' : preparation.value?.phase === 'worktree' ? 'Preparing this request’s Git worktree…' : 'Saving approved files and the feature request…');
 const options = ref<HTMLDetailsElement | null>(null);
-const capacity = computed(() => buildWorkerCapacityView(state.sessions?.capacity, getCapacityFreshness()));
+const capacity = computed(() => buildWorkerCapacityView(state.sessions?.capacity, getCapacityFreshness(), state.environment?.repositories?.nativeWork));
 const definition = computed(() => state.definitions.find(item => item.id === intake.definitionId));
 const agent = computed(() => definition.value?.agents.find(item => item.name === intake.agent));
 const connection = computed(() => state.settings?.providers.find(item => item.id === intake.provider));

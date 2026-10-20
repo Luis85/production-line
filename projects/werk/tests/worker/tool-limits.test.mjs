@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import { toolPropertyDescription } from './model-fixtures.mjs';
 import { testErrorCode } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
@@ -14,6 +15,8 @@ import { gateDigest } from '../../src/worker/dist/worker/application/request-gat
 import { createToolRuntime, mcpToolName } from '../../src/worker/dist/worker/infrastructure/tool-runtime.js';
 import { WorkerSettings } from '../../src/worker/dist/worker/infrastructure/settings.js';
 import { toolAccessBody } from '../../scripts/runtime/portable/worker-commands.mjs';
+
+prepareNativeProcessFixture();
 
 const signal = () => new AbortController().signal;
 const preset = (extra = {}) => ({ id: 'unit-tests', name: 'Unit tests', executable: process.execPath, args: ['--version'], enabled: true, ...extra });

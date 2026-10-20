@@ -1,3 +1,4 @@
+import { assertNativeWorkReady } from './workspace-native-work.js';
 import { processStatus, processCommand } from './workspace-processes.js';
 import type { FeatureAuthoringCommand, FeatureAuthoringResult } from '../application/feature-authoring-contracts.js';
 import type { FeatureActionResult } from '../application/feature-management.js';
@@ -17,7 +18,7 @@ import { sharedIntakeView, sharedIntakeCommand, featureView, featureList, featur
 import { repositoryStatus, repositoryCommand, worktrees, pruneWorktrees } from './workspace-repositories.js';
 import { providerStatus, providerAccount, toolAccess, updateToolAccess, discoverToolAccess, withIdleConfiguration, withRepositoryAdmission, updateSettings, integrations } from './workspace-settings.js';
 import { environment, history } from './workspace-environment.js';
-import { init, close, closeEvidence, authenticate } from './workspace-lifecycle.js';
+import { init, startNativeWork, close, closeEvidence, authenticate } from './workspace-lifecycle.js';
 
 export function chatConfiguration(value: unknown): string | undefined {
   if (value === undefined) return;
@@ -50,6 +51,7 @@ export class WorkerWorkspace {
     this.context = new WorkspaceContext(config, journal, get);
   }
   private observed<T>(operation: () => T): T { return this.context.processObservations.run({}, operation); }
+  get nativeWorkReady() { return this.context.nativeWorkState === 'ready'; }
   get executionProfiles() { return this.context.executionProfiles; }
   tickFeatures(force = false) { return this.context.featureProjects.tick(force); }
   get featureTracking() { return this.context.featureTracking; }
@@ -84,7 +86,8 @@ export class WorkerWorkspace {
   interaction(input: unknown) { return this.observed(() => interaction(this.context, input)); }
   runEvidence(input: unknown) { return runEvidence(this.context, input); }
   task(input: unknown) { return this.observed(() => task(this.context, input)); }
-  init() { return this.observed(() => init(this.context)); }
+  init(options: { deferNativeWork?: boolean } = {}) { return this.observed(() => init(this.context, options)); }
+  startNativeWork() { return this.observed(() => startNativeWork(this.context)); }
   providerStatus(input: unknown) { return providerStatus(this.context, input); }
   providerAccount(input: unknown) { return providerAccount(this.context, input); }
   sharedIntakeView(projectId?: string) { return sharedIntakeView(this.context, projectId); }
@@ -99,6 +102,7 @@ export class WorkerWorkspace {
     return this.observed(() => action === 'prepare' || action === 'publish' ? authorFeature(this.context, input) : featureCommand(this.context, input));
   }
   createTaskboard(input: unknown) {
+    assertNativeWorkReady(this.context);
     assertDirectFeatureCreation(this.context, input);
     return this.observed(() => withRepositoryAdmission(this.context, () => this.board.create(input)));
   }

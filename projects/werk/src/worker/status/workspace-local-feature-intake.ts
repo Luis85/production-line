@@ -1,3 +1,4 @@
+import { nativeWorkStatus } from './workspace-native-work.js';
 import type { FeatureRequests } from '../application/feature-requests.js';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -49,6 +50,8 @@ export async function createLocalFeatureInteraction(workspace: WorkspaceContext,
   const preparation = workspace.board.preparation(receipt.taskId);
   if (preparation) return { preparation };
   if (!workspace.sessions.view().records.some(record => record.id === receipt.sessionId)) {
+    const native = nativeWorkStatus(workspace);
+    if (native.message) throw new DomainError('unavailable', `Feature Request saved as ${receipt.name}. ${native.message} It will be picked up automatically; keep this interaction ID when checking its result.`);
     const record = features.view().records.find(record => record.id === id);
     const reason = record?.sourceIssue?.reason ?? record?.error ?? features.view().errors.find(error => error.file === receipt.name)?.message ?? 'The worker is waiting for admission.';
     throw new DomainError('conflict', `Feature Request saved as ${receipt.name}. ${reason} Retry the same interaction ID after resolving this; its note remains the source of truth.`);

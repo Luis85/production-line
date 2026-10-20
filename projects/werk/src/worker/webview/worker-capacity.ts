@@ -1,3 +1,4 @@
+import { nativeWorkReadiness, type NativeWorkReadinessInput } from './native-work-readiness';
 import type { CapacityConsumption, WorkerCapacitySnapshot } from '../application/worker-capacity';
 
 export type CapacityFreshness = 'fresh' | 'stale' | 'unknown';
@@ -8,6 +9,7 @@ export interface WorkerCapacityView {
   stale: boolean;
   executionLabel: string;
   unresolvedCount?: number;
+  nativeWorkMessage?: string;
   localLabel: string;
   remoteLabel: string;
   admissionAvailable: boolean | null;
@@ -23,8 +25,7 @@ function consumptionBlock(value: CapacityConsumption | null): string {
     default: return 'Consumption controls block new model calls. Review the saved limits.';
   }
 }
-/** Shared dashboard/taskboard wording uses measured admission facts and never predicts completion time. */
-export function buildWorkerCapacityView(capacity: WorkerCapacitySnapshot | null | undefined, freshness: CapacityFreshness = 'fresh'): WorkerCapacityView {
+function capacityView(capacity: WorkerCapacitySnapshot | null | undefined, freshness: CapacityFreshness): WorkerCapacityView {
   const missing: WorkerCapacityView = { state: 'unknown', title: 'Worker activity is unavailable', description: 'Refresh to check the execution slot and admission limits.', stale: freshness !== 'fresh', executionLabel: 'Execution slot unavailable', localLabel: 'Local capacity unavailable', remoteLabel: 'Remote assignments unavailable', admissionAvailable: null, startBlocked: null };
   if (!capacity) return missing;
   const view: WorkerCapacityView = {
@@ -53,4 +54,18 @@ export function buildWorkerCapacityView(capacity: WorkerCapacitySnapshot | null 
   if (block) return { ...view, state: 'blocked', title: 'New model calls are blocked', description: block };
   if (!consumption) return { ...view, title: 'Start conditions need refresh', description: 'The execution slot is free, but consumption readiness is unavailable. Refresh to check it.' };
   return { ...view, state: 'available', title: 'Execution capacity available', description: capacity.local.remaining > 0 ? 'Waiting work can start. New requests can join within the local admission limit.' : 'Waiting work can start. Local admission is full; accepted tasks remain queued.' };
+}
+
+/** Startup blocks execution independently of durable admission, saved pause and consumption limits. */
+export function buildWorkerCapacityView(capacity: WorkerCapacitySnapshot | null | undefined, freshness: CapacityFreshness = 'fresh', nativeWork?: NativeWorkReadinessInput | null): WorkerCapacityView {
+  const view = capacityView(capacity, freshness), readiness = nativeWorkReadiness(nativeWork);
+  if (!readiness) return view;
+  return {
+    ...view, startBlocked: true,
+    nativeWorkMessage: readiness.message + ' Queue pause and consumption limits still apply.',
+    ...(view.state === 'available' ? {
+      state: 'blocked' as const, title: readiness.title,
+      description: view.admissionAvailable ? 'You can add requests within the local admission limit while startup completes.' : 'Local admission is full; accepted requests remain queued.',
+    } : {}),
+  };
 }

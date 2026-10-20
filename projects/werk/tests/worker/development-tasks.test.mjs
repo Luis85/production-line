@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import { trackingSharedRecord, trackingWorkflow } from './tracking-fixtures.mjs';
 import test from 'node:test';
 import { createProcessObservation } from '../../src/worker/dist/worker/infrastructure/process-observation.js';
@@ -14,6 +15,8 @@ import { modelCapabilities } from '../../src/worker/dist/worker/application/mode
 import { defaultGatePolicy } from '../../src/worker/dist/worker/application/request-gates.js';
 import { SharedFeatureLifecycle } from '../../src/worker/dist/worker/application/shared-feature-lifecycle.js';
 import { sharedFeatureRequestReference } from '../../src/worker/dist/worker/application/feature-request-reference.js';
+
+prepareNativeProcessFixture();
 
 const run = promisify(execFile), delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 // Native Windows containment adds process startup cost to every attempt's Git/check operations.

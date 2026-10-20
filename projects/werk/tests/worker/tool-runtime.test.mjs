@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, lstat, readFile, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises';
@@ -6,6 +7,8 @@ import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createToolRuntime, mcpToolName } from '../../src/worker/dist/worker/infrastructure/tool-runtime.js';
 import { defaultToolPolicy } from '../../src/worker/dist/worker/application/tool-policy.js';
+
+prepareNativeProcessFixture();
 
 const signal = () => new AbortController().signal;
 const decoded = result => { assert.equal(result.isError, undefined, JSON.stringify(result)); return JSON.parse(result.content[0].text); };

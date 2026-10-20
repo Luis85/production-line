@@ -1,6 +1,6 @@
 import { workspaceModelFactory } from '../../src/worker/dist/worker/infrastructure/workspace-services.js';
 import { modelCapabilities } from '../../src/worker/dist/worker/application/model-contract.js';
-import test, { before } from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, mkdir, writeFile, readFile, rm, realpath, symlink } from 'node:fs/promises';
@@ -9,15 +9,14 @@ import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';
 import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
-import { prepareProcessRuntime } from '../../src/worker/dist/shared/process/launcher.js';
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import { statusServer } from '../../src/worker/dist/worker/status/server.js';
 import { workerStatus } from '../helpers/worker-status.mjs';
 import { testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import { workspaceContext, taskboardRuntime } from './runtime-fixtures.mjs';
 
 // Establish native process readiness separately from the bounded admission/service scenario.
-// Allow 45 s for native initialization and 5 s for cancellation cleanup.
-before(async t => prepareProcessRuntime(process.cwd(), t.signal), { timeout: 50000 });
+prepareNativeProcessFixture();
 
 async function fixture(t, repositoryAlias = false) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-service-workspace-'))), repository = join(directory, 'repository'), state = join(directory, 'state');

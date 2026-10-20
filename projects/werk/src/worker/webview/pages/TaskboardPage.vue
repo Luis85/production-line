@@ -28,7 +28,7 @@ const overview = computed(() => buildTaskOverview({ sessions: state.sessions, bo
 const running = computed(() => allTasks.value.groups.running.find(item => item.sessionId === currentExecutionId.value));
 const extraRunning = computed(() => overview.value.groups.running.filter(item => item.sessionId !== currentExecutionId.value));
 const projectChoices = computed(() => [...new Set(allTasks.value.items.flatMap(item => item.projectId ? [item.projectId] : []))].sort());
-const capacity = computed(() => buildWorkerCapacityView(state.sessions?.capacity, getCapacityFreshness()));
+const capacity = computed(() => buildWorkerCapacityView(state.sessions?.capacity, getCapacityFreshness(), state.environment?.repositories?.nativeWork));
 const selectedSession = computed(() => state.sessions?.records.find(item => item.id === state.sessions?.selected));
 const showRemoteCapacity = computed(() => !!state.environment?.orchestratorUrl || (state.sessions?.capacity?.remote.accepted ?? 0) > 0);
 const queueNote = computed(() => capacity.value.stale || capacity.value.state === 'unknown' ? 'Refresh to check current start conditions.' : capacity.value.startBlocked ? 'New starts are on hold. See the worker conditions above.' : 'Waiting work uses the shared and project execution limits.');

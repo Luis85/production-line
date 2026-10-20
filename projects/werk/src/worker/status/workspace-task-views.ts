@@ -1,3 +1,4 @@
+import { assertNativeWorkReady } from './workspace-native-work.js';
 import { stopSessionProcesses } from './workspace-processes.js';
 import type { WorkspaceContext } from './workspace-context.js';
 import { publicTaskConversation } from '../application/public-task-transcript.js';
@@ -46,7 +47,9 @@ export function taskboardDetail(workspace: WorkspaceContext, id: string){
 }
 
 export async function taskboardAction(workspace: WorkspaceContext, input: unknown){
-  if ((input as Record<string, unknown> | null)?.action === 'retry') {
+  const action = (input as Record<string, unknown> | null)?.action;
+  if (action === 'retry' || action === 'delete' && (input as { removeWorktree?: unknown }).removeWorktree === true) assertNativeWorkReady(workspace);
+  if (action === 'retry') {
     const id = String((input as Record<string, unknown>).id);
     const task = workspace.board.view().tasks.find(item => item.id === id);
     if (task && isSharedFeatureSession(workspace, task.sessionId))

@@ -1,12 +1,12 @@
-import test, { before } from 'node:test';
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { access } from 'node:fs/promises';
 import { runProviderProbe } from '../../src/worker/dist/worker/infrastructure/provider-process.js';
-import { ProcessRunError, prepareProcessRuntime } from '../../src/worker/dist/shared/process/launcher.js';
+import { ProcessRunError } from '../../src/worker/dist/shared/process/launcher.js';
 
 // Establish native process readiness before testing the unchanged per-operation deadlines.
-// Allow 45 s for native initialization and 5 s for cancellation cleanup.
-before(async t => prepareProcessRuntime(process.cwd(), t.signal), { timeout: 50000 });
+prepareNativeProcessFixture();
 
 test('provider probes preserve account lookup, bound both streams and remove private cwd before settling', { timeout: 20000 }, async t => {
   const original = process.env.WERK_PROBE_PRIVATE_SECRET;

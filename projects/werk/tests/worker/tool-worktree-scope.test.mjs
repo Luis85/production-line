@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import { taskboardRuntime } from './runtime-fixtures.mjs';
 import { workerStatus } from '../helpers/worker-status.mjs';
 import { workspaceModelFactory } from './application-fixtures.mjs';
@@ -11,6 +12,8 @@ import { cleanup } from './fixture-cleanup.mjs';
 import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';
 import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
 import { modelCapabilities } from '../../src/worker/dist/worker/application/model-contract.js';
+
+prepareNativeProcessFixture();
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function settle(worker, id, state) { await worker.board.tick(); for (let i = 0; i < 600; i++) { if (worker.board.detail(id).status === state && !worker.sessions.busy) return; await delay(5); } throw Error('File task did not settle: ' + worker.board.detail(id).status); }
 async function fixture(t, builtins = { files: true, commands: [], webOrigins: [] }) {

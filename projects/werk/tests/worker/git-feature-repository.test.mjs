@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import { featureGitIo } from './runtime-fixtures.mjs';
 import { testErrorCode, testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
@@ -10,6 +11,8 @@ import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { GitFeatureRepository } from '../../src/worker/dist/worker/infrastructure/features/git-repository.js';
 import { prepareRepositoryWorktree } from '../../src/worker/dist/worker/infrastructure/repositories.js';
+
+prepareNativeProcessFixture();
 
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.autocrlf=false', '-c', 'user.name=Werk Fixture', '-c', 'user.email=fixture@example.invalid', ...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 const hash = text => createHash('sha256').update(text).digest('hex');

@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import test from 'node:test';
 import { verifyNativeCandidate } from '../../src/worker/dist/worker/application/native-development.js';
 import assert from 'node:assert/strict';
@@ -11,6 +12,8 @@ import { createRepositoryWorktree, repositoryRoot } from '../../src/worker/dist/
 import { defaultToolPolicy, validateToolPolicy } from '../../src/worker/dist/worker/application/tool-policy.js';
 import { freezeDevelopmentScope, developmentVerified } from '../../src/worker/dist/worker/application/development.js';
 import { cleanup } from './fixture-cleanup.mjs';
+
+prepareNativeProcessFixture();
 const signal = () => new AbortController().signal;
 const git = (directory, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-C', directory, ...args], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
 async function fixture(t, options = {}) {

@@ -1,3 +1,4 @@
+import type { SerialExecutor } from '../application/serial-executor.js';
 import { closePublications } from './workspace-publication.js';
 import { initProcesses, closeProcesses } from './workspace-processes.js';
 import type { WorkspaceContext } from './workspace-context.js';
@@ -8,7 +9,10 @@ import { DomainError } from "../../shared/errors.js";
 import { ensureDirectory } from "../infrastructure/journal/files.js";
 
 
-export async function init(workspace: WorkspaceContext){
+export async function init(workspace: WorkspaceContext, options: { deferNativeWork?: boolean } = {}){
+  workspace.nativeWorkState = options.deferNativeWork ? 'preparing' : 'starting';
+  const executor: SerialExecutor = workspace.executor;
+  workspace.releaseNativeWork ??= executor.suspendNativeWork();
   await ensureDirectory(workspace.config.stateDir);
   workspace.token = await loadWebviewToken(workspace.config.stateDir, workspace.config.webviewToken);
   await workspace.settings.init();
@@ -17,7 +21,6 @@ export async function init(workspace: WorkspaceContext){
   await workspace.repositoryDiscovery.init(workspace.settings.value.repositories.items);
   await workspace.featureProjects.init();
   await workspace.repositories.configure(workspace.settings.value.repositories);
-  await workspace.repositories.init();
   await workspace.sessions.init();
   await initProcesses(workspace);
   await workspace.board.init();
@@ -25,8 +28,21 @@ export async function init(workspace: WorkspaceContext){
   await workspace.featureTracking.init();
   await workspace.resources.init();
   workspace.resources.start();
+  if (!options.deferNativeWork) await startNativeWork(workspace);
+}
+
+/** Private state is ready before HTTP opens; native work starts only after the runner's owned setup. */
+export async function startNativeWork(workspace: WorkspaceContext) {
+  workspace.repositoryStop.signal.throwIfAborted();
+  if (workspace.nativeWorkState === 'ready') return;
+  workspace.nativeWorkState = 'starting';
+  await workspace.repositories.init();
+  workspace.repositoryStop.signal.throwIfAborted();
   workspace.repositories.start();
   workspace.featureProjects.start();
+  workspace.nativeWorkState = 'ready';
+  workspace.releaseNativeWork?.();
+  workspace.releaseNativeWork = undefined;
 }
 
 export function close(workspace: WorkspaceContext, options: { deferEvidence?: boolean } = {}): Promise<void>{

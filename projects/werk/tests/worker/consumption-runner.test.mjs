@@ -1,5 +1,5 @@
-import test, { before } from 'node:test';
-import { prepareProcessRuntime } from '../../src/worker/dist/shared/process/launcher.js';
+import test from 'node:test';
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -10,8 +10,7 @@ import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.j
 import { workspaceModelFactory } from '../../src/worker/dist/worker/infrastructure/workspace-services.js';
 import { modelFor } from '../../src/worker/dist/worker/infrastructure/providers.js';
 // History-enabled model composition requires native readiness before the unchanged queue-resume scenario.
-// Allow 45 s for native initialization and 5 s for cancellation cleanup.
-before(async t => prepareProcessRuntime(process.cwd(), t.signal), { timeout: 50000 });
+prepareNativeProcessFixture();
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(predicate) { const deadline = performance.now() + 10000; while (performance.now() < deadline) { if (await predicate()) return; await delay(20); } throw Error('Queued worker did not resume.'); }
 
@@ -21,8 +20,8 @@ test('running worker keeps accepted chats queued and automatically resumes exact
   let workspace;
   let run, requests = 0, clock = new Date('2026-10-16T23:59:59Z');
   const originalInit = WorkerWorkspace.prototype.init;
-  WorkerWorkspace.prototype.init = async function () {
-    await originalInit.call(this);
+  WorkerWorkspace.prototype.init = async function (options) {
+    await originalInit.call(this, options);
     // @ts-expect-error Inject the private clock to test UTC rollover without waiting a day.
     this.consumption.now = () => clock;
     await this.updateSettings({ consumption: { enabled: true, period: 'daily', allowance: 100, workerPercent: 50, perRunReservation: 40 }, provider: { id: 'openai-api', model: 'protocol-fixture', apiKey: 'fixture-only' } });

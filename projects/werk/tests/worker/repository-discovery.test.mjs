@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import { workspaceContext } from './runtime-fixtures.mjs';
 import { workerStatus } from '../helpers/worker-status.mjs';
 import { prepareTaskWorkspace } from '../../src/worker/dist/worker/status/workspace-repositories.js';
@@ -13,6 +14,8 @@ import { RepositoryManager } from '../../src/worker/dist/worker/infrastructure/r
 import { worktreeName } from '../../src/worker/dist/worker/infrastructure/repositories-git.js';
 import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';
 import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
+
+prepareNativeProcessFixture();
 
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'user.name=Werk Fixture', '-c', 'user.email=fixture@example.invalid', ...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 const exists = async path => !!await lstat(path).catch(error => { if (error.code !== 'ENOENT') throw error; });

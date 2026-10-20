@@ -90,7 +90,8 @@ test('legacy dispatches may omit limits but cannot change grant revisions or exa
 test('provider process accepts only the bounded Claude MCP wait override and keeps isolation settings', { timeout: 30000 }, async () => {
   const environment = { ...claudeToolEnvironment({ toolTimeoutMs: 450000 }), HOME: '/forbidden-override', WERK_UNAPPROVED_ENV: 'private', CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS: '100' };
   const script = 'console.log(JSON.stringify({timeout:process.env.MCP_TOOL_TIMEOUT??null,home:process.env.HOME??null,extra:process.env.WERK_UNAPPROVED_ENV??null,background:process.env.CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS??null}))';
-  const output = await providerCommand(process.execPath, ['-e', script], tmpdir(), AbortSignal.timeout(20000), undefined, true, 'claude', undefined, environment);
+  // This environment-only probe must not use the temporary root containing the private cache.
+  const output = await providerCommand(process.execPath, ['-e', script], process.cwd(), AbortSignal.timeout(20000), undefined, true, 'claude', undefined, environment);
   assert.deepEqual(JSON.parse(output.toString()), { timeout: '450000', home: process.env.HOME ?? null, extra: null, background: '0' });
   assert.deepEqual(claudeToolEnvironment(undefined), {});
   for (const timeout of ['NaN', '999', '86400001', '1000ms']) await assert.rejects(providerCommand(process.execPath, ['-e', 'throw Error("Must not launch")'], tmpdir(), signal(), undefined, true, 'claude', undefined, { MCP_TOOL_TIMEOUT: timeout }), { code: 'tool_access' });

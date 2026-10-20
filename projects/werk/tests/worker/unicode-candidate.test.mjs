@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import { requiredValue } from '../ui/helpers/required-value.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -12,6 +13,8 @@ import { freezeDevelopmentScope, developmentVerified } from '../../src/worker/di
 import { validateApprovedPaths } from '../../src/worker/dist/worker/application/approved-paths.js';
 import { approvedTaskFiles } from '../../src/worker/dist/worker/infrastructure/journal/workspace-files.js';
 import { cleanup } from './fixture-cleanup.mjs';
+
+prepareNativeProcessFixture();
 
 const git = (directory, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-C', directory, ...args], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
 

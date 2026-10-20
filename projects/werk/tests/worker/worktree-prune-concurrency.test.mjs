@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import { workerStatus } from '../helpers/worker-status.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,6 +9,8 @@ import { join } from 'node:path';
 import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';
 import { submitFeature, submitSharedFeature } from '../../src/worker/dist/worker/status/workspace-features.js';
 import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
+
+prepareNativeProcessFixture();
 
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'user.name=Werk Fixture', '-c', 'user.email=fixture@example.invalid', ...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 /** @returns {PromiseWithResolvers<void>} */

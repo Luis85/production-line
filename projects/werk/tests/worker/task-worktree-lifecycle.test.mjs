@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import { workerStatus } from '../helpers/worker-status.mjs';
 import { testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
@@ -10,6 +11,8 @@ import { RepositoryManager } from '../../src/worker/dist/worker/infrastructure/r
 import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';
 import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
 import { statusServer } from '../../src/worker/dist/worker/status/server.js';
+
+prepareNativeProcessFixture();
 
 const signal = () => AbortSignal.timeout(300000);
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'user.name=Werk Fixture', '-c', 'user.email=fixture@example.invalid', ...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();

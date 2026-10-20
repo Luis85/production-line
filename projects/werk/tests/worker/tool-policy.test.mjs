@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import { taskboardRuntime, reviewOptions } from './runtime-fixtures.mjs';
 import { workerStatus } from '../helpers/worker-status.mjs';
 import { testErrorCode, testListeningAddress } from '../helpers/typed-boundaries.mjs';
@@ -16,6 +17,8 @@ import { WorkerSessions, workspaceModelFactory } from './application-fixtures.mj
 import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
 import { statusServer } from '../../src/worker/dist/worker/status/server.js';
 import { modelCapabilities, prepareModelRequest } from '../../src/worker/dist/worker/application/model-contract.js';
+
+prepareNativeProcessFixture();
 const definition = { name: 'fixture_read', description: 'Read fixture data.\nNo mutation.', inputSchema: { type: 'object', properties: {}, additionalProperties: false } };
 const httpConnection = (extra = {}) => ({ id: 'fixture', name: 'Fixture service', transport: 'http', enabled: true, command: '', args: [], url: 'https://mcp.example.test/', secretEnv: '', allowedTools: [], ...extra });
 /** @returns {import('../../src/worker/application/tool-policy.js').ToolAccessUpdate} */

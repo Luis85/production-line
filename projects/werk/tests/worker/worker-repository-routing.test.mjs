@@ -41,7 +41,7 @@ test('claims refresh saved assignments, withdraw removed repositories, and reuse
   let run, stop = new AbortController(), registrations = 0;
   const claims = [];
   const originalInit = WorkerWorkspace.prototype.init;
-  WorkerWorkspace.prototype.init = async function () { await originalInit.call(this); workspace = this; };
+  WorkerWorkspace.prototype.init = async function (options) { await originalInit.call(this, options); workspace = this; };
   t.after(async () => { stop.abort(); await run; WorkerWorkspace.prototype.init = originalInit; await rm(root, { recursive: true, force: true }); });
   const client = {
     async currentAssignments() { return []; },
@@ -120,7 +120,7 @@ for (const pendingOperation of ['currentAssignments', 'claim']) {
     let run, entered = false, assigned = false, completed = false, selected;
     const {promise:pending,resolve:release}=Promise.withResolvers();
     const originalInit = WorkerWorkspace.prototype.init;
-    WorkerWorkspace.prototype.init = async function () { await originalInit.call(this); workspace = this; };
+    WorkerWorkspace.prototype.init = async function (options) { await originalInit.call(this, options); workspace = this; };
     t.after(async () => { release(); releaseExecutor?.(); stop.abort(); await run; WorkerWorkspace.prototype.init = originalInit; await rm(root, { recursive: true, force: true }); });
     /** @type {import('../../src/shared/domain.ts').Task} */
     const task = { id: 'pending-assignment', project: 'alpha', repository: initial.id, title: 'Keep the selected repository', criteria: ['Keep the admitted mapping'], wikilinks: [], provider: 'codex', priority: 1, status: 'running', attempt: 1, workerId: 'worker-one', lease: 'pending-lease', expiresAt: Date.now() + 60000, createdAt: Date.now(), profile: config.profiles[0].id };

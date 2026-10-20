@@ -1,3 +1,4 @@
+import { assertNativeWorkReady } from './workspace-native-work.js';
 import { executionRecoveryCommand } from './workspace-execution-recovery.js';
 import { deliveryPolicyActions, deliveryPolicyCommand } from './workspace-delivery-policy.js';
 import { deliveryMetrics } from './workspace-delivery-metrics.js';
@@ -174,6 +175,7 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
       "Remote assignments require an explicit upstream successor with a fresh lease and pinned context.",
     );
   if (['propose', 'accept_candidate', 'execute'].includes(action)) assertTaskCanContinue(workspace, before.owner.sessionId);
+  if (before.input.kind === 'patch' && ['criterion_decision', 'attest', 'request_changes', 'confirm_stopped', 'execute', 'resume', 'retry', 'accept_candidate', 'readiness_decision'].includes(action)) assertNativeWorkReady(workspace);
   if (action === "criterion_decision") await workspace.board.verifyDeliveryCheckpoint(requestId, before.revision);
   if (["attest", "request_changes"].includes(action) && before.delivery?.review) await workspace.board.verifyDelivery(requestId, before.revision);
   const assertNoLiveServices = () => {

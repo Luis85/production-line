@@ -1,3 +1,4 @@
+import { assertNativeWorkReady } from './workspace-native-work.js';
 import { validateSharedIntakeConfig } from '../application/shared-feature-state.js';
 import type { FeatureRequests } from '../application/feature-requests.js';
 import type { SharedFeatureIntake } from '../application/shared-feature-intake.js';
@@ -70,6 +71,7 @@ export async function sharedIntakeCommand(workspace: WorkspaceContext, input: un
   }
   if (body.config !== undefined || body.expectedRevision !== undefined) throw new DomainError('invalid_input', 'Configuration fields are only accepted when saving shared intake.');
   if (body.action === 'sync' && body.id === undefined) {
+    assertNativeWorkReady(workspace);
     if (!workspace.acceptingTasks || workspace.configurationUpdating || workspace.repositoriesUpdating) throw new DomainError('unavailable', 'Worker configuration is changing or the worker is stopping.');
     await project.sharedRuntime.intake.sync();
     return sharedIntakeView(workspace, projectId);

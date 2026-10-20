@@ -6,6 +6,7 @@ import { mkdtemp, mkdir, readFile, writeFile, realpath, rm } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parse, stringify } from 'yaml';
+import { prepareProcessRuntime } from '../../src/worker/dist/shared/process/launcher.js';
 import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';
 import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
 import { modelFor } from '../../src/worker/dist/worker/infrastructure/providers.js';
@@ -168,6 +169,8 @@ export async function sharedMarkdownFixture(t) {
   await git(author, 'add', '.'); await git(author, 'commit', '-m', 'Configure shared Markdown workflow');
   await git(author, 'push', '-u', 'origin', 'main');
   await git(directory, 'clone', remote, checkout); await configureGit(checkout);
+  // This direct workspace fixture bypasses runner startup; prepare before its Git/sync operation budgets.
+  await prepareProcessRuntime(checkout, t.signal);
   phase('initialize workspace and shared binding');
   await start();
   await current().updateSettings({ board: { paused: true },

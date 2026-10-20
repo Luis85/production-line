@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import { compareBaselineChecks } from '../../src/worker/dist/worker/application/development-baseline-comparison.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,6 +14,8 @@ import { freezeDevelopmentScope, developmentVerified } from '../../src/worker/di
 import { createDevelopmentRuntime } from '../../src/worker/dist/worker/infrastructure/candidate-tools.js';
 import { approvedTaskFiles } from '../../src/worker/dist/worker/infrastructure/journal/workspace-files.js';
 import { prepareRepositoryWorktree, removeRepositoryWorktree, repositoryRoot, worktreeName } from '../../src/worker/dist/worker/infrastructure/repositories-git.js';
+
+prepareNativeProcessFixture();
 const run = promisify(execFile);
 const git = async (repo, ...args) => (await run('git', ['-c', 'core.hooksPath=/dev/null', '-C', repo, ...args], { windowsHide: true })).stdout.trim();
 const budget = process.platform === 'win32' ? 180000 : 30000;

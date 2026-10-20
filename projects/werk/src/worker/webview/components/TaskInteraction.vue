@@ -15,7 +15,7 @@ import type { InteractionTurn, InteractionView } from '../../application/interac
 import { state, chatAction, date, request, taskStatus, workspaceAction, getCapacityFreshness } from '../store';
 import { buildWorkerCapacityView } from '../worker-capacity';
 const emit = defineEmits<{ busy: [boolean]; board: [] }>();
-const capacity = computed(() => buildWorkerCapacityView(state.sessions?.capacity, getCapacityFreshness()));
+const capacity = computed(() => buildWorkerCapacityView(state.sessions?.capacity, getCapacityFreshness(), state.environment?.repositories?.nativeWork));
 const mode = ref<'new' | 'followup'>('new');
 const savedRequest = ref('');
 watch(() => state.unlocked, unlocked => { if (!unlocked) savedRequest.value = ''; }, { flush: 'sync' });

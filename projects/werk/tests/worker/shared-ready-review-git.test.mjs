@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -9,6 +10,8 @@ import { defaultFeatureWorkflow, defaultFeatureCheck, featureContentHash } from 
 import { readyReviewSessionId, validateReadyReviewInput } from '../../src/worker/dist/worker/application/ready-review-contracts.js';
 import { authoringBase, authoringTemplateFor } from '../../src/worker/dist/worker/infrastructure/feature-authoring-assets.js';
 import { parseFeature } from '../../src/worker/dist/worker/infrastructure/features/document.js';
+
+prepareNativeProcessFixture();
 
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.autocrlf=false', '-c', 'user.name=Werk Fixture', '-c', 'user.email=fixture@example.invalid', ...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 15000 }).trim();
 const sourcePath = 'features/export.md', reviewPath = 'prompts/ready-check.md';
