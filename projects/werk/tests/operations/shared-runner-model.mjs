@@ -20,7 +20,7 @@ if (resumed) input = await readFile(contextFile, 'utf8') + '\n' + input;
 await writeFile(contextFile, input, { mode: 0o600 });
 const identity = input.match(/\[batch-(00|10|20)\]/)?.[1];
 assert.ok(identity, 'Expected the labelled Feature Request in the model input.');
-const event = value => appendFile(calls, JSON.stringify({ identity, ...value }) + '\n');
+const event = value => appendFile(calls, JSON.stringify({ identity, at: new Date().toISOString(), ...value }) + '\n');
 const handle = await open(lock, 'wx').catch(async error => { await event({ phase: 'overlap' }); throw error; });
 await event({ phase: 'started', input, sessionId, resumed });
 try {

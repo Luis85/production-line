@@ -237,7 +237,7 @@ test('only the exact current Ready Check attempt establishes active model eviden
   const input = { sessions: sessions([], 'review-one'), sharedRequests: [request], runs: [run('review-one', { id: 'review-run', purpose: 'gate_review', outcome: 'running', startedAt: at, after: null })] };
   let item = buildTaskOverview(input).items[0];
   assert.equal(item.group, 'running'); assert.equal(item.statusLabel, 'Ready Check running'); assert.equal(item.model, 'recorded-model');
-  assert.equal(item.sessionId, undefined); assert.equal(item.evidenceHref, '/history?view=runs&runSession=review-one');
+  assert.equal(item.sessionId, 'review-one'); assert.equal(item.primaryAction.kind, 'feature'); assert.equal(item.evidenceHref, '/history?view=runs&runSession=review-one');
   input.runs[0].id = 'previous-attempt';
   item = buildTaskOverview(input).items[0];
   assert.equal(item.status, 'unconfirmed'); assert.equal(item.model, null);

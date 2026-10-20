@@ -29,11 +29,17 @@ test('interaction input rejects ambiguous text, invalid revisions and caller-con
   const cases=[[undefined,flags],[{answer:' '},flags],[{answer:'a'.repeat(8001)},flags],[{answer:'One'},{...flags,message:'Two'}],[{answer:'Text',sessionId:'other'},flags],[{answer:'Text',operationId:'other'},flags],[{answer:'Text'},{...flags,'if-match':'-1'}],[{answer:'Text'},{...flags,'if-match':'1.5'}],[{answer:'Text'},{...flags,'if-match':'9007199254740992'}],[{answer:'Text'},{...flags,key:'spaces not allowed'}]];
   for(const [body,options] of cases)await assert.rejects(workerBody(catalog['interaction answer'],body,options),error=>testErrorStatus(error, 'exitCode')===2);
 });
-test('worker waits return immediately for pending questions/escalations and never label them completed',async()=>{
-  const task={session:{status:'waiting_input'}},feature={record:{status:'escalated'},execution:{status:'escalated'}},local={status:'waiting_input'};
-  assert.equal(await waitForWorker(async()=>task,'task','1'),task);assert.equal(task.session.status,'waiting_input');
-  assert.equal(await waitForWorker(async()=>feature,'feature','1'),feature);assert.equal(feature.execution.status,'escalated');
-  assert.equal(await waitForWorker(async()=>local,'file-task','1'),local);
+test('worker waits return immediately for pending questions/escalations and never label them completed',async t=>{
+  // This checks terminal-state handling, not scheduler speed across a 1 ms wall-clock boundary.
+  t.mock.method(Date,'now',()=>1000);
+  const delay=t.mock.method(globalThis,'setTimeout',()=>{throw Error('A pending interaction must return without scheduling another poll.');});
+  for(const kind of ['task','feature','file-task'])for(const status of ['waiting_input','escalated']){
+    const result=kind==='task'?{session:{status}}:kind==='feature'?{record:{status},execution:{status}}:{status};
+    const original=structuredClone(result);let reads=0;
+    assert.equal(await waitForWorker(async budget=>{reads++;assert.equal(budget,1);return result;},kind,'1'),result);
+    assert.equal(reads,1);assert.deepEqual(result,original);
+  }
+  assert.equal(delay.mock.callCount(),0);
 });
 
 test('normalized event polling rejects unsafe sequence/page arguments before a request',async()=>{

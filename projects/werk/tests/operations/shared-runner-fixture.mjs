@@ -45,7 +45,10 @@ export async function sharedRunnerFixture(t) {
       const result = await check(); if (result) return result;
       await delay(250);
     }
-    throw Error(label + ': ' + JSON.stringify({ intake: lastView, events: (await events()).map(({ identity, phase }) => ({ identity, phase })) }));
+    const retained = await readFile(join(state, 'shared-intake.json'), 'utf8').then(JSON.parse).catch(() => null);
+    const board = await api('/api/taskboard').then(value => value.tasks.map(({ id, status, error, finishedAt }) => ({ id, status, error, finishedAt }))).catch(error => ({ error: String(error) }));
+    const claims = Array.isArray(retained?.records) ? retained.records.slice(0, 100).filter(record => record && typeof record === 'object').map(({ id, status, updatedAt, submitted, pending, remoteRevision, publishedState }) => ({ id, status, updatedAt, submitted, pendingOperation: pending?.operationId ?? null, remoteAcknowledged: remoteRevision === publishedState })) : null;
+    throw Error(label + ': ' + JSON.stringify({ intake: lastView, board, claims, events: (await events()).map(({ identity, phase, at }) => ({ identity, phase, at })) }));
   }
   async function observePolls(count = 2) {
     let previous = (await view()).lastSyncedAt, observed = 0;

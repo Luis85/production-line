@@ -13,10 +13,10 @@ const parsed = ts.createSourceFile('page.ts', script, ts.ScriptTarget.ES2022, tr
 const code = ts.createPrinter().printList(ts.ListFormat.MultiLine, ts.factory.createNodeArray(parsed.statements.filter(statement => !ts.isImportDeclaration(statement))), parsed);
 const javascript = ts.transpile(code, { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS });
 const at = '2026-10-18T12:00:00.000Z';
-function fixture(t) {
-  const calls = [], state = reactive({ unlocked: true, workspaceBusy: false, sessionsReadAt: at, environment: null, board: null, history: null,
+function fixture(t, sharedRequests = []) {
+  const calls = [], state = reactive({ unlocked: true, workspaceBusy: false, sessionsReadAt: at, environment: { sharedIntake: { requests: sharedRequests } }, board: null, history: null,
     sessions: { selected: '', records: [], execution: { currentSessionId: 'ready-review-one', activeSessions: /** @type {import('../../src/worker/application/serial-executor').ActiveExecutionPermit[] | undefined} */ (undefined) } } });
-  const run = { id: 'review-run', sessionId: 'ready-review-one', title: 'Ready Check: Improve search', purpose: 'gate_review', provider: 'codex-cli', model: 'review-model', startedAt: at, after: null, usage: { inputTokens: 300, outputTokens: 80 } };
+  const run = { id: 'review-run', sessionId: 'ready-review-one', title: 'Ready Check: Improve search', purpose: 'gate_review', provider: 'codex-cli', model: 'review-model', outcome: 'running', acceptedAt: at, startedAt: at, after: null, usage: { inputTokens: 300, outputTokens: 80 } };
   const runs = [run];
   const read = async (path, method, body) => {
     calls.push({ path, method, body });
@@ -27,7 +27,7 @@ function fixture(t) {
   const bindings = { computed, ref, watch, nextTick, onActivated() {}, onDeactivated() {}, useRoute: () => ({ path: '/taskboard', query: {} }), useRouter: () => ({}), state, request: read,
     buildTaskOverview, readRequestSummaries, buildWorkerCapacityView: () => ({ state: 'busy', stale: false }), getCapacityFreshness: () => 'fresh' };
   const scope = effectScope(); t.after(() => scope.stop());
-  const result = scope.run(() => new Function(...Object.keys(bindings), javascript + '\nreturn { readEvidence, activeRun, activeRuns, currentExecutionId, currentSession, runProvider, runModel, runElapsed, usage, canStop };')(...Object.values(bindings)));
+  const result = scope.run(() => new Function(...Object.keys(bindings), javascript + '\nreturn { readEvidence, activeRun, activeRuns, currentExecutionId, currentSession, runProvider, runModel, runElapsed, usage, canStop, running, extraRunning, activePurpose };')(...Object.values(bindings)));
   return { ...result, state, run, runs, calls };
 }
 
@@ -55,4 +55,21 @@ test('concurrent attempt projection selects only unique live sessions and never 
   await f.readEvidence(); assert.deepEqual(f.activeRuns.value.map(run => run.id), ['review-run', 'implementation-run']); assert.equal(f.runModel.value, 'review-model');
   f.state.sessions.execution.currentSessionId = 'implementation-two'; assert.equal(f.runModel.value, 'second-model'); assert.equal(f.usage.value, '30 tokens reported');
   f.runs.push({ ...f.runs.at(-1), id: 'ambiguous-second-attempt' }); await f.readEvidence(); assert.equal(f.activeRun.value, null); assert.equal(f.runModel.value, 'Not yet recorded'); assert.deepEqual(f.activeRuns.value.map(run => run.id), ['review-run']);
+});
+
+
+test('Ready Check sessions identify the current reviewer without duplicating it or claiming unrelated attempts', async t => {
+  const requests = ['one', 'two'].map(id => ({ id, name: id + '.md', title: 'Review ' + id, status: 'reviewing_ready', isLocal: true, taskId: null, updatedAt: at,
+    readyReview: { status: 'running', sessionId: 'ready-review-' + id, runId: id === 'one' ? 'review-run' : 'review-two' } }));
+  const f = fixture(t, requests);
+  f.state.sessions.execution.activeSessions = ['ready-review-one', 'ready-review-two'].map(sessionId => ({ sessionId, projectId: sessionId, projectLimit: 1, startedAt: Date.parse(at), monotonicStartedAt: 0 }));
+  f.runs.push({ ...f.run, id: 'review-two', sessionId: 'ready-review-two', model: 'other-review-model' });
+  await f.readEvidence();
+  assert.equal(f.activePurpose.value, 'Feature Request Ready Check');
+  assert.equal(f.running.value.title, 'Review one'); assert.equal(f.running.value.primaryAction.kind, 'feature');
+  assert.deepEqual(f.extraRunning.value.map(item => item.sessionId), ['ready-review-two']);
+  assert.equal(f.canStop.value, false); assert.equal(f.currentSession.value, undefined);
+  f.run.id = 'previous-attempt'; await f.readEvidence();
+  assert.equal(f.running.value, undefined); assert.equal(f.activePurpose.value, 'Advisory review');
+  assert.deepEqual(f.extraRunning.value.map(item => item.sessionId), ['ready-review-two']);
 });

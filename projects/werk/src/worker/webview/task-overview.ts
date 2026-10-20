@@ -211,7 +211,7 @@ function projectReadyReview(request: SharedFeatureView, currentSessionId: string
     : review.status === 'passed' ? 'The review and Definition of Ready checks passed. Waiting for implementation admission, capacity, and start conditions.'
     : 'Waiting for the worker’s shared execution slot and start conditions. Implementation has not started.';
   return {
-    id: 'shared-feature:' + (request.feature?.key ?? request.id), projectId: request.feature?.repositoryId, taskId: '', featureName: request.name,
+    id: 'shared-feature:' + (request.feature?.key ?? request.id), projectId: request.feature?.repositoryId, taskId: '', sessionId: review.sessionId, featureName: request.name,
     title: request.title, summary, source: 'project', sourceLabel: 'Project request', status, statusLabel, group: groupFor(status),
     provider: run?.provider ?? null, model: run?.model || null, modelBasis: run ? 'recorded' : 'unavailable',
     modelSnapshot: run ? { provider: run.provider, model: run.model, runId: run.id, recordedAt: run.acceptedAt, purpose: run.purpose } : null,
