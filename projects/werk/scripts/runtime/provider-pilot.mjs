@@ -9,6 +9,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { WorkerSettings } from '../../src/worker/dist/worker/infrastructure/settings.js';
 import { createWorkerSessions, createLocalTaskboard } from '../../src/worker/dist/worker/infrastructure/workspace-services.js';
 import { prepareRepositoryWorktree } from '../../src/worker/dist/worker/infrastructure/repositories.js';
+import { prepareProcessRuntime } from '../../src/worker/dist/shared/process/launcher.js';
 import { ProviderStatusChecks } from '../../src/worker/dist/worker/infrastructure/provider-status.js';
 const { values } = parseArgs({ options: { help: { type: 'boolean' }, provider: { type: 'string', default: 'claude-cli' }, executable: { type: 'string' }, model: { type: 'string', default: '' }, 'allow-billable-model-call': { type: 'boolean' }, 'accept-cursor-native-permissions': { type: 'boolean' }, 'timeout-ms': { type: 'string', default: '900000' } } });
 const usage = 'Usage: npm run pilot:provider -- --provider claude-cli|codex-cli|cursor-cli --executable <absolute official CLI> --allow-billable-model-call [--model <name>] [--timeout-ms 900000] [--accept-cursor-native-permissions]\nRuns one real local development Feature Request using the current CLI subscription login. It creates and retains a scratch Git repository, isolated worktree, checks and local review note; it does not push or merge. Provider calls consume your account allowance. A successful run qualifies only this exact host/CLI/version. Cursor uses its own native permissions and hooks.';
@@ -23,6 +24,8 @@ async function pilot() {
   let sessions, board, root;
   const receipt = { schemaVersion: 1, checkKind: 'real_provider_development_pilot', fixture: false, platform: process.platform, architecture: process.arch, node: process.versions.node, provider, authenticationMode: 'cli-account', startedAt: new Date().toISOString(), liveInferenceQualified: false };
   try {
+    if (process.platform === 'win32') console.error('Preparing the trusted Windows command runtime (up to 30 seconds); provider checks keep their separate five-second deadlines.');
+    await prepareProcessRuntime(process.cwd(), new AbortController().signal);
     const diagnostic = await checks.check(connection);
     if (!diagnostic.available || diagnostic.authentication !== 'authenticated') throw Error('The selected official CLI must pass its account/version diagnostic before billable execution.');
     root = await realpath(await mkdtemp(join(tmpdir(), 'werk-real-provider-pilot-')));

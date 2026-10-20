@@ -1,4 +1,4 @@
-import { requireAuthenticationSelection } from './provider-authentication.js';
+import { requireAuthenticationSelection, requireProviderAuthentication } from './provider-authentication.js';
 import { join } from 'node:path';
 import { currentToolManifest, withProviderTools, type ProviderOptions } from './provider-tool-session.js';
 import { legacyModelReply, modelCapabilities, observeModelInvocation, ProviderModelError, requireModelRequest, type StructuredModel } from '../application/model-contract.js';
@@ -16,9 +16,10 @@ export function cursorModel(connection: ProviderConnection, directory: string, o
     toolManifestFor(policy) { return currentToolManifest(options.tools, policy); },
     capabilities: { ...modelCapabilities, tools: 'provider_native', ...(options.session ? { continuation: 'provider_session', nativeResume: true } : {}) },
     reply(messages, signal, onUsage) { return legacyModelReply(model, messages, signal, onUsage); },
-    execute(request, signal, onUsage, control) {
+    async execute(request, signal, onUsage, control) {
       requireModelRequest(request, 'cursor-cli');
       requireAuthenticationSelection(connection, request.provider.authenticationMode);
+      await requireProviderAuthentication(connection, signal);
       return observeModelInvocation(signal, onUsage, observe => withProviderTools(request, signal, options.tools, async (runtime, bounded) => {
         let workspace = join(directory, 'model-workspaces', options.session ? sessionDigest(options.session.binding) : 'cursor-chat');
         if (request.policy.development) {

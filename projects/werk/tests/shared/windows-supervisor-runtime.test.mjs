@@ -96,3 +96,24 @@ test('a cold deadline never dispatches its target and later adequate-budget warm
 test('invalid target arguments retain typed spawn failures', { skip, timeout: 30000 }, async () => {
   await assert.rejects(runProcess(node, ['invalid\0argument'], { env: {}, mode: 'contained', maxOutputBytes: 4096 }), error => error instanceof ProcessRunError && error.reason === 'spawn');
 });
+
+
+test('a runtime owner survives a short cold command deadline and later probes keep their five-second budget', { skip, timeout: 60000 }, async t => {
+  const launcherUrl = new URL('../../src/worker/dist/shared/process/launcher.js', import.meta.url);
+  launcherUrl.search = 'owned-preparation';
+  /** @type {typeof import('../../src/shared/process/launcher.ts')} */
+  const fresh = await import(launcherUrl.href);
+  const directory = await mkdtemp(join(tmpdir(), 'werk-supervisor-owner-'));
+  const controller = new AbortController(), signal = AbortSignal.any([controller.signal, t.signal]);
+  const marker = join(directory, 'must-not-dispatch');
+  const preparation = fresh.prepareProcessRuntime(directory, signal);
+  t.after(async () => { controller.abort(); await preparation.catch(() => {}); await rm(directory, {recursive:true,force:true}); });
+  assert.equal(fresh.processRuntimePreparing(), true);
+  await assert.rejects(fresh.runProcess(node, ['-e', `require('node:fs').writeFileSync(${JSON.stringify(marker)},'started')`], { cwd: directory, env: {}, mode:'contained', signal, timeoutMs:1, maxOutputBytes:4096 }), error => error instanceof fresh.ProcessRunError && error.reason === 'timeout');
+  await assert.rejects(readFile(marker), {code:'ENOENT'});
+  assert.equal(fresh.processRuntimePreparing(), true, 'the command deadline cannot cancel the separate runtime owner');
+  await preparation;
+  assert.equal(fresh.processRuntimePreparing(), false);
+  const probe = await fresh.runProcess(node, ['-e', 'console.log("ready")'], { cwd:directory, env:{}, mode:'contained', signal, timeoutMs:5000, maxOutputBytes:4096 });
+  assert.equal(probe.stdout.toString().trim(), 'ready');
+});

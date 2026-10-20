@@ -241,6 +241,9 @@ test('deep publication and later task worktrees support committed receipt paths 
       // The Windows job supervisor carries the original command as data. Observe it without substituting execution.
       const launch = JSON.parse(Buffer.from(options.env.WERK_PROVIDER_LAUNCH, 'base64').toString('utf8'));
       invoked = launch.executable; commandArgs = launch.arguments;
+    } else if ([repository, taskRepository].includes(options?.cwd) && Array.isArray(args) && args[0] === 'werk-supervisor-v1' && args[1] === 'argv') {
+      // The cached native supervisor carries the same command in its argv envelope.
+      invoked = args[2]; commandArgs = args.slice(3);
     }
     const command = Array.isArray(commandArgs) ? commandArgs.indexOf('worktree') : -1;
     if ((invoked === 'git' || basename(invoked).toLowerCase() === 'git.exe') && [repository, taskRepository].includes(options?.cwd) && command >= 0 && commandArgs[command + 1] === 'add') {

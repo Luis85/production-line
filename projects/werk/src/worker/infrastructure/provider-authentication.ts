@@ -1,3 +1,4 @@
+import { prepareProcessRuntime } from '../../shared/process/launcher.js';
 import type { ProviderAuthenticationMode } from '../application/provider-capabilities.js';
 import type { ProviderConnection } from '../application/provider-contract.js';
 import { ProviderModelError } from '../application/model-result.js';
@@ -19,9 +20,13 @@ export function requireAuthenticationSelection(connection: ProviderConnection, a
   const apiMode = connection.id.endsWith('-api') ? 'api-key' : undefined;
   if ((accepted ?? apiMode) !== (connection.authenticationMode ?? apiMode)) throw new ProviderModelError('authentication');
 }
-/** Confirm account billing without inference or reading the provider's credential store. */
+/** Prepare native execution, then confirm account billing without inference or credential-store access. */
 export async function requireProviderAuthentication(connection: ProviderConnection, signal: AbortSignal): Promise<void> {
   const environment = providerAuthenticationEnvironment(connection);
+  if (connection.id.endsWith('-cli')) {
+    try { await prepareProcessRuntime(process.cwd(), signal); }
+    catch { throw new ProviderModelError(signal.aborted ? 'cancelled' : 'unavailable'); }
+  }
   if (connection.authenticationMode !== 'cli-account' || connection.id === 'cursor-cli') return;
   const claude = connection.id === 'claude-cli';
   if (!claude && connection.id !== 'codex-cli') return;

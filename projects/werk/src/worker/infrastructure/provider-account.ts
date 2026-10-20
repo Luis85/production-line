@@ -1,3 +1,4 @@
+import { processRuntimePreparing } from '../../shared/process/launcher.js';
 import { providerAuthenticationEnvironment } from './provider-authentication.js';
 import { constants } from 'node:fs';
 import { access } from 'node:fs/promises';
@@ -69,7 +70,7 @@ export class ProviderAccountChecks {
       const args = connection.id === 'codex-cli' ? ['login', 'status'] : connection.id === 'cursor-cli' ? ['status'] : ['auth', 'status'];
       const result = await runProviderProbe(connection.executable, connection.id === 'codex-cli' ? 'codex' : connection.id === 'cursor-cli' ? 'cursor' : 'claude', args, { signal: this.controller.signal, timeoutMs: 5000, maxOutputBytes: 16384 }, providerAuthenticationEnvironment(connection));
       return parseProviderAccount(connection.id, result.exitCode, result.stdout.toString('utf8'), result.stderr.toString('utf8'));
-    } catch { return this.unavailable(connection.id, 'The account check failed, timed out or returned too much output. Retry after checking the CLI installation.'); }
+    } catch { return this.unavailable(connection.id, processRuntimePreparing() ? 'The Windows command runtime is preparing. Retry shortly; no account identity was confirmed.' : 'The account check failed, timed out or returned too much output. Retry after checking the CLI installation.'); }
   }
   async close() { this.controller.abort(); await Promise.allSettled([...this.pending.values()].map(item => item.operation)); this.cached.clear(); }
 }

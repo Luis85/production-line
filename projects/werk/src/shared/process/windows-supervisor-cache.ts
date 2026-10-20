@@ -63,7 +63,7 @@ export class WindowsSupervisorCache {
     if (!this.directory || !this.directoryIdentity) return;
     try {
       const info = lstatSync(this.directory);
-      if (info.isDirectory() && !info.isSymbolicLink() && same(info, this.directoryIdentity) && realpathSync(this.directory) === this.directory)
+      if (info.isDirectory() && !info.isSymbolicLink() && same(info, this.directoryIdentity) && realpathSync.native(this.directory) === this.directory)
         rmSync(this.directory, { recursive: true, force: true });
     } catch { /* An executing Windows image may remain locked until its supervisor exits. */ }
   }
@@ -96,7 +96,7 @@ export class WindowsSupervisorCache {
   async prepare(compile: WindowsSupervisorCompiler, cwd: string, signal: AbortSignal): Promise<void> {
     signal.throwIfAborted();
     if (this.disabled || this.artifact) return;
-    try { cwd = realpathSync(cwd); } catch { return; }
+    try { cwd = realpathSync.native(cwd); } catch { return; }
     let pending = this.preparation;
     if (!pending) {
       pending = { controller: new AbortController(), promise: Promise.resolve(), waiters: 0, settled: false };
@@ -123,12 +123,12 @@ export class WindowsSupervisorCache {
     const saved = this.artifact;
     if (!saved || this.disabled) return undefined;
     let workspace: string;
-    try { workspace = realpathSync(cwd); } catch { return undefined; }
+    try { workspace = realpathSync.native(cwd); } catch { return undefined; }
     try {
       if (!separate(saved.directory, workspace)) throw Error('Supervisor cache overlaps the project');
       const directory = lstatSync(saved.directory), info = lstatSync(saved.executable);
-      if (!directory.isDirectory() || directory.isSymbolicLink() || !same(directory, saved.directoryIdentity) || realpathSync(saved.directory) !== saved.directory ||
-          !info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || !same(info, saved.identity) || info.size !== saved.size || !bounded(info.size) || realpathSync(saved.executable) !== saved.executable ||
+      if (!directory.isDirectory() || directory.isSymbolicLink() || !same(directory, saved.directoryIdentity) || realpathSync.native(saved.directory) !== saved.directory ||
+          !info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || !same(info, saved.identity) || info.size !== saved.size || !bounded(info.size) || realpathSync.native(saved.executable) !== saved.executable ||
           digest(readFileSync(saved.executable)) !== saved.digest) throw Error('Supervisor cache changed');
       const commandLine = verbatimCmd ? windowsCommandLine(executable, args) : null;
       const targetEnvironment = { ...env };

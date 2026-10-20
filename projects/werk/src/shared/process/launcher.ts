@@ -4,6 +4,7 @@ import { windowsContainment } from './windows-containment.js';
 import { WindowsSupervisorCache } from './windows-supervisor-cache.js';
 
 const supervisorCache = process.platform === 'win32' ? new WindowsSupervisorCache() : undefined;
+let preparationOwners = 0;
 
 /**
  * The only place application code starts child processes. Every launch:
@@ -65,6 +66,28 @@ export interface RunOptions extends LaunchOptions {
   allowNonZeroExit?: boolean;
 }
 
+/** Read-only preparation state; it never implies provider authentication or readiness. */
+export function processRuntimePreparing(): boolean { return preparationOwners > 0; }
+
+/** Explicit lifecycle-owned setup. It runs no provider command and never extends a command's deadline. */
+export async function prepareProcessRuntime(cwd: string, signal: AbortSignal): Promise<void> {
+  signal.throwIfAborted();
+  if (!supervisorCache) return;
+  const stop = new AbortController(), bounded = AbortSignal.any([signal, stop.signal]);
+  const timer = setTimeout(() => stop.abort(), 30000); timer.unref();
+  preparationOwners++;
+  try { await prepareWindowsSupervisor(cwd, bounded); bounded.throwIfAborted(); }
+  finally { clearTimeout(timer); preparationOwners--; }
+}
+
+async function prepareWindowsSupervisor(cwd: string, signal: AbortSignal): Promise<void> {
+  await supervisorCache?.prepare(async (plan, bounded) => {
+    // Private path bypasses cache preparation, while the existing supervisor contains the compiler.
+    await runUnpreparedProcess(plan.executable, plan.args, { cwd: plan.cwd, env: plan.env, mode: 'contained', observation: 'ignore', input: plan.input,
+      signal: bounded, timeoutMs: 30000, maxOutputBytes: 131072, captureStderr: true, graceMs: 0 });
+  }, cwd, signal);
+}
+
 /** Run to completion with a deadline, cancellation and bounded output. */
 export async function runProcess(executable: string, args: string[], options: RunOptions): Promise<RunResult> {
   if (!supervisorCache || options.mode !== 'contained' || executable.includes('\0') || args.some(arg => arg.includes('\0'))) return runUnpreparedProcess(executable, args, options);
@@ -75,11 +98,7 @@ export async function runProcess(executable: string, args: string[], options: Ru
   const signal = options.signal ? AbortSignal.any([options.signal, timeout.signal]) : timeout.signal;
   const interrupted = () => new ProcessRunError(options.signal?.aborted ? 'cancelled' : 'timeout', { exitCode: null, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) });
   try {
-    await supervisorCache.prepare(async (plan, bounded) => {
-      // Private path bypasses cache preparation, while the existing supervisor contains the compiler.
-      await runUnpreparedProcess(plan.executable, plan.args, { cwd: plan.cwd, env: plan.env, mode: 'contained', observation: 'ignore', input: plan.input,
-        signal: bounded, timeoutMs: 30000, maxOutputBytes: 131072, captureStderr: true, graceMs: 0 });
-    }, options.cwd ?? process.cwd(), signal);
+    await prepareWindowsSupervisor(options.cwd ?? process.cwd(), signal);
   } catch (error) { if (signal.aborted) throw interrupted(); throw error; }
   finally { if (deadline) clearTimeout(deadline); }
   if (signal.aborted) throw interrupted();

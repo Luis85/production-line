@@ -1,3 +1,4 @@
+import { processRuntimePreparing } from '../../shared/process/launcher.js';
 import { providerCapabilities, type ProviderCapabilities, type ProviderAuthenticationMode } from '../application/provider-capabilities.js';
 import { providerAuthenticationEnvironment } from './provider-authentication.js';
 import { parseProviderAccount } from './provider-account.js';
@@ -77,7 +78,7 @@ export class ProviderStatusChecks {
         } catch { /* Older CLI versions may not provide a machine-readable status. */ }
       }
       return { ...available, authentication: 'unknown', message: 'The CLI could not confirm login. Check its status in the worker account terminal; updating the CLI may be needed.' };
-    } catch { return { ...available, ...(connection.id === 'claude-cli' && available.compatibility !== 'minimum_met' ? { available: false, minimumVersion: minimumClaudeVersion, compatibility: 'unknown' as const } : {}), authentication: 'unknown', message: 'The CLI status check failed or timed out. Check the installation and login in the worker account terminal.' }; }
+    } catch { return { ...available, ...(connection.id === 'claude-cli' && available.compatibility !== 'minimum_met' ? { available: false, minimumVersion: minimumClaudeVersion, compatibility: 'unknown' as const } : {}), authentication: 'unknown', message: processRuntimePreparing() ? 'The Windows command runtime is preparing. Retry shortly; no provider authentication was confirmed.' : 'The CLI status check failed or timed out. Check the installation and login in the worker account terminal.' }; }
   }
   async close() { this.controller.abort(); await Promise.allSettled([...this.pending.values()].map(item => item.operation)); this.cached.clear(); }
 }

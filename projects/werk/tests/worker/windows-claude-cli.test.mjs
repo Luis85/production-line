@@ -7,6 +7,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
+import { prepareProcessRuntime } from '../../src/worker/dist/shared/process/launcher.js';
 import { claudeArguments, modelFor } from '../../src/worker/dist/worker/infrastructure/providers.js';
 import { providerCommand, providerEnvironment } from '../../src/worker/dist/worker/infrastructure/codex-adapter.js';
 import { ProviderStatusChecks } from '../../src/worker/dist/worker/infrastructure/provider-status.js';
@@ -60,16 +61,23 @@ test('Windows provider environment keeps the account profile but drops unrelated
 
 test('Windows cancellation terminates the provider and its descendants', { ...windows, timeout: 30000 }, async t => {
   const f = await treeFixture(t);
+  // Native setup has its own bounded lifecycle; the unchanged marker deadline measures the dispatched provider.
+  await prepareProcessRuntime(f.directory, t.signal);
   const script = `const {spawn}=require('node:child_process');const c=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});require('node:fs').appendFileSync(${JSON.stringify(f.pidFile)},String(c.pid)+'\\n');setInterval(()=>{},1000);`;
   const execution = providerCommand(process.execPath, ['-e', script], f.directory, f.controller.signal, undefined, true, 'claude');
-  // Observe startup failures immediately while waiting for the child fixture.
-  const settled = execution.then(output => ({ output }), error => ({ error }));
-  await waitFor(async () => (await f.pids()).length > 0);
-  f.controller.abort();
-  const outcome = await bounded(settled);
-  assert.equal(outcome.error?.name, 'ProviderModelError');
-  assert.equal(outcome.error?.code, 'cancelled');
-  await waitFor(async () => (await f.pids()).every(pid => !alive(pid)));
+  let observed;
+  const settled = execution.then(output => observed = { output }, error => observed = { error });
+  try {
+    await waitFor(async () => {
+      if (observed) throw observed.error ?? Error('Provider fixture exited before starting its descendant');
+      return (await f.pids()).length > 0;
+    });
+    f.controller.abort();
+    const outcome = await bounded(settled);
+    assert.equal(outcome.error?.name, 'ProviderModelError');
+    assert.equal(outcome.error?.code, 'cancelled');
+    await waitFor(() => f.pids().then(pids => pids.every(pid => !alive(pid))));
+  } finally { f.controller.abort(); await settled; }
 });
 
 for (const inheritPipes of [false, true]) {
