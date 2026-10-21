@@ -145,6 +145,7 @@ function validateSavedDefinition(value: unknown): asserts value is AgentDefiniti
   if (!record(value) || !Array.isArray(value.agents) || !value.agents.length || value.agents.length > 24
     || typeof value.createdAt !== 'string' || !Number.isFinite(Date.parse(value.createdAt))
     || (value.updatedAt !== undefined && (typeof value.updatedAt !== 'string' || !Number.isFinite(Date.parse(value.updatedAt))))) invalid('Invalid saved agent definitions.');
+  if (value.ref !== undefined && (typeof value.ref !== 'string' || !definitionReference.test(value.ref))) invalid('Invalid saved agent definition references.');
   for (const agent of value.agents) {
     if (!record(agent) || typeof agent.description !== 'string' || agent.description.length > 1000 || typeof agent.requiresAdaptation !== 'boolean') invalid('Invalid saved agent definition.');
     const snapshot = { definitionId: value.id, ref: value.ref, name: value.name, digest: value.digest, agent: agent.name, instruction: agent.instruction, model: agent.model, provider: agent.provider, unsupported: agent.unsupported, adapted: agent.requiresAdaptation };
