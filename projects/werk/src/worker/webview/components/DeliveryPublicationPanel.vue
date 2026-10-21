@@ -9,7 +9,7 @@ import { useWorkerSnapshot } from '../useWorkerSnapshot';
 import { publicationCandidateMatches, publicationCommand, publicationLink, publicationStatusLabels } from '../delivery-publication-view';
 const props = defineProps<{ subject: WorkerRequest; disabled: boolean; pending: (action: string) => boolean }>();
 const emit = defineEmits<{ command: [GateCommandFields] }>();
-const snapshot = useWorkerSnapshot(() => request<RemotePublicationView>('/api/requests', 'POST', { action: 'publication', requestId: props.subject.id }), [() => props.subject.id, () => props.subject.revision]);
+const snapshot = useWorkerSnapshot(() => request<RemotePublicationView>('/api/requests', 'POST', { action: 'publication', requestId: props.subject.id }), [() => props.subject.id], [() => props.subject.revision]);
 const { data, error, loading, refreshing, readAt, now, refresh } = snapshot;
 const stale = computed(() => props.disabled || state.paused || !!error.value || !data.value || !readAt.value || now.value - Date.parse(readAt.value) > 15000);
 const matches = computed(() => !!data.value && publicationCandidateMatches(props.subject, data.value));

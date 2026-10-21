@@ -74,7 +74,9 @@ test('dependency graph budgets accept exact bounds and stop oversized graphs bef
 test('dependency blockers preserve distinct node and reason identities without duplicate diagnostics', async () => {
   const graph = [{ id: 'root', dependsOn: ['root'] }, { id: 'root', dependsOn: ['root'] }, { id: 'root', dependsOn: ['root'] }, { id: 'other', dependsOn: [] }, { id: 'other', dependsOn: [] }];
   const plan = await planDeliveryDependencies('root', graph, baseline, noCalls);
-  assert.deepEqual(plan.blockers.map(({ nodeId, code }) => [nodeId, code]), [['root', 'duplicate'], ['other', 'duplicate'], ['root', 'cycle']]);
+  assert.deepEqual(plan.blockers.map(({ nodeId, code }) => [nodeId, code]), [['root', 'duplicate'], ['root', 'cycle']]);
+  const independent = await planDeliveryDependencies('independent', [...graph, { id: 'independent', dependsOn: [] }], baseline, noCalls);
+  assert.equal(independent.ready, true); assert.deepEqual(independent.blockers, []);
   const missing = await planDeliveryDependencies('root', [{ id: 'root', dependsOn: ['missing', 'missing', 'another'] }], baseline, noCalls);
   assert.deepEqual(missing.nodes.map(node => node.id), ['missing', 'another', 'root']);
   assert.deepEqual(missing.nodes[0].blockers.map(item => item.nodeId), ['missing']);

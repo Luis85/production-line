@@ -66,9 +66,14 @@ export function validateDeliveryProjectPolicy(value: unknown): DeliveryProjectPo
   if (reviewDirectory.toLowerCase().split('/').includes('.werk')) invalid('Review notes must be outside private worker state.');
   const checkPacks = raw.checkPacks === undefined ? undefined : validateDeliveryCheckPacks(raw.checkPacks);
   for (const profile of profiles) selectedDeliveryCheckPacks({ checkPacks }, profile);
+  const execution = raw.execution === undefined ? undefined : validateDeliveryExecutionPolicy(raw.execution);
+  // Cross-section references belong to the complete project policy, shared by draft, approval and admission.
+  const qualityProfiles = new Set(profiles.map(profile => profile.id));
+  for (const rule of execution?.routing ?? []) for (const id of rule.qualityProfiles ?? [])
+    if (!qualityProfiles.has(id)) invalid(`Execution routing rule ${rule.id} references unknown quality profile ${id}.`);
   return { schemaVersion: 1, version: Number(raw.version), defaultProfile: raw.defaultProfile, reviewDirectory, profiles,
     ...(checkPacks === undefined ? {} : { checkPacks }),
-    ...(raw.execution === undefined ? {} : { execution: validateDeliveryExecutionPolicy(raw.execution) }),
+    ...(execution === undefined ? {} : { execution }),
     ...(raw.remoteDelivery === undefined ? {} : { remoteDelivery: validateRemoteDeliveryPolicy(raw.remoteDelivery) }),
     ...(raw.coordination === undefined ? {} : { coordination: validateDeliveryCoordinationPolicy(raw.coordination) }),
     ...(raw.retention === undefined ? {} : { retention: validateDeliveryRetention(raw.retention) }),

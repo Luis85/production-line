@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { setImmediate as turn } from 'node:timers/promises';
 import { SerialExecutor } from '../../../.mutation-build/worker/application/serial-executor.js';
 import { validateExecutionRecoveryCommand, assertExecutionStopObservation, deliveryOwnsRun } from '../../../.mutation-build/worker/application/execution-recovery.js';
 const command = () => ({ action: 'confirm_execution_stopped', runId: 'a'.repeat(8) + '-aaaa-aaaa-aaaa-' + 'a'.repeat(12), expectedRevision: 1, operationId: 'operator-observation', note: 'Inspected the execution and confirmed cessation.' });
@@ -49,4 +50,24 @@ test('failed uncertainty persistence keeps its original live permit after the ca
   await executor.run('original', new AbortController().signal, async () => { executor.retainUncertain('original'); });
   assert.equal(executor.has('original'), true); assert.equal(executor.executions.length, 1); assert.equal(executor.busy, true);
   assert.equal(executor.canStart('other'), false); assert.equal(executor.reservedExecutions.length, 0);
+});
+
+
+test('nested native startup holds release independently and never bypass pause or cancellation', { timeout: 1000 }, async () => {
+  let paused = true;
+  const executor = new SerialExecutor(() => paused), first = executor.suspendNativeWork(), second = executor.suspendNativeWork();
+  const stop = new AbortController(), starts = [];
+  const real = executor.acquire('real', stop.signal, { continuation: true }).then(release => { starts.push('real'); return release; });
+  const simulated = executor.acquire('mock', stop.signal, { startupIndependent: true }).then(release => { starts.push('mock'); return release; });
+  await turn(); assert.deepEqual(starts, []); assert.equal(executor.canStart('other', { startupIndependent: true }), false);
+  paused = false; executor.wake(); const releaseMock = await simulated;
+  assert.deepEqual(starts, ['mock']); releaseMock(); first(); first(); await turn();
+  assert.deepEqual(starts, ['mock']); assert.equal(executor.canStart('other', { continuation: true }), false);
+  second(); second(); const releaseReal = await real;
+  assert.deepEqual(starts, ['mock', 'real']); releaseReal();
+  assert.equal(executor.canStart('other'), true); assert.equal(executor.busy, false);
+  const held = executor.suspendNativeWork(), cancelled = new AbortController();
+  const waiting = executor.acquire('cancelled', cancelled.signal, { continuation: true }); cancelled.abort();
+  await assert.rejects(waiting, { name: 'AbortError' }); held();
+  assert.equal(executor.waiting, 0); assert.equal(executor.current, null);
 });

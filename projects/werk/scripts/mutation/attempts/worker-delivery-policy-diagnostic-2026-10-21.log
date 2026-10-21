@@ -1,0 +1,28 @@
+[32m10:57:56 (12637) INFO ProjectReader[39m Found 1 of 417 file(s) to be mutated.
+[32m10:57:56 (12637) INFO Instrumenter[39m Instrumented 1 source file(s) with 318 mutant(s)
+[32m10:57:57 (12637) INFO ConcurrencyTokenProvider[39m Creating 3 test runner process(es).
+[32m10:57:57 (12637) INFO Sandbox[39m Running build command "node scripts/mutation/build.mjs" in "/workspace/production-line/projects/werk/.stryker-tmp/sandbox-ocf1l7".
+[32m10:57:58 (12637) INFO DryRunExecutor[39m Starting initial test run (tap test runner with "perTest" coverage analysis). This may take a while.
+[32m10:58:02 (12637) INFO DryRunExecutor[39m Initial test run succeeded. Ran 24 tests in 3 seconds (net 2153.0889300000003 ms, overhead 1826.9110699999997 ms).
+Mutation testing 10% (elapsed: <1m, remaining: ~1m) 38/318 tested (3 survived, 0 timed out)
+Mutation testing 22% (elapsed: <1m, remaining: ~1m) 71/318 tested (6 survived, 0 timed out)
+Mutation testing 33% (elapsed: <1m, remaining: ~1m) 100/318 tested (9 survived, 0 timed out)
+Mutation testing 45% (elapsed: <1m, remaining: <1m) 134/318 tested (12 survived, 0 timed out)
+Mutation testing 56% (elapsed: <1m, remaining: <1m) 169/318 tested (16 survived, 0 timed out)
+Mutation testing 66% (elapsed: ~1m, remaining: <1m) 200/318 tested (21 survived, 0 timed out)
+Mutation testing 79% (elapsed: ~1m, remaining: <1m) 246/318 tested (28 survived, 0 timed out)
+Mutation testing 89% (elapsed: ~1m, remaining: <1m) 288/318 tested (30 survived, 0 timed out)
+[33m10:59:30 (12637) WARN MutationTestReportHelper[39m Test file "/workspace/production-line/projects/werk/.mutation-build/tests/shared-ready-review.test.mjs" not found in input files, but did receive test result for it. This shouldn't happen.
+[33m10:59:30 (12637) WARN MutationTestReportHelper[39m Test file "/workspace/production-line/projects/werk/.mutation-build/tests/shared-ready-review-selection.test.mjs" not found in input files, but did receive test result for it. This shouldn't happen.
+[33m10:59:30 (12637) WARN MutationTestReportHelper[39m Test file "/workspace/production-line/projects/werk/.mutation-build/tests/shared-ready-review-recovery.test.mjs" not found in input files, but did receive test result for it. This shouldn't happen.
+[33m10:59:30 (12637) WARN MutationTestReportHelper[39m Test file "/workspace/production-line/projects/werk/.mutation-build/tests/shared-ready-review-publication.test.mjs" not found in input files, but did receive test result for it. This shouldn't happen.
+[33m10:59:30 (12637) WARN MutationTestReportHelper[39m Test file "/workspace/production-line/projects/werk/.mutation-build/tests/serialized-operations.test.mjs" not found in input files, but did receive test result for it. This shouldn't happen.
+[33m10:59:30 (12637) WARN MutationTestReportHelper[39m Test file "/workspace/production-line/projects/werk/.mutation-build/tests/delivery-policy-extensions.test.mjs" not found in input files, but did receive test result for it. This shouldn't happen.
+[33m10:59:30 (12637) WARN MutationTestReportHelper[39m Test file "/workspace/production-line/projects/werk/.mutation-build/tests/delivery-execution-policy.test.mjs" not found in input files, but did receive test result for it. This shouldn't happen.
+[33m10:59:30 (12637) WARN MutationTestReportHelper[39m Test file "/workspace/production-line/projects/werk/.mutation-build/tests/delivery-criterion-decisions.test.mjs" not found in input files, but did receive test result for it. This shouldn't happen.
+[33m10:59:30 (12637) WARN MutationTestReportHelper[39m Test file "/workspace/production-line/projects/werk/.mutation-build/tests/delivery-coordination.test.mjs" not found in input files, but did receive test result for it. This shouldn't happen.
+[33m10:59:30 (12637) WARN MutationTestReportHelper[39m Test file "/workspace/production-line/projects/werk/.mutation-build/tests/delivery-check-packs.test.mjs" not found in input files, but did receive test result for it. This shouldn't happen.
+[33m10:59:30 (12637) WARN MutationTestReportHelper[39m Test file "/workspace/production-line/projects/werk/.mutation-build/tests/consumption.test.mjs" not found in input files, but did receive test result for it. This shouldn't happen.
+[32m10:59:30 (12637) INFO MutationTestReportHelper[39m Final mutation score of 87.11 is greater than or equal to break threshold 0
+[32m10:59:30 (12637) INFO JsonReporter[39m Your report can be found at: file:///workspace/werk-task-work/work/ldw/review-tests/policy-diagnostic.json
+[32m10:59:30 (12637) INFO MutationTestExecutor[39m Done in 1 minute and 33 seconds.

@@ -25,7 +25,7 @@ export function parseFeature(raw: string): FeatureDocument {
   });
   const data = document.toJS({ maxAliasCount: 0 }) as Record<string, unknown>;
   if (data.schema !== undefined && data.schema !== requestSchema || data.schema === undefined && data.schemaVersion !== 1) throw Error('Use schema: worker.request/v1 or legacy schemaVersion: 1.');
-  if (data.schema === requestSchema && (typeof data.id !== 'string' || !['draft', 'submit'].includes(String(data.intent)))) throw Error('A worker.request/v1 document needs a stable id and explicit intent: draft or submit.');
+  if (data.schema === requestSchema && (typeof data.id !== 'string' || typeof data.intent !== 'string' || !['draft', 'submit'].includes(data.intent))) throw Error('A worker.request/v1 document needs a stable id and explicit intent: draft or submit.');
   const allowedId = data.schema === requestSchema ? featureId : /^[a-z0-9][a-z0-9-]{0,79}$/;
   if (data.id !== undefined && (typeof data.id !== 'string' || !allowedId.test(data.id))) throw Error('Feature id must use 1–80 letters, digits or hyphens.');
   if (data.source !== 'orchestrator' && typeof data.id === 'string' && data.id.startsWith('remote-')) throw Error('The remote- ID prefix is reserved for orchestrator assignments.');
@@ -40,12 +40,12 @@ export function featureInput(parsed: FeatureDocument, defaultProvider: string, o
   if (d.type === 'Task' || d.type === 'PullRequest') throw Error('Task and PullRequest companions are not new feature requests. Keep them at their generated paths.');
   if (typeof title !== 'string' || !title.trim() || title.length > 120) throw Error('title must contain 1–120 characters.');
   if ((!options.reviewOnly && !body.trim()) || body.length > 8000) throw Error('Request Markdown must contain 1–8,000 characters.');
-  if (!['chat', 'patch'].includes(String(mode))) throw Error('mode must be chat or patch.');
+  if (typeof mode !== 'string' || !['chat', 'patch'].includes(mode)) throw Error('mode must be chat or patch.');
   if (!providerIds.includes(provider as ProviderId)) throw Error('Choose a supported provider connection.');
   if (d.model !== undefined) validateModelName(d.model);
   const effort = d.effort === undefined ? undefined : d.provider === undefined ? parseModelEffort(d.effort) : validateModelEffort(d.effort, String(provider));
   if (d.paths !== undefined && (!Array.isArray(d.paths) || d.paths.some(path => typeof path !== 'string' || !path || path.length > 1024) || d.paths.length > 32)) throw Error('paths must list at most 32 project-relative files.');
-  if (!options.reviewOnly && !(d.schema === requestSchema && d.intent === 'draft') && mode === 'patch' && (!Array.isArray(d.paths) || !d.paths.length)) throw Error('Set approved paths before implementation. Patch requests require an explicit paths list. Set paths: to the approved project-relative files or folders (a folder ends with /). A request copied from a template with a commented paths example, such as _templates/local-request.md, only needs that example uncommented and edited.');
+  if (!options.reviewOnly && !(d.schema === requestSchema && d.intent === 'draft') && mode === 'patch' && (!Array.isArray(d.paths) || !d.paths.length)) throw Error('Set approved paths before implementation. Patch requests require an explicit paths list. Set paths: to the approved project-relative files or folders (a folder ends with /). Edit the template paths to match this request before setting intent: submit.');
   if (mode === 'chat' && d.paths !== undefined) throw Error('Use mode: patch to supply approved files. Chat does not read paths.');
   if (d.definitionId !== undefined && (typeof d.definitionId !== 'string' || d.definitionId.length > 100)) throw Error('Invalid definitionId.');
   if (d.definitionRef !== undefined && (typeof d.definitionRef !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(d.definitionRef))) throw Error('definitionRef must use 1–80 letters, digits or hyphens.');
@@ -53,7 +53,8 @@ export function featureInput(parsed: FeatureDocument, defaultProvider: string, o
   if (d.agent !== undefined && (typeof d.agent !== 'string' || d.agent.length > 100)) throw Error('Invalid agent name.');
   if (d.useInstructionsOnly !== undefined && typeof d.useInstructionsOnly !== 'boolean') throw Error('useInstructionsOnly must be true or false.');
   const priorities: Record<string, number> = { low: 0, normal: 1, high: 2, urgent: 3 };
-  const priority = d.schema === requestSchema ? priorities[String(d.priority ?? 'normal')] : d.priority ?? 1;
+  if (d.schema === requestSchema && d.priority !== undefined && typeof d.priority !== 'string') throw Error('priority must be low, normal, high or urgent.');
+  const priority = d.schema === requestSchema ? priorities[(d.priority ?? 'normal') as string] : d.priority ?? 1;
   if (typeof priority !== 'number' || (d.schema !== requestSchema && ![1, 2].includes(priority))) throw Error('priority must be low, normal, high or urgent (legacy: 1 or 2).');
   if (d.execution_profile !== undefined && (typeof d.execution_profile !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(d.execution_profile))) throw Error('execution_profile must name an allowed project execution profile.');
   if (d.quality_profile !== undefined && (typeof d.quality_profile !== 'string' || !/^[a-z][a-z0-9_-]{0,79}$/.test(d.quality_profile))) throw Error('quality_profile must name a project quality profile.');

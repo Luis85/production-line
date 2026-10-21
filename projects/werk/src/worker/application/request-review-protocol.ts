@@ -42,7 +42,8 @@ function parseAdvisoryReview(
       Object.keys(raw).some(
         (key) => !["kind", "message", "blocking"].includes(key),
       ) ||
-      !["question", "issue", "gap"].includes(String(raw.kind)) ||
+      typeof raw.kind !== 'string' ||
+      !["question", "issue", "gap"].includes(raw.kind) ||
       !boundedText(raw.message, 4000) ||
       typeof raw.blocking !== "boolean"
     )

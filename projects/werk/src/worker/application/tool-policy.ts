@@ -125,7 +125,7 @@ function builtins(value: unknown, previous?: ToolBuiltinPolicy): ToolBuiltinPoli
 function connection(value: unknown, index = 0): ToolMcpConnection {
   const entry = entryLabel('MCP connection', value, index);
   const input = fields(value, ['id', 'name', 'transport', 'enabled', 'command', 'args', 'url', 'secretEnv', 'secret', 'allowedTools', 'discoveredTools', 'timeoutMs', 'chatDirectory'], 'saved MCP connection');
-  if (!['stdio', 'http'].includes(String(input.transport))) invalid('Choose stdio or HTTP for the MCP transport.');
+  if (typeof input.transport !== 'string' || !['stdio', 'http'].includes(input.transport)) invalid('Choose stdio or HTTP for the MCP transport.');
   const transport = input.transport as 'stdio' | 'http';
   const command = transport === 'stdio' ? absolute(input.command, 'MCP executable', entry) : string(input.command, 'unused MCP executable', 0, true, entry);
   const args = strings(input.args, 'MCP arguments', 32, 2048, entry);

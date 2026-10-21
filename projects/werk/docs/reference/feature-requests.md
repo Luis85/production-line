@@ -61,9 +61,12 @@ request text cannot grant tools or weaken trusted checks. `feature` and
 | `id` | Required stable request identity; preserve it when renaming or revising the same work. |
 | `intent` | Explicit `draft` or `submit`; a retained submit intent cannot reopen terminal work. |
 | `priority` | `low`, `normal`, `high` or `urgent`; scheduling changes do not create a new requirement revision. |
-| `quality_profile` | An allowed named project profile; omission uses the configured default. |
-| `depends_on` | Request IDs; unknown references, cycles and prerequisites absent from the selected baseline hold dispatch. |
-| `review`, `control` | Guarded commands described below, separate from requirement content. |
+| `quality_profile` | An allowed named quality profile; omission uses the configured default. |
+| `execution_profile` | Optional named provider profile allowed by the committed project policy. Explicit provider/model/effort or definition fields must agree with that selection. |
+| `depends_on` | Same-project request IDs or `repositoryId:requestId` references; unknown references, cycles and prerequisites absent from the selected baseline hold dispatch. |
+| `review`, `control` | Guarded candidate decisions and execution controls described below, separate from requirement content. |
+| `readiness_decision`, `criterion_decision` | Exact-subject decisions permitted by the accepted policy; see [readiness and criterion decisions](../how-to/configure-delivery-readiness.md). |
+| `publication` | Explicit push, remote PR or reconciliation command under an approved remote-delivery policy; see [candidate publication](../how-to/publish-worker-candidates.md). |
 
 Provider/model/effort, approved file scope and instruction-profile selectors use
 the same authority boundaries as legacy intake. Worker-owned status, questions,
@@ -114,7 +117,12 @@ control:
 ```
 
 Supported control actions are `pause_after_step`, `interrupt`, `cancel`, `resume`,
-`retry` and `reopen`. Run-targeting actions need the current `run_id`; reopening
+`retry`, `confirm_stopped` and `reopen`. `confirm_stopped` requires the current
+run and request revision plus a note attesting that the operator inspected the
+host and stopped the previous processes. It resolves an unknown cessation state,
+not an implementation result, and does not resume work. Follow the
+[recovery procedure](../explanation/local-delivery-worker.md#execution-and-evidence)
+before issuing it. Run-targeting actions need the current `run_id`; reopening
 terminal work uses a fresh command ID. Intake pause is a project action, separate
 from the selected run's step pause. Stop requests remain pending until the
 execution outcome is known; uncertain work must be reconciled before retry.

@@ -44,17 +44,17 @@ export function markdownCommands(parsed: FeatureDocument): FeatureMarkdownComman
     const note = action === 'readiness_decision' ? item.note : item.reason;
     if (typeof note !== 'string' || !note.trim() || note.length > 4000) throw Error('A decision needs a supporting reason (1–4,000 characters).');
     if (action === 'readiness_decision') {
-      if (typeof item.input_hash !== 'string' || !/^[a-f0-9]{64}$/.test(item.input_hash) || !['accepted', 'rejected'].includes(String(item.decision))) throw Error('A readiness decision requires the exact input_hash and accepted/rejected outcome.');
+      if (typeof item.input_hash !== 'string' || !/^[a-f0-9]{64}$/.test(item.input_hash) || typeof item.decision !== 'string' || !['accepted', 'rejected'].includes(item.decision)) throw Error('A readiness decision requires the exact input_hash and accepted/rejected outcome.');
       Object.assign(command, { inputHash: item.input_hash, assessmentId: id(item.assessment_id, 'assessment_id'), proposalId: id(item.proposal_id, 'proposal_id'), decision: item.decision, feedback: note.trim() });
     } else {
-      if (typeof item.candidate_commit !== 'string' || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(item.candidate_commit) || typeof item.criterion_id !== 'string' || !/^(?:check:[A-Za-z0-9_-]+|human:[1-9][0-9]*:[a-f0-9]{12})$/.test(item.criterion_id) || !['exempted', 'not_applicable'].includes(String(item.kind))) throw Error('A criterion decision needs an exact commit, documented criterion ID and exempted/not_applicable kind.');
+      if (typeof item.candidate_commit !== 'string' || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(item.candidate_commit) || typeof item.criterion_id !== 'string' || !/^(?:check:[A-Za-z0-9_-]+|human:[1-9][0-9]*:[a-f0-9]{12})$/.test(item.criterion_id) || typeof item.kind !== 'string' || !['exempted', 'not_applicable'].includes(item.kind)) throw Error('A criterion decision needs an exact commit, documented criterion ID and exempted/not_applicable kind.');
       Object.assign(command, { runId: id(item.run_id, 'run_id'), candidateCommit: item.candidate_commit, criterionDecision: { criterionId: item.criterion_id, kind: item.kind, reason: note.trim() } });
     }
     result.push(command);
   }
   if (data.control !== undefined) {
     const control = fields(data.control, ['command_id', 'action', 'run_id', 'request_revision', 'note']);
-    if (!['reopen', 'pause_after_step', 'interrupt', 'cancel', 'resume', 'retry', 'confirm_stopped'].includes(String(control.action))) throw Error('Unknown control action.');
+    if (typeof control.action !== 'string' || !['reopen', 'pause_after_step', 'interrupt', 'cancel', 'resume', 'retry', 'confirm_stopped'].includes(control.action)) throw Error('Unknown control action.');
     const command: FeatureMarkdownCommand = { commandId: id(control.command_id, 'command_id'), action: control.action as FeatureMarkdownCommand['action'] };
     if (control.action !== 'reopen' && (control.action !== 'cancel' || control.run_id !== undefined)) command.runId = id(control.run_id, 'run_id');
     if (control.request_revision !== undefined) { if (!Number.isSafeInteger(control.request_revision) || Number(control.request_revision) < 1) throw Error('request_revision must be a positive revision number.'); command.requestRevision = Number(control.request_revision); }
@@ -75,7 +75,7 @@ export function markdownCommands(parsed: FeatureDocument): FeatureMarkdownComman
   }
   if (data.review !== undefined) {
     const review = fields(data.review, ['command_id', 'decision', 'request_revision', 'candidate_commit', 'human_checks', 'feedback', 'review_duration_minutes']);
-    if (!['accept', 'request_changes'].includes(String(review.decision))) throw Error('review.decision must be accept or request_changes.');
+    if (typeof review.decision !== 'string' || !['accept', 'request_changes'].includes(review.decision)) throw Error('review.decision must be accept or request_changes.');
     if (!Number.isSafeInteger(review.request_revision) || Number(review.request_revision) < 1) throw Error('Review request_revision must be a positive revision number.');
     if (typeof review.candidate_commit !== 'string' || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(review.candidate_commit)) throw Error('Review candidate_commit must identify the complete Git commit.');
     const command: FeatureMarkdownCommand = { commandId: id(review.command_id, 'command_id'), action: review.decision as 'accept' | 'request_changes', requestRevision: Number(review.request_revision), candidateCommit: review.candidate_commit };
@@ -93,7 +93,7 @@ export function markdownCommands(parsed: FeatureDocument): FeatureMarkdownComman
       if (!Array.isArray(review.human_checks) || review.human_checks.length > 100) throw Error('human_checks must be a list of at most 100 criterion outcomes.');
       command.humanChecks = review.human_checks.map(value => {
         const check = fields(value, ['criterion_id', 'outcome', 'note']);
-        if (!['pass', 'fail', 'exempt'].includes(String(check.outcome)) || typeof check.note !== 'string' || !check.note.trim() || check.note.length > 2000) throw Error('Human checks need criterion_id, pass/fail/exempt outcome and supporting note.');
+        if (typeof check.outcome !== 'string' || !['pass', 'fail', 'exempt'].includes(check.outcome) || typeof check.note !== 'string' || !check.note.trim() || check.note.length > 2000) throw Error('Human checks need criterion_id, pass/fail/exempt outcome and supporting note.');
         if (typeof check.criterion_id !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_:.-]{0,199}$/.test(check.criterion_id)) throw Error('criterion_id must identify a documented check or criterion.');
         return { criterionId: check.criterion_id, outcome: check.outcome as 'pass' | 'fail' | 'exempt', note: check.note.trim() };
       });

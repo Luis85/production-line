@@ -126,7 +126,32 @@ export function previewDefinition(source: unknown) {
   return { compatibility: 'instruction-profile' as const, agents };
 }
 export function validateSnapshot(value: unknown): asserts value is DefinitionSnapshot {
-  if (!record(value) || typeof value.definitionId !== 'string' || !safeKey(value.definitionId) || (value.ref !== undefined && (typeof value.ref !== 'string' || !definitionReference.test(value.ref))) || typeof value.agent !== 'string' || !safeKey(value.agent) || typeof value.name !== 'string' || !value.name || value.name.length > 120 || typeof value.digest !== 'string' || !/^[a-f0-9]{64}$/.test(value.digest) || typeof value.instruction !== 'string' || !value.instruction.trim() || value.instruction.length > 16000 || typeof value.model !== 'string' || value.model.length > 200 || !['', 'openai', 'anthropic'].includes(String(value.provider)) || typeof value.adapted !== 'boolean' || !Array.isArray(value.unsupported) || value.unsupported.length > 500 || value.unsupported.some(item => typeof item !== 'string' || item.length > 300) || (value.unsupported.length && !value.adapted)) invalid('Invalid saved agent definition snapshot.');
+  if (!record(value)
+    || typeof value.definitionId !== 'string' || !safeKey(value.definitionId)
+    || (value.ref !== undefined && (typeof value.ref !== 'string' || !definitionReference.test(value.ref)))
+    || typeof value.agent !== 'string' || !safeKey(value.agent)
+    || typeof value.name !== 'string' || !value.name || value.name.length > 120
+    || typeof value.digest !== 'string' || !/^[a-f0-9]{64}$/.test(value.digest)
+    || typeof value.instruction !== 'string' || !value.instruction.trim() || value.instruction.length > 16000
+    || typeof value.model !== 'string' || value.model.length > 200
+    || typeof value.provider !== 'string' || !['', 'openai', 'anthropic'].includes(value.provider)
+    || typeof value.adapted !== 'boolean'
+    || !Array.isArray(value.unsupported) || value.unsupported.length > 500
+    || value.unsupported.some(item => typeof item !== 'string' || item.length > 300)
+    || (value.unsupported.length && !value.adapted)) invalid('Invalid saved agent definition snapshot.');
+}
+/** Validate persisted data before reading nested fields or restoring any catalog entry. */
+function validateSavedDefinition(value: unknown): asserts value is AgentDefinition {
+  if (!record(value) || !Array.isArray(value.agents) || !value.agents.length || value.agents.length > 24
+    || typeof value.createdAt !== 'string' || !Number.isFinite(Date.parse(value.createdAt))
+    || (value.updatedAt !== undefined && (typeof value.updatedAt !== 'string' || !Number.isFinite(Date.parse(value.updatedAt))))) invalid('Invalid saved agent definitions.');
+  for (const agent of value.agents) {
+    if (!record(agent) || typeof agent.description !== 'string' || agent.description.length > 1000 || typeof agent.requiresAdaptation !== 'boolean') invalid('Invalid saved agent definition.');
+    const snapshot = { definitionId: value.id, ref: value.ref, name: value.name, digest: value.digest, agent: agent.name, instruction: agent.instruction, model: agent.model, provider: agent.provider, unsupported: agent.unsupported, adapted: agent.requiresAdaptation };
+    validateSnapshot(snapshot);
+    if (agent.requiresAdaptation !== (snapshot.unsupported.length > 0)) invalid('Invalid saved agent definition.');
+  }
+  if (new Set(value.agents.map(agent => agent.name)).size !== value.agents.length) invalid('Invalid saved agent definitions.');
 }
 export function definitionConnection(connection: ProviderConnection, definition?: DefinitionSnapshot): ProviderConnection {
   if (!definition) return connection;
@@ -140,15 +165,14 @@ export class WorkerDefinitions {
   async init() {
     const saved = await this.storage.read();
     if (saved !== undefined) {
-      const value = JSON.parse(saved);
-      if (!Array.isArray(value) || value.length > 32 || new Set(value.map(item => item.id)).size !== value.length) invalid('Invalid saved agent definitions.');
-      const refs = value.filter(item => item.ref !== undefined).map(item => item.ref);
-      if (refs.some(ref => typeof ref !== 'string' || !definitionReference.test(ref)) || new Set(refs).size !== refs.length) invalid('Invalid saved agent definition references.');
-      for (const definition of value) {
-        if (!Array.isArray(definition.agents) || !definition.agents.length || definition.agents.length > 24 || new Set(definition.agents.map((agent: DefinitionAgent) => agent.name)).size !== definition.agents.length || !Number.isFinite(Date.parse(definition.createdAt)) || (definition.updatedAt !== undefined && !Number.isFinite(Date.parse(definition.updatedAt)))) invalid('Invalid saved agent definitions.');
-        for (const agent of definition.agents) { if (typeof agent.description !== 'string' || agent.description.length > 1000 || typeof agent.requiresAdaptation !== 'boolean' || agent.requiresAdaptation !== (agent.unsupported?.length > 0)) invalid('Invalid saved agent definition.'); validateSnapshot({ definitionId: definition.id, name: definition.name, digest: definition.digest, agent: agent.name, instruction: agent.instruction, model: agent.model, provider: agent.provider, unsupported: agent.unsupported, adapted: agent.requiresAdaptation }); }
-      }
-      this.definitions = value;
+      const value: unknown = JSON.parse(saved);
+      if (!Array.isArray(value) || value.length > 32) invalid('Invalid saved agent definitions.');
+      const definitions: AgentDefinition[] = [];
+      for (const definition of value) { validateSavedDefinition(definition); definitions.push(definition); }
+      if (new Set(definitions.map(item => item.id)).size !== definitions.length) invalid('Invalid saved agent definitions.');
+      const refs = definitions.flatMap(item => item.ref === undefined ? [] : [item.ref]);
+      if (new Set(refs).size !== refs.length) invalid('Invalid saved agent definition references.');
+      this.definitions = definitions;
     }
   }
   view() { return { compatibility: 'instruction-profile' as const, definitions: this.definitions.map(item => ({ ...structuredClone(item), revision: definitionRevision(item) })) }; }

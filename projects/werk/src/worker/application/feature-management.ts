@@ -34,8 +34,8 @@ function stoppedRequest(record: FeatureRecord, queue: FeatureQueuePort) {
 }
 export async function manageFeature(input: unknown, context: FeatureManagementContext): Promise<FeatureActionResult> {
   const body = object(input, 'Feature command', ['action', 'name', 'markdown', 'revision']);
-  const action = String(body.action), name = text(body.name, 'name', 200), { documents, index, queue } = context;
-  if (!['get', 'validate', 'create', 'edit', 'submit', 'cancel', 'retry', 'archive', 'restore', 'delete', 'result'].includes(action)) throw new DomainError('invalid_input', 'Unknown feature action.');
+  const action = body.action, name = text(body.name, 'name', 200), { documents, index, queue } = context;
+  if (typeof action !== 'string' || !['get', 'validate', 'create', 'edit', 'submit', 'cancel', 'retry', 'archive', 'restore', 'delete', 'result'].includes(action)) throw new DomainError('invalid_input', 'Unknown feature action.');
   let atName = index.records.find(item => item.name === name);
   if (action === 'create') {
     if (atName) throw new DomainError('conflict', 'Filename belongs to a retained request. Choose a new filename.');
@@ -119,6 +119,6 @@ export async function manageFeature(input: unknown, context: FeatureManagementCo
 function draft(value: unknown, documents: FeatureDocumentPort) {
   text(value, 'markdown', 65536);
   const markdown = value as string, parsed = documents.validate(markdown);
-  if (parsed.status !== 'draft' || parsed.managed) throw new DomainError('invalid_input', 'Create or edit status: draft requests without source/werk metadata. Use submit to queue them.');
+  if (parsed.status !== 'draft' || parsed.managed) throw new DomainError('invalid_input', 'Create or edit intent: draft requests (legacy: status: draft) without source/werk metadata. Use submit to queue them.');
   return markdown;
 }

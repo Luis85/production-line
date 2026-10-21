@@ -436,9 +436,13 @@ worktree path, then use **New request** to approve current repository files.
 The failed request cannot resume, retry execution or accept follow-ups. Repeating
 its original creation returns that same failed record without executing it.
 
-The file-change path supports up to 32 approved text files, 24 KiB per input file
-and 48,000 input characters in total. New files are supported; secret-like paths,
-symlinks and path traversal are rejected. For a new Git-backed request with file
+The file-change path supports up to 32 approved paths. Exact-file input snapshots
+are limited to 24,000 bytes per file and 48,000 characters in total. Implementation
+requests can also approve folders ending in `/`; the model reads their files
+through granted tools rather than initial content snapshots. Candidate content
+and patch limits are separately configurable; see
+[implementation limits](implement-feature.md#current-limits). New files are
+supported; secret-like paths, symlinks and path traversal are rejected. For a new Git-backed request with file
 access and at least one enabled **Required feature check** preset, the model can
 edit approved files in the worktree, run checks and repair failures. The worker
 generates the patch from the actual candidate and requires every frozen check to
@@ -448,7 +452,8 @@ or History.
 Other requests retain the proposal-only workflow: validated returned contents
 become a patch without being applied or automatically tested. The composer
 explains available setup; the saved task records its accepted mode. Commands and
-MCP tools retain their separate saved grants. All work shares one execution slot.
+MCP tools retain their separate saved grants. All work shares configured machine
+capacity; project limits can be stricter, and unscoped work remains exclusive.
 See [implement a feature](implement-feature.md) for setup and review.
 
 Choose **Review changes** or **Review result** on a request card to open its
@@ -601,7 +606,9 @@ Open **Settings → Execution profiles**. These are the IDs/providers offered fo
 orchestrator assignments, separate from provider sign-in, model settings and
 imported agent definitions. A simulated worker supports 1–8 Claude/Codex profiles;
 a worker already configured for native Linux Codex supports one Codex profile.
-Editing keeps the current execution mode and the shared single execution slot.
+Editing keeps the current execution mode and exclusive orchestrator assignment
+semantics. Project provider choices belong to **Settings → Project delivery**;
+**Queue capacity** separately configures the worker's machine execution ceiling.
 
 1. Finish or stop queued/running tasks and active replies, then **Pause new starts**.
    Pausing leaves queued work in place; resume to finish it or stop it before editing.
@@ -632,7 +639,7 @@ registered with that line. Enter the worker webview address reachable from the
 orchestrator and its access token. The widget uses the worker's selected task
 session and shares its transcript with the worker webview. New task followed by
 its first message queues a task on that worker; subsequent messages continue
-the same session and share its single execution slot. Configure providers
+the same session and use the worker's shared execution capacity. Configure providers
 and manage sessions in the worker itself. If another operator changes the
 selected session, reconnect before sending more messages.
 

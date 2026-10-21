@@ -69,7 +69,7 @@ export async function withReplaySession(request: ModelRequest, access: ModelSess
   try {
     signal.throwIfAborted();
     await session.begin();
-    const result = await run({ ...control, beforeCall() { control?.beforeCall(); session.markDispatched(); } });
+    const result = await run({ ...control, beforeCall() { control?.beforeCall(); if (signal.aborted) throw new ProviderModelError('cancelled'); session.markDispatched(); } });
     signal.throwIfAborted();
     await session.complete(result);
     return result;

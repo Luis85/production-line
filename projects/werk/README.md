@@ -149,7 +149,9 @@ For a worker that watches your own folder, choose `init --intake local`. New
 acceptance criteria and approved paths. The worker pins the committed project
 policy, implements in an owned worktree, runs required checks and creates a local
 review note. Accept the exact candidate through Markdown or the webview before
-merging it yourself. This mode does not push branches or notes to a remote.
+merging it yourself. Local intake does not automatically push branches or notes.
+A project can separately authorize [candidate publication](docs/how-to/publish-worker-candidates.md);
+each push or remote PR remains an explicit action with its own recorded outcome.
 
 The [local delivery guide](docs/explanation/local-delivery-worker.md) explains quality
 profiles, dependencies, pause and interruption recovery. Both intake modes retain
@@ -269,8 +271,10 @@ flowchart TD
 | Factory | Organizes lines, including optional logical subfactories | Line registrations, portfolio summaries and routing of new intake between lines |
 
 Only workers invoke models. Each application has its own webview, private state
-and credentials. Start additional workers with distinct state directories and
-ports when separate requests need to execute in parallel.
+and credentials. A worker can run bounded project-scoped work concurrently within
+its configured machine and project limits. Add workers with distinct state
+directories and ports when you need separate machines, accounts or operating
+policies; unscoped assignments retain exclusive execution.
 
 ### Connect your worker to an Orchestrator
 

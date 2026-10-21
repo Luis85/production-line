@@ -48,6 +48,7 @@ export async function claudeSessionReply(connection: ProviderConnection, directo
       args.push('--system-prompt-snapshot', 'off', resumed ? '--resume' : '--session-id', nativeId);
       await session.begin(nativeId);
       control?.beforeCall();
+      if (signal.aborted) throw new ProviderModelError('cancelled');
       session.markDispatched();
       return providerCommand(connection.executable, args, cwd, signal, session.input, true, 'claude', buffer => {
         let response; try { response = JSON.parse(buffer.toString('utf8')); } catch { return; }

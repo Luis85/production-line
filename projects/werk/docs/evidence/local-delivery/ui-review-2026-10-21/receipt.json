@@ -1,0 +1,336 @@
+{
+  "schemaVersion": 1,
+  "scope": "Fresh offline Linux Chromium worker UI fixtures; no provider, Git or permission changes occur. Source digests identify build inputs; this is not a clean-commit or native Windows qualification.",
+  "viewports": [
+    {
+      "name": "desktop",
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "name": "mobile",
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "captures": {
+    "baseline": {
+      "sourceDigest": "0f72b4e8c9c4d6fb2fe782279d3cb8bb1991886fcaa110aef957a597c5591bbc",
+      "measuredAt": "2026-10-21T10:53:25.126Z",
+      "passed": 16,
+      "total": 16,
+      "cases": [
+        {
+          "story": "worker-local-delivery--running-delivery",
+          "viewport": "desktop",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-local-delivery--running-delivery",
+          "viewport": "mobile",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-local-delivery--review-draft-survives-refresh",
+          "viewport": "desktop",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-local-delivery--review-draft-survives-refresh",
+          "viewport": "mobile",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-project-delivery--exact-policy-approval",
+          "viewport": "desktop",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-project-delivery--exact-policy-approval",
+          "viewport": "mobile",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-project-delivery--explicit-readiness-decision",
+          "viewport": "desktop",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-project-delivery--explicit-readiness-decision",
+          "viewport": "mobile",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-project-delivery--uncertain-publication",
+          "viewport": "desktop",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-project-delivery--uncertain-publication",
+          "viewport": "mobile",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-metrics--active-worker",
+          "viewport": "desktop",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-metrics--active-worker",
+          "viewport": "mobile",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-project-intake--direct-project-request",
+          "viewport": "desktop",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-project-intake--direct-project-request",
+          "viewport": "mobile",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-workspace--populated-taskboard",
+          "viewport": "desktop",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-workspace--populated-taskboard",
+          "viewport": "mobile",
+          "passed": true,
+          "issues": []
+        }
+      ]
+    },
+    "confirmation": {
+      "sourceDigest": "632b966e13a1af35be0abd5ce2723e2d86b0571a3ba0d9c3a269f87a804159c0",
+      "measuredAt": "2026-10-21T11:01:03.549Z",
+      "passed": 20,
+      "total": 20,
+      "cases": [
+        {
+          "story": "worker-local-delivery--running-delivery",
+          "viewport": "desktop",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-local-delivery--running-delivery",
+          "viewport": "mobile",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-local-delivery--review-draft-survives-refresh",
+          "viewport": "desktop",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-local-delivery--review-draft-survives-refresh",
+          "viewport": "mobile",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-project-delivery--exact-policy-approval",
+          "viewport": "desktop",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-project-delivery--exact-policy-approval",
+          "viewport": "mobile",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-project-delivery--explicit-readiness-decision",
+          "viewport": "desktop",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-project-delivery--explicit-readiness-decision",
+          "viewport": "mobile",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-project-delivery--uncertain-publication",
+          "viewport": "desktop",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-project-delivery--uncertain-publication",
+          "viewport": "mobile",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-metrics--active-worker",
+          "viewport": "desktop",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-metrics--active-worker",
+          "viewport": "mobile",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-project-intake--direct-project-request",
+          "viewport": "desktop",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-project-intake--direct-project-request",
+          "viewport": "mobile",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-publication-refresh--quiet-revision-refresh",
+          "viewport": "desktop",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-publication-refresh--quiet-revision-refresh",
+          "viewport": "mobile",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-publication-refresh--failed-revision-refresh",
+          "viewport": "desktop",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-publication-refresh--failed-revision-refresh",
+          "viewport": "mobile",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-workspace--populated-taskboard",
+          "viewport": "desktop",
+          "passed": true,
+          "issues": []
+        },
+        {
+          "story": "worker-workspace--populated-taskboard",
+          "viewport": "mobile",
+          "passed": true,
+          "issues": []
+        }
+      ]
+    }
+  },
+  "publicationProbe": {
+    "before": {
+      "historyVisible": false,
+      "loadingVisible": true,
+      "disclosureOpenAfterResponse": false
+    },
+    "after": {
+      "historyVisible": true,
+      "loadingVisible": false,
+      "disclosureOpenAfterResponse": true
+    }
+  },
+  "inspectedScreenshots": [
+    {
+      "path": "01-taskboard-desktop.png",
+      "capture": "baseline",
+      "sourceScreenshot": "worker-workspace--populated-taskboard-desktop.png",
+      "sha256": "9d7519a7159b526ff5544cffba26c14bc405a0c535755836553e513502d25865"
+    },
+    {
+      "path": "01-taskboard-mobile.png",
+      "capture": "baseline",
+      "sourceScreenshot": "worker-workspace--populated-taskboard-mobile.png",
+      "sha256": "1b038e52ccb3109f5603808ec33efd5102e931802a981a27188e266932022155"
+    },
+    {
+      "path": "02-request-desktop.png",
+      "capture": "baseline",
+      "sourceScreenshot": "worker-project-intake--direct-project-request-desktop.png",
+      "sha256": "3b916636b053b53d7b777535f4c3907e898e311611eb17b6040294f617ecbf5e"
+    },
+    {
+      "path": "03-progress-desktop.png",
+      "capture": "baseline",
+      "sourceScreenshot": "worker-local-delivery--running-delivery-desktop.png",
+      "sha256": "689166fe129c95ed09cc32b2e864f747eef675cb8a25642272c513d6a66baeb0"
+    },
+    {
+      "path": "04-readiness-mobile.png",
+      "capture": "baseline",
+      "sourceScreenshot": "worker-project-delivery--explicit-readiness-decision-mobile.png",
+      "sha256": "754adfbd9cf13d5146d44e0b012aca79026430c1453ab2865fdb837b0f404511"
+    },
+    {
+      "path": "05-review-desktop.png",
+      "capture": "baseline",
+      "sourceScreenshot": "worker-local-delivery--review-draft-survives-refresh-desktop.png",
+      "sha256": "f3731fa7a8d60a5944621ec4a8ac3a28f7759d2236ab9679ac0183eb9e430e2a"
+    },
+    {
+      "path": "06-publication-refresh-before.png",
+      "capture": "baseline",
+      "sourceScreenshot": "publication-during.png",
+      "sha256": "df02806d0827595dccc7f698bb2d1f3c70402728a381a4fdd3d9b3cc7814fa9b"
+    },
+    {
+      "path": "06-publication-refresh-after.png",
+      "capture": "confirmation",
+      "sourceScreenshot": "publication-during.png",
+      "sha256": "6b8bfbf5d0e8360f3664c241a592ad6966a1d8184011e9781dbf2766d2e5d08c"
+    },
+    {
+      "path": "06-publication-mobile.png",
+      "capture": "confirmation",
+      "sourceScreenshot": "worker-publication-refresh--quiet-revision-refresh-mobile.png",
+      "sha256": "cf3889238eb5707ef103929f423c7efda5e0916f30abec04a1d84b2c14138c1a"
+    },
+    {
+      "path": "07-metrics-desktop.png",
+      "capture": "baseline",
+      "sourceScreenshot": "worker-metrics--active-worker-desktop.png",
+      "sha256": "78e1c5999e65a5067b71254223b21a16af3c362d925fd25c5cc605f331807b1e"
+    },
+    {
+      "path": "08-policy-desktop.png",
+      "capture": "confirmation",
+      "sourceScreenshot": "worker-project-delivery--exact-policy-approval-desktop.png",
+      "sha256": "90696c27b1655e937055c3aa4c995f9557b5201f03224d9d55001d0cdd214282"
+    },
+    {
+      "path": "08-policy-mobile.png",
+      "capture": "confirmation",
+      "sourceScreenshot": "worker-project-delivery--exact-policy-approval-mobile.png",
+      "sha256": "1105488f291e2b1816b1b064ef3bcaed6a3f3b106315f2b9c3bae4dc75477366"
+    }
+  ]
+}

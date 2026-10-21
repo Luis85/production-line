@@ -8,15 +8,16 @@ export interface DeliveryDependencyPlanNode {
 export interface DeliveryDependencyPlan { schemaVersion: 1; target: string; baseline: string; ready: boolean; nodes: DeliveryDependencyPlanNode[]; waves: string[][]; blockers: DeliveryDependencyBlocker[]; }
 /** Inspect a bounded reachable graph without starting work or implying integration from branch success. */
 export async function planDeliveryDependencies(target: string, inputs: DeliveryDependencyNode[], baseline: string, ports: DeliveryDependencyPorts): Promise<DeliveryDependencyPlan> {
-  const graph = new Map<string, DeliveryDependencyNode>(), blockers: DeliveryDependencyBlocker[] = [];
+  const graph = new Map<string, DeliveryDependencyNode>(), duplicates = new Set<string>(), blockers: DeliveryDependencyBlocker[] = [];
   const add = (nodeId: string, code: DeliveryDependencyBlocker['code'], reason: string) => { if (!blockers.some(item => item.nodeId === nodeId && item.code === code)) blockers.push({ nodeId, code, reason }); };
   if (inputs.length > 4096) add(target, 'limit', 'The dependency catalog exceeds 4096 requests. Narrow the project intake.');
   for (const node of inputs.slice(0, 4096)) {
-    if (graph.has(node.id)) add(node.id, 'duplicate', 'Duplicate Feature Request identity prevents dependency resolution: ' + node.id);
+    if (graph.has(node.id)) duplicates.add(node.id);
     graph.set(node.id, node);
   }
   const visiting = new Set<string>(), visited = new Set<string>(), ordered: string[] = [], levels = new Map<string, number>();
   const visit = (id: string, depth: number): number => {
+    if (duplicates.has(id)) add(id, 'duplicate', 'Duplicate Feature Request identity prevents dependency resolution: ' + id);
     if (visiting.has(id)) { add(id, 'cycle', 'Feature Request dependency cycle includes ' + id + '.'); return 0; }
     if (visited.has(id)) return levels.get(id) ?? 0;
     if (depth > 128 || visited.size + visiting.size >= 256) { add(id, 'limit', 'The reachable dependency graph exceeds its bounded planning limit. Split the request into smaller dependency groups.'); return 0; }
@@ -42,11 +43,17 @@ export async function planDeliveryDependencies(target: string, inputs: DeliveryD
     }
     receipts.set(id, { ...structuredClone(accepted), baseline });
   }
-  const nodes: DeliveryDependencyPlanNode[] = ordered.map(id => {
+  const nodes: DeliveryDependencyPlanNode[] = [], states = new Map<string, DeliveryDependencyPlanNode['state']>();
+  for (const id of ordered) {
     const own = blockers.filter(item => item.nodeId === id), receipt = receipts.get(id);
-    const state = structural || id === target && blockers.length ? 'blocked' : own.some(item => item.code === 'unaccepted') ? 'waiting_acceptance' : own.some(item => ['not_integrated', 'inspection_unavailable'].includes(item.code)) ? 'waiting_integration' : 'ready';
-    return { id, dependsOn: [...(graph.get(id)?.dependsOn ?? [])], wave: structural ? null : levels.get(id) ?? 0, state, ...(acceptedRequests.has(id) ? { accepted: acceptedRequests.get(id)! } : {}), ...(receipt ? { receipt } : {}), blockers: own };
-  });
+    const dependencyHeld = (graph.get(id)?.dependsOn ?? []).some(dependency => states.get(dependency) !== 'ready');
+    const state = structural || id === target && blockers.length ? 'blocked'
+      : own.some(item => item.code === 'unaccepted') ? 'waiting_acceptance'
+      : own.some(item => ['not_integrated', 'inspection_unavailable'].includes(item.code)) ? 'waiting_integration'
+      : dependencyHeld ? 'blocked' : 'ready';
+    states.set(id, state);
+    nodes.push({ id, dependsOn: [...(graph.get(id)?.dependsOn ?? [])], wave: structural ? null : levels.get(id) ?? 0, state, ...(acceptedRequests.has(id) ? { accepted: acceptedRequests.get(id)! } : {}), ...(receipt ? { receipt } : {}), blockers: own });
+  }
   const waves: string[][] = [];
   if (!structural) for (const node of nodes) (waves[node.wave!] ??= []).push(node.id);
   return { schemaVersion: 1, target, baseline, ready: blockers.length === 0, nodes, waves, blockers };

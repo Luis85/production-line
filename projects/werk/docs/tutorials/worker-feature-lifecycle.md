@@ -12,7 +12,7 @@ Claude account. The commands below use an installed runtime that contains the
 local-delivery iteration. An older download may expose only the legacy proposal
 workflow; check its version and matching documentation first.
 
-You need Node24, Git with an existing initial commit, a verified Werk runtime and
+You need Node 24, Git with an existing initial commit, a verified Werk runtime and
 a supported provider connection. Use a disposable repository for your first
 attempt. Installing Werk does not install or sign in to a model provider. For a
 shared commit-and-push team queue, use [shared intake](../how-to/shared-feature-intake.md)
@@ -48,8 +48,10 @@ node bin/apps/worker/cli.mjs repository status
 node bin/apps/worker/cli.mjs repository accept --discovery-id ID_FROM_DISCOVERY
 ```
 
-Copy the exact current discovery ID. An existing explicit assignment already
-authorizes the repository. Local candidate delivery does not require a remote;
+Copy the exact current discovery ID. If native execution is still preparing,
+wait until `repository status` reports `nativeWork.state: "ready"` before accepting
+it. An existing explicit assignment already authorizes the repository. Local
+candidate delivery does not require a remote;
 repository synchronization and shared publication have their own configuration.
 The selected committed baseline excludes unrelated staged or unstaged source.
 
@@ -104,9 +106,26 @@ using the machine's absolute Node executable and arguments
 executable path. Save the permissions before submitting work. See
 [implementation setup](../how-to/implement-feature.md) for fixed command presets.
 
-Inspect the effective [delivery policy](../reference/request-gates.md#committed-local-delivery-policy).
-Its feature profile needs observable criteria, bounds repairs and protects existing
-verification inputs. Request text cannot remove those requirements or grant tools.
+Review the generated `.werk/delivery-policy.json`. Its feature profile requires
+semantic readiness, bounds repairs and protects existing verification inputs.
+Commit the policy to the baseline before submitting the request:
+
+```sh
+git add -- .werk/delivery-policy.json
+git commit -m "Configure the worker delivery policy"
+```
+
+In **Settings → Project delivery**, select this repository, inspect the committed
+configuration and approve its exact digest. Saving a draft does not commit or
+approve it. The [headless policy commands](../reference/delivery-policy.md#configure-without-opening-the-webview)
+provide the same inspection and guarded approval from the CLI.
+
+Check that the selected baseline includes both the tutorial files and policy.
+An uncommitted policy, missing local approval or unavailable semantic assessment
+holds implementation with an actionable reason. A new request can still be saved
+as a draft. Request text cannot remove these requirements or grant tools. See
+[readiness setup](../how-to/configure-delivery-readiness.md) for the required
+assessment and how to answer its findings.
 
 ## 4. Create and submit the Feature Request
 

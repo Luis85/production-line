@@ -44,7 +44,7 @@ export function validateModelSessionBinding(value: unknown): asserts value is Mo
 }
 export function validateModelSessionUpdate(value: unknown): asserts value is ModelSessionUpdate {
   if (!record(value) || Object.keys(value).some(key => !['status', 'checkpoint', 'lastDispatchDigest'].includes(key))
-    || !['idle', 'running', 'unknown'].includes(String(value.status)) || value.lastDispatchDigest !== undefined && !hash(value.lastDispatchDigest)) throw Error('Invalid model session checkpoint.');
+    || (typeof value.status !== 'string' || !['idle', 'running', 'unknown'].includes(value.status)) || value.lastDispatchDigest !== undefined && !hash(value.lastDispatchDigest)) throw Error('Invalid model session checkpoint.');
   if (value.checkpoint === undefined) return;
   const c = value.checkpoint;
   if (!record(c) || Object.keys(c).some(key => !['nativeId', 'providerContextDigest', 'historyDigests', 'resultDigest', 'cumulativeCostUsd'].includes(key))

@@ -26,7 +26,7 @@ export function useWorkerClock() {
 }
 
 /** Authenticated page reads share quiet polling, query identity and access lifetime fences. */
-export function useWorkerSnapshot<T>(read: () => Promise<T>, sources: WatchSource[] = []) {
+export function useWorkerSnapshot<T>(read: () => Promise<T>, sources: WatchSource[] = [], revalidateSources: WatchSource[] = []) {
   const data = shallowRef<T | null>(null), error = ref(''), readAt = ref('');
   const loading = ref(false), refreshing = ref(false), now = useWorkerClock();
   let active = false, disposed = false, revision = 0;
@@ -75,5 +75,11 @@ export function useWorkerSnapshot<T>(read: () => Promise<T>, sources: WatchSourc
   }, { flush: 'sync' });
   watch(() => state.refreshRevision, () => { void load(); });
   if (sources.length) watch(sources, () => { invalidate(true); void load(); }, { flush: 'sync' });
+  // A newer revision of the same subject invalidates decisions, not readable history.
+  if (revalidateSources.length) watch(revalidateSources, () => {
+    invalidate();
+    readAt.value = '';
+    void load();
+  }, { flush: 'sync' });
   return { data, error, loading, refreshing, readAt, now, refresh: () => load(true) };
 }

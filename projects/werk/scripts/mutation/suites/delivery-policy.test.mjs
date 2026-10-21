@@ -100,3 +100,21 @@ test('named readiness gates retain mandatory source checks and enforce profile t
   const collision = defaultGatePolicy(); collision.ready.patch.push({ ...collision.ready.patch[0], id: 'another-mandatory-rule' }); collision.ready.patch[0].id = 'delivery-profile-message';
   assert.throws(() => deliveryGatePolicy(collision, deliveryPolicySnapshot(profile(), baseline)), /reserved/);
 });
+
+
+test('remote publication authority and retention survive policy validation and detached snapshots', () => {
+  const remoteDelivery = { remote: 'origin', repository: 'team/project', base: 'main', push: true, pullRequest: true, draft: true };
+  const retention = { temporaryLogHours: 24, acceptedEvidence: /** @type {const} */ ('preserve'), unacceptedWork: /** @type {const} */ ('preserve') };
+  const configured = { ...profile(), remoteDelivery, retention };
+  const snapshot = deliveryPolicySnapshot(configured, baseline);
+  assert.deepEqual(snapshot.configuration.remoteDelivery, remoteDelivery);
+  assert.deepEqual(snapshot.configuration.retention, retention);
+  assert.deepEqual(validateDeliveryPolicySnapshot(snapshot), snapshot);
+  remoteDelivery.push = false; retention.temporaryLogHours = 0;
+  assert.equal(snapshot.configuration.remoteDelivery.push, true);
+  assert.equal(snapshot.configuration.retention.temporaryLogHours, 24);
+  rejects({ ...profile(), remoteDelivery });
+  rejects({ ...profile(), retention: { ...retention, acceptedEvidence: 'delete' } });
+  const changed = structuredClone(snapshot); changed.configuration.remoteDelivery.draft = false;
+  assert.throws(() => validateDeliveryPolicySnapshot(changed), /accepted snapshot/);
+});

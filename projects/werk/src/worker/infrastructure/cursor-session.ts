@@ -45,6 +45,7 @@ export async function cursorReply(connection: ProviderConnection, workspace: str
         ...(!request.policy.development ? ['--mode', 'ask'] : []), ...(plugin ? ['--plugin-dir', plugin] : [])];
       await session?.begin(id);
       control?.beforeCall();
+      if (signal.aborted) throw new ProviderModelError('cancelled');
       session?.markDispatched();
       // No documented CLI token/cost counters: this remains unknown even when a future output resembles another provider.
       observe(unknownUsage('Cursor CLI does not expose documented token or cost counters. Native subagent usage is also unavailable.'));
