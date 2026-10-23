@@ -41,7 +41,10 @@ async function completedDraft(f, name = 'search.md') {
 test('authoring setup installs a standalone team kit and preserves customized files', async () => {
   const f = await fixture({ featuresDirectory: 'requests/features' });
   assert.equal(f.installed.workflow.requestsDirectory, 'requests/features');
-  assert.equal(f.installed.files.length, 10);
+  assert.equal(f.installed.files.length, 11);
+  const deliveryPolicy = JSON.parse(await readFile(join(f.root, '.werk/delivery-policy.json'), 'utf8'));
+  assert.equal(deliveryPolicy.profiles.every(profile => profile.readiness.assessment === 'required'), true);
+  assert.equal(JSON.parse(await readFile(join(f.root, '.werk/authoring/manifest.json'), 'utf8')).requiresCommittedDeliveryPolicy, true);
   await assert.rejects(access(join(f.root, 'bin/apps/worker')));
   await assert.rejects(access(join(f.root, '.werk/worker.json')));
   const base = parse(await readFile(join(f.root, 'Feature Requests.base'), 'utf8'));
@@ -238,7 +241,7 @@ test('a customized or unrecorded script is replaced only with an explicit matchi
   await writeFile(join(f.root, scriptPath), customized);
   const preserved = await initializeFeatureAuthoring(f.root, { script });
   assert.equal(statusOf(preserved, scriptPath), 'preserved');
-  assert.equal(statusOf(preserved, manifestPath), undefined, 'a customized script is never recorded as managed');
+  assert.equal(statusOf(preserved, manifestPath), 'preserved', 'the installation restriction is preserved without recording the customized script as managed');
   assert.deepEqual(preserved.warnings.map(warning => [warning.code, warning.revision]), [['authoring_script_outdated', sha256(customized)]]);
   assert.match(preserved.warnings[0].message, new RegExp('feature setup --if-match ' + sha256(customized)));
   assert.equal(await readFile(join(f.root, scriptPath), 'utf8'), customized);

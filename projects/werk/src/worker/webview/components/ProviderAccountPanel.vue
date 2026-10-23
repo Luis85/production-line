@@ -2,9 +2,10 @@
 import { computed, onActivated, onBeforeUnmount, onMounted, watch } from 'vue';
 import UButton from '@nuxt/ui/components/Button.vue';
 import type { ProviderId } from '../../application/provider-contract';
+import type { ProviderAuthenticationMode } from '../../application/provider-capabilities';
 import { createProviderAccountView } from '../provider-account-view';
 import { date, request, state } from '../store';
-const props = defineProps<{ providerId: ProviderId; connectionKey: string; enabled: boolean }>();
+const props = defineProps<{ providerId: ProviderId; authenticationMode?: ProviderAuthenticationMode; connectionKey: string; enabled: boolean }>();
 const account = createProviderAccountView({ id: () => props.providerId, identity: () => props.connectionKey, enabled: () => props.enabled, unlocked: () => state.unlocked, epoch: () => state.draftEpoch, read: id => request('/api/providers/account', 'POST', { id }) });
 const observation = account.state;
 const status = computed(() => observation.value?.signedIn === true ? 'Signed in' : observation.value?.signedIn === false ? 'Signed out' : 'Account status unavailable');
@@ -28,7 +29,7 @@ onBeforeUnmount(account.dispose);
       <p class="page-note">{{ observation.value.message }}</p>
       <p v-if="observation.value.signedIn === true && !observation.value.subscription" class="page-note">Subscription details are unavailable from this CLI.</p>
     </template>
-    <p class="page-note">{{ providerId === 'cursor-cli' ? 'Uses the configured Cursor key or the worker process owner’s saved login.' : 'Uses the worker process owner’s saved login.' }} This read-only check sends no model task and does not sign in, sign out or change accounts.</p>
+    <p class="page-note">{{ authenticationMode === 'api-key' ? 'Uses the explicitly configured API-key mode; a saved subscription login is not a fallback.' : authenticationMode === 'legacy' ? 'Choose an authentication method before the worker starts new work.' : 'Reads the worker process owner’s saved provider account.' }} This read-only check sends no model task and does not sign in, sign out or change accounts.</p>
   </section>
 </template>
 <style scoped>

@@ -1,3 +1,6 @@
+import { sharedIntakeQuestions } from './shared-intake-measurement.js';
+import { featureIntakeHold } from './feature-intake-measurement.js';
+import { deliveryPolicyRequiresApproval } from './delivery-policy-approval.js';
 import { sharedFeatureInputHash, assertSharedFeatureReplySelection } from './shared-feature-selection.js';
 import { sharedFeatureRequestReference } from './feature-request-reference.js';
 import { featureInputHash } from './feature-workflow.js';
@@ -13,8 +16,10 @@ export function sharedReviewInput(record: SharedFeatureRecord, answer: string, g
     operationId: 'ready-review-' + sharedHash(feature.key + generation + featureInputHash(record.accepted) + prompt.sha256).slice(0, 48),
     feature, source: { commit: record.sourceCommit, path: record.sourcePath, sha256: sharedHash(markdown), markdown },
     ...(record.selection ? { selection: structuredClone(record.selection) } : {}),
+    ...(record.deliveryExecution ? { definition: structuredClone(record.deliveryExecution.definition ?? null) } : {}),
+    ...(record.deliveryPolicy && deliveryPolicyRequiresApproval(record.deliveryPolicy.configuration) ? { deliveryAuthority: { repositoryId: record.binding.repositoryId, configurationDigest: record.deliveryPolicy.configurationDigest } } : {}),
     ...(previousResult ? { previousAssessment: structuredClone(previousResult) } : {}),
-    prompt: structuredClone(prompt), title: record.title, provider: record.accepted.provider as ReadyReviewInput['provider'], generation,
+    prompt: structuredClone(prompt), title: record.title, provider: record.selection?.provider ?? record.accepted.provider as ReadyReviewInput['provider'], generation,
     ...(record.accepted.definitionId ? { definitionId: record.accepted.definitionId } : {}),
     ...(record.accepted.definitionRef ? { definitionRef: record.accepted.definitionRef } : {}),
     ...(record.accepted.agent ? { agent: record.accepted.agent } : {}),
@@ -55,10 +60,11 @@ export class SharedReadyReviewLifecycle {
       assertSharedFeatureReplySelection(record, eligible.input);
       const issue = this.ports.admissionIssue?.(eligible.input); if (issue) throw Error(issue);
       if (eligible.inputHash === state.reviewedHash) return false;
+      if (execution?.result) state.result = structuredClone(execution.result);
+      if (response.answer.trim()) this.ports.observeMetric?.(record, { observations: sharedIntakeQuestions(state, 'clarification_answer') });
       // Adopt the exact pushed edit before any new publication; CAS never restores the previous author body.
       record.sourceMarkdown = response.sourceMarkdown; record.sourceCommit = head; record.remoteRevision = sharedHash(current);
       record.accepted = eligible.input; record.title = eligible.input.title; record.inputHash = sharedFeatureInputHash(record);
-      if (execution?.result) state.result = structuredClone(execution.result);
       record.readyReviewState = state = sharedReviewCheckpoint(record, response.answer, state);
       record.status = 'reviewing_ready'; record.ready = null; record.error = null;
       record.progress = 'Your committed changes are queued for another Feature Request Ready Check.';
@@ -74,11 +80,19 @@ export class SharedReadyReviewLifecycle {
     if (!execution) {
       const hold = this.ports.admissionHold?.();
       if (hold || !this.ports.canAdmit()) {
+        this.ports.observeMetric?.(record, { phase: 'waiting_input', feedback: true, blockers: [featureIntakeHold(hold?.code ?? 'capacity')] });
         record.progress = hold?.message ?? 'The Feature Request Ready Check is waiting for worker capacity.';
         await this.retain(record, repository, signal); return false;
       }
       // Re-persist the immutable reservation before every admission attempt. The runner deduplicates this operation.
-      await this.save(); state.attempt = await this.ports.readyReview.schedule(state.input); await this.save();
+      await this.save();
+      try { state.attempt = await this.ports.readyReview.schedule(state.input); }
+      catch (error) {
+        const observed = this.ports.readyReview.inspect(state.input);
+        if (observed?.runId) this.ports.observeMetric?.(record, { providerRunId: observed.runId });
+        throw error;
+      }
+      await this.save();
       execution = this.ports.readyReview.inspect(state.input);
       if (!execution) throw Error('Ready Check admission is not confirmed. Its saved operation will be inspected before retrying.');
     }

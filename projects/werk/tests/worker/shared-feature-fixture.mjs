@@ -118,7 +118,7 @@ export async function fixture(t, options = {}) {
     },
     repository,
     loadWorkflow: (repo, commit, configPath) => loadFeatureWorkflowSnapshot({ commit, configPath, readBlob: (at, path) => repo.readBlob(at, path) }),
-    readyReview: options.readyReview, resolveSelection: options.resolveSelection,
+    readyReview: options.readyReview, resolveSelection: options.resolveSelection, prepare: options.prepare,
     readyReviewEligible: (markdown, snapshot, provider) => validateFeatureReviewEligibility(markdown, snapshot, provider ?? options.defaultProvider?.()),
     readyReviewResponse: readReadyReviewResponse,
     ready: (markdown, snapshot, provider) => { options.onReady?.(); return validateFeatureReadiness(markdown, snapshot.readyCheck, provider ?? options.defaultProvider?.(), snapshot.template); },

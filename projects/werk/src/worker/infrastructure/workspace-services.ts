@@ -1,3 +1,5 @@
+import type { LocalTaskDependencies } from '../application/local-task-runtime-contract.js';
+import { createLocalDelivery } from './local-delivery.js';
 import { workspaceProcessTools, type WorkspaceProcessTools } from './workspace-process-tools.js';
 import { workspaceDelegation } from './workspace-delegation.js';
 import type { RunJournal } from '../application/journal-ports.js';
@@ -51,7 +53,7 @@ export function workspaceModelFactory(directory: string, settings: ModelSettings
         additionalOperations.push(...processTools.tools(settings.toolPolicy()));
         const grant = settings.toolPolicy().delegation;
         if (binding && policy?.sessionContext && grant?.enabled && runs && connection.id !== 'cursor-cli') {
-          const delegated = workspaceDelegation({ directory, binding, connection: { ...connection, ...(dispatch ? { model: dispatch.provider.model, instruction: dispatch.provider.instruction, effort: dispatch.provider.effort ?? 'default' } : {}) }, grant, acceptedScope: dispatch?.messages[0]?.text, runtime: () => runtime, runs, consumption, model, observations: processes?.observations });
+          const delegated = workspaceDelegation({ directory, binding, connection: { ...connection, ...(dispatch ? { model: dispatch.provider.model, instruction: dispatch.provider.instruction, effort: dispatch.provider.effort ?? 'default', authenticationMode: dispatch.provider.authenticationMode } : {}) }, grant, acceptedScope: dispatch?.messages[0]?.text, runtime: () => runtime, runs, consumption, model, observations: processes?.observations });
           if (delegated) additionalOperations.push(delegated);
         }
         runtime = createToolRuntime({
@@ -93,10 +95,11 @@ export function createWorkerSessions(directory: string, settings: WorkerSettings
     definitions: createWorkerDefinitions(directory), activeOutsideChat, auxiliary,
   });
 }
-export function createLocalTaskboard(directory: string, settings: WorkerSettingsPort, sessions: WorkerSessions, modelOrWorkspaces: WorkspaceProviderFactory | LocalTaskWorkspaces = modelFor, workspaces?: LocalTaskWorkspaces, consumption?: ConsumptionRuntime, processes?: WorkspaceProcessTools) {
+export function createLocalTaskboard(directory: string, settings: WorkerSettingsPort, sessions: WorkerSessions, modelOrWorkspaces: WorkspaceProviderFactory | LocalTaskWorkspaces = modelFor, workspaces?: LocalTaskWorkspaces, consumption?: ConsumptionRuntime, processes?: WorkspaceProcessTools, authorizeDelivery?: LocalTaskDependencies['authorizeDelivery']) {
   const model = typeof modelOrWorkspaces === 'function' ? modelOrWorkspaces : modelFor;
   return new LocalTaskboard(settings, sessions, {
-    model: workspaceModelFactory(directory, settings, model, consumption, sessions.runs, processes), storage: localTaskStorage(directory), files: approvedTaskFiles, development: createDevelopmentRuntime, observations: processes?.observations,
+    model: workspaceModelFactory(directory, settings, model, consumption, sessions.runs, processes), storage: localTaskStorage(directory), files: approvedTaskFiles, development: createDevelopmentRuntime, delivery: repository => createLocalDelivery({ repository, stateDirectory: directory }), observations: processes?.observations,
+    authorizeDelivery,
     workspaces: typeof modelOrWorkspaces === 'function' ? workspaces : modelOrWorkspaces,
   });
 }

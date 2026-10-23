@@ -1,5 +1,7 @@
 
 
+import { unknownUsage } from './run-evidence.js';
+import type { DeliveryDependencyReceipt } from './delivery-dependencies.js';
 import type { InteractionCommand } from "./interactions.js";
 
 import { randomUUID } from "node:crypto";
@@ -13,7 +15,7 @@ export function executeRequest(host: Pick<LocalTaskRuntime, "trackContinuation" 
     return host.trackContinuation(host.executeOwnedRequest(id));
   }
 
-export async function executeOwnedRequest(host: Pick<LocalTaskRuntime, "closed" | "sessions" | "tasks" | "assertAcceptedSnapshots" | "view" | "change" | "running" | "admissionReserved" | "continuationReservations" | "waitingPreparations" | "settings" | "gateInput" | "context" | "prepareTurn" | "evidencePersistenceError">, id: string) {
+export async function executeOwnedRequest(host: Pick<LocalTaskRuntime, "closed" | "sessions" | "tasks" | "assertAcceptedSnapshots" | "view" | "change" | "running" | "admissionReserved" | "continuationReservations" | "waitingPreparations" | "settings" | "gateInput" | "context" | "prepareTurn" | "evidencePersistenceError" | "interact">, id: string) {
     if (host.closed) throw new DomainError("unavailable", "Worker is stopping.");
     const request = host.sessions.requests.get(id);
     const retainedTask = host.tasks.find(task => task.sessionId === request.owner.sessionId);
@@ -23,8 +25,17 @@ export async function executeOwnedRequest(host: Pick<LocalTaskRuntime, "closed" 
         "conflict",
         "This request belongs to another execution owner.",
       );
-    if (request.execution?.inputRevision === request.inputRevision)
+    if (request.execution?.inputRevision === request.inputRevision) {
+      if (request.delivery?.status === 'queued' && retainedTask && !host.running.has(retainedTask.id)) {
+        const checkpoint = request.delivery.steps.findLast(step => ['implementing', 'repairing'].includes(step.phase) && step.turnId === retainedTask.currentTurnId && step.status === 'completed' && step.result);
+        if (checkpoint) await host.change(tasks => { const task = tasks.find(item => item.id === retainedTask.id)!; task.status = 'running'; task.error = null; task.finishedAt = null; });
+        else if (['failed', 'cancelled'].includes(retainedTask.status)) {
+          const view = host.sessions.interactions.view(retainedTask.sessionId);
+          if (view.latestTurn) await host.interact({ action: 'resume', sessionId: retainedTask.sessionId, expectedRevision: view.revision, turnId: view.latestTurn.id, operationId: 'delivery-resume-' + request.delivery.id + '-' + request.revision });
+        }
+      }
       return host.view();
+    }
     if (!host.sessions.requests.evaluate(id, "ready").passed) {
       host.sessions.notifyRequest(id);
       return host.view();
@@ -59,8 +70,15 @@ export async function executeOwnedRequest(host: Pick<LocalTaskRuntime, "closed" 
       task.instruction = current.input.message;
       task.title = current.input.title;
       task.criteria = current.input.criteria === undefined ? undefined : structuredClone(current.input.criteria);
+      const context = current.input.context as { dependencies?: DeliveryDependencyReceipt[] } | undefined;
+      task.dependencies = context?.dependencies === undefined ? undefined : structuredClone(context.dependencies);
       if (current.inputRevision > 1) {
         const previous = host.sessions.interactions.view(task.sessionId);
+        if (previous.latestTurn && ['running', 'queued'].includes(previous.phase)) {
+          const checkpoint = current.deliveryHistory?.flatMap(run => run.steps).findLast(step => step.turnId === previous.latestTurn!.id && step.status === 'completed' && step.result);
+          if (checkpoint?.result && previous.phase === 'running') host.sessions.interactions.complete(task.sessionId, previous.latestTurn.id, checkpoint.result, checkpoint.usage ?? unknownUsage());
+          else if (previous.phase === 'queued') host.sessions.interactions.fail(task.sessionId, previous.latestTurn.id, 'interrupted', 'source_superseded');
+        }
         if (previous.pending)
           host.sessions.interactions.abandon(
             task.sessionId,
@@ -137,6 +155,7 @@ export async function continueTask(host: Pick<LocalTaskRuntime, "closed" | "sess
         if (!task)
           throw new DomainError("not_found", "File-task session not found.");
         host.assertAcceptedSnapshots(task);
+        if (!host.sessions.interactions.operation(task.sessionId, body.operationId)) host.sessions.executor.assertResolved(task.sessionId, { projectId: task.repositoryId ?? task.repository });
         const prior =
           body.turnId ??
           host.sessions.interactions.view(task.sessionId).pending?.turnId;
@@ -187,6 +206,8 @@ export async function continueTask(host: Pick<LocalTaskRuntime, "closed" | "sess
                 "Resume the saved approved-file task context."),
           context: host.context(task),
         });
+        if (request && accepted.turn.kind === 'answer' && accepted.turn.priorTurnId && (!accepted.duplicate || request.execution?.turnId === accepted.turn.priorTurnId && request.execution.inputRevision === request.inputRevision))
+          host.sessions.requests.bindTurn(request.id, accepted.turn.id, request.inputRevision, accepted.turn.priorTurnId);
         if (accepted.duplicate) return;
         taskForFailure = task;
         if (

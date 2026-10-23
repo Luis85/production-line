@@ -45,7 +45,10 @@ export async function sharedRunnerFixture(t) {
       const result = await check(); if (result) return result;
       await delay(250);
     }
-    throw Error(label + ': ' + JSON.stringify({ intake: lastView, events: (await events()).map(({ identity, phase }) => ({ identity, phase })) }));
+    const retained = await readFile(join(state, 'shared-intake.json'), 'utf8').then(JSON.parse).catch(() => null);
+    const board = await api('/api/taskboard').then(value => value.tasks.map(({ id, status, error, finishedAt }) => ({ id, status, error, finishedAt }))).catch(error => ({ error: String(error) }));
+    const claims = Array.isArray(retained?.records) ? retained.records.slice(0, 100).filter(record => record && typeof record === 'object').map(({ id, status, updatedAt, submitted, pending, remoteRevision, publishedState }) => ({ id, status, updatedAt, submitted, pendingOperation: pending?.operationId ?? null, remoteAcknowledged: remoteRevision === publishedState })) : null;
+    throw Error(label + ': ' + JSON.stringify({ intake: lastView, board, claims, events: (await events()).map(({ identity, phase, at }) => ({ identity, phase, at })) }));
   }
   async function observePolls(count = 2) {
     let previous = (await view()).lastSyncedAt, observed = 0;
@@ -103,7 +106,7 @@ export async function sharedRunnerFixture(t) {
   running.catch(error => { runError = error; ready.reject(error); });
   await ready.promise;
   token = (await readFile(join(state, 'webview-token'), 'utf8')).trim();
-  await api('/api/settings', { board: { paused: true, queueCapacity: 1 }, provider: { id: 'claude-cli', executable, model: 'labelled-fixture' }, repositories: { pollMs: 300000, items: [{ id: 'shared', path: checkout, remote: 'origin', branch: 'main', watch: true }] } });
+  await api('/api/settings', { board: { paused: true, queueCapacity: 1 }, provider: { id: 'claude-cli', executable, model: 'labelled-fixture', authenticationMode: 'cli-account' }, repositories: { pollMs: 300000, items: [{ id: 'shared', path: checkout, remote: 'origin', branch: 'main', watch: true }] } });
   const tools = await api('/api/tool-access');
   const check = "const assert=require('node:assert/strict');const fs=require('node:fs');assert.match(fs.readFileSync('approved.txt','utf8'),/^Implemented batch-(00|10|20)\\n$/);console.log('Verified actual candidate source.');";
   await api('/api/tool-access', { expectedRevision: tools.revision, builtins: { ...tools.builtins, files: true, commands: [{ id: 'verify-source', name: 'Verify candidate source', executable: process.execPath, args: ['-e', check], enabled: true, verification: true }] }, mcp: [] });

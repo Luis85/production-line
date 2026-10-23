@@ -3,7 +3,8 @@ import { testErrorCode, testErrorMessage } from '../helpers/typed-boundaries.mjs
 import { withProviderTools } from '../../src/worker/dist/worker/infrastructure/provider-tool-session.js';
 import { withCliToolBridge } from '../../src/worker/dist/worker/infrastructure/cli-tool-bridge.js';
 import { providerCommand } from '../../src/worker/dist/worker/infrastructure/codex-adapter.js';
-import test from 'node:test';
+import test, { describe } from 'node:test';
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, rm, access } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -17,8 +18,9 @@ const manifest = { revision: 3, tools: [{ name: 'fixture_read', description: 'Re
 const usage = { input_tokens: 10, output_tokens: 3, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 };
 const answer = id => id === 'openai-api' ? { status: 'completed', usage, output: [{ type: 'message', content: [{ type: 'output_text', text: 'Fixture complete.' }] }] } : { stop_reason: 'end_turn', usage, content: [{ type: 'text', text: 'Fixture complete.' }] };
 const call = (id, extra = {}) => id === 'openai-api' ? { status: 'completed', usage, output: [{ type: 'function_call', name: 'fixture_read', call_id: 'call_1', arguments: '{"path":"README.md"}', ...extra }] } : { stop_reason: 'tool_use', usage, content: [{ type: 'tool_use', name: 'fixture_read', id: 'call_1', input: { path: 'README.md' }, ...extra }] };
+// This tool records in-memory calls only; CLI adapters still prepare their own native process runtime.
 /** @returns {import('../../src/worker/infrastructure/provider-tool-session.js').ToolRuntimeFactory} */
-function runtimeFactory(observed, override = {}) { return () => ({ manifest: structuredClone(manifest), async call(name, args, signal) { observed.calls.push({ name, args, aborted: signal.aborted }); return { content: [{ type: 'text', text: 'Fixture file contents' }] }; }, async close() { observed.closed++; }, ...override }); }
+function runtimeFactory(observed, override = {}) { return () => ({ requiresProcessRuntime: false, manifest: structuredClone(manifest), async call(name, args, signal) { observed.calls.push({ name, args, aborted: signal.aborted }); return { content: [{ type: 'text', text: 'Fixture file contents' }] }; }, async close() { observed.closed++; }, ...override }); }
 for (const id of /** @type {const} */ (['openai-api', 'anthropic-api'])) {
   test(`${id} executes only current granted tools, replays results and totals usage across turns`, async () => {
     const observed = { calls: [], closed: 0 }, bodies = [], measurements = [];
@@ -121,6 +123,11 @@ if(${JSON.stringify(id)}==='claude-cli')console.log(JSON.stringify({type:'result
   }
 });
 
+describe('contained CLI bridge operations', () => {
+  // Wire-only bridge probes run in the checkout, outside the supervisor's private cache storage.
+  // Native setup is separate from each unchanged test and bridge-operation deadline.
+  prepareNativeProcessFixture();
+
 test('private CLI bridge speaks MCP through the contained launcher on every platform', { timeout: 30000 }, async () => {
   const observed = { calls: [], closed: 0 }, runtime = runtimeFactory(observed)();
   let privateFile;
@@ -128,7 +135,7 @@ test('private CLI bridge speaks MCP through the contained launcher on every plat
     const output = await withCliToolBridge(runtime, AbortSignal.timeout(20000), async bridge => {
       privateFile = bridge.args[1];
       const input = [{ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18' } }, { jsonrpc: '2.0', id: 2, method: 'tools/list' }, { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'fixture_read', arguments: { path: 'README.md' } } }].map(value => JSON.stringify(value)).join('\n') + '\n';
-      return providerCommand(bridge.command, bridge.args, tmpdir(), AbortSignal.timeout(15000), input, true, 'claude');
+      return providerCommand(bridge.command, bridge.args, process.cwd(), AbortSignal.timeout(15000), input, true, 'claude');
     });
     const responses = output.toString('utf8').trim().split('\n').map(value => JSON.parse(value));
     assert.equal(responses[0].result.protocolVersion, '2025-06-18');
@@ -156,7 +163,7 @@ test('cancelled CLI tool invocation holds execution until tool cleanup completes
   const pending = withProviderTools(prepareModelRequest(model, messages), controller.signal, () => runtime, (tools, signal) => withCliToolBridge(tools, signal, bridge => {
     privateFile = bridge.args[1];
     const input = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'fixture_read', arguments: { path: 'README.md' } } }) + '\n';
-    return providerCommand(bridge.command, bridge.args, tmpdir(), signal, input, true, 'claude');
+    return providerCommand(bridge.command, bridge.args, process.cwd(), signal, input, true, 'claude');
   }));
   const assertion = assert.rejects(pending, { code: 'cancelled' }); pending.then(() => { settled = true; }, () => { settled = true; });
   try {
@@ -164,4 +171,6 @@ test('cancelled CLI tool invocation holds execution until tool cleanup completes
     assert.equal(settled, false); assert.equal(closed, false);
   } finally { controller.abort(); release(); }
   await assertion; assert.equal(closed, true); await assert.rejects(access(privateFile));
+});
+
 });

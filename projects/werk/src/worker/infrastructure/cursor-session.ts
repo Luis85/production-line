@@ -1,3 +1,5 @@
+import { providerAuthenticationEnvironment } from './provider-authentication.js';
+import { structuredProviderFailure } from './provider-failures.js';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -26,14 +28,14 @@ export async function cursorReply(connection: ProviderConnection, workspace: str
   access: ModelSessionAccess | undefined, observe: (usage: ProviderUsage) => void, runtime?: ToolRuntime, control?: ModelInvocationControl) {
   if (request.policy.tools !== 'provider_native' || request.provider.effort && request.provider.effort !== 'default') throw new ProviderModelError('invalid_request');
   const session = request.schemaVersion === 2 ? await openProviderSession(access, request, connection.executable) : undefined;
-  const environment = connection.apiKey ? { CURSOR_API_KEY: connection.apiKey } : {};
+  const environment = providerAuthenticationEnvironment(connection);
   try {
     let nativeId = session?.nativeId;
     if (!nativeId) {
       const bounded = AbortSignal.any([signal, AbortSignal.timeout(5000)]);
       let output: Buffer;
       try { output = await providerCommand(connection.executable, ['create-chat'], workspace, bounded, undefined, true, 'cursor', undefined, environment); }
-      catch { throw new ProviderModelError(signal.aborted ? 'cancelled' : 'unavailable'); }
+      catch (error) { throw signal.aborted ? new ProviderModelError('cancelled') : error; }
       nativeId = output.toString('utf8').trim();
     }
     if (!chatId(nativeId)) throw new ProviderModelError('protocol');
@@ -43,6 +45,7 @@ export async function cursorReply(connection: ProviderConnection, workspace: str
         ...(!request.policy.development ? ['--mode', 'ask'] : []), ...(plugin ? ['--plugin-dir', plugin] : [])];
       await session?.begin(id);
       control?.beforeCall();
+      if (signal.aborted) throw new ProviderModelError('cancelled');
       session?.markDispatched();
       // No documented CLI token/cost counters: this remains unknown even when a future output resembles another provider.
       observe(unknownUsage('Cursor CLI does not expose documented token or cost counters. Native subagent usage is also unavailable.'));
@@ -52,6 +55,7 @@ export async function cursorReply(connection: ProviderConnection, workspace: str
     let response: unknown; try { response = JSON.parse(output.toString('utf8')); } catch { throw new ProviderModelError('protocol'); }
     if (!response || typeof response !== 'object' || Array.isArray(response)) throw new ProviderModelError('protocol');
     const value = response as Record<string, unknown>;
+    const failure = structuredProviderFailure(value); if (failure) throw failure;
     if (value.type !== 'result' || value.subtype !== 'success' || value.is_error !== false || value.session_id !== id || typeof value.result !== 'string') throw new ProviderModelError('protocol');
     const result = parseModelResult(value.result);
     signal.throwIfAborted();

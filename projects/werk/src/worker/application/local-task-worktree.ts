@@ -1,3 +1,5 @@
+import { observeTaskBaseline } from './local-task-baseline.js';
+import type { DevelopmentFactoryOptions } from './development.js';
 
 import { assertDevelopmentPolicy, validateDevelopmentState, type DevelopmentLimits, type DevelopmentRuntime } from './development.js';
 
@@ -8,17 +10,20 @@ import { DomainError } from "../../shared/errors.js";
 import { BACKGROUND_ADMISSION_TIMEOUT_MS, type LocalTask } from './local-task-contracts.js';
 import type { LocalTaskRuntime } from './local-task-runtime-contract.js';
 
-export function developmentRuntime(host: Pick<LocalTaskRuntime, "settings" | "development" | "assertToolWorkspace" | "change">, task: LocalTask, limits: DevelopmentLimits = {}): DevelopmentRuntime | undefined {
+export function developmentRuntime(host: Pick<LocalTaskRuntime, "settings" | "development" | "assertToolWorkspace" | "change" | "workspaces" | "files" | "authorizeDelivery">, task: LocalTask, limits: DevelopmentLimits = {}, persistEvidence = true): DevelopmentRuntime | undefined {
     if (!task.implementation) return;
     validateDevelopmentState(task.implementation, task.developmentEvidence);
     assertDevelopmentPolicy(task.implementation, host.settings.toolPolicy());
     if (!host.development || !task.worktree || !task.worktreeIdentity) throw new DomainError('unavailable', 'Implementation tools are unavailable; the accepted worktree is retained.');
-    return host.development({ scope: structuredClone(task.implementation), worktree: task.worktree, worktreeIdentity: task.worktreeIdentity, repository: task.repository,
+    let baseline = task.developmentEvidence?.baseline;
+    const options: DevelopmentFactoryOptions = { scope: structuredClone(task.implementation), worktree: task.worktree, worktreeIdentity: task.worktreeIdentity, repository: task.repository,
       initialEvidence: task.developmentEvidence, commandTimeoutMs: limits.commandTimeoutMs,
       candidateSourceMaxBytes: limits.candidateSourceMaxBytes, candidateSourceMaxFiles: limits.candidateSourceMaxFiles, candidateFileMaxBytes: limits.candidateFileMaxBytes,
       candidateApprovedFileMaxBytes: limits.candidateApprovedFileMaxBytes, candidateApprovedTotalMaxBytes: limits.candidateApprovedTotalMaxBytes, candidateReviewPatchMaxBytes: limits.candidateReviewPatchMaxBytes,
-      verifyWorkspace: signal => host.assertToolWorkspace(task, signal, false, limits), currentPolicy: () => host.settings.toolPolicy(),
+      verifyWorkspace: signal => host.assertToolWorkspace(task, signal, !persistEvidence, limits), currentPolicy: () => host.settings.toolPolicy(),
       checkpoint: async evidence => {
+        if (!persistEvidence) return;
+        if (baseline) evidence = { ...evidence, baseline };
         validateDevelopmentState(task.implementation, evidence);
         await host.change(tasks => { const current = tasks.find(item => item.id === task.id);
           if (!current || current.currentTurnId !== task.currentTurnId || current.status !== 'running') throw new DomainError('conflict', 'This implementation attempt no longer owns its worktree.');
@@ -28,10 +33,20 @@ export function developmentRuntime(host: Pick<LocalTaskRuntime, "settings" | "de
         task.developmentEvidence = structuredClone(evidence);
         delete task.developmentCompletion;
       },
-    });
+    };
+    const runtime = host.development(options);
+    return { ...runtime, evidence: () => ({ ...runtime.evidence(), ...(baseline ? { baseline: structuredClone(baseline) } : {}) }),
+      ...(persistEvidence ? { observeBaseline: async (signal: AbortSignal) => {
+        if (baseline) return structuredClone(baseline);
+        baseline = await observeTaskBaseline(host, task, options, signal);
+        await options.checkpoint({ ...runtime.evidence(), baseline });
+        return structuredClone(baseline);
+      } } : {}),
+    };
   }
 
-export async function assertToolWorkspace(host: Pick<LocalTaskRuntime, "settings" | "workspaces" | "files">, task: LocalTask, signal: AbortSignal, verifyOnly = false, inspection: DevelopmentLimits = host.settings.value.execution) {
+export async function assertToolWorkspace(host: Pick<LocalTaskRuntime, "settings" | "workspaces" | "files" | "authorizeDelivery">, task: LocalTask, signal: AbortSignal, verifyOnly = false, inspection: DevelopmentLimits = host.settings.value.execution) {
+    if (!verifyOnly) host.authorizeDelivery?.(task);
     const policy = host.settings.toolPolicy();
     const granted = policy.services?.enabled && policy.services.presets.some(item => item.enabled) || policy.builtins.files || policy.builtins.commands.some(item => item.enabled) || policy.builtins.cliTools.some(item => item.enabled) || policy.builtins.webOrigins.length || policy.mcp.some(item => item.enabled && item.allowedTools.length);
     if (!granted || !task.worktree) return;
@@ -49,6 +64,8 @@ export async function assertToolWorkspace(host: Pick<LocalTaskRuntime, "settings
     const retained = await prepare(selector, task.worktreeKey ?? task.id, signal, task.baseCommit, inspection);
     if (!retained.reused || retained.path !== task.worktree || retained.repository !== task.repository || retained.baseCommit !== task.baseCommit || retained.repositoryId !== task.repositoryId) throw fail();
     await verifyIdentity();
+    signal.throwIfAborted();
+    if (!verifyOnly) host.authorizeDelivery?.(task);
   }
 
 export async function removeTaskWorktree(host: Pick<LocalTaskRuntime, "workspaces" | "files" | "settings" | "workspaceController">, task: LocalTask, requested: boolean | undefined, discardChanges: boolean) {

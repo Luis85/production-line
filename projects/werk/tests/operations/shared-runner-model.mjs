@@ -8,6 +8,7 @@ import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 const calls = ${JSON.stringify(callsPath)}, lock = ${JSON.stringify(lockPath)};
 const args = process.argv.slice(2);
+if (args.join(' ') === 'auth status') { console.log(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai' })); process.exit(0); }
 if (args.includes('--version')) { console.log('2.1.277 (Claude Code labelled fixture)'); process.exit(0); }
 const resumed = args.includes('--resume'), nativeFlag = resumed ? '--resume' : '--session-id';
 assert.ok(args.includes(nativeFlag), 'Expected worker-owned native session binding.');
@@ -19,7 +20,7 @@ if (resumed) input = await readFile(contextFile, 'utf8') + '\n' + input;
 await writeFile(contextFile, input, { mode: 0o600 });
 const identity = input.match(/\[batch-(00|10|20)\]/)?.[1];
 assert.ok(identity, 'Expected the labelled Feature Request in the model input.');
-const event = value => appendFile(calls, JSON.stringify({ identity, ...value }) + '\n');
+const event = value => appendFile(calls, JSON.stringify({ identity, at: new Date().toISOString(), ...value }) + '\n');
 const handle = await open(lock, 'wx').catch(async error => { await event({ phase: 'overlap' }); throw error; });
 await event({ phase: 'started', input, sessionId, resumed });
 try {

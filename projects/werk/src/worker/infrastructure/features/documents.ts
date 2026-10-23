@@ -1,7 +1,9 @@
 import { open, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DomainError } from '../../../shared/errors.js';
-import { atomicWrite, readBoundedFile } from '../journal/files.js';
+import { readBoundedFile } from '../journal/files.js';
+import { replaceFeatureFile } from './recoverable-write.js';
+import { submissionIntent, requestSchema } from './markdown-contract.js';
 import { parseFeature, featureInput, requestName, digest } from './document.js';
 import type { FeatureDocumentPort } from '../../application/feature-management.js';
 
@@ -16,15 +18,16 @@ export class FeatureDocuments implements FeatureDocumentPort {
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new DomainError('not_found', 'Feature file not found.'); throw error; }
   }
   validate(markdown: string) {
-    try { const parsed = parseFeature(markdown); return { input: featureInput(parsed, typeof this.provider === 'function' ? this.provider() : this.provider), id: parsed.data.id, status: parsed.data.status, managed: parsed.data.werk !== undefined || parsed.data.source !== undefined, gates: (parsed.data.werk as { gates?: import('../../application/feature-requests.js').FeatureGateProjection } | undefined)?.gates }; }
+    try { const parsed = parseFeature(markdown); return { input: featureInput(parsed, typeof this.provider === 'function' ? this.provider() : this.provider), id: parsed.data.id, status: parsed.data.schema === requestSchema ? submissionIntent(parsed.data) : parsed.data.status, ...(typeof parsed.data.schema === 'string' ? { schema: parsed.data.schema } : {}), managed: parsed.data.werk !== undefined || parsed.data.source !== undefined, gates: (parsed.data.werk as { gates?: import('../../application/feature-requests.js').FeatureGateProjection } | undefined)?.gates }; }
     catch (error) { throw new DomainError('invalid_input', error instanceof Error ? error.message : 'Invalid feature document.'); }
   }
-  ready(markdown: string) { const parsed = parseFeature(markdown); parsed.document.set('status', 'ready'); return '---\n' + parsed.document.toString({ lineWidth: 0 }) + '---\n' + parsed.body; }
+  ready(markdown: string) { const parsed = parseFeature(markdown); parsed.document.set(parsed.data.schema === requestSchema ? 'intent' : 'status', parsed.data.schema === requestSchema ? 'submit' : 'ready'); return '---\n' + parsed.document.toString({ lineWidth: 0 }) + '---\n' + parsed.body; }
   async write(name: string, markdown: string, revision?: string) {
     await this.check(); const path = this.path(name);
     if (revision !== undefined) {
-      if ((await this.read(name)).revision !== revision) throw new DomainError('conflict', 'Feature changed. Read it again and reconcile before retrying.');
-      await atomicWrite(path, markdown);
+      const before = await this.read(name);
+      if (before.revision !== revision) throw new DomainError('conflict', 'Feature changed. Read it again and reconcile before retrying.');
+      if (!await replaceFeatureFile(path, before.markdown, markdown, join(this.directory, '_conflicts'))) throw new DomainError('conflict', 'Feature changed during save. Reconcile the current note and retained _conflicts copy before retrying.');
     } else {
       let handle;
       try { handle = await open(path, 'wx', 0o600); await handle.writeFile(markdown); await handle.sync(); }

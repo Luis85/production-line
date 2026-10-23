@@ -53,7 +53,7 @@ export async function newTask(options: { model?: string; effort?: ModelEffort; p
   return workspaceAction('/api/sessions', { action: 'create', title: 'New task', provider, ...options });
 }
 export interface FeatureRequestCommand {
-  action: 'create'; id: string; title: string; message: string; provider: string; model?: string; effort?: ModelEffort;
+  action: 'create'; id: string; title: string; message: string; provider?: string; projectId?: string; executionProfile?: string; model?: string; effort?: ModelEffort;
   definitionId?: string; agent?: string; useInstructionsOnly?: boolean;
   files?: { repository: string; paths: string[] };
   background?: true;

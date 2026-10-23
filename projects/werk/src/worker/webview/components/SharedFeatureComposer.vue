@@ -5,7 +5,7 @@ import type { ProviderId } from '../../application/provider-contract';
 import type { ModelEffort } from '../../application/model-effort';
 import { emptyFeatureAuthoringEditor } from '../feature-authoring-editor';
 const editorState = reactive(emptyFeatureAuthoringEditor());
-const emptySeed = () => ({ title: '', message: '', provider: undefined as ProviderId | undefined, model: '', effort: '' as ModelEffort | '', paths: '', selectionEdited: false });
+const emptySeed = () => ({ title: '', message: '', provider: undefined as ProviderId | undefined, model: '', effort: '' as ModelEffort | '', paths: '', selectionEdited: false, executionProfile: '' });
 const seed = reactive(emptySeed());
 watchPrivateDraft(() => workerState.draftEpoch, () => {
   Object.assign(editorState, emptyFeatureAuthoringEditor());
@@ -13,9 +13,11 @@ watchPrivateDraft(() => workerState.draftEpoch, () => {
 }, { flush: 'sync' });
 </script>
 <script setup lang="ts">
-import { computed, nextTick, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import UButton from '@nuxt/ui/components/Button.vue';
 import UInput from '@nuxt/ui/components/Input.vue';
+import ProjectExecutionSelection from './ProjectExecutionSelection.vue';
+import { useWorkerSnapshot } from '../useWorkerSnapshot';
 import ModelSelectionFields from './ModelSelectionFields.vue';
 import UTextarea from '@nuxt/ui/components/Textarea.vue';
 import MessageContent from './MessageContent.vue';
@@ -26,10 +28,13 @@ import { sharedReadyReviewView } from '../shared-ready-review-view';
 import { splitFeatureRequestMarkdown } from '../feature-request-note';
 import type { FeatureAuthoringResult } from '../../application/feature-authoring-contracts';
 const emit = defineEmits<{ created: [sessionId: string, previousSessionId: string]; busy: [boolean] }>();
-const view = computed(() => state.environment?.sharedIntake);
+const projectId = ref(''), projectProfiles = ref(false);
+const projectSnapshot = useWorkerSnapshot(() => request<NonNullable<NonNullable<typeof state.environment>['sharedIntake']>>('/api/shared-intake' + (projectId.value ? '?projectId=' + encodeURIComponent(projectId.value) : '')), [projectId]);
+const projectChoices = computed(() => projectSnapshot.data.value?.projects ?? state.environment?.sharedIntake?.projects ?? []);
+const view = computed(() => projectSnapshot.data.value ?? (!projectId.value ? state.environment?.sharedIntake : undefined));
 const binding = () => view.value?.config.repositoryId ? { repositoryId: view.value.config.repositoryId, remote: view.value.config.remote, branch: view.value.config.branch, workflowPath: view.value.config.workflowPath } : null;
 const editor = createFeatureAuthoringEditor({ state: editorState, binding, active: () => state.unlocked,
-  epoch: () => state.draftEpoch, uuid: () => crypto.randomUUID(), command: command => request<FeatureAuthoringResult>('/api/features', 'POST', command) });
+  epoch: () => state.draftEpoch, uuid: () => crypto.randomUUID(), command: command => request<FeatureAuthoringResult>('/api/features', 'POST', { ...command, projectId: command.expectedBinding?.repositoryId ?? projectId.value }) });
 const locked = computed(() => editorState.busy || !!editorState.pending || state.workspaceBusy || !state.unlocked);
 const current = computed(() => editor.current());
 const editable = computed(() => editor.editable());
@@ -51,9 +56,9 @@ watch([() => state.settings?.providers, defaultProvider], () => {
 }, { immediate: true });
 async function focusInstructions() { await nextTick(); document.getElementById(editorState.result ? 'feature-detail-goal' : 'new-task-instructions')?.focus(); }
 async function prepare() {
-  if (locked.value || !seed.message.trim() || !seed.provider) return;
-  await editor.prepare({ title: seed.title.trim() || seed.message.trim().slice(0, 80), message: seed.message, provider: seed.provider,
-    ...(seed.model.trim() ? { model: seed.model.trim() } : {}), ...(seed.effort ? { effort: seed.effort } : {}),
+  if (locked.value || !seed.message.trim() || !binding() || !projectProfiles.value && !seed.provider) return;
+  await editor.prepare({ title: seed.title.trim() || seed.message.trim().slice(0, 80), message: seed.message, ...(projectProfiles.value ? seed.executionProfile ? { executionProfile: seed.executionProfile } : {} : { provider: seed.provider }),
+    ...(!projectProfiles.value && seed.model.trim() ? { model: seed.model.trim() } : {}), ...(!projectProfiles.value && seed.effort ? { effort: seed.effort } : {}),
     paths: seed.paths.split('\n').map(path => path.trim()).filter(Boolean) });
   await focusInstructions();
 }
@@ -73,6 +78,7 @@ defineExpose({ focusInstructions });
   <section class="shared-feature-composer" aria-labelledby="shared-feature-title" :aria-busy="editorState.busy">
     <h3 id="shared-feature-title">Create a feature request</h3>
     <p class="composer-intro">Describe the outcome here. Your request uses the same project template, Markdown queue and checks as your team.</p>
+    <label for="shared-project-choice">Project</label><select id="shared-project-choice" v-model="projectId" :disabled="locked || !!editorState.result || !!seed.message.trim()"><option value="">Worker installation project</option><option v-for="project in projectChoices" :key="project.id" :value="project.id">{{ project.label }}{{ project.enabled ? '' : ' · intake paused' }}</option></select><p v-if="projectSnapshot.error.value" role="alert" class="error-text">{{ projectSnapshot.error.value }}</p><p v-if="view && !view.config.repositoryId" class="notice">Shared Git intake is not configured for this project. Add requests to its local feature folder, or configure shared intake.</p>
     <p class="destination">{{ view?.config.repositoryId }} · {{ view?.config.remote }} / {{ view?.config.branch }}</p>
     <p v-if="view && !view.config.enabled" class="notice">Shared intake is paused. You can publish requests; execution waits until intake resumes.</p>
     <form v-if="!editorState.result" :aria-busy="editorState.busy" @submit.prevent="prepare">
@@ -84,20 +90,21 @@ defineExpose({ focusInstructions });
           <summary>Request options</summary>
           <label for="shared-request-title">Request name · optional</label>
           <UInput id="shared-request-title" v-model="seed.title" :maxlength="120" placeholder="Named from your instructions" class="w-full" />
-          <ModelSelectionFields id="shared-request" @update:provider="seed.selectionEdited = true" @update:model="seed.selectionEdited = true" @update:effort="seed.selectionEdited = true" v-model:provider="seed.provider" v-model:model="seed.model" v-model:effort="seed.effort" :providers="state.settings?.providers ?? []" :disabled="locked" />
+          <ProjectExecutionSelection id="shared-request" v-model="seed.executionProfile" :project-id="view?.config.repositoryId || projectId || undefined" mode="patch" :disabled="locked" @configured="projectProfiles = $event" />
+          <ModelSelectionFields v-if="!projectProfiles" id="shared-request" @update:provider="seed.selectionEdited = true" @update:model="seed.selectionEdited = true" @update:effort="seed.selectionEdited = true" v-model:provider="seed.provider" v-model:model="seed.model" v-model:effort="seed.effort" :providers="state.settings?.providers ?? []" :disabled="locked" />
           <label for="shared-request-paths">Approved repository paths · one per line</label>
           <UTextarea id="shared-request-paths" v-model="seed.paths" :rows="3" placeholder="src/orders/export.ts" class="w-full" />
           <p class="help">Only approve files this feature may change. You can complete these details in the draft.</p>
         </details>
       </fieldset>
-      <UButton type="submit" :loading="editorState.busy" :disabled="locked || !seed.message.trim() || !seed.provider">Prepare request</UButton>
+      <UButton type="submit" :loading="editorState.busy" :disabled="locked || !seed.message.trim() || !binding() || !projectProfiles && !seed.provider">Prepare request</UButton>
     </form>
     <template v-else>
       <div class="request-identity"><strong>{{ editorState.result.name }}</strong><span>{{ editorState.result.revision ? 'Published ' + editorState.result.status : 'Unpublished draft' }}</span></div>
       <p v-if="!current" class="error-text" role="alert">The shared connection changed. This draft still belongs to {{ editorState.result.binding.repositoryId }} / {{ editorState.result.binding.branch }}. Restore that connection to continue.</p>
       <p v-if="editorState.notice" class="notice" role="status">{{ editorState.notice }}</p>
       <template v-if="editable">
-        <FeatureRequestDetails v-model="editorState.markdown" :disabled="locked" />
+        <FeatureRequestDetails v-model="editorState.markdown" :disabled="locked" :project-id="editorState.result.binding.repositoryId" />
         <section class="readiness" aria-labelledby="shared-readiness-title" aria-live="polite">
           <h4 id="shared-readiness-title">{{ changed ? 'Details changed · check again' : editorState.result.readiness.valid ? reviewRequired ? 'Ready for request review' : 'Ready checks passed' : reviewRequired ? 'Details needed before review' : 'Details needed before work can start' }}</h4>
           <ul v-if="!changed && editorState.result.readiness.errors.length"><li v-for="(issue, index) in editorState.result.readiness.errors" :key="index">{{ issue.message }}</li></ul>
@@ -145,6 +152,7 @@ p { line-height: 1.6; }
 .composer-intro { margin: 8px 0 12px; color: var(--ui-text-muted); font-size: .875rem; }
 .destination { margin: 0 0 24px; font-size: .75rem; color: var(--ui-text-muted); overflow-wrap: anywhere; }
 fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+select { min-height:44px;max-width:100%;width:100%;background:var(--ui-bg);color:var(--ui-text);border:1px solid var(--ui-border);padding-inline:12px;border-radius:6px; }
 label { display: block; margin: 20px 0 8px; font-weight: 600; font-size: .875rem; }
 fieldset > label:first-child { margin-top: 0; }
 :deep(textarea) { background: #111e26; line-height: 1.6; }

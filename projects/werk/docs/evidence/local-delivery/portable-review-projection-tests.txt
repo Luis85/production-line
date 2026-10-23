@@ -1,0 +1,48 @@
+(node:362897) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ gate matching excludes different input, policy and output generations, including unknown output (1.157622ms)
+✔ passed completion checks and a retained patch still require human review (2.362238ms)
+✔ proposal-only requests do not inherit implementation or check success (0.247504ms)
+✔ stale candidate checks block review acceptance even when a completion evaluation passed (0.228797ms)
+✔ only an operator-acceptance gate can offer attestation, and verification blockers outrank it (0.556698ms)
+✔ attestation matches current input and output rather than the existence of an old decision (0.350255ms)
+✔ shared publication is distinct from implemented checks and requires branch plus review note (0.605167ms)
+✔ another owner and unclaimed shared requests never acquire local mutation authority (0.224599ms)
+✔ pending questions outrank old results; already-published answers do not offer another answer (0.526869ms)
+✔ shared stop requires a successor while failed retained checkpoints support explicit continuation (0.376126ms)
+✔ stale, unavailable and cross-request reads provide refresh only and do not join unrelated evidence (0.319049ms)
+✔ orchestrator ownership suppresses local scope mutation and never claims implementation (0.161986ms)
+✔ a saved answer for an earlier checkpoint does not hide a new question (0.132062ms)
+✔ a policy requiring acceptance to remain false does not offer an acceptance mutation (0.10628ms)
+✔ an unclaimed invalid shared request asks the operator to repair readiness (0.154419ms)
+✔ a shared record owned elsewhere cannot borrow colliding local execution identifiers (0.275161ms)
+✔ real local session catalog aliases join their exact board task without accepting unrelated IDs (51.53298ms)
+✔ pre-DoR reviewer findings direct answers to the same Markdown request without inventing an implementation (0.584925ms)
+✔ review model information uses retained acceptance and never reconstructs it from current defaults (0.302019ms)
+✔ a interrupted delivery cannot inherit completion from a retained interaction, patch or gate (0.42284ms)
+✔ a outcome_unknown delivery cannot inherit completion from a retained interaction, patch or gate (0.173544ms)
+✔ a reconciling delivery cannot inherit completion from a retained interaction, patch or gate (0.07448ms)
+✔ a paused delivery cannot inherit completion from a retained interaction, patch or gate (0.057604ms)
+✔ a failed delivery cannot inherit completion from a retained interaction, patch or gate (0.04284ms)
+✔ a running delivery cannot inherit completion from a retained interaction, patch or gate (0.066319ms)
+✔ a queued delivery cannot inherit completion from a retained interaction, patch or gate (0.061804ms)
+✔ only a current completed delivery review package establishes its candidate checks and handoff (0.513625ms)
+(node:362898) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ required acceptance is tied to current output and does not create a new policy requirement (6.47308ms)
+✔ explicit shared Feature Request source blocks scope changes even without a session record (2.809174ms)
+✔ an outer stale/read-only page blocks fresh mutations and an unretained retry (0.943341ms)
+✔ only the invoked action shows progress while other actions keep stable labels (1.067834ms)
+✔ acceptance preserves exact identity and reports actual completion outcome (true) (2.491544ms)
+✔ acceptance preserves exact identity and reports actual completion outcome (false) (1.426406ms)
+✔ uncertain acceptance retains the original action and a retry cannot duplicate intent (1.751273ms)
+✔ stopped-process confirmation binds the run and observation and retries the exact saved command (1.668179ms)
+✔ a delivery run owns continuation while generic invocation and instruction controls are unavailable (1.246657ms)
+ℹ tests 36
+ℹ suites 0
+ℹ pass 36
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 702.186298

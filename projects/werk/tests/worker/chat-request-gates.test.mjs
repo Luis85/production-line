@@ -23,6 +23,7 @@ async function fixture(t, execute) {
         capabilities: modelCapabilities,
     configuration: {
       id: connection.id,
+      authenticationMode: connection.authenticationMode,
       model: connection.model,
       effort: connection.effort,
       instruction: "Frozen fixture instructions",

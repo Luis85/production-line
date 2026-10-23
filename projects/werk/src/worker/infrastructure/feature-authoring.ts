@@ -1,3 +1,5 @@
+import { newDeliveryProjectPolicy } from '../application/delivery-policy-template.js';
+import { deliveryPolicyPath } from '../application/delivery-policy.js';
 import { open, unlink } from 'node:fs/promises';
 import { providerIds } from '../application/provider-contract.js';
 import { parseFeature } from './features/document.js';
@@ -107,10 +109,21 @@ async function prepareFeatureAuthoring(directory: string, options: AuthoringSetu
   if (base !== undefined && !base.trim()) throw Error('The configured feature-request Base must not be empty.');
   const script = await planScript(root, options);
   if (script.action === 'preserve') warnings.push({ code: 'authoring_script_outdated', revision: script.revision, message: `The existing ${authoringScriptPath} differs from this worker's bundled script and was preserved because Werk cannot tell whether the team changed it. Compare it with src/worker/dist/worker/authoring/feature-request.mjs in the worker app folder. To replace it, run feature setup --if-match ${script.revision}, then commit the change.` });
-  // A preserved, possibly customized script must never be recorded as Werk-managed.
-  const manifest = script.action === 'preserve' ? undefined : json({ schemaVersion: 1, files: { [authoringScriptPath]: { sha256: contentHash(options.script) } } });
+  // The restriction marker never approves policy; it prevents a new installation falling back before its first commit.
+  const existingManifest = await readAuthoringFile(root, authoringManifestPath, authoringManifestLimit);
+  let previousManifest: Record<string, unknown> = {};
+  if (existingManifest !== undefined) { try { const parsed = JSON.parse(existingManifest); if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) previousManifest = parsed; } catch { /* Older malformed management metadata grants nothing. */ } }
+  if (previousManifest.requiresCommittedDeliveryPolicy !== undefined && typeof previousManifest.requiresCommittedDeliveryPolicy !== 'boolean') throw Error('Authoring manifest requiresCommittedDeliveryPolicy must be a boolean.');
+  const requiresCommittedDeliveryPolicy = saved === undefined || previousManifest.requiresCommittedDeliveryPolicy === true;
+  // A preserved, possibly customized script must never be newly recorded as Werk-managed.
+  const manifest = script.action === 'preserve' && !requiresCommittedDeliveryPolicy ? undefined : json({
+    schemaVersion: 1,
+    files: script.action === 'preserve' ? previousManifest.files ?? {} : { [authoringScriptPath]: { sha256: contentHash(options.script) } },
+    ...(requiresCommittedDeliveryPolicy ? { requiresCommittedDeliveryPolicy: true } : {}),
+  });
   const files: Record<string, string> = {
     [featureWorkflowPath]: json(config),
+    ...(saved === undefined ? { [deliveryPolicyPath]: json(newDeliveryProjectPolicy()) } : {}),
     [config.readyCheck]: json(defaultFeatureCheck('ready')),
     [config.doneCheck]: json(defaultFeatureCheck('done')),
     ...prompts,

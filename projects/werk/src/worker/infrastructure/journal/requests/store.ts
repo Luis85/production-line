@@ -1,3 +1,6 @@
+import { deliveryEventMeasurement } from '../../../application/delivery-event-measurement.js';
+import type { DeliveryMetricObservation } from '../../../application/delivery-metrics-contracts.js';
+import { deliveryLifecycle, refreshDelivery } from '../../../application/delivery-behavior.js';
 import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from 'node:sqlite';
 import { DomainError } from "../../../../shared/errors.js";
@@ -44,6 +47,7 @@ export class RequestStore {
         .all()) {
         const request = JSON.parse(String(row.payload)) as WorkerRequest;
         let changed = false;
+        const observations: DeliveryMetricObservation[] = [];
         if (
           request.execution &&
           ["prepared", "running"].includes(request.execution.status) &&
@@ -55,6 +59,11 @@ export class RequestStore {
           request.phase = "interrupted";
           changed = true;
         }
+        if (request.delivery) {
+          for (const publication of request.delivery.publications ?? []) if (publication.status === 'pending') { publication.status = 'unknown'; publication.updatedAt = iso(); publication.detail = 'Worker restarted before the remote publication outcome was recorded. Reconcile it before retrying.'; observations.push({ kind: 'recovery', operationId: publication.operationId, outcome: 'unknown', duplicateActions: null }); changed = true; }
+          for (const step of request.delivery.steps) if (step.status === 'running') { step.status = 'outcome_unknown'; step.detail = 'Worker restarted before the operation outcome was recorded.'; observations.push({ kind: 'recovery', operationId: request.delivery.control?.operationId ?? request.delivery.id + ':' + step.id, outcome: 'unknown', duplicateActions: null }); changed = true; }
+          if (request.delivery.steps.some(step => step.status === 'outcome_unknown')) { request.delivery.status = 'outcome_unknown'; changed = true; }
+        }
         for (const review of request.reviews)
           if (review.status === "running") {
             review.status = "interrupted";
@@ -63,7 +72,7 @@ export class RequestStore {
             changed = true;
           }
         if (changed)
-          this.transaction(() => this.save(request, "recovered_interrupted"));
+          this.transaction(() => this.save(request, "recovered_interrupted", { observations }));
       }
   }
   preparedForRecovery(id: string): boolean {
@@ -103,8 +112,11 @@ export class RequestStore {
   save(
     request: WorkerRequest,
     type: string,
-    detail: Pick<RequestEvent, "evaluationId" | "turnId" | "runId"> = {},
+    detail: Pick<RequestEvent, "evaluationId" | "turnId" | "runId" | "deliveryRunId" | "deliveryStepId"> & { observations?: DeliveryMetricObservation[] } = {},
   ) {
+    const { observations, ...eventDetail } = detail;
+    refreshDelivery(request);
+    request.lifecycle = deliveryLifecycle(request);
     request.revision++;
     request.updatedAt = iso();
     const payload = JSON.stringify(request);
@@ -149,7 +161,9 @@ export class RequestStore {
       phase: request.phase,
       at: request.updatedAt,
       inputRevision: request.inputRevision,
-      ...detail,
+      ...(request.delivery ? { deliveryRunId: request.delivery.id } : {}),
+      ...eventDetail,
+      measurement: deliveryEventMeasurement(request, observations),
     };
     const result = this.database()
       .prepare(

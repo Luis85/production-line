@@ -3,7 +3,7 @@ import { reactive, watch as watchPrivateDraft } from 'vue';
 import { state as workerState, type FeatureRequestCommand } from '../store';
 import type { ProviderId } from '../../application/provider-contract';
 import type { ModelEffort } from '../../application/model-effort';
-const emptyDraft = () => ({ message: '', provider: undefined as ProviderId | undefined, model: '', effort: '' as ModelEffort | '', selectionEdited: false, title: '', definitionId: 'none', agent: '', adapt: false, fileChanges: false, repository: '', paths: '', pending: null as FeatureRequestCommand | null, error: '' });
+const emptyDraft = () => ({ message: '', provider: undefined as ProviderId | undefined, model: '', effort: '' as ModelEffort | '', selectionEdited: false, executionProfile: '', title: '', definitionId: 'none', agent: '', adapt: false, fileChanges: false, repository: '', paths: '', pending: null as FeatureRequestCommand | null, error: '' });
 // Keep private drafts in tab memory; explicit locking clears them with the other editors.
 const intake = reactive(emptyDraft());
 watchPrivateDraft(() => workerState.draftEpoch, () => Object.assign(intake, emptyDraft()), { flush: 'sync' });
@@ -17,6 +17,8 @@ import UTextarea from '@nuxt/ui/components/Textarea.vue';
 import { createFeatureRequest, getCapacityFreshness, state, type FeatureRequestPreparation } from '../store';
 import { providerSupportsDefinition } from '../../application/provider-contract';
 import { validateApprovedPaths } from '../../application/approved-paths';
+import type { DeliveryExecutionProfile } from '../../application/delivery-execution-policy';
+import ProjectExecutionSelection from './ProjectExecutionSelection.vue';
 import RunTask from './RunTask.vue';
 import SharedFeatureComposer from './SharedFeatureComposer.vue';
 import ModelSelectionFields from './ModelSelectionFields.vue';
@@ -25,10 +27,11 @@ const sharedComposer = ref<InstanceType<typeof SharedFeatureComposer> | null>(nu
 const sharedBinding = computed(() => !!state.environment?.sharedIntake?.config.repositoryId);
 const emit = defineEmits<{ created: [sessionId: string, previousSessionId: string]; busy: [boolean] }>();
 const sending = ref(false), optionsOpen = ref(false), filesOpen = ref(false);
+const projectProfiles = ref(false), projectProfile = ref<DeliveryExecutionProfile | null>(null);
 const preparation = ref<FeatureRequestPreparation | null>(null);
 const preparationNote = computed(() => preparation.value?.phase === 'waiting' ? 'Waiting for an earlier request to finish preparation…' : preparation.value?.phase === 'worktree' ? 'Preparing this request’s Git worktree…' : 'Saving approved files and the feature request…');
 const options = ref<HTMLDetailsElement | null>(null);
-const capacity = computed(() => buildWorkerCapacityView(state.sessions?.capacity, getCapacityFreshness()));
+const capacity = computed(() => buildWorkerCapacityView(state.sessions?.capacity, getCapacityFreshness(), state.environment?.repositories?.nativeWork));
 const definition = computed(() => state.definitions.find(item => item.id === intake.definitionId));
 const agent = computed(() => definition.value?.agents.find(item => item.name === intake.agent));
 const connection = computed(() => state.settings?.providers.find(item => item.id === intake.provider));
@@ -41,7 +44,7 @@ const fileIssue = computed(() => {
   if (repositories.value.length ? !repositories.value.some(item => item.id === intake.repository) : !intake.repository.trim()) return 'Choose a repository for the approved file changes.';
   try { validateApprovedPaths(approvedPaths(), 'Approved paths', { folders: true }); return ''; } catch (error) { return (error as Error).message; }
 });
-const canCreate = computed(() => state.unlocked && !state.workspaceBusy && !sending.value && (!!intake.pending || connection.value?.configured && capacity.value.admissionAvailable !== false && !!intake.message.trim() && !incompatible.value && !missingAgent.value && !fileIssue.value && (!agent.value?.requiresAdaptation || intake.adapt)));
+const canCreate = computed(() => state.unlocked && !state.workspaceBusy && !sending.value && (!!intake.pending || (projectProfiles.value ? !!projectProfile.value && !!state.settings?.providers.find(item => item.id === projectProfile.value?.provider)?.configured : connection.value?.configured) && capacity.value.admissionAvailable !== false && !!intake.message.trim() && (projectProfiles.value || !incompatible.value && !missingAgent.value) && !fileIssue.value && (projectProfiles.value || !agent.value?.requiresAdaptation || intake.adapt)));
 const model = computed(() => intake.model.trim() || agent.value?.model || connection.value?.model || 'Provider default');
 const optionIssue = computed(() => missingAgent.value ? 'This definition or agent is no longer available. Choose another definition.' : incompatible.value ? 'Choose a ' + agent.value?.provider + ' connection for this agent’s model.' : agent.value?.requiresAdaptation && !intake.adapt ? 'Review this agent’s omitted features and accept instructions-only use before creating the task.' : '');
 const admissionNote = computed(() => sending.value && preparation.value ? 'Your request is being prepared. It has not joined the queue yet.' : intake.pending ? 'Retry checks the same request. It does not create a second request.' : capacity.value.admissionAvailable === false ? 'Local admission is full. Your instructions stay here while accepted work finishes.' : capacity.value.stale || capacity.value.state === 'unknown' ? 'Capacity needs refresh. The worker checks admission when you submit.' : capacity.value.startBlocked ? 'You can add this request to the queue. New model calls wait until the start conditions below are resolved.' : capacity.value.state === 'running' ? 'Joins the queue behind the active task.' : 'Joins this worker’s shared execution queue.');
@@ -65,9 +68,9 @@ async function create() {
   const epoch = state.draftEpoch, previousSessionId = state.sessions?.selected ?? '';
   if (!intake.pending) intake.pending = {
     action: 'create', id: crypto.randomUUID(), title: intake.title.trim() || intake.message.trim().slice(0, 80),
-    message: intake.message, provider: intake.provider!,
-    ...(intake.model.trim() ? { model: intake.model.trim() } : {}), ...(intake.effort ? { effort: intake.effort } : {}),
-    ...(definition.value ? { definitionId: definition.value.id, agent: intake.agent, useInstructionsOnly: intake.adapt } : {}),
+    message: intake.message, ...(intake.repository ? { projectId: intake.repository } : {}), ...(projectProfiles.value ? intake.executionProfile ? { executionProfile: intake.executionProfile } : {} : { provider: intake.provider! }),
+    ...(!projectProfiles.value && intake.model.trim() ? { model: intake.model.trim() } : {}), ...(!projectProfiles.value && intake.effort ? { effort: intake.effort } : {}),
+    ...(!projectProfiles.value && definition.value ? { definitionId: definition.value.id, agent: intake.agent, useInstructionsOnly: intake.adapt } : {}),
     ...(intake.fileChanges ? { background: true as const, files: { repository: intake.repository.trim(), paths: approvedPaths() } } : {}),
   };
   const command = JSON.parse(JSON.stringify(intake.pending)) as FeatureRequestCommand;
@@ -101,25 +104,27 @@ defineExpose({ focusInstructions });
     <p class="intake-intro">Describe the outcome. The worker saves a Markdown feature request and tracks its progress and results.</p>
     <form :aria-busy="sending" @submit.prevent="create">
       <fieldset :disabled="sending || state.workspaceBusy || !!intake.pending" class="contents">
+        <div v-if="repositories.length" class="intake-field"><label for="new-task-project">Project</label><select id="new-task-project" v-model="intake.repository"><option value="">Worker installation project</option><option v-for="repository in repositories" :key="repository.id" :value="repository.id">{{ repository.id }}</option></select></div>
         <div class="intake-field intake-message">
           <label for="new-task-instructions">Request instructions</label>
           <UTextarea id="new-task-instructions" v-model="intake.message" :rows="6" :maxrows="12" autoresize :maxlength="8000" required placeholder="What would you like this worker to do?" class="w-full" aria-describedby="new-task-draft-note" @keydown="keydown" />
           <p id="new-task-draft-note" class="intake-help">{{ intake.message.length.toLocaleString() }} / 8,000 · Ctrl / ⌘ + Enter to create</p>
         </div>
         <details ref="options" class="intake-definition" :open="optionsOpen" @toggle="optionsOpen = ($event.target as HTMLDetailsElement).open">
-          <summary><span>Task options</span><span class="options-selection">{{ connection?.label ?? 'Choose a connection' }} · {{ model }}</span></summary>
+          <summary><span>Task options</span><span class="options-selection">{{ projectProfiles ? (projectProfile?.id ?? 'Project routing') : (connection?.label ?? 'Choose a connection') }} · {{ projectProfiles ? (projectProfile?.model ?? 'Project profile') : model }}</span></summary>
           <div class="intake-options-content">
-            <ModelSelectionFields id="new-task" @update:provider="intake.selectionEdited = true" @update:model="intake.selectionEdited = true" @update:effort="intake.selectionEdited = true" v-model:provider="intake.provider" v-model:model="intake.model" v-model:effort="intake.effort" :providers="state.settings?.providers ?? []" :definition-model="agent?.model" :disabled="sending || state.workspaceBusy || !!intake.pending" />
-            <p v-if="intake.provider !== 'cursor-cli'" class="intake-tool-access">Tool access: {{ toolSummary }} · <RouterLink to="/settings#tool-access">Manage access</RouterLink><span v-if="state.toolAccess?.builtins.files">File reads use the task worktree. Edits stay within the approved paths below.</span></p>
+            <ProjectExecutionSelection id="new-task" v-model="intake.executionProfile" :project-id="intake.repository || undefined" :mode="intake.fileChanges ? 'patch' : 'chat'" :disabled="sending || !!intake.pending" @configured="projectProfiles = $event" @resolved="projectProfile = $event" />
+            <ModelSelectionFields v-if="!projectProfiles" id="new-task" @update:provider="intake.selectionEdited = true" @update:model="intake.selectionEdited = true" @update:effort="intake.selectionEdited = true" v-model:provider="intake.provider" v-model:model="intake.model" v-model:effort="intake.effort" :providers="state.settings?.providers ?? []" :definition-model="agent?.model" :disabled="sending || state.workspaceBusy || !!intake.pending" />
+            <p v-if="projectProfiles ? projectProfile?.boundary !== 'provider_native' : intake.provider !== 'cursor-cli'" class="intake-tool-access">Tool access: {{ toolSummary }} · <RouterLink to="/settings#tool-access">Manage access</RouterLink><span v-if="state.toolAccess?.builtins.files">File reads use the task worktree. Edits stay within the approved paths below.</span></p>
             <div class="intake-field">
               <label for="new-task-name">Request name · optional</label>
               <UInput id="new-task-name" v-model="intake.title" :maxlength="120" placeholder="Named from your first message" class="w-full" />
             </div>
-            <div class="intake-field">
+            <div v-if="!projectProfiles" class="intake-field">
               <label for="new-task-definition">Agent definition</label>
               <USelect id="new-task-definition" v-model="intake.definitionId" :items="[{ value: 'none', label: 'No definition · use my instructions' }, ...state.definitions.map(item => ({ value: item.id, label: item.name }))]" class="w-full" />
             </div>
-            <template v-if="definition">
+            <template v-if="definition && !projectProfiles">
               <div class="intake-field">
                 <label for="new-task-agent">Agent</label>
                 <USelect id="new-task-agent" v-model="intake.agent" :items="definition.agents.map(item => ({ value: item.name, label: item.name }))" class="w-full" />
@@ -139,8 +144,9 @@ defineExpose({ focusInstructions });
           <RunTask v-model:enabled="intake.fileChanges" v-model:repository="intake.repository" v-model:paths="intake.paths" />
           <p v-if="fileIssue" class="intake-notice error-text" role="status">{{ fileIssue }}</p>
         </details>
-        <p v-if="!connection?.configured" class="intake-notice" role="status">Choose a configured connection in Task options or <RouterLink to="/settings#provider-connections">set up a provider</RouterLink> before creating a request.</p>
-        <div v-if="optionIssue" class="intake-notice" role="status"><p>{{ optionIssue }}</p><button type="button" class="options-review" @click="reviewOptions">Review task options</button></div>
+        <p v-if="projectProfiles && projectProfile && !state.settings?.providers.find(item => item.id === projectProfile?.provider)?.configured" class="intake-notice" role="status">The selected project profile uses {{ projectProfile.provider }}, which needs a configured connection. <RouterLink to="/settings#provider-connections">Set up this provider</RouterLink> before creating a request.</p>
+        <p v-if="!projectProfiles && !connection?.configured" class="intake-notice" role="status">Choose a configured connection in Task options or <RouterLink to="/settings#provider-connections">set up a provider</RouterLink> before creating a request.</p>
+        <div v-if="!projectProfiles && optionIssue" class="intake-notice" role="status"><p>{{ optionIssue }}</p><button type="button" class="options-review" @click="reviewOptions">Review task options</button></div>
       </fieldset>
         <p v-if="sending && preparation && state.unlocked" class="intake-notice" role="status">{{ preparationNote }} Your original instructions stay here until the request is saved.</p>
         <p v-if="intake.pending && !sending" class="intake-notice" role="status">The submitted request is kept until its creation is confirmed. Retry uses its original instructions and request ID.</p>
@@ -156,6 +162,7 @@ defineExpose({ focusInstructions });
 </template>
 <style scoped>
 .task-intake { min-width: 0; }
+#new-task-project { width:100%;min-height:44px;border:1px solid var(--ui-border);border-radius:6px;background:var(--ui-bg);color:var(--ui-text);padding-inline:var(--space-3); }
 h3 { margin: 0; color: var(--ui-text-highlighted); font-size: 1.25rem; line-height: 1.4; font-weight: 650; }
 .intake-intro { margin: var(--space-2) 0 var(--space-6); color: var(--ui-text-muted); font-size: .875rem; line-height: 1.6; }
 .intake-field { display: grid; gap: var(--space-2); margin: 0 0 var(--space-6); min-width: 0; }

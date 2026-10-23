@@ -10,13 +10,13 @@ function command(value: unknown): FeatureAuthoringCommand {
   if (!value || typeof value !== 'object' || Array.isArray(value)) invalid('Feature authoring requires a command.');
   const body = value as Record<string, unknown>;
   if (Object.keys(body).some(key => !['action', 'operationId', 'name', 'markdown', 'seed', 'expectedRevision', 'expectedWorkflowDigest', 'expectedBinding', 'status'].includes(key))) invalid('Unknown feature authoring field.');
-  if (!['prepare', 'publish'].includes(String(body.action)) || typeof body.operationId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(body.operationId)) invalid('Use prepare or publish with a stable operation ID.');
+  if (typeof body.action !== 'string' || !['prepare', 'publish'].includes(body.action) || typeof body.operationId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(body.operationId)) invalid('Use prepare or publish with a stable operation ID.');
   if (body.name !== undefined) {
     if (typeof body.name !== 'string' || body.name.length > 200 || body.name.startsWith('_') || body.name.includes('/') || !/\.md$/i.test(body.name)) invalid('Use a top-level Markdown filename outside generated underscore folders.');
     featureWorkflowPath(body.name, 'Feature filename');
   }
   if (body.markdown !== undefined && (typeof body.markdown !== 'string' || Buffer.byteLength(body.markdown) > 65536)) invalid('Feature Markdown must be bounded text.');
-  if (body.status !== undefined && (body.action !== 'publish' || !['draft', 'ready'].includes(String(body.status)))) invalid('Set draft or ready only when publishing.');
+  if (body.status !== undefined && (body.action !== 'publish' || typeof body.status !== 'string' || !['draft', 'ready'].includes(body.status))) invalid('Set draft or ready only when publishing.');
   if (body.seed !== undefined && (body.action !== 'prepare' || body.markdown !== undefined)) invalid('A template seed is only used when preparing a new draft without Markdown.');
   if (body.expectedBinding !== undefined) {
     const binding = body.expectedBinding as Record<string, unknown>;

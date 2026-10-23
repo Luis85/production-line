@@ -1,3 +1,4 @@
+import type { ReservedExecutionPermit } from '../../../application/serial-executor.js';
 import {
   type RequestEvent,
   type WorkerRequest
@@ -150,4 +151,18 @@ export function requestEvents(store: RequestStore, id: string, after = 0, limit 
     nextAfter: selected.length ? Number(selected.at(-1)!.sequence) : after,
     hasMore: rows.length > limit,
   };
+}
+
+/** Unknown process outcomes retain execution capacity independently of session catalog pagination. */
+export function requestUnresolvedExecutions(store: RequestStore): ReservedExecutionPermit[] {
+  const rows = store.database().prepare(`SELECT payload FROM worker_requests WHERE
+    json_extract(payload, '$.delivery.status') IN ('outcome_unknown', 'reconciling', 'interrupting')
+    OR EXISTS (SELECT 1 FROM json_each(payload, '$.delivery.steps') WHERE json_extract(value, '$.status')='outcome_unknown')`).all();
+  return rows.map(row => {
+    const request = JSON.parse(String(row.payload)) as WorkerRequest;
+    const context = request.input.context as { repositoryId?: unknown; repository?: unknown; deliveryPolicy?: { configuration?: { coordination?: { maxActiveRequests?: unknown } } } } | undefined;
+    const project = context?.repositoryId ?? context?.repository, limit = context?.deliveryPolicy?.configuration?.coordination?.maxActiveRequests;
+    return { sessionId: request.owner.sessionId, projectId: typeof project === 'string' && !!project.trim() && project.length <= 4096 ? project : null,
+      projectLimit: Number.isSafeInteger(limit) && Number(limit) >= 1 && Number(limit) <= 8 ? Number(limit) : 1 };
+  });
 }

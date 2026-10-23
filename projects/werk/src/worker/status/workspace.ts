@@ -1,3 +1,4 @@
+import { assertNativeWorkReady } from './workspace-native-work.js';
 import { processStatus, processCommand } from './workspace-processes.js';
 import type { FeatureAuthoringCommand, FeatureAuthoringResult } from '../application/feature-authoring-contracts.js';
 import type { FeatureActionResult } from '../application/feature-management.js';
@@ -17,7 +18,7 @@ import { sharedIntakeView, sharedIntakeCommand, featureView, featureList, featur
 import { repositoryStatus, repositoryCommand, worktrees, pruneWorktrees } from './workspace-repositories.js';
 import { providerStatus, providerAccount, toolAccess, updateToolAccess, discoverToolAccess, withIdleConfiguration, withRepositoryAdmission, updateSettings, integrations } from './workspace-settings.js';
 import { environment, history } from './workspace-environment.js';
-import { init, close, closeEvidence, authenticate } from './workspace-lifecycle.js';
+import { init, startNativeWork, close, closeEvidence, authenticate } from './workspace-lifecycle.js';
 
 export function chatConfiguration(value: unknown): string | undefined {
   if (value === undefined) return;
@@ -50,8 +51,9 @@ export class WorkerWorkspace {
     this.context = new WorkspaceContext(config, journal, get);
   }
   private observed<T>(operation: () => T): T { return this.context.processObservations.run({}, operation); }
+  get nativeWorkReady() { return this.context.nativeWorkState === 'ready'; }
   get executionProfiles() { return this.context.executionProfiles; }
-  get features() { return this.context.features; }
+  tickFeatures(force = false) { return this.context.featureProjects.tick(force); }
   get featureTracking() { return this.context.featureTracking; }
   get sharedRuntime() { return this.context.sharedRuntime; }
   get repositories() { return this.context.repositories; }
@@ -84,26 +86,29 @@ export class WorkerWorkspace {
   interaction(input: unknown) { return this.observed(() => interaction(this.context, input)); }
   runEvidence(input: unknown) { return runEvidence(this.context, input); }
   task(input: unknown) { return this.observed(() => task(this.context, input)); }
-  init() { return this.observed(() => init(this.context)); }
+  init(options: { deferNativeWork?: boolean } = {}) { return this.observed(() => init(this.context, options)); }
+  startNativeWork() { return this.observed(() => startNativeWork(this.context)); }
   providerStatus(input: unknown) { return providerStatus(this.context, input); }
   providerAccount(input: unknown) { return providerAccount(this.context, input); }
-  sharedIntakeView() { return sharedIntakeView(this.context); }
+  sharedIntakeView(projectId?: string) { return sharedIntakeView(this.context, projectId); }
   sharedIntakeCommand(input: unknown) { return this.observed(() => sharedIntakeCommand(this.context, input)); }
-  featureView() { return featureView(this.context); }
-  featureList() { return featureList(this.context); }
+  featureView(projectId?: string) { return featureView(this.context, projectId); }
+  featureList(projectId?: string) { return featureList(this.context, projectId); }
   featureCommand(input: FeatureAuthoringCommand): Promise<FeatureAuthoringResult>;
+  featureCommand(input: { action: 'dependency_plan'; projectId?: string; id: string }): Promise<import('../application/delivery-dependency-plan.js').DeliveryDependencyPlan>;
   featureCommand(input: unknown): Promise<FeatureActionResult>;
   featureCommand(input: unknown) {
     const action = (input as { action?: unknown } | null)?.action;
     return this.observed(() => action === 'prepare' || action === 'publish' ? authorFeature(this.context, input) : featureCommand(this.context, input));
   }
   createTaskboard(input: unknown) {
-    assertDirectFeatureCreation(this.context);
+    assertNativeWorkReady(this.context);
+    assertDirectFeatureCreation(this.context, input);
     return this.observed(() => withRepositoryAdmission(this.context, () => this.board.create(input)));
   }
   async sessionCommand(input: unknown) {
     const body = input as { action?: unknown; id?: unknown } | null;
-    if (body?.action === 'create') assertDirectFeatureCreation(this.context);
+    if (body?.action === 'create') assertDirectFeatureCreation(this.context, input);
     if (body?.action === 'rename' && typeof body.id === 'string' && isSharedFeatureSession(this.context, body.id))
       throw new DomainError('conflict', 'This title belongs to the published Feature Request. Its accepted scope and title remain fixed.');
     const result = await this.sessions.action(input);

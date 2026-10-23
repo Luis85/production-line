@@ -16,7 +16,8 @@ for (const path of await discoverMutationSources(root)) {
   const code = stripTypeScriptTypes(await readFile(join(root, path), 'utf8'), { mode: 'strip' });
   await writeFile(target, code);
 }
-// Run ordinary queue, SQLite accounting and Ready Check lifecycle contracts against the instrumented source.
+// Dedicated suites exercise delivery dependency and quality-profile authority against this isolated source.
+// Reuse ordinary queue, SQLite accounting and Ready Check lifecycle contracts too.
 await mkdir(join(output, 'tests'), { recursive: true });
 const reused = [...scope.reusedTests, ...scope.reusedFixtures];
 if (new Set(reused.map(path => basename(path))).size !== reused.length) throw Error('Mutation reused source names must be unique.');

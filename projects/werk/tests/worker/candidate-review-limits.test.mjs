@@ -5,6 +5,7 @@ import { mkdtemp, mkdir, readFile, realpath, rm, writeFile, lstat } from 'node:f
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { testErrorCode } from '../helpers/typed-boundaries.mjs';
+import { prepareProcessRuntime } from '../../src/worker/dist/shared/process/launcher.js';
 import { createDevelopmentRuntime } from '../../src/worker/dist/worker/infrastructure/candidate-tools.js';
 import { createRepositoryWorktree, repositoryRoot } from '../../src/worker/dist/worker/infrastructure/repositories-git.js';
 import { WorkerSettings } from '../../src/worker/dist/worker/infrastructure/settings.js';
@@ -64,6 +65,8 @@ async function fixture(t, files, approvedPaths, committed = {}) {
   await writeFile(join(repository, 'readme.md'), 'notes\n');
   for (const [path, body] of Object.entries(committed)) { await mkdir(join(repository, path, '..'), { recursive: true }); await writeFile(join(repository, path), body); }
   git(repository, 'add', '.'); git(repository, 'commit', '-m', 'Baseline');
+  // Cold containment startup belongs to fixture setup, not the unchanged Git operation budget.
+  await prepareProcessRuntime(repository, t.signal);
   const prepared = await createRepositoryWorktree(await repositoryRoot(repository, signal()), 'project', 'review', signal());
   for (const [path, body] of Object.entries(files)) { await mkdir(join(prepared.path, path, '..'), { recursive: true }); await writeFile(join(prepared.path, path), body); }
   const info = await lstat(prepared.path), worktreeIdentity = { dev: String(info.dev), ino: String(info.ino), birthtimeMs: info.birthtimeMs };

@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import { testErrorCode, testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -10,6 +11,8 @@ import { gitEnvironment } from '../../src/worker/dist/shared/git/environment.js'
 import { gitLaunchMode } from '../../src/worker/dist/shared/git/launch-mode.js';
 import { repositoryGit, repositoryRoot } from '../../src/worker/dist/worker/infrastructure/repositories-git.js';
 import { FeatureGitIo } from '../../src/worker/dist/worker/infrastructure/features/git-io.js';
+
+prepareNativeProcessFixture();
 
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'user.name=Boundary Fixture', '-c', 'user.email=fixture@example.invalid', ...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 async function fixture(t) {

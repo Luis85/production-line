@@ -16,12 +16,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    # Native Windows containment and multi-clone Git journeys need extra time.
-    # macOS runner variation also needs room for the complete lifecycle suite.
-    # Keep per-test/command deadlines and leave time to retain failure diagnostics.
-    timeout-minutes: ${{ matrix.os == 'windows-latest' && 60 || matrix.os == 'macos-latest' && 25 || 15 }}
+    # Full POSIX checks retain bounded test deadlines and upload time.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -36,18 +34,10 @@ jobs:
           python-version: '3.13'
       - run: npm ci --ignore-scripts
       - name: Run full check (POSIX)
-        if: matrix.os != 'windows-latest'
-        timeout-minutes: ${{ matrix.os == 'macos-latest' && 20 || 11 }}
+        timeout-minutes: 20
         run: |
           set -o pipefail
           npm run check 2>&1 | tee "$RUNNER_TEMP/werk-check.log"
-      - name: Run full check (Windows)
-        if: matrix.os == 'windows-latest'
-        timeout-minutes: 55
-        run: |
-          $PSNativeCommandUseErrorActionPreference = $false
-          npm run check 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/werk-check.log"
-          exit $LASTEXITCODE
       # Step deadlines leave time for best-effort diagnostics. Runner loss or
       # cancellation grace exhausting the job budget can still prevent upload.
       - name: Retain full check output
@@ -61,6 +51,59 @@ jobs:
           retention-days: 7
       - run: npm run audit:dependencies
       - name: Check generated workflow drift
+        working-directory: /
+        run: node bin/forge.js workflows sync --check
+  windows:
+    name: Windows tests (${{ matrix.shard }}/4)
+    runs-on: windows-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ${{ env.FORGE_PROJECT_PATH }}/package-lock.json
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - run: npm ci --ignore-scripts
+      - name: Windows quality checks
+        if: matrix.shard == 1
+        timeout-minutes: 8
+        run: npm run check:fast
+      - name: Build all independent applications
+        timeout-minutes: 8
+        run: npm run build
+      # Partition whole files from the same globs as npm test. Every shard proves
+      # the disjoint union is complete and records the suite digest for diagnosis.
+      - name: Run complete Windows test partition
+        timeout-minutes: 22
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          node scripts/quality/test-shard.mjs --shard "${{ matrix.shard }}/4" --manifest "$env:RUNNER_TEMP/werk-test-shard.json" 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/werk-check.log"
+          exit $LASTEXITCODE
+      - name: Retain Windows output and exact test manifest
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: werk-check-output-windows-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/werk-check.log
+            ${{ runner.temp }}/werk-test-shard.json
+          if-no-files-found: warn
+          retention-days: 7
+      - run: npm run audit:dependencies
+        if: matrix.shard == 1
+      - name: Check generated workflow drift
+        if: matrix.shard == 1
         working-directory: /
         run: node bin/forge.js workflows sync --check
   containers:

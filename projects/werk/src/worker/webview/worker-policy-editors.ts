@@ -1,17 +1,18 @@
 import type { WorkerSettingsView } from '../application/workspace-view';
 import { DEFAULT_MAX_TOOL_CALLS, MAX_TOOL_CALLS, DEFAULT_COMMAND_TIMEOUT_MS, MIN_COMMAND_TIMEOUT_MS, MAX_COMMAND_TIMEOUT_MS, candidateInspectionBounds, type CandidateInspectionLimits } from '../application/execution-policy';
 import { createGuardedSettingsEditor, type GuardedSettingsPorts } from './guarded-settings-editor';
-export interface QueuePolicy { queueCapacity: number; orchestratorQueue: number; order: 'fifo' | 'priority'; }
+export interface QueuePolicy { maxParallel: number; queueCapacity: number; orchestratorQueue: number; order: 'fifo' | 'priority'; }
 export interface QueueSettingsCommand { board: QueuePolicy; expectedBoard: QueuePolicy; }
-interface QueueDraft { queueCapacity: string | number; orchestratorQueue: string | number; order: 'fifo' | 'priority'; }
-export function queuePolicy(settings: WorkerSettingsView | null): QueuePolicy | null { return settings ? { queueCapacity: settings.board.queueCapacity, orchestratorQueue: settings.board.orchestratorQueue, order: settings.board.order } : null; }
+interface QueueDraft { maxParallel: string | number; queueCapacity: string | number; orchestratorQueue: string | number; order: 'fifo' | 'priority'; }
+export function queuePolicy(settings: WorkerSettingsView | null): QueuePolicy | null { return settings ? { maxParallel: settings.board.maxParallel, queueCapacity: settings.board.queueCapacity, orchestratorQueue: settings.board.orchestratorQueue, order: settings.board.order } : null; }
 export function createQueueSettingsEditor(ports: GuardedSettingsPorts<QueuePolicy, QueueSettingsCommand>) {
   return createGuardedSettingsEditor<QueuePolicy, QueueDraft, QueueSettingsCommand>(ports, {
-    empty: () => ({ queueCapacity: 16, orchestratorQueue: 0, order: 'fifo' }),
+    empty: () => ({ maxParallel: 1, queueCapacity: 16, orchestratorQueue: 0, order: 'fifo' }),
     fields: saved => ({ ...saved }),
-    value: draft => ({ queueCapacity: Number(draft.queueCapacity), orchestratorQueue: Number(draft.orchestratorQueue), order: draft.order }),
+    value: draft => ({ maxParallel: Number(draft.maxParallel), queueCapacity: Number(draft.queueCapacity), orchestratorQueue: Number(draft.orchestratorQueue), order: draft.order }),
     validate: draft => {
-      const capacity = Number(draft.queueCapacity), remote = Number(draft.orchestratorQueue);
+      const capacity = Number(draft.queueCapacity), remote = Number(draft.orchestratorQueue), parallel = Number(draft.maxParallel);
+      if (!String(draft.maxParallel).trim() || !Number.isInteger(parallel) || parallel < 1 || parallel > 8) return 'Choose 1 to 8 shared execution slots.';
       if (!String(draft.queueCapacity).trim() || !Number.isInteger(capacity) || capacity < 1 || capacity > 64) return 'Choose a chat and file-task capacity from 1 to 64 tasks.';
       if (!String(draft.orchestratorQueue).trim() || !Number.isInteger(remote) || remote < 0 || remote > 64) return 'Choose 0 to 64 extra orchestrator queue places.';
       return ['fifo', 'priority'].includes(draft.order) ? '' : 'Choose a file-task and assignment order.';

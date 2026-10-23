@@ -166,11 +166,11 @@ agent status
 agent models
 ```
 
-Cursor also accepts `CURSOR_API_KEY` in the worker process environment. A saved
-Cursor API key in the provider editor is passed privately to the subprocess;
-keep it out of request notes and command arguments. An arbitrary key in the
-project `.env` is not automatically loaded: that file reads only its documented
-Werk launch keys. See [Cursor authentication](https://cursor.com/docs/cli/reference/authentication).
+For Cursor API billing, explicitly select `api-key` and save the Cursor key in
+the private provider editor. Werk passes that selected key privately to the
+subprocess. Account mode uses the supported CLI login and excludes API-key
+fallback. Keep credentials out of request notes and command arguments. Project
+`.env` files contain only their documented Werk launch keys. See [Cursor authentication](https://cursor.com/docs/cli/reference/authentication).
 
 Select **Cursor CLI** in **Settings → Providers & accounts**, save its executable,
 default model and optional key, then use **Check sign-in**. The bounded status and
@@ -198,6 +198,31 @@ including native subagent usage, are unavailable in this adapter. Metrics show
 unknown usage; an enabled consumption limiter can hold subsequent work until
 unverified usage is resolved through the existing controls. An account login or
 successful reply does not establish a remaining allowance.
+
+### Choose authentication explicitly
+
+Each provider connection records its authentication/billing mode. Use
+`cli-account` for the supported official CLI login or `api-key` with a privately
+saved key. API adapters accept `api-key` only. Existing connections marked
+`legacy` require an explicit selection before new dispatch. A failed account
+connection does not fall back to an environment or saved API key.
+
+Read the runtime/version, connection result and capability diagnostics before
+submitting work. A supported interface can still lack isolation, interactive
+approval or detailed usage; the UI reports those limits. A successful diagnostic
+is not a successful model invocation or proof of available quota.
+
+For the Windows/Claude pilot, run this read-only preflight from the source checkout
+with the actual installed executable path:
+
+```powershell
+node scripts/runtime/provider-diagnostics.mjs --provider claude-cli --executable "C:\path\to\claude.exe" --authentication-mode cli-account
+```
+
+It emits sanitized environment/runtime/capability information and
+`liveInferenceQualified: false`. Complete the disposable-repository implementation,
+verification, interruption and review journey before claiming native qualification;
+see the [acceptance ledger](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reports/2026-10-20-local-delivery-acceptance.md).
 
 ## Choose provider, model and effort
 
@@ -411,9 +436,13 @@ worktree path, then use **New request** to approve current repository files.
 The failed request cannot resume, retry execution or accept follow-ups. Repeating
 its original creation returns that same failed record without executing it.
 
-The file-change path supports up to 32 approved text files, 24 KiB per input file
-and 48,000 input characters in total. New files are supported; secret-like paths,
-symlinks and path traversal are rejected. For a new Git-backed request with file
+The file-change path supports up to 32 approved paths. Exact-file input snapshots
+are limited to 24,000 bytes per file and 48,000 characters in total. Implementation
+requests can also approve folders ending in `/`; the model reads their files
+through granted tools rather than initial content snapshots. Candidate content
+and patch limits are separately configurable; see
+[implementation limits](implement-feature.md#current-limits). New files are
+supported; secret-like paths, symlinks and path traversal are rejected. For a new Git-backed request with file
 access and at least one enabled **Required feature check** preset, the model can
 edit approved files in the worktree, run checks and repair failures. The worker
 generates the patch from the actual candidate and requires every frozen check to
@@ -423,7 +452,8 @@ or History.
 Other requests retain the proposal-only workflow: validated returned contents
 become a patch without being applied or automatically tested. The composer
 explains available setup; the saved task records its accepted mode. Commands and
-MCP tools retain their separate saved grants. All work shares one execution slot.
+MCP tools retain their separate saved grants. All work shares configured machine
+capacity; project limits can be stricter, and unscoped work remains exclusive.
 See [implement a feature](implement-feature.md) for setup and review.
 
 Choose **Review changes** or **Review result** on a request card to open its
@@ -438,16 +468,21 @@ complete saved bytes. Markdown summaries and criteria remain readable. Required
 checks show whether their evidence belongs to the current candidate; unavailable,
 failed and outdated checks never imply successful implementation.
 
-When configured policy requires human acceptance, inspect the evidence and record
-an acceptance note. Acceptance applies to the saved output revision; changing the
-scope or output requires fresh evaluation. Completing a model turn, passing checks,
+Local delivery requires human acceptance. Inspect the current candidate and
+record the required manual criterion outcomes with supporting notes before
+accepting. The decision identifies the request input revision and candidate Git
+commit; changing requirements, code, baseline or check definitions requires fresh
+evidence. A legacy request may additionally expose its configured acceptance gate. Completing a model turn, passing checks,
 recording acceptance and merging Git changes remain separate actions. Shared
 requests show publication and the PullRequest Markdown review note. That note does
 not mean a Git-hosting pull request has been created or merged.
 
 **Open conversation** returns to the same request to answer or resume a checkpoint.
-For new scope, create a new Feature Request. Request-text rework proposes revised
-instructions and consumes model allowance; it does not repair files. Other-worker
+Use a new Feature Request for unrelated work. Canonical local requirement changes
+reassess the same request; terminal work needs **Reopen request**. Shared-owned
+scope continues to require its upstream successor workflow. Request-text rework
+proposes revised instructions and consumes model allowance; implementation repair
+is a separate bounded delivery step with fresh verification. Other-worker
 ownership or inconsistent request identity keeps decisions unavailable.
 
 History’s retained file detail uses the same patch and check components and links
@@ -465,6 +500,34 @@ checkout may no longer accept a patch. **Retry saved input** retains the origina
 snapshots; start a new task to capture current files. Terminal results are saved
 locally, with review artifacts under `local-review/`.
 
+## Follow and control a delivery run
+
+Request detail shows the Feature Request lifecycle separately from the delivery
+run's status and phase. **Execution complete** means the run finished;
+**Accepted** means a person accepted its current candidate. The behaviour panel
+explains the selected action, evaluated conditions, reason and next expected
+event. Ordered activity correlates request events and step receipts with their
+recorded identities.
+
+Use **Pause after this step** to finish the current bounded step and wait before
+the next. **Interrupt now** requests cessation; **Cancel request** also closes
+work once execution has stopped. Pending/unknown stop outcomes remain visible.
+**Resume work**, **Retry failed work** and **Reopen request** appear only when the
+recorded state permits them. These controls do not erase checkpoints or bypass
+missing answers, source conflicts, permissions or mandatory gates.
+
+The project queue's pause control holds new starts and is separate from a
+selected run's step pause. Closing or refreshing the webview does not stop the
+daemon. Reconnect and inspect the current run before issuing a new command;
+repeat an uncertain command with its saved identity instead of creating duplicate
+work. Background reads retain focus and unsubmitted answers.
+
+### Recover a provider attempt without a delivery run
+
+If Taskboard shows **Provider processes need inspection**, an uncertain readiness, advisory-review or older provider attempt still reserves capacity, including after restart. Open its attempt evidence, inspect the host and stop any surviving provider processes and development services. Select the exact attempt, acknowledge that inspection and enter a note before **Record operator-confirmed stop**. The worker refuses confirmation while it observes a live controller, owned process or service.
+
+A lost response offers **Retry same stop confirmation**, retaining the run, recovery revision, note and operation ID. Confirmation releases the reservation but preserves the model's unknown outcome and unavailable usage. Retry the Ready Check or continue the request separately when safe. Delivery-owned executions use their request's existing recovery controls. [Headless commands](../reference/portable-apps.md#recover-an-uncertain-provider-attempt) reach the same checks.
+
 ## Configure the taskboard and orchestrator queue
 
 History lists conversations from chat, file tasks and orchestrator assignments.
@@ -476,13 +539,16 @@ taskboard retains at most 100 tasks. Open **Settings → Queue & duration** to c
 
 - **Local task capacity:** 1–64 accepted local tasks, counting queued and running
   work and temporary preparation/resume reservations. This does not add execution slots.
-- **Extra orchestrator queue places:** 0–64 accepted assignments beyond the one
-  worker execution slot; defaults to zero.
+- **Shared execution slots:** 1–8, default one. Project policy can impose a lower
+  per-project limit; unresolved attempts retain reservations.
+- **Extra orchestrator queue places:** 0–64 accepted assignments in the remote
+  waiting buffer; defaults to zero and does not add execution slots.
 - **Start order:** FIFO or high priority first for queued file tasks.
 
-There is always exactly one executing task across Chat, explicit file tasks and
-orchestrator assignments. With two extra orchestrator queue places, a worker can
-accept three remote assignments, but still executes only one task in total.
+All provider work shares the machine ceiling. Approved project delivery can run
+concurrently within its project limit; the same session cannot execute twice.
+Unscoped Chat, legacy work and remote assignments remain exclusive. Queue places
+add waiting capacity, not permission to bypass these limits.
 Waiting assignments have lease renewal; loss of ownership prevents execution.
 The orchestrator remains the authority for assigned tasks. Its task state calls
 leased assignments `running`, while the worker distinguishes queued from
@@ -492,9 +558,9 @@ executing. Both services must support the queue extension to enable extra places
 already accepted remote assignments. The active task can finish; waiting work
 remains queued until resumed. Pausing display updates in the header is separate:
 it only pauses refresh of the webview. Reducing queue limits does not discard
-accepted work. To execute more tasks in parallel, run more worker instances
-with separate state and ports; there are no independent chat or local-task
-process budgets that bypass the worker's single execution slot.
+accepted work. Configure project concurrency through the [delivery policy](../reference/delivery-policy.md#concurrency-and-dependency-planning)
+and the private machine ceiling. Unknown execution reservations count toward
+capacity but are shown separately from observed active processes.
 
 Taskboard shows local admission usage separately from accepted remote
 assignments. Drafts, finished tasks and ready project notes awaiting admission are not
@@ -507,8 +573,9 @@ Settings in this tab. Save each section explicitly. If another operator changes
 its saved policy, reload and reconcile your draft before saving. A successful
 save followed by a failed refresh does not imply that the change was rejected.
 
-Queued file tasks survive restart. Interrupted file execution becomes failed and
-requires an explicit retry. Orchestrator assignments are reconciled from the
+Queued file tasks survive restart. Known interrupted execution requires an
+explicit retry; an unknown provider outcome keeps its capacity reservation until
+reconciliation or operator-confirmed cessation. Orchestrator assignments are reconciled from the
 server and existing terminal evidence is not executed again.
 
 ## Connect an orchestrator later
@@ -539,7 +606,9 @@ Open **Settings → Execution profiles**. These are the IDs/providers offered fo
 orchestrator assignments, separate from provider sign-in, model settings and
 imported agent definitions. A simulated worker supports 1–8 Claude/Codex profiles;
 a worker already configured for native Linux Codex supports one Codex profile.
-Editing keeps the current execution mode and the shared single execution slot.
+Editing keeps the current execution mode and exclusive orchestrator assignment
+semantics. Project provider choices belong to **Settings → Project delivery**;
+**Queue capacity** separately configures the worker's machine execution ceiling.
 
 1. Finish or stop queued/running tasks and active replies, then **Pause new starts**.
    Pausing leaves queued work in place; resume to finish it or stop it before editing.
@@ -570,7 +639,7 @@ registered with that line. Enter the worker webview address reachable from the
 orchestrator and its access token. The widget uses the worker's selected task
 session and shares its transcript with the worker webview. New task followed by
 its first message queues a task on that worker; subsequent messages continue
-the same session and share its single execution slot. Configure providers
+the same session and use the worker's shared execution capacity. Configure providers
 and manage sessions in the worker itself. If another operator changes the
 selected session, reconnect before sending more messages.
 
@@ -608,6 +677,16 @@ execution evidence and operational health. Measurement age and missing readings 
 visible. Settings links open the corresponding editor without mixing forms into
 the measurements. Standalone mode is healthy without an orchestrator.
 
+The delivery metrics cohort includes eligible local/shared submissions observed
+before readiness or admission succeeds, even when no implementation has started.
+The same request is counted once after admission. Ready Check provider time,
+recorded clarification answers and waits remain linked to that feature. Missing
+or truncated evidence remains unknown; it is not an invented completion or cost.
+
+**All time** also includes historical submissions with an unknown original time.
+Choosing a date range excludes those requests and displays the excluded count.
+Do not interpret an empty dated cohort as proof that no older submissions exist.
+
 The **Services & execution processes** section reports owned development services
 and observed model, tool, MCP and Git processes separately from the worker Node
 process. It links each attributed process to its Feature Request, shows sampling
@@ -629,7 +708,7 @@ personal use outside the worker remains unmeasured. Follow
 [set a worker consumption limit](worker-consumption-limits.md) for setup and
 recovery from incomplete usage.
 
-Pages refresh every three seconds while visible; header controls pause readings
+Visible pages poll for current observations; header controls pause readings
 or refresh manually. Failed reads retain the last observation with a stale-data
 warning; successful reads still update independently. A successful action remains
 accepted if its follow-up refresh fails, avoiding a misleading retry prompt.
@@ -642,8 +721,8 @@ Read its reason/choices, enter your response and submit through the pending-inpu
 control. Generic follow-up sending is held until that decision is resolved.
 Taskboard and History identify requests needing input and link back to the selected task on the taskboard.
 
-Inspect the saved checkpoint before resuming a failed, cancelled or interrupted
-turn. Continuation replays saved context in a fresh invocation and may consume
+Inspect the saved checkpoint before resuming a compatible failed or interrupted
+turn. Canonical cancelled or accepted requests require explicit reopening. Continuation replays saved context in a fresh invocation and may consume
 additional tokens. Restart alone does not repeat ambiguous work. Latest-turn
 consumption shows measured values and unavailable fields; a reported estimate is
 not a billed amount. See [answer and resume](answer-and-resume-worker.md) for the

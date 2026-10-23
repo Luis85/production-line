@@ -145,6 +145,7 @@ export async function pollRemoteAssignments(context: AssignmentContext, client: 
       const release = await workspace.executor.acquire(
         sessionId,
         AbortSignal.any([stopping, entry.lease.signal]),
+        { startupIndependent: adapter.mode === 'mock' && (task.executionMode ?? 'mock') === 'mock' },
       );
       // Keep renewing while another task owns the shared worker permit.
       if (

@@ -8,7 +8,7 @@ const labels: Record<GateFact, string> = {
   'input.kind': 'Request type', 'input.titleLength': 'Title length', 'input.messageLength': 'Instruction length',
   'input.criteriaCount': 'Acceptance criteria', 'input.approvedFileCount': 'Approved files', 'input.approvedBytes': 'Approved file size',
   'input.pathsValid': 'Approved paths valid', 'output.nonEmpty': 'Result recorded', 'output.protocolValid': 'Valid model response',
-  'output.patchPresent': 'Patch available', 'output.changedFileCount': 'Changed files', 'output.verificationPassed': 'Required checks passed',
+  'output.patchPresent': 'Patch available', 'output.changedFileCount': 'Changed files', 'output.verificationPassed': 'Required checks passed', 'output.verificationEligible': 'Verification policy satisfied · disclosed decisions included',
   'output.requiredCheckCount': 'Required checks', 'output.candidateDigest': 'Recorded candidate', 'execution.recoverySafe': 'Safe to resume',
   'execution.outcome': 'Execution outcome', 'pending.count': 'Pending questions', 'findings.blockingCount': 'Blocking findings',
   'operator.accepted': 'Human acceptance', 'tests.passed': 'Tests passed', 'build.passed': 'Build passed',

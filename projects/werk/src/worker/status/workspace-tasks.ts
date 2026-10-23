@@ -1,3 +1,5 @@
+import { assertNativeWorkReady } from './workspace-native-work.js';
+import { usesLocalFeatureIntake, createLocalFeatureInteraction } from './workspace-local-feature-intake.js';
 import { stopSessionProcesses } from './workspace-processes.js';
 import { admitFeatureRequest } from '../application/feature-admission.js';
 import { interactionFeatureRequest, sessionFeatureRequest, type FeatureRequestReference } from '../application/feature-request-reference.js';
@@ -15,6 +17,7 @@ import { withRepositoryAdmission } from './workspace-settings.js';
 
 /** Address sessions directly; automation never changes the browser's selected task. */
 export async function task(workspace: WorkspaceContext, input: unknown, reference?: FeatureRequestReference, trustedSelection?: ModelSelection){
+  if (!reference && usesLocalFeatureIntake(workspace, input)) return createLocalFeatureInteraction(workspace, input);
   const operation = workspace.taskRequests
     .catch(() => {})
     .then(async () => {
@@ -68,7 +71,7 @@ export async function task(workspace: WorkspaceContext, input: unknown, referenc
           : retained?.submissionHash && workspace.sessions.detail(retained.id).chat.messages.length > 0;
         // A confirmed legacy receipt may be replayed after shared intake is configured.
         // Exact input and identity are still checked below; an empty session cannot admit new work.
-        if (!admitted) assertDirectFeatureCreation(workspace);
+        if (!admitted) assertDirectFeatureCreation(workspace, body);
       }
       if (body.action === "get") return workspace.sessions.detail(id);
       if (body.action === "cancel") { const result = await workspace.sessions.cancelTask(id); await stopSessionProcesses(workspace, id); return result; }
@@ -97,6 +100,7 @@ export async function task(workspace: WorkspaceContext, input: unknown, referenc
       const message = text(requestMessage, "message", 8000);
       if (body.action === "create") {
         const files = body.files === undefined ? undefined : object(body.files, 'Approved task files', ['repository', 'paths']);
+        if (files) assertNativeWorkReady(workspace);
         const approved = files ? { repository: text(files.repository, 'repository', 4096), paths: validateApprovedPaths(files.paths, 'Approved paths', { folders: true }) } : undefined;
         // File request IDs and their generated session IDs share the task namespace.
         const aliasesPendingPreparation = (!approved && workspace.board.preparation(id)) ||

@@ -99,7 +99,7 @@ export async function initializeWorker(root, options) {
   const localTemplate = join(featureDirectory, localTemplateName), local = intake === 'local' ? localIntakeResult(localTemplate, relative(project, localTemplate).split(sep).join('/')) : undefined;
   if (intake === 'local') await seed(localTemplate, localRequestTemplate(normalized.features.provider));
   await ignore(join(project, '.werk/.gitignore'), ['worker/', 'provider-home/', 'agent-integrations.json', 'agent-integrations.pending.json', 'agent-integrations.lock']);
-  await ignore(join(featureDirectory, '.gitignore'), ['_worker.lock', '_worker-owner.json', '_worker-status.md', '_results/', '_questions/', '_tasks/', '_gates/']);
+  await ignore(join(featureDirectory, '.gitignore'), ['_worker.lock', '_worker-owner.json', '_worker-status.md', '_results/', '_questions/', '_tasks/', '_gates/', '_conflicts/']);
   const name = 'werk-worker-' + randomBytes(5).toString('hex');
   const compose = `# Project-local worker. Native and Docker runs share state: stop one before starting the other.
 name: ${name}

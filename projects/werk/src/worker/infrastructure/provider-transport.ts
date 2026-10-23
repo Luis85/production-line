@@ -16,6 +16,7 @@ function invalidCompression(error: unknown): boolean {
  * Request/body deadlines belong to the caller's frozen execution policy.
  */
 export const providerTransport: typeof fetch = async (input, init) => {
+  if (init?.signal?.aborted) throw new ProviderModelError('cancelled');
   const url = typeof input === 'string' || input instanceof URL ? input : input.url;
   // Disable independent five-minute header/body caps. The invocation signal owns
   // the total deadline; HTTP/1.1 also avoids a protocol-fallback inference replay.
@@ -31,7 +32,7 @@ export const providerTransport: typeof fetch = async (input, init) => {
     const body = response.body as unknown as ReadableStream<Uint8Array> | null;
     try { bytes = await readResponseBody(body, 1048576, { cancel: 'always' }); }
     catch (error) {
-      if (init?.signal?.aborted) throw new ProviderModelError('cancelled');
+      if (init?.signal?.aborted) throw new ProviderModelError('outcome_unknown');
       if (error instanceof ResponseBodyLimitError || response.headers.has('content-encoding') && invalidCompression(error)) throw new ProviderModelError('protocol');
       throw error;
     }

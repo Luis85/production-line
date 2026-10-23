@@ -1,3 +1,4 @@
+import { unknownProviderOutcome } from './provider-outcome.js';
 import { completeConsumption, type ConsumptionRuntime } from './consumption.js';
 import type { ConversationModel } from './conversation.js';
 import { unknownUsage, type ProviderUsage } from './run-evidence.js';
@@ -12,7 +13,7 @@ export async function withConsumption<T>(runtime: ConsumptionRuntime | undefined
   signal.throwIfAborted();
   const attempt = runtime?.begin(provider), controller = new AbortController();
   const bounded = AbortSignal.any([signal, controller.signal]);
-  let usage: ProviderUsage | undefined, accountingError: unknown, settled = false, complete = false;
+  let usage: ProviderUsage | undefined, accountingError: unknown, uncertainty: ProviderModelError | undefined, settled = false, complete = false;
   let dispatched = false, stopBeforeCall = false, boundaryStop: ProviderModelError | undefined;
   const checkAllowance = () => {
     if (!runtime || !attempt) return;
@@ -37,6 +38,13 @@ export async function withConsumption<T>(runtime: ConsumptionRuntime | undefined
     }
     try { onUsage?.(value); } catch { /* Display telemetry cannot alter an invocation. */ }
   };
+  const settleAccounting = () => {
+    if (!attempt) return;
+    try {
+      if (!dispatched && !complete && usage === undefined && !accountingError) runtime!.release(attempt.id);
+      else runtime!.finish(attempt.id, usage, complete && !accountingError);
+    } catch (error) { if (!uncertainty) throw error; }
+  };
   try {
     const result = await invoke(bounded, observe, control);
     if (accountingError) throw accountingError;
@@ -46,13 +54,12 @@ export async function withConsumption<T>(runtime: ConsumptionRuntime | undefined
   } catch (error) {
     // The preceding response was fully received; no new request crossed this boundary.
     if (boundaryStop && error === boundaryStop) complete = dispatched;
-    throw accountingError ?? error;
+    const unknown = unknownProviderOutcome(error);
+    if (unknown) uncertainty = new ProviderModelError(unknown);
+    throw uncertainty ?? accountingError ?? error;
   } finally {
     settled = true;
-    if (attempt) {
-      if (!dispatched && !complete && usage === undefined && !accountingError) runtime!.release(attempt.id);
-      else runtime!.finish(attempt.id, usage, complete && !accountingError);
-    }
+    settleAccounting();
   }
 }
 

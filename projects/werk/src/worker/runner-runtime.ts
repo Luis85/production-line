@@ -1,3 +1,4 @@
+import { prepareProcessRuntime } from '../shared/process/launcher.js';
 import { settleCleanup, withCleanup, type CleanupStep } from '../shared/lifecycle.js';
 import { drainHttpServer } from '../shared/http/server-lifecycle.js';
 import { ExecutionProfiles, type ExecutionProfilesView } from './application/execution-profiles.js';
@@ -222,7 +223,11 @@ export async function runLockedWorker(
     save().catch((error) => {
       stateWriteError("worker", "status_snapshot", error);
     });
+  let processPreparation = Promise.resolve(), nativeStartup = Promise.resolve();
+  let nativeStartupError: unknown;
   const execute = async () => {
+    // Preparation owns a bounded waiter; short probes keep their deadlines without cancelling setup.
+    processPreparation = (dependencies.prepareProcessRuntime ?? prepareProcessRuntime)(process.cwd(), stopping).catch(() => {});
     await handle.writeFile(String(process.pid));
     await handle.sync();
     await handle.close();
@@ -230,7 +235,7 @@ export async function runLockedWorker(
     if (executionProfiles.pending && !(await readRegisteredIdentity(config.stateDir))) await executionProfiles.commit();
     applyProfileState();
     await journal.init();
-    await workspace.init();
+    await workspace.init({ deferNativeWork: true });
     status = await statusServer(
       () => ({ ...state, outbox: journal.metrics(now()) }),
       config.statusHost,
@@ -259,8 +264,16 @@ export async function runLockedWorker(
     }
     const bound = status.address();
     if (bound && typeof bound !== "string") await dependencies.ready?.(bound);
+    nativeStartup = processPreparation.then(async () => {
+      stopping.throwIfAborted();
+      await workspace.startNativeWork();
+      stopping.throwIfAborted();
+    }).catch(error => { if (!stopping.aborted) { nativeStartupError = error; shutdown.abort(); } });
+    if (adapter.mode !== 'mock') await nativeStartup;
+    stopping.throwIfAborted();
     localTimer = setInterval(() => {
-      void workspace.features?.tick();
+      if (!workspace.nativeWorkReady) return;
+      void workspace.tickFeatures();
       void workspace.featureTracking.sync();
       workspace.executor.wake();
       workspace.reviews.tick();
@@ -359,15 +372,15 @@ export async function runLockedWorker(
     }
   };
   await withCleanup(async () => {
-    try { await execute(); }
-    catch (error) { if (!stopping.aborted) throw error; }
+    try { await execute(); if (nativeStartupError) throw nativeStartupError; }
+    catch (error) { if (nativeStartupError) throw nativeStartupError; if (!stopping.aborted) throw error; }
   }, async () => {
     shutdown.abort();
     stopping.removeEventListener("abort", stopRepositories);
     state.state = "stopping";
     if (localTimer) clearInterval(localTimer);
     await settleCleanup(
-      [closeWorkspace, () => drainHttpServer(status)],
+      [closeWorkspace, () => drainHttpServer(status), () => processPreparation, () => nativeStartup],
       [...waiting.values()].map(entry => () => settleCleanup(
         () => entry.lease.close(),
         () => cancelSession(entry.task, "The worker stopped before this queued assignment executed."),

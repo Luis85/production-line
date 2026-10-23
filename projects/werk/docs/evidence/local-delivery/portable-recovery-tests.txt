@@ -1,0 +1,44 @@
+✔ delivery selection prioritizes safety, observes active work and waits without mutating its inputs (3.910101ms)
+✔ observing or replaying a started step never records another consequential operation (47.835076ms)
+✔ pause after step remains pending during execution and prevents verification until explicit resume (27.546178ms)
+✔ control receipts replay after restart while changed payloads and stale targets fail without new events (25.665098ms)
+✔ interrupt distinguishes requested, uncertain and confirmed cessation before another step can start (27.486064ms)
+✔ cancellation does not close unknown execution and terminal work requires a new explicit reopen (23.083738ms)
+✔ restart preserves unknown step identity and blocks blind replay until reconciliation (23.620055ms)
+✔ source holds prevent new actions and accepted material revisions retain history without old evidence (22.170013ms)
+✔ automatic completion remains in review and cannot be accepted without a candidate package (19.87922ms)
+✔ journal acceptance requires current candidate and each manual criterion; rejected decisions leave no success receipt (28.225869ms)
+✔ a completed delivery awaiting human review cannot use terminal reopen to bypass the candidate decision (20.428268ms)
+✔ parsed Markdown review commands use the same manual criterion and once-consumed journal acceptance rules (28.692232ms)
+✔ operator stop confirmation requires an exact trusted observation and never automatically resumes (15.103326ms)
+✔ stop confirmations replay without new observations after restart and retain exactly one recovery receipt (13.684347ms)
+✔ an attested stop resolves pending cancellation without discarding the partial-work identity (14.151735ms)
+▶ a restart preserves uncertain operation identity across every delivery phase
+  ✔ assessing (14.683692ms)
+  ✔ planning (16.413354ms)
+  ✔ preparing (15.252738ms)
+  ✔ implementing (13.694522ms)
+  ✔ verifying (17.830977ms)
+  ✔ repairing (15.732453ms)
+  ✔ packaging (19.221623ms)
+✔ a restart preserves uncertain operation identity across every delivery phase (113.987243ms)
+✔ checkpoint receipts bind exact delivery inputs and replay without duplicating durable events (14.085832ms)
+✔ stale reviews withdraw review eligibility while preserving the exact historical candidate (16.843584ms)
+✔ recovery inspection observes the owned candidate without settling its unknown operation (37.555276ms)
+✔ recovery inspection refuses active managed controllers and processes before observing files (27.60115ms)
+✔ recovery inspection rejects replaced worktrees, stale request revisions and concurrent changes (25.648705ms)
+✔ a managed process appearing during inspection prevents the recovery receipt (18.796146ms)
+✔ a failed observed check dispatches bounded repair and preserves both candidate receipts (78.279991ms)
+✔ pause after the model step releases the boundary and resumes verification without redispatch (41.402555ms)
+✔ repair exhaustion stops deterministically and unchanged reevaluation spends no further calls (39.116448ms)
+✔ a model question preserves its durable result and does not run checks or enter repair (26.632951ms)
+✔ explicit recovery resumes interrupted verification without replaying a known model result (41.177118ms)
+✔ a failed checkpoint after a paused model result preserves its completed receipt and permits explicit retry (32.353004ms)
+ℹ tests 35
+ℹ suites 0
+ℹ pass 35
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 636.539314

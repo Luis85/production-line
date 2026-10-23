@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createProcessObservation } from '../../src/worker/dist/worker/infrastructure/process-observation.js';
-import { launchProcess, runProcess, terminateProcess, ProcessRunError } from '../../src/worker/dist/shared/process/launcher.js';
+import { launchProcess, prepareProcessRuntime, runProcess, terminateProcess, ProcessRunError } from '../../src/worker/dist/shared/process/launcher.js';
 import { withProcessObserver } from '../../src/worker/dist/shared/process/observation.js';
 import { runApprovedToolProcess } from '../../src/worker/dist/worker/infrastructure/tool-process.js';
 import { providerCommand, runProviderProbe } from '../../src/worker/dist/worker/infrastructure/provider-process.js';
@@ -63,7 +63,9 @@ test('async nested contexts restore the parent and capture identity before calle
   assert.equal((await outer.status()).summary.total, 1, 'launch outside run is not captured');
 });
 
-test('provider and tool purposes override inherited label while probes and explicit ignores stay absent', async () => {
+test('provider and tool purposes override inherited label while probes and explicit ignores stay absent', async t => {
+  // Prepare containment outside the observation scope and the five-second command budget.
+  await prepareProcessRuntime(process.cwd(), t.signal);
   const registry = createProcessObservation();
   await registry.run({ ...identity, kind: 'other', label: 'Parent scope' }, async () => {
     await runApprovedToolProcess(node, ['-e', ''], { cwd: process.cwd(), signal: new AbortController().signal, timeoutMs: 5000, maxOutputBytes: 1024 });

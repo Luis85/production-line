@@ -1,3 +1,4 @@
+import { unknownProviderOutcome } from '../application/provider-outcome.js';
 import type { ProcessObservation } from '../application/process-observation.js';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
@@ -36,13 +37,14 @@ export function createDelegationChildRunner(options: DelegationChildOptions): De
     input.tools.assertAvailable?.(input.signal);
     if (input.tools.manifest.tools.some(tool => tool.name === 'werk_delegate')) throw new ProviderModelError('tool_access');
     const parent = options.parent();
-    if (!parent || parent.sessionId !== options.parentSessionId || parent.provider !== connection.id || parent.model !== connection.model) throw new ProviderModelError('session_conflict');
+    if (!parent || parent.sessionId !== options.parentSessionId || parent.provider !== connection.id || parent.model !== connection.model || parent.authenticationMode !== connection.authenticationMode) throw new ProviderModelError('session_conflict');
     const sessionId = 'delegated-' + randomUUID();
     const binding = { schemaVersion: 1 as const, logicalSessionId: sessionId, featureRequestKey: options.featureRequestKey, providerId: connection.id, generation: 1 };
     validateModelSessionBinding(binding);
     const metadata: RunMetadata = {
       sessionId, taskId: parent.taskId, kind: parent.kind, title: parent.title, provider: parent.provider, model: parent.model,
       ...(parent.requestId ? { requestId: parent.requestId } : {}), ...(parent.purpose ? { purpose: parent.purpose } : {}),
+      ...(parent.authenticationMode ? { authenticationMode: parent.authenticationMode } : {}),
       parentRunId: parent.id, parentSessionId: parent.sessionId, delegationId: input.id,
     };
     validateRunLineage(metadata, parent);
@@ -56,7 +58,7 @@ export function createDelegationChildRunner(options: DelegationChildOptions): De
       const implementsCandidate = input.tools.manifest.tools.some(tool => tool.name === 'werk_candidate_apply');
       const model: StructuredModel = {
         sessionBinding: binding,
-        configuration: { id: connection.id, model: connection.model, instruction: connection.instruction ?? '', ...(connection.effort === undefined ? {} : { effort: connection.effort }) },
+        configuration: { id: connection.id, model: connection.model, instruction: connection.instruction ?? '', ...(connection.authenticationMode ? { authenticationMode: connection.authenticationMode } : {}), ...(connection.effort === undefined ? {} : { effort: connection.effort }) },
         capabilities: instance.capabilities ?? modelCapabilities,
         toolManifest: input.tools.manifest.tools.length ? input.tools.manifest : undefined,
         executionPolicy: input.tools.limits ? { maxToolCalls: input.tools.limits.maxCalls, commandTimeoutMs: input.tools.limits.commandTimeoutMs, ...(implementsCandidate ? { ...input.tools.manifest.limits?.candidateInspection, ...input.tools.manifest.limits?.candidateReview } : {}) } : undefined,
@@ -81,8 +83,10 @@ export function createDelegationChildRunner(options: DelegationChildOptions): De
       });
       if (evidenceError) throw evidenceError;
     } catch (error) {
-      await options.runs.finish(run.id, input.signal.aborted ? 'cancelled' : 'failed', usage);
-      throw evidenceError ?? error;
+      const unknown = unknownProviderOutcome(error);
+      try { await options.runs.finish(run.id, unknown ? 'failed' : input.signal.aborted ? 'cancelled' : 'failed', usage); }
+      catch (writeError) { if (!unknown) throw writeError; }
+      throw unknown ? new ProviderModelError(unknown) : evidenceError ?? error;
     }
     await options.runs.finish(run.id, result.type === 'completed' ? 'completed' : result.request.kind === 'escalation' ? 'escalated' : 'waiting_input', usage);
     return { sessionId, result, usage };

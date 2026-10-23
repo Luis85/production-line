@@ -40,6 +40,7 @@ export interface ServiceRecord {
 }
 export interface ServiceLog { sequence: number; at: string; stream: 'stdout' | 'stderr'; text: string; }
 export interface StoredService {
+  temporaryLogHours?: number;
   record: ServiceRecord; scope: ServiceScope; presetFingerprint: string; operationId: string;
   logs: ServiceLog[]; nextLogSequence: number;
   commands?: Array<{ operationId: string; action: 'stop' | 'restart'; expectedRevision: number }>;
@@ -59,4 +60,5 @@ export interface ProcessSupervisorOptions {
   /** Revalidate the canonical FR, repository and pinned worktree before every actual start. */
   validateScope(scope: ServiceScope): Promise<void>;
   maxActive?: number | (() => number); now?: () => number;
+  temporaryLogHours?: (scope: ServiceScope) => number;
 }

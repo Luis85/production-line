@@ -1,3 +1,10 @@
+import { assertNativeWorkReady } from './workspace-native-work.js';
+import { validateSharedIntakeConfig } from '../application/shared-feature-state.js';
+import type { FeatureRequests } from '../application/feature-requests.js';
+import type { SharedFeatureIntake } from '../application/shared-feature-intake.js';
+import { featureDependencyPlan, retainedFeatureDependencyPlans } from './workspace-feature-dependencies.js';
+import type { WorkspaceFeatureProject } from './workspace-project-features.js';
+import { featureDeliverySubmission } from './workspace-delivery.js';
 import { admitFeatureRequest, type FeatureAdmissionPorts } from '../application/feature-admission.js';
 import { featureRequestReference, sharedFeatureRequestReference } from '../application/feature-request-reference.js';
 import type { WorkspaceContext } from './workspace-context.js';
@@ -9,7 +16,7 @@ import type { SharedExecution, SharedFeatureRecord } from '../application/shared
 import { developmentCompletionValid, developmentScopeView } from '../application/development.js';
 import { type FeatureRecord } from "../application/feature-requests.js";
 import { object, identifier, type Task } from "../../shared/contracts.js";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { DomainError } from "../../shared/errors.js";
 import { task } from './workspace-tasks.js';
 import { toolAccessBlockedReason, withIdleConfiguration, withRepositoryAdmission } from './workspace-settings.js';
@@ -20,11 +27,11 @@ export function featureTrackingSnapshot(workspace: WorkspaceContext): FeatureTra
     const interaction = session.interaction;
     const taskId = tasks.get(session.id), local = taskId ? workspace.board.executionDetail(taskId) : undefined;
     const sharedTaskId = taskId ?? (session.kind === 'local' && session.id.startsWith('local-') ? session.id.slice(6) : undefined);
-    const sharedReference = sharedTaskId ? workspace.sharedRuntime.intake.referenceForTask(sharedTaskId, session.feature?.key) : undefined;
-    const folderReference = workspace.features?.referenceForSession(session.id, session.feature?.key);
-    const sharedSource = sharedTaskId && sharedReference ? workspace.sharedRuntime.intake.sourceForTask(sharedTaskId) : undefined;
+    const shared = sharedTaskId ? workspace.featureProjects.sharedForTask(sharedTaskId, session.feature?.key) : undefined;
+    const folder = workspace.featureProjects.forSession(session.id, session.feature?.key);
+    const sharedReference = shared?.reference, folderReference = folder?.reference, sharedSource = shared?.source;
     const sourceRepository = sharedSource && workspace.settings.value.repositories.items.find(item => item.id === sharedSource.repositoryId);
-    const sourcePath = sharedSource ? sourceRepository ? join(sourceRepository.path, sharedSource.path) : sharedSource.path : folderReference?.sourcePath ? join(workspace.config.features!.directory, folderReference.sourcePath) : undefined;
+    const sourcePath = sharedSource ? sourceRepository ? join(sourceRepository.path, sharedSource.path) : sharedSource.path : folderReference?.sourcePath ? join(folder!.project.directory!, folderReference.sourcePath) : undefined;
     const reference = sharedReference ?? folderReference;
     const runs = workspace.sessions.runs.list({ sessionId: session.id, limit: 100 }).rows;
     return { session: reference ? { ...session, feature: reference } : session, messages: publicTaskConversation(chat, local ? { instruction: local.instruction, paths: local.admissionFailure?.paths ?? local.files.map(file => file.path) } : undefined).messages, request: workspace.sessions.requests.forSession(session.id),
@@ -39,36 +46,61 @@ export function featureTrackingSnapshot(workspace: WorkspaceContext): FeatureTra
 const localIntakeHint = { intake: 'local', hint: 'Shared Git intake is intentionally off: this worker was created with init --intake local. Create a request by copying <features>/_templates/local-request.md outside the feature folder, setting paths, then running feature create --markdown <copy>. To use shared intake, run shared setup; its saved repository binding takes precedence over the local setup defaults.' } as const;
 const withLocalHint = <T extends object>(workspace: WorkspaceContext, view: T): T | (T & typeof localIntakeHint) => workspace.config.features?.intake === 'local' && !workspace.sharedRuntime.intake.binding?.repositoryId ? { ...view, ...localIntakeHint } : view;
 
-export function sharedIntakeView(workspace: WorkspaceContext){
-  const blocked = toolAccessBlockedReason(workspace)?.replaceAll('tool access', 'shared intake') ?? null;
-  return withLocalHint(workspace, workspace.sharedRuntime.intake.view(blocked));
+function projectView(workspace: WorkspaceContext, project: WorkspaceFeatureProject) {
+  return { selectedProjectId: workspace.featureProjects.id(project), projects: workspace.featureProjects.choices(), dependencyPlans: retainedFeatureDependencyPlans(workspace, workspace.featureProjects.id(project)) };
 }
-
+export function sharedIntakeView(workspace: WorkspaceContext, projectId?: string){
+  const project = workspace.featureProjects.resolve(projectId);
+  const blocked = toolAccessBlockedReason(workspace)?.replaceAll('tool access', 'shared intake') ?? null;
+  return { ...(project.primary ? withLocalHint(workspace, project.sharedRuntime.intake.view(blocked)) : project.sharedRuntime.intake.view(blocked)), ...projectView(workspace, project) };
+}
 export async function sharedIntakeCommand(workspace: WorkspaceContext, input: unknown){
-  const body = object(input, 'Shared intake command', ['action', 'expectedRevision', 'config', 'id']);
+  const body = object(input, 'Shared intake command', ['action', 'expectedRevision', 'config', 'id', 'projectId']);
+  const projectId = body.projectId === undefined ? undefined : identifier(body.projectId, 'projectId');
+  const project = workspace.featureProjects.resolve(projectId);
+  const intake: SharedFeatureIntake = project.sharedRuntime.intake;
   if (body.action === 'configure') {
     if (body.id !== undefined || !Number.isSafeInteger(body.expectedRevision)) throw new DomainError('invalid_input', 'Save shared intake with its current revision.');
-    await withIdleConfiguration(workspace, () => workspace.sharedRuntime.intake.configure(body.config, Number(body.expectedRevision)));
-    return sharedIntakeView(workspace);
+    const config = validateSharedIntakeConfig(body.config);
+    await withIdleConfiguration(workspace, async () => {
+      workspace.featureProjects.assertSharedBinding(project, config.repositoryId);
+      await intake.configure(config, Number(body.expectedRevision));
+      await workspace.featureProjects.configure();
+    });
+    return sharedIntakeView(workspace, workspace.featureProjects.id(project));
   }
   if (body.config !== undefined || body.expectedRevision !== undefined) throw new DomainError('invalid_input', 'Configuration fields are only accepted when saving shared intake.');
   if (body.action === 'sync' && body.id === undefined) {
+    assertNativeWorkReady(workspace);
     if (!workspace.acceptingTasks || workspace.configurationUpdating || workspace.repositoriesUpdating) throw new DomainError('unavailable', 'Worker configuration is changing or the worker is stopping.');
-    await workspace.sharedRuntime.intake.sync();
-    return sharedIntakeView(workspace);
+    await project.sharedRuntime.intake.sync();
+    return sharedIntakeView(workspace, projectId);
   }
-  if (body.action === 'note') return workspace.sharedRuntime.intake.note(identifier(body.id, 'feature ID'));
+  if (body.action === 'note') return intake.note(identifier(body.id, 'feature ID'));
   throw new DomainError('invalid_input', 'Use configure, sync or note for shared intake.');
 }
-
-export function featureView(workspace: WorkspaceContext){ return workspace.sharedRuntime.intake.binding?.repositoryId ? { enabled: false, reason: 'Shared repository intake is configured.' } : withLocalHint(workspace, workspace.features?.view() ?? { enabled: false }); }
-
-export async function featureList(workspace: WorkspaceContext){ return workspace.sharedRuntime.intake.binding?.repositoryId ? featureView(workspace) : withLocalHint(workspace, await workspace.features?.list() ?? { enabled: false }); }
-
+export function featureView(workspace: WorkspaceContext, projectId?: string){
+  const project = workspace.featureProjects.resolve(projectId);
+  const view = project.sharedRuntime.intake.binding?.repositoryId ? { enabled: false, reason: 'Shared repository intake is configured.' } : project.features?.view() ?? { enabled: false };
+  return { ...(project.primary ? withLocalHint(workspace, view) : view), ...projectView(workspace, project) };
+}
+export async function featureList(workspace: WorkspaceContext, projectId?: string){
+  const project = workspace.featureProjects.resolve(projectId);
+  if (project.sharedRuntime.intake.binding?.repositoryId) return featureView(workspace, projectId);
+  const features: FeatureRequests | undefined = project.features;
+  const view = await features?.list() ?? { enabled: false };
+  return { ...(project.primary ? withLocalHint(workspace, view) : view), ...projectView(workspace, project) };
+}
 export async function featureCommand(workspace: WorkspaceContext, input: unknown){
-  if (!workspace.features) throw new DomainError('conflict', 'Configure a feature folder first.');
-  if (workspace.sharedRuntime.intake.binding?.repositoryId && !['get', 'result', 'validate'].includes(String((input as { action?: unknown })?.action))) throw new DomainError('conflict', 'Shared Git intake owns new feature requests. Create and validate the request in the repository, then commit and push it.');
-  return workspace.features.action(input);
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new DomainError('invalid_input', 'Feature command must be an object.');
+  const raw = input as { projectId?: unknown; action?: unknown };
+  const project = workspace.featureProjects.resolve(raw?.projectId === undefined ? undefined : identifier(raw.projectId, 'projectId'));
+  if (raw.action === 'dependency_plan') { const command = object(input, 'Dependency plan', ['action', 'projectId', 'id']); return featureDependencyPlan(workspace, project, identifier(command.id, 'Feature ID')); }
+  const features: FeatureRequests | undefined = project.features;
+  if (!features) throw new DomainError('conflict', 'Configure a feature folder for this project first.');
+  if (project.sharedRuntime.intake.binding?.repositoryId && !['get', 'result', 'validate'].includes(String(raw?.action))) throw new DomainError('conflict', 'Shared Git intake owns new feature requests. Create and validate the request in the repository, then commit and push it.');
+  const { projectId: _projectId, ...command } = input as Record<string, unknown>;
+  return features.action(command);
 }
 
 export function inspectSharedFeature(workspace: WorkspaceContext, id: string): SharedExecution | undefined{
@@ -92,7 +124,6 @@ export async function continueFeatureInteraction(workspace: WorkspaceContext, se
     }).view;
   }
   if (!workspace.acceptingTasks || workspace.configurationUpdating || workspace.repositoriesUpdating || workspace.executionProfiles?.pending()) throw new DomainError('unavailable', 'Task response is saved. It will resume after the worker is available.');
-  if (workspace.settings.value.board.paused) throw new DomainError('unavailable', 'Task response is saved. Resume the worker queue to continue.');
   if (workspace.consumption.status().blocked) throw new DomainError('unavailable', 'Task response is saved. The worker consumption limit currently prevents execution.');
   if ((workspace.sessions.admissionActive ?? workspace.sessions.chatActive) + workspace.board.active >= workspace.settings.value.board.queueCapacity) throw new DomainError('unavailable', 'Task response is saved. It will resume when queue capacity is available.');
   return interaction(workspace, command, { fromFeatureNote: true });
@@ -108,10 +139,11 @@ function featureAdmissionPorts(workspace: WorkspaceContext): FeatureAdmissionPor
 export async function submitSharedFeature(workspace: WorkspaceContext, record: SharedFeatureRecord){
   return withRepositoryAdmission(workspace, async () => {
     const assignment = workspace.repositories.resolve(record.binding.repositoryId);
+    const delivery = record.deliveryPolicy ? await featureDeliverySubmission(workspace, { id: record.id, input: record.accepted, deliveryPolicy: record.deliveryPolicy, deliveryExecution: record.deliveryExecution }, assignment.path, record.workflow.policy) : undefined;
     await admitFeatureRequest(featureAdmissionPorts(workspace), {
       input: record.accepted, taskId: record.taskId!, submissionHash: record.inputHash, repository: assignment.path,
       reference: sharedFeatureRequestReference(record), selection: record.selection,
-      submission: { ...(record.selection ? { selection: record.selection } : {}), policy: record.workflow.policy, ...(record.workflow.definitionPrompts ? { definitionPrompts: record.workflow.definitionPrompts } : {}), criteria: record.accepted.criteria, repositoryId: record.binding.repositoryId, baseCommit: record.sourceCommit },
+      submission: { ...delivery, ...(record.selection ? { selection: record.selection } : {}), policy: delivery?.policy ?? record.workflow.policy, ...(record.workflow.definitionPrompts ? { definitionPrompts: record.workflow.definitionPrompts } : {}), criteria: record.accepted.criteria, repositoryId: record.binding.repositoryId, baseCommit: record.sourceCommit },
     });
     await workspace.featureTracking.sync();
   });
@@ -133,15 +165,27 @@ export async function rememberTask(workspace: WorkspaceContext, task: Task){
   workspace.historyCache = undefined;
 }
 
-export async function submitFeature(workspace: WorkspaceContext, record: FeatureRecord){
+export async function submitFeature(workspace: WorkspaceContext, record: FeatureRecord, project = workspace.featureProjects.forRecord(record)){
   return withRepositoryAdmission(workspace, async () => {
+    const repository = project.repository;
+    const submission = record.input?.mode === 'patch' && (record.input.requestSchema === 'worker.request/v1' || record.deliveryPolicy) ? await featureDeliverySubmission(workspace, record, repository, workspace.sessions.requests.policy().policy) : undefined;
     await admitFeatureRequest(featureAdmissionPorts(workspace), {
       input: record.input!, taskId: record.taskId, submissionHash: record.inputHash, selection: record.selection,
-      repository: resolve(workspace.config.projectDir ?? process.cwd()),
-      reference: record.feature ? { ...record.feature, sourcePath: record.name } : featureRequestReference({ id: record.id, source: 'folder', scope: workspace.features!.view().directory, sourcePath: record.name }),
+      repository, ...(submission ? { submission } : {}),
+      reference: record.feature ? { ...record.feature, sourcePath: record.name, repositoryId: workspace.featureProjects.id(project) } : featureRequestReference({ id: record.id, source: 'folder', scope: project.features!.view().directory, sourcePath: record.name }),
     });
     await workspace.featureTracking.sync();
   });
+}
+
+/** Priority is scheduling metadata; it never revises requirements or starts another run. */
+export async function reprioritizeFeature(workspace: WorkspaceContext, record: FeatureRecord, priority: number) {
+  if (!workspace.acceptingTasks || workspace.configurationUpdating || workspace.repositoriesUpdating || workspace.executionProfiles?.pending() || record.source !== 'folder' || record.input?.mode !== 'patch') return false;
+  const task = workspace.board.view().tasks.find(item => item.id === record.taskId);
+  if (!task || task.status !== 'queued') return false;
+  if (task.sessionId !== record.sessionId || record.feature && task.feature?.key !== record.feature.key) throw new DomainError('conflict', 'The queued task belongs to another Feature Request.');
+  await workspace.board.action({ action: 'priority', id: task.id, priority });
+  return true;
 }
 
 function executionEvidence(workspace: WorkspaceContext, sessionId: string, runId?: string){

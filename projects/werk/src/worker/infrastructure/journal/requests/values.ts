@@ -1,3 +1,5 @@
+import { validateAuthenticationMode } from '../../../application/provider-capabilities.js';
+import type { ProviderId } from '../../../application/provider-contract.js';
 import { validateModelEffort } from '../../../application/model-effort.js';
 import { randomUUID } from "node:crypto";
 import { DomainError } from "../../../../shared/errors.js";
@@ -103,10 +105,11 @@ export function provider(value: ModelProvider): ModelProvider {
     typeof value.instruction !== "string" ||
     value.instruction.length > 64000 ||
     Object.keys(value).some(
-      (key) => !["id", "model", "instruction", "effort"].includes(key),
+      (key) => !["id", "model", "instruction", "effort", "authenticationMode"].includes(key),
     )
   )
     invalid("Invalid request provider metadata.");
+  if (value.authenticationMode !== undefined) validateAuthenticationMode(value.authenticationMode, value.id as ProviderId);
   if (value.effort !== undefined) validateModelEffort(value.effort, value.id);
   return clone(value);
 }
@@ -174,6 +177,8 @@ export function summary(request: WorkerRequest): RequestSummary {
     inputHash,
     policyDigest,
     phase,
+    lifecycle: request.lifecycle,
+    ...(request.delivery ? { delivery: { id: request.delivery.id, status: request.delivery.status, phase: request.delivery.phase, decision: clone(request.delivery.decision), allowedControls: [...request.delivery.allowedControls] } } : {}),
     title: request.input.title,
     kind: request.input.kind,
     assignee,

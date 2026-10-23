@@ -62,6 +62,13 @@ The browser is optional: open the printed URL and unlock with
 The token is never printed or placed in the URL. `run` stays in the terminal;
 Ctrl+C closes the worker.
 
+The webview can become available while native execution is still preparing,
+especially on a cold Windows start. Check `repository status` for
+`nativeWork.state: "ready"` before accepting a repository or starting native
+repository actions. During preparation you can inspect the worker and save
+requests; accepted work waits for readiness. A retryable setup response does not
+mean that an accepted request should be created again.
+
 Edit the project `.env` to configure `WERK_WORKER_HOST`, `WERK_WORKER_PORT`,
 `WERK_WORKER_STATE_DIR` or `WERK_WORKER_CONFIG`. Explicit CLI launch options win;
 process environment overrides the file. Relative environment paths are rooted in
@@ -124,8 +131,10 @@ for the JSON example, polling limits, status/sync API and retention behavior.
 
 In **New request**, expand **Repository files · optional**, enable **Allow changes
 to approved repository files**, and select an assigned repository and paths.
-The same **Create request** action captures committed files in a task worktree
-beneath that repository's `.werk/worktrees` directory and returns a review patch.
+The same **Create request** action records one Feature Request with those
+permissions. When admitted, implementation uses committed files in a task worktree
+beneath that repository's `.werk/worktrees` directory, runs its required checks and
+produces a candidate for human review.
 If project tools such as a vault linter scan that folder, set
 `repositories.worktreeDirectory` to a short absolute folder outside the checkout.
 Deleting a file task removes its clean, verified worktree; changed or protected
@@ -249,19 +258,21 @@ text completion alone does not establish passing project tests.
 ### Local folder intake without a shared repository
 
 Local folder intake targets the same Feature Request lifecycle and worker queue.
-It accepts requests without `templateId`. Generate a draft with `feature template`,
-then use the local management commands below.
-Its saves are consumed locally and do not require commit/push. The installed team
-template belongs to shared intake and is never silently executed by this watcher.
-See the [local proposal tutorial](../tutorials/worker-feature-lifecycle.md) and
-[request contract](../reference/feature-requests.md) for this alternative.
+Its canonical format is `worker.request/v1`, without a shared `templateId`.
+Local request saves do not require commit/push; implementation still requires an
+assigned Git repository, a committed baseline and the approved delivery policy.
+The installed team template belongs to shared intake and is never silently
+executed by the local watcher. Follow the
+[local delivery tutorial](../tutorials/worker-feature-lifecycle.md) and
+[request contract](../reference/feature-requests.md) for this intake mode.
 For day-to-day operation, including Windows input files and tool limits, use the
 [project worker checklist](operate-project-worker.md).
 
 ## Set up an operator-only worker
 
-If you only want a local worker that reads requests from its feature folder, with no
-shared Git repository or team, initialize it with `--intake local`:
+If you want a worker that takes requests from local saves without a shared remote
+queue, initialize it with `--intake local`. Git-backed implementation still uses a
+local repository and committed baseline:
 
 ```bash
 node /path/to/werk-release/bin/apps/worker/cli.mjs init --intake local
@@ -270,32 +281,47 @@ node /path/to/werk-release/bin/apps/worker/cli.mjs init --intake local
 The default is `--intake shared`, which changes nothing. With `local`, `init` still
 installs the offline authoring kit, and it also:
 
-- writes `features/_templates/local-request.md`: a local request template without
-  `templateId`, with `status: draft`, `mode: patch`, your provider, and commented
-  `paths` (including a folder entry ending in `/`) and `definitionRef` examples;
+- writes `features/_templates/local-request.md`: a canonical `worker.request/v1`
+  template without `templateId`, with `intent: draft`, `mode: patch`, your provider,
+  a placeholder ID and `paths: [src/]` to review before submission;
 - records `features.intake: "local"` in `.werk/worker.json`. A repeated `init` keeps
   it. `init` refuses an explicit conflicting intake choice without changing
   existing configuration; it names the file and the migration steps;
 - reports `intake: { mode: "local", template, commands, next }` instead of the shared
   connection steps.
 
-`mode: patch` needs an explicit `paths` list (`feature create` and `feature validate`
-refuse a request without one), so copy the template, uncomment and edit `paths`, then
-create, check and queue it. Keep the copy outside the feature folder: the worker scans
-every file in that folder, so an unedited copy there is reported as an error and would
-stay as a second request next to the one `feature create` makes. The template's
-operator instructions are front-matter comments, so they are never sent to the model.
+Before submitting implementation work, start the worker and complete setup:
 
-```bash
-cp features/_templates/local-request.md request-draft.md   # edit title, paths and body
+1. Accept the detected project repository with `repository accept --discovery-id ID`.
+2. Connect and check the chosen provider, then configure approved tools and required
+   project checks. See [implementation setup](implement-feature.md).
+3. Review and commit `.werk/delivery-policy.json` to the selected baseline. In
+   **Settings → Project delivery**, approve that exact committed configuration.
+   The [policy reference](../reference/delivery-policy.md#configure-without-opening-the-webview)
+   provides the equivalent authenticated CLI commands. The generated policy requires
+   semantic readiness; a saved but uncommitted or unapproved file cannot enable it.
+
+Copy the template and choose a unique stable `id`, title, approved `paths` and body.
+A canonical draft may be incomplete; `mode: patch` requires explicit approved paths
+before submission. For CLI import, keep the editable copy outside the watched
+folder, then let `feature create` create the one canonical file:
+
+```sh
+# Copy features/_templates/local-request.md to request-draft.md and edit it.
 node bin/apps/worker/cli.mjs feature create --name request.md --markdown request-draft.md
 node bin/apps/worker/cli.mjs feature validate --name request.md
 node bin/apps/worker/cli.mjs feature submit --name request.md --if-match REVISION
 ```
 
-Start the worker, then accept the detected project checkout with
-`repository accept --discovery-id ID` if tasks should use it. For a local worker the
-new assignment is not watched, so nothing is fetched in the background. Pass
+Use the successful validation's file `revision`. Alternatively, copy the template
+directly into the feature folder, keep `intent: draft` while editing, and save it
+with `intent: submit` when ready. Use only one of these creation paths for each
+request. Duplicate IDs hold both notes; repeated saves of one note do not create
+another request. Keep worker-region markers intact and answer questions in
+`## Answers`. Human acceptance applies to the exact candidate and does not merge it.
+
+Accepting the detected project checkout saves the repository assignment. For a
+local worker the new assignment is not watched, so nothing is fetched in the background. Pass
 `--watch true` to `repository accept` to watch it anyway; `--watch false` also works for a
 shared worker. `--watch` only applies to a new assignment: for a checkout that is assigned
 already it is refused, so change watching in **Settings → Repositories** or with
@@ -390,8 +416,9 @@ native permissions and hooks, which are separate from Werk tool grants.
 
 Register through the worker's existing connection settings. New assignments are
 written into the same feature folder as frontmatter plus Markdown, with their
-orchestrator task/session IDs and current state. They share the same serial
-execution slot. Edit the offered IDs/providers in **Settings → Execution profiles**
+orchestrator task/session IDs and current state. They share the same execution
+capacity. Unscoped orchestrator assignments remain exclusive; project-scoped requests use the configured machine and project
+limits. Edit the offered IDs/providers in **Settings → Execution profiles**
 while paused and idle; see [profile editing](use-worker-webview.md#edit-execution-profiles)
 for the supported modes and acknowledgment required after registration. The orchestrator keeps routing and lease ownership; editing an
 exported file cannot create a second local execution or alter the remote task.
@@ -399,13 +426,15 @@ exported file cannot create a second local execution or alter the remote task.
 
 ## Manage local folder requests from a terminal or AI agent
 
-These commands manage the separate local folder flow, which is suspended while
-a shared Git binding is saved. For the team template, use the offline authoring
-commands above. Otherwise start the worker and prepare a draft outside the watched folder:
+These commands manage local files in the same Feature Request workflow. A saved
+shared Git binding takes precedence over new local intake; use the offline team
+authoring commands for its template. For local intake, complete the repository,
+provider, tool and committed-policy setup above, then prepare a draft outside the
+watched folder:
 
 ```sh
 node bin/apps/worker/cli.mjs feature template > request-draft.md
-# Edit request-draft.md, keeping status: draft.
+# Edit the unique id, title, paths and body, keeping intent: draft.
 node bin/apps/worker/cli.mjs feature create --name search.md --markdown request-draft.md
 node bin/apps/worker/cli.mjs feature validate --name search.md
 node bin/apps/worker/cli.mjs feature get --name search.md
@@ -422,9 +451,11 @@ node bin/apps/worker/cli.mjs feature result --name search.md
 A newly created draft has no accepted execution record yet. After submission and
 stable-save admission, the JSON record supplies `taskId` and `sessionId` for follow-up commands. Use
 `task send --id SESSION_ID --file follow-up.json` with
-`{"message":"Explain the next step."}` to continue that session. For cancellation,
-retry, archive or deletion, fetch the current feature revision and use the
-corresponding named command. See the [complete management contract](../reference/feature-requests.md#cli-management-contract).
+`{"message":"Explain the next step."}` only when that request offers an eligible
+continuation. Canonical requirement changes and answers belong in the source note;
+a terminal request requires explicit reopening. Cancellation, retry, archive and
+deletion also obey the current lifecycle and evidence guards. Fetch the current
+feature revision before the corresponding named command. See the [complete management contract](../reference/feature-requests.md#cli-management-contract).
 
 No browser is required for provider setup: `settings set --file provider.json`
 accepts `{"provider":{"id":"codex-cli","executable":"/absolute/path/to/codex"}}`.

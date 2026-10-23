@@ -1,3 +1,6 @@
+import { providerAuthenticationEnvironment } from './provider-authentication.js';
+import { structuredProviderFailure } from './provider-failures.js';
+import type { ProviderAuthenticationMode } from '../application/provider-capabilities.js';
 import type { ModelEffort } from '../application/model-effort.js';
 import { claudeVersion, minimumClaudeVersion } from './provider-version.js';
 import { randomUUID } from 'node:crypto';
@@ -29,7 +32,7 @@ async function costScope(executable: string, signal: AbortSignal): Promise<'invo
   throw error;
 }
 export async function claudeSessionReply(connection: ProviderConnection, directory: string, request: ModelRequest, signal: AbortSignal,
-  access: ModelSessionAccess, argumentsFor: (model: string, promptFile: string, bridge?: CliToolBridge, effort?: ModelEffort) => string[],
+  access: ModelSessionAccess, argumentsFor: (model: string, promptFile: string, bridge?: CliToolBridge, effort?: ModelEffort, authenticationMode?: ProviderAuthenticationMode) => string[],
   observe: (usage: ProviderUsage) => void, runtime?: ToolRuntime, control?: ModelInvocationControl) {
   const session = await openProviderSession(access, request, connection.executable), resumed = !!session.nativeId;
   const nativeId = session.nativeId ?? randomUUID();
@@ -41,21 +44,22 @@ export async function claudeSessionReply(connection: ProviderConnection, directo
     const scope = await costScope(connection.executable, signal), promptFile = join(promptDirectory, 'system-prompt.md');
     await writeFile(promptFile, request.protocolInstructions, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
     const output = await withCliToolBridge(runtime, signal, async bridge => {
-      const args = argumentsFor(request.provider.model, promptFile, bridge, request.provider.effort).filter(arg => arg !== '--no-session-persistence');
+      const args = argumentsFor(request.provider.model, promptFile, bridge, request.provider.effort, connection.authenticationMode).filter(arg => arg !== '--no-session-persistence');
       args.push('--system-prompt-snapshot', 'off', resumed ? '--resume' : '--session-id', nativeId);
       await session.begin(nativeId);
       control?.beforeCall();
+      if (signal.aborted) throw new ProviderModelError('cancelled');
       session.markDispatched();
       return providerCommand(connection.executable, args, cwd, signal, session.input, true, 'claude', buffer => {
         let response; try { response = JSON.parse(buffer.toString('utf8')); } catch { return; }
         if (response?.type !== 'result' || response.session_id !== nativeId) return;
         total = providerUsage('claude', response).providerReportedCostUsd;
         observe(claudeSessionUsage(response, resumed, scope, session.checkpoint.cumulativeCostUsd));
-      }, bridge ? { MCP_TOOL_TIMEOUT: String(bridge.toolTimeoutMs) } : {});
+      }, { ...(bridge ? { MCP_TOOL_TIMEOUT: String(bridge.toolTimeoutMs) } : {}), ...providerAuthenticationEnvironment(connection) });
     });
     let response; try { response = JSON.parse(output.toString('utf8')); } catch { throw new ProviderModelError('protocol'); }
+    const failure = structuredProviderFailure(response); if (failure) throw failure;
     if (!response || response.type !== 'result' || response.session_id !== nativeId || typeof response.result !== 'string') throw new ProviderModelError('protocol');
-    if (response.is_error) throw new ProviderModelError('unavailable');
     const result = parseModelResult(response.result);
     signal.throwIfAborted();
     await session.complete(result, { cumulativeCostUsd: scope === 'session' ? total ?? null : null });

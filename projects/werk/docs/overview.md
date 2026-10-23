@@ -19,9 +19,11 @@ merging.
 | You want to… | Start here |
 | --- | --- |
 | Install a worker in your project | [Project-worker quick start](#install-a-project-worker) |
+| Work locally from Markdown with review before merge | [Local delivery worker](explanation/local-delivery-worker.md) |
 | Let a team submit requests through Git and Obsidian | [Shared Markdown queue](how-to/shared-feature-intake.md) |
 | Design features by day and implement them overnight | [Evening handoff and morning review](how-to/shared-feature-intake.md#work-during-the-day-implement-overnight) |
 | Create and follow requests in the browser | [Worker webview](how-to/use-worker-webview.md) |
+| Configure provider routing, project capacity and delivery checks | [Project delivery policy](reference/delivery-policy.md) |
 | Assign your worker to an Orchestrator | [Connect the next building block](#connect-your-worker-to-an-orchestrator) |
 | Bring production lines together in a Factory | [Grow into a Factory](#introduce-a-factory) |
 | Build or extend the frontend | [Storybook and frontend reference](#documentation-and-frontend-reference) |
@@ -86,8 +88,13 @@ Before submitting shared work:
    the repository, remote and shared intake branch.
 3. Review the model's file, command and MCP permissions and the required project
    checks. A provider login does not grant tool access.
-4. Commit and push the shared template, authoring kit and ready/done rules, then
-   connect shared intake using the [setup guide](how-to/shared-feature-intake.md#connect-the-worker).
+4. Review and commit the generated `.werk/delivery-policy.json` with the shared
+   template, authoring kit and ready/done rules. Approve the exact committed policy
+   in **Settings → Project delivery**. New project policies require a structured
+   readiness assessment before implementation.
+5. Push the shared setup files, then connect shared intake using the
+   [setup guide](how-to/shared-feature-intake.md#connect-the-worker). For local intake,
+   commit and approve the policy before submitting canonical requests as well.
 
 All setup controls are also available through the CLI. The
 [project-worker guide](how-to/project-worker.md) covers browser-free setup,
@@ -130,6 +137,21 @@ it does not grant new permissions. The developer checkout stays untouched by
 shared implementation and publication. See the
 [shared workflow guide](how-to/shared-feature-intake.md) for ownership,
 retries, conflicts and human review.
+
+### Working locally
+
+For a worker that watches your own folder, choose `init --intake local`. New
+`worker.request/v1` notes start as drafts; set `intent: submit` after writing the
+acceptance criteria and approved paths. The worker pins the committed project
+policy, implements in an owned worktree, runs required checks and creates a local
+review note. Accept the exact candidate through Markdown or the webview before
+merging it yourself. Local intake does not automatically push branches or notes.
+A project can separately authorize [candidate publication](how-to/publish-worker-candidates.md);
+each push or remote PR remains an explicit action with its own recorded outcome.
+
+The [local delivery guide](explanation/local-delivery-worker.md) explains quality
+profiles, dependencies, pause and interruption recovery. Both intake modes retain
+the same Feature Request throughout execution and review.
 
 ## Create requests through Markdown or chat
 
@@ -237,8 +259,10 @@ flowchart TD
 | Factory | Organizes lines, including optional logical subfactories | Line registrations, portfolio summaries and routing of new intake between lines |
 
 Only workers invoke models. Each application has its own webview, private state
-and credentials. Start additional workers with distinct state directories and
-ports when separate requests need to execute in parallel.
+and credentials. A worker can run bounded project-scoped work concurrently within
+its configured machine and project limits. Add workers with distinct state
+directories and ports when you need separate machines, accounts or operating
+policies; unscoped assignments retain exclusive execution.
 
 ### Connect your worker to an Orchestrator
 

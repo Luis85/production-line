@@ -277,6 +277,26 @@ owning workflow. Editing the original Feature Request body or a progress
 projection is not an answer to a pending question. See
 [answer and resume](../how-to/answer-and-resume-worker.md).
 
+## Windows command runtime preparation
+
+The worker prepares its contained command launcher in the background while its
+HTTP interface starts. Private state and read APIs are initialized first; repository
+synchronization and local model dispatch wait until command setup settles. Saved
+chat requests and Markdown notes remain durable while the UI shows preparation
+progress. Native actions such as manual sync return a retryable unavailable status.
+Trusted remote simulations can continue through the same execution permit; they
+still obey the saved pause, capacity and cancellation controls.
+
+This trusted setup has a separate 45-second ceiling; it does not run a provider or
+establish authentication. Initial repository synchronization then uses the normal
+Git deadlines, and its completion releases queued model work. Shutdown owns and
+drains both stages, including cancellation before any Git command starts. Native CLI and process-tool
+dispatches wait for setup within their existing invocation deadline. A shorter
+invocation, command or probe deadline still wins. Read-only files, web requests
+and HTTP MCP tools do not require native setup; stdio MCP, command, candidate and
+other process-capable tools do. Diagnostic and pilot commands announce setup
+before running their unchanged five-second provider checks.
+
 ## Private interaction API and CLI
 
 Authenticated `POST /api/interactions` provides:

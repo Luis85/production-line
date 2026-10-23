@@ -1,8 +1,12 @@
+import { restorableDeliveryCompletion } from './local-task-completion.js';
+import { readinessContextMessages } from './delivery-readiness-context.js';
+import { deliveryVerificationEligibility } from './delivery-verification-eligibility.js';
+import type { WorkerRequest } from './request-gates.js';
 import type { FeatureDefinitionPrompts } from './feature-workflow.js';
 import { withSessionRecovery } from './model-session-recovery.js';
 import { interactionFeatureRequest } from './feature-request-reference.js';
 
-import { developmentCompletionValid, developmentScopeView } from './development.js';
+import { developmentScopeView } from './development.js';
 
 import type { StructuredModel } from './model-contract.js';
 import { type GateInput } from "./request-gates.js";
@@ -29,6 +33,7 @@ export async function reserveRun(host: Pick<LocalTaskRuntime, "sessions">, task:
         title: task.title,
         provider: task.provider,
         model: task.model,
+        authenticationMode: task.selection?.authenticationMode,
         requestId: task.requestId,
         purpose: "execution",
       })
@@ -61,6 +66,7 @@ export function ensureRequest(host: Pick<LocalTaskRuntime, "sessions" | "setting
     const profile = {
       id: connection.id,
       model: connection.model,
+      ...(connection.authenticationMode ? { authenticationMode: connection.authenticationMode } : {}),
       ...(task.selection ? { effort: task.selection.effort } : {}),
       instruction: actual?.configuration?.instruction ?? connection.instruction ?? "",
     };
@@ -79,18 +85,24 @@ export function ensureRequest(host: Pick<LocalTaskRuntime, "sessions" | "setting
     return request;
   }
 
-export function outputFacts(valid: { patch: string; changedFileCount: number } | null, task?: LocalTask) {
+export function outputFacts(valid: { patch: string; changedFileCount: number } | null, task?: LocalTask, request?: WorkerRequest) {
+    const candidate = request?.delivery?.review?.candidate ?? request?.delivery?.checkpoints?.at(-1);
+    const eligible = task?.implementation && deliveryVerificationEligibility(task.implementation, task.developmentEvidence, candidate, request?.delivery?.criterionDecisions, task.deliveryPolicy?.profile.exceptions).eligible;
     return {
       "output.protocolValid": !!valid,
       "output.patchPresent": !!valid?.patch,
       "output.changedFileCount": valid?.changedFileCount ?? 0,
-      ...(task?.implementation ? { "output.verificationPassed": task.developmentCompletion?.verified === true && !!valid, "output.requiredCheckCount": task.implementation.checks.length, "output.candidateDigest": task.developmentCompletion?.candidateDigest ?? "" } : {}),
+      ...(task?.implementation ? { "output.verificationPassed": task.developmentCompletion?.verified === true && !!valid, "output.verificationEligible": !!eligible && !!valid, "output.requiredCheckCount": task.implementation.checks.length, "output.candidateDigest": task.developmentCompletion?.candidateDigest ?? "" } : {}),
     };
   }
 
 export function taskContext(task: LocalTask) {
     return {
       taskId: task.id,
+      ...(task.deliveryExecution ? { deliveryExecution: structuredClone(task.deliveryExecution) } : {}),
+      ...(task.deliveryPolicy ? { deliveryPolicy: structuredClone(task.deliveryPolicy) } : {}),
+      ...(task.readinessReferences ? { readinessReferences: structuredClone(task.readinessReferences) } : {}),
+      ...(task.dependencies ? { dependencies: structuredClone(task.dependencies) } : {}),
       title: task.title,
       instruction: task.instruction,
       ...(task.criteria === undefined ? {} : { criteria: structuredClone(task.criteria) }),
@@ -161,6 +173,7 @@ export function preparedRequest(host: Pick<LocalTaskRuntime, "sessions" | "origi
             text: host.originalPrompt(task),
           },
         ];
+    if (!base && task.requestId) messages.push(...readinessContextMessages(host.sessions.requests.get(task.requestId)));
     for (let index = 0; index < ancestors.length; index++) {
       const previous = ancestors[index];
       // The nearest prepared dispatch already includes its own input. Accepted later
@@ -223,8 +236,8 @@ export function preparedRequest(host: Pick<LocalTaskRuntime, "sessions" | "origi
     return withSessionRecovery(request, turn, ancestors[0]);
   }
 
-export function restoredDevelopment(task: LocalTask, turn: InteractionTurn) {
-    if (!developmentCompletionValid(task) || task.developmentCompletion!.turnId !== turn.id || task.developmentCompletion!.runId !== turn.runId) return null;
+export function restoredDevelopment(task: LocalTask, turn: InteractionTurn, request?: WorkerRequest) {
+    if (!restorableDeliveryCompletion(task, request) || task.developmentCompletion!.turnId !== turn.id || task.developmentCompletion!.runId !== turn.runId) return null;
     return { patch: task.patch!, summary: task.summary ?? (turn.result?.type === 'completed' ? turn.result.text : ''), changedFileCount: task.developmentEvidence!.changedPaths.length };
   }
 

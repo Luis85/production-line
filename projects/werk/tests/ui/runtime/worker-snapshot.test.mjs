@@ -9,7 +9,7 @@ import { deferred } from '../helpers/frontend-loader.mjs';
 async function fixture(t, read) {
   const source = await readFile(new URL('../../../src/worker/webview/useWorkerSnapshot.ts', import.meta.url), 'utf8');
   const state = vue.reactive({ unlocked: true, refreshRevision: 0, paused: false });
-  const query = vue.ref('today'), hooks = { mounted: [], activated: [], deactivated: [], unmounted: [] };
+  const query = vue.ref('today'), observedRevision = vue.ref(1), hooks = { mounted: [], activated: [], deactivated: [], unmounted: [] };
   /** @type {Set<() => void>} */
   const timers = new Set();
   let time = Date.parse('2026-10-18T12:00:00.000Z');
@@ -21,12 +21,12 @@ async function fixture(t, read) {
     callback => { timers.add(callback); return callback; }, timer => timers.delete(timer),
   );
   const scope = vue.effectScope();
-  const snapshot = scope.run(() => exports.useWorkerSnapshot(() => read(query.value), [query]));
+  const snapshot = scope.run(() => exports.useWorkerSnapshot(() => read(query.value), [query], [observedRevision]));
   const trigger = event => hooks[event].forEach(callback => callback());
   t.after(() => { trigger('unmounted'); scope.stop(); });
   trigger('mounted'); trigger('activated');
   await vue.nextTick();
-  return { ...snapshot, state, query, trigger, timers, tick: (ms = 1000) => { time += ms; for (const callback of timers) callback(); } };
+  return { ...snapshot, state, query, observedRevision, trigger, timers, tick: (ms = 1000) => { time += ms; for (const callback of timers) callback(); } };
 }
 async function settle() { await vue.nextTick(); await vue.nextTick(); }
 async function poll(f) { f.state.refreshRevision++; await settle(); }
@@ -113,4 +113,54 @@ test('a locked component never reads until unlocked and inactive query changes s
   f.state.unlocked = false; f.trigger('deactivated'); f.query.value = 'month';
   assert.equal(f.data.value, null); f.trigger('activated'); assert.equal(f.loading.value, false);
   f.state.unlocked = true; await settle(); assert.equal(f.data.value.query, 'month');
+});
+
+
+test('same-subject revisions retain history but invalidate decision freshness and fence older reads', async t => {
+  const older = deferred(), newer = deferred(); let calls = 0;
+  const f = await fixture(t, async () => ++calls === 1 ? { receipt: 'retained' } : calls === 2 ? older.promise : newer.promise);
+  const retained = f.data.value;
+  await poll(f);
+  f.observedRevision.value++;
+  assert.equal(calls, 3);
+  assert.equal(f.data.value, retained, 'same-subject history stays mounted during revalidation');
+  assert.equal(f.readAt.value, '', 'old policy availability cannot authorize a new revision');
+  assert.equal(f.refreshing.value, false, 'background changes never claim a manual refresh');
+  older.resolve({ receipt: 'outdated' }); await settle();
+  assert.equal(f.data.value, retained); assert.equal(f.readAt.value, '');
+  newer.resolve({ receipt: 'current' }); await settle();
+  assert.equal(f.data.value.receipt, 'current'); assert.ok(f.readAt.value);
+});
+
+test('failed same-subject revalidation retains readable history until explicit recovery', async t => {
+  let calls = 0;
+  const f = await fixture(t, async () => ++calls === 1 ? { receipt: 'retained' } : calls === 2 ? Promise.reject(Error('Policy unavailable')) : { receipt: 'confirmed' });
+  f.observedRevision.value++; await settle();
+  assert.equal(f.data.value.receipt, 'retained'); assert.equal(f.readAt.value, '');
+  assert.match(f.error.value, /Policy unavailable/);
+  await f.refresh();
+  assert.equal(f.data.value.receipt, 'confirmed'); assert.ok(f.readAt.value); assert.equal(f.error.value, '');
+});
+
+test('identity and access changes still clear history while same-subject revalidation is pending', async t => {
+  const changed = deferred(), switched = deferred(); let calls = 0;
+  const f = await fixture(t, async () => ++calls === 1 ? { receipt: 'private' } : calls === 2 ? changed.promise : switched.promise);
+  f.observedRevision.value++; f.query.value = 'another-request';
+  assert.equal(f.data.value, null);
+  changed.resolve({ receipt: 'old-request' }); await settle(); assert.equal(f.data.value, null);
+  f.state.unlocked = false;
+  switched.resolve({ receipt: 'after-lock' }); await settle(); assert.equal(f.data.value, null); assert.equal(f.readAt.value, '');
+});
+
+
+test('a revision supersedes pending manual refresh and keeps decisions stale until its own response', async t => {
+  const manual = deferred(), revised = deferred(); let calls = 0;
+  const f = await fixture(t, async () => ++calls === 1 ? { receipt: 'saved' } : calls === 2 ? manual.promise : revised.promise);
+  const refresh = f.refresh(); assert.equal(f.refreshing.value, true);
+  f.observedRevision.value++;
+  assert.equal(calls, 3); assert.equal(f.refreshing.value, false); assert.equal(f.readAt.value, '');
+  manual.resolve({ receipt: 'old-manual' }); await refresh;
+  assert.equal(f.data.value.receipt, 'saved'); assert.equal(f.readAt.value, ''); assert.equal(f.loading.value, true);
+  revised.resolve({ receipt: 'new-revision' }); await settle();
+  assert.equal(f.data.value.receipt, 'new-revision'); assert.ok(f.readAt.value); assert.equal(f.loading.value, false);
 });

@@ -1,3 +1,6 @@
+import { assertNativeWorkReady } from './workspace-native-work.js';
+import { defaultDeliveryRetention } from '../application/delivery-retention.js';
+import { authorizeTaskDelivery } from './workspace-delivery-policy.js';
 import { lstat, realpath } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { object, identifier } from '../../shared/contracts.js';
@@ -20,7 +23,9 @@ function currentProcessTask(workspace: WorkspaceContext, scope: ServiceScope) {
   return task;
 }
 async function validateProcessScope(workspace: WorkspaceContext, scope: ServiceScope): Promise<void> {
-  const { repositoryId, repository } = currentProcessTask(workspace, scope);
+  const task = currentProcessTask(workspace, scope);
+  authorizeTaskDelivery(workspace, workspace.board.executionDetail(task.id));
+  const { repositoryId, repository } = task;
   const assignment = workspace.settings.value.repositories.items.find(item => item.id === repositoryId);
   const assigned = assignment ? { ...assignment } : undefined;
   const assignedPath = assigned?.path ?? repository;
@@ -36,12 +41,14 @@ async function validateProcessScope(workspace: WorkspaceContext, scope: ServiceS
   const currentAssignment = workspace.settings.value.repositories.items.find(item => item.id === current.repositoryId);
   if (current.repositoryId !== repositoryId || current.repository !== repository
     || (['id', 'path', 'remote', 'branch', 'watch'] as const).some(key => currentAssignment?.[key] !== assigned?.[key])) throw invalid();
+  authorizeTaskDelivery(workspace, workspace.board.executionDetail(current.id));
 }
 export async function initProcesses(workspace: WorkspaceContext) {
   workspace.processes = await createProcessSupervisor({ directory: workspace.config.stateDir,
     presets: () => { const policy = workspace.settings.toolPolicy().services; return policy?.enabled ? policy.presets : []; },
     maxActive: () => workspace.settings.toolPolicy().services?.maxActive ?? 4,
     validateScope: scope => validateProcessScope(workspace, scope),
+    temporaryLogHours: scope => scope.taskId ? workspace.board.executionDetail(scope.taskId).deliveryPolicy?.configuration.retention?.temporaryLogHours ?? defaultDeliveryRetention().temporaryLogHours : defaultDeliveryRetention().temporaryLogHours,
   });
   // Reconcile failures, archived requests and externally changed worktrees even when the UI is closed.
   workspace.processReconciliation = setInterval(() => { void workspace.processes?.reconcileGrants().catch(() => {}); }, 1000);
@@ -77,6 +84,7 @@ export async function processCommand(workspace: WorkspaceContext, input: unknown
   }
   if (!['stop', 'restart'].includes(String(body.action)) || body.after !== undefined || body.limit !== undefined || !Number.isSafeInteger(body.expectedRevision) || Number(body.expectedRevision) < 1) throw new DomainError('invalid_input', 'Use stop or restart with the current service revision and a unique operation ID.');
   const command = { id, expectedRevision: Number(body.expectedRevision), operationId: identifier(body.operationId, 'operation ID') };
+  if (body.action === 'restart') assertNativeWorkReady(workspace);
   const record = body.action === 'stop' ? await supervisor.stop(command) : await supervisor.restart(command);
   return { service: await projectService(workspace, record) };
 }

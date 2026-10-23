@@ -7,7 +7,7 @@ import { DomainError } from "../../shared/errors.js";
 
 import type { LocalTaskRuntime } from './local-task-runtime-contract.js';
 
-export async function action(host: Pick<LocalTaskRuntime, "preparations" | "tasks" | "preparationOwners" | "view" | "forgetPreparation" | "executionDetail" | "assertAcceptedSnapshots" | "running" | "sessions" | "context" | "interact" | "change" | "input" | "removeTaskWorktree">, input: unknown, expectedInteractionRevision?: number) {
+export async function action(host: Pick<LocalTaskRuntime, "preparations" | "tasks" | "preparationOwners" | "view" | "forgetPreparation" | "executionDetail" | "assertAcceptedSnapshots" | "running" | "sessions" | "context" | "interact" | "change" | "input" | "removeTaskWorktree" | "executeRequest">, input: unknown, expectedInteractionRevision?: number) {
     const body = object(input, "Task action", ["id", "action", "priority", "removeWorktree", "discardChanges"]);
     const id = String(body.id);
     for (const flag of ["removeWorktree", "discardChanges"] as const)
@@ -27,6 +27,23 @@ export async function action(host: Pick<LocalTaskRuntime, "preparations" | "task
       host.forgetPreparation(preparation);
       return host.view();
     }
+    const ownedTask = host.tasks.find(task => task.id === id);
+    const ownedRequest = ownedTask?.requestId ? host.sessions.requests.get(ownedTask.requestId) : undefined;
+    if (ownedTask && ownedRequest?.delivery && ['retry', 'cancel'].includes(String(body.action))) {
+      if (expectedInteractionRevision !== undefined) {
+        const interaction = host.sessions.interactions.view(ownedTask.sessionId);
+        if (interaction.revision !== expectedInteractionRevision || interaction.phase !== 'cancelled') return host.view();
+      }
+      const run = ownedRequest.delivery;
+      const action = body.action === 'cancel' ? 'cancel' : run.status === 'interrupted' || run.status === 'paused' ? 'resume' : 'retry';
+      if (!(action === 'cancel' && run.control?.action === 'cancel')) host.sessions.requests.command({ action, requestId: ownedRequest.id, expectedRevision: ownedRequest.revision, operationId: 'task-' + randomUUID(), deliveryRunId: run.id, inputRevision: ownedRequest.inputRevision });
+      if (action === 'cancel') {
+        host.running.get(id)?.controller.abort();
+        if (host.sessions.requests.get(ownedRequest.id).delivery?.status === 'cancelled') await host.change(tasks => { const task = tasks.find(item => item.id === id)!; task.status = 'cancelled'; task.finishedAt = new Date().toISOString(); task.error = 'Delivery cancelled by the operator.'; });
+      } else await host.executeRequest(ownedRequest.id);
+      return host.view();
+    }
+    if (ownedRequest?.delivery && ['archive', 'delete'].includes(String(body.action)) && ['running', 'pause_pending', 'paused', 'interrupting', 'outcome_unknown', 'reconciling'].includes(ownedRequest.delivery.status)) throw new DomainError('conflict', 'Stop and reconcile the delivery before archiving or deleting its retained workspace.');
     let worktree: { outcome: "removed" | "kept" | "not_applicable"; reason?: string } | undefined;
     if (body.action === "retry") {
       const task = host.executionDetail(id);
@@ -132,10 +149,10 @@ export async function action(host: Pick<LocalTaskRuntime, "preparations" | "task
             });
         }
       } else if (body.action === "priority") {
-        if (task.status !== "queued" || ![1, 2].includes(Number(body.priority)))
+        if (task.status !== "queued" || (!Number.isInteger(body.priority) || ![0, 1, 2, 3].includes(Number(body.priority))))
           throw new DomainError(
             "invalid_input",
-            "Only queued tasks can change priority (1 or 2)",
+            "Only queued tasks can change priority: 0 low, 1 normal, 2 high, 3 urgent",
           );
         task.priority = Number(body.priority);
       } else if (

@@ -2,15 +2,18 @@
 import UIcon from '@nuxt/ui/components/Icon.vue';
 import type { TaskOverviewItem } from '../task-overview';
 import { date } from '../store';
+import { taskPriorityLabel } from '../task-priority';
 defineProps<{ item: TaskOverviewItem; selected?: boolean; disabled?: boolean; compact?: boolean }>();
 defineEmits<{ open: [TaskOverviewItem] }>();
 </script>
 <template>
   <article class="overview-card" :class="[{ selected, compact }, 'task-group-' + item.group]" :aria-label="item.title">
-    <div class="overview-card-meta"><span class="task-source">{{ item.sourceLabel }}</span><span v-if="selected" class="task-selected">Selected</span></div>
+    <div class="overview-card-meta"><span class="task-source">{{ item.sourceLabel }}</span><span v-if="item.projectId">{{ item.projectId }}</span><span v-if="item.priority !== undefined">{{ taskPriorityLabel(item.priority) }} priority</span><span v-if="selected" class="task-selected">Selected</span></div>
     <div class="overview-card-title"><h3>{{ item.title }}</h3><span v-if="item.taskId" class="task-identity" :title="item.taskId" :aria-label="'Task ID: ' + item.taskId">{{ item.taskId }}</span></div>
     <div class="overview-status"><UIcon :name="item.group === 'attention' ? 'i-lucide-circle-alert' : item.group === 'completed' ? 'i-lucide-circle-check' : item.group === 'queued' ? 'i-lucide-clock-3' : 'i-lucide-file-pen-line'" />{{ item.statusLabel }}</div>
+    <p v-if="item.deliveryPhaseLabel" class="overview-phase">{{ item.deliveryPhaseLabel }}<template v-if="item.lifecycleLabel && item.lifecycleLabel !== item.statusLabel"> · {{ item.lifecycleLabel }}</template></p>
     <p class="overview-card-summary">{{ item.summary }}</p>
+    <p v-if="item.nextEvent" class="overview-next">Next: {{ item.nextEvent }}</p>
     <div class="overview-card-footer">
       <span v-if="item.provider" class="task-provider">{{ item.provider }}</span>
       <time v-else-if="item.updatedAt" :datetime="item.updatedAt">{{ date(item.updatedAt) }}</time>
@@ -30,6 +33,7 @@ h3 { margin: 13px 0 11px; font-size: 1.0625rem; line-height: 1.5; font-weight: 6
 .task-group-attention .overview-status { color: #edc47e; }
 .task-group-completed .overview-status { color: #8be0b8; }
 .overview-card-summary { margin: 12px 0 15px; font-size: .875rem; line-height: 1.65; color: #b5c4cd; overflow-wrap: anywhere; }
+.overview-phase, .overview-next { font-size: .75rem; color: var(--ui-text-muted); line-height: 1.65; overflow-wrap: anywhere; margin-block: var(--space-2); }
 .overview-card-footer { display: flex; align-items: center; gap: 8px; justify-content: space-between; flex-wrap: wrap; }
 .task-provider, time { font-size: .6875rem; color: #a4b7c2; }
 button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; border: 1px solid #40565e; border-radius: 6px; padding: 8px 12px; font-size: .75rem; font-weight: 550; color: #e1edf0; background: #23353e; cursor: pointer; text-decoration: none; }
@@ -40,6 +44,7 @@ button:disabled { opacity: .5; cursor: default; }
 .compact { display: grid; grid-template-columns: minmax(120px, .8fr) minmax(180px, 1.5fr) minmax(110px, .7fr) minmax(160px, 1fr); gap: 16px; align-items: center; padding: 14px 18px; }
 .compact h3 { margin: 0; font-size: .875rem; }
 .compact .overview-card-summary { display: none; }
+.compact .overview-phase, .compact .overview-next { grid-column: 2 / -1; }
 .overview-card-title { min-width: 0; }
 .compact .task-identity { margin: var(--space-1) 0 0; }
 .compact .overview-card-footer { justify-content: flex-end; }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createRepositoryWorktree, repositoryRoot } from '../../src/worker/dist/worker/infrastructure/repositories-git.js';
+import { prepareProcessRuntime } from '../../src/worker/dist/shared/process/launcher.js';
 import { cli, exists, git, project, temporary } from './project-worker-uninstall-fixture.mjs';
 
 test('tracking ignores case where Git does, so committed files under a differently cased folder stay', { timeout: 180000 }, async t => {
@@ -84,6 +85,8 @@ test('a folder holding a task worktree that stays is never removed', { timeout: 
   await mkdir(storage); await writeFile(join(cwd, '.werk/worker/webview-token'), 'c'.repeat(64));
   const config = JSON.parse(await readFile(join(cwd, '.werk/worker.json'), 'utf8'));
   await writeFile(join(cwd, '.werk/worker.json'), JSON.stringify({ ...config, repositories: { items: [{ id: 'other', path: other }], worktreeDirectory: storage } }), { mode: 0o600 });
+  // Prepare native containment before the unchanged root/worktree operation deadlines.
+  await prepareProcessRuntime(other, t.signal);
   const changed = await createRepositoryWorktree(await repositoryRoot(other, AbortSignal.timeout(30000)), 'other', 'changed-task', AbortSignal.timeout(60000), undefined, 30000, { directory: storage });
   await writeFile(join(changed.path, 'draft.txt'), 'unsaved\n');
   const preview = await cli(cwd, 'uninstall', '--dry-run');

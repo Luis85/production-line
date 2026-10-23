@@ -137,8 +137,9 @@ export function validateGatePolicy(value: unknown): GatePolicy {
           invalid("Unknown gate fact.");
         const type = gateFacts[rule.fact as GateFact];
         if (
-          !["eq", "neq", "gte", "lte"].includes(String(rule.op)) ||
-          (["gte", "lte"].includes(String(rule.op)) && type !== "number")
+          typeof rule.op !== "string" ||
+          !["eq", "neq", "gte", "lte"].includes(rule.op) ||
+          (["gte", "lte"].includes(rule.op) && type !== "number")
         )
           invalid("Unsupported operator for gate fact.");
         if (
@@ -178,7 +179,8 @@ export function validateGateInput(value: unknown): GateInput {
     "request input",
   );
   if (
-    !["chat", "patch"].includes(String(input.kind)) ||
+    typeof input.kind !== "string" ||
+    !["chat", "patch"].includes(input.kind) ||
     typeof input.title !== "string" ||
     input.title.length > 200 ||
     typeof input.message !== "string" ||
@@ -284,8 +286,9 @@ export function evaluateGate(
     } as GateRuleResult;
   });
   // Candidate verification is execution authority, not an optional custom policy rule.
-  // Absence preserves legacy proposal/chat behavior; only the coordinator emits false.
-  if (stage === "done" && facts["output.verificationPassed"] === false)
+  // Absence preserves legacy proposal/chat behavior. Eligibility is a separate trusted coordinator fact
+  // requiring exact candidate-bound, policy-permitted decisions; it never changes the observed result.
+  if (stage === "done" && facts["output.verificationPassed"] === false && facts["output.verificationEligible"] !== true)
     rules.push({
       ruleId: "worker-required-verification",
       fact: "output.verificationPassed",

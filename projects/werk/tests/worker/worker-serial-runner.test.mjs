@@ -32,13 +32,15 @@ test('remote execution shares the session gate, retains waiting leases while pau
   let run, completed = false, executions = 0, renewals = 0, startupElapsed = 0;
   const now = () => Date.now() + startupElapsed;
   const originalInit = WorkerWorkspace.prototype.init;
-  WorkerWorkspace.prototype.init = async function () {
-    await originalInit.call(this);
+  WorkerWorkspace.prototype.init = async function (options) {
+    await originalInit.call(this, options);
+    // Synthetic occupancy models an existing owner; this fixture never dispatches a model during startup.
+    releaseChat = await this.executor.acquire('default', stop.signal, { startupIndependent: true });
     // Startup may outlast a short lease on CI; advance the injected clock without sleeping.
     startupElapsed = 60000;
-    workspace = this; releaseChat = await this.executor.acquire('default', stop.signal);
+    workspace = this;
   };
-  t.after(async () => { stop.abort(); releaseChat?.(); await run; WorkerWorkspace.prototype.init = originalInit; await rm(directory, { recursive: true, force: true }); });
+  t.after(async () => { stop.abort(); releaseChat?.(); try { await run; } finally { WorkerWorkspace.prototype.init = originalInit; await rm(directory, { recursive: true, force: true }); } });
   /** @type {import('../../src/shared/domain.js').Task} */
   const task = { id: 'serial-task', project: 'alpha', title: 'Keep the actual request', criteria: ['Record the outcome'], wikilinks: [], provider: 'codex', priority: 1, status: 'running', attempt: 1, workerId: 'worker-one', lease: 'serial-lease', expiresAt: 0, createdAt: now(), profile: config.profiles[0].id };
   let claimed = false;
@@ -79,7 +81,7 @@ test('failed initial lease renewal cancels the prepared session when the assignm
   let workspace;
   let run, claimed = false, polls = 0, executions = 0, heartbeats = 0;
   const originalInit = WorkerWorkspace.prototype.init;
-  WorkerWorkspace.prototype.init = async function () { await originalInit.call(this); workspace = this; };
+  WorkerWorkspace.prototype.init = async function (options) { await originalInit.call(this, options); workspace = this; };
   t.after(async () => { stop.abort(); await run; WorkerWorkspace.prototype.init = originalInit; await rm(directory, { recursive: true, force: true }); });
   /** @type {import('../../src/shared/domain.js').Task} */
   const task = { id: 'withdrawn-task', project: 'alpha', title: 'Withdrawn before execution', criteria: ['Never execute'], wikilinks: [], provider: 'codex', priority: 1, status: 'running', attempt: 1, workerId: 'worker-one', lease: 'withdrawn-lease', expiresAt: 0, createdAt: Date.now(), profile: config.profiles[0].id };
@@ -120,7 +122,8 @@ test('runner mirrors orchestrator assignments into the feature folder without lo
   const gateway = { async register() { return { id: 'worker-one', token: 'fixture-token', project: 'alpha' }; }, connect() { return client; } };
   /** @type {import('../../src/shared/contracts.js').Adapter} */
   const adapter = { mode: 'mock', async run() { executions++; return { kind: 'simulated', summary: 'Remote fixture evidence' }; } };
-  run = runWorker({ ...config, stateDir, url: 'http://orchestrator.invalid', enrollmentToken: 'fixture-enrollment', statusHost: '127.0.0.1', statusPort: 0 }, stop.signal, { gateway, adapter });
+  // This projection fixture has only a mock adapter and local notes; separate cold-start tests own native setup.
+  run = runWorker({ ...config, stateDir, url: 'http://orchestrator.invalid', enrollmentToken: 'fixture-enrollment', statusHost: '127.0.0.1', statusPort: 0 }, stop.signal, { gateway, adapter, prepareProcessRuntime: async () => {} });
   const path = join(featureDir, 'remote-folder-assignment.md'); let body = '';
   await until(async () => { body = await readFile(path, 'utf8').catch(() => ''); return body.includes('status: completed'); });
   assert.equal(executions, 1); assert.match(body, /source: orchestrator/); assert.match(body, /Keep one authoritative assignment/); assert.ok(!body.includes(task.lease));

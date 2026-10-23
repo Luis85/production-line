@@ -148,9 +148,23 @@ Worker Taskboard is the first work surface after unlock. Cards combine session,
 file-task and project-request records by retained identity, preserving Local
 request, Assigned and Project request labels. Needs you makes questions,
 decisions, rework, reviews and failures prominent; Up next shows queued work.
-The Running now strip follows the shared executor's current session. Completed
-and Drafts are secondary disclosures. The layout does not use several apparently
-active columns to imply parallel execution.
+The Running now strip follows the shared executor's observed active sessions.
+Completed and Drafts are secondary disclosures. Reserved places for unknown
+outcomes remain visibly distinct from observed running work.
+
+Request detail is the delivery workspace: request input/revision, questions,
+activity, changes, verification and human decision remain attached to one Feature
+Request. Show lifecycle separately from run status and phase. A completed model
+invocation or delivery run is never labelled Accepted without a current-candidate
+human decision. Blocked views identify the reason, responsible actor and next
+available action without requiring transcript inspection.
+
+The behaviour inspector is read-only. It presents the selected branch/action,
+conditions, wait reason and bounded repair allowance. Pause intake and pause after
+step have distinct scope; interruption and cancellation remain pending until the
+actual outcome is known. Reconnect reconstructs durable state, and background
+polling preserves focus and typed answers. Markdown and webview commands share
+operation identity, source/revision guards and candidate evidence rules.
 
 The right-hand panel offers New request and Follow up for the selected task.
 Instructions, provider/agent choices and optional repository-file approval belong
@@ -168,24 +182,28 @@ queue/duration policy, tools, repositories and enrollment. Metrics holds observe
 consumption, process health and diagnostics; Taskboard owns capacity and new-start
 controls. Settings sections preserve unsubmitted drafts in the current tab; guarded policy saves detect stale baselines.
 
-One worker has exactly one execution slot shared by chat, explicit file tasks
-and remote assignments. Local admission includes preparation reservations and
-queued/running chat/file tasks; accepted remote leases use a separate buffer.
-Unadmitted project notes are not occupied queue places. Stale counts remain
-labelled as last reported, without an availability claim. Stop
-task stops the selected task through its supported controls. Pause new starts
-holds every new execution start while the active task finishes; it does not
-interrupt that model or drain waiting assignments. Pause updates stops automatic
-browser reads only. Scale parallel work with separate native or Docker workers.
-Only the worker prompts an LLM; Factory and orchestrator route work.
+One worker shares a configured machine ceiling of 1–8 operations across
+project-scoped work, with stricter project limits where configured. Unscoped
+legacy and orchestrator assignments remain exclusive. Local admission includes
+preparation reservations and queued/running work; accepted remote leases use a
+separate buffer. Unknown outcomes reserve execution capacity without implying
+live processes. Unadmitted project notes are not occupied queue places.
+Stale counts remain labelled as last reported, without an availability claim.
+Stop task targets the selected task through its supported controls. Pause new
+starts holds additional starts while active work continues its permitted steps;
+it does not interrupt models or drain waiting assignments. Pause updates stops
+browser reads only. Only the worker prompts an LLM; Factory and orchestrator
+route work.
 
 Monitoring distinguishes recorded provider/model snapshots from configured
 file-task or definition snapshots. Missing actual model, usage, cost and progress
 remain unavailable; a previous attempt's model is not evidence of a new running
 turn's model. Saved events, checkpoints and retained run evidence explain observed
 state. Live prompt edits, native provider resume and token streaming are not
-advertised. Local file-change tasks produce review patches without silently
-applying changes or running project tests. Simulation remains explicitly labelled.
+advertised. Implementation requests edit their owned worktree, run configured
+required checks and retain a candidate for review. Legacy proposal requests keep
+their accepted contract. Neither passing checks nor acceptance automatically
+merges changes into the developer checkout. Simulation remains explicitly labelled.
 
 Connection, loading, stale data and empty filters are distinct states. Operator
 tokens never enter URLs or browser storage. Factory/orchestrator views and their

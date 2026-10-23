@@ -1,4 +1,10 @@
-import { modelSelection, selectedConnection } from '../application/model-selection.js';
+import { assertNativeWorkReady } from './workspace-native-work.js';
+import { readyReviewProfile } from '../application/ready-review-selection.js';
+import { authorizeDeliveryPolicy, authorizeTaskDelivery } from './workspace-delivery-policy.js';
+import type { SharedFeatureIntake } from '../application/shared-feature-intake.js';
+import { DeliveryPolicyApprovals } from '../infrastructure/delivery-policy-approvals.js';
+import { WorkspaceProjectIntakes } from './workspace-projects.js';
+import { createProjectFeatureRuntime } from './workspace-project-features.js';
 import { DomainError } from '../../shared/errors.js';
 import { ReadyReviewManager } from '../application/ready-review.js';
 import { readyReviewModels } from '../infrastructure/ready-review-model.js';
@@ -12,7 +18,7 @@ import { WorkerConsumptionJournal } from '../infrastructure/journal/consumption.
 import { ProviderStatusChecks } from '../infrastructure/provider-status.js';
 import { createWorkerSessions, createLocalTaskboard } from '../infrastructure/workspace-services.js';
 import { ProviderAccountChecks } from '../infrastructure/provider-account.js';
-import { SharedIntakeRuntime } from '../infrastructure/features/shared-intake-runtime.js';
+import type { SharedIntakeRuntime } from '../infrastructure/features/shared-intake-runtime.js';
 import type { ExecutionProfilesControl } from '../application/execution-profiles.js';
 import { RepositoryDiscovery } from '../infrastructure/repository-discovery.js';
 import type { RepositoryConfiguration } from '../application/repositories.js';
@@ -23,9 +29,7 @@ import { WorkerResourceMonitor } from "../application/resource-monitor.js";
 import { WorkerResourceJournal } from "../infrastructure/journal/resource-events.js";
 import { resourceSampler } from "../infrastructure/resource-sampler.js";
 import { serviceEvent } from "../../shared/http/observability.js";
-import { FeatureRequests, type FeatureInput } from "../application/feature-requests.js";
-import { MarkdownFeatureFolder } from "../infrastructure/features/folder.js";
-import { definitionConnection } from "../application/definitions.js";
+import type { FeatureRequests } from "../application/feature-requests.js";
 import { WorkerSettings } from "../infrastructure/settings.js";
 import type { WorkerSessions } from "../application/sessions.js";
 import type { LocalTaskboard } from "../application/local-tasks.js";
@@ -34,10 +38,8 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import type { SnapshotJournal } from "../infrastructure/journal/snapshots.js";
 import type { Status } from "./server.js";
-import { task } from './workspace-tasks.js';
 import { sharedFeatureAdmissionHold } from './workspace-feature-admission.js';
-import { taskboardAction } from './workspace-task-views.js';
-import { featureTrackingSnapshot, inspectSharedFeature, submitSharedFeature, submitFeature, inspectFeature, continueFeatureInteraction } from './workspace-features.js';
+import { featureTrackingSnapshot } from './workspace-features.js';
 import { prepareTaskWorkspace, removeTaskWorkspace } from './workspace-repositories.js';
 import type { readHistory } from './workspace-environment.js';
 
@@ -58,17 +60,13 @@ export interface WorkspaceConfiguration {
     timeoutMs: number;
   }
 
-/** Admission refuses these selections; folder and shared intake report them before reserving or claiming a request. */
-function definitionIssue(workspace: WorkspaceContext, input: Pick<FeatureInput, 'provider' | 'definitionId' | 'definitionRef' | 'agent' | 'useInstructionsOnly'>) {
-  try { definitionConnection(workspace.settings.provider(input.provider), workspace.definitions.select({ definitionId: input.definitionId, definitionRef: input.definitionRef, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly })); return undefined; }
-  catch (error) { return error instanceof Error ? error.message : 'The selected agent definition is unavailable.'; }
-}
-
 /** Composition-owned services and coordination state; command modules retain their own policies. */
 export class WorkspaceContext {
   readonly executionProfiles?: ExecutionProfilesControl;
+  readonly deliveryApprovals: DeliveryPolicyApprovals;
+  readonly featureProjects: WorkspaceProjectIntakes;
   taskIndex: TaskIndex;
-  readonly features?: FeatureRequests;
+  get features(): FeatureRequests | undefined { return this.featureProjects.primary.features; }
   readonly featureTracking: FeatureTracking;
   readonly sharedRuntime: SharedIntakeRuntime;
   providerAccounts = new ProviderAccountChecks();
@@ -78,6 +76,8 @@ export class WorkspaceContext {
   configurationUpdating = false;
   repositoryPreparations = 0;
   repositoriesUpdating = false;
+  nativeWorkState: 'preparing' | 'starting' | 'ready' = 'ready';
+  releaseNativeWork?: () => void;
   repositoryStop = new AbortController();
   readonly resources: WorkerResourceMonitor;
   processes?: ProcessSupervisor;
@@ -123,6 +123,7 @@ export class WorkspaceContext {
     this.taskIndex = new TaskIndex(config.stateDir);
     this.config = config;
     this.executionProfiles = config.executionProfiles;
+    this.deliveryApprovals = new DeliveryPolicyApprovals(config.stateDir);
     this.journal = journal;
     this.get = get;
     this.settings = new WorkerSettings(
@@ -134,18 +135,18 @@ export class WorkspaceContext {
       config.features?.provider,
     );
     this.consumption = new WorkerConsumption(new WorkerConsumptionJournal(config.stateDir), () => this.settings.value.consumption);
-    this.repositories = new RepositoryManager(this.settings.value.repositories, { beforeRepositoryUse: item => this.repositoryDiscovery.assertAllowed(item.path), preserveCheckout: item => this.sharedRuntime?.intake.binding?.repositoryId === item.id || (this.sharedRuntime?.intake.requiredRepositoryIds().includes(item.id) ?? false) });
+    this.repositories = new RepositoryManager(this.settings.value.repositories, { beforeRepositoryUse: item => { if (this.nativeWorkState === 'preparing') assertNativeWorkReady(this); return this.repositoryDiscovery.assertAllowed(item.path); }, preserveCheckout: item => this.featureProjects?.preservesCheckout(item) ?? false });
     this.repositoryDiscovery = new RepositoryDiscovery(config.stateDir, config.integrationProjectDir ?? config.projectDir ?? process.cwd(), this.repositoryStop.signal, config.codex?.repository, config.features?.intake === 'local' ? false : undefined);
     this.sessions = createWorkerSessions(
       config.stateDir, this.settings, modelFor, undefined, () => this.board.active, this.consumption,
       { remote: () => { const status = this.get(); return { waiting: status.queuedTasks?.length ?? null, running: status.activeTasks.length }; } },
       { supervisor: () => this.processes, observations: this.processObservations },
-      { active: () => this.readyReviews?.active ?? 0, retainedSessionIds: () => this.sharedRuntime?.intake.readyReviewSessionIds() ?? [] },
+      { active: () => this.readyReviews?.active ?? 0, retainedSessionIds: () => this.featureProjects?.all().flatMap(project => { const intake: SharedFeatureIntake = project.sharedRuntime.intake; return intake.readyReviewSessionIds(); }) ?? [] },
     );
     this.sessions.featureSource = record => {
       const shared = record.kind === 'local' && record.id.startsWith('local-')
-        ? this.sharedRuntime?.intake.referenceForTask(record.id.slice(6), record.feature?.key) : undefined;
-      return shared ?? this.features?.referenceForSession(record.id, record.feature?.key);
+        ? this.featureProjects?.sharedForTask(record.id.slice(6), record.feature?.key)?.reference : undefined;
+      return shared ?? this.featureProjects?.forSession(record.id, record.feature?.key)?.reference;
     };
     this.board = createLocalTaskboard(
       config.stateDir,
@@ -157,12 +158,18 @@ export class WorkspaceContext {
         removeWorktree: (selector, key, signal, expected) => removeTaskWorkspace(this, selector, key, signal, expected),
       },
       undefined, this.consumption, { supervisor: () => this.processes, observations: this.processObservations },
+      task => authorizeTaskDelivery(this, task),
     );
     this.featureTracking = new FeatureTracking(new MarkdownFeatureTracking(
       config.features ? join(config.features.directory, '_tasks') : join(config.stateDir, 'feature-requests'), config.stateDir,
     ), () => featureTrackingSnapshot(this));
     this.sessions.featureTracking = this.featureTracking;
     this.reviews = new RequestReviewManager({
+      onReady: async id => {
+        const request = this.sessions.requests.get(id);
+        if (request.input.kind === 'patch') await this.board.executeRequest(id);
+        else await this.sessions.executeRequest(id);
+      },
       gates: this.sessions.requests,
       executor: this.executor,
       runs: this.sessions.runs,
@@ -182,12 +189,8 @@ export class WorkspaceContext {
       interactions: this.sessions.interactions, runs: this.sessions.runs, executor: this.executor,
       maxRuntimeMs: () => this.settings.value.execution.maxRuntimeMs,
       assertCanAdmit: () => { const hold = sharedFeatureAdmissionHold(this); if (hold) throw new DomainError('unavailable', hold.message); },
-      profile: input => {
-        const definition = this.definitions.select({ definitionId: input.definitionId, definitionRef: input.definitionRef, agent: input.agent, useInstructionsOnly: input.useInstructionsOnly });
-        const current = this.settings.provider(input.provider);
-        const connection = input.selection ? selectedConnection(current, input.selection, definition) : definitionConnection(current, definition);
-        return { id: connection.id, model: connection.model, instruction: connection.instruction ?? '', ...(connection.effort === undefined ? {} : { effort: connection.effort }) };
-      },
+      authorize: authority => authorizeDeliveryPolicy(this, authority.repositoryId, authority.configurationDigest),
+      profile: input => readyReviewProfile(input, this.settings.provider(input.provider), selectors => this.definitions.select(selectors)),
       model: readyReviewModels(config.stateDir, this.settings, this.consumption, this.sessions.runs, this.processObservations),
     });
     this.sessions.onRequestChanged = (id) => {
@@ -199,16 +202,7 @@ export class WorkspaceContext {
       store: new WorkerResourceJournal(config.stateDir),
       read: resourceSampler(config.stateDir),
       policy: () => this.settings.value.resources,
-      active: () =>
-        this.executor.current &&
-        this.executor.startedAt !== null &&
-        this.executor.startedMonotonicAt !== null
-          ? {
-              sessionId: this.executor.current,
-              startedAt: this.executor.startedAt,
-              monotonicStartedAt: this.executor.startedMonotonicAt,
-            }
-          : null,
+      active: () => this.executor.executions,
       log: (event) =>
         serviceEvent(
           "worker",
@@ -216,42 +210,11 @@ export class WorkspaceContext {
           event === "resource_alert_resolved" ? "info" : "warn",
         ),
     });
-    this.sharedRuntime = new SharedIntakeRuntime({
-      stateDirectory: config.stateDir,
-      resolve: id => this.repositories.resolve(id),
-      allowed: path => this.repositoryDiscovery.assertAllowed(path),
-      canAdmit: () => !sharedFeatureAdmissionHold(this),
-      admissionHold: () => sharedFeatureAdmissionHold(this),
-      submit: record => submitSharedFeature(this, record),
-      readyReview: this.readyReviews,
-      defaultProvider: () => this.settings.value.defaultProvider,
-      resolveSelection: input => modelSelection(this.settings.provider(input.provider), input, this.definitions.select({ ...input })),
-      continue: (record, command) => continueFeatureInteraction(this, this.board.executionDetail(record.taskId!).sessionId, command),
-      admissionIssue: input => definitionIssue(this, input),
-      inspect: id => inspectSharedFeature(this, id),
+    const primary = createProjectFeatureRuntime(this, {
+      primary: true, repository: config.projectDir ?? process.cwd(), stateDirectory: config.stateDir,
+      ...(config.features ? { directory: config.features.directory } : {}), pollMs: config.features?.pollMs ?? 1000,
     });
-    if (config.features)
-      this.features = new FeatureRequests(
-        new MarkdownFeatureFolder(
-          config.features.directory,
-          config.stateDir,
-          () => this.settings.value.defaultProvider,
-          config.projectDir ?? process.cwd(),
-        ),
-        {
-          selection: input => modelSelection(this.settings.provider(input.provider), input, this.definitions.select({ ...input })),
-          submit: (record) => submitFeature(this, record),
-          admissionIssue: input => definitionIssue(this, input),
-          inspect: (record) => inspectFeature(this, record),
-          reference: id => this.sessions.view().records.find(record => record.id === id)?.feature,
-          interact: (record, command) => continueFeatureInteraction(this, record.sessionId, command),
-          control: (record, action) =>
-            record.input?.mode === "patch"
-              ? taskboardAction(this, { id: record.taskId, action })
-              : task(this, { id: record.sessionId, action }),
-        },
-        config.features.pollMs,
-        () => !this.sharedRuntime.intake.binding?.repositoryId,
-      );
+    this.sharedRuntime = primary.sharedRuntime;
+    this.featureProjects = new WorkspaceProjectIntakes(this, primary);
   }
 }

@@ -1,3 +1,8 @@
+import type { DeliveryReadinessState, DeliveryReadinessResult, deliveryReadinessView } from './delivery-readiness.js';
+import type { DeliveryCriterionDecisionInput } from './delivery-criterion-decisions.js';
+import type { DeliveryEventMeasurement } from './delivery-metrics-contracts.js';
+import type { DeliveryHumanOutcome } from './delivery-review-contracts.js';
+import type { DeliveryLifecycle, DeliveryRun, DeliveryStopObservation, DeliveryUpdate } from './delivery-contracts.js';
 import type {
   ModelProvider,
   ModelResult,
@@ -32,6 +37,7 @@ export const gateFacts = {
   "output.patchPresent": "boolean",
   "output.changedFileCount": "number",
   "output.verificationPassed": "boolean",
+  "output.verificationEligible": "boolean",
   "output.requiredCheckCount": "number",
   "output.candidateDigest": "string",
   "execution.recoverySafe": "boolean",
@@ -89,6 +95,7 @@ export interface GateRuleResult {
   result: "pass" | "fail" | "unknown";
 }
 export interface GateEvaluation {
+  readiness?: ReturnType<typeof deliveryReadinessView>;
   id: string;
   stage: GateStage;
   inputRevision: number;
@@ -139,6 +146,7 @@ export interface GateReviewIntent {
       blocking?: boolean;
     }[];
     summary: string;
+    readiness?: DeliveryReadinessResult;
     candidate?: GateInput;
   } | null;
   usage: ProviderUsage | null;
@@ -163,6 +171,11 @@ export interface RequestExecution {
   facts: GateFactSnapshot;
 }
 export interface WorkerRequest {
+  readiness?: DeliveryReadinessState;
+  lifecycle?: DeliveryLifecycle;
+  delivery?: DeliveryRun;
+  deliveryHistory?: DeliveryRun[];
+  deliveryHolds?: { code: string; reason: string }[];
   schemaVersion: 1;
   id: string;
   owner: RequestOwner;
@@ -193,6 +206,8 @@ export interface WorkerRequest {
   } | null;
 }
 export interface RequestSummary {
+  lifecycle?: DeliveryLifecycle;
+  delivery?: Pick<DeliveryRun, 'id' | 'status' | 'phase' | 'decision' | 'allowedControls'>;
   id: string;
   owner: RequestOwner;
   revision: number;
@@ -206,6 +221,9 @@ export interface RequestSummary {
   updatedAt: string;
 }
 export interface RequestEvent {
+  measurement?: DeliveryEventMeasurement;
+  deliveryRunId?: string;
+  deliveryStepId?: string;
   schemaVersion: 1;
   id: string;
   sequence: number;
@@ -229,10 +247,33 @@ export interface RequestCommand {
     | "propose"
     | "accept_candidate"
     | "rework"
-    | "cancel";
+    | "cancel"
+    | "pause_after_step"
+    | "interrupt"
+    | "resume"
+    | "retry"
+    | "reopen"
+    | "request_changes"
+    | "confirm_stopped"
+    | "readiness_decision"
+    | "criterion_decision"
+    | "push_candidate"
+    | "create_pull_request"
+    | "reconcile_publication";
   requestId: string;
   expectedRevision: number;
   operationId: string;
+  publicationOperationId?: string;
+  assessmentId?: string;
+  proposalId?: string;
+  decision?: 'accepted' | 'rejected';
+  criterionDecision?: DeliveryCriterionDecisionInput;
+  reviewDurationMinutes?: number;
+  candidateCommit?: string;
+  candidateDigest?: string;
+  humanOutcomes?: Omit<DeliveryHumanOutcome, 'actor' | 'at'>[];
+  deliveryRunId?: string;
+  inputRevision?: number;
   stage?: GateStage;
   assignee?: "operator" | "llm";
   note?: string;
@@ -250,10 +291,12 @@ export interface RequestGatePort {
     policy?: GatePolicy;
   }): WorkerRequest;
   get(id: string): WorkerRequest;
+  deliveryUpdate(id: string, update: DeliveryUpdate): WorkerRequest;
+  reviseInput(id: string, input: GateInput): WorkerRequest;
   forTurn(sessionId: string, turnId: string): WorkerRequest | undefined;
   forSession(sessionId: string): WorkerRequest | undefined;
   hasActiveReview(sessionId: string): boolean;
-  bindTurn(id: string, turnId: string, inputRevision?: number): WorkerRequest;
+  bindTurn(id: string, turnId: string, inputRevision?: number, answeredTurnId?: string): WorkerRequest;
   evaluate(id: string, stage: GateStage): GateEvaluation;
   prepareExecution(id: string, turnId: string, runId: string): WorkerRequest;
   startExecution(id: string, turnId: string, runId: string): WorkerRequest;
@@ -270,7 +313,8 @@ export interface RequestGatePort {
     turnId: string,
     status: "failed" | "cancelled" | "interrupted",
   ): WorkerRequest;
-  command(input: RequestCommand): {
+  replayCommand(input: RequestCommand): { request: WorkerRequest; duplicate: true } | undefined;
+  command(input: RequestCommand, stopped?: DeliveryStopObservation): {
     request: WorkerRequest;
     duplicate: boolean;
   };

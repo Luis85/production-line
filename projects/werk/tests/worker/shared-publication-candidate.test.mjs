@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -12,6 +13,8 @@ import { defaultToolPolicy, validateToolPolicy } from '../../src/worker/dist/wor
 import { developmentScopeView, developmentVerified, freezeDevelopmentScope, validateDevelopmentState } from '../../src/worker/dist/worker/application/development.js';
 import { sharedFeaturePublicationIssue, sharedFeaturePublicationLimits } from '../../src/worker/dist/worker/application/shared-feature-publication-limits.js';
 import { cleanup } from './fixture-cleanup.mjs';
+
+prepareNativeProcessFixture();
 
 const signal = () => new AbortController().signal;
 const git = (directory, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-C', directory, ...args], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();

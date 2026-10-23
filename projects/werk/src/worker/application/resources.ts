@@ -20,7 +20,7 @@ export function validateResourcePolicy(input: unknown): ResourcePolicy {
   }
   return { ...value };
 }
-export interface ActiveExecution { sessionId: string; startedAt: number; monotonicStartedAt: number; }
+export interface ActiveExecution { projectId?: string | null; sessionId: string; startedAt: number; monotonicStartedAt: number; }
 export interface ResourceReading {
   processId: number;
   processStartId: string;
@@ -43,6 +43,7 @@ export interface ResourceSnapshot extends Omit<ResourceReading, 'monotonicMs' | 
   cpuCores: number | null;
   cpuPercent: number | null;
   active: { sessionId: string; startedAt: string; elapsedMs: number } | null;
+  activeExecutions?: Array<{ sessionId: string; projectId: string | null; startedAt: string; elapsedMs: number }>;
 }
 export type ResourceAlertCode = 'memory' | 'heap' | 'cpu' | 'disk' | 'long_running';
 export interface ResourceAlert {

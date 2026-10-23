@@ -5,7 +5,7 @@ interface MonitorDependencies {
   store: ResourceEventStore;
   read: () => Promise<ResourceReading>;
   policy: () => ResourcePolicy;
-  active: () => ActiveExecution | null;
+  active: () => ActiveExecution | ActiveExecution[] | null;
   now?: () => number;
   log?: (event: 'resource_alert_opened' | 'resource_alert_resolved' | 'resource_sample_error') => void;
   intervalMs?: number;
@@ -59,12 +59,14 @@ export class WorkerResourceMonitor {
     const cpuPercent = cpuCores === null || reading.cpuCapacityCores <= 0 ? null : cpuCores / reading.cpuCapacityCores * 100;
     if (!prior || prior.processStartId !== reading.processStartId || elapsed <= 0 || cpuDelta < 0) this.cpuHighSince = null;
     this.previous = reading;
-    const active = this.dependencies.active();
+    const observation = this.dependencies.active();
+    const executions = (Array.isArray(observation) ? observation : observation ? [observation] : []).map(active => ({ sessionId: active.sessionId, projectId: active.projectId ?? null, startedAt: new Date(active.startedAt).toISOString(), elapsedMs: Math.max(0, reading.monotonicMs - active.monotonicStartedAt) }));
+    const first = executions[0];
     const { monotonicMs: _clock, cpuTotalMicros: _cpu, ...measurements } = reading;
-    this.snapshot = { ...measurements, capturedAt: new Date(now).toISOString(), scope: 'worker_node_process', cpuCapacityBasis: 'available_parallelism', cpuCores, cpuPercent, active: active ? { sessionId: active.sessionId, startedAt: new Date(active.startedAt).toISOString(), elapsedMs: Math.max(0, reading.monotonicMs - active.monotonicStartedAt) } : null };
+    this.snapshot = { ...measurements, capturedAt: new Date(now).toISOString(), scope: 'worker_node_process', cpuCapacityBasis: 'available_parallelism', cpuCores, cpuPercent, active: first ? { sessionId: first.sessionId, startedAt: first.startedAt, elapsedMs: first.elapsedMs } : null, ...(Array.isArray(observation) ? { activeExecutions: executions } : {}) };
     this.sampleError = reading.unavailable.length > 0;
     this.sampleErrorReason = this.sampleError ? 'measurement_unavailable' : null;
-    const policy = this.dependencies.policy(), snapshot = this.snapshot;
+    const policy = this.dependencies.policy();
     try {
       const ratio = (used: number, total: number | null) => total && total > 0 ? used / total * 100 : null;
       this.pressure('memory', ratio(reading.rssBytes, reading.effectiveMemoryLimitBytes), policy.memoryPercent);
@@ -82,9 +84,9 @@ export class WorkerResourceMonitor {
         const required = Math.max(policy.diskFreeBytes, reading.diskTotalBytes * policy.diskFreePercent / 100);
         this.condition('disk', reading.diskAvailableBytes < required, reading.diskAvailableBytes > required / 0.9, reading.diskAvailableBytes, required);
       }
-      const long = this.dependencies.store.active().find(alert => alert.code === 'long_running');
-      if (long && (!snapshot.active || long.sessionId !== snapshot.active.sessionId || long.executionStartedAt !== snapshot.active.startedAt)) this.resolve(long, 'execution_finished');
-      if (snapshot.active) this.condition('long_running', snapshot.active.elapsedMs >= policy.longRunningMs, false, snapshot.active.elapsedMs, policy.longRunningMs, snapshot.active.sessionId);
+      for (const long of this.dependencies.store.active().filter(alert => alert.code === 'long_running'))
+        if (!executions.some(active => long.sessionId === active.sessionId && long.executionStartedAt === active.startedAt)) this.resolve(long, 'execution_finished');
+      for (const active of executions) this.condition('long_running', active.elapsedMs >= policy.longRunningMs, false, active.elapsedMs, policy.longRunningMs, active.sessionId, active.startedAt);
       this.persistenceError = false;
     } catch { this.persistenceError = true; }
   }
@@ -102,11 +104,11 @@ export class WorkerResourceMonitor {
   private pressure(code: ResourceAlertCode, observed: number | null, threshold: number, allowOpen = true) {
     if (observed !== null) this.condition(code, allowOpen && observed >= threshold, observed < threshold * 0.9, observed, threshold);
   }
-  private condition(code: ResourceAlertCode, open: boolean, recovered: boolean, observed: number, threshold: number, sessionId?: string) {
-    const existing = this.dependencies.store.active().find(alert => alert.code === code);
+  private condition(code: ResourceAlertCode, open: boolean, recovered: boolean, observed: number, threshold: number, sessionId?: string, executionStartedAt?: string) {
+    const existing = this.dependencies.store.active().find(alert => alert.code === code && alert.sessionId === sessionId);
     if (existing && recovered) this.resolve({ ...existing, observed, threshold }, 'recovered');
     else if (!existing && open) {
-      const alert: ResourceAlert = { id: randomUUID(), code, severity: 'warning', openedAt: this.snapshot!.capturedAt, observed, threshold, ...(sessionId ? { sessionId, executionStartedAt: this.snapshot!.active!.startedAt } : {}) };
+      const alert: ResourceAlert = { id: randomUUID(), code, severity: 'warning', openedAt: this.snapshot!.capturedAt, observed, threshold, ...(sessionId ? { sessionId, executionStartedAt: executionStartedAt! } : {}) };
       this.dependencies.store.transition(alert, 'opened', 'threshold', this.snapshot!.capturedAt);
       this.dependencies.log?.('resource_alert_opened');
     }

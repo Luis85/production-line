@@ -16,6 +16,7 @@ export interface DelegationReceipt {
   result?: ModelResult;
   usage?: ProviderUsage;
   error?: string;
+  errorCode?: 'outcome_unknown' | 'process_stop_unconfirmed';
 }
 export interface DelegationPorts {
   runChild(input: DelegationChildInput): Promise<DelegationChildResult>;

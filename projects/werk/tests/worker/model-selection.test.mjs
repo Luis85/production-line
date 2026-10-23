@@ -52,7 +52,7 @@ test('prepared request and reviewer journal retain effort and reject a changed r
   const intent = journal.queuedReviews()[0]; assert.equal(intent.provider.effort, 'high');
   const model = { configuration: accepted, async reply() { throw Error('No model calls'); } };
   const dispatch = prepareModelRequest(model, messages); assert.equal(dispatch.provider.effort, 'high');
-  assert.throws(() => journal.startReview(request.id, intent.id, 'review-run', { ...dispatch, provider: { ...dispatch.provider, effort: 'medium' } }), /frozen provider or model or effort/);
+  assert.throws(() => journal.startReview(request.id, intent.id, 'review-run', { ...dispatch, provider: { ...dispatch.provider, effort: 'medium' } }), { code: 'conflict', message: 'Reviewer dispatch changed its frozen provider, model, effort or authentication mode.' });
   assert.equal(journal.queuedReviews().length, 1, 'rejected selection does not consume a queued review');
   journal.startReview(request.id, intent.id, 'review-run', dispatch);
   assert.equal(journal.get(request.id).reviews[0].dispatch?.provider.effort, 'high');

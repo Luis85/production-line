@@ -1,3 +1,4 @@
+import { prepareProcessRuntime } from '../../shared/process/launcher.js';
 import type { ModelSessionAccess } from '../application/model-session.js';
 import { ProviderModelError, type ModelInvocationControl, type ModelRequest } from '../application/model-contract.js';
 import type { ToolManifest, ToolRuntime } from '../application/tool-runtime.js';
@@ -17,9 +18,13 @@ function sameManifest(saved: ToolManifest | undefined, current: ToolManifest): b
 /** The saved dispatch carries descriptions, never authority. Only the current runtime can execute tools. */
 export async function withProviderTools<T>(request: ModelRequest, signal: AbortSignal, factory: ToolRuntimeFactory | undefined, run: (runtime: ToolRuntime | undefined, signal: AbortSignal) => Promise<T>, control?: ModelInvocationControl): Promise<T> {
   const runtime = factory?.(request.policy);
-  const bounded = request.policy.maxRuntimeMs ? AbortSignal.any([signal, AbortSignal.timeout(request.policy.maxRuntimeMs)]) : signal;
+  const bounded = AbortSignal.any([signal, ...(request.policy.maxRuntimeMs ? [AbortSignal.timeout(request.policy.maxRuntimeMs)] : []), ...(runtime?.failureSignal ? [runtime.failureSignal] : [])]);
   try {
     if ((request.policy.tools === 'granted' || request.policy.tools === 'provider_native' && request.toolManifest !== undefined) && (!runtime || !sameManifest(request.toolManifest, runtime.manifest))) throw new ProviderModelError('tool_access');
+    if (runtime && runtime.requiresProcessRuntime !== false && request.policy.tools !== 'none') {
+      try { await prepareProcessRuntime(process.cwd(), bounded); }
+      catch { throw new ProviderModelError(bounded.aborted ? 'cancelled' : 'unavailable'); }
+    }
     const result = await run(request.policy.tools !== 'none' ? runtime : undefined, bounded);
     if (bounded.aborted) throw new ProviderModelError('cancelled');
     return result;

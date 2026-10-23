@@ -1,3 +1,6 @@
+import { providerAuthenticationEnvironment, requireProviderAuthentication, requireAuthenticationSelection } from './provider-authentication.js';
+import { structuredProviderFailure } from './provider-failures.js';
+import type { ProviderConnection } from '../application/provider-contract.js';
 import type { ModelEffort } from '../application/model-effort.js';
 import type { ModelSessionAccess } from '../application/model-session.js';
 import { withReplaySession } from './native-session.js';
@@ -31,11 +34,13 @@ export class CodexConversationModel implements StructuredModel {
   readonly configuration;
   readonly sessionBinding;
   private readonly session?: ModelSessionAccess;
+  private readonly connection?: ProviderConnection;
   private executable: string; private directory: string; private readonly tools?: ToolRuntimeFactory;
-  constructor(executable: string, directory: string, instruction = '', model = '', tools?: ToolRuntimeFactory, session?: ModelSessionAccess, effort?: ModelEffort) { this.session = session; this.sessionBinding = session ? structuredClone(session.binding) : undefined; this.executable = executable; this.directory = directory; this.tools = tools; this.configuration = Object.freeze({ id: 'codex-cli', model, instruction, ...(effort === undefined ? {} : { effort }) }); }
+  constructor(executable: string, directory: string, instruction = '', model = '', tools?: ToolRuntimeFactory, session?: ModelSessionAccess, effort?: ModelEffort, connection?: ProviderConnection) { this.connection = connection; this.session = session; this.sessionBinding = session ? structuredClone(session.binding) : undefined; this.executable = executable; this.directory = directory; this.tools = tools; this.configuration = Object.freeze({ id: 'codex-cli', model, instruction, ...(connection?.authenticationMode ? { authenticationMode: connection.authenticationMode } : {}), ...(effort === undefined ? {} : { effort }) }); }
   reply(messages: ChatMessage[], signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void) { return legacyModelReply(this, messages, signal, onUsage); }
   async execute(request: ModelRequest, signal: AbortSignal, onUsage?: (usage: ProviderUsage) => void, control?: ModelInvocationControl) {
     requireModelRequest(request, 'codex-cli');
+    if (this.connection) { requireAuthenticationSelection(this.connection, request.provider.authenticationMode); await requireProviderAuthentication(this.connection, signal); }
     return observeModelInvocation(signal, onUsage, observe => withProviderTools(request, signal, this.tools, (runtime, bounded) => withReplaySession(request, this.session, this.executable, bounded, control, async guarded => {
       const workspace = join(resolve(this.directory), 'chat-workspace');
       await ensureDirectory(workspace);
@@ -43,14 +48,14 @@ export class CodexConversationModel implements StructuredModel {
       try {
       const output = await withCliToolBridge(runtime, bounded, bridge => {
         guarded?.beforeCall();
-        return providerCommand(this.executable, ['exec', ...(request.provider.model ? ['--model', request.provider.model] : []), ...(request.provider.effort && request.provider.effort !== 'default' ? ['-c', 'model_reasoning_effort=' + JSON.stringify(request.provider.effort)] : []), '--ignore-user-config', '--ephemeral', '--skip-git-repo-check', '--sandbox', 'read-only', '--json', '--disable', 'shell_tool', '--disable', 'unified_exec', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'code_mode', '--disable', 'multi_agent', '-c', 'approval_policy="never"', '-c', 'web_search="disabled"', '-c', 'project_doc_max_bytes=0', '-c', 'shell_environment_policy.inherit="none"', ...(bridge ? ['-c', bridge.codexConfig] : []), '-C', cwd, '-'], cwd, bounded, request.renderedPrompt, true, 'codex', output => codexUsage(output, observe));
+        return providerCommand(this.executable, ['exec', ...(this.connection?.authenticationMode ? ['-c', 'forced_login_method=' + JSON.stringify(this.connection.authenticationMode === 'cli-account' ? 'chatgpt' : 'api')] : []), ...(request.provider.model ? ['--model', request.provider.model] : []), ...(request.provider.effort && request.provider.effort !== 'default' ? ['-c', 'model_reasoning_effort=' + JSON.stringify(request.provider.effort)] : []), '--ignore-user-config', '--ephemeral', '--skip-git-repo-check', '--sandbox', 'read-only', '--json', '--disable', 'shell_tool', '--disable', 'unified_exec', '--disable', 'apps', '--disable', 'browser_use', '--disable', 'computer_use', '--disable', 'code_mode', '--disable', 'multi_agent', '-c', 'approval_policy="never"', '-c', 'web_search="disabled"', '-c', 'project_doc_max_bytes=0', '-c', 'shell_environment_policy.inherit="none"', ...(bridge ? ['-c', bridge.codexConfig] : []), '-C', cwd, '-'], cwd, bounded, request.renderedPrompt, true, 'codex', output => codexUsage(output, observe), this.connection ? providerAuthenticationEnvironment(this.connection) : {});
       });
       const replies: string[] = [];
       for (const line of output.toString('utf8').split('\n')) {
         if (!line.trim()) continue;
         let event; try { event = JSON.parse(line); } catch { throw new ProviderModelError('protocol'); }
         if (!event || typeof event !== 'object' || typeof event.type !== 'string') throw new ProviderModelError('protocol');
-        if (event.type === 'error' || event.type === 'turn.failed') throw new ProviderModelError('unavailable');
+        const failure = structuredProviderFailure(event); if (failure) throw failure;
         if (!['thread.started', 'turn.started', 'turn.completed', 'item.started', 'item.updated', 'item.completed'].includes(event.type)) throw new ProviderModelError('protocol');
         // Unknown native capabilities stay forbidden; MCP events must name this worker bridge and an exposed tool.
         if (event.type.startsWith('item.')) {

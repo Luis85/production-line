@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import { completedText } from './model-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,6 +14,8 @@ import { providerCommand } from '../../src/worker/dist/worker/infrastructure/cod
 import { prepareModelRequest, executeModel, modelCapabilities } from '../../src/worker/dist/worker/application/model-contract.js';
 import { WorkerSettings } from '../../src/worker/dist/worker/infrastructure/settings.js';
 import { WorkerSessions } from './application-fixtures.mjs';
+
+prepareNativeProcessFixture();
 
 const signal = () => new AbortController().signal;
 const exhaustedPattern = /^Tool budget exhausted \(4 calls \/ 120 s window\): the 4-call limit of this invocation is reached\. No further tool calls will run in this invocation\. Finish with the information you have, or ask the operator with a werkInteraction question\.$/;
@@ -98,13 +101,14 @@ test('API tool loops deliver the refusal, let the model finish, report evidence 
 });
 
 test('the CLI bridge returns budget refusals as MCP tool errors instead of dropping the call', { timeout: 30000 }, async t => {
-  const { create } = await fixture(t);
+  const { create, directory } = await fixture(t);
   const runtime = create({ maxCalls: 1 });
   let privateFile;
   const output = await withCliToolBridge(runtime, AbortSignal.timeout(20000), async bridge => {
     privateFile = bridge.args[1];
     const input = [1, 2, 3].map(id => JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'werk_files_list', arguments: {} } })).join('\n') + '\n';
-    return providerCommand(bridge.command, bridge.args, tmpdir(), AbortSignal.timeout(15000), input, true, 'claude');
+    // A fixture cwd keeps the target outside the supervisor's private cache storage.
+    return providerCommand(bridge.command, bridge.args, directory, AbortSignal.timeout(15000), input, true, 'claude');
   });
   const responses = output.toString('utf8').trim().split('\n').map(value => JSON.parse(value));
   assert.equal(responses.length, 3);

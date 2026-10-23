@@ -11,7 +11,7 @@ export default meta;
 type Story = StoryObj;
 function render(settings = false, cursor = false) { return () => ({ setup() {
   installWorkerFixture(settings ? 'settings-ready' : 'empty');
-  state.settings!.providers.push({ id: 'cursor-cli', label: 'Cursor CLI', executable: '/example/bin/agent', model: 'auto', effort: 'default', configured: true, hasApiKey: false, authentication: 'Illustrative local Cursor login; not checked' });
+  state.settings!.providers.push({ id: 'cursor-cli', label: 'Cursor CLI', executable: '/example/bin/agent', model: 'auto', effort: 'default', configured: true, hasApiKey: false, authenticationMode: 'cli-account', authentication: 'Illustrative local Cursor login; not checked' });
   state.settings!.providers[0].effort = 'medium';
   if (cursor) state.settings!.defaultProvider = 'cursor-cli';
   return () => h(UApp, null, { default: () => h('main', { style: 'max-width:760px;margin:auto;padding:24px;min-width:0' }, [h('p', { class: 'page-note' }, 'Illustrative example · no provider sign-in, settings write or model call'), h(settings ? SettingsPanel : TaskIntake, settings ? { providerOnly: true } : {})]) });
@@ -57,7 +57,10 @@ export const WorkerDefaults: Story = {
     const query = within(canvasElement);
     await choose(canvasElement, '#provider-connection', 'Cursor CLI');
     await query.findByText('agent login', { exact: true });
-    if (!query.getByLabelText('API key · optional', { exact: true }) || !query.getByLabelText('Remove saved API key')) throw Error('Cursor key controls missing.');
+    if (query.queryByLabelText('API key', { exact: true })) throw Error('Account mode must not silently offer an API-key fallback.');
+    await choose(canvasElement, '#provider-authentication', 'API key · metered billing');
+    if (!query.getByLabelText('API key', { exact: true }) || !query.getByLabelText('Remove saved API key')) throw Error('Explicit API-key mode controls missing.');
+    if (query.queryByText('agent login', { exact: true })) throw Error('API-key mode must not advertise a subscription fallback.');
     const model = query.getByLabelText('Default model', { exact: true }) as HTMLInputElement;
     if (model.value !== 'auto') throw Error('Saved Cursor model default was not loaded.');
     await userEvent.clear(model); await userEvent.type(model, 'team-cursor-model');

@@ -1,0 +1,48 @@
+(node:691299) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 1107 modules transformed.
+rendering chunks...
+computing gzip size...
+../.build-691299/worker/public/index.html                                      0.55 kB │ gzip:   0.35 kB
+../.build-691299/worker/public/assets/delivery-behavior-view-3eoNHjoL.css      0.53 kB │ gzip:   0.29 kB
+../.build-691299/worker/public/assets/AssistantMessage-Cq7YjiTy.css            1.68 kB │ gzip:   0.58 kB
+../.build-691299/worker/public/assets/RepositoryDiscovery-CyFX638W.css         1.76 kB │ gzip:   0.60 kB
+../.build-691299/worker/public/assets/shared-ready-review-view-BBR4wEGe.css    3.32 kB │ gzip:   0.89 kB
+../.build-691299/worker/public/assets/HistoryPage-ITrnikeE.css                 4.48 kB │ gzip:   1.14 kB
+../.build-691299/worker/public/assets/ReviewPage-BU7Krd3c.css                 16.95 kB │ gzip:   2.65 kB
+../.build-691299/worker/public/assets/RequestGatePanel-CDkY9Px_.css           17.75 kB │ gzip:   3.07 kB
+../.build-691299/worker/public/assets/MonitoringPage-C5DIwYBw.css             23.98 kB │ gzip:   3.90 kB
+../.build-691299/worker/public/assets/TaskboardPage-BJh7Jvzz.css              30.33 kB │ gzip:   5.57 kB
+../.build-691299/worker/public/assets/SettingsPage-GlHI92HB.css               32.18 kB │ gzip:   4.86 kB
+../.build-691299/worker/public/assets/index-DRbxC2Nj.css                     231.58 kB │ gzip:  32.86 kB
+../.build-691299/worker/public/assets/task-priority-DuL-AfZv.js                0.15 kB │ gzip:   0.15 kB
+../.build-691299/worker/public/assets/provider-contract-DdLbPb90.js            0.44 kB │ gzip:   0.24 kB
+../.build-691299/worker/public/assets/useWorkerSnapshot-BnQkYwmi.js            1.33 kB │ gzip:   0.70 kB
+../.build-691299/worker/public/assets/consumption-view-C51YRhAT.js             1.50 kB │ gzip:   0.70 kB
+../.build-691299/worker/public/assets/delivery-behavior-view-CcYNk-3M.js       2.11 kB │ gzip:   1.05 kB
+../.build-691299/worker/public/assets/worker-capacity-BBJq858Y.js              3.41 kB │ gzip:   1.35 kB
+../.build-691299/worker/public/assets/delivery-view-DZwVKAnw.js                4.56 kB │ gzip:   2.14 kB
+../.build-691299/worker/public/assets/RepositoryDiscovery-CzDet9xp.js          8.08 kB │ gzip:   3.32 kB
+../.build-691299/worker/public/assets/AssistantMessage-CZqNOKrF.js            15.13 kB │ gzip:   6.31 kB
+../.build-691299/worker/public/assets/ReviewPage-DA3UeaUZ.js                  44.44 kB │ gzip:  13.13 kB
+../.build-691299/worker/public/assets/MonitoringPage-CVJzmhi6.js              59.15 kB │ gzip:  18.19 kB
+../.build-691299/worker/public/assets/HistoryPage-CkZnFRyA.js                 63.27 kB │ gzip:  19.00 kB
+../.build-691299/worker/public/assets/RequestGatePanel-D-sADRDe.js            85.86 kB │ gzip:  26.79 kB
+../.build-691299/worker/public/assets/shared-ready-review-view-ATwq518w.js   167.17 kB │ gzip:  61.43 kB
+../.build-691299/worker/public/assets/SettingsPage-UYF1_5QS.js               192.02 kB │ gzip:  53.25 kB
+../.build-691299/worker/public/assets/TaskboardPage-DJ5fAsze.js              213.08 kB │ gzip:  65.29 kB
+../.build-691299/worker/public/assets/index-CM3xiMQ-.js                      400.31 kB │ gzip: 126.87 kB
+✓ built in 8.93s
+vite v7.3.7 building client environment for production...
+transforming...
+✓ 723 modules transformed.
+rendering chunks...
+computing gzip size...
+../../.build-691299/.status-view/index.html                   0.58 kB │ gzip:  0.37 kB
+../../.build-691299/.status-view/assets/style-DCePVDIa.css  229.91 kB │ gzip: 32.53 kB
+../../.build-691299/.status-view/assets/index-BJTjKv5U.js   286.96 kB │ gzip: 93.85 kB
+✓ built in 2.39s
+Built independent application: src/worker/dist
+Built portable application: bin/apps/worker

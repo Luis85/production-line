@@ -28,7 +28,7 @@ export const TaskboardReadyChecks: Story = {
   render: () => ({ setup() {
     const base = installWorkerFixture('empty');
     const records = [request('search', 'Review search requirements', 'running'), request('exports', 'Clarify export permissions', 'waiting_input'), request('onboarding', 'Review team onboarding', 'queued')];
-    state.environment!.sharedIntake = { revision: 1, workerId: 'example-worker', config: { enabled: true, repositoryId: 'shared', remote: 'origin', branch: 'main', workflowPath: '.werk/feature-workflow.json', pollMs: 5000 },
+    state.environment!.sharedIntake = { dependencyPlans: [], selectedProjectId: 'demo', projects: [{id:'demo',label:'Demo project',enabled:true}], revision: 1, workerId: 'example-worker', config: { enabled: true, repositoryId: 'shared', remote: 'origin', branch: 'main', workflowPath: '.werk/feature-workflow.json', pollMs: 5000 },
       canEdit: false, blockedReason: 'Pause and drain before changing shared intake.', state: 'idle', error: null, lastSyncedAt: at, sourceCommit: 'a'.repeat(40), workflow: null, requests: records };
     state.sessions!.execution = { currentSessionId: 'review-search', queued: 1, maxParallel: 1 };
     state.sessions!.capacity = workerCapacitySnapshot({ capturedAt: at, currentSessionId: 'review-search', localUsed: 2,

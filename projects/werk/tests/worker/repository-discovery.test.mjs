@@ -1,3 +1,5 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
+import { workspaceContext } from './runtime-fixtures.mjs';
 import { workerStatus } from '../helpers/worker-status.mjs';
 import { prepareTaskWorkspace } from '../../src/worker/dist/worker/status/workspace-repositories.js';
 import { cleanup } from './fixture-cleanup.mjs';
@@ -9,8 +11,11 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { RepositoryDiscovery } from '../../src/worker/dist/worker/infrastructure/repository-discovery.js';
 import { RepositoryManager } from '../../src/worker/dist/worker/infrastructure/repositories.js';
+import { worktreeName } from '../../src/worker/dist/worker/infrastructure/repositories-git.js';
 import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';
 import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
+
+prepareNativeProcessFixture();
 
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'user.name=Werk Fixture', '-c', 'user.email=fixture@example.invalid', ...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 const exists = async path => !!await lstat(path).catch(error => { if (error.code !== 'ENOENT') throw error; });
@@ -108,7 +113,14 @@ test('acceptance persists one assignment, enables worktrees and remembers declin
   await assert.rejects(prepareTaskWorkspace(f.context, f.repository, 'task-before', new AbortController().signal), /Approve the detected/);
   const accepted = await f.worker.repositoryCommand({ action: 'accept', discoveryId: id }); assert.equal(accepted.items.length, 1); assert.equal(accepted.items[0].watch, false); assert.equal(accepted.discovery.decision, 'accepted');
   await f.worker.repositoryCommand({ action: 'accept', discoveryId: id }); assert.equal(f.worker.repositoryStatus().items.length, 1);
-  const task = await prepareTaskWorkspace(f.context, accepted.items[0].id, 'task-after', new AbortController().signal); assert.ok(task.path.startsWith(join(f.repository, '.werk/worktrees'))); assert.equal(git(task.path, 'rev-parse', '--abbrev-ref', 'HEAD'), 'HEAD');
+  const task = await prepareTaskWorkspace(f.context, accepted.items[0].id, 'task-after', new AbortController().signal);
+  assert.ok(task.path.startsWith(join(f.repository, '.werk/worktrees')));
+  const name = worktreeName(accepted.items[0].id, 'task-after'), branch = 'werk/workspaces/' + name;
+  assert.equal(git(task.path, 'rev-parse', '--abbrev-ref', 'HEAD'), branch);
+  const ownership = JSON.parse(await readFile(join(f.repository, '.git', 'werk-worktrees', name + '.json'), 'utf8'));
+  assert.equal(ownership.branch, branch); assert.equal(ownership.branchOwned, true); assert.equal(ownership.taskKey, 'task-after');
+  assert.equal(git(task.path, 'rev-parse', 'HEAD'), git(f.repository, 'rev-parse', 'HEAD'));
+  assert.equal(git(f.repository, 'branch', '--show-current'), 'main');
   assert.equal(await readFile(join(f.repository, 'hello.txt'), 'utf8'), 'original\n');
   const saved = JSON.parse(await readFile(join(f.state, 'workspace-settings.json'), 'utf8')); assert.equal(saved.repositories.items[0].id, accepted.items[0].id);
 });
@@ -193,8 +205,8 @@ test('a repository replacement during acceptance cannot inherit the previously s
 test('ready patch features remain waiting for consent then enter the queue after acceptance', async t => {
   const f = await workspace(t, { features: true }); await f.worker.updateSettings({ board: { paused: true }, provider: { id: 'openai-api', model: 'fixture-model', apiKey: 'fixture-key' } });
   await writeFile(join(f.repository, 'features/change.md'), '---\nschemaVersion: 1\ntitle: Await repository permission\nstatus: ready\nmode: patch\npaths: [hello.txt]\n---\nChange the approved file.\n');
-  await f.worker.features.tick(true); await f.worker.features.tick(true);
-  let record = f.worker.features.view().records[0]; assert.equal(record.submitted, false); assert.equal(record.status, 'waiting'); assert.match(record.error, /Approve the detected/); assert.equal(await exists(join(f.repository, '.werk/worktrees')), false);
+  await workspaceContext(f.worker).features.tick(true); await workspaceContext(f.worker).features.tick(true);
+  let record = workspaceContext(f.worker).features.view().records[0]; assert.equal(record.submitted, false); assert.equal(record.status, 'waiting'); assert.match(record.error, /Approve the detected/); assert.equal(await exists(join(f.repository, '.werk/worktrees')), false);
   await f.worker.repositoryCommand({ action: 'accept', discoveryId: f.worker.repositoryStatus().discovery.id });
-  await f.worker.features.tick(true); record = f.worker.features.view().records[0]; assert.equal(record.submitted, true); assert.equal(f.worker.board.view().tasks.length, 1); assert.equal(await exists(join(f.repository, '.werk/worktrees')), true);
+  await workspaceContext(f.worker).features.tick(true); record = workspaceContext(f.worker).features.view().records[0]; assert.equal(record.submitted, true); assert.equal(f.worker.board.view().tasks.length, 1); assert.equal(await exists(join(f.repository, '.werk/worktrees')), true);
 });

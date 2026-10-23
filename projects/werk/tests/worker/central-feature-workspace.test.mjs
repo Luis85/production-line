@@ -1,3 +1,5 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
+import { workspaceContext } from './runtime-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -11,6 +13,8 @@ import { defaultFeatureWorkflow, defaultFeatureCheck, featureContentHash } from 
 import { authoringTemplateFor, authoringBase } from '../../src/worker/dist/worker/infrastructure/feature-authoring-assets.js';
 import { parseFeature } from '../../src/worker/dist/worker/infrastructure/features/document.js';
 import { workerStatus } from '../helpers/worker-status.mjs';
+
+prepareNativeProcessFixture();
 
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.autocrlf=false', '-c', 'user.name=Werk Fixture', '-c', 'user.email=fixture@example.invalid', ...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000 }).trim();
 const binding = { enabled: true, repositoryId: 'project', remote: 'origin', branch: 'main', workflowPath: '.werk/feature-workflow.json', pollMs: 300000 };
@@ -165,15 +169,18 @@ test('a rejected folder identity collision preserves the original request and su
   await f.api('/api/tasks', { action: 'cancel', id: created.session.id });
   const runs = f.workspace.sessions.runs.list().total;
   await writeFile(join(f.project, 'legacy-features', 'collision.md'), '---\nschemaVersion: 1\nid: collision\ntitle: Export orders\nstatus: ready\nmode: chat\nprovider: openai-api\n---\n' + seed.message + '\n');
-  await f.workspace.features.tick(true); await f.workspace.features.tick(true);
-  const record = f.workspace.features.view().records.find(item => item.id === 'collision');
+  await workspaceContext(f.workspace).features.tick(true); await workspaceContext(f.workspace).features.tick(true);
+  const record = workspaceContext(f.workspace).features.view().records.find(item => item.id === 'collision');
   assert.ok(record); assert.equal(record.submitted, false); assert.match(record.error, /another Feature Request/);
   await f.workspace.featureTracking.sync();
   const tracking = await f.workspace.featureTrackingCommand({ action: 'get', sessionId: created.session.id });
   assert.equal(parseFeature(tracking.markdown).data.featureRequestKey, created.session.feature.key);
-  assert.equal(parseFeature(tracking.markdown).data.type, 'feature-request');
+  assert.equal(parseFeature(tracking.markdown).data.type, 'FeatureRequestProgress');
+  assert.equal(created.session.feature.source, 'folder');
+  const canonical = parseFeature(await readFile(join(f.project, 'legacy-features', 'interaction-feature-collision.md'), 'utf8'));
+  assert.equal(canonical.data.schema, 'worker.request/v1'); assert.equal(canonical.data.id, 'feature-collision');
   await f.restart();
   assert.equal(f.workspace.sessions.detail(created.session.id).session.feature.key, created.session.feature.key);
-  assert.equal(f.workspace.features.view().records.find(item => item.id === 'collision').submitted, false);
+  assert.equal(workspaceContext(f.workspace).features.view().records.find(item => item.id === 'collision').submitted, false);
   assert.equal(f.workspace.sessions.runs.list().total, runs);
 });

@@ -45,6 +45,8 @@ export interface WorkerConfig {
 }
 
 export interface WorkerDependencies {
+  /** Trusted native-runtime setup; startup owns cancellation and drains it on every exit path. */
+  prepareProcessRuntime?: (cwd: string, signal: AbortSignal) => Promise<void>;
   ready?: (address: { port: number; address: string }) => Promise<void>;
   gateway?: WorkerGateway;
   adapter?: Adapter;

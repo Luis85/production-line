@@ -1,3 +1,5 @@
+import { MAX_WORKER_PARALLEL } from '../application/delivery-coordination.js';
+import { authenticationDescription, providerCapabilities, validateAuthenticationMode } from '../application/provider-capabilities.js';
 import { validateModelEffort, validateModelName } from '../application/model-effort.js';
 import { defaultConsumptionPolicy, validateConsumptionPolicy, type ConsumptionPolicy } from '../application/consumption.js';
 import type { WorkerSettingsView } from '../application/workspace-view.js';
@@ -30,12 +32,12 @@ export class WorkerSettings {
   private executionSource: 'environment' | 'saved_settings' | 'default' = 'default';
   constructor(directory: string, url = '', enrollmentToken = '', executable = '', repositories = defaultRepositoryConfiguration(), defaultProvider = 'codex-cli') {
     this.directory = directory;
-    this.value = { defaultProvider: defaultProvider as ProviderId, repositories: validateRepositoryConfiguration(repositories), resources: defaultResourcePolicy(), execution: defaultExecutionPolicy(), consumption: defaultConsumptionPolicy(), providers: providerIds.map(id => ({ id, executable: id === 'codex-cli' ? executable : '', model: '', apiKey: '' })), connection: { enabled: !!url, url, enrollmentToken }, board: { paused: false, maxParallel: 1, queueCapacity: 16, orchestratorQueue: 0, order: 'fifo' } };
+    this.value = { defaultProvider: defaultProvider as ProviderId, repositories: validateRepositoryConfiguration(repositories), resources: defaultResourcePolicy(), execution: defaultExecutionPolicy(), consumption: defaultConsumptionPolicy(), providers: providerIds.map(id => ({ id, executable: id === 'codex-cli' ? executable : '', model: '', apiKey: '', authenticationMode: id.endsWith('-cli') ? 'cli-account' : 'api-key' })), connection: { enabled: !!url, url, enrollmentToken }, board: { paused: false, maxParallel: 1, queueCapacity: 16, orchestratorQueue: 0, order: 'fifo' } };
   }
   async init() {
     const configured = process.env.WERK_WORKER_MAX_RUNTIME_MS;
     if (configured !== undefined) this.executionOverride = validateExecutionPolicy({ maxRuntimeMs: /^\d+$/.test(configured) ? Number(configured) : NaN });
-    try { const saved = JSON.parse(await readBoundedFile(join(this.directory, 'workspace-settings.json'), 65536)); if (saved?.board) saved.board.maxParallel = 1; if (saved?.execution !== undefined) this.executionSource = 'saved_settings'; this.value = this.validate(saved); this.savedExecution = { ...this.value.execution }; await this.persist(this.value); }
+    try { const saved = JSON.parse(await readBoundedFile(join(this.directory, 'workspace-settings.json'), 65536)); if (saved?.execution !== undefined) this.executionSource = 'saved_settings'; this.value = this.validate(saved); this.savedExecution = { ...this.value.execution }; await this.persist(this.value); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
       for (const provider of this.value.providers) if (provider.id.endsWith('-cli') && !provider.executable) provider.executable = await findExecutable(provider.id === 'codex-cli' ? 'codex' : provider.id === 'cursor-cli' ? 'agent' : 'claude');
       this.value = this.validate(this.value); await this.persist(this.value);
@@ -72,7 +74,7 @@ export class WorkerSettings {
     });
     this.writing = operation; await operation; return this.toolAccess();
   }
-  publicView(): WorkerSettingsView { return { defaultProvider: this.value.defaultProvider, repositories: structuredClone(this.value.repositories), executionSource: this.executionSource, resources: { ...this.value.resources }, consumption: { ...this.value.consumption }, execution: { ...this.value.execution }, providers: this.value.providers.map(({ apiKey, ...provider }) => ({ ...provider, label: providerLabels[provider.id], configured: providerReady({ ...provider, apiKey }), hasApiKey: !!apiKey, authentication: provider.id.endsWith('-cli') ? 'Host CLI login; not verified' : 'Private API key' })), connection: { enabled: this.value.connection.enabled, url: this.value.connection.url, hasEnrollmentToken: !!this.value.connection.enrollmentToken }, board: { ...this.value.board } }; }
+  publicView(): WorkerSettingsView { return { defaultProvider: this.value.defaultProvider, repositories: structuredClone(this.value.repositories), executionSource: this.executionSource, resources: { ...this.value.resources }, consumption: { ...this.value.consumption }, execution: { ...this.value.execution }, providers: this.value.providers.map(({ apiKey, ...provider }) => ({ ...provider, label: providerLabels[provider.id], configured: providerReady({ ...provider, apiKey }), hasApiKey: !!apiKey, authentication: authenticationDescription(provider.authenticationMode), authenticationConfigured: provider.authenticationMode !== 'legacy', supportedAuthenticationModes: providerCapabilities(provider.id).authenticationModes, capabilities: providerCapabilities(provider.id) })), connection: { enabled: this.value.connection.enabled, url: this.value.connection.url, hasEnrollmentToken: !!this.value.connection.enrollmentToken }, board: { ...this.value.board } }; }
   provider(id: string) { const value = this.value.providers.find(item => item.id === id); if (!value) throw new DomainError('invalid_input', 'Choose a supported provider.'); return value; }
   async update(input: unknown) {
     const operation = this.writing.catch(() => {}).then(async () => {
@@ -87,13 +89,14 @@ export class WorkerSettings {
       if (body.expectedBoard !== undefined) {
         if (body.board === undefined) throw new DomainError('invalid_input', 'A queue baseline requires queue settings to save.');
         const fields = ['queueCapacity', 'orchestratorQueue', 'order'] as const;
+        const supported = [...fields, 'maxParallel'];
         // Pause is an independent operational action, never part of a queue editor's stale snapshot.
-        const patch = object(body.board, 'Queue settings', [...fields]);
-        if (!fields.some(key => patch[key] !== undefined)) throw new DomainError('invalid_input', 'A queue baseline requires queue settings to save.');
-        const expected = object(body.expectedBoard, 'Queue settings baseline', [...fields]);
-        if (fields.some(key => expected[key] === undefined)) throw new DomainError('invalid_input', 'Use the complete queue settings baseline before saving.');
+        const patch = object(body.board, 'Queue settings', supported);
+        if (!supported.some(key => patch[key] !== undefined)) throw new DomainError('invalid_input', 'A queue baseline requires queue settings to save.');
+        const expected = object(body.expectedBoard, 'Queue settings baseline', supported);
+        if (fields.some(key => expected[key] === undefined) || patch.maxParallel !== undefined && expected.maxParallel === undefined) throw new DomainError('invalid_input', 'Use the complete queue settings baseline before saving.');
         this.validateBoard({ ...this.value.board, ...expected });
-        if (fields.some(key => expected[key] !== this.value.board[key]))
+        if (fields.some(key => expected[key] !== this.value.board[key]) || expected.maxParallel !== undefined && expected.maxParallel !== this.value.board.maxParallel)
           throw new DomainError('conflict', 'Queue settings changed in another session. Reload the current queue settings before saving.');
       }
       if (body.expectedDuration !== undefined) {
@@ -141,8 +144,9 @@ export class WorkerSettings {
       if (body.defaultProvider !== undefined) next.defaultProvider = body.defaultProvider as ProviderId;
       if (body.consumption !== undefined) next.consumption = validateConsumptionPolicy(body.consumption);
       if (body.provider) {
-        const p = object(body.provider, 'Provider', ['id', 'executable', 'model', 'effort', 'apiKey', 'clearApiKey']);
+        const p = object(body.provider, 'Provider', ['id', 'executable', 'model', 'effort', 'apiKey', 'clearApiKey', 'authenticationMode']);
         const target = next.providers.find(item => item.id === p.id); if (!target) throw new DomainError('invalid_input', 'Unknown provider');
+        if (p.authenticationMode !== undefined) target.authenticationMode = validateAuthenticationMode(p.authenticationMode, target.id);
         if (p.executable !== undefined) target.executable = p.executable as string;
         if (p.model !== undefined) target.model = validateModelName(p.model);
         if (p.effort !== undefined) target.effort = validateModelEffort(p.effort, target.id);
@@ -182,6 +186,8 @@ export class WorkerSettings {
     if (value.defaultProvider === undefined) value.defaultProvider = this.value.defaultProvider;
     if (!providerIds.includes(value.defaultProvider)) throw new DomainError('invalid_input', 'Choose a supported default model connection.');
     for (const p of value.providers) {
+      // Old CLI credentials may have used inherited keys: never guess their billing mode.
+      p.authenticationMode = validateAuthenticationMode(p.authenticationMode ?? (p.id.endsWith('-cli') ? 'legacy' : 'api-key'), p.id);
       validateModelName(p.model);
       if (p.effort !== undefined) p.effort = validateModelEffort(p.effort, p.id);
       if (!providerIds.includes(p.id as ProviderId) || typeof p.executable !== 'string' || (p.executable && (!isAbsolute(p.executable) || /[\x00-\x1f]/.test(p.executable))) || p.executable.length > 4096 || typeof p.model !== 'string' || p.model.length > 200 || typeof p.apiKey !== 'string' || p.apiKey.length > 4096 || /[\r\n]/.test(p.apiKey)) throw new DomainError('invalid_input', 'Use an absolute CLI path and valid model/key.');
@@ -200,6 +206,6 @@ export class WorkerSettings {
     return value;
   }
   private validateBoard(b: WorkspaceSettings['board']) {
-    if (!b || typeof b.paused !== 'boolean' || !['fifo', 'priority'].includes(b.order) || !Number.isInteger(b.maxParallel) || b.maxParallel !== 1 || !Number.isInteger(b.queueCapacity) || b.queueCapacity < 1 || b.queueCapacity > 64 || !Number.isInteger(b.orchestratorQueue) || b.orchestratorQueue < 0 || b.orchestratorQueue > 64) throw new DomainError('invalid_input', 'Workers execute one task at a time; local queue: 1–64; orchestrator queue: 0–64.');
+    if (!b || typeof b.paused !== 'boolean' || !['fifo', 'priority'].includes(b.order) || !Number.isInteger(b.maxParallel) || (b.maxParallel < 1 || b.maxParallel > MAX_WORKER_PARALLEL) || !Number.isInteger(b.queueCapacity) || b.queueCapacity < 1 || b.queueCapacity > 64 || !Number.isInteger(b.orchestratorQueue) || b.orchestratorQueue < 0 || b.orchestratorQueue > 64) throw new DomainError('invalid_input', 'Worker concurrency: 1–8; local queue: 1–64; orchestrator queue: 0–64.');
   }
 }

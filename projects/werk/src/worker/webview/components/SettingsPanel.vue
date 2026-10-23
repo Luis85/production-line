@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ProviderId } from '../../application/provider-contract';
+import type { ProviderAuthenticationMode, ProviderCapabilities } from '../../application/provider-capabilities';
 import type { ModelEffort } from '../../application/model-effort';
 import { computed, ref, watch } from 'vue';
 import UButton from '@nuxt/ui/components/Button.vue';
@@ -7,26 +8,35 @@ import UInput from '@nuxt/ui/components/Input.vue';
 import USelect from '@nuxt/ui/components/Select.vue';
 import ModelSelectionFields from './ModelSelectionFields.vue';
 import ProviderAccountPanel from './ProviderAccountPanel.vue';
+import ProviderCapabilitiesPanel from './ProviderCapabilitiesPanel.vue';
 import { state, workspaceAction, request, date } from '../store';
 defineProps<{ providerOnly?: boolean; connectionOnly?: boolean }>();
 let connectionGeneration = 0;
-const check = ref<{ message: string; authentication: string; checkedAt: string } | null>(null), checking = ref(false), copied = ref(false);
+const check = ref<{ message: string; authentication: string; checkedAt: string; version?: string | null; capabilities?: ProviderCapabilities } | null>(null), checking = ref(false), copied = ref(false);
 const provider = ref<ProviderId>('codex-cli'), executable = ref(''), model = ref(''), key = ref(''), clearKey = ref(false), url = ref(''), enrollment = ref(''), busy = ref(false), message = ref('');
+type AuthenticationMode = ProviderAuthenticationMode;
+const authenticationMode = ref<AuthenticationMode>('legacy');
+const authenticationLabels = { 'cli-account': 'Provider account / subscription', 'api-key': 'API key · metered billing', legacy: 'Choose authentication before running work' };
 const providerNotice = ref(''), connectionNotice = ref(''), defaultNotice = ref('');
 const effort = ref<ModelEffort | ''>('default'), defaultProvider = ref<ProviderId>('codex-cli'), defaultBaseline = ref<ProviderId>('codex-cli');
 const defaultDirty = computed(() => defaultProvider.value !== defaultBaseline.value);
 const loginCommand = computed(() => provider.value === 'codex-cli' ? 'codex login' : provider.value === 'cursor-cli' ? 'agent login' : 'claude auth login');
-const providerBaseline = ref({ executable: '', model: '', effort: 'default' as ModelEffort | '' }), connectionBaseline = ref('');
+const providerBaseline = ref({ executable: '', model: '', effort: 'default' as ModelEffort | '', authenticationMode: 'legacy' as AuthenticationMode }), connectionBaseline = ref('');
 const selected = computed(() => state.settings?.providers.find(item => item.id === provider.value));
+const authenticationOptions = computed<Array<{ value: AuthenticationMode; label: string; disabled?: boolean }>>(() => [
+  ...(authenticationMode.value === 'legacy' ? [{ value: 'legacy' as const, label: authenticationLabels.legacy, disabled: true }] : []),
+  ...(selected.value?.supportedAuthenticationModes ?? (provider.value.endsWith('-cli') ? ['cli-account', 'api-key'] as const : ['api-key'] as const)).map(value => ({ value, label: authenticationLabels[value] })),
+]);
 const accountRevision = ref(0);
-const accountConnectionKey = computed(() => JSON.stringify([selected.value?.executable ?? '', !!selected.value?.hasApiKey, accountRevision.value]));
-const providerCommand = () => ({ provider: { id: provider.value, executable: executable.value, model: model.value, effort: effort.value || 'default', apiKey: key.value, clearApiKey: clearKey.value } });
+const accountConnectionKey = computed(() => JSON.stringify([selected.value?.executable ?? '', selected.value?.authenticationMode, !!selected.value?.hasApiKey, accountRevision.value]));
+const providerCommand = () => ({ provider: { id: provider.value, executable: executable.value, model: model.value, effort: effort.value || 'default', authenticationMode: authenticationMode.value, apiKey: key.value, clearApiKey: clearKey.value } });
 const editingLocked = computed(() => busy.value || checking.value);
-const dirty = computed(() => executable.value !== providerBaseline.value.executable || model.value !== providerBaseline.value.model || effort.value !== providerBaseline.value.effort || !!key.value || clearKey.value);
+const dirty = computed(() => executable.value !== providerBaseline.value.executable || model.value !== providerBaseline.value.model || effort.value !== providerBaseline.value.effort || authenticationMode.value !== providerBaseline.value.authenticationMode || !!key.value || clearKey.value);
 const connectionDirty = computed(() => url.value !== connectionBaseline.value || !!enrollment.value);
 function fillProvider() {
   executable.value = selected.value?.executable ?? ''; model.value = selected.value?.model ?? ''; effort.value = selected.value?.effort ?? 'default';
-  providerBaseline.value = { executable: executable.value, model: model.value, effort: effort.value };
+  authenticationMode.value = selected.value?.authenticationMode ?? (provider.value.endsWith('-cli') ? 'legacy' : 'api-key');
+  providerBaseline.value = { executable: executable.value, model: model.value, effort: effort.value, authenticationMode: authenticationMode.value };
   key.value = ''; clearKey.value = false; providerNotice.value = ''; check.value = null;
 }
 function fillDefault() { defaultProvider.value = state.settings?.defaultProvider ?? 'codex-cli'; defaultBaseline.value = defaultProvider.value; defaultNotice.value = ''; }
@@ -36,7 +46,7 @@ watch(() => state.settings?.defaultProvider, (value, previous) => {
   else fillDefault();
 }, { immediate: true });
 function fillConnection() { url.value = state.settings?.connection.url ?? ''; connectionBaseline.value = url.value; enrollment.value = ''; connectionNotice.value = ''; }
-watch([executable, model, effort, key, clearKey], () => { connectionGeneration++; check.value = null; }, { flush: 'sync' });
+watch([executable, model, effort, authenticationMode, key, clearKey], () => { connectionGeneration++; check.value = null; }, { flush: 'sync' });
 watch(provider, () => { connectionGeneration++; fillProvider(); copied.value = false; }, { flush: 'sync' });
 watch(() => JSON.stringify(selected.value), (value, previous) => {
   if (!state.unlocked || value === previous) return;
@@ -61,7 +71,7 @@ watch(() => state.unlocked, value => {
   if (value) { fillProvider(); fillConnection(); fillDefault(); }
   else { connectionGeneration++; key.value = ''; enrollment.value = ''; executable.value = ''; model.value = ''; effort.value = 'default'; defaultNotice.value = ''; url.value = ''; message.value = ''; providerNotice.value = ''; connectionNotice.value = ''; check.value = null; }
 }, { immediate: true });
-const providerInput = () => JSON.stringify([provider.value, executable.value, model.value, effort.value, key.value, clearKey.value]);
+const providerInput = () => JSON.stringify([provider.value, executable.value, model.value, effort.value, authenticationMode.value, key.value, clearKey.value]);
 const connectionInput = () => JSON.stringify([url.value, enrollment.value]);
 async function save(body: unknown) {
   if (editingLocked.value || !state.unlocked) return;
@@ -108,15 +118,20 @@ async function save(body: unknown) {
           Connection
         </label>
         <USelect id="provider-connection" v-model="provider" :items="state.settings?.providers.map(item => ({ label: item.label, value: item.id })) ?? []" class="w-full" :disabled="editingLocked" />
+        <label for="provider-authentication">Authentication and billing</label>
+        <USelect id="provider-authentication" v-model="authenticationMode" :items="authenticationOptions" placeholder="Choose how this worker signs in" class="w-full" :disabled="editingLocked" aria-describedby="provider-authentication-help" />
+        <p id="provider-authentication-help" class="page-note" :class="{ 'error-text': authenticationMode === 'legacy' }">
+          {{ authenticationMode === 'legacy' ? 'Choose an authentication method before starting new work. This saved connection has not declared which credentials to use.' : authenticationMode === 'cli-account' ? 'Uses the provider account signed in as the worker’s operating-system user. An API key will not be used as a fallback.' : 'Uses the configured API key with provider billing. Removing the key does not switch this connection to a subscription account.' }}
+        </p>
         <template v-if="provider.endsWith('-cli')">
           <label for="provider-path">
             CLI executable on this machine
           </label>
           <UInput id="provider-path" v-model="executable" placeholder="/absolute/path/to/codex" class="w-full" :disabled="editingLocked" />
           <p class="page-note">
-            {{ provider === 'cursor-cli' ? 'Uses a saved Cursor API key, then CURSOR_API_KEY from the worker environment, then the worker process owner’s CLI login.' : 'Uses the worker process owner’s existing CLI login.' }} For CLI login, sign in on the machine first. After saving, check sign-in below. Subscription quota and model access are not verified by this check. Claude Code CLI supports Linux, macOS and Windows; Codex CLI requires Linux or macOS. See the <a href="https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/use-worker-webview.md#connect-claude-or-codex" target="_blank" rel="noopener noreferrer">Windows Claude requirements</a>.
+            After saving, check the connection below. Subscription quota and model access are not verified by this check. Claude Code CLI supports Linux, macOS and Windows; Codex CLI requires Linux or macOS. See the <a href="https://github.com/Luis85/production-line/blob/main/projects/werk/docs/how-to/use-worker-webview.md#connect-claude-or-codex" target="_blank" rel="noopener noreferrer">Windows Claude requirements</a>.
           </p>
-          <div class="provider-login">
+          <div v-if="authenticationMode === 'cli-account'" class="provider-login">
             <strong>
               Sign in on the worker machine
             </strong>
@@ -136,9 +151,9 @@ async function save(body: unknown) {
             </p>
           </div>
         </template>
-        <template v-if="!provider.endsWith('-cli') || provider === 'cursor-cli'">
+        <template v-if="authenticationMode === 'api-key'">
           <label for="provider-key">
-            {{ provider === 'cursor-cli' ? 'API key · optional' : 'API key' }}
+            API key
           </label>
           <UInput id="provider-key" v-model="key" type="password" autocomplete="off" :placeholder="selected?.hasApiKey ? 'Key saved · leave blank to keep' : 'Paste provider API key'" class="w-full" :disabled="editingLocked" />
           <label class="check-label">
@@ -146,13 +161,13 @@ async function save(body: unknown) {
             Remove saved API key
           </label>
           <p class="page-note">
-            Keys are stored privately on the worker machine and are never returned to the browser. {{ provider === 'cursor-cli' ? 'Leave blank to keep a saved key. Removing it falls back to CURSOR_API_KEY from the worker environment, then the local Cursor login.' : 'API calls use your provider billing.' }}
+            Keys are stored privately on the worker machine and are never returned to the browser. Leave blank to retain a saved key. API usage is billed by your provider.
           </p>
         </template>
         <ModelSelectionFields id="provider-default" :provider="provider" v-model:model="model" v-model:effort="effort" :providers="state.settings?.providers ?? []" :disabled="editingLocked" :show-provider="false" defaults />
         <p v-if="provider === 'cursor-cli'" class="page-note">Cursor CLI does not provide documented token or cost counts. Usage remains unknown; enabled consumption limits can hold later work until you reconcile that usage.</p>
         <div class="actions">
-          <UButton type="submit" :loading="busy" :disabled="editingLocked">
+          <UButton type="submit" :loading="busy" :disabled="editingLocked || authenticationMode === 'legacy'">
             Save provider
           </UButton>
           <UButton color="neutral" variant="outline" :loading="checking" :disabled="editingLocked || dirty" @click="checkConnection">
@@ -165,7 +180,8 @@ async function save(body: unknown) {
         <p v-if="check" role="status" class="provider-result" :class="{ 'error-text': ['signed-out', 'unavailable'].includes(check.authentication) }">
           {{ selected?.label }} · {{ date(check.checkedAt) }} · {{ check.message }}
         </p>
-        <ProviderAccountPanel v-if="provider.endsWith('-cli')" :provider-id="provider" :connection-key="accountConnectionKey" :enabled="!dirty && !!selected?.configured" />
+        <ProviderCapabilitiesPanel :capabilities="check?.capabilities ?? selected?.capabilities" :runtime-version="check?.version" />
+        <ProviderAccountPanel v-if="provider.endsWith('-cli')" :provider-id="provider" :authentication-mode="selected?.authenticationMode" :connection-key="accountConnectionKey" :enabled="!dirty && !!selected?.configured" />
       </form>
       <form v-if="!providerOnly" class="settings-form" @submit.prevent="save({ connection: { enabled: true, url, enrollmentToken: enrollment } })">
         <h2>Optional orchestrator</h2>

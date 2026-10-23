@@ -1,0 +1,139 @@
+✔ bounded body collection measures bytes across chunks and releases the reader on success and overflow (6.290444ms)
+✔ provider cleanup cancels on read failure, suppresses cleanup errors, and releases the lock (0.62905ms)
+✔ HTTP adapters retain strict public decoding and permissive private decoding with private errors (16.685883ms)
+✔ shared, private and Factory response adapters retain their separate byte limits and overflow policies (9.393846ms)
+✔ provider API bounds responses and distinguishes undispatched cancellation from unknown dispatched outcomes (3.176576ms)
+✔ openai-api accepts a paid final answer at the limit and fences subsequent invocations (51.633856ms)
+✔ openai-api stops a tool loop before a new paid request when the allowance is consumed (18.397186ms)
+✔ openai-api stops a tool loop before a new paid request when usage is missing (13.478439ms)
+✔ anthropic-api accepts a paid final answer at the limit and fences subsequent invocations (15.748037ms)
+✔ anthropic-api stops a tool loop before a new paid request when the allowance is consumed (13.508618ms)
+✔ anthropic-api stops a tool loop before a new paid request when usage is missing (12.264995ms)
+✔ failed and cancelled model invocations retain observed spend and conservative reservations (25.359038ms)
+✔ disabled limits still account for usage and cannot erase uncertainty when enabled (12.648194ms)
+✔ accounting observer failure aborts execution and cannot be swallowed by provider observer isolation (13.018405ms)
+✔ queued execution resumes after a UTC reset without a failed attempt (11.85266ms)
+✔ pre-aborted and invalid model requests never reserve consumption or dispatch (11.678994ms)
+✔ late provider usage cannot rewrite a settled consumption invocation (10.195419ms)
+✔ rejected tool preparation releases its reservation before any model dispatch (10.368212ms)
+✔ API continuation observes a consumption policy lowered during tool execution (13.315754ms)
+✔ API continuation observes a consumption policy disabled during tool execution (12.726135ms)
+✔ outcome_unknown survives an accounting observer failure and failed final ledger write (9.470663ms)
+✔ process_stop_unconfirmed survives an accounting observer failure and failed final ledger write (11.237713ms)
+✔ children retain one FR/provider/profile and separate native handles and numeric usage without reopening the journal (92.801232ms)
+✔ grant revocation at the paid-call boundary releases only the undispatched child reservation (30.262577ms)
+✔ parent cancellation waits for adapter cleanup and preserves separate observed child consumption (23.291647ms)
+✔ child questions return to their parent and only numeric evidence remains in the shared journal (26.184862ms)
+✔ invalid or nested lineage, widened tools and a terminal parent fail before provider dispatch (17.030258ms)
+✔ shared journal rejects incomplete or cross-FR child metadata and recovers unfinished children without replay (24.342574ms)
+✔ overlapping child CPU windows are excluded from aggregates while child consumption stays additive (32.65162ms)
+✔ failed evidence persistence prevents accepted child results without losing measured consumption (22.036702ms)
+✔ an ended parent cannot dispatch a child even after its child run was admitted (25.988331ms)
+✔ delegated subprocesses use the child session and run while keeping the parent FR and task (76.945922ms)
+✔ candidate parent delegation retains only relevant frozen inspection evidence for werk_file_read (23.123224ms)
+✔ candidate parent delegation retains only relevant frozen inspection evidence for werk_candidate_status (16.504245ms)
+✔ candidate parent delegation retains only relevant frozen inspection evidence for werk_candidate_apply (17.817422ms)
+✔ candidate parent delegation retains only relevant frozen inspection evidence for werk_candidate_check (17.789262ms)
+✔ unknown child outcome survives usage persistence failure and parent abort (24.423666ms)
+✔ unknown child outcome survives run_finish persistence failure and parent abort (25.08352ms)
+✔ unknown child outcome survives consumption_finish persistence failure and parent abort (20.889996ms)
+✔ outcome_unknown drains active siblings, cancels queued children and remains fatal after parent cancellation (21.427898ms)
+✔ process_stop_unconfirmed drains active siblings, cancels queued children and remains fatal after parent cancellation (4.075078ms)
+✔ an unstopped sibling outranks a generic child failure and an earlier uncertain outcome (3.963766ms)
+✔ failed terminal child evidence cannot erase unknown outcome or dispatch queued work (3.091237ms)
+✔ CLI bridge serialization cannot turn outcome_unknown into a successful parent result (50.727004ms)
+✔ CLI bridge serialization cannot turn process_stop_unconfirmed into a successful parent result (9.70322ms)
+✔ uncertain reviewer recovery releases only capacity and exact lost acknowledgements replay once (144.501937ms)
+✔ live controllers, processes and services prevent an operator cessation receipt (91.05549ms)
+✔ a controller change during observation cannot clear uncertain capacity (87.311343ms)
+✔ a service change during observation cannot clear uncertain capacity (79.487477ms)
+✔ a shutdown change during observation cannot clear uncertain capacity (69.577445ms)
+✔ malformed, stale and public observation fields cannot authorize execution recovery (70.810857ms)
+✔ a delegated execution cannot be confirmed while its parent still owns a controller or process (74.785887ms)
+✔ parent cessation requires delegated child controllers, processes and services to stop (86.9221ms)
+✔ unknown auxiliary run reserves capacity once and only grounded exact attestation releases it without replay (25.817891ms)
+✔ restart reserves only started missing-result attempts and preserves known results and never-dispatched work (21.305629ms)
+✔ recovery rejects malformed primitives and cannot create uncertainty for queued or finished evidence (18.157406ms)
+✔ all unresolved rows contribute capacity beyond evidence pagination and preserve detached receipts (315.879188ms)
+✔ an uncertainty write failure retains the live permit until restart rather than releasing through finally (0.43394ms)
+✔ canonical delivery owns only its exact provider invocation or delegated parent identity (0.236157ms)
+▶ restart retains child accounting under one exact parent recovery boundary
+  ✔ unknown (16.598644ms)
+  ✔ confirmed (18.124352ms)
+  ✔ unfinished-parent (18.228783ms)
+  ✔ no-parent-recovery (18.91627ms)
+✔ restart retains child accounting under one exact parent recovery boundary (72.840443ms)
+✔ legacy folder restart restores one parent to source, session, task and gate without redispatch (518.112271ms)
+✔ retained shared claims restore the parent before task recovery even after the active binding changes (89.42022ms)
+✔ migration uses accepted remote provenance and rejects conflicting parents atomically (12.809138ms)
+✔ an unsubmitted shared reservation cannot replace an existing or legacy interaction parent on restart (59.398388ms)
+✔ legacy chat outcome_unknown retains central capacity and requires explicit continuation after confirmation (138.854456ms)
+✔ legacy chat process_stop_unconfirmed retains central capacity and requires explicit continuation after confirmation (123.244118ms)
+✔ legacy approved-file proposal unknown outcome cannot silently queue a retry before reconciliation (138.143975ms)
+✔ legacy unknown receipt persistence failure retains live permit and unfinished evidence (53.203558ms)
+✔ openai-api cancellation before the actual transport call performs no paid dispatch (3.826545ms)
+✔ openai-api cancellation after fetch was attempted retains unknown remote completion without retry (1.040763ms)
+✔ openai-api loss of an aborted response body does not establish that the remote model stopped (5.451946ms)
+✔ anthropic-api cancellation before the actual transport call performs no paid dispatch (0.683242ms)
+✔ anthropic-api cancellation after fetch was attempted retains unknown remote completion without retry (0.392382ms)
+✔ anthropic-api loss of an aborted response body does not establish that the remote model stopped (0.63235ms)
+✔ the owned transport rejects an already aborted request before opening a connection (0.308559ms)
+✔ Ready Check outcome_unknown retains capacity and exact attempt through shutdown and restart (96.290297ms)
+✔ Ready Check process_stop_unconfirmed retains capacity and exact attempt through shutdown and restart (55.976159ms)
+✔ Ready Check holds the live permit and unfinished run when unknown receipt persistence fails (72.940033ms)
+✔ advisory outcome_unknown preserves request/review/run identity and blocks unrelated work after restart (34.860378ms)
+✔ advisory process_stop_unconfirmed preserves request/review/run identity and blocks unrelated work after restart (30.825077ms)
+✔ advisory unknown receipt failure retains the permit and never records known completion (5.954787ms)
+✔ unified chat creation is idempotent under concurrency and immediately returns its saved Markdown identity (244.87938ms)
+✔ unified file creation replays the exact session and rejects identity or approval changes without another task (252.741508ms)
+✔ follow-ups update one Markdown record and final flush persists progress before restart (192.586542ms)
+✔ configured intake stores generated records under _tasks without rewriting or re-intaking shared source notes (204.780241ms)
+{"schemaVersion":1,"time":"2026-10-20T17:53:27.312Z","service":"worker","level":"warn","event":"request_finished","requestId":"ec530288-20db-43a2-ad9b-01c7e5c6ade9","method":"GET","route":"/api/feature-tracking","status":401,"durationMs":3}
+{"schemaVersion":1,"time":"2026-10-20T17:53:27.347Z","service":"worker","level":"info","event":"request_finished","requestId":"90588f9d-5ad7-4466-b798-f338fc033b17","method":"POST","route":"/api/tasks","status":200,"durationMs":25}
+{"schemaVersion":1,"time":"2026-10-20T17:53:27.366Z","service":"worker","level":"info","event":"request_finished","requestId":"92286d61-367e-4355-aeb2-39748c138fbb","method":"POST","route":"/api/sessions","status":200,"durationMs":15}
+{"schemaVersion":1,"time":"2026-10-20T17:53:27.369Z","service":"worker","level":"info","event":"request_finished","requestId":"d0a7645c-02e7-4f98-9802-6ccbf399e3e1","method":"GET","route":"/api/chat","status":200,"durationMs":2}
+{"schemaVersion":1,"time":"2026-10-20T17:53:27.379Z","service":"worker","level":"info","event":"request_finished","requestId":"0fef7365-0603-476d-a240-c89b9889c8d1","method":"GET","route":"/api/chat/session","status":200,"durationMs":7}
+{"schemaVersion":1,"time":"2026-10-20T17:53:27.400Z","service":"worker","level":"info","event":"request_finished","requestId":"86453a4a-52dc-4906-a2af-aed8a300d969","method":"POST","route":"/api/feature-tracking","status":200,"durationMs":16}
+{"schemaVersion":1,"time":"2026-10-20T17:53:27.409Z","service":"worker","level":"warn","event":"request_finished","requestId":"f4ff9d65-de9c-46de-98df-062be9843304","method":"POST","route":"/api/tasks","status":409,"durationMs":7}
+{"schemaVersion":1,"time":"2026-10-20T17:53:27.434Z","service":"worker","level":"info","event":"request_finished","requestId":"bc355bef-189d-4d90-8cdf-c45f5aa7c926","method":"POST","route":"/api/taskboard","status":202,"durationMs":22}
+{"schemaVersion":1,"time":"2026-10-20T17:53:27.442Z","service":"worker","level":"info","event":"request_finished","requestId":"b2878add-9a1f-4879-b86a-b25d710d0128","method":"GET","route":"/api/feature-tracking","status":200,"durationMs":6}
+✔ authenticated API exposes exact records and safe local conversation while legacy admissions are also tracked (217.213904ms)
+✔ public transcript projection matches generated context without changing retained input or trimmed follow-ups (0.346975ms)
+✔ accepted work reports unavailable Markdown and recovers with the same identity after storage returns (86.480977ms)
+✔ remote assignment admission immediately creates its own Markdown request (68.77589ms)
+✔ shared request provenance follows the retained task binding without exposing mutable private state (1.957722ms)
+✔ exact file request recovers after interrupted snapshot persistence in its original Git worktree (504.174793ms)
+✔ exact file request recovers after interrupted taskboard persistence in its original Git worktree (424.612974ms)
+{"schemaVersion":1,"time":"2026-10-20T17:53:28.928Z","service":"worker","level":"info","event":"request_finished","requestId":"1b948358-f0bf-47b7-95ae-53dd821063b9","method":"POST","route":"/api/tasks","status":200,"durationMs":120}
+{"schemaVersion":1,"time":"2026-10-20T17:53:28.939Z","service":"worker","level":"info","event":"request_finished","requestId":"c9a7a844-3ecf-4eeb-bed2-7ffb3eab0245","method":"POST","route":"/api/tasks","status":200,"durationMs":9}
+{"schemaVersion":1,"time":"2026-10-20T17:53:28.950Z","service":"worker","level":"info","event":"request_finished","requestId":"04c6510c-8902-4adb-bc33-39af0a7c28b1","method":"POST","route":"/api/sessions","status":200,"durationMs":8}
+{"schemaVersion":1,"time":"2026-10-20T17:53:28.959Z","service":"worker","level":"warn","event":"request_finished","requestId":"2a8e8143-c36b-41eb-9eb7-c8c2f5a7fd79","method":"POST","route":"/api/tasks","status":409,"durationMs":6}
+{"schemaVersion":1,"time":"2026-10-20T17:53:28.963Z","service":"worker","level":"warn","event":"request_finished","requestId":"d51e9724-1e3b-4c6f-9471-6c6c891694d9","method":"POST","route":"/api/chat","status":409,"durationMs":2}
+{"schemaVersion":1,"time":"2026-10-20T17:53:28.972Z","service":"worker","level":"warn","event":"request_finished","requestId":"dd5be7db-35f4-45f8-916d-d78d56555b97","method":"POST","route":"/api/taskboard/action","status":409,"durationMs":7}
+{"schemaVersion":1,"time":"2026-10-20T17:53:28.981Z","service":"worker","level":"warn","event":"request_finished","requestId":"0ad93392-6f38-498d-b63c-4bc0d0642f8f","method":"POST","route":"/api/interactions","status":409,"durationMs":7}
+{"schemaVersion":1,"time":"2026-10-20T17:53:29.007Z","service":"worker","level":"info","event":"request_finished","requestId":"2ae707b7-2713-4c01-babe-06153da3f1a3","method":"POST","route":"/api/taskboard/action","status":200,"durationMs":14}
+{"schemaVersion":1,"time":"2026-10-20T17:53:29.019Z","service":"worker","level":"warn","event":"request_finished","requestId":"3023ecfc-9600-4c68-b635-9897b7fc44fb","method":"POST","route":"/api/tasks","status":409,"durationMs":5}
+{"schemaVersion":1,"time":"2026-10-20T17:53:29.022Z","service":"worker","level":"warn","event":"request_finished","requestId":"a99faddb-f310-4740-b66b-25b1f3aa6c47","method":"POST","route":"/api/chat","status":409,"durationMs":1}
+{"schemaVersion":1,"time":"2026-10-20T17:53:29.030Z","service":"worker","level":"warn","event":"request_finished","requestId":"a0dcd148-0f8e-49d2-91bb-f99186f0e6dd","method":"POST","route":"/api/interactions","status":409,"durationMs":6}
+✔ changed interrupted checkout returns a durable failed request and blocks every follow-up route: tracked (637.68496ms)
+{"schemaVersion":1,"time":"2026-10-20T17:53:29.550Z","service":"worker","level":"info","event":"request_finished","requestId":"64306250-d6c4-4513-91f1-6ba5aadb9acd","method":"POST","route":"/api/tasks","status":200,"durationMs":115}
+{"schemaVersion":1,"time":"2026-10-20T17:53:29.560Z","service":"worker","level":"info","event":"request_finished","requestId":"3c2abf1b-fd9f-4a08-b915-0827cf36f679","method":"POST","route":"/api/tasks","status":200,"durationMs":8}
+{"schemaVersion":1,"time":"2026-10-20T17:53:29.570Z","service":"worker","level":"info","event":"request_finished","requestId":"9b32deb0-b956-4bd9-88e9-dac413022b07","method":"POST","route":"/api/sessions","status":200,"durationMs":8}
+{"schemaVersion":1,"time":"2026-10-20T17:53:29.583Z","service":"worker","level":"warn","event":"request_finished","requestId":"5db7ed29-0ad7-4c42-9650-3781388f43fb","method":"POST","route":"/api/tasks","status":409,"durationMs":11}
+{"schemaVersion":1,"time":"2026-10-20T17:53:29.586Z","service":"worker","level":"warn","event":"request_finished","requestId":"02a9a0a7-e5a6-4847-abc0-dc6f4163f955","method":"POST","route":"/api/chat","status":409,"durationMs":1}
+{"schemaVersion":1,"time":"2026-10-20T17:53:29.594Z","service":"worker","level":"warn","event":"request_finished","requestId":"bdd2dd3b-5698-45d4-bf93-cf3b2c847969","method":"POST","route":"/api/taskboard/action","status":409,"durationMs":6}
+{"schemaVersion":1,"time":"2026-10-20T17:53:29.603Z","service":"worker","level":"warn","event":"request_finished","requestId":"651cc41e-f51d-4efc-b2d7-acac853219f3","method":"POST","route":"/api/interactions","status":409,"durationMs":6}
+{"schemaVersion":1,"time":"2026-10-20T17:53:29.623Z","service":"worker","level":"info","event":"request_finished","requestId":"91d7fc69-465a-4828-9403-1f6e9882c976","method":"POST","route":"/api/taskboard/action","status":200,"durationMs":10}
+{"schemaVersion":1,"time":"2026-10-20T17:53:29.632Z","service":"worker","level":"warn","event":"request_finished","requestId":"8dbebc96-9a70-41a3-91af-ac59e91877c9","method":"POST","route":"/api/tasks","status":409,"durationMs":7}
+{"schemaVersion":1,"time":"2026-10-20T17:53:29.636Z","service":"worker","level":"warn","event":"request_finished","requestId":"8068aed6-a751-44fe-9ea9-b5353cea1d98","method":"POST","route":"/api/chat","status":409,"durationMs":1}
+{"schemaVersion":1,"time":"2026-10-20T17:53:29.644Z","service":"worker","level":"warn","event":"request_finished","requestId":"d4f7535d-5ef0-41df-b187-5cba41b96892","method":"POST","route":"/api/interactions","status":409,"durationMs":7}
+✔ changed interrupted checkout returns a durable failed request and blocks every follow-up route: ignored (623.286539ms)
+✔ ordinary accepted local requests retain their conversational follow-up capability (106.462806ms)
+ℹ tests 99
+ℹ suites 0
+ℹ pass 99
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6631.973751

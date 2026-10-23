@@ -1,0 +1,3093 @@
+{
+  "scope": "Offline Linux Chromium component/interaction fixtures; no native Windows or live provider qualification.",
+  "sourceDigest": "c7e54ba4b7a050a3578a5ef5ff127a19a5f17d33faae8bb4bd7ab9a4c218707d",
+  "measuredAt": "2026-10-20T17:43:16.879Z",
+  "results": [
+    {
+      "id": "worker-delivery-setup--committed-policy",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-delivery-setup--committed-policy-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Named quality profiles expose their readiness requirements, repair limits and protected verification inputs. Preview does not change an accepted request or publish local edits.",
+          "covers": [
+            "src/worker/webview/components/DeliveryPolicyPanel.vue"
+          ],
+          "route": "/settings#delivery-policy",
+          "ready": "[data-delivery-setup-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/DeliveryPolicyPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-delivery-setup--committed-policy",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-delivery-setup--committed-policy-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Named quality profiles expose their readiness requirements, repair limits and protected verification inputs. Preview does not change an accepted request or publish local edits.",
+          "covers": [
+            "src/worker/webview/components/DeliveryPolicyPanel.vue"
+          ],
+          "route": "/settings#delivery-policy",
+          "ready": "[data-delivery-setup-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/DeliveryPolicyPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-delivery-setup--explicit-authentication",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-delivery-setup--explicit-authentication-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "A saved legacy connection requires an explicit authentication choice. The provider’s limits remain visible and choosing subscription authentication does not enable an API fallback.",
+          "covers": [
+            "src/worker/webview/components/SettingsPanel.vue",
+            "src/worker/webview/components/ProviderCapabilitiesPanel.vue"
+          ],
+          "route": "/settings#provider-connections",
+          "ready": "[data-delivery-setup-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/ModelSelectionFields.vue",
+          "src/worker/webview/components/ProviderAccountPanel.vue",
+          "src/worker/webview/components/ProviderCapabilitiesPanel.vue",
+          "src/worker/webview/components/SettingsPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-delivery-setup--explicit-authentication",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-delivery-setup--explicit-authentication-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "A saved legacy connection requires an explicit authentication choice. The provider’s limits remain visible and choosing subscription authentication does not enable an API fallback.",
+          "covers": [
+            "src/worker/webview/components/SettingsPanel.vue",
+            "src/worker/webview/components/ProviderCapabilitiesPanel.vue"
+          ],
+          "route": "/settings#provider-connections",
+          "ready": "[data-delivery-setup-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/ModelSelectionFields.vue",
+          "src/worker/webview/components/ProviderAccountPanel.vue",
+          "src/worker/webview/components/ProviderCapabilitiesPanel.vue",
+          "src/worker/webview/components/SettingsPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-local-delivery--running-delivery",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-local-delivery--running-delivery-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The Feature Request lifecycle, delivery run status and current phase stay separate. Behavior conditions and recorded steps explain the next action without a fabricated progress percentage.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/DeliveryRunPanel.vue",
+            "src/worker/webview/components/DeliveryControls.vue",
+            "src/worker/webview/components/RequestActivityPanel.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-delivery-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryBehaviorInspector.vue",
+          "src/worker/webview/components/DeliveryControls.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryPlanPanel.vue",
+          "src/worker/webview/components/DeliveryProviderPanel.vue",
+          "src/worker/webview/components/DeliveryPublicationPanel.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/DeliveryRunPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestActivityPanel.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-local-delivery--running-delivery",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-local-delivery--running-delivery-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The Feature Request lifecycle, delivery run status and current phase stay separate. Behavior conditions and recorded steps explain the next action without a fabricated progress percentage.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/DeliveryRunPanel.vue",
+            "src/worker/webview/components/DeliveryControls.vue",
+            "src/worker/webview/components/RequestActivityPanel.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-delivery-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryBehaviorInspector.vue",
+          "src/worker/webview/components/DeliveryControls.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryPlanPanel.vue",
+          "src/worker/webview/components/DeliveryProviderPanel.vue",
+          "src/worker/webview/components/DeliveryPublicationPanel.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/DeliveryRunPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestActivityPanel.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-local-delivery--pause-at-boundary",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-local-delivery--pause-at-boundary-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "A guarded pause command preserves the exact delivery run and revision. The interface distinguishes recorded intent from a completed pause, then offers explicit resume.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/DeliveryRunPanel.vue",
+            "src/worker/webview/components/DeliveryControls.vue",
+            "src/worker/webview/components/RequestActivityPanel.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-delivery-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryBehaviorInspector.vue",
+          "src/worker/webview/components/DeliveryControls.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryPlanPanel.vue",
+          "src/worker/webview/components/DeliveryProviderPanel.vue",
+          "src/worker/webview/components/DeliveryPublicationPanel.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/DeliveryRunPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestActivityPanel.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-local-delivery--pause-at-boundary",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-local-delivery--pause-at-boundary-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "A guarded pause command preserves the exact delivery run and revision. The interface distinguishes recorded intent from a completed pause, then offers explicit resume.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/DeliveryRunPanel.vue",
+            "src/worker/webview/components/DeliveryControls.vue",
+            "src/worker/webview/components/RequestActivityPanel.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-delivery-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryBehaviorInspector.vue",
+          "src/worker/webview/components/DeliveryControls.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryPlanPanel.vue",
+          "src/worker/webview/components/DeliveryProviderPanel.vue",
+          "src/worker/webview/components/DeliveryPublicationPanel.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/DeliveryRunPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestActivityPanel.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-local-delivery--unknown-outcome",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-local-delivery--unknown-outcome-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "A process whose completion is unknown remains explicit, with retained step correlation and no unsupported resume or retry action.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/DeliveryRunPanel.vue",
+            "src/worker/webview/components/DeliveryControls.vue",
+            "src/worker/webview/components/RequestActivityPanel.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-delivery-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryBehaviorInspector.vue",
+          "src/worker/webview/components/DeliveryControls.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryPlanPanel.vue",
+          "src/worker/webview/components/DeliveryProviderPanel.vue",
+          "src/worker/webview/components/DeliveryPublicationPanel.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/DeliveryReviewEvidence.vue",
+          "src/worker/webview/components/DeliveryRunPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestActivityPanel.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-local-delivery--unknown-outcome",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-local-delivery--unknown-outcome-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "A process whose completion is unknown remains explicit, with retained step correlation and no unsupported resume or retry action.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/DeliveryRunPanel.vue",
+            "src/worker/webview/components/DeliveryControls.vue",
+            "src/worker/webview/components/RequestActivityPanel.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-delivery-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryBehaviorInspector.vue",
+          "src/worker/webview/components/DeliveryControls.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryPlanPanel.vue",
+          "src/worker/webview/components/DeliveryProviderPanel.vue",
+          "src/worker/webview/components/DeliveryPublicationPanel.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/DeliveryReviewEvidence.vue",
+          "src/worker/webview/components/DeliveryRunPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestActivityPanel.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-local-delivery--confirm-stopped-process",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-local-delivery--confirm-stopped-process-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Recovery requires the operator to inspect and stop remaining processes, acknowledge that inspection, and record a note. Confirmation remains separate from resume.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/DeliveryRunPanel.vue",
+            "src/worker/webview/components/DeliveryControls.vue",
+            "src/worker/webview/components/RequestActivityPanel.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-delivery-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryBehaviorInspector.vue",
+          "src/worker/webview/components/DeliveryControls.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryPlanPanel.vue",
+          "src/worker/webview/components/DeliveryProviderPanel.vue",
+          "src/worker/webview/components/DeliveryPublicationPanel.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/DeliveryReviewEvidence.vue",
+          "src/worker/webview/components/DeliveryRunPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestActivityPanel.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-local-delivery--confirm-stopped-process",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-local-delivery--confirm-stopped-process-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Recovery requires the operator to inspect and stop remaining processes, acknowledge that inspection, and record a note. Confirmation remains separate from resume.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/DeliveryRunPanel.vue",
+            "src/worker/webview/components/DeliveryControls.vue",
+            "src/worker/webview/components/RequestActivityPanel.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-delivery-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryBehaviorInspector.vue",
+          "src/worker/webview/components/DeliveryControls.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryPlanPanel.vue",
+          "src/worker/webview/components/DeliveryProviderPanel.vue",
+          "src/worker/webview/components/DeliveryPublicationPanel.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/DeliveryReviewEvidence.vue",
+          "src/worker/webview/components/DeliveryRunPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestActivityPanel.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-local-delivery--lost-acknowledgement",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-local-delivery--lost-acknowledgement-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "An uncertain HTTP acknowledgement keeps the original operation ID. Retrying confirms the saved pause instead of submitting another command.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/DeliveryRunPanel.vue",
+            "src/worker/webview/components/DeliveryControls.vue",
+            "src/worker/webview/components/RequestActivityPanel.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-delivery-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryBehaviorInspector.vue",
+          "src/worker/webview/components/DeliveryControls.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryPlanPanel.vue",
+          "src/worker/webview/components/DeliveryProviderPanel.vue",
+          "src/worker/webview/components/DeliveryPublicationPanel.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/DeliveryRunPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestActivityPanel.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-local-delivery--lost-acknowledgement",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-local-delivery--lost-acknowledgement-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "An uncertain HTTP acknowledgement keeps the original operation ID. Retrying confirms the saved pause instead of submitting another command.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/DeliveryRunPanel.vue",
+            "src/worker/webview/components/DeliveryControls.vue",
+            "src/worker/webview/components/RequestActivityPanel.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-delivery-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryBehaviorInspector.vue",
+          "src/worker/webview/components/DeliveryControls.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryPlanPanel.vue",
+          "src/worker/webview/components/DeliveryProviderPanel.vue",
+          "src/worker/webview/components/DeliveryPublicationPanel.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/DeliveryRunPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestActivityPanel.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-local-delivery--human-criterion-review",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-local-delivery--human-criterion-review-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "A local candidate commit and its criterion matrix precede the review decision. Every required human criterion needs a passing observation; the command binds the candidate and never implies a remote PR or merge.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/DeliveryRunPanel.vue",
+            "src/worker/webview/components/DeliveryControls.vue",
+            "src/worker/webview/components/RequestActivityPanel.vue",
+            "src/worker/webview/components/DeliveryReviewEvidence.vue",
+            "src/worker/webview/components/DeliveryHumanReview.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-delivery-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryBehaviorInspector.vue",
+          "src/worker/webview/components/DeliveryControls.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryHumanReview.vue",
+          "src/worker/webview/components/DeliveryPlanPanel.vue",
+          "src/worker/webview/components/DeliveryProviderPanel.vue",
+          "src/worker/webview/components/DeliveryPublicationPanel.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/DeliveryReviewEvidence.vue",
+          "src/worker/webview/components/DeliveryRunPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestActivityPanel.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-local-delivery--human-criterion-review",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-local-delivery--human-criterion-review-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "A local candidate commit and its criterion matrix precede the review decision. Every required human criterion needs a passing observation; the command binds the candidate and never implies a remote PR or merge.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/DeliveryRunPanel.vue",
+            "src/worker/webview/components/DeliveryControls.vue",
+            "src/worker/webview/components/RequestActivityPanel.vue",
+            "src/worker/webview/components/DeliveryReviewEvidence.vue",
+            "src/worker/webview/components/DeliveryHumanReview.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-delivery-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryBehaviorInspector.vue",
+          "src/worker/webview/components/DeliveryControls.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryHumanReview.vue",
+          "src/worker/webview/components/DeliveryPlanPanel.vue",
+          "src/worker/webview/components/DeliveryProviderPanel.vue",
+          "src/worker/webview/components/DeliveryPublicationPanel.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/DeliveryReviewEvidence.vue",
+          "src/worker/webview/components/DeliveryRunPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestActivityPanel.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-local-delivery--review-draft-survives-refresh",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-local-delivery--review-draft-survives-refresh-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The candidate-scoped observation draft remains in the same field during polling, so reviewing evidence does not interrupt typing.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/DeliveryRunPanel.vue",
+            "src/worker/webview/components/DeliveryControls.vue",
+            "src/worker/webview/components/RequestActivityPanel.vue",
+            "src/worker/webview/components/DeliveryReviewEvidence.vue",
+            "src/worker/webview/components/DeliveryHumanReview.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-delivery-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryBehaviorInspector.vue",
+          "src/worker/webview/components/DeliveryControls.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryHumanReview.vue",
+          "src/worker/webview/components/DeliveryPlanPanel.vue",
+          "src/worker/webview/components/DeliveryProviderPanel.vue",
+          "src/worker/webview/components/DeliveryPublicationPanel.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/DeliveryReviewEvidence.vue",
+          "src/worker/webview/components/DeliveryRunPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestActivityPanel.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-local-delivery--review-draft-survives-refresh",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-local-delivery--review-draft-survives-refresh-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The candidate-scoped observation draft remains in the same field during polling, so reviewing evidence does not interrupt typing.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/DeliveryRunPanel.vue",
+            "src/worker/webview/components/DeliveryControls.vue",
+            "src/worker/webview/components/RequestActivityPanel.vue",
+            "src/worker/webview/components/DeliveryReviewEvidence.vue",
+            "src/worker/webview/components/DeliveryHumanReview.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-delivery-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryBehaviorInspector.vue",
+          "src/worker/webview/components/DeliveryControls.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryHumanReview.vue",
+          "src/worker/webview/components/DeliveryPlanPanel.vue",
+          "src/worker/webview/components/DeliveryProviderPanel.vue",
+          "src/worker/webview/components/DeliveryPublicationPanel.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/DeliveryReviewEvidence.vue",
+          "src/worker/webview/components/DeliveryRunPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestActivityPanel.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-local-delivery--filter-activity",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-local-delivery--filter-activity-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The worker journal is ordered and filterable by event, phase, invocation or revision. Recorded step output is separate from command acknowledgements.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/DeliveryRunPanel.vue",
+            "src/worker/webview/components/DeliveryControls.vue",
+            "src/worker/webview/components/RequestActivityPanel.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-delivery-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryBehaviorInspector.vue",
+          "src/worker/webview/components/DeliveryControls.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryPlanPanel.vue",
+          "src/worker/webview/components/DeliveryProviderPanel.vue",
+          "src/worker/webview/components/DeliveryPublicationPanel.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/DeliveryRunPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestActivityPanel.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-local-delivery--filter-activity",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-local-delivery--filter-activity-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The worker journal is ordered and filterable by event, phase, invocation or revision. Recorded step output is separate from command acknowledgements.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/DeliveryRunPanel.vue",
+            "src/worker/webview/components/DeliveryControls.vue",
+            "src/worker/webview/components/RequestActivityPanel.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-delivery-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryBehaviorInspector.vue",
+          "src/worker/webview/components/DeliveryControls.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryPlanPanel.vue",
+          "src/worker/webview/components/DeliveryProviderPanel.vue",
+          "src/worker/webview/components/DeliveryPublicationPanel.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/DeliveryRunPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestActivityPanel.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-execution-recovery--uncertain-reviewer-stop",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-execution-recovery--uncertain-reviewer-stop-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "An unresolved readiness reviewer keeps capacity reserved. Explicit operator inspection records an exact run/revision receipt; an uncertain response retries the same operation and does not dispatch or resume work.",
+          "covers": [
+            "src/worker/webview/components/ExecutionRecoveryPanel.vue"
+          ],
+          "route": "/taskboard",
+          "ready": "[data-execution-recovery-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/ExecutionRecoveryPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-execution-recovery--uncertain-reviewer-stop",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-execution-recovery--uncertain-reviewer-stop-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "An unresolved readiness reviewer keeps capacity reserved. Explicit operator inspection records an exact run/revision receipt; an uncertain response retries the same operation and does not dispatch or resume work.",
+          "covers": [
+            "src/worker/webview/components/ExecutionRecoveryPanel.vue"
+          ],
+          "route": "/taskboard",
+          "ready": "[data-execution-recovery-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/ExecutionRecoveryPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--accepted-plan-and-providers",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--accepted-plan-and-providers-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The current delivery shows frozen work, effective limits, exact-candidate advisory assessment and a fresh-session provider handoff. Accepted dependencies retain their baseline incorporation receipts.",
+          "covers": [
+            "src/worker/webview/components/DeliveryRunPanel.vue",
+            "src/worker/webview/components/DeliveryPlanPanel.vue",
+            "src/worker/webview/components/DeliveryProviderPanel.vue",
+            "src/worker/webview/components/DeliveryBehaviorInspector.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/DeliveryBehaviorInspector.vue",
+          "src/worker/webview/components/DeliveryPlanPanel.vue",
+          "src/worker/webview/components/DeliveryProviderPanel.vue",
+          "src/worker/webview/components/DeliveryRunPanel.vue",
+          "src/worker/webview/components/MessageContent.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--accepted-plan-and-providers",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--accepted-plan-and-providers-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The current delivery shows frozen work, effective limits, exact-candidate advisory assessment and a fresh-session provider handoff. Accepted dependencies retain their baseline incorporation receipts.",
+          "covers": [
+            "src/worker/webview/components/DeliveryRunPanel.vue",
+            "src/worker/webview/components/DeliveryPlanPanel.vue",
+            "src/worker/webview/components/DeliveryProviderPanel.vue",
+            "src/worker/webview/components/DeliveryBehaviorInspector.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/DeliveryBehaviorInspector.vue",
+          "src/worker/webview/components/DeliveryPlanPanel.vue",
+          "src/worker/webview/components/DeliveryProviderPanel.vue",
+          "src/worker/webview/components/DeliveryRunPanel.vue",
+          "src/worker/webview/components/MessageContent.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--exact-policy-approval",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--exact-policy-approval-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Local approval binds the exact committed policy digest and machine approval revision. Guarded draft editing writes configuration only; users commit and separately approve its new version.",
+          "covers": [
+            "src/worker/webview/components/DeliveryPolicyPanel.vue",
+            "src/worker/webview/components/DeliveryExecutionPolicy.vue",
+            "src/worker/webview/components/DeliveryPolicyDraftEditor.vue"
+          ],
+          "route": "/settings#delivery-policy",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/DeliveryExecutionPolicy.vue",
+          "src/worker/webview/components/DeliveryPolicyDraftEditor.vue",
+          "src/worker/webview/components/DeliveryPolicyPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--exact-policy-approval",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--exact-policy-approval-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Local approval binds the exact committed policy digest and machine approval revision. Guarded draft editing writes configuration only; users commit and separately approve its new version.",
+          "covers": [
+            "src/worker/webview/components/DeliveryPolicyPanel.vue",
+            "src/worker/webview/components/DeliveryExecutionPolicy.vue",
+            "src/worker/webview/components/DeliveryPolicyDraftEditor.vue"
+          ],
+          "route": "/settings#delivery-policy",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/DeliveryExecutionPolicy.vue",
+          "src/worker/webview/components/DeliveryPolicyDraftEditor.vue",
+          "src/worker/webview/components/DeliveryPolicyPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--authorized-routing",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--authorized-routing-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Automatic routing uses all matching conditions and first-match order. An allowed named request override selects provider/model/effort/agent together without exposing credentials.",
+          "covers": [
+            "src/worker/webview/components/ProjectExecutionSelection.vue"
+          ],
+          "route": "/taskboard",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/ProjectExecutionSelection.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--authorized-routing",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--authorized-routing-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Automatic routing uses all matching conditions and first-match order. An allowed named request override selects provider/model/effort/agent together without exposing credentials.",
+          "covers": [
+            "src/worker/webview/components/ProjectExecutionSelection.vue"
+          ],
+          "route": "/taskboard",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/ProjectExecutionSelection.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--explicit-readiness-decision",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--explicit-readiness-decision-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Interpretation and assumption decisions retain assessment/input identity and require a reason. Accepting an assumption does not answer its blocking question or satisfy unknown readiness.",
+          "covers": [
+            "src/worker/webview/components/DeliveryReadinessPanel.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/MessageContent.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--explicit-readiness-decision",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--explicit-readiness-decision-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Interpretation and assumption decisions retain assessment/input identity and require a reason. Accepting an assumption does not answer its blocking question or satisfy unknown readiness.",
+          "covers": [
+            "src/worker/webview/components/DeliveryReadinessPanel.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/MessageContent.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--checkpoint-exception",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--checkpoint-exception-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "A failed checkpoint exposes only check IDs from the accepted scope. The explicit reason and exact candidate are retained; no human IDs, passed check, or retry is invented.",
+          "covers": [
+            "src/worker/webview/components/DeliveryCriterionDecisions.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--checkpoint-exception",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--checkpoint-exception-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "A failed checkpoint exposes only check IDs from the accepted scope. The explicit reason and exact candidate are retained; no human IDs, passed check, or retry is invented.",
+          "covers": [
+            "src/worker/webview/components/DeliveryCriterionDecisions.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--dependency-incorporation",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--dependency-incorporation-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "A read-only dependency plan explains execution waves and why accepted dependency code must still be incorporated into the selected baseline. Inspection never dispatches work.",
+          "covers": [
+            "src/worker/webview/components/DeliveryDependencyPanel.vue"
+          ],
+          "route": "/history?view=features",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/DeliveryDependencyPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--dependency-incorporation",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--dependency-incorporation-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "A read-only dependency plan explains execution waves and why accepted dependency code must still be incorporated into the selected baseline. Inspection never dispatches work.",
+          "covers": [
+            "src/worker/webview/components/DeliveryDependencyPanel.vue"
+          ],
+          "route": "/history?view=features",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/DeliveryDependencyPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--uncertain-publication",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--uncertain-publication-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "An uncertain remote action retains its original operation and candidate. Reconciliation is distinct from pushing again, accepting the feature, or merging.",
+          "covers": [
+            "src/worker/webview/components/DeliveryPublicationPanel.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/DeliveryPublicationPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--uncertain-publication",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--uncertain-publication-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "An uncertain remote action retains its original operation and candidate. Reconciliation is distinct from pushing again, accepting the feature, or merging.",
+          "covers": [
+            "src/worker/webview/components/DeliveryPublicationPanel.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/DeliveryPublicationPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--unknown-outcome-metrics",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--unknown-outcome-metrics-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Nine canonical delivery outcomes remain separate from invocation KPIs. Missing history, review time, recovery audits and usage are unavailable with explicit coverage.",
+          "covers": [
+            "src/worker/webview/components/DeliveryMetricsPanel.vue"
+          ],
+          "route": "/monitoring",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/DeliveryMetricsPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--unknown-outcome-metrics",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--unknown-outcome-metrics-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Nine canonical delivery outcomes remain separate from invocation KPIs. Missing history, review time, recovery audits and usage are unavailable with explicit coverage.",
+          "covers": [
+            "src/worker/webview/components/DeliveryMetricsPanel.vue"
+          ],
+          "route": "/monitoring",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/DeliveryMetricsPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--shared-machine-capacity",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--shared-machine-capacity-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The configured machine ceiling and per-project occupancy are distinct. More than one active request is represented without inventing additional local admission places.",
+          "covers": [
+            "src/worker/webview/components/WorkerCapacityPanel.vue"
+          ],
+          "route": "/taskboard",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/WorkerCapacityPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--shared-machine-capacity",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--shared-machine-capacity-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The configured machine ceiling and per-project occupancy are distinct. More than one active request is represented without inventing additional local admission places.",
+          "covers": [
+            "src/worker/webview/components/WorkerCapacityPanel.vue"
+          ],
+          "route": "/taskboard",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/WorkerCapacityPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--revoke-retired-approval",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--revoke-retired-approval-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Removed repositories and older policy versions keep visible exact-version revocation. A different committed policy cannot hide earlier local grants.",
+          "covers": [
+            "src/worker/webview/components/DeliveryPolicyPanel.vue"
+          ],
+          "route": "/settings#delivery-policy",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/DeliveryExecutionPolicy.vue",
+          "src/worker/webview/components/DeliveryPolicyDraftEditor.vue",
+          "src/worker/webview/components/DeliveryPolicyPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--revoke-retired-approval",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--revoke-retired-approval-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Removed repositories and older policy versions keep visible exact-version revocation. A different committed policy cannot hide earlier local grants.",
+          "covers": [
+            "src/worker/webview/components/DeliveryPolicyPanel.vue"
+          ],
+          "route": "/settings#delivery-policy",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/DeliveryExecutionPolicy.vue",
+          "src/worker/webview/components/DeliveryPolicyDraftEditor.vue",
+          "src/worker/webview/components/DeliveryPolicyPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--repair-malformed-draft",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--repair-malformed-draft-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "A JSON editor preserves malformed shape while users repair it. Unsupported objects remain subject to server validation; primitive JSON cannot be submitted as configuration.",
+          "covers": [
+            "src/worker/webview/components/DeliveryPolicyDraftEditor.vue"
+          ],
+          "route": "/settings#delivery-policy",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/DeliveryExecutionPolicy.vue",
+          "src/worker/webview/components/DeliveryPolicyDraftEditor.vue",
+          "src/worker/webview/components/DeliveryPolicyPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--repair-malformed-draft",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--repair-malformed-draft-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "A JSON editor preserves malformed shape while users repair it. Unsupported objects remain subject to server validation; primitive JSON cannot be submitted as configuration.",
+          "covers": [
+            "src/worker/webview/components/DeliveryPolicyDraftEditor.vue"
+          ],
+          "route": "/settings#delivery-policy",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/DeliveryExecutionPolicy.vue",
+          "src/worker/webview/components/DeliveryPolicyDraftEditor.vue",
+          "src/worker/webview/components/DeliveryPolicyPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--unresolved-capacity",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--unresolved-capacity-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Unresolved process outcomes occupy machine and project capacity while retaining a distinct unknown state. No running timer or live-process assertion is inferred from that reservation.",
+          "covers": [
+            "src/worker/webview/components/WorkerCapacityPanel.vue"
+          ],
+          "route": "/taskboard",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/WorkerCapacityPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-delivery--unresolved-capacity",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-delivery--unresolved-capacity-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Unresolved process outcomes occupy machine and project capacity while retaining a distinct unknown state. No running timer or live-process assertion is inferred from that reservation.",
+          "covers": [
+            "src/worker/webview/components/WorkerCapacityPanel.vue"
+          ],
+          "route": "/taskboard",
+          "ready": "[data-expanded-delivery-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/WorkerCapacityPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-shared-feature-requests--describe-request",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-shared-feature-requests--describe-request-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The chat entry point prepares the same project Feature Request used by the Git intake. Drafting does not dispatch a model or create a separate task.",
+          "covers": [
+            "src/worker/webview/components/TaskIntake.vue",
+            "src/worker/webview/components/SharedFeatureComposer.vue"
+          ],
+          "route": "/taskboard",
+          "ready": "[data-authoring-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/ModelSelectionFields.vue",
+          "src/worker/webview/components/ProjectExecutionSelection.vue",
+          "src/worker/webview/components/SharedFeatureComposer.vue",
+          "src/worker/webview/components/TaskIntake.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-shared-feature-requests--describe-request",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-shared-feature-requests--describe-request-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The chat entry point prepares the same project Feature Request used by the Git intake. Drafting does not dispatch a model or create a separate task.",
+          "covers": [
+            "src/worker/webview/components/TaskIntake.vue",
+            "src/worker/webview/components/SharedFeatureComposer.vue"
+          ],
+          "route": "/taskboard",
+          "ready": "[data-authoring-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/ModelSelectionFields.vue",
+          "src/worker/webview/components/ProjectExecutionSelection.vue",
+          "src/worker/webview/components/SharedFeatureComposer.vue",
+          "src/worker/webview/components/TaskIntake.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-shared-feature-requests--complete-request-details",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-shared-feature-requests--complete-request-details-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Template fields retain one Feature Request ID. The worker checks readiness before the user can explicitly publish ready; custom Markdown remains available under advanced editing.",
+          "covers": [
+            "src/worker/webview/components/TaskIntake.vue",
+            "src/worker/webview/components/SharedFeatureComposer.vue",
+            "src/worker/webview/components/FeatureRequestDetails.vue"
+          ],
+          "route": "/taskboard",
+          "ready": "[data-authoring-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/FeatureRequestDetails.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/ModelSelectionFields.vue",
+          "src/worker/webview/components/ProjectExecutionSelection.vue",
+          "src/worker/webview/components/SharedFeatureComposer.vue",
+          "src/worker/webview/components/TaskIntake.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-shared-feature-requests--complete-request-details",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-shared-feature-requests--complete-request-details-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Template fields retain one Feature Request ID. The worker checks readiness before the user can explicitly publish ready; custom Markdown remains available under advanced editing.",
+          "covers": [
+            "src/worker/webview/components/TaskIntake.vue",
+            "src/worker/webview/components/SharedFeatureComposer.vue",
+            "src/worker/webview/components/FeatureRequestDetails.vue"
+          ],
+          "route": "/taskboard",
+          "ready": "[data-authoring-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/FeatureRequestDetails.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/ModelSelectionFields.vue",
+          "src/worker/webview/components/ProjectExecutionSelection.vue",
+          "src/worker/webview/components/SharedFeatureComposer.vue",
+          "src/worker/webview/components/TaskIntake.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-shared-feature-requests--submit-for-ready-check",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-shared-feature-requests--submit-for-ready-check-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Structural eligibility for the opt-in model review is labelled separately from passed Definition of Ready checks. A ready publication remains explicit.",
+          "covers": [
+            "src/worker/webview/components/TaskIntake.vue",
+            "src/worker/webview/components/SharedFeatureComposer.vue",
+            "src/worker/webview/components/FeatureRequestDetails.vue"
+          ],
+          "route": "/taskboard",
+          "ready": "[data-authoring-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/FeatureRequestDetails.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/ModelSelectionFields.vue",
+          "src/worker/webview/components/ProjectExecutionSelection.vue",
+          "src/worker/webview/components/SharedFeatureComposer.vue",
+          "src/worker/webview/components/TaskIntake.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-shared-feature-requests--submit-for-ready-check",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-shared-feature-requests--submit-for-ready-check-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Structural eligibility for the opt-in model review is labelled separately from passed Definition of Ready checks. A ready publication remains explicit.",
+          "covers": [
+            "src/worker/webview/components/TaskIntake.vue",
+            "src/worker/webview/components/SharedFeatureComposer.vue",
+            "src/worker/webview/components/FeatureRequestDetails.vue"
+          ],
+          "route": "/taskboard",
+          "ready": "[data-authoring-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/FeatureRequestDetails.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/ModelSelectionFields.vue",
+          "src/worker/webview/components/ProjectExecutionSelection.vue",
+          "src/worker/webview/components/SharedFeatureComposer.vue",
+          "src/worker/webview/components/TaskIntake.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-shared-feature-requests--select-request-model",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-shared-feature-requests--select-request-model-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Provider and model overrides are stored on the same Markdown Feature Request and remain editable before publication.",
+          "covers": [
+            "src/worker/webview/components/TaskIntake.vue",
+            "src/worker/webview/components/SharedFeatureComposer.vue",
+            "src/worker/webview/components/FeatureRequestDetails.vue",
+            "src/worker/webview/components/ModelSelectionFields.vue"
+          ],
+          "route": "/taskboard",
+          "ready": "[data-authoring-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/FeatureRequestDetails.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/ModelSelectionFields.vue",
+          "src/worker/webview/components/ProjectExecutionSelection.vue",
+          "src/worker/webview/components/SharedFeatureComposer.vue",
+          "src/worker/webview/components/TaskIntake.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-shared-feature-requests--select-request-model",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-shared-feature-requests--select-request-model-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Provider and model overrides are stored on the same Markdown Feature Request and remain editable before publication.",
+          "covers": [
+            "src/worker/webview/components/TaskIntake.vue",
+            "src/worker/webview/components/SharedFeatureComposer.vue",
+            "src/worker/webview/components/FeatureRequestDetails.vue",
+            "src/worker/webview/components/ModelSelectionFields.vue"
+          ],
+          "route": "/taskboard",
+          "ready": "[data-authoring-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/FeatureRequestDetails.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/ModelSelectionFields.vue",
+          "src/worker/webview/components/ProjectExecutionSelection.vue",
+          "src/worker/webview/components/SharedFeatureComposer.vue",
+          "src/worker/webview/components/TaskIntake.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-shared-feature-requests--new-request-uses-updated-defaults",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-shared-feature-requests--new-request-uses-updated-defaults-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Current defaults apply to a fresh request while an active draft keeps its selected model and provider.",
+          "covers": [
+            "src/worker/webview/components/TaskIntake.vue",
+            "src/worker/webview/components/SharedFeatureComposer.vue",
+            "src/worker/webview/components/FeatureRequestDetails.vue"
+          ],
+          "route": "/taskboard",
+          "ready": "[data-authoring-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/FeatureRequestDetails.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/ModelSelectionFields.vue",
+          "src/worker/webview/components/ProjectExecutionSelection.vue",
+          "src/worker/webview/components/SharedFeatureComposer.vue",
+          "src/worker/webview/components/TaskIntake.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-shared-feature-requests--new-request-uses-updated-defaults",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-shared-feature-requests--new-request-uses-updated-defaults-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Current defaults apply to a fresh request while an active draft keeps its selected model and provider.",
+          "covers": [
+            "src/worker/webview/components/TaskIntake.vue",
+            "src/worker/webview/components/SharedFeatureComposer.vue",
+            "src/worker/webview/components/FeatureRequestDetails.vue"
+          ],
+          "route": "/taskboard",
+          "ready": "[data-authoring-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/FeatureRequestDetails.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/ModelSelectionFields.vue",
+          "src/worker/webview/components/ProjectExecutionSelection.vue",
+          "src/worker/webview/components/SharedFeatureComposer.vue",
+          "src/worker/webview/components/TaskIntake.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-model-selection--worker-defaults",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-model-selection--worker-defaults-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Default provider is saved independently. Each provider has model and effort defaults; dirty edits survive refresh and accepted requests keep their saved values.",
+          "covers": [
+            "src/worker/webview/components/ModelSelectionFields.vue",
+            "src/worker/webview/components/SettingsPanel.vue"
+          ],
+          "route": "/settings#provider-connections",
+          "ready": "[data-model-selection-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/ModelSelectionFields.vue",
+          "src/worker/webview/components/ProviderAccountPanel.vue",
+          "src/worker/webview/components/ProviderCapabilitiesPanel.vue",
+          "src/worker/webview/components/SettingsPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-model-selection--worker-defaults",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-model-selection--worker-defaults-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Default provider is saved independently. Each provider has model and effort defaults; dirty edits survive refresh and accepted requests keep their saved values.",
+          "covers": [
+            "src/worker/webview/components/ModelSelectionFields.vue",
+            "src/worker/webview/components/SettingsPanel.vue"
+          ],
+          "route": "/settings#provider-connections",
+          "ready": "[data-model-selection-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/ModelSelectionFields.vue",
+          "src/worker/webview/components/ProviderAccountPanel.vue",
+          "src/worker/webview/components/ProviderCapabilitiesPanel.vue",
+          "src/worker/webview/components/SettingsPanel.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-intake--direct-project-request",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-intake--direct-project-request-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The direct composer binds a secondary project and its authorized execution profile to the same durable request. Raw worker defaults do not override the named profile.",
+          "covers": [
+            "src/worker/webview/components/TaskIntake.vue",
+            "src/worker/webview/components/ProjectExecutionSelection.vue"
+          ],
+          "route": "/taskboard",
+          "ready": "[data-project-intake-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/ModelSelectionFields.vue",
+          "src/worker/webview/components/ProjectExecutionSelection.vue",
+          "src/worker/webview/components/RunTask.vue",
+          "src/worker/webview/components/TaskIntake.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-intake--direct-project-request",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-intake--direct-project-request-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The direct composer binds a secondary project and its authorized execution profile to the same durable request. Raw worker defaults do not override the named profile.",
+          "covers": [
+            "src/worker/webview/components/TaskIntake.vue",
+            "src/worker/webview/components/ProjectExecutionSelection.vue"
+          ],
+          "route": "/taskboard",
+          "ready": "[data-project-intake-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/ModelSelectionFields.vue",
+          "src/worker/webview/components/ProjectExecutionSelection.vue",
+          "src/worker/webview/components/RunTask.vue",
+          "src/worker/webview/components/TaskIntake.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-intake--shared-project-automatic-routing",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-intake--shared-project-automatic-routing-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The shared composer preserves project Git binding and omits inherited provider settings for automatic routing. Preparing the draft neither publishes nor starts implementation.",
+          "covers": [
+            "src/worker/webview/components/TaskIntake.vue",
+            "src/worker/webview/components/ProjectExecutionSelection.vue",
+            "src/worker/webview/components/SharedFeatureComposer.vue",
+            "src/worker/webview/components/FeatureRequestDetails.vue"
+          ],
+          "route": "/taskboard",
+          "ready": "[data-project-intake-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/FeatureRequestDetails.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/ModelSelectionFields.vue",
+          "src/worker/webview/components/ProjectExecutionSelection.vue",
+          "src/worker/webview/components/SharedFeatureComposer.vue",
+          "src/worker/webview/components/TaskIntake.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-project-intake--shared-project-automatic-routing",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-project-intake--shared-project-automatic-routing-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The shared composer preserves project Git binding and omits inherited provider settings for automatic routing. Preparing the draft neither publishes nor starts implementation.",
+          "covers": [
+            "src/worker/webview/components/TaskIntake.vue",
+            "src/worker/webview/components/ProjectExecutionSelection.vue",
+            "src/worker/webview/components/SharedFeatureComposer.vue",
+            "src/worker/webview/components/FeatureRequestDetails.vue"
+          ],
+          "route": "/taskboard",
+          "ready": "[data-project-intake-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/FeatureRequestDetails.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/ModelSelectionFields.vue",
+          "src/worker/webview/components/ProjectExecutionSelection.vue",
+          "src/worker/webview/components/SharedFeatureComposer.vue",
+          "src/worker/webview/components/TaskIntake.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--verified-candidate",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--verified-candidate-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "One canonical feature request links accepted scope, the patch, checks and human acceptance. Passing checks never implies a merge.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--verified-candidate",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--verified-candidate-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "One canonical feature request links accepted scope, the patch, checks and human acceptance. Passing checks never implies a merge.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--record-acceptance",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--record-acceptance-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The matching acceptance command records the note, reevaluates completion and preserves separate patch review.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--record-acceptance",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--record-acceptance-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The matching acceptance command records the note, reevaluates completion and preserves separate patch review.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--failed-checks",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--failed-checks-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Failed required checks lead to evidence, without treating acceptance as proof that tests passed.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--failed-checks",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--failed-checks-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Failed required checks lead to evidence, without treating acceptance as proof that tests passed.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--outdated-checks",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--outdated-checks-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The recorded candidate digest differs from the check receipts. The page points to the checks that need rerunning.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--outdated-checks",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--outdated-checks-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The recorded candidate digest differs from the check receipts. The page points to the checks that need rerunning.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--publishing-handoff",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--publishing-handoff-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Successful local work is distinct from confirmation that the team can see its notes and branch.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--publishing-handoff",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--publishing-handoff-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Successful local work is distinct from confirmation that the team can see its notes and branch.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--published-handoff",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--published-handoff-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The team can find the published PullRequest note and feature branch. A human reviews and merges changes through Git.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--published-handoff",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--published-handoff-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The team can find the published PullRequest note and feature branch. A human reviews and merges changes through Git.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--answer-needed",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--answer-needed-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "A question sends the operator to the existing conversation and retained checkpoint without creating another workflow.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--answer-needed",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--answer-needed-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "A question sends the operator to the existing conversation and retained checkpoint without creating another workflow.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--interrupted-attempt",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--interrupted-attempt-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Uncertain execution retains its explicit continuation path. Opening review does not replay model work.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--interrupted-attempt",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--interrupted-attempt-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Uncertain execution retains its explicit continuation path. Opening review does not replay model work.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--unavailable-request",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--unavailable-request-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Unavailable identity displays an actionable read error and never falls back to the selected conversation.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--unavailable-request",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--unavailable-request-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Unavailable identity displays an actionable read error and never falls back to the selected conversation.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--quiet-refresh",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--quiet-refresh-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Routine polling keeps controls, typed acceptance text and keyboard focus stable.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--quiet-refresh",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--quiet-refresh-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Routine polling keeps controls, typed acceptance text and keyboard focus stable.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--stale-review",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--stale-review-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The last matching request stays readable after a failed refresh, but acceptance cannot use stale combined evidence.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--stale-review",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--stale-review-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "The last matching request stays readable after a failed refresh, but acceptance cannot use stale combined evidence.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--keyboard-review",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--keyboard-review-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Section links and file navigation use native keyboard controls and retain visible labels at narrow widths.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--keyboard-review",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--keyboard-review-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Section links and file navigation use native keyboard controls and retain visible labels at narrow widths.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--mismatched-evidence",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--mismatched-evidence-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "A mismatched feature identity is rejected before adoption. The earlier matching snapshot stays visible with decisions disabled.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--mismatched-evidence",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--mismatched-evidence-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "A mismatched feature identity is rejected before adoption. The earlier matching snapshot stays visible with decisions disabled.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--request-navigation",
+      "viewport": "desktop",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--request-navigation-desktop.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Changing the route never carries a previous request’s evidence or decisions into another identity. Returning restores only that request’s own draft.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    },
+    {
+      "id": "worker-review--request-navigation",
+      "viewport": "mobile",
+      "issues": [],
+      "passed": true,
+      "screenshot": "worker-review--request-navigation-mobile.png",
+      "evidence": {
+        "metadata": {
+          "app": "Worker",
+          "summary": "Changing the route never carries a previous request’s evidence or decisions into another identity. Returning restores only that request’s own draft.",
+          "covers": [
+            "src/worker/webview/pages/ReviewPage.vue",
+            "src/worker/webview/components/PatchReview.vue",
+            "src/worker/webview/components/CandidateEvidence.vue",
+            "src/worker/webview/components/RequestGatePanel.vue",
+            "src/worker/webview/components/AcceptedModelSelection.vue"
+          ],
+          "route": "/review?session=file&fileId=file-review",
+          "ready": "[data-review-ready]"
+        },
+        "mounted": [
+          "src/shared/webview/components/MessageContent.vue",
+          "src/worker/webview/components/AcceptedModelSelection.vue",
+          "src/worker/webview/components/AssistantMessage.vue",
+          "src/worker/webview/components/CandidateEvidence.vue",
+          "src/worker/webview/components/DeliveryCriterionDecisions.vue",
+          "src/worker/webview/components/DeliveryReadinessPanel.vue",
+          "src/worker/webview/components/FeatureRequestNote.vue",
+          "src/worker/webview/components/MessageContent.vue",
+          "src/worker/webview/components/PatchReview.vue",
+          "src/worker/webview/components/RequestGateEvidence.vue",
+          "src/worker/webview/components/RequestGatePanel.vue",
+          "src/worker/webview/components/WorkerShell.vue",
+          "src/worker/webview/pages/ReviewPage.vue"
+        ],
+        "errors": [],
+        "meaningful": true,
+        "horizontalOverflow": false
+      }
+    }
+  ]
+}

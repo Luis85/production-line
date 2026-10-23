@@ -1,3 +1,4 @@
+import { workspaceContext } from './runtime-fixtures.mjs';
 import { resultWith } from './contract-fixtures.mjs';
 import { testErrorCode, testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import { cleanup } from './fixture-cleanup.mjs';
@@ -80,7 +81,7 @@ test('feature validate reports adaptation and unknown references before submissi
 
 test('local folder intake reports an adaptation-requiring request as an intake error instead of waiting', async t => {
   const { workspace, request, put } = await folderWorkspace(t);
-  const features = /** @type {NonNullable<typeof workspace.features>} */ (workspace.features);
+  const features = /** @type {import('../../src/worker/application/feature-requests.js').FeatureRequests} */ (workspaceContext(workspace).features);
   await put('adapt.md', request('ready', 'definitionRef: future-reviewer\n'));
   await put('unknown.md', request('ready', 'definitionRef: missing-reviewer\n'));
   await features.tick(true); await features.tick(true);

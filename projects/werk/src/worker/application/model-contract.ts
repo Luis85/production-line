@@ -1,3 +1,5 @@
+import { validateAuthenticationMode, type ProviderAuthenticationMode } from './provider-capabilities.js';
+import type { ProviderId } from './provider-contract.js';
 import { validateModelEffort, type ModelEffort } from './model-effort.js';
 import { parseModelResult, ProviderModelError, type ModelResult } from './model-result.js';
 export { parseModelResult, ProviderModelError } from './model-result.js';
@@ -10,7 +12,7 @@ import type { ChatMessage, ConversationModel } from './conversation.js';
 import type { ProviderUsage } from './run-evidence.js';
 export interface ModelCapabilities { continuation: 'worker_context_replay' | 'provider_session'; nativeResume: boolean; streaming: false; tools: 'none' | 'granted' | 'provider_native'; structuredQuestions: 'werk_protocol_v1'; usage: 'provider_reported_when_available'; usageScope: 'invocation'; cost: 'provider_reported_estimate_or_unavailable'; }
 export const modelCapabilities: ModelCapabilities = Object.freeze({ continuation: 'worker_context_replay', nativeResume: false, streaming: false, tools: 'none', structuredQuestions: 'werk_protocol_v1', usage: 'provider_reported_when_available', usageScope: 'invocation', cost: 'provider_reported_estimate_or_unavailable' });
-export interface ModelProvider { id: string; model: string; instruction: string; effort?: ModelEffort; }
+export interface ModelProvider { id: string; model: string; instruction: string; effort?: ModelEffort; authenticationMode?: ProviderAuthenticationMode; }
 export interface ModelRequest {
   schemaVersion: 1 | 2; session?: ModelSessionBinding; sessionRecovery?: { operationId: string; priorTurnId: string; priorDispatchDigest: string }; contextCheckpoint?: ModelContextCheckpoint; operation: 'chat' | 'patch'; messages: ChatMessage[];
   provider: ModelProvider; policy: { tools: 'none' | 'granted' | 'provider_native'; filesystem: 'read_only' | 'worker_grants' | 'provider_permissions'; continuation: 'worker_context_replay' | 'provider_session'; sessionContext?: true; maxRuntimeMs?: number; maxToolCalls?: number; commandTimeoutMs?: number; development?: true } & Partial<CandidateLimits>;
@@ -34,7 +36,7 @@ export function prepareModelRequest(model: ConversationModel, input: ChatMessage
   if (session) validateModelSessionBinding(session);
   if (!Array.isArray(input) || input.length > (session ? 10000 : 60) || input.some(item => !item || !['user', 'assistant'].includes(item.role) || typeof item.text !== 'string' || item.text.length > 1048576) || !['chat', 'patch'].includes(operation)) throw new ProviderModelError('protocol');
   const configured = (model as Partial<StructuredModel>).configuration;
-  const provider = { id: configured?.id ?? 'legacy', model: configured?.model ?? '', instruction: configured?.instruction ?? '', ...(configured?.effort === undefined ? {} : { effort: validateModelEffort(configured.effort, configured.id) }) };
+  const provider = { id: configured?.id ?? 'legacy', model: configured?.model ?? '', instruction: configured?.instruction ?? '', ...(configured?.authenticationMode ? { authenticationMode: configured.authenticationMode } : {}), ...(configured?.effort === undefined ? {} : { effort: validateModelEffort(configured.effort, configured.id) }) };
   const context = modelContext(input, session), copied = context.messages;
   const typed = model as Partial<StructuredModel>, limits = typed.executionPolicy;
   const executionPolicy = { ...(limits?.maxToolCalls === undefined ? {} : { maxToolCalls: limits.maxToolCalls }), ...(limits?.commandTimeoutMs === undefined ? {} : { commandTimeoutMs: limits.commandTimeoutMs }) };
@@ -111,6 +113,7 @@ function validManifestLimits(manifest: ToolManifest): boolean {
 }
 export function requireModelRequest(request: ModelRequest, providerId: string) {
   if (!object(request) || ![1, 2].includes(request.schemaVersion) || request.interactionProtocol !== 1 || !object(request.provider) || request.provider.id !== providerId || typeof request.provider.model !== 'string' || request.provider.model.length > 200 || typeof request.provider.instruction !== 'string' || request.provider.instruction.length > 64000 || !['chat', 'patch'].includes(request.operation) || !object(request.policy) || !['none', 'granted', 'provider_native'].includes(request.policy.tools as string) || (request.policy.tools === 'provider_native') !== (providerId === 'cursor-cli') || request.policy.filesystem !== (request.policy.tools === 'provider_native' ? 'provider_permissions' : request.policy.tools === 'granted' ? 'worker_grants' : 'read_only') || !['worker_context_replay', ...(request.schemaVersion === 2 ? ['provider_session'] : [])].includes(request.policy.continuation) || !object(request.capabilities) || Object.entries(modelCapabilities).some(([key, value]) => request.capabilities[key as keyof ModelCapabilities] !== (key === 'tools' ? request.policy.tools : request.schemaVersion === 2 && key === 'continuation' ? request.policy.continuation : request.schemaVersion === 2 && key === 'nativeResume' ? request.policy.continuation === 'provider_session' : value)) || !Array.isArray(request.messages) || request.messages.length > 60 || request.messages.some(item => !object(item) || !['user', 'assistant'].includes(item.role as string) || typeof item.text !== 'string' || item.text.length > 1048576) || typeof request.renderedPrompt !== 'string' || request.renderedPrompt.length > 2097152 || typeof request.protocolInstructions !== 'string' || request.protocolInstructions.length > 128000) throw new ProviderModelError('protocol');
+  if (request.provider.authenticationMode !== undefined) { try { validateAuthenticationMode(request.provider.authenticationMode, providerId as ProviderId); } catch { throw new ProviderModelError('protocol'); } }
   if (request.provider.effort !== undefined) { try { validateModelEffort(request.provider.effort, providerId); } catch { throw new ProviderModelError('protocol'); } }
   if (request.schemaVersion === 1) {
     if (request.session !== undefined || request.sessionRecovery !== undefined || request.contextCheckpoint !== undefined || request.policy.sessionContext !== undefined) throw new ProviderModelError('protocol');

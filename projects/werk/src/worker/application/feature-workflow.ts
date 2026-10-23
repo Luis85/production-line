@@ -161,4 +161,4 @@ export function evaluateFeatureDone(policy: GatePolicy, facts: GateFactSnapshot)
   return evaluateGate(validateGatePolicy(policy), 'done', 'patch', facts);
 }
 export const featureContentHash = (content: string) => createHash('sha256').update(content).digest('hex');
-export const featureInputHash = (input: SharedFeatureInput) => gateDigest(input);
+export const featureInputHash = (input: SharedFeatureInput) => { const { providerExplicit: _explicit, ...semantic } = input; return gateDigest(semantic); };

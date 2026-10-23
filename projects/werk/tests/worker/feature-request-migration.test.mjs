@@ -1,3 +1,4 @@
+import { workspaceContext } from './runtime-fixtures.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, rm, realpath } from 'node:fs/promises';
@@ -54,8 +55,8 @@ test('legacy folder restart restores one parent to source, session, task and gat
   t.after(async () => { await close(); await rm(directory, { recursive: true, force: true }); });
   await open(); await workspace.updateSettings({ board: { paused: true }, provider: { id: 'openai-api', apiKey: 'fixture-only', model: 'fixture' } });
   await writeFile(join(features, 'export.md'), '---\nschemaVersion: 1\nid: export-feature\ntitle: Export feature\nstatus: ready\nmode: patch\npaths: [approved.txt]\nprovider: openai-api\n---\nImplement the approved export.\n');
-  await workspace.features.tick(true); await workspace.features.tick(true);
-  const task = workspace.board.view().tasks[0], source = workspace.features.view().records[0];
+  await workspaceContext(workspace).features.tick(true); await workspaceContext(workspace).features.tick(true);
+  const task = workspace.board.view().tasks[0], source = workspaceContext(workspace).features.view().records[0];
   assert.ok(task); assert.equal(source.feature.source, 'folder');
   const before = workspace.sessions.requests.forSession(task.sessionId);
   const runCount = workspace.sessions.runs.list({ sessionId: task.sessionId }).total;
@@ -63,7 +64,7 @@ test('legacy folder restart restores one parent to source, session, task and gat
   const restored = workspace.board.view().tasks[0], after = workspace.sessions.requests.forSession(task.sessionId);
   assert.equal(workspace.sessions.detail(task.sessionId).session.feature.key, source.feature.key);
   assert.equal(restored.feature.key, source.feature.key); assert.equal(after.owner.featureId, source.feature.key);
-  assert.equal(workspace.features.view().records[0].feature.key, source.feature.key);
+  assert.equal(workspaceContext(workspace).features.view().records[0].feature.key, source.feature.key);
   assertSameAcceptedRequest(before, after);
   assert.equal(restored.submissionHash, task.submissionHash);
   assert.equal(workspace.sessions.runs.list({ sessionId: task.sessionId }).total, runCount);
@@ -73,17 +74,36 @@ test('legacy folder restart restores one parent to source, session, task and gat
   await close(); await open(); assert.equal(workspace.sessions.requests.forSession(task.sessionId).revision, revision);
 });
 
+
+/** @param {import('../../src/worker/application/shared-feature-state.js').SharedFeatureState} retained */
+async function migratedSharedIntake(retained) {
+  const unreachable = () => { throw Error('Identity recovery must not synchronize Git or dispatch work.'); };
+  let stored = structuredClone(retained), saves = 0;
+  /** @type {import('../../src/worker/application/shared-feature-state.js').SharedIntakePorts} */
+  const ports = {
+    load: async () => structuredClone(stored),
+    async save(state) {
+      saves++; const { measurements, ...workflow } = state;
+      assert.deepEqual(workflow, retained, 'Local telemetry migration preserves every accepted lifecycle field.');
+      assert.ok(measurements); assert.equal(measurements.length, retained.records.length);
+      for (const metric of measurements) { assert.equal(metric.submittedAt, null); assert.equal(metric.complete, false); }
+      stored = structuredClone(state);
+    },
+    repository: unreachable, loadWorkflow: unreachable, ready: unreachable, source: unreachable, renderSource: unreachable, submit: unreachable, inspect: unreachable, canAdmit: () => false,
+  };
+  const intake = new SharedFeatureIntake(ports); await intake.init(); assert.equal(saves, 1);
+  const restarted = new SharedFeatureIntake(ports); await restarted.init();
+  assert.equal(saves, 1, 'Already migrated retained history needs no initialization write.');
+  assert.deepEqual(restarted.measurements(), intake.measurements()); await restarted.close();
+  return intake;
+}
+
 test('retained shared claims restore the parent before task recovery even after the active binding changes', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'werk-shared-upgrade-')), repository = join(directory, 'project');
   await mkdir(repository); await writeFile(join(repository, 'approved.txt'), 'untouched\n');
   const record = trackingSharedRecord({ taskId: 'shared-feature-upgrade', binding: { ...defaultSharedIntakeConfig(), repositoryId: 'original-project' } });
   const reference = sharedFeatureRequestReference(record);
-  const unreachable = () => { throw Error('Identity recovery must not synchronize Git or dispatch work.'); };
-  const intake = new SharedFeatureIntake({
-    load: async () => ({ schemaVersion: 1, workerId: 'worker', revision: 1, config: { ...defaultSharedIntakeConfig(), repositoryId: 'different-project' }, records: [record] }),
-    save: unreachable, repository: unreachable, loadWorkflow: unreachable, ready: unreachable, source: unreachable, renderSource: unreachable, submit: unreachable, inspect: unreachable, canAdmit: () => false,
-  });
-  await intake.init();
+  const intake = await migratedSharedIntake({ schemaVersion: 1, workerId: 'worker', revision: 1, config: { ...defaultSharedIntakeConfig(), repositoryId: 'different-project' }, records: [record] });
   const settings = new WorkerSettings(directory); await settings.init();
   await settings.update({ board: { paused: true }, provider: { id: 'openai-api', model: 'fixture', apiKey: 'fixture-only' } });
   let calls = 0;
@@ -127,12 +147,7 @@ test('an unsubmitted shared reservation cannot replace an existing or legacy int
   const directory = await mkdtemp(join(tmpdir(), 'werk-unclaimed-upgrade-'));
   const record = trackingSharedRecord({ taskId: 'reserved-task', submitted: false });
   const reference = sharedFeatureRequestReference(record);
-  const unreachable = () => { throw Error('Recovery cannot claim or dispatch work.'); };
-  const intake = new SharedFeatureIntake({
-    load: async () => ({ schemaVersion: 1, workerId: 'worker', revision: 0, config: defaultSharedIntakeConfig(), records: [record] }),
-    save: unreachable, repository: unreachable, loadWorkflow: unreachable, ready: unreachable, source: unreachable, renderSource: unreachable, submit: unreachable, inspect: unreachable, canAdmit: () => false,
-  });
-  await intake.init();
+  const intake = await migratedSharedIntake({ schemaVersion: 1, workerId: 'worker', revision: 0, config: defaultSharedIntakeConfig(), records: [record] });
   assert.equal(intake.referenceForTask(record.taskId), undefined);
   assert.equal(intake.referenceForTask(record.taskId, reference.key).key, reference.key);
   const settings = new WorkerSettings(directory); await settings.init();

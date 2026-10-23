@@ -7,6 +7,43 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-23
+
+Qualification: the live Windows/Claude Code pilot, full provider/account matrix and worker-managed live GitHub publication remain pending. Portable contract fixtures and installation checks do not establish those live outcomes. The expanded mutation scope remains advisory and has no completed full-scope score.
+
+### Added
+
+- Local delivery uses canonical `worker.request/v1` Markdown notes with explicit draft/submission intent, stable identity, scoped edits and dependency checks. Local chat intake writes the same notes and follows the same Feature Request lifecycle.
+- Committed `.werk/delivery-policy.json` selects quality profiles, bounded repair attempts and protected verification inputs. Each request retains the policy and repository baseline accepted at admission.
+- Durable delivery runs expose real execution steps, pause after a step, interruption, guarded recovery and append-only attempt evidence. Local candidate branches and review notes bind automated checks and per-criterion human acceptance to the exact candidate.
+- The worker review workspace shows delivery progress, blockers, scope, effective policy and candidate evidence. Provider settings expose explicit CLI-account/API-key selection, capabilities and diagnostics without silently switching billing authority.
+- Project delivery adds named provider profiles, allowed request overrides, ordered routing, a separate candidate reviewer and explicitly authorized bounded handoffs across Claude Code, Codex and Cursor adapters.
+- Multiple assigned projects retain isolated intake and request identities, with a shared execution ceiling, approved per-project concurrency and dependency plans that require accepted code to be incorporated into the relevant baseline.
+- Structured readiness retains committed references and explicit assumptions. Versioned check packs, baseline failure comparisons and exact-candidate criterion decisions preserve original observations while producing a complete human review package.
+- Project settings provide guarded policy draft editing and exact-version approval/revocation. Optional GitHub branch push and PR creation retain separate authorization and reconciliation receipts; human acceptance and merge remain separate.
+- Canonical request metrics show feedback, completed clarification cycles, verification, review effort, recovery, integrity, blockers and consumption with explicit coverage. Run views expose retained plans, behavior decisions, provider assessments and unresolved capacity.
+
+### Changed
+
+- New authoring installations require their starter delivery policy to be committed and approved before canonical work begins. Existing legacy installations and accepted policy snapshots retain their previous meaning.
+- Temporary service-log retention is configurable independently of preserved candidate artifacts and unfinished work.
+- Local authoring templates, CLI submission and documentation guide the request from draft to human acceptance. Legacy and shared Git intake remain supported.
+- Advisory release mutation testing expands the delivery authority, execution selection, coordination, readiness and verification contracts under a new 24-target scope. Ordinary development remains independent of mutation runs.
+
+### Fixed
+
+- Source reconciliation preserves user-authored Markdown, handles renamed and duplicate request identities, fences unsafe revisions and replays acknowledged commands without duplicate execution.
+- Candidate verification includes raw Git tree identity and protects approved verification inputs. Retained worktree ownership checks preserve existing branches during cleanup.
+- Review controls preserve an exact pending command after a lost acknowledgement while preventing new actions against stale state.
+- Restart recovery preserves immutable failed-check evidence when an exact authorized exception permits review, and unresolved execution reserves capacity across every model dispatch path.
+- Queued readiness reviews retain accepted definitions and billing choices; fresh permission checks after asynchronous preparation prevent revoked authority from launching tools, services or publication. Strict enum validation rejects coerced action and outcome values.
+- Dependency planning ignores duplicate request identities outside the reachable project graph and propagates unresolved prerequisites through intermediate dependencies.
+- Cancellation before inference preserves the known durable session checkpoint; uncertain outcomes after dispatch still require explicit reconciliation.
+- Publication refreshes retain history, expanded details and keyboard focus while guarding actions until current policy arrives. Project-policy approval controls remain aligned on narrow screens.
+- Policy validation rejects routing rules with missing quality profiles, saved definition restoration validates the complete catalog before exposing it, and saved sessions and MCP settings reject malformed values.
+- Native startup keeps HTTP and durable request intake usable while repository/model work waits for owned preparation; shutdown drains that preparation.
+- Windows supervisor compilation retains the host PowerShell module context needed for native setup, while preserving the private compiler environment, exact provider environment and existing preparation deadline.
+
 ## [0.14.0] - 2026-10-19
 
 ### Added

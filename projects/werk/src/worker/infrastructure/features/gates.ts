@@ -1,3 +1,4 @@
+import { remotePublicationMarkdown } from '../../application/remote-publication-markdown.js';
 import { join } from "node:path";
 import { stringify } from "yaml";
 import type {
@@ -50,6 +51,8 @@ export function validateFeatureGates(record: FeatureRecord) {
     projection.gaps !== base + "gaps.md"
   )
     throw Error("Invalid feature request gate projection.");
+  const run = projection.delivery;
+  if (run && (!gateIdentifier(run.runId) || [run.status, run.phase, run.reason].some(value => typeof value !== 'string' || value.length > 4000) || run.waitingFor !== null && typeof run.waitingFor !== 'string' || !Array.isArray(run.controls) || run.controls.some(value => typeof value !== 'string') || run.checkpoint && (typeof run.checkpoint.branch !== 'string' || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(run.checkpoint.candidateCommit)))) throw Error('Invalid delivery checkpoint projection.');
 }
 function currentEvaluation(
   request: WorkerRequest,
@@ -92,7 +95,7 @@ function evaluationText(evaluation?: GateEvaluation) {
           `| ${tableText(rule.ruleId)} | ${tableText(rule.fact)} | ${tableText(rule.expected)} | ${tableText(rule.observed)} | ${rule.result} |`,
       )
       .join("\n") +
-    "\n"
+    "\n" + (evaluation.readiness ? `\n### Semantic readiness\n\n${evaluation.readiness.message}\n\n${evaluation.readiness.conditions.map(item => `- ${tableText(item.id)}: ${item.outcome} — ${tableText(item.reason)}`).join('\n')}\n\n${evaluation.readiness.assessment ? `Assessment: ${evaluation.readiness.assessment.id}; input hash: ${evaluation.readiness.assessment.inputHash}; evaluator: ${evaluation.readiness.assessment.evaluator.kind}/${evaluation.readiness.assessment.evaluator.id}.\n\n` : ''}${evaluation.readiness.proposals.map(item => `- ${tableText(item.id)} (${item.kind}, ${item.impact} impact): **${item.status}** — ${tableText(item.text)}${item.decision ? `; operator reason: ${tableText(item.decision.reason)}` : ''}`).join('\n')}\n\nProposals are not answers to blocking questions. Use a guarded readiness_decision command in the original request to adopt or reject a current proposal.\n` : '')
   );
 }
 function findingsText(findings: RequestFinding[]) {
@@ -136,6 +139,11 @@ export async function exportFeatureGates(
     questions: base + "questions.md",
     gaps: base + "gaps.md",
   };
+  if (request.delivery) {
+    const run = request.delivery, checkpoint = run.checkpoints?.at(-1);
+    projection.delivery = { runId: run.id, status: run.status, phase: run.phase, reason: run.decision.reason, waitingFor: run.decision.waitingFor, controls: [...run.allowedControls], ...(checkpoint ? { checkpoint: { branch: checkpoint.branch, candidateCommit: checkpoint.candidateCommit } } : {}) };
+  }
+  if (request.delivery?.publications?.length) projection.publications = structuredClone(request.delivery.publications);
   validateFeatureGates({ ...record, gates: projection });
   const root = join(directory, "_gates", record.id);
   await ensureDirectory(root);
@@ -157,6 +165,8 @@ export async function exportFeatureGates(
     note +
     `\nRequest phase: ${request.phase}\nModel execution outcome: ${request.execution?.outcome ?? "not recorded"}\nRework owner: ${request.assignee}\n\n## Ready gate\n\n` +
     evaluationText(ready) +
+    (projection.delivery ? `\n## Delivery run\n\nRun ID: ${projection.delivery.runId}\nStatus: ${projection.delivery.status}\nPhase: ${projection.delivery.phase}\nReason: ${projection.delivery.reason}\nWaiting for: ${projection.delivery.waitingFor ?? 'No external event'}\nAvailable controls: ${projection.delivery.controls.join(', ') || 'None'}\n` + (projection.delivery.checkpoint ? `\nInspectable checkpoint (not a verification pass): ${projection.delivery.checkpoint.candidateCommit} on ${projection.delivery.checkpoint.branch}\n` : '') : '') +
+    (projection.publications?.length ? "\n" + remotePublicationMarkdown(projection.publications) + "\n" : "") +
     "\n## Done gate\n\n" +
     evaluationText(done) +
     "\n## Questions, issues and gaps\n\n" +

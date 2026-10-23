@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -5,6 +6,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { gitExecutable } from '../../src/worker/dist/shared/git/executable.js';
 import { runProcess } from '../../src/worker/dist/shared/process/launcher.js';
+
+prepareNativeProcessFixture();
 
 test('Windows Git in both launch modes resolves native executable only from its supplied PATH', { skip: process.platform !== 'win32', timeout: 20000 }, async t => {
   const directory = await mkdtemp(join(tmpdir(), 'werk-git-executable-')); t.after(() => rm(directory, { recursive: true, force: true }));

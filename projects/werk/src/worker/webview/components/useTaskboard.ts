@@ -9,6 +9,7 @@ import {
 import { useRoute, useRouter } from "vue-router";
 import { state, workspaceAction, request, date } from "../store";
 import type { LocalTaskDetailView } from "../../application/workspace-view";
+import { taskPriorityLabel } from '../task-priority';
 
 /** Owns this page's state, actions and lifecycle; the Vue component owns rendering. */
 export function useTaskboard() {
@@ -138,7 +139,7 @@ export function useTaskboard() {
       title: task.title,
       status: task.status,
       sourceLabel: "This worker",
-      priority: task.priority === 2 ? "High" : "Normal",
+      priority: taskPriorityLabel(task.priority),
       contextLabel: task.provider + " · " + task.files.length + " approved files",
       gate: task.requestPhase ? { phase: task.requestPhase } : undefined,
     })),

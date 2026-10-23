@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { taskPriorityOptions } from '../task-priority';
 import UButton from "@nuxt/ui/components/Button.vue";
 import UInput from "@nuxt/ui/components/Input.vue";
 import USelect from "@nuxt/ui/components/Select.vue";
@@ -223,21 +224,7 @@ const {
               detail.status === "queued" ? "Cancel queued task" : "Stop task"
             }}
           </UButton>
-          <UButton
-            v-if="detail.status === 'queued'"
-            color="neutral"
-            variant="outline"
-            :disabled="busy"
-            @click="
-              action({
-                id: detail.id,
-                action: 'priority',
-                priority: detail.priority === 2 ? 1 : 2,
-              })
-            "
-          >
-            {{ detail.priority === 2 ? "Normal priority" : "Raise priority" }}
-          </UButton>
+          <div v-if="detail.status === 'queued'"><label for="file-task-priority">Queue priority</label><USelect id="file-task-priority" :model-value="detail.priority" :items="taskPriorityOptions" :disabled="busy" @update:model-value="action({ id: detail.id, action: 'priority', priority: Number($event) })" /></div>
           <UButton
             v-if="canRetry"
             :disabled="busy"

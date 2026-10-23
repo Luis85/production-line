@@ -1,0 +1,19 @@
+✔ project init installs a self-contained worker, configurable template and Docker launch without overwriting edits (4157.682404ms)
+✔ installed native worker consumes files, exports review patches and keeps task identity across restart (9175.373115ms)
+✔ generated private question, task and gate ignores preserve operator rules and remain idempotent on repeat init (2225.653654ms)
+✔ init places workflow files under --workflow-dir, skips the root package with --no-npm and keeps the project root clean (1343.876704ms)
+✔ init without layout options keeps the root defaults and reports the project package (1492.024679ms)
+✔ an existing workflow wins over a differing --workflow-dir and the warning names both locations (2084.350064ms)
+✔ feature setup honors --workflow-dir and rejects folders outside the project (1138.025036ms)
+✔ canonical Markdown request delivers a real local candidate, human acceptance and restart without redispatch (6056.415256ms)
+✔ priority-only Markdown edits reorder a paused queue without accepting another input or invoking a model (7955.186981ms)
+✔ removing acceptance criteria from canonical Markdown clears stale criteria and blocks the same request at readiness (4566.473467ms)
+✔ an external candidate edit withdraws review readiness without another model call or stale acceptance (4547.459829ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 45265.489258

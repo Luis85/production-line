@@ -1,10 +1,14 @@
 <script setup lang="ts">
 import { computed, useId } from 'vue';
 import UBadge from '@nuxt/ui/components/Badge.vue';
+import { compareBaselineChecks } from '../../application/development-baseline-comparison';
 import { candidateEvidenceView, type DevelopmentTaskView } from '../candidate-evidence';
 const props = defineProps<{ task: DevelopmentTaskView; showReviewLink?: boolean }>();
 const view = computed(() => candidateEvidenceView(props.task));
 const titleId = useId();
+const comparisons = computed(() => props.task.implementation ? compareBaselineChecks(props.task.implementation, props.task.developmentEvidence) : []);
+const baselineLabels = { passing: 'Baseline and candidate passed', regression: 'Regression against the baseline', resolved: 'Baseline failure resolved', pre_existing: 'Pre-existing failure · still required', unknown: 'Baseline comparison unavailable' };
+const diagnostic = (id: string) => comparisons.value.find(item => item.id === id);
 const when = (value: string) => new Date(value).toLocaleString();
 </script>
 <template>
@@ -14,9 +18,12 @@ const when = (value: string) => new Date(value).toLocaleString();
     <RouterLink v-if="showReviewLink && (task.hasPatch || task.patch)" class="candidate-review" :to="{ path: '/review', query: { fileId: task.id, ...(task.sessionId ? { session: task.sessionId } : {}) } }">Review changes and checks</RouterLink>
     <template v-if="view.implementation">
       <p v-if="task.developmentEvidence" class="candidate-time">Last recorded <time :datetime="task.developmentEvidence.updatedAt">{{ when(task.developmentEvidence.updatedAt) }}</time></p>
+      <p v-if="task.implementation?.checkPacks?.length" class="candidate-time">Accepted check packs: {{ task.implementation.checkPacks.map(pack => pack.id + ' v' + pack.version).join(', ') }}. Pack versions are retained with this verification plan.</p>
+      <p v-if="task.developmentEvidence?.baseline" class="candidate-time">Baseline comparison is diagnostic. A pre-existing failure does not pass a required check. {{ task.developmentEvidence.baseline.reason }}</p>
       <ul class="candidate-checks" aria-label="Required feature checks">
         <li v-for="check in view.checks" :key="check.id">
           <div class="check-result"><strong>{{ check.name }}</strong><UBadge :color="check.passed ? 'success' : ['Failed', 'Interrupted', 'Needs rerun', 'Invalid evidence'].includes(check.status) ? 'warning' : 'neutral'" variant="subtle">{{ check.status }}</UBadge></div>
+          <p v-if="task.developmentEvidence?.baseline && diagnostic(check.id)" class="check-help">{{ baselineLabels[diagnostic(check.id)!.classification as keyof typeof baselineLabels] }}</p>
           <p v-if="check.status === 'Needs rerun'" class="check-help">This result belongs to different changes or a different check definition. Run this check again on the current candidate.</p>
           <p v-else-if="check.status === 'Not run'" class="check-help">No result is recorded for this required check.</p>
           <details v-if="check.receipt" class="check-output">

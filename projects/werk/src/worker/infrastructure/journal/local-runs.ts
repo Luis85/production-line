@@ -1,3 +1,6 @@
+import { assertExecutionStopObservation, validateExecutionRecoveryCommand, type ExecutionStopObservation, type UnknownExecutionReason } from '../../application/execution-recovery.js';
+import { validateAuthenticationMode } from '../../application/provider-capabilities.js';
+import type { ProviderId } from '../../application/provider-contract.js';
 import type { DatabaseSync } from 'node:sqlite';
 import { createHash, randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
@@ -14,10 +17,10 @@ export class WorkerRunJournal {
   private clock = new Map<string, { accepted?: number; started?: number }>();
   private directory: string;
   constructor(directory: string) { this.directory = directory; }
-  async init(recovery?: (runId: string) => { outcome: Exclude<RunOutcome, 'queued' | 'running'>; usage: ProviderUsage } | undefined) {
+  async init(recovery?: (runId: string) => { outcome: Exclude<RunOutcome, 'queued' | 'running'>; usage: ProviderUsage } | undefined, deliveryOwns?: (run: WorkerRun) => boolean) {
     if (this.initialized) return;
     await this.open();
-    try { await this.recover(recovery); } catch (error) { this.close(); throw error; }
+    try { await this.recover(recovery, new Set(), deliveryOwns); } catch (error) { this.close(); throw error; }
   }
   async open() {
     if (this.initialized) return;
@@ -31,7 +34,8 @@ export class WorkerRunJournal {
         input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER, cache_write_tokens INTEGER, cost_usd REAL,
         duration_ms REAL, cpu_user REAL, cpu_system REAL, rss_bytes INTEGER);
       CREATE INDEX IF NOT EXISTS worker_runs_session ON worker_runs(session_id, sequence);
-      CREATE INDEX IF NOT EXISTS worker_runs_filter ON worker_runs(provider, outcome, sequence);`);
+      CREATE INDEX IF NOT EXISTS worker_runs_filter ON worker_runs(provider, outcome, sequence);
+      CREATE TABLE IF NOT EXISTS execution_recovery_operations(operation_id TEXT PRIMARY KEY, run_id TEXT NOT NULL, command_digest TEXT NOT NULL);`);
     this.initialized = true;
     } catch (error) { this.db.close(); this.initialized = false; throw error; }
   }
@@ -40,11 +44,18 @@ export class WorkerRunJournal {
     return !!row && row.finished === 0 && row.outcome === 'queued' && row.reported === 0 && row.session_id === run.sessionId && row.task_id === run.taskId && row.kind === run.kind && row.provider === run.provider && row.created_at === run.acceptedAt &&
       ['input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens', 'cost_usd', 'duration_ms', 'cpu_user', 'cpu_system', 'rss_bytes'].every(key => row[key] === null);
   }
-  async recover(recovery?: Parameters<WorkerRunJournal['init']>[0], retained: ReadonlySet<string> = new Set()) {
+  async recover(recovery?: Parameters<WorkerRunJournal['init']>[0], retained: ReadonlySet<string> = new Set(), deliveryOwns?: (run: WorkerRun) => boolean) {
     for (const row of this.db.prepare('SELECT id FROM worker_runs WHERE finished=0 ORDER BY sequence').all()) {
       const id = String(row.id);
       if (retained.has(id) && this.queuedForRecovery(id)) continue;
-      const known = recovery?.(id);
+      const known = recovery?.(id), run = this.get(id);
+      const parent = run.parentRunId ? this.get(run.parentRunId) : undefined;
+      // A delegated child borrows the parent's recovery boundary, including an operator's descendant-aware stop attestation.
+      const parentOwns = parent && parent.sessionId === run.parentSessionId && parent.parentRunId === undefined
+        && ['taskId', 'requestId', 'kind', 'provider', 'model', 'authenticationMode'].every(key => run[key as keyof RunMetadata] === parent[key as keyof RunMetadata])
+        && (run.purpose ?? 'execution') === (parent.purpose ?? 'execution')
+        && (parent.executionRecovery?.state === 'unknown' || parent.executionRecovery?.state === 'operator_confirmed_stopped');
+      if (!known && run.startedAt && !parentOwns && !deliveryOwns?.(run)) this.reserveUnknown(id, 'worker_restarted');
       await this.complete(id, known?.outcome ?? 'interrupted', known?.usage ?? this.get(id).usage, true);
     }
   }
@@ -67,6 +78,7 @@ export class WorkerRunJournal {
   }
   private save(run: WorkerRun) { this.db.prepare('UPDATE worker_runs SET outcome=?, payload=? WHERE id=?').run(run.outcome, JSON.stringify(run), run.id); }
   async begin(metadata: RunMetadata): Promise<WorkerRun> {
+    if (metadata.authenticationMode !== undefined) validateAuthenticationMode(metadata.authenticationMode, metadata.provider as ProviderId);
     if (metadata.purpose !== undefined && !['execution', 'gate_review', 'rework'].includes(metadata.purpose)) throw new DomainError('invalid_input', 'Invalid run purpose.');
     if (metadata.requestId !== undefined && (typeof metadata.requestId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(metadata.requestId))) throw new DomainError('invalid_input', 'Invalid request identity.');
     validateRunLineage(metadata, metadata.parentRunId === undefined ? undefined : this.get(metadata.parentRunId));
@@ -105,7 +117,7 @@ export class WorkerRunJournal {
     return normalized;
   }
   async finish(id: string, outcome: Exclude<RunOutcome, 'queued' | 'running'>, usage = unknownUsage()) { return this.complete(id, outcome, usage); }
-  private async complete(id: string, outcome: Exclude<RunOutcome, 'queued' | 'running'>, usage: ProviderUsage, recovered = false) {
+  private complete(id: string, outcome: Exclude<RunOutcome, 'queued' | 'running'>, usage: ProviderUsage, recovered = false) {
     const run = this.get(id); if (run.after) return run;
     const normalized = this.normalizeUsage(usage);
     const timing = this.clock.get(id), resources = this.resources();
@@ -123,6 +135,38 @@ export class WorkerRunJournal {
     if (typeof id !== 'string' || !/^[a-f0-9-]{36}$/.test(id)) throw new DomainError('invalid_input', 'Choose a valid run ID.');
     const row = this.db.prepare('SELECT payload FROM worker_runs WHERE id=?').get(id);
     if (!row) throw new DomainError('not_found', 'Run evidence not found.'); return JSON.parse(String(row.payload));
+  }
+  reserveUnknown(id: string, reason: UnknownExecutionReason): void {
+    if (reason !== 'outcome_unknown' && reason !== 'process_stop_unconfirmed' && reason !== 'worker_restarted') throw new DomainError('invalid_input', 'Choose an exact unresolved execution reason.');
+    const run = this.get(id);
+    if (run.executionRecovery?.state === 'unknown') return;
+    if (!run.startedAt || run.after || run.executionRecovery) throw new DomainError('conflict', 'Only a started unresolved attempt can reserve execution capacity.');
+    run.executionRecovery = { schemaVersion: 1, revision: 1, state: 'unknown', reason, detectedAt: new Date().toISOString() };
+    this.transaction(() => this.save(run));
+  }
+  uncertainExecutions(): WorkerRun[] {
+    return this.db.prepare("SELECT payload FROM worker_runs WHERE json_extract(payload, '$.executionRecovery.state')='unknown' ORDER BY sequence").all().map(row => JSON.parse(String(row.payload)) as WorkerRun);
+  }
+  recoveryReplay(input: unknown): WorkerRun | undefined {
+    const command = validateExecutionRecoveryCommand(input), digest = createHash('sha256').update(JSON.stringify(command)).digest('hex');
+    const row = this.db.prepare('SELECT run_id,command_digest FROM execution_recovery_operations WHERE operation_id=?').get(command.operationId);
+    if (!row) return undefined;
+    if (row.command_digest !== digest || row.run_id !== command.runId) throw new DomainError('conflict', 'Recovery operation identity already belongs to a different attestation.');
+    return this.get(command.runId);
+  }
+  confirmExecutionStopped(input: unknown, observation: ExecutionStopObservation): WorkerRun {
+    const command = validateExecutionRecoveryCommand(input), replay = this.recoveryReplay(command);
+    if (replay) return replay;
+    const run = this.get(command.runId);
+    assertExecutionStopObservation(run, command, observation);
+    run.executionRecovery = { ...run.executionRecovery!, revision: command.expectedRevision + 1, state: 'operator_confirmed_stopped',
+      confirmation: { operationId: command.operationId, note: command.note, observedAt: observation.observedAt, confirmedAt: new Date().toISOString(), basis: 'operator_attested' } };
+    this.transaction(() => {
+      this.save(run);
+      this.db.prepare('INSERT INTO execution_recovery_operations(operation_id,run_id,command_digest) VALUES (?,?,?)').run(command.operationId, command.runId, createHash('sha256').update(JSON.stringify(command)).digest('hex'));
+    });
+    // Accounting may have failed after dispatch. Cessation is an explicit operator observation, never a fabricated provider result.
+    return run.after ? run : this.complete(run.id, 'interrupted', run.usage, true);
   }
   latest(sessionId: string): WorkerRun | undefined {
     const row = this.db.prepare('SELECT payload FROM worker_runs WHERE session_id=? ORDER BY sequence DESC LIMIT 1').get(sessionId);

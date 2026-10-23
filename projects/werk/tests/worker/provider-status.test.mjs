@@ -21,11 +21,11 @@ test('provider checks explain missing executable or unsupported platform', async
   const missing = await checks.check(provider('codex-cli', { executable: '/does-not-exist-provider' })); assert.equal(missing.configured, true); assert.equal(missing.available, false);
 });
 test('read-only CLI status checks report login, redact diagnostics and share concurrent work', { skip: process.platform === 'win32' }, async t => {
-  const path = await executable(t, `const fs = require('node:fs'); fs.appendFileSync(__filename + '.calls', 'x'); if (process.argv.slice(2).join(' ') !== 'login status') process.exit(3); console.error('Logged in using ChatGPT secret-private-account');`);
+  const path = await executable(t, `const fs = require('node:fs'); fs.appendFileSync(__filename + '.calls', 'x'); if(process.argv.includes('--version')){console.log('codex-cli 0.1.0');process.exit(0)} if (process.argv.slice(2).join(' ') !== 'login status') process.exit(3); console.error('Logged in using ChatGPT secret-private-account');`);
   const checks = new ProviderStatusChecks(), connection = provider('codex-cli', { executable: path });
   const results = await Promise.all([checks.check(connection), checks.check(connection), checks.check(connection)]);
   assert.equal(results[0].authentication, 'authenticated'); assert.equal(results[0].available, true); assert.doesNotMatch(JSON.stringify(results), /secret-private-account/);
-  await checks.check(connection); assert.equal(await readFile(path + '.calls', 'utf8'), 'x');
+  await checks.check(connection); assert.equal(await readFile(path + '.calls', 'utf8'), 'xx'); assert.equal(results[0].version, '0.1.0');
   const claude = await executable(t, `if(process.argv.includes('--version')){console.log('2.1.257');process.exit(0)}console.error('private-startup-diagnostic'); if (process.argv.slice(2).join(' ') !== 'auth status') process.exit(3); console.log(JSON.stringify({loggedIn: true, email: 'private@example.com', authMethod: 'oauth_token'}));`);
   const status = await checks.check(provider('claude-cli', { executable: claude })); assert.equal(status.authentication, 'authenticated'); assert.doesNotMatch(JSON.stringify(status), /private@example|oauth_token|private-startup-diagnostic/);
 });

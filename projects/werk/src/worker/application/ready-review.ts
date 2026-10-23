@@ -1,3 +1,4 @@
+import { unknownProviderOutcome } from './provider-outcome.js';
 import { DomainError } from '../../shared/errors.js';
 import { gateDigest } from './request-gates.js';
 import { DEFAULT_MAX_RUNTIME_MS } from './execution-policy.js';
@@ -16,6 +17,7 @@ export interface ReadyReviewOptions {
   profile(input: ReadyReviewInput): ModelProvider;
   model(profile: ModelProvider, binding: ModelSessionBinding): ConversationModel | undefined;
   assertCanAdmit(): void;
+  authorize?(authority: NonNullable<ReadyReviewInput['deliveryAuthority']>): void;
   maxRuntimeMs?: () => number;
 }
 interface Prepared { attempt: ReadyReviewAttempt; model: ConversationModel; dispatch: ModelRequest; }
@@ -38,7 +40,7 @@ export class ReadyReviewManager implements ReadyReviewPort {
     const context = turn.context as Partial<Context> | null;
     if (context?.kind !== 'feature_ready_review' || gateDigest(context.input) !== gateDigest(input)
       || !context.provider || context.provider.id !== input.provider
-      || input.selection && (context.provider.model !== input.selection.model || context.provider.effort !== input.selection.effort)
+      || input.selection && (context.provider.model !== input.selection.model || context.provider.effort !== input.selection.effort || context.provider.authenticationMode !== input.selection.authenticationMode)
       || typeof context.provider.model !== 'string' || typeof context.provider.instruction !== 'string')
       throw new DomainError('conflict', 'Ready Check evidence does not match the accepted source and provider.');
     if (turn.dispatch && (gateDigest(turn.dispatch.provider) !== gateDigest(context.provider)
@@ -71,6 +73,7 @@ export class ReadyReviewManager implements ReadyReviewPort {
     const existing = this.inspect(input);
     if (existing) return { operationId: existing.operationId, sessionId, turnId: existing.turnId, runId: existing.runId };
     if (this.closed || this.persistenceError) throw new DomainError('unavailable', 'Ready Check execution is unavailable until the worker is restarted.');
+    this.authorize(input);
     this.options.assertCanAdmit();
     const controller = new AbortController();
     const acceptance = Promise.resolve().then(() => this.prepare(input, controller.signal));
@@ -89,7 +92,7 @@ export class ReadyReviewManager implements ReadyReviewPort {
     try {
       signal.throwIfAborted();
       const provider = structuredClone(this.options.profile(input));
-      if (provider.id !== input.provider || input.selection && (provider.model !== input.selection.model || provider.effort !== input.selection.effort))
+      if (provider.id !== input.provider || input.selection && (provider.model !== input.selection.model || provider.effort !== input.selection.effort || provider.authenticationMode !== input.selection.authenticationMode))
         throw new DomainError('conflict', 'Ready Check provider, model and effort do not match the accepted selection.');
       const context: Context = { kind: 'feature_ready_review', input, provider };
       turn = this.options.interactions.accept({ sessionId, operationId: input.operationId, kind: 'message',
@@ -101,7 +104,7 @@ export class ReadyReviewManager implements ReadyReviewPort {
         capabilities: { ...((model as Partial<StructuredModel>).capabilities ?? modelCapabilities), tools: provider.id === 'cursor-cli' ? 'provider_native' : 'none' } } as ConversationModel;
       const dispatch = prepareModelRequest(frozen, [readyReviewMessage(input, turn.createdAt)], 'chat', this.options.maxRuntimeMs?.() ?? DEFAULT_MAX_RUNTIME_MS);
       runId = (await this.options.runs.begin({ sessionId, taskId: sessionId, kind: 'local', purpose: 'gate_review', title: 'Ready Check: ' + input.title,
-        provider: provider.id, model: provider.model })).id;
+        provider: provider.id, model: provider.model, ...(provider.authenticationMode ? { authenticationMode: provider.authenticationMode } : {}) })).id;
       this.options.interactions.prepare(sessionId, turn.id, dispatch, runId);
       signal.throwIfAborted();
       return { attempt: { operationId: input.operationId, sessionId, turnId: turn.id, runId }, model, dispatch };
@@ -120,12 +123,13 @@ export class ReadyReviewManager implements ReadyReviewPort {
   private async execute(input: ReadyReviewInput, prepared: Prepared, controller: AbortController): Promise<void> {
     const { attempt, model, dispatch } = prepared, { sessionId, turnId } = attempt, runId = attempt.runId!;
     let release: (() => void) | undefined, signal = controller.signal, usage = unknownUsage();
-    let outcome: 'completed' | 'failed' | 'interrupted' = 'failed';
+    let outcome: 'completed' | 'failed' | 'interrupted' = 'failed', retainPermit = false;
     try {
       release = await this.options.executor.acquire(sessionId, controller.signal);
       signal = AbortSignal.any([controller.signal, AbortSignal.timeout(dispatch.policy.maxRuntimeMs ?? DEFAULT_MAX_RUNTIME_MS)]);
       if (this.persistenceError) throw new DomainError('unavailable', 'Ready Check evidence storage is unavailable.');
       this.inspect(input); // Verify the durable scope again before any paid call.
+      this.authorize(input);
       await this.options.runs.start(runId);
       this.options.interactions.start(sessionId, turnId);
       signal.throwIfAborted();
@@ -133,7 +137,7 @@ export class ReadyReviewManager implements ReadyReviewPort {
         usage = value;
         try { this.options.runs.observeUsage(runId, value); this.options.interactions.observeUsage(sessionId, turnId, value); }
         catch { this.failEvidence(); }
-      });
+      }, { beforeCall: () => { signal.throwIfAborted(); this.authorize(input); } });
       if (this.persistenceError) throw new DomainError('unavailable', 'Ready Check evidence storage is unavailable.');
       const parsed = readyReviewResult(result);
       // Normalize typed questions to a completed review assessment. Team answers are new committed revisions.
@@ -145,20 +149,32 @@ export class ReadyReviewManager implements ReadyReviewPort {
       catch { this.failEvidence(); }
       if (saved) outcome = 'completed';
       else {
-        outcome = controller.signal.aborted ? 'interrupted' : 'failed';
+        const unknown = unknownProviderOutcome(error);
+        if (unknown) {
+          try { this.options.runs.reserveUnknown(runId, unknown); }
+          catch { retainPermit = true; this.failEvidence(); }
+        }
+        outcome = unknown ? 'failed' : controller.signal.aborted ? 'interrupted' : 'failed';
         try { this.options.interactions.fail(sessionId, turnId, outcome, this.errorCode(error, signal)); }
         catch { this.failEvidence(); }
       }
     }
-    try { await this.options.runs.finish(runId, outcome, usage); }
-    catch { this.failEvidence(); }
-    release?.();
+    if (!retainPermit) {
+      try { await this.options.runs.finish(runId, outcome, usage); }
+      catch { this.failEvidence(); }
+      release?.();
+    }
+  }
+  private authorize(input: ReadyReviewInput): void {
+    if (!input.deliveryAuthority) return;
+    if (!this.options.authorize) throw new DomainError('unavailable', 'Ready Check project authority cannot be verified on this worker.');
+    this.options.authorize(input.deliveryAuthority);
   }
   private failEvidence(): void {
     this.persistenceError = true;
     for (const job of this.jobs.values()) job.controller.abort();
   }
   private errorCode(error: unknown, signal: AbortSignal): string {
-    return this.persistenceError ? 'evidence_unavailable' : this.closed ? 'interrupted' : signal.aborted ? 'timeout' : error instanceof ProviderModelError ? error.code : error instanceof DomainError ? error.code : 'execution_failed';
+    return unknownProviderOutcome(error) ?? (this.persistenceError ? 'evidence_unavailable' : this.closed ? 'interrupted' : signal.aborted ? 'timeout' : error instanceof ProviderModelError ? error.code : error instanceof DomainError ? error.code : 'execution_failed');
   }
 }

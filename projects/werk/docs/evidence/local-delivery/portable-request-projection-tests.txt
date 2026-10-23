@@ -1,0 +1,29 @@
+✔ feature configuration is opt-in and resolves relative to the project (2.327185ms)
+✔ legacy template stays a draft; stable Markdown intake preserves body, comments and custom metadata (120.513916ms)
+✔ completion exports a readable result and rename/restart/edit never replays a request (108.623454ms)
+✔ capacity/configuration waits retain immutable input and recover a lost admission acknowledgement (61.1172ms)
+✔ a failed private reservation write blocks admission until it is durably retried (28.823827ms)
+✔ invalid YAML and duplicate IDs are visible without poisoning valid intake (53.142547ms)
+✔ orchestrator requests are written and tracked without entering the local submit path (41.385524ms)
+✔ a missing request or deleted queue history never silently creates new work (33.159348ms)
+✔ folder ownership and regular-file boundaries prevent a second consumer and symlink ingestion (40.81283ms)
+✔ optimistic request updates refuse a newer editor save (9.772108ms)
+✔ feature patch submission is idempotent and shares the serial executor with chat (146.40181ms)
+✔ feature retries export immutable before/after pairs and retain earlier run results across restart (188.924828ms)
+✔ feature terminal result waits for complete evidence before freezing a per-run export (60.969082ms)
+✔ feature evidence refuses traversal IDs and never overwrites a conflicting immutable snapshot (33.831867ms)
+✔ fast pre-execution cancellation clears old execution pointers without rewriting an earlier run result (67.64797ms)
+✔ feature retry captures a terminal run that finished since the last watcher observation (49.103684ms)
+✔ pending questions preserve accepted requests and malformed local edits without admitting answers (98.315608ms)
+✔ canonical feature gates project findings separately and edited companions never change accepted input or admit work (118.648295ms)
+✔ local folder requests submit a stable definitionRef unchanged and reject mixed or malformed references (25.061229ms)
+✔ legacy orchestrator folder projections use the restored session parent and persist it on renewed assignment (25.327981ms)
+✔ moving an owned feature folder preserves its persisted parent namespace and pending admission identity (124.159844ms)
+ℹ tests 21
+ℹ suites 0
+ℹ pass 21
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1702.157786

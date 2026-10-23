@@ -4,6 +4,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
 import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -49,6 +51,9 @@ async function fixture(t) {
 for (const provider of /** @type {const} */ (['openai-api', 'anthropic-api'])) {
   test(`${provider} executes granted worktree and MCP tools through the same bounded catalog`, async t => {
     const f = await fixture(t), mcpName = mcpToolName('fixture', definition.name);
+    const spawn = t.mock.method(childProcess, 'spawn', () => { throw Error('Files and HTTP MCP must not start a native runtime or child process'); });
+    syncBuiltinESMExports();
+    t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
     let round = 0;
     const transport = async (_url, options) => {
       const body = JSON.parse(options.body), openai = provider === 'openai-api';
@@ -68,7 +73,11 @@ for (const provider of /** @type {const} */ (['openai-api', 'anthropic-api'])) {
         ? { status: 'completed', usage: { input_tokens: 3, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, output: [{ type: 'message', content: [{ type: 'output_text', text: 'Checked fixture.' }] }] }
         : { stop_reason: 'end_turn', usage: { input_tokens: 3, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 }, content: [{ type: 'text', text: 'Checked fixture.' }] });
     };
-    const model = modelFor({ id: provider, executable: '', model: 'fixture', apiKey: 'not-a-real-key', instruction: '' }, f.directory, transport, { tools: () => createToolRuntime({ policy: f.policy, currentRevision: () => f.policy.revision, directory: f.directory, worktree: f.worktree }) });
+    const model = modelFor({ id: provider, executable: '', model: 'fixture', apiKey: 'not-a-real-key', instruction: '' }, f.directory, transport, { tools: () => {
+      const runtime = createToolRuntime({ policy: f.policy, currentRevision: () => f.policy.revision, directory: f.directory, worktree: f.worktree });
+      assert.equal(runtime.requiresProcessRuntime, false);
+      return runtime;
+    } });
     const request = prepareModelRequest(model, input);
     /** @type {import('../../src/worker/application/run-evidence.js').ProviderUsage} */
     let usage;
@@ -76,6 +85,7 @@ for (const provider of /** @type {const} */ (['openai-api', 'anthropic-api'])) {
     assert.equal(JSON.stringify(request).includes('not-a-real-key'), false);
     assert.equal(completedText((await executeModel(model, request, new AbortController().signal, value => { usage = value; }))), 'Checked fixture.');
     assert.equal(f.calls, 1); assert.equal(round, 3); assert.equal(usage.inputTokens, 9); assert.equal(usage.outputTokens, 3);
+    assert.equal(spawn.mock.callCount(), 0, 'read-only file and HTTP tool execution never compiles or launches a native process');
     assert.equal(await readFile(join(f.worktree, 'accepted.txt'), 'utf8'), 'Approved fixture content.\n');
   });
 }

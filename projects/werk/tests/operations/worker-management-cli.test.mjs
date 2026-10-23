@@ -8,6 +8,7 @@ import { mkdtemp, readFile, writeFile, realpath } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ownWorkspace } from '../helpers/workspace-processes.mjs';
+import { waitForInstalledNativeWork } from '../helpers/native-cli-readiness.mjs';
 const exec = promisify(execFile), installer = resolve('bin/apps/worker/cli.mjs');
 test('copied worker CLI manages drafts, tasks, queues and history without a browser', { timeout: 120000 }, async t => {
   const cwd = await realpath(await mkdtemp(join(tmpdir(), 'werk-management-cli-'))), entry = join(cwd, 'bin/apps/worker/cli.mjs'); let running = false;
@@ -24,7 +25,13 @@ test('copied worker CLI manages drafts, tasks, queues and history without a brow
   assert.equal((await cli('feature', 'list', '--status', 'draft')).files.length, 1);
   await assert.rejects(cli('feature', 'edit', '--name', 'example.md', '--markdown', markdown, '--if-match', 'stale'), error => testErrorCode(error) === 2 && /revision/.test(testErrorOutput(error, 'stderr')));
   file = await cli('feature', 'edit', '--name', 'example.md', '--markdown', markdown, '--if-match', file.revision);
-  await cli('feature', 'validate', '--name', 'example.md'); await cli('feature', 'submit', '--name', 'example.md', '--if-match', file.revision);
+  await cli('feature', 'validate', '--name', 'example.md');
+  file = await cli('feature', 'submit', '--name', 'example.md', '--if-match', file.revision);
+  assert.match(file.markdown, /Describe a feature\./);
+  assert.match(await readFile(join(cwd, 'features/example.md'), 'utf8'), /Describe a feature\./);
+  // Submission is durable even when native startup has not admitted a task yet.
+  await waitForInstalledNativeWork(entry, cwd, t.signal);
+  assert.equal((await cli('queue', 'settings')).board.paused, true, 'Native readiness must preserve the manual pause.');
   for (let i = 0; i < 30; i++) { await cli('feature', 'list'); file = await cli('feature', 'get', '--name', 'example.md'); if (file.record?.submitted) break; await new Promise(r => setTimeout(r, 100)); }
   assert.equal(file.record.status, 'queued'); const id = file.record.sessionId;
   assert.equal(file.record.gates.phase, 'ready', 'Readiness is separate from the paused execution queue.');

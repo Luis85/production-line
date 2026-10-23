@@ -153,3 +153,19 @@ test('resource endpoints require worker access, reject arbitrary paths and expos
   assert.equal(workspace.resources.status().policy.memoryPercent, 82);
   const metrics = await (await fetch(base + '/metrics')).text(); assert.match(metrics, /werk_worker_process_rss_bytes/); assert.match(metrics, /werk_worker_resource_sample_known 1/); assert.doesNotMatch(metrics, /sessionId|processStartId|webview-token/);
 });
+
+
+test('parallel sessions retain separate long-running warnings and resolve only the finished session', async t => {
+  const f = await fixture(t, {}, { longRunningMs: 1000 });
+  const first = { sessionId: 'project-a-request', projectId: 'a', startedAt: 1700000000000, monotonicStartedAt: 0 };
+  const second = { sessionId: 'project-b-request', projectId: 'b', startedAt: 1700000000000, monotonicStartedAt: 0 };
+  f.active = [first, second]; await f.tick(2000);
+  assert.equal(f.monitor.status().snapshot.activeExecutions.length, 2);
+  const alerts = f.monitor.status().alerts.filter(alert => alert.code === 'long_running'); assert.equal(alerts.length, 2);
+  assert.deepEqual(alerts.map(alert => alert.sessionId).sort(), [first.sessionId, second.sessionId]);
+  f.active = [second]; await f.tick(1000);
+  assert.deepEqual(f.monitor.status().alerts.map(alert => alert.sessionId), [second.sessionId]);
+  const transitions = f.monitor.events().events; assert.equal(transitions.length, 3); assert.equal(transitions.at(-1).sessionId, first.sessionId); assert.equal(transitions.at(-1).reason, 'execution_finished');
+  await f.tick(1000); assert.equal(f.monitor.events().events.length, 3);
+  f.active = []; await f.tick(1000); assert.equal(f.monitor.status().alerts.length, 0);
+});

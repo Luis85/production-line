@@ -17,11 +17,12 @@ const { draft, dirty, stale, locked, validation, canSave } = editor;
 <template>
   <section class="policy-settings queue-settings" aria-labelledby="queue-settings-title">
     <h2 id="queue-settings-title">Queue capacity</h2>
-    <p class="page-note">Choose how much work this worker can accept. It executes one task at a time; additional tasks wait.</p>
+    <p class="page-note">Choose how much work this worker can accept. Execution uses the shared slot limit and each project’s approved limit; additional tasks wait.</p>
     <form v-if="draft.baseline" :aria-busy="draft.busy" @submit.prevent="editor.save">
       <fieldset class="policy-fields" :disabled="locked">
         <legend class="sr-only">Worker queue settings</legend>
         <div class="policy-grid">
+          <div class="policy-field"><label for="execution-capacity">Shared execution slots</label><UInput id="execution-capacity" v-model.number="draft.values.maxParallel" type="number" min="1" max="8" step="1" required class="w-full" aria-describedby="execution-capacity-help" /><p id="execution-capacity-help" class="page-note">1–8 simultaneous operations. Project limits can be stricter. Lowering the limit keeps active work and holds new starts until a slot is free.</p></div>
           <div class="policy-field"><label for="local-capacity">Local request capacity</label><UInput id="local-capacity" v-model.number="draft.values.queueCapacity" type="number" min="1" max="64" step="1" required class="w-full" aria-describedby="local-capacity-help" /><p id="local-capacity-help" class="page-note">1–64 tasks, including queued and running work. Lowering this keeps tasks already accepted.</p></div>
           <div class="policy-field"><label for="remote-queue">Extra orchestrator queue places</label><UInput id="remote-queue" v-model.number="draft.values.orchestratorQueue" type="number" min="0" max="64" step="1" required class="w-full" aria-describedby="remote-queue-help" /><p id="remote-queue-help" class="page-note">0–64 additional waiting assignments. The orchestrator keeps their leases active.</p></div>
           <div class="policy-field"><label for="queue-order">File-task and assignment order</label><USelect id="queue-order" v-model="draft.values.order" :items="[{ label: 'First in, first out', value: 'fifo' }, { label: 'High priority first', value: 'priority' }]" class="w-full" aria-describedby="queue-order-help" /><p id="queue-order-help" class="page-note">Orders waiting file tasks and orchestrator assignments within their queues. Chat messages keep their normal order.</p></div>

@@ -9,10 +9,14 @@ import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';
 import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import { statusServer } from '../../src/worker/dist/worker/status/server.js';
 import { workerStatus } from '../helpers/worker-status.mjs';
 import { testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import { workspaceContext, taskboardRuntime } from './runtime-fixtures.mjs';
+
+// Establish native process readiness separately from the bounded admission/service scenario.
+prepareNativeProcessFixture();
 
 async function fixture(t, repositoryAlias = false) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'werk-service-workspace-'))), repository = join(directory, 'repository'), state = join(directory, 'state');

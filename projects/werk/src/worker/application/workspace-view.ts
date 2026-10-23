@@ -1,3 +1,4 @@
+import type { ProviderCapabilities, ProviderAuthenticationMode } from './provider-capabilities.js';
 import type { ModelSelection, ModelEffort } from './model-selection.js';
 import type { FeatureRequestReference } from './feature-request-reference.js';
 import type { FeatureTrackingRecord, FeatureTrackingStatus } from './feature-tracking.js';
@@ -27,7 +28,7 @@ export interface WorkerSettingsView {
   resources: ResourcePolicy;
   consumption: ConsumptionPolicy;
   execution: ExecutionPolicy;
-  providers: Array<Omit<ProviderConnection, 'apiKey'> & { label: string; configured: boolean; hasApiKey: boolean; authentication: string }>;
+  providers: Array<Omit<ProviderConnection, 'apiKey'> & { label: string; configured: boolean; hasApiKey: boolean; authentication: string; authenticationConfigured?: boolean; supportedAuthenticationModes?: Array<Exclude<ProviderAuthenticationMode, 'legacy'>>; capabilities?: ProviderCapabilities }>;
   connection: { enabled: boolean; url: string; hasEnrollmentToken: boolean };
   board: WorkerBoardSettings;
 }
@@ -35,7 +36,7 @@ export interface SessionView {
   featureTracking?: Pick<FeatureTrackingStatus, 'directory' | 'lastSyncedAt' | 'error'>;
   capacity?: WorkerCapacitySnapshot;
   selected: string;
-  execution: { currentSessionId: string | null; queued: number; maxParallel: number };
+  execution: { currentSessionId: string | null; queued: number; maxParallel: number; activeSessions?: import('./serial-executor.js').ActiveExecutionPermit[] };
   records: Array<SessionRecord & { featureRequest?: FeatureTrackingRecord; requestId?: string; requestPhase?: RequestPhase; requestRevision?: number; status: string; interaction: InteractionView; busy: boolean; messages: number }>;
 }
 /** Shared public task fields are an allowlist, independent of the private execution aggregate. */

@@ -1,3 +1,4 @@
+import { unknownProviderOutcome } from '../application/provider-outcome.js';
 import { validateDelegationPolicy, type DelegationPolicy } from '../application/delegation-policy.js';
 import type { DelegationPorts, DelegationReceipt } from '../application/delegation.js';
 import { parseModelResult, ProviderModelError, type ModelResult } from '../application/model-contract.js';
@@ -77,19 +78,28 @@ function boundedResult(result: ModelResult): ModelResult {
 export function delegationTool(grant: DelegationPolicy | undefined, runtime: () => ToolRuntime, ports: DelegationPorts): ToolOperation | undefined {
   if (!grant?.enabled) return undefined;
   const policy = validateDelegationPolicy(grant), reservations = new Map<string, Reservation>();
-  const queue: (() => Promise<void>)[] = [];
-  let active = 0, evidenceFailed = false;
+  const queue: { run(): Promise<void>; reject(error: unknown): void }[] = [];
+  const stopping = new AbortController();
+  let active = 0, evidenceFailed = false, fatal: ProviderModelError | undefined;
+  const uncertain = (reason: 'outcome_unknown' | 'process_stop_unconfirmed') => {
+    if (!fatal || reason === 'process_stop_unconfirmed') fatal = new ProviderModelError(reason);
+    runtime().stopUncertain?.(reason);
+    stopping.abort(fatal);
+    for (const job of queue.splice(0)) job.reject(fatal);
+  };
   const record = async (receipt: DelegationReceipt) => {
     try { await ports.record(structuredClone(receipt)); }
     catch { evidenceFailed = true; throw new BuiltinToolError('Child execution evidence could not be saved. No further children will start in this attempt.'); }
   };
   const drain = () => {
-    while (active < policy.maxConcurrent && queue.length) {
+    while (!fatal && active < policy.maxConcurrent && queue.length) {
       const job = queue.shift()!; active++;
-      void job().finally(() => { active--; drain(); });
+      void job.run().finally(() => { active--; drain(); });
     }
   };
-  const run = async (task: ChildTask, signal: AbortSignal): Promise<DelegationReceipt> => {
+  const run = async (task: ChildTask, parentSignal: AbortSignal): Promise<DelegationReceipt> => {
+    if (fatal) throw fatal;
+    const signal = AbortSignal.any([parentSignal, stopping.signal]);
     const parent = runtime(), tools = borrowed(parent, task.tools, signal);
     const receipt: DelegationReceipt = { id: task.id, state: 'started', tools: [...task.tools], startedAt: new Date().toISOString() };
     try {
@@ -105,12 +115,18 @@ export function delegationTool(grant: DelegationPolicy | undefined, runtime: () 
       receipt.usage = structuredClone(result.usage);
       receipt.state = receipt.result.type;
     } catch (error) {
-      if (evidenceFailed) throw error;
-      receipt.state = signal.aborted ? 'cancelled' : 'failed';
-      receipt.error = signal.aborted ? 'Child invocation cancelled with its parent.' : error instanceof ProviderModelError ? error.message : 'Child invocation could not complete. Inspect the Feature Request execution evidence.';
+      const unknown = unknownProviderOutcome(error);
+      if (unknown) {
+        uncertain(unknown); receipt.state = 'failed'; receipt.errorCode = unknown; receipt.error = new ProviderModelError(unknown).message;
+      } else {
+        if (evidenceFailed) throw fatal ?? error;
+        receipt.state = signal.aborted ? 'cancelled' : 'failed';
+        receipt.error = signal.aborted ? 'Child invocation cancelled with its parent.' : error instanceof ProviderModelError ? error.message : 'Child invocation could not complete. Inspect the Feature Request execution evidence.';
+      }
     } finally { await tools.close(); }
     receipt.finishedAt = new Date().toISOString();
-    await record(receipt);
+    try { await record(receipt); } catch (error) { throw fatal ?? error; }
+    if (fatal) throw fatal;
     return receipt;
   };
   return {
@@ -121,6 +137,7 @@ export function delegationTool(grant: DelegationPolicy | undefined, runtime: () 
       inputSchema: { type: 'object', additionalProperties: false, required: ['tasks'], properties: { tasks: { type: 'array', minItems: 1, maxItems: policy.maxChildren, items: { type: 'object', additionalProperties: false, required: ['id', 'prompt'], properties: { id: { type: 'string', pattern: '^[a-zA-Z0-9_-]{1,64}$' }, prompt: { type: 'string', minLength: 1, maxLength: 16000 }, tools: { type: 'array', maxItems: 63, uniqueItems: true, items: { type: 'string' }, description: 'Optional subset of granted tool names. Omit to inherit the parent tools except delegation; use [] for a child without tools.' } } } } } },
     },
     async call(input, signal) {
+      if (fatal) throw fatal;
       if (evidenceFailed) throw new BuiltinToolError('Child execution evidence is unavailable. Start no further children in this attempt.');
       const requested = tasks(input, runtime().manifest, policy.maxChildren);
       for (const task of requested) {
@@ -133,10 +150,11 @@ export function delegationTool(grant: DelegationPolicy | undefined, runtime: () 
         let resolveReceipt!: (receipt: DelegationReceipt) => void, rejectReceipt!: (error: unknown) => void;
         const promise = new Promise<DelegationReceipt>((resolve, reject) => { resolveReceipt = resolve; rejectReceipt = reject; });
         reservations.set(task.id, { digest: JSON.stringify(task), promise });
-        queue.push(async () => { try { resolveReceipt(await run(task, signal)); } catch (error) { rejectReceipt(error); } });
+        queue.push({ reject: rejectReceipt, async run() { try { resolveReceipt(await run(task, signal)); } catch (error) { rejectReceipt(error); } } });
       }
       drain();
       const settled = await Promise.allSettled(requested.map(task => reservations.get(task.id)!.promise));
+      if (fatal) { await Promise.allSettled([...reservations.values()].map(item => item.promise)); throw fatal; }
       const failed = settled.find(item => item.status === 'rejected');
       if (failed?.status === 'rejected') throw failed.reason;
       const receipts = settled.map(item => (item as PromiseFulfilledResult<DelegationReceipt>).value);

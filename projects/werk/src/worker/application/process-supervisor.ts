@@ -1,3 +1,4 @@
+import { defaultDeliveryRetention } from './delivery-retention.js';
 import { DomainError } from '../../shared/errors.js';
 import { serviceActive, serviceFingerprint, serviceLimits, serviceOperationId, validateServicePreset, validateServiceScope } from './service-policy.js';
 import type { ProcessStatus, ProcessSupervisorOptions, ServiceCommand, ServiceExit, ServiceHostEvent, ServiceHostHandle, ServicePreset, ServiceRecord, ServiceStart, ServiceStopReason, StoredService } from './process-supervision.js';
@@ -44,6 +45,7 @@ export class ProcessSupervisor {
   private clearTimers(item: LiveService) { if (item.timer) clearTimeout(item.timer); if (item.readyTimer) clearTimeout(item.readyTimer); item.timer = undefined; item.readyTimer = undefined; }
   private defer(run: () => Promise<unknown>, delay: number) { const timer = setTimeout(() => { void this.serial(run).catch(() => {}); }, Math.max(0, delay)); timer.unref?.(); return timer; }
   private async persist() {
+    this.expireLogs();
     try { await this.options.journal.save([...this.items.values()].map(item => clone(item.stored))); }
     catch {
       this.persistenceError = true;
@@ -59,6 +61,16 @@ export class ProcessSupervisor {
     }
   }
   private flushSoon() { if (this.closing) return; this.flushTimer ??= this.defer(async () => { this.flushTimer = undefined; await this.persist(); }, 100); }
+  private expireLogs(): boolean {
+    let changed = false;
+    for (const item of this.items.values()) {
+      const hours = item.stored.temporaryLogHours ?? defaultDeliveryRetention().temporaryLogHours;
+      const cutoff = this.now() - hours * 3600000;
+      const retained = hours === 0 ? [] : item.stored.logs.filter(log => Number.isFinite(Date.parse(log.at)) && Date.parse(log.at) > cutoff);
+      if (retained.length !== item.stored.logs.length) { item.stored.logs = retained; changed = true; }
+    }
+    return changed;
+  }
   private prune() {
     const ended = [...this.items.values()].filter(item => !serviceActive(item.stored.record.state));
     while (this.items.size >= serviceLimits.retainedServices && ended.length) this.items.delete(ended.shift()!.stored.record.id);
@@ -78,7 +90,9 @@ export class ProcessSupervisor {
       if ([...this.items.values()].some(item => serviceActive(item.stored.record.state) && item.stored.record.featureRequestKey === input.scope.featureRequestKey && item.stored.record.presetId === input.presetId)) throw new DomainError('conflict', 'This Feature Request already has an active service for that preset.');
       this.prune();
       const record: ServiceRecord = { id: 'service-' + crypto.randomUUID(), revision: 1, presetId: preset.id, name: preset.name, featureRequestKey: input.scope.featureRequestKey, sessionId: input.scope.sessionId, ...(input.scope.taskId ? { taskId: input.scope.taskId } : {}), ...(input.scope.runId ? { runId: input.scope.runId } : {}), state: 'starting', generation: 0, restartCount: 0, restartLimit: preset.restart.maxAttempts, createdAt: this.iso(), startedAt: null, endedAt: null, expiresAt: new Date(this.now() + preset.ttlMs).toISOString(), readiness: preset.readyText ? 'waiting' : 'not_configured', readyAt: null, lastExit: null, error: null, measurement: null };
-      const item: LiveService = { stored: { record, scope: clone(input.scope), presetFingerprint: serviceFingerprint(preset), operationId: input.operationId, logs: [], nextLogSequence: 1, commands: [] }, readinessTail: '' };
+      const temporaryLogHours = this.options.temporaryLogHours?.(input.scope) ?? defaultDeliveryRetention().temporaryLogHours;
+      if (!Number.isSafeInteger(temporaryLogHours) || temporaryLogHours < 0 || temporaryLogHours > 720) throw new DomainError('invalid_input', 'Temporary service log retention must be 0–720 hours.');
+      const item: LiveService = { stored: { temporaryLogHours, record, scope: clone(input.scope), presetFingerprint: serviceFingerprint(preset), operationId: input.operationId, logs: [], nextLogSequence: 1, commands: [] }, readinessTail: '' };
       this.items.set(record.id, item); await this.persist(); await this.launch(item);
       return clone(record);
     });
@@ -208,16 +222,17 @@ export class ProcessSupervisor {
     if (failure) throw failure;
   }
   async stopFeature(featureRequestKey: string, reason: ServiceStopReason = 'feature_ended') { return this.serial(() => this.drain(reason, featureRequestKey)); }
-  async reconcileGrants() { return this.serial(async () => { for (const item of this.items.values()) if (serviceActive(item.stored.record.state) && item.stored.record.state !== 'stopping') { try { if (serviceFingerprint(this.preset(item.stored.record.presetId)) !== item.stored.presetFingerprint) throw new Error(); await this.options.validateScope(clone(item.stored.scope)); } catch { await this.stopItem(item, 'revoked'); } } }); }
+  async reconcileGrants() { return this.serial(async () => { if (this.expireLogs()) await this.persist(); for (const item of this.items.values()) if (serviceActive(item.stored.record.state) && item.stored.record.state !== 'stopping') { try { if (serviceFingerprint(this.preset(item.stored.record.presetId)) !== item.stored.presetFingerprint) throw new Error(); await this.options.validateScope(clone(item.stored.scope)); } catch { await this.stopItem(item, 'revoked'); } } }); }
   async close() {
     this.closing = true;
     return this.serial(async () => { if (this.flushTimer) clearTimeout(this.flushTimer); this.flushTimer = undefined; await this.drain('shutdown'); await this.persist(); });
   }
   logs(id: string, options: { after?: number; limit?: number } = {}) {
+    if (this.expireLogs()) this.flushSoon();
     const item = this.items.get(id); if (!item) throw new DomainError('not_found', 'This service is not retained by the worker.');
     const after = Math.max(0, options.after ?? 0), limit = Math.min(128, Math.max(1, options.limit ?? 64));
     const entries = clone(item.stored.logs.filter(row => row.sequence > after).slice(0, limit));
-    return { entries, nextAfter: entries.at(-1)?.sequence ?? after, gap: (item.stored.logs[0]?.sequence ?? 1) > after + 1 };
+    return { entries, nextAfter: entries.at(-1)?.sequence ?? Math.max(after, item.stored.nextLogSequence - 1), gap: (item.stored.logs[0]?.sequence ?? item.stored.nextLogSequence) > after + 1, temporaryLogHours: item.stored.temporaryLogHours ?? defaultDeliveryRetention().temporaryLogHours };
   }
   status(): ProcessStatus {
     const services = [...this.items.values()].map(item => clone(item.stored.record));

@@ -5,6 +5,12 @@ import USelect from '@nuxt/ui/components/Select.vue';
 import UTextarea from '@nuxt/ui/components/Textarea.vue';
 import UAlert from '@nuxt/ui/components/Alert.vue';
 import RequestGateEvidence from './RequestGateEvidence.vue';
+import DeliveryReadinessPanel from './DeliveryReadinessPanel.vue';
+import DeliveryCriterionDecisions from './DeliveryCriterionDecisions.vue';
+import { reportedReviewMinutes } from '../delivery-readiness-view';
+import DeliveryControls from './DeliveryControls.vue';
+import DeliveryPublicationPanel from './DeliveryPublicationPanel.vue';
+import DeliveryHumanReview from './DeliveryHumanReview.vue';
 import MessageContent from './MessageContent.vue';
 import type { WorkerRequest } from '../../application/request-gates';
 import { useRequestGatePanel } from './useRequestGatePanel';
@@ -15,7 +21,7 @@ const {
   chooseRequest, command, currentEvaluation, date, draft, error, gateLabel, gateState,
   identity, load, loading, mutable, notice, openFindings, operation, pendingCandidates,
   pendingModel, phaseLabel, propose, proposedMessage, resolveFinding, rows, send,
-  setDraft, stage, view, acceptanceFinding, isPending, review,
+  setDraft, stage, view, acceptanceFinding, isPending, review, deliveryCommand, humanReviewReady, requestChanges,
 } = useRequestGatePanel(props, emit);
 </script>
 <template>
@@ -47,37 +53,45 @@ const {
         <p>{{ review.nextStep.description }}</p>
         <div class="request-gate-badges" aria-label="Current request checks">
           <UBadge :color="currentEvaluation('ready')?.passed ? 'success' : 'neutral'" variant="subtle">Readiness · {{ gateLabel('ready') }}</UBadge>
-          <UBadge :color="currentEvaluation('done')?.passed ? 'success' : 'neutral'" variant="subtle">Completion · {{ gateLabel('done') }}</UBadge>
+          <UBadge v-if="!view.delivery" :color="currentEvaluation('done')?.passed ? 'success' : 'neutral'" variant="subtle">Completion · {{ gateLabel('done') }}</UBadge>
         </div>
       </div>
       <div v-if="operation" class="request-operation">
         <p>The worker's acknowledgement is uncertain. Your original action is retained. Retry it to confirm the result without submitting duplicate work.</p>
-        <UButton variant="outline" :loading="isPending('retry')" :disabled="busy || props.disabled" @click="send(operation)">Retry saved action</UButton>
+        <UButton variant="outline" :loading="isPending('retry')" :disabled="busy" @click="send(operation)">Retry saved action</UButton>
       </div>
+      <DeliveryControls v-if="view.delivery" :run="view.delivery" :disabled="busy || loading || gateState.stale || !!operation || !!props.disabled" :pending="isPending" @command="deliveryCommand" />
+      <DeliveryReadinessPanel :subject="view" :evaluation="currentEvaluation('ready')" :disabled="!mutable" :draft="draft" @update="setDraft" @command="command" />
+      <DeliveryCriterionDecisions :subject="view" :disabled="!mutable" :draft="draft" @update="setDraft" @command="command" />
       <form v-if="canAttest" id="request-attestation" class="request-attestation" @submit.prevent="attest">
         <h3>Record your review</h3>
-        <p>This request requires human acceptance. Review its result and evidence, then record your acceptance note for this exact input and output.</p>
-        <label for="request-attestation-note">Acceptance note</label>
+        <p>This request requires human acceptance. Review its result and evidence, then record your review for this exact input and output.</p>
+        <!-- Keep draft fields stable while background evidence is revalidated; actions remain guarded. -->
+        <DeliveryHumanReview v-if="view.delivery?.review" :review="view.delivery.review" :disabled="busy" :draft="draft" @update="setDraft" />
+        <label for="request-attestation-note">{{ view.delivery?.review ? 'Review note' : 'Acceptance note' }}</label>
         <UTextarea
           id="request-attestation-note"
           :model-value="draft('attestation')"
           maxlength="8000"
           :rows="3"
-          :disabled="!mutable"
+          :readonly="busy"
           @update:model-value="setDraft('attestation', String($event))"
         />
+        <label for="request-review-minutes">Time spent reviewing · optional minutes</label><input id="request-review-minutes" type="number" min="0" max="1440" step="any" :value="draft('review-minutes')" :readonly="busy" @input="setDraft('review-minutes', ($event.target as HTMLInputElement).value)" /><p v-if="!reportedReviewMinutes(draft('review-minutes')).valid" class="error-text">Enter a number from 0 to 1,440 minutes, or leave it blank.</p><p class="request-gate-note">Recorded as your estimate, separately from elapsed time with this page open.</p>
         <p class="request-gate-note">Recording acceptance re-evaluates the saved completion evidence. It does not run verification commands or merge changes.</p>
-        <UButton type="submit" :disabled="!mutable || !draft('attestation').trim()" :loading="isPending('attest')">Record acceptance</UButton>
+        <p v-if="view.delivery?.review && !humanReviewReady" class="request-gate-note">Acceptance requires recorded passing evidence or a separate current policy-authorized decision for each required criterion. Record explicit observations for remaining human criteria.</p>
+        <div class="request-gate-actions"><UButton type="submit" :disabled="!mutable || !reportedReviewMinutes(draft('review-minutes')).valid || !draft('attestation').trim() || !humanReviewReady" :loading="isPending('attest')">Record acceptance</UButton><UButton v-if="view.delivery?.review" type="button" color="neutral" variant="outline" :disabled="!mutable || !reportedReviewMinutes(draft('review-minutes')).valid || !draft('attestation').trim()" :loading="isPending('request_changes')" @click="requestChanges">Request changes</UButton></div>
       </form>
       <div v-else-if="review.evidence.attested" id="request-acceptance-recorded" class="request-attestation-recorded" tabindex="-1">
         <h3>Acceptance recorded for this result</h3>
         <p>Your note is saved for the current input and output. {{ currentEvaluation('done')?.passed ? 'The configured completion rules passed; merge remains a separate human action.' : 'Completion still needs attention. Inspect the remaining findings before evaluating again.' }}</p>
         <details><summary>Read acceptance note</summary><MessageContent :text="view.attestation!.note" /></details>
       </div>
+      <DeliveryPublicationPanel v-if="view.delivery" :subject="view" :disabled="busy || loading || gateState.stale || !!operation || !!props.disabled" :pending="isPending" @command="command" />
       <p v-if="pendingModel">The model is waiting for input. Answer its checkpoint in the interaction or the linked Task note.</p>
-      <p v-if="activeExecution">The worker is {{ view.execution?.status === 'prepared' ? 'queued' : 'running' }} with its accepted scope. Its task controls can stop the invocation.</p>
-      <p v-if="activeReview" role="status">An instruction review or proposal is queued or running. It cannot accept its own proposal or satisfy verified checks.</p>
-      <div v-if="!['done', 'cancelled'].includes(view.phase) && !pendingModel && !activeExecution && !activeReview" class="request-gate-actions">
+      <p v-if="activeExecution && !view.delivery">The worker is {{ view.execution?.status === 'prepared' ? 'queued' : 'running' }} with its accepted scope. Its task controls can stop the invocation.</p>
+      <p v-if="activeReview && !view.delivery" role="status">An instruction review or proposal is queued or running. It cannot accept its own proposal or satisfy verified checks.</p>
+      <div v-if="!view.delivery && !['done', 'cancelled'].includes(view.phase) && !pendingModel && !activeExecution && !activeReview" class="request-gate-actions">
         <UButton
           v-if="scopeMutable && stage === 'ready' && !view.owner.remote"
           :disabled="!mutable"
@@ -95,7 +109,9 @@ const {
       <details class="request-evidence" :open="view.phase === 'needs_rework' && !canAttest">
         <summary>Checks and findings · {{ openFindings.length }} open</summary>
         <p>Model completion, verified checks, human acceptance and merge are separate. Unknown or outdated evidence cannot pass a check.</p>
-        <RequestGateEvidence v-for="stageName in ['ready', 'done'] as const" :key="stageName" :stage="stageName" :evaluation="currentEvaluation(stageName)" />
+        <RequestGateEvidence stage="ready" :evaluation="currentEvaluation('ready')" />
+        <details v-if="view.delivery && currentEvaluation('done')"><summary>Retained completion gate evaluation</summary><p>This evaluation records an invocation’s input and output. The current delivery candidate and its criterion matrix determine current verification and review readiness.</p><RequestGateEvidence stage="done" :evaluation="currentEvaluation('done')" /></details>
+        <RequestGateEvidence v-else-if="!view.delivery" stage="done" :evaluation="currentEvaluation('done')" />
         <article v-for="finding in openFindings" :key="finding.id" class="request-finding">
           <div class="request-gate-badges">
             <UBadge :color="finding.blocking ? 'warning' : 'neutral'" variant="subtle">{{ finding.blocking ? 'Blocking finding' : 'Advisory finding' }}</UBadge>
@@ -115,7 +131,7 @@ const {
                 :model-value="draft(finding.id)"
                 maxlength="8000"
                 :rows="3"
-                :disabled="!mutable"
+                :readonly="busy"
                 @update:model-value="setDraft(finding.id, String($event))"
               />
               <UButton type="submit" variant="outline" :loading="isPending('resolve_finding:' + finding.id)" :disabled="!mutable || !draft(finding.id).trim()">Record resolution</UButton>
@@ -153,7 +169,7 @@ const {
           <summary>Propose a revised instruction</summary>
           <form @submit.prevent="propose">
             <label for="request-candidate-message">Candidate instruction</label>
-            <UTextarea id="request-candidate-message" v-model="proposedMessage" maxlength="64000" :rows="5" :disabled="!mutable" />
+            <UTextarea id="request-candidate-message" v-model="proposedMessage" maxlength="64000" :rows="5" :readonly="busy" />
             <p>A proposal leaves accepted scope unchanged. Acceptance creates an explicit input revision; approved files and captured context stay frozen.</p>
             <UButton
               type="submit"
@@ -167,7 +183,7 @@ const {
           <h3>Instruction proposal · {{ candidate.source === 'reviewer' ? 'Model' : 'Operator' }}</h3>
           <p>Based on input revision {{ candidate.basedOnInputRevision }} · {{ date(candidate.createdAt) }}</p>
           <details><summary>Read proposed instruction</summary><MessageContent :text="candidate.input.message" /></details>
-          <p v-if="!scopeMutable">This earlier proposal is retained as evidence. Changed shared scope requires a new Feature Request.</p>
+          <p v-if="!scopeMutable">This earlier proposal is retained as evidence. The accepted request keeps its scope; use a new Feature Request for different work.</p>
           <p v-else>Accepting queues work only if readiness passes. The original feature body and approved file snapshots remain retained.</p>
           <UButton
             v-if="scopeMutable"
@@ -193,7 +209,7 @@ const {
           <pre tabindex="0" aria-label="Frozen request gate policy">{{ JSON.stringify(view.policy, null, 2) }}</pre>
         </details>
       </details>
-      <details v-if="!['done', 'cancelled'].includes(view.phase)">
+      <details v-if="!view.delivery && !['done', 'cancelled'].includes(view.phase)">
         <summary>Cancel this request</summary>
         <p>Stop a running invocation through its task controls first. Cancellation keeps the recorded evidence and does not imply completion.</p>
         <UButton

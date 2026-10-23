@@ -30,6 +30,18 @@ async function loaded(canvas: HTMLElement) {
   await element(canvas, '#review-decision .request-gate-panel');
   if (state.sessions?.selected !== 'completed' || fixture.mutations.length) throw Error('Reading a review changed selected conversation or mutated work');
 }
+async function draftAcceptance(canvas: HTMLElement) {
+  const input = await element<HTMLTextAreaElement>(canvas, '#request-attestation-note');
+  input.value = 'Review draft retained while matching evidence is refreshed.';
+  input.dispatchEvent(new Event('input', { bubbles: true })); await nextTick();
+  return input;
+}
+async function assertStaleDecision(canvas: HTMLElement, input: HTMLTextAreaElement) {
+  const button = await element<HTMLButtonElement>(canvas, '#request-attestation button[type="submit"]');
+  if (!button.disabled || input.disabled || input.readOnly || canvas.querySelector('#request-attestation-note') !== input || !input.value) throw Error('Stale evidence must disable the decision while retaining the editable review draft.');
+  input.closest('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); await nextTick();
+  if (fixture.mutations.length) throw Error('Stale evidence must never submit an acceptance command, including direct form submission.');
+}
 export const VerifiedCandidate: Story = { name: 'Review changes and record acceptance', parameters: { storymap: storymap('One canonical feature request links accepted scope, the patch, checks and human acceptance. Passing checks never implies a merge.') }, render: render(), play: async ({ canvasElement }) => {
   await loaded(canvasElement); await element(canvasElement, '#request-attestation-note');
   const primary = await element<HTMLAnchorElement>(canvasElement, '.review-next a');
@@ -66,8 +78,8 @@ export const QuietRefresh: Story = { name: 'Background refresh preserves the acc
   await ready(canvasElement);
 } };
 export const StaleReview: Story = { name: 'A failed refresh retains evidence and disables decisions', parameters: { storymap: storymap('The last matching request stays readable after a failed refresh, but acceptance cannot use stale combined evidence.') }, render: render(), play: async ({ canvasElement }) => {
-  await loaded(canvasElement); await element(canvasElement, '#request-attestation-note'); fixture.failNextRead(); await element(canvasElement, '.review-notice[role="alert"]'); await nextTick();
-  if (!(canvasElement.querySelector('#request-attestation-note') as HTMLTextAreaElement)?.disabled || !canvasElement.querySelector('#review-changes')) throw Error('Stale evidence must remain readable with decisions disabled'); await ready(canvasElement);
+  await loaded(canvasElement); const input = await draftAcceptance(canvasElement); fixture.failNextRead(); await element(canvasElement, '.review-notice[role="alert"]'); await nextTick();
+  if (!canvasElement.querySelector('#review-changes')) throw Error('Stale evidence must remain readable'); await assertStaleDecision(canvasElement, input); await ready(canvasElement);
 } };
 export const KeyboardReview: Story = { name: 'Review anchors and patch navigation work by keyboard', parameters: { storymap: storymap('Section links and file navigation use native keyboard controls and retain visible labels at narrow widths.') }, render: render(), play: async ({ canvasElement }) => {
   await loaded(canvasElement); const changes = await element<HTMLAnchorElement>(canvasElement, '.review-sections a[href="#review-changes"]'); changes.focus(); await userEvent.keyboard('{Enter}');
@@ -78,9 +90,9 @@ export const KeyboardReview: Story = { name: 'Review anchors and patch navigatio
 } };
 
 export const MismatchedEvidence: Story = { name: 'Conflicting evidence cannot replace a matching review', parameters: { storymap: storymap('A mismatched feature identity is rejected before adoption. The earlier matching snapshot stays visible with decisions disabled.') }, render: render(), play: async ({ canvasElement }) => {
-  await loaded(canvasElement); await element(canvasElement, '#request-attestation-note'); const goal = canvasElement.querySelector('#review-goal')?.textContent; fixture.changeOwnership();
+  await loaded(canvasElement); const input = await draftAcceptance(canvasElement); const goal = canvasElement.querySelector('#review-goal')?.textContent; fixture.changeOwnership();
   const warning = await element(canvasElement, '.review-notice[role="alert"]'); await nextTick();
-  if (!warning.textContent?.includes('identities do not agree') || canvasElement.querySelector('#review-goal')?.textContent !== goal || !(canvasElement.querySelector('#request-attestation-note') as HTMLTextAreaElement)?.disabled) throw Error('Conflicting evidence must not replace the matching scope or enable decisions'); await ready(canvasElement);
+  if (!warning.textContent?.includes('identities do not agree') || canvasElement.querySelector('#review-goal')?.textContent !== goal) throw Error('Conflicting evidence must not replace the matching scope'); await assertStaleDecision(canvasElement, input); await ready(canvasElement);
 } };
 
 export const RequestNavigation: Story = { name: 'Changing request identity clears the previous review', parameters: { storymap: storymap('Changing the route never carries a previous request’s evidence or decisions into another identity. Returning restores only that request’s own draft.') }, render: render(), play: async ({ canvasElement }) => {

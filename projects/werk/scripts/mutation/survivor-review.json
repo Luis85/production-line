@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
-  "scopeId": "worker-ready-review-v3",
-  "reportDigest": "0a2f65b3069a276fcc7a9917518f957e275b6b74df86583f4f0fe8ba85b05501",
-  "sourceDigest": "8860a7dfb8aa93b42e11ef3034c709e61d69a45d3ac5ce5d1ad2b3a177488d2b",
-  "compiledSourceDigest": "d6941842a4fd485f99a3c3248603f72e2eaa8c6a878695068db15f9b5bb1cf5c",
-  "testDigest": "2c8c0b62e3a350896f5d53a41c2f85810b759c6c60aec13b04184988d0189634",
-  "configurationDigest": "0eff89ec2b09c55c1a7df4ce2ef4dd78d35aaa8459e4aae06bbe9706a28ef5ae",
-  "reviewedAt": "2026-10-18T21:16:27.605Z",
+  "scopeId": "worker-local-delivery-v4",
+  "reportDigest": "2bac2916d45a6a166e4f4cf103533384705a3e6265a3df83e72f245826a51337",
+  "sourceDigest": "18aa0d43db215d08b4702055a48298db0a100654c53f99fa2e4ac29110913b0a",
+  "compiledSourceDigest": "1de3a2050dbec1777446fd0c4ab0ac42be35d4afb4fe2909f49b14a4661b28eb",
+  "testDigest": "89bc6fad182371fc73d87351009cc9efdb768a00923643b4a01072c71c0995ec",
+  "configurationDigest": "636a0625435204f2683c4803e0b01f4a773a974c1743a12e5a7bb7854f23b86c",
+  "reviewedAt": "2026-10-20T13:40:18.432Z",
   "policy": "All surviving and uncovered mutants remain in the raw report and denominator. Classifications explain remaining evidence limits; no mutator exclusions or score adjustments are applied.",
   "findings": [
     {
@@ -120,8 +120,258 @@
       "rationale": "Number.isFinite already requires a numeric value, so the preceding typeof check is redundant."
     },
     {
+      "file": "src/worker/application/delivery-dependencies.ts",
+      "id": "523",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 20,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing the final punctuation changes the cycle diagnostic, while the conflict code, cycle identity and admission rejection remain intact."
+    },
+    {
+      "file": "src/worker/application/delivery-dependencies.ts",
+      "id": "542",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 30,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing the Dependency label changes diagnostic wording, while the dependency identity, conflict code, required action and admission rejection remain intact."
+    },
+    {
+      "file": "src/worker/application/delivery-dependencies.ts",
+      "id": "553",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 32,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing the Dependency label changes diagnostic wording, while the dependency identity, conflict code, required action and admission rejection remain intact."
+    },
+    {
+      "file": "src/worker/application/delivery-policy.ts",
+      "id": "568",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 21,
+      "replacement": "false",
+      "classification": "defensive_guard",
+      "rationale": "The later 64-configured-path limit and case-insensitive uniqueness check still reject overlong input lists. Removing this early bound may do more validation work before rejection, so resource-behavior equivalence is not claimed."
+    },
+    {
+      "file": "src/worker/application/delivery-policy.ts",
+      "id": "578",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 21,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing this diagnostic label or message changes user-facing error wording. The invalid_input error code and rejected policy boundary remain intact; no exact-wording equivalence is claimed."
+    },
+    {
+      "file": "src/worker/application/delivery-policy.ts",
+      "id": "585",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 24,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing this diagnostic label or message changes user-facing error wording. The invalid_input error code and rejected policy boundary remain intact; no exact-wording equivalence is claimed."
+    },
+    {
+      "file": "src/worker/application/delivery-policy.ts",
+      "id": "592",
+      "status": "Survived",
+      "mutator": "MethodExpression",
+      "line": 26,
+      "replacement": "path.toUpperCase()",
+      "classification": "coverage_gap",
+      "rationale": "The suite covers ASCII case collisions, but uppercase folding can conflate distinct Unicode paths such as straße and strasse. The mutant remains a documented acceptance-boundary coverage gap; it is not classified as equivalent."
+    },
+    {
+      "file": "src/worker/application/delivery-policy.ts",
+      "id": "594",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 26,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing this diagnostic label or message changes user-facing error wording. The invalid_input error code and rejected policy boundary remain intact; no exact-wording equivalence is claimed."
+    },
+    {
+      "file": "src/worker/application/delivery-policy.ts",
+      "id": "607",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 28,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing this diagnostic label or message changes user-facing error wording. The invalid_input error code and rejected policy boundary remain intact; no exact-wording equivalence is claimed."
+    },
+    {
+      "file": "src/worker/application/delivery-policy.ts",
+      "id": "628",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 39,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing this diagnostic label or message changes user-facing error wording. The invalid_input error code and rejected policy boundary remain intact; no exact-wording equivalence is claimed."
+    },
+    {
+      "file": "src/worker/application/delivery-policy.ts",
+      "id": "653",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 40,
+      "replacement": "false",
+      "classification": "equivalent_candidate",
+      "rationale": "The mandatory feature and lightweight profile membership checks already require at least two distinct profiles. Removing only the minimum-cardinality guard admits no additional validated configuration."
+    },
+    {
+      "file": "src/worker/application/delivery-policy.ts",
+      "id": "660",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 40,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing this diagnostic label or message changes user-facing error wording. The invalid_input error code and rejected policy boundary remain intact; no exact-wording equivalence is claimed."
+    },
+    {
+      "file": "src/worker/application/delivery-policy.ts",
+      "id": "662",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 42,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing this diagnostic label or message changes user-facing error wording. The invalid_input error code and rejected policy boundary remain intact; no exact-wording equivalence is claimed."
+    },
+    {
+      "file": "src/worker/application/delivery-policy.ts",
+      "id": "682",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 43,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing this diagnostic label or message changes user-facing error wording. The invalid_input error code and rejected policy boundary remain intact; no exact-wording equivalence is claimed."
+    },
+    {
+      "file": "src/worker/application/delivery-policy.ts",
+      "id": "696",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 45,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing this diagnostic label or message changes user-facing error wording. The invalid_input error code and rejected policy boundary remain intact; no exact-wording equivalence is claimed."
+    },
+    {
+      "file": "src/worker/application/delivery-policy.ts",
+      "id": "716",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 48,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing this diagnostic label or message changes user-facing error wording. The invalid_input error code and rejected policy boundary remain intact; no exact-wording equivalence is claimed."
+    },
+    {
+      "file": "src/worker/application/delivery-policy.ts",
+      "id": "720",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 49,
+      "replacement": "false",
+      "classification": "equivalent_candidate",
+      "rationale": "Every configured profile ID has already been validated as a string, and strict equality against one configured ID rejects any nonstring default. Removing only the typeof guard admits no additional default."
+    },
+    {
+      "file": "src/worker/application/delivery-policy.ts",
+      "id": "730",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 49,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing this diagnostic label or message changes user-facing error wording. The invalid_input error code and rejected policy boundary remain intact; no exact-wording equivalence is claimed."
+    },
+    {
+      "file": "src/worker/application/delivery-policy.ts",
+      "id": "731",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 50,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing this diagnostic label or message changes user-facing error wording. The invalid_input error code and rejected policy boundary remain intact; no exact-wording equivalence is claimed."
+    },
+    {
+      "file": "src/worker/application/delivery-policy.ts",
+      "id": "738",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 51,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing this diagnostic label or message changes user-facing error wording. The invalid_input error code and rejected policy boundary remain intact; no exact-wording equivalence is claimed."
+    },
+    {
+      "file": "src/worker/application/delivery-policy.ts",
+      "id": "784",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 77,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing this diagnostic label or message changes user-facing error wording. The invalid_input error code and rejected policy boundary remain intact; no exact-wording equivalence is claimed."
+    },
+    {
+      "file": "src/worker/application/delivery-policy.ts",
+      "id": "791",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 78,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing this diagnostic label or message changes user-facing error wording. The invalid_input error code and rejected policy boundary remain intact; no exact-wording equivalence is claimed."
+    },
+    {
+      "file": "src/worker/application/delivery-policy.ts",
+      "id": "805",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 79,
+      "replacement": "false",
+      "classification": "coverage_gap",
+      "rationale": "A one-item JSON array containing a hexadecimal commit can coerce through the downstream regular expression if this primitive-type guard is removed. The current guard rejects it, but the focused suite does not yet exercise that malformed persisted baseline boundary."
+    },
+    {
+      "file": "src/worker/application/delivery-policy.ts",
+      "id": "808",
+      "status": "Survived",
+      "mutator": "ConditionalExpression",
+      "line": 79,
+      "replacement": "false",
+      "classification": "defensive_contract",
+      "rationale": "Snapshot reconstruction and exact profile digest comparison provide additional rejection boundaries. The separate primitive-type guard remains an explicit defense against malformed in-process values; the suite does not establish equivalence for all non-JSON objects."
+    },
+    {
+      "file": "src/worker/application/delivery-policy.ts",
+      "id": "812",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 79,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing this diagnostic label or message changes user-facing error wording. The invalid_input error code and rejected policy boundary remain intact; no exact-wording equivalence is claimed."
+    },
+    {
       "file": "src/worker/infrastructure/responses.ts",
-      "id": "1197",
+      "id": "1524",
       "status": "Survived",
       "mutator": "StringLiteral",
       "line": 28,
@@ -131,7 +381,7 @@
     },
     {
       "file": "src/worker/infrastructure/responses.ts",
-      "id": "1205",
+      "id": "1532",
       "status": "Survived",
       "mutator": "StringLiteral",
       "line": 30,
@@ -141,7 +391,7 @@
     },
     {
       "file": "src/worker/infrastructure/responses.ts",
-      "id": "1206",
+      "id": "1533",
       "status": "Survived",
       "mutator": "StringLiteral",
       "line": 30,
@@ -151,7 +401,7 @@
     },
     {
       "file": "src/worker/infrastructure/responses.ts",
-      "id": "1220",
+      "id": "1547",
       "status": "Survived",
       "mutator": "StringLiteral",
       "line": 35,
@@ -161,7 +411,7 @@
     },
     {
       "file": "src/worker/infrastructure/responses.ts",
-      "id": "1223",
+      "id": "1550",
       "status": "Survived",
       "mutator": "StringLiteral",
       "line": 36,
@@ -171,7 +421,7 @@
     },
     {
       "file": "src/worker/infrastructure/responses.ts",
-      "id": "1233",
+      "id": "1560",
       "status": "Survived",
       "mutator": "MethodExpression",
       "line": 37,
@@ -181,7 +431,7 @@
     },
     {
       "file": "src/worker/infrastructure/responses.ts",
-      "id": "1235",
+      "id": "1562",
       "status": "Survived",
       "mutator": "ConditionalExpression",
       "line": 37,
@@ -191,7 +441,7 @@
     },
     {
       "file": "src/worker/application/ready-review-protocol.ts",
-      "id": "513",
+      "id": "833",
       "status": "Survived",
       "mutator": "ConditionalExpression",
       "line": 6,
@@ -201,7 +451,7 @@
     },
     {
       "file": "src/worker/application/ready-review-protocol.ts",
-      "id": "594",
+      "id": "914",
       "status": "Survived",
       "mutator": "ConditionalExpression",
       "line": 15,
@@ -211,7 +461,7 @@
     },
     {
       "file": "src/worker/application/ready-review-protocol.ts",
-      "id": "630",
+      "id": "950",
       "status": "Survived",
       "mutator": "BlockStatement",
       "line": 25,
@@ -221,7 +471,7 @@
     },
     {
       "file": "src/worker/application/ready-review-protocol.ts",
-      "id": "635",
+      "id": "955",
       "status": "Survived",
       "mutator": "ConditionalExpression",
       "line": 29,
@@ -231,17 +481,7 @@
     },
     {
       "file": "src/worker/application/shared-ready-review.ts",
-      "id": "671",
-      "status": "Survived",
-      "mutator": "StringLiteral",
-      "line": 13,
-      "replacement": "\"\"",
-      "classification": "equivalent_candidate",
-      "rationale": "The operation prefix is opaque within the dedicated review session. Removing it preserves the deterministic identity and remains within the identifier contract; the raw mutant is retained."
-    },
-    {
-      "file": "src/worker/application/shared-ready-review.ts",
-      "id": "672",
+      "id": "992",
       "status": "Survived",
       "mutator": "MethodExpression",
       "line": 13,
@@ -251,7 +491,17 @@
     },
     {
       "file": "src/worker/application/shared-ready-review.ts",
-      "id": "754",
+      "id": "991",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 13,
+      "replacement": "\"\"",
+      "classification": "equivalent_candidate",
+      "rationale": "The operation prefix is opaque within the dedicated review session. Removing it preserves the deterministic identity and remains within the identifier contract; the raw mutant is retained."
+    },
+    {
+      "file": "src/worker/application/shared-ready-review.ts",
+      "id": "1074",
       "status": "Survived",
       "mutator": "StringLiteral",
       "line": 54,
@@ -261,7 +511,7 @@
     },
     {
       "file": "src/worker/application/shared-ready-review.ts",
-      "id": "771",
+      "id": "1091",
       "status": "Survived",
       "mutator": "ConditionalExpression",
       "line": 66,
@@ -271,7 +521,7 @@
     },
     {
       "file": "src/worker/infrastructure/features/review-eligibility.ts",
-      "id": "979",
+      "id": "1306",
       "status": "NoCoverage",
       "mutator": "StringLiteral",
       "line": 25,
@@ -281,7 +531,7 @@
     },
     {
       "file": "src/worker/infrastructure/features/review-eligibility.ts",
-      "id": "1035",
+      "id": "1362",
       "status": "NoCoverage",
       "mutator": "StringLiteral",
       "line": 38,
@@ -291,7 +541,7 @@
     },
     {
       "file": "src/worker/infrastructure/features/review-eligibility.ts",
-      "id": "910",
+      "id": "1230",
       "status": "Survived",
       "mutator": "StringLiteral",
       "line": 11,
@@ -301,7 +551,37 @@
     },
     {
       "file": "src/worker/infrastructure/features/review-eligibility.ts",
-      "id": "972",
+      "id": "1291",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 23,
+      "replacement": "\"\"",
+      "classification": "diagnostic_only",
+      "rationale": "Removing the Approved path label changes diagnostic wording while retaining the repository-relative path rejection. This remains a surviving wording change, not a killed mutant."
+    },
+    {
+      "file": "src/worker/infrastructure/features/review-eligibility.ts",
+      "id": "1298",
+      "status": "Survived",
+      "mutator": "UnaryOperator",
+      "line": 24,
+      "replacement": "+1",
+      "classification": "redundant_defense",
+      "rationale": "validateApprovedPaths has already validated the entire folder path before this second validator. Replacing the last-character removal with a one-character prefix leaves the tested valid folders admitted, but no general equivalence claim is made for future validator changes."
+    },
+    {
+      "file": "src/worker/infrastructure/features/review-eligibility.ts",
+      "id": "1296",
+      "status": "Survived",
+      "mutator": "StringLiteral",
+      "line": 24,
+      "replacement": "\"\"",
+      "classification": "coverage_gap",
+      "rationale": "Replacing the slash suffix with an empty string makes every approved file take the folder branch. A one-character valid file path would then become empty and be rejected; this positive boundary is not yet exercised by this focused suite."
+    },
+    {
+      "file": "src/worker/infrastructure/features/review-eligibility.ts",
+      "id": "1299",
       "status": "Survived",
       "mutator": "StringLiteral",
       "line": 24,
@@ -311,17 +591,17 @@
     },
     {
       "file": "src/worker/infrastructure/features/review-eligibility.ts",
-      "id": "974",
+      "id": "1301",
       "status": "Survived",
       "mutator": "ConditionalExpression",
       "line": 25,
       "replacement": "false",
       "classification": "equivalent_candidate",
-      "rationale": "validateApprovedPaths already rejects case-insensitive duplicate paths before this repeated check."
+      "rationale": "validateApprovedPaths already rejects case-insensitive duplicate paths; removing this repeated duplicate check does not admit another path list."
     },
     {
       "file": "src/worker/infrastructure/features/review-eligibility.ts",
-      "id": "1002",
+      "id": "1329",
       "status": "Survived",
       "mutator": "MethodExpression",
       "line": 30,

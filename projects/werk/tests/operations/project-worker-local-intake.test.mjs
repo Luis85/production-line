@@ -17,8 +17,8 @@ const read = path => readFile(path, 'utf8');
 test('init --intake local writes a local request template, records the choice and reports local commands', async t => {
   const cwd = await temporary(t, 'werk-local-init-'), result = await init(cwd, '--intake', 'local', '--features-dir', 'requests', '--provider', 'claude-cli');
   const template = join(cwd, 'requests/_templates/local-request.md'), raw = await read(template), data = front(raw);
-  assert.equal(data.templateId, undefined); assert.equal(data.status, 'draft'); assert.equal(data.mode, 'patch'); assert.equal(data.provider, 'claude-cli'); assert.equal(data.schemaVersion, 1);
-  assert.equal(data.paths, undefined); assert.doesNotMatch(raw.split(/^---$/m)[2], /Ready to queue|feature create|templateId/, 'Operator instructions stay out of the body sent to the model.'); assert.deepEqual(raw.split(/^---$/m)[2].match(/^#{1,2} .*$/gm), ['# Goal', '## Acceptance criteria', '## Context']); assert.match(raw.split(/^---$/m)[1], /OUTSIDE the feature folder/); assert.match(raw, /^# paths:\n#   - src\/example\.ts\n#   - docs\/$/m); assert.match(raw, /^# definitionRef: /m);
+  assert.equal(data.templateId, undefined); assert.equal(data.intent, 'draft'); assert.equal(data.mode, 'patch'); assert.equal(data.provider, 'claude-cli'); assert.equal(data.schema, 'worker.request/v1');
+  assert.deepEqual(data.paths, ['src/']); assert.match(raw, /id: FR-0001/); assert.match(raw, /## Answers/); assert.match(raw, /<!-- worker:begin -->/); assert.match(raw, /unique request ID/);
   assert.deepEqual(JSON.parse(await read(join(cwd, '.werk/worker.json'))).features, { directory: 'requests', provider: 'claude-cli', pollMs: 1000, intake: 'local' });
   assert.equal(result.intake.mode, 'local'); assert.equal(result.intake.connectionRequired, false); assert.equal(result.intake.template, template);
   assert.match(result.intake.commands.create, /feature create --name \S+ --markdown \S+/); assert.match(result.intake.commands.validate, /feature validate --name/); assert.match(result.intake.commands.submit, /feature submit --name \S+ --if-match/);
@@ -62,7 +62,7 @@ test('a request created from the local template is accepted by local folder inta
   const cwd = await temporary(t, 'werk-local-folder-'); await init(cwd, '--intake', 'local');
   const features = join(cwd, 'features'), state = join(cwd, '.state'); await mkdir(state); await mkdir(join(cwd, 'src')); await writeFile(join(cwd, 'src/example.ts'), 'export {};\n');
   const template = await read(join(features, '_templates/local-request.md'));
-  const draft = template.replace('# paths:', 'paths:').replace('#   - src/example.ts', '  - src/example.ts').replace('#   - docs/', '  - docs/');
+  const draft = template.replace('paths: [src/]', 'paths: [src/example.ts, docs/]');
   const submitted = [], queue = { async submit(record) { submitted.push(record); }, inspect: () => ({ status: 'queued' }), async control() {} };
   const service = new FeatureRequests(new MarkdownFeatureFolder(features, state, 'claude-cli', cwd), queue, 0); await service.init();
   try {
@@ -74,9 +74,11 @@ test('a request created from the local template is accepted by local folder inta
   await writeFile(join(features, 'team.md'), (await read(join(features, '_templates/feature-request.md'))).replace('status: draft', 'status: ready')); await service.tick(true);
   assert.equal((await service.list()).files.find(item => item.name === 'team.md').shared, true, 'The shared template carries templateId and is skipped by folder intake.');
   assert.equal(submitted.length, 1);
-  await assert.rejects(service.action({ action: 'create', name: 'bare.md', markdown: template }), /explicit paths list. Set paths: to the approved project-relative files or folders.*such as _templates\/local-request\.md, only needs that example uncommented/);
+  await service.action({ action: 'create', name: 'bare.md', markdown: template.replace('FR-0001', 'FR-0002').replace('paths: [src/]\n', '') });
+  const bare = await service.action({ action: 'get', name: 'bare.md' });
+  await assert.rejects(service.action({ action: 'submit', name: 'bare.md', revision: bare.revision }), /approved paths/);
   await writeFile(join(features, 'copy.md'), template); await service.tick(true);
-  assert.match((await service.list()).files.find(item => item.name === 'copy.md').error, /explicit paths list/, 'An unedited copy inside the folder is an error, the reason to keep copies outside it.');
+  assert.ok(service.view().errors.some(error => /Duplicate feature ID/.test(error.message)), 'Copies retain identity and duplicates block execution.');
   } finally { await service.close(); }
 });
 

@@ -26,14 +26,14 @@ export class SharedIntakeRuntime {
   private stateDirectory: string;
   private resolve: (id: string) => { path: string };
   private allowed: (path: string) => Promise<void>;
-  constructor(options: { stateDirectory: string; resolve: (id: string) => { path: string }; allowed: (path: string) => Promise<void>; submit: SharedIntakePorts['submit']; inspect: SharedIntakePorts['inspect']; canAdmit: SharedIntakePorts['canAdmit']; admissionHold?: SharedIntakePorts['admissionHold']; admissionIssue?: SharedIntakePorts['admissionIssue']; continue?: SharedIntakePorts['continue']; readyReview?: ReadyReviewPort; defaultProvider?: () => string; resolveSelection?: SharedIntakePorts['resolveSelection'] }) {
+  constructor(options: { stateDirectory: string; resolve: (id: string) => { path: string }; allowed: (path: string) => Promise<void>; submit: SharedIntakePorts['submit']; inspect: SharedIntakePorts['inspect']; canAdmit: SharedIntakePorts['canAdmit']; admissionHold?: SharedIntakePorts['admissionHold']; admissionIssue?: SharedIntakePorts['admissionIssue']; continue?: SharedIntakePorts['continue']; readyReview?: ReadyReviewPort; defaultProvider?: () => string; resolveSelection?: SharedIntakePorts['resolveSelection']; prepare?: SharedIntakePorts['prepare'] }) {
     this.stateDirectory = options.stateDirectory; this.resolve = options.resolve; this.allowed = options.allowed;
     const journal = new SharedFeatureJournal(options.stateDirectory);
     this.intake = new SharedFeatureIntake({
       load: () => journal.load(), save: state => journal.save(state), repository: (binding, workflow) => this.repository(binding, workflow),
       loadWorkflow: (repository, commit, configPath, signal) => loadFeatureWorkflowSnapshot({ commit, configPath, readBlob: (sha, path) => repository.readBlob(sha, path, signal) }),
       ready: (markdown, snapshot, provider) => validateFeatureReadiness(markdown, snapshot.readyCheck, provider ?? options.defaultProvider?.(), snapshot.template, { configuration: snapshot.configuration, workflowPath: snapshot.files.configuration.path }),
-      resolveSelection: options.resolveSelection,
+      resolveSelection: options.resolveSelection, prepare: options.prepare,
       readyReview: options.readyReview, readyReviewEligible: (markdown, snapshot, provider) => validateFeatureReviewEligibility(markdown, snapshot, provider ?? options.defaultProvider?.()), readyReviewResponse: readReadyReviewResponse,
       source: sharedSource, renderSource: renderSharedSource, submit: options.submit, inspect: options.inspect, canAdmit: options.canAdmit, admissionHold: options.admissionHold, admissionIssue: options.admissionIssue, continue: options.continue,
     });
@@ -71,5 +71,6 @@ export class SharedIntakeRuntime {
       publishPatch: (input: Parameters<GitFeatureRepository['publishPatch']>[0], signal: AbortSignal) => guard(() => adapter.publishPatch(input, signal)),
     };
   }
+  async selectedBaseline(signal: AbortSignal) { const binding = this.intake.binding; if (!binding?.repositoryId) throw new DomainError('conflict', 'Configure shared intake before selecting its baseline.'); return this.repository(binding).head(signal); }
   async close() { this.authoringStop.abort(); await this.intake.close(); await Promise.allSettled([...this.adapters.values()].map(adapter => adapter.close())); }
 }

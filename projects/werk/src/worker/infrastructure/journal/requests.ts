@@ -1,3 +1,5 @@
+import type { DeliveryStopObservation, DeliveryUpdate } from '../../application/delivery-contracts.js';
+import { requestDeliveryUpdate, requestReviseInput } from './requests/delivery.js';
 import type { FeatureIdentityJournal } from '../../application/journal-ports.js';
 import type {
   ModelProvider,
@@ -16,10 +18,10 @@ import {
 } from "../../application/request-gates.js";
 import type { ProviderUsage } from "../../application/run-evidence.js";
 import { requestBindFeature, requestBindTurn, requestEnsure } from './requests/admission.js';
-import { requestCommand, requestPolicy, requestSetPolicy } from './requests/commands.js';
+import { requestCommand, requestPolicy, requestReplayCommand, requestSetPolicy } from './requests/commands.js';
 import { requestFailExecution, requestPrepareExecution, requestRecordResult, requestStartExecution } from './requests/execution.js';
 import { requestEvaluate, requestHoldRecovery } from './requests/gates.js';
-import { requestEvents, requestExecution, requestForSession, requestForTurn, requestHasActiveReview, requestList } from './requests/queries.js';
+import { requestEvents, requestExecution, requestForSession, requestForTurn, requestHasActiveReview, requestUnresolvedExecutions, requestList } from './requests/queries.js';
 import { requestCompleteReview, requestFailReview, requestObserveReviewUsage, requestQueuedReviews, requestReserveReview, requestStartReview } from './requests/reviews.js';
 import { RequestStore } from './requests/store.js';
 
@@ -41,6 +43,9 @@ export class WorkerRequestJournal implements RequestGatePort, FeatureIdentityJou
   bindFeature(sessionId: string, featureId: string): void {
     requestBindFeature(this.store, sessionId, featureId);
   }
+  deliveryUpdate(id: string, update: DeliveryUpdate): WorkerRequest { return requestDeliveryUpdate(this.store, id, update); }
+  reviseInput(id: string, input: GateInput): WorkerRequest { return requestReviseInput(this.store, id, input); }
+  unresolvedExecutions() { return requestUnresolvedExecutions(this.store); }
   get(id: string): WorkerRequest {
     return this.store.get(id);
   }
@@ -78,8 +83,8 @@ export class WorkerRequestJournal implements RequestGatePort, FeatureIdentityJou
   }): WorkerRequest {
     return requestEnsure(this.store, input);
   }
-  bindTurn(id: string, turnId: string, inputRevision?: number) {
-    return requestBindTurn(this.store, id, turnId, inputRevision);
+  bindTurn(id: string, turnId: string, inputRevision?: number, answeredTurnId?: string) {
+    return requestBindTurn(this.store, id, turnId, inputRevision, answeredTurnId);
   }
   evaluate(id: string, stage: GateStage) {
     return requestEvaluate(this.store, id, stage);
@@ -142,11 +147,12 @@ export class WorkerRequestJournal implements RequestGatePort, FeatureIdentityJou
   ) {
     return requestFailReview(this.store, id, intentId, code, usage);
   }
-  command(input: RequestCommand): {
+  replayCommand(input: RequestCommand) { return requestReplayCommand(this.store, input); }
+  command(input: RequestCommand, stopped?: DeliveryStopObservation): {
     request: WorkerRequest;
     duplicate: boolean;
   } {
-    return requestCommand(this.store, input);
+    return requestCommand(this.store, input, stopped);
   }
   policy() {
     return requestPolicy(this.store);

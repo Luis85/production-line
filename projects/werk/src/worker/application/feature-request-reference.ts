@@ -15,7 +15,7 @@ export interface FeatureRequestReference {
 export function featureRequestReference(input: Omit<FeatureRequestReference, 'key'>): FeatureRequestReference {
   const value = object(input, 'Feature request reference', ['id', 'source', 'scope', 'sourcePath', 'repositoryId']);
   const id = identifier(value.id, 'Feature request ID'), scope = text(value.scope, 'Feature request scope', 4096);
-  if (!['interaction', 'folder', 'shared_git', 'orchestrator'].includes(String(value.source)))
+  if (typeof value.source !== 'string' || !['interaction', 'folder', 'shared_git', 'orchestrator'].includes(value.source))
     throw new DomainError('invalid_input', 'Unknown feature request source.');
   const source = value.source as FeatureRequestSource;
   const key = 'fr-' + createHash('sha256').update(JSON.stringify([source, scope, id])).digest('hex');

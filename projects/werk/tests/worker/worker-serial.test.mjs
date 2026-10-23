@@ -41,7 +41,7 @@ test('cancelling a queued chat never prompts the model and does not block later 
   assert.equal(sessions.view().records[0].status,'cancelled');assert.equal(sessions.executor.waiting,0);
   await sessions.action({action:'create',title:'New task',provider:'codex-cli'});await sessions.start('Next task');
   await settings.update({board:{paused:false}});sessions.executor.wake();await until(()=>!sessions.busy);assert.equal(calls,1);
-  await assert.rejects(settings.update({board:{maxParallel:2}}),/one task/);
+  await assert.rejects(settings.update({board:{maxParallel:9}}),/concurrency/);
 });
 
 test('failed taskboard writes and restart reconciliation leave no locked orphan task sessions',async t=>{

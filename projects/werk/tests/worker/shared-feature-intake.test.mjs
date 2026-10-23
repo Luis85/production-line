@@ -50,7 +50,7 @@ for (const [label, rule] of [
 test('completion publication requires exact phase, input, policy, output, turn and run evidence', async t => {
   const f = await fixture(t); await f.intake.sync(); await f.complete();
   const mutations = [
-    value => { value.request.phase = 'review'; },
+    value => { value.request.phase = 'needs_rework'; },
     value => { value.request.execution.status = 'running'; },
     value => { value.request.execution.inputRevision++; },
     value => { value.request.policyDigest = 'b'.repeat(64); },
@@ -67,6 +67,14 @@ test('completion publication requires exact phase, input, policy, output, turn a
     await f.intake.sync(); assert.equal(f.patchAttempts.length, 0);
   }
   f.controls.inspect = null; await f.intake.sync(); assert.equal(f.featureCommits, 1);
+});
+
+for (const phase of ['review', 'done']) test(`current ${phase} evidence can publish a feature for human review`, async t => {
+  const f = await fixture(t); await f.intake.sync(); await f.complete();
+  f.controls.inspect = value => ({ ...value, request: { ...value.request, phase } });
+  await f.intake.sync(); assert.equal(f.featureCommits, 1);
+  assert.equal(f.intake.view().requests[0].status, 'ready_for_review');
+  assert.equal(f.primaryExecutions, 1, 'Publication does not redispatch the implementation.');
 });
 
 test('corrupt current policy blocks new claims while a frozen completed request still publishes its valid evidence', async t => {

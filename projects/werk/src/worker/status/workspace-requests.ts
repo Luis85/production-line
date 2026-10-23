@@ -1,3 +1,10 @@
+import { assertNativeWorkReady } from './workspace-native-work.js';
+import { executionRecoveryCommand } from './workspace-execution-recovery.js';
+import { deliveryPolicyActions, deliveryPolicyCommand } from './workspace-delivery-policy.js';
+import { deliveryMetrics } from './workspace-delivery-metrics.js';
+import { publicationView, publishRequest } from './workspace-publication.js';
+import { remotePublicationCommands } from '../application/remote-delivery-contracts.js';
+import { serviceActive } from '../application/service-policy.js';
 import { minimumClaudeVersion } from '../infrastructure/provider-version.js';
 import { delegationLimits } from '../application/delegation-policy.js';
 import { isSharedFeatureSession } from './workspace-feature-authoring.js';
@@ -67,6 +74,10 @@ export function capabilities(workspace: WorkspaceContext){
 }
 
 export async function requestCommand(workspace: WorkspaceContext, input: unknown){
+  const selectedAction = input && typeof input === 'object' && !Array.isArray(input) ? (input as { action?: unknown }).action : undefined;
+  if (deliveryPolicyActions.some(action => action === selectedAction)) return deliveryPolicyCommand(workspace, input);
+  if (selectedAction === 'metrics') return deliveryMetrics(workspace, input);
+  if (selectedAction === 'execution_recovery' || selectedAction === 'confirm_execution_stopped') return executionRecoveryCommand(workspace, input);
   const initial = object(input, "Request command", [
     "action",
     "sessionId",
@@ -85,6 +96,8 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
     "candidateId",
     "inputHash",
     "outputDigest",
+    "deliveryRunId", "inputRevision", "candidateCommit", "candidateDigest", "humanOutcomes",
+    "assessmentId", "proposalId", "decision", "criterionDecision", "reviewDurationMinutes", "publicationOperationId",
   ]);
   const action = String(initial.action);
   const reads: Record<string, string[]> = {
@@ -93,6 +106,7 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
     events: ["action", "requestId", "after", "limit"],
     schema: ["action"],
     policy: ["action"],
+    publication: ["action", "requestId"],
     set_policy: ["action", "policy", "expectedRevision", "operationId"],
     execute: ["action", "requestId", "expectedRevision", "operationId"],
   };
@@ -118,6 +132,7 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
         "explicit_operator_decision_not_proof_of_human_identity",
     };
   if (action === "policy") return gates.policy();
+  if (action === "publication") return publicationView(workspace, identifier(initial.requestId, "requestId"));
   if (action === "list")
     return gates.list({
       sessionId: initial.sessionId as string | undefined,
@@ -132,9 +147,13 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
       initial.after as number | undefined,
       initial.limit as number | undefined,
     );
+  if (action !== "set_policy") {
+    const replay = gates.replayCommand(initial as unknown as RequestCommand);
+    if (replay) return { ...replay, dispatch: requestDispatchStatus(replay.request, action) };
+  }
   if (!workspace.acceptingTasks)
     throw new DomainError("unavailable", "Worker is stopping.");
-  if (action !== "cancel" && (workspace.configurationUpdating || workspace.executionProfiles?.pending()))
+  if (!["cancel", "interrupt", "pause_after_step", "confirm_stopped"].includes(action) && (workspace.configurationUpdating || workspace.executionProfiles?.pending()))
     throw new DomainError("conflict", "Finish the execution profile change before starting new work.");
   if (action === "set_policy")
     return gates.setPolicy({
@@ -144,6 +163,7 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
     });
   const requestId = identifier(initial.requestId, "requestId");
   const before = gates.get(requestId);
+  if (remotePublicationCommands.includes(action as typeof remotePublicationCommands[number])) return publishRequest(workspace, initial as unknown as RequestCommand);
   if (isSharedFeatureSession(workspace, before.owner.sessionId) && ['propose', 'accept_candidate', 'rework', 'execute'].includes(action))
     throw new DomainError('conflict', 'This Feature Request retains its published scope and checks. Use its Task answer or resume control to continue; publish a new Feature Request for a scope change.');
   if (
@@ -155,15 +175,25 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
       "Remote assignments require an explicit upstream successor with a fresh lease and pinned context.",
     );
   if (['propose', 'accept_candidate', 'execute'].includes(action)) assertTaskCanContinue(workspace, before.owner.sessionId);
-  const result = gates.command(initial as unknown as RequestCommand);
+  if (before.input.kind === 'patch' && ['criterion_decision', 'attest', 'request_changes', 'confirm_stopped', 'execute', 'resume', 'retry', 'accept_candidate', 'readiness_decision'].includes(action)) assertNativeWorkReady(workspace);
+  if (action === "criterion_decision") await workspace.board.verifyDeliveryCheckpoint(requestId, before.revision);
+  if (["attest", "request_changes"].includes(action) && before.delivery?.review) await workspace.board.verifyDelivery(requestId, before.revision);
+  const assertNoLiveServices = () => {
+    if (workspace.processes?.status().services.some(service => service.sessionId === before.owner.sessionId && serviceActive(service.state)))
+      throw new DomainError('conflict', 'Stop this request’s managed development services before confirming stopped processes.');
+  };
+  if (action === "confirm_stopped") assertNoLiveServices();
+  const stopObservation = action === "confirm_stopped" ? await workspace.board.inspectStopped(requestId, before.revision) : undefined;
+  if (action === "confirm_stopped") assertNoLiveServices();
+  const result = gates.command(initial as unknown as RequestCommand, stopObservation);
   if (!result.duplicate && action === "cancel")
     workspace.reviews.cancel(requestId);
   if (
     !result.duplicate &&
-    (action === "execute" || action === "accept_candidate")
+    (["execute", "accept_candidate", "resume", "retry", "criterion_decision", "readiness_decision"].includes(action))
   ) {
     const current = gates.get(requestId);
-    if (current.phase === "ready") {
+    if (current.phase === "ready" || ["resume", "retry"].includes(action)) {
       try {
         if (current.input.kind === "patch") await workspace.board.executeRequest(requestId);
         else await workspace.sessions.executeRequest(requestId);

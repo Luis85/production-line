@@ -25,6 +25,15 @@ test('an unattended worker drains a pushed evening batch and resumes one morning
   const sourceCommit = await f.push(batch.map(row => row.path), 'Publish the evening Feature Request batch');
   t.diagnostic('Published three ready requests with one local admission place; only production timers dispatch them.');
   const first = batch[0];
+  // Each durable milestone gets the existing wait budget. The unchanged outer deadline bounds the entire journey.
+  await f.until(async () => {
+    const row = (await f.view()).requests.find(request => request.id === first.id);
+    return row?.status === 'waiting_input' && row.taskNote && row.publication === 'synced';
+  }, 'The first request must publish its question before independent work proceeds');
+  await f.until(async () => {
+    const view = await f.view();
+    return batch.slice(1).some(request => view.requests.some(row => row.id === request.id && row.status === 'ready_for_review' && row.publication === 'synced'));
+  }, 'At least one independent request must publish a verified review while the first waits');
   const overnight = await f.until(async () => {
     const view = await f.view();
     const question = view.requests.find(row => row.id === first.id);

@@ -1,0 +1,6 @@
+[32m17:54:56 (692221) INFO ProjectReader[39m Found 24 of 410 file(s) to be mutated.
+[32m17:54:57 (692221) INFO Instrumenter[39m Instrumented 24 source file(s) with 3820 mutant(s)
+[32m17:54:57 (692221) INFO ConcurrencyTokenProvider[39m Creating 2 test runner process(es).
+[32m17:54:57 (692221) INFO Sandbox[39m Running build command "node scripts/mutation/build.mjs" in "/workspace/production-line/projects/werk/.stryker-tmp/sandbox-DpIMza".
+[32m17:54:58 (692221) INFO DryRunExecutor[39m Starting initial test run (tap test runner with "perTest" coverage analysis). This may take a while.
+[32m17:55:02 (692221) INFO DryRunExecutor[39m Initial test run succeeded. Ran 21 tests in 4 seconds (net 2717.2428819999996 ms, overhead 1351.7571180000004 ms).

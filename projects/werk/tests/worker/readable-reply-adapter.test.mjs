@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import assert from 'node:assert/strict';
 import { mkdtemp, realpath, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -7,6 +8,9 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { WorkerSettings } from '../../src/worker/dist/worker/infrastructure/settings.js';
 import { modelFor } from '../../src/worker/dist/worker/infrastructure/providers.js';
 import { LocalTaskboard, WorkerSessions } from './application-fixtures.mjs';
+
+// The real session composition includes trusted history tools.
+prepareNativeProcessFixture();
 
 // These are offline wire-format fixtures through the real API adapters, not live inference.
 function envelope(provider, text) {

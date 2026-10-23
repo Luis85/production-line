@@ -1,3 +1,5 @@
+import { cliFailure } from './provider-failures.js';
+import type { ProviderAuthenticationMode } from '../application/provider-capabilities.js';
 import { createHash } from 'node:crypto';
 import type { ProviderConnection } from '../application/provider-contract.js';
 import { ProviderModelError } from '../application/model-contract.js';
@@ -10,7 +12,7 @@ import { tmpdir } from 'node:os';
 /** Private cache identity changes when operator credentials change, without retaining raw keys. */
 export function providerProbeKey(connection: ProviderConnection): string {
     const credentials = connection.id === 'cursor-cli' ? [connection.apiKey || process.env.CURSOR_API_KEY || '', process.env.CURSOR_AUTH_TOKEN ?? '', process.env.CURSOR_CONFIG_DIR ?? '', process.env.XDG_CONFIG_HOME ?? ''] : [connection.apiKey];
-    return JSON.stringify([connection.executable, connection.model, createHash('sha256').update(JSON.stringify(credentials)).digest('hex')]);
+    return JSON.stringify([connection.executable, connection.model, connection.authenticationMode, createHash('sha256').update(JSON.stringify(credentials)).digest('hex')]);
 }
 const windowsEnvironment = ['SystemRoot', 'windir', 'SystemDrive', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'TEMP', 'TMP', 'PATHEXT', 'ComSpec', 'HOMEDRIVE', 'HOMEPATH', 'USERNAME', 'CLAUDE_CODE_GIT_BASH_PATH'];
 /** Provider diagnostics never become logs/evidence; operator authentication is inherited, never copied. */
@@ -25,12 +27,21 @@ export function providerEnvironment(provider = 'codex'): NodeJS.ProcessEnv {
     return { ...env, ...(provider === 'claude' ? { CLAUDE_CODE_DISABLE_CLAUDE_MDS: '1', CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS: '0' } : {}), GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0' };
 }
 /** Only typed provider settings may augment the inherited environment; secrets never become argv/evidence. */
-export interface ProviderToolEnvironment { MCP_TOOL_TIMEOUT?: string; CURSOR_API_KEY?: string; }
+export interface ProviderToolEnvironment { MCP_TOOL_TIMEOUT?: string; CURSOR_API_KEY?: string; CODEX_API_KEY?: string; ANTHROPIC_API_KEY?: string; authenticationMode?: ProviderAuthenticationMode; }
 function environmentFor(provider: string, settings: ProviderToolEnvironment) {
     const env = providerEnvironment(provider);
-    if (provider === 'cursor' && settings.CURSOR_API_KEY !== undefined) {
-        if (!settings.CURSOR_API_KEY || settings.CURSOR_API_KEY.length > 8192 || /[\x00-\x1f]/.test(settings.CURSOR_API_KEY)) throw new ProviderModelError('authentication');
-        env.CURSOR_API_KEY = settings.CURSOR_API_KEY;
+    if (settings.authenticationMode === 'legacy') throw new ProviderModelError('authentication');
+    const key = provider === 'codex' ? 'CODEX_API_KEY' : provider === 'claude' ? 'ANTHROPIC_API_KEY' : 'CURSOR_API_KEY';
+    if (settings.authenticationMode !== undefined) {
+        delete env[key];
+        if (provider === 'codex') delete env.OPENAI_API_KEY;
+        if (provider === 'cursor' && settings.authenticationMode === 'api-key') delete env.CURSOR_AUTH_TOKEN;
+    }
+    const value = settings[key];
+    if (settings.authenticationMode === 'api-key' && !value) throw new ProviderModelError('authentication');
+    if (value !== undefined && settings.authenticationMode !== 'cli-account') {
+        if (!value || value.length > 8192 || /[\x00-\x1f]/.test(value)) throw new ProviderModelError('authentication');
+        env[key] = value;
     }
     return env;
 }
@@ -48,7 +59,8 @@ export async function providerCommand(executable: string, args: string[], cwd: s
     catch (error) { if (!(error instanceof ProcessRunError)) throw error; result = error.result; failed = true; }
     // Numeric telemetry may exist even when execution fails; diagnostics never leave this callback.
     try { observeOutput?.(result.stdout); } catch { /* Telemetry must not mask process cleanup or outcome. */ }
-    if (failed || signal.aborted) throw new ProviderModelError(signal.aborted ? 'cancelled' : 'unavailable');
+    if (signal.aborted) throw new ProviderModelError('cancelled');
+    if (failed) throw cliFailure(result.stdout);
     return result.stdout;
 }
 

@@ -1,4 +1,4 @@
-import { validateModelEffort, validateModelName } from '../../application/model-effort.js';
+import { parseModelEffort, validateModelEffort, validateModelName } from '../../application/model-effort.js';
 import { DomainError } from '../../../shared/errors.js';
 import type { FeatureAuthoringDocuments, FeatureAuthoringSeed } from '../../application/feature-authoring-contracts.js';
 import type { FeatureWorkflowSnapshot } from '../../application/feature-workflow.js';
@@ -21,11 +21,12 @@ function inspect(markdown: string) {
   return { id: data.id, status: data.status as 'draft' | 'ready' };
 }
 function seedInput(value: FeatureAuthoringSeed): FeatureAuthoringSeed {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !['title', 'message', 'provider', 'model', 'effort', 'paths', 'definitionRef', 'agent', 'useInstructionsOnly'].includes(key))) invalid('Invalid feature draft seed.');
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !['title', 'message', 'provider', 'model', 'effort', 'executionProfile', 'paths', 'definitionRef', 'agent', 'useInstructionsOnly'].includes(key))) invalid('Invalid feature draft seed.');
   if (typeof value.title !== 'string' || !value.title.trim() || value.title.length > 120 || typeof value.message !== 'string' || value.message.length > 8000) invalid('Provide a bounded title and request message.');
-  if (!providerIds.includes(value.provider as typeof providerIds[number])) invalid('Choose a supported model connection.');
+  if (value.provider !== undefined && !providerIds.includes(value.provider as typeof providerIds[number])) invalid('Choose a supported model connection.');
+  if (value.executionProfile !== undefined && (typeof value.executionProfile !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(value.executionProfile))) invalid('Use a configured execution profile name.');
   if (value.model !== undefined) validateModelName(value.model);
-  if (value.effort !== undefined) validateModelEffort(value.effort, value.provider);
+  if (value.effort !== undefined) { if (value.provider === undefined) parseModelEffort(value.effort); else validateModelEffort(value.effort, value.provider); }
   if (value.paths !== undefined && (!Array.isArray(value.paths) || value.paths.length > 32 || value.paths.some(path => typeof path !== 'string' || !path || path.length > 1024))) invalid('Approved paths must be a bounded file list.');
   if (value.definitionRef !== undefined && (typeof value.definitionRef !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(value.definitionRef))) invalid('Use a stable definition reference.');
   if (value.agent !== undefined && (typeof value.agent !== 'string' || !value.agent || value.agent.length > 100)) invalid('Use a bounded agent name.');
@@ -37,10 +38,13 @@ function prepare(snapshot: FeatureWorkflowSnapshot, featureId: string, supplied?
   parsed.document.set('id', featureId); parsed.document.set('status', 'draft');
   let body = parsed.body;
   if (seed) {
-    parsed.document.set('title', seed.title.trim()); parsed.document.set('provider', seed.provider);
+    parsed.document.set('title', seed.title.trim());
+    if (seed.provider !== undefined) parsed.document.set('provider', seed.provider);
+    else parsed.document.delete('provider');
+    if (seed.executionProfile !== undefined) parsed.document.set('execution_profile', seed.executionProfile); else parsed.document.delete('execution_profile');
     if (seed.paths !== undefined) parsed.document.set('paths', seed.paths);
-    for (const key of ['model', 'effort', 'definitionRef', 'agent', 'useInstructionsOnly'] as const) if (seed[key] !== undefined) parsed.document.set(key, seed[key]);
-    if (seed.definitionRef !== undefined) parsed.document.delete('definitionId');
+    for (const key of ['model', 'effort', 'definitionRef', 'agent', 'useInstructionsOnly'] as const) { if (seed[key] !== undefined) parsed.document.set(key, seed[key]); else parsed.document.delete(key); }
+    parsed.document.delete('definitionId');
     if (seed.message.trim()) body = replaceFeatureSection(body, 'goal', seed.message);
   }
   const markdown = '---\n' + parsed.document.toString({ lineWidth: 0 }) + '---\n' + body;

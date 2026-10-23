@@ -11,11 +11,15 @@ import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { WorkerWorkspace } from '../../src/worker/dist/worker/status/workspace.js';
 import { SnapshotJournal } from '../../src/worker/dist/worker/infrastructure/journal/snapshots.js';
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import { WorkerSettings } from '../../src/worker/dist/worker/infrastructure/settings.js';
 import { repositoryWorktreeArgument, worktreeName } from '../../src/worker/dist/worker/infrastructure/repositories-git.js';
 import { modelCapabilities } from '../../src/worker/dist/worker/application/model-contract.js';
 import { DomainError } from '../../src/worker/dist/shared/errors.js';
 import { LocalTaskboard, WorkerSessions } from './application-fixtures.mjs';
+
+// Establish native process readiness separately from the bounded admission/service scenario.
+prepareNativeProcessFixture();
 
 const execute = promisify(execFile);
 async function git(directory, ...args) {
@@ -231,6 +235,7 @@ test('an explicit background retry reuses a pristine worktree after interrupted 
   taskboardRuntime(f.workspace.board).files = { ...files, async snapshot() { throw new DomainError('unavailable', 'Fixture snapshot was interrupted.'); } };
   const accepted = await f.workspace.task(request); assert.equal(accepted.preparation.id, request.id);
   await until(() => f.workspace.board.preparation(request.id)?.state === 'failed', 'The interrupted snapshot did not leave a visible failure.');
+  assert.match(f.workspace.board.preparation(request.id).error, /Fixture snapshot was interrupted/);
   assert.equal(f.workspace.board.view().tasks.length, 0); assert.equal(f.workspace.sessions.runs.list().total, 0);
   const retained = (await readdir(join(f.project, '.werk', 'worktrees'))).filter(name => !name.startsWith('.')); assert.equal(retained.length, 1);
   await f.close(); await f.open();

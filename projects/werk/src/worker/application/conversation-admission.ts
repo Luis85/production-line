@@ -99,7 +99,13 @@ export async function launchConversation(host: ConversationRuntime, text: string
           input: text,
           context: { chatMessages: next.messages, assistantId: answer.id },
         });
-        if (replay.duplicate) return;
+        if (replay.duplicate) {
+          if (replay.turn.kind === 'answer' && replay.turn.priorTurnId) {
+            const request = requests.forTurn(host.sessionId, replay.turn.priorTurnId);
+            if (request?.execution?.turnId === replay.turn.priorTurnId && request.execution.inputRevision === request.inputRevision) requests.bindTurn(request.id, replay.turn.id, request.inputRevision, replay.turn.priorTurnId);
+          }
+          return;
+        }
       }
       if (command) {
         const prior =
@@ -222,7 +228,7 @@ export async function launchConversation(host: ConversationRuntime, text: string
       if (admission.duplicate) return;
       turn = admission.turn;
       if (gateRequest)
-        requests!.bindTurn(gateRequest.id, turn.id, gateRequest.inputRevision);
+        requests!.bindTurn(gateRequest.id, turn.id, gateRequest.inputRevision, turn.kind === 'answer' ? turn.priorTurnId ?? undefined : undefined);
     }
     if (
       host.changing ||

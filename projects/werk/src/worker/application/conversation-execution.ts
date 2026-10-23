@@ -1,3 +1,4 @@
+import { unknownProviderOutcome } from './provider-outcome.js';
 import { conversationProjection } from './model-context.js';
 import type { WorkerRequest } from "./request-gates.js";
 
@@ -25,7 +26,7 @@ export async function executeConversation(host: Pick<ConversationRuntime, 'evide
 
       let release: (() => void) | undefined,
         runId: string | undefined,
-        evidenceError = false;
+        evidenceError = false, retainPermit = false;
       let usage = unknownUsage();
       let outcome:
         | "completed"
@@ -43,6 +44,8 @@ export async function executeConversation(host: Pick<ConversationRuntime, 'evide
           if (request.provider.id !== "legacy") {
             metadata.provider = request.provider.id;
             metadata.model = request.provider.model;
+            if (request.provider.authenticationMode) metadata.authenticationMode = request.provider.authenticationMode;
+            else delete metadata.authenticationMode;
           }
           try {
             runId = (await host.evidence.journal.begin(metadata)).id;
@@ -144,16 +147,21 @@ export async function executeConversation(host: Pick<ConversationRuntime, 'evide
                 : "escalated";
           evidenceError = true;
         } else {
-          outcome = controller.signal.aborted ? "cancelled" : "failed";
-          answer.state = controller.signal.aborted ? "cancelled" : "error";
-          const code = controller.signal.aborted
+          const unknown = unknownProviderOutcome(error);
+          if (unknown && runId) {
+            try { host.evidence!.journal.reserveUnknown(runId, unknown); }
+            catch { evidenceError = true; retainPermit = true; }
+          }
+          outcome = !unknown && controller.signal.aborted ? "cancelled" : "failed";
+          answer.state = !unknown && controller.signal.aborted ? "cancelled" : "error";
+          const code = unknown ?? (controller.signal.aborted
             ? "cancelled"
             : signal.aborted
               ? "timeout"
               : error instanceof ProviderModelError
                 ? error.code
-                : "execution_failed";
-          answer.text = controller.signal.aborted
+                : "execution_failed");
+          answer.text = unknown && error instanceof Error ? error.message : controller.signal.aborted
             ? "Reply stopped."
             : signal.aborted
               ? "This attempt reached its configured execution time limit. Its saved context is retained; resume explicitly to make another attempt."
@@ -171,7 +179,7 @@ export async function executeConversation(host: Pick<ConversationRuntime, 'evide
           }
         }
       }
-      if (runId) {
+      if (runId && !retainPermit) {
         try {
           await host.evidence!.journal.finish(runId, outcome, usage);
         } catch {
@@ -188,7 +196,7 @@ export async function executeConversation(host: Pick<ConversationRuntime, 'evide
         host.changing = false;
         host.phase = "idle";
         host.controller = undefined;
-        release?.();
+        if (!retainPermit) release?.();
         if (gateRequest) host.evidence?.notifyRequest?.(gateRequest.id);
       }
 

@@ -5,10 +5,11 @@ import type { SharedRepositoryPort } from './shared-feature-state.js';
 
 export type FeatureAuthoringBinding = Pick<SharedIntakeConfig, 'repositoryId' | 'remote' | 'branch' | 'workflowPath'>;
 export interface FeatureAuthoringSeed {
-  title: string; message: string; provider: string; model?: string; effort?: ModelEffort; paths?: string[];
+  title: string; message: string; provider?: string; model?: string; effort?: ModelEffort; executionProfile?: string; paths?: string[];
   definitionRef?: string; agent?: string; useInstructionsOnly?: boolean;
 }
 export interface FeatureAuthoringCommand {
+  projectId?: string;
   action: 'prepare' | 'publish'; operationId: string; name?: string; markdown?: string; status?: 'draft' | 'ready';
   seed?: FeatureAuthoringSeed; expectedRevision?: string | null;
   expectedWorkflowDigest?: string; expectedBinding?: FeatureAuthoringBinding;

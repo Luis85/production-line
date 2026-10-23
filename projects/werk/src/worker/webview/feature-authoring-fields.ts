@@ -7,7 +7,7 @@ export const featureDetailFields = [
   { key: 'acceptance criteria', label: 'Acceptance criteria', hint: 'One observable result per line.', rows: 4 },
   { key: 'verification plan', label: 'Verification plan', hint: 'Explain how the implementation should be checked.', rows: 3 },
 ] as const;
-export type FeatureModelField = 'provider' | 'model' | 'effort';
+export type FeatureModelField = 'provider' | 'model' | 'effort' | 'execution_profile' | 'quality_profile' | 'priority' | 'depends_on';
 export type FeatureDetailField = typeof featureDetailFields[number]['key'];
 interface Section { name: string; start: number; end: number; }
 function document(markdown: string) {
@@ -46,14 +46,15 @@ export function readFeatureDetails(markdown: string) {
   if (provider !== undefined && !providerIds.includes(provider) || effort !== undefined && provider && !providerEfforts[provider]?.includes(effort)) throw Error('Correct the provider or effort in Advanced template editing.');
   if (effort !== undefined) { try { parseModelEffort(effort); } catch { throw Error('Correct the provider or effort in Advanced template editing.'); } }
   const selection = { provider, model: String(metadata.model ?? ''), effort: effort ?? '' as ModelEffort | '' };
-  return { fields, selection, title: String(parsed.metadata.get('title') ?? ''), paths: Array.isArray(values) ? values.filter((path): path is string => typeof path === 'string').join('\n') : '' };
+  return { fields, selection, executionProfile: String(metadata.execution_profile ?? ''), qualityProfile: String(metadata.quality_profile ?? ''), priority: typeof metadata.priority === 'number' ? metadata.priority : 2, dependsOn: Array.isArray(metadata.depends_on) ? metadata.depends_on.filter((id): id is string => typeof id === 'string').join('\n') : '', title: String(parsed.metadata.get('title') ?? ''), paths: Array.isArray(values) ? values.filter((path): path is string => typeof path === 'string').join('\n') : '' };
 }
 /** Edits only a named template field; the worker remains the readiness authority. */
 export function writeFeatureDetail(markdown: string, field: FeatureDetailField | FeatureModelField | 'paths' | 'title', value: string) {
   const parsed = document(markdown);
-  if (field === 'paths' || field === 'title' || field === 'provider' || field === 'model' || field === 'effort') {
-    if ((field === 'model' || field === 'effort') && !value.trim()) parsed.metadata.delete(field);
-    else parsed.metadata.set(field, field === 'paths' ? value.split('\n').map(path => path.trim()).filter(Boolean) : value);
+  if (field === 'paths' || field === 'title' || field === 'provider' || field === 'model' || field === 'effort' || field === 'execution_profile' || field === 'quality_profile' || field === 'priority' || field === 'depends_on') {
+    if (field === 'execution_profile') for (const key of ['provider', 'model', 'effort', 'definition', 'definition_ref', 'agent', 'use_instructions_only']) parsed.metadata.delete(key);
+    if (['model', 'effort', 'execution_profile', 'quality_profile', 'depends_on'].includes(field) && !value.trim()) parsed.metadata.delete(field);
+    else parsed.metadata.set(field, field === 'priority' ? Number(value) : field === 'paths' || field === 'depends_on' ? value.split('\n').map(path => path.trim()).filter(Boolean) : value);
     return '---\n' + parsed.metadata.toString({ lineWidth: 0 }) + '---\n' + parsed.lines.join('\n');
   }
   const section = parsed.sections.find(section => section.name === field)!;

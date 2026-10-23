@@ -1,3 +1,5 @@
+import { processRuntimePreparing } from '../../shared/process/launcher.js';
+import { providerAuthenticationEnvironment } from './provider-authentication.js';
 import { constants } from 'node:fs';
 import { access } from 'node:fs/promises';
 import { providerProbeKey, runProviderProbe } from './provider-process.js';
@@ -58,15 +60,17 @@ export class ProviderAccountChecks {
   }
   private unavailable(id: ProviderId, message: string): ProviderAccountStatus { return { id, signedIn: 'unknown', ...identity(), checkedAt: new Date().toISOString(), message }; }
   private async inspect(connection: ProviderConnection): Promise<ProviderAccountStatus> {
+    if (connection.authenticationMode === 'legacy') return this.unavailable(connection.id, 'Choose authentication and billing in Settings before checking this provider.');
+    if (connection.authenticationMode === 'api-key') return this.unavailable(connection.id, 'Explicit API-key billing is selected. Account identity is unavailable; no provider request was made.');
     if (!connection.id.endsWith('-cli')) return this.unavailable(connection.id, 'Account identity is unavailable for API-key connections. No provider request was made.');
     if (process.platform === 'win32' && connection.id === 'codex-cli') return this.unavailable(connection.id, 'Codex CLI account checks require a native Linux or macOS worker.');
     if (!connection.executable) return this.unavailable(connection.id, 'Save the provider CLI executable before checking its account.');
     try { await access(connection.executable, constants.X_OK); } catch { return this.unavailable(connection.id, 'The saved CLI executable cannot be run by the worker account.'); }
     try {
-      const args = connection.id === 'codex-cli' ? ['login', 'status'] : connection.id === 'cursor-cli' ? ['status'] : ['auth', 'status', '--json'];
-      const result = await runProviderProbe(connection.executable, connection.id === 'codex-cli' ? 'codex' : connection.id === 'cursor-cli' ? 'cursor' : 'claude', args, { signal: this.controller.signal, timeoutMs: 5000, maxOutputBytes: 16384 }, connection.id === 'cursor-cli' && connection.apiKey ? { CURSOR_API_KEY: connection.apiKey } : {});
+      const args = connection.id === 'codex-cli' ? ['login', 'status'] : connection.id === 'cursor-cli' ? ['status'] : ['auth', 'status'];
+      const result = await runProviderProbe(connection.executable, connection.id === 'codex-cli' ? 'codex' : connection.id === 'cursor-cli' ? 'cursor' : 'claude', args, { signal: this.controller.signal, timeoutMs: 5000, maxOutputBytes: 16384 }, providerAuthenticationEnvironment(connection));
       return parseProviderAccount(connection.id, result.exitCode, result.stdout.toString('utf8'), result.stderr.toString('utf8'));
-    } catch { return this.unavailable(connection.id, 'The account check failed, timed out or returned too much output. Retry after checking the CLI installation.'); }
+    } catch { return this.unavailable(connection.id, processRuntimePreparing() ? 'The Windows command runtime is preparing. Retry shortly; no account identity was confirmed.' : 'The account check failed, timed out or returned too much output. Retry after checking the CLI installation.'); }
   }
   async close() { this.controller.abort(); await Promise.allSettled([...this.pending.values()].map(item => item.operation)); this.cached.clear(); }
 }

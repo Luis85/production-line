@@ -27,10 +27,10 @@ async function fixture(t, beforeWorktree) {
   const executed = [];
   /** @type {import('../../src/worker/infrastructure/workspace-services.js').WorkspaceProviderFactory} */
   const factory = connection => ({
-    configuration: { id: connection.id, model: connection.model, effort: connection.effort, instruction: connection.instruction ?? '' }, capabilities: modelCapabilities,
+    configuration: { id: connection.id, authenticationMode: connection.authenticationMode, model: connection.model, effort: connection.effort, instruction: connection.instruction ?? '' }, capabilities: modelCapabilities,
     async reply() { throw Error('Structured execution required.'); },
     async execute(request) {
-      calls.push(request); executed.push({ provider: connection.id, model: connection.model, effort: connection.effort ?? 'default' });
+      calls.push(request); executed.push({ provider: connection.id, authenticationMode: connection.authenticationMode, model: connection.model, effort: connection.effort ?? 'default' });
       return { type: 'completed', text: request.operation === 'patch' ? JSON.stringify({ summary: 'Proposed the accepted edit.', files: [{ path: 'approved.txt', content: 'after\n' }] }) : 'Reviewed the request.' };
     },
   });
@@ -47,7 +47,7 @@ async function fixture(t, beforeWorktree) {
     async settle(id) { await settings.update({ board: { paused: false } }); await board.tick(); await until(() => !sessions.busy && board.detail(id).status === 'review'); },
   };
 }
-const initial = { provider: 'openai-api', model: 'initial-model', effort: 'medium' };
+const initial = { provider: 'openai-api', authenticationMode: 'api-key', model: 'initial-model', effort: 'medium' };
 
 test('model defaults freeze before asynchronous worktree preparation and survive queued restart', async t => {
   const entered = Promise.withResolvers(), release = Promise.withResolvers();
@@ -72,7 +72,7 @@ test('explicit model and default effort override a compatible profile and provid
   const { definitions: [profile] } = resultWith(await f.sessions.definitions.action({ action: 'import', name: 'Developer', yaml: 'agents:\n  root:\n    instruction: Preserve the reviewed scope.\n    model: openai/profile-model\n' }), 'definitions');
   await f.board.create({ ...f.input, definitionId: profile.id, model: 'explicit-model', effort: 'default' });
   const task = f.board.view().tasks.at(-1);
-  assert.deepEqual(task.selection, { provider: 'openai-api', model: 'explicit-model', effort: 'default' });
+  assert.deepEqual(task.selection, { provider: 'openai-api', authenticationMode: 'api-key', model: 'explicit-model', effort: 'default' });
   assert.equal(task.definition.model, 'profile-model');
   await f.sessions.definitions.action({ action: 'delete', id: profile.id });
   await f.settings.update({ provider: { id: 'openai-api', model: 'replacement', effort: 'high' } });
@@ -84,7 +84,7 @@ test('explicit model and default effort override a compatible profile and provid
 test('chat selection persists through provider reload, restart and subsequent messages', async t => {
   const f = await fixture(t);
   await f.sessions.action({ action: 'create', title: 'Discuss the feature', model: 'chat-model', effort: 'low' });
-  const id = f.sessions.current.id, selection = { provider: 'openai-api', model: 'chat-model', effort: 'low' };
+  const id = f.sessions.current.id, selection = { provider: 'openai-api', authenticationMode: 'api-key', model: 'chat-model', effort: 'low' };
   await f.settings.update({ board: { paused: false } });
   await f.sessions.start('Review the feature', id); await until(() => !f.sessions.busy);
   await f.sessions.updateProviders(() => f.settings.update({ provider: { id: 'openai-api', model: 'changed-default', effort: 'high' } }));
@@ -106,7 +106,7 @@ test('legacy chat catalog recovers its accepted model from the journal instead o
     await writeFile(path, JSON.stringify(saved));
   });
   await f.sessions.start('Continue the original discussion', id); await until(() => !f.sessions.busy);
-  assert.deepEqual(f.sessions.detail(id).session.selection, { provider: 'openai-api', model: 'historical-model', effort: 'default' });
+  assert.deepEqual(f.sessions.detail(id).session.selection, { provider: 'openai-api', authenticationMode: 'api-key', model: 'historical-model', effort: 'default' });
   assert.equal(f.executed[1].model, 'historical-model'); assert.equal(f.executed[1].effort, 'default');
 });
 

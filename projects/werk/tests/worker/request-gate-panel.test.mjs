@@ -6,6 +6,9 @@ import * as vue from 'vue';
 import { frontend, deferred } from '../ui/helpers/frontend-loader.mjs';
 const projection = await frontend('src/worker/webview/feature-review.ts');
 const controller = await frontend('src/worker/webview/request-gate-controller.ts');
+const acceptedPolicy = await frontend('src/worker/webview/delivery-policy-view.ts');
+const readiness = await frontend('src/worker/webview/delivery-readiness-view.ts');
+const humanReview = await frontend('src/worker/webview/delivery-human-review.ts');
 const source = await readFile(new URL('../../src/worker/webview/components/useRequestGatePanel.ts', import.meta.url), 'utf8');
 const javascript = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
 const at = '2026-10-18T12:00:00Z';
@@ -31,6 +34,9 @@ function fixture(api = async (_command) => undefined, overrides = {}) {
     '../store': { state, request: async (_path, _method, command) => { calls.push(structuredClone(vue.toRaw(command))); return api(command); }, refresh: async () => {}, date: value => value },
     '../request-gate-controller': controller,
     '../feature-review': projection,
+    '../delivery-human-review': humanReview,
+    '../delivery-policy-view': acceptedPolicy,
+    '../delivery-readiness-view': readiness,
     './request-gate-drafts': { requestDrafts: vue.reactive(new Map()), requestOperations: operations },
   };
   const usePanel = new Function('require', 'exports', 'document', javascript + '; return exports.useRequestGatePanel;')(id => {
@@ -66,7 +72,7 @@ test('explicit shared Feature Request source blocks scope changes even without a
   assert.equal(f.calls.length, 1); assert.equal(f.calls[0].expectedRevision, 3);
 });
 
-test('an outer stale/read-only page blocks fresh panel mutations and saved-operation retry', async t => {
+test('an outer stale/read-only page blocks fresh mutations and an unretained retry', async t => {
   const f = fixture(); t.after(f.close);
   f.props.disabled = true;
   assert.equal(f.mutable.value, false);
@@ -111,7 +117,36 @@ test('uncertain acceptance retains the original action and a retry cannot duplic
   f.setDraft('attestation', 'Review note'); await f.attest();
   const saved = f.operations.get('request-a'); assert.ok(saved);
   f.setDraft('attestation', 'Changed draft'); await f.attest(); assert.equal(f.calls.length, 1);
+  f.props.disabled = true;
   fail = false; await f.send(saved);
   assert.deepEqual(f.calls[0], f.calls[1]); assert.equal(f.operations.size, 0);
   assert.match(f.notice.value, /No duplicate work/);
+});
+
+
+test('stopped-process confirmation binds the run and observation and retries the exact saved command', async t => {
+  let fail = true;
+  const f = fixture(async () => { if (fail) throw Error('Connection interrupted'); return { request: record(), duplicate: true }; }); t.after(f.close);
+  f.view.value.delivery = { id: 'delivery-1', inputRevision: 1, allowedControls: ['confirm_stopped'] };
+  await f.deliveryCommand('confirm_stopped'); assert.equal(f.calls.length, 0);
+  await f.deliveryCommand('resume', 'Inspected processes'); assert.equal(f.calls.length, 0);
+  await f.deliveryCommand('confirm_stopped', '  Inspected the retained workspace and stopped the previous process.  ');
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.calls[0].deliveryRunId, 'delivery-1'); assert.equal(f.calls[0].inputRevision, 1);
+  assert.equal(f.calls[0].note, 'Inspected the retained workspace and stopped the previous process.');
+  const saved = f.operations.get('request-a'); assert.ok(saved);
+  fail = false; await f.send(saved);
+  assert.deepEqual(f.calls[0], f.calls[1]);
+  assert.equal(f.calls.some(command => command.action === 'resume'), false);
+});
+
+
+test('a delivery run owns continuation while generic invocation and instruction controls are unavailable', async t => {
+  const f = fixture(); t.after(f.close);
+  f.view.value.delivery = { id: 'delivery-1', inputRevision: 1, allowedControls: ['resume'] };
+  assert.equal(f.scopeMutable.value, false);
+  for (const action of ['execute', 'evaluate', 'rework', 'propose', 'accept_candidate', 'assign']) await f.command({ action });
+  assert.equal(f.calls.length, 0); assert.match(f.error.value, /exact delivery controls/);
+  await f.deliveryCommand('resume');
+  assert.equal(f.calls.length, 1); assert.equal(f.calls[0].action, 'resume'); assert.equal(f.calls[0].deliveryRunId, 'delivery-1');
 });

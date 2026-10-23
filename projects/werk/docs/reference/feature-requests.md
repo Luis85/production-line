@@ -28,6 +28,121 @@ is a projection, not an independent authoring authority or a second request to
 schedule. Changing shared requirements after acceptance requires a successor
 Feature Request.
 
+## Canonical local delivery requests
+
+Local delivery uses `schema: worker.request/v1` on the same Feature Request and
+serial executor. The existing shared Git authoring contract below retains its
+commit-and-push handoff and ownership rules. Do not convert an actively shared
+note into local intake to bypass those rules.
+
+```yaml
+schema: worker.request/v1
+id: FR-0042
+title: Export the filtered backlog
+intent: draft
+priority: normal
+quality_profile: feature
+depends_on: []
+mode: patch
+paths:
+  - src/export.ts
+```
+
+Use YAML frontmatter around these fields and Markdown sections for Outcome,
+Scope, Acceptance criteria, Boundaries, References and Answers. Change `intent`
+to `submit` when ready. A missing intent or ID is invalid, rather than an implicit
+submission. The quality profile must resolve to an allowed project profile;
+request text cannot grant tools or weaken trusted checks. `feature` and
+`lightweight` distinguish required inputs while keeping one lifecycle.
+
+| Field | Canonical local contract |
+| --- | --- |
+| `schema` | Required `worker.request/v1`. |
+| `id` | Required stable request identity; preserve it when renaming or revising the same work. |
+| `intent` | Explicit `draft` or `submit`; a retained submit intent cannot reopen terminal work. |
+| `priority` | `low`, `normal`, `high` or `urgent`; scheduling changes do not create a new requirement revision. |
+| `quality_profile` | An allowed named quality profile; omission uses the configured default. |
+| `execution_profile` | Optional named provider profile allowed by the committed project policy. Explicit provider/model/effort or definition fields must agree with that selection. |
+| `depends_on` | Same-project request IDs or `repositoryId:requestId` references; unknown references, cycles and prerequisites absent from the selected baseline hold dispatch. |
+| `review`, `control` | Guarded candidate decisions and execution controls described below, separate from requirement content. |
+| `readiness_decision`, `criterion_decision` | Exact-subject decisions permitted by the accepted policy; see [readiness and criterion decisions](../how-to/configure-delivery-readiness.md). |
+| `publication` | Explicit push, remote PR or reconciliation command under an approved remote-delivery policy; see [candidate publication](../how-to/publish-worker-candidates.md). |
+
+Provider/model/effort, approved file scope and instruction-profile selectors use
+the same authority boundaries as legacy intake. Worker-owned status, questions,
+findings and references belong between `<!-- worker:begin -->` and
+`<!-- worker:end -->`. The user owns the surrounding text. Generated edits,
+cosmetic blank-line changes, scheduling priority and command metadata do not
+create new requirement revisions. Code indentation and Markdown hard breaks
+remain meaningful.
+
+Material edits to nonterminal work hold new actions while the worker reconciles
+execution and reassesses the same request. Terminal work requires an explicit
+reopen command. Missing, duplicated or invalid active sources produce a visible
+hold; restoring the source or cancelling resolves that condition. Conflicting
+writes retain recoverable content rather than silently replacing a newer save.
+
+### Candidate decisions and execution controls
+
+Read current IDs from the worker-managed projection or request detail before
+issuing a command. `request_revision` is the numeric requirement input revision;
+`candidate_commit` is the complete Git commit ID, not a branch name. A decision
+must identify the offered result:
+
+```yaml
+review:
+  command_id: CMD-0042-review-01
+  decision: accept
+  request_revision: 2
+  candidate_commit: <complete candidate commit from the review package>
+  human_checks:
+    - criterion_id: "human:1:0123456789ab"
+      outcome: pass
+      note: Verified the exported rows against the active filters.
+```
+
+Copy the criterion IDs from the current package; the example ID above is illustrative.
+Each mandatory human criterion needs a matching outcome and supporting note.
+An empty list is sufficient only when no required human criteria remain. Exemptions
+are separate authorized decisions, never fabricated passing checks. Use
+`decision: request_changes` with `feedback` or a user-owned `## Review feedback`
+section to request changes to that candidate.
+
+```yaml
+control:
+  command_id: CMD-0042-pause-01
+  action: pause_after_step
+  run_id: <current delivery run ID>
+  request_revision: 2
+```
+
+Supported control actions are `pause_after_step`, `interrupt`, `cancel`, `resume`,
+`retry`, `confirm_stopped` and `reopen`. `confirm_stopped` requires the current
+run and request revision plus a note attesting that the operator inspected the
+host and stopped the previous processes. It resolves an unknown cessation state,
+not an implementation result, and does not resume work. Follow the
+[recovery procedure](../explanation/local-delivery-worker.md#execution-and-evidence)
+before issuing it. Run-targeting actions need the current `run_id`; reopening
+terminal work uses a fresh command ID. Intake pause is a project action, separate
+from the selected run's step pause. Stop requests remain pending until the
+execution outcome is known; uncertain work must be reconciled before retry.
+
+Commands are durably consumed once. Repeated saves return the prior acknowledgement;
+changed content under the same command ID is rejected. Stale candidate, revision
+or run targets produce a rejection with the next action to reconcile. UI commands
+use these same application rules. Editing generated status cannot accept work.
+
+A delivery's lifecycle is `draft`, `submitted`, `ready`, `in_progress`,
+`in_review`, `done` or `cancelled`. Its run status and phase are separate facts.
+A completed invocation or successful verification does not establish `done`;
+local delivery waits for human acceptance of the verified candidate. A local
+review note is not a remote pull request or merge.
+
+The [local delivery explanation](../explanation/local-delivery-worker.md) describes
+the journey and the [acceptance ledger](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reports/2026-10-20-local-delivery-acceptance.md)
+records qualification limits. The remaining legacy field and management tables
+below describe `schemaVersion: 1` compatibility.
+
 ## Shared authoring API
 
 Authenticated `POST /api/features` accepts `action: "prepare"` and
@@ -217,7 +332,7 @@ explicit ready status, ID, template ID and patch mode; see the
 | --- | --- |
 | `schemaVersion` | Required integer `1`. |
 | `title` | Required, 1–120 characters. |
-| `status` | `draft` holds a new request. `ready` or an omitted status submits it once stable. After capture, the worker owns this field. |
+| `status` | `draft` holds a new request. Explicit `ready` submits it once stable; an omitted status does not submit new work. After capture, the worker owns this field. |
 | `id` | Optional stable identifier, 1–80 lowercase letters/digits/hyphens, starting with a letter/digit. The worker assigns one when absent. Do not reuse IDs for different work; `remote-` is reserved. |
 | `mode` | `chat` (default) sends the Markdown as a task message. `patch` generates a review patch from explicitly approved files. |
 | `provider` | `codex-cli`, `claude-cli`, `openai-api`, `anthropic-api` or `cursor-cli`; omission uses the saved worker `defaultProvider`. Configure/authenticate that connection separately. |
@@ -228,8 +343,8 @@ explicit ready status, ID, template ID and patch mode; see the
 | `definitionRef` or `definitionId`, `agent`, `useInstructionsOnly` | Optional [Docker Agent instruction profile](agent-definitions.md) selection, with the same compatibility acknowledgement as the webview. Use `definitionRef` (1–80 lowercase letters, digits or hyphens) in committed or shared files: it names a definition by its [stable reference](agent-definitions.md#stable-references-for-committed-requests). `definitionId` is specific to one worker. A request may use one, not both. |
 | `source`, `werk` | Worker-owned provenance and lifecycle metadata. Orchestrator files use `source: orchestrator`; users must not create remote assignments by editing this field. |
 
-Custom frontmatter fields/comments are retained. The Markdown body is preserved
-when lifecycle metadata is written. The whole document is bounded to 64 KiB;
+Custom frontmatter fields/comments are retained. The user-owned Markdown body is preserved
+when lifecycle metadata is written; canonical delivery updates its designated region. The whole document is bounded to 64 KiB;
 local request Markdown is bounded to 8,000 characters. YAML aliases, custom tags,
 duplicate keys, unsafe mapping keys and excessive depth/nodes are rejected.
 Invalid files stay untouched and appear in `_worker-status.md` and `feature list`.
@@ -463,8 +578,9 @@ Read the current revision immediately before an edit or lifecycle mutation. A
 stale revision returns an input/API rejection (exit 2); reread and reconcile.
 These checks coordinate with the watcher and other CLI callers. External editors
 do not participate in that lock: avoid concurrent saves during CLI mutations.
-Accepted input is immutable. To request different work, create a new draft with a
-new filename/ID and no `werk` or `source` fields. Feature files can still be renamed
+Legacy accepted snapshots remain immutable. For unrelated work, create a new draft
+with a new filename/ID and no `werk` or `source` fields. Canonical local delivery
+reassesses material changes to the same request; terminal requests need explicit reopen. Feature files can still be renamed
 in the filesystem: their durable ID preserves identity on the next scan.
 
 `feature wait` returning successfully means a terminal state was observed, not
@@ -515,4 +631,4 @@ unanswered checkpoints and known results without automatically replaying inferen
 Orchestrator assignments retain their lease and routing boundaries. Handle all
 question/result files with the same privacy care as their feature requests.
 
-A genuine failed, cancelled, or interrupted attempt may use guarded feature retry when its frozen readiness verdict still passes. Gate-held requests and known completed results require the request controls instead. Retry also checks the generated request ID, revision, input revision, and policy digest against the canonical worker record. If admission succeeded but saving its acknowledgement failed, the old file revision cannot dispatch again: inspect `feature get`, refresh the generated projection, and reconcile before another intentional retry.
+For legacy intake, a genuine failed, cancelled, or interrupted attempt may use guarded feature retry when its frozen readiness verdict still passes. Gate-held requests and known completed results require the request controls instead. Retry also checks the generated request ID, revision, input revision, and policy digest against the canonical worker record. If admission succeeded but saving its acknowledgement failed, the old file revision cannot dispatch again: inspect `feature get`, refresh the generated projection, and reconcile before another intentional retry.

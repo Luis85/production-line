@@ -21,6 +21,7 @@ export function reviewActionHref(action: string | undefined, sessionId: string):
   if (action === 'answer' || action === 'resume') return '/taskboard?session=' + encodeURIComponent(sessionId);
   if (action === 'inspect_history') return '/history?view=runs&runSession=' + encodeURIComponent(sessionId);
   if (action === 'inspect_checks') return '#review-checks';
+  if (action === 'delivery_controls') return '#review-decision';
   if (action === 'review_patch') return '#review-changes';
   if (action === 'review_shared' || action === 'open_source') return '#review-handoff';
   return '#review-decision';

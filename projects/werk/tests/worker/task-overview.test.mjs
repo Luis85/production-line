@@ -1,11 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { stripTypeScriptTypes } from 'node:module';
+import { frontend } from '../ui/helpers/frontend-loader.mjs';
 
-const source = await readFile(new URL('../../src/worker/webview/task-overview.ts', import.meta.url), 'utf8');
-const javascript = stripTypeScriptTypes(source);
-const { buildTaskOverview } = await import('data:text/javascript;base64,' + Buffer.from(javascript).toString('base64'));
+const { buildTaskOverview } = await frontend('src/worker/webview/task-overview.ts');
 const at = '2026-10-15T10:00:00.000Z';
 const later = '2026-10-15T10:10:00.000Z';
 const interaction = (phase = 'idle', extra = {}) => ({ schemaVersion: 1, sessionId: 's', revision: 1, phase, pending: null, latestTurn: null, turns: [], totalTurns: 0, ...extra });
@@ -240,7 +237,7 @@ test('only the exact current Ready Check attempt establishes active model eviden
   const input = { sessions: sessions([], 'review-one'), sharedRequests: [request], runs: [run('review-one', { id: 'review-run', purpose: 'gate_review', outcome: 'running', startedAt: at, after: null })] };
   let item = buildTaskOverview(input).items[0];
   assert.equal(item.group, 'running'); assert.equal(item.statusLabel, 'Ready Check running'); assert.equal(item.model, 'recorded-model');
-  assert.equal(item.sessionId, undefined); assert.equal(item.evidenceHref, '/history?view=runs&runSession=review-one');
+  assert.equal(item.sessionId, 'review-one'); assert.equal(item.primaryAction.kind, 'feature'); assert.equal(item.evidenceHref, '/history?view=runs&runSession=review-one');
   input.runs[0].id = 'previous-attempt';
   item = buildTaskOverview(input).items[0];
   assert.equal(item.status, 'unconfirmed'); assert.equal(item.model, null);
@@ -275,4 +272,12 @@ test('a shared review publication error needs attention instead of appearing as 
   assert.equal(item.group, 'attention'); assert.equal(item.statusLabel, 'Publication needs attention');
   assert.match(item.summary, /could not be published.*resolve the Git publication error/);
   assert.equal(item.primaryAction.href, '/settings#shared-intake');
+});
+
+
+test('project queue preserves low priority and orders urgent requests before high and normal', () => {
+  const records = [feature('low', { status: 'waiting', submitted: false, priority: 0 }), feature('normal', { status: 'waiting', submitted: false, priority: 1 }), feature('urgent', { status: 'waiting', submitted: false, priority: 3 }), feature('high', { status: 'waiting', submitted: false, priority: 2 })];
+  const result = buildTaskOverview({ features: features(records, [{ name: 'draft.md', title: 'Draft with urgent priority', status: 'draft', priority: 3 }]) });
+  assert.deepEqual(result.groups.queued.map(item => item.priority), [3, 2, 1, 0]);
+  assert.equal(result.groups.draft[0].priority, 3);
 });

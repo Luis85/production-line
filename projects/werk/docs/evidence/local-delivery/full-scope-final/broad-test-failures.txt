@@ -1,0 +1,242 @@
+ℹ tests 3066
+ℹ suites 0
+ℹ pass 3041
+ℹ fail 10
+ℹ cancelled 0
+ℹ skipped 15
+ℹ todo 0
+ℹ duration_ms 637696.433541
+
+✖ failing tests:
+
+test at tests/shared/http-response-body.test.mjs:81:1
+✖ provider API preserves response limits, HTTP classification and cancellation without remote diagnostics (10.567371ms)
+  AssertionError [ERR_ASSERTION]: The validation function is expected to return "true". Received false
+
+  Caught error:
+
+  ProviderModelError: The provider response was lost after dispatch. Its remote outcome is unknown; reconcile before starting another attempt.
+      at async TestContext.<anonymous> (file:///workspace/production-line/projects/werk/tests/shared/http-response-body.test.mjs:93:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: ProviderModelError: The provider response was lost after dispatch. Its remote outcome is unknown; reconcile before starting another attempt.
+        at readResponse (file:///workspace/production-line/projects/werk/src/worker/dist/worker/infrastructure/provider-api.js:24:31)
+        at async apiReply (file:///workspace/production-line/projects/werk/src/worker/dist/worker/infrastructure/provider-api.js:67:19)
+        at async waitForActual (node:assert:646:5)
+        at async strict.rejects (node:assert:769:25)
+        at async TestContext.<anonymous> (file:///workspace/production-line/projects/werk/tests/shared/http-response-body.test.mjs:93:3)
+        at async Test.run (node:internal/test_runner/test:1389:7)
+        at async Test.processPendingSubtests (node:internal/test_runner/test:960:7),
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests/worker/consumption-runtime.test.mjs:155:92
+✖ outcome_unknown survives an accounting observer failure and failed final ledger write (11.98745ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+  + Comparison {}
+  - Comparison {
+  -   code: 'outcome_unknown'
+  - }
+
+      at async TestContext.<anonymous> (file:///workspace/production-line/projects/werk/tests/worker/consumption-runtime.test.mjs:161:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: Error: Final accounting write failed.
+        at WorkerConsumption.<anonymous> (file:///workspace/production-line/projects/werk/tests/worker/consumption-runtime.test.mjs:159:52)
+        at Object.apply (node:internal/test_runner/mock/mock:767:20)
+        at withConsumption (file:///workspace/production-line/projects/werk/src/worker/dist/worker/application/consumption-model.js:54:21)
+        at async waitForActual (node:assert:646:5)
+        at async strict.rejects (node:assert:769:25)
+        at async TestContext.<anonymous> (file:///workspace/production-line/projects/werk/tests/worker/consumption-runtime.test.mjs:161:3)
+        at async Test.run (node:internal/test_runner/test:1389:7)
+        at async Test.processPendingSubtests (node:internal/test_runner/test:960:7),
+    expected: { code: 'outcome_unknown' },
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests/worker/consumption-runtime.test.mjs:155:92
+✖ process_stop_unconfirmed survives an accounting observer failure and failed final ledger write (16.803264ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+  + Comparison {}
+  - Comparison {
+  -   code: 'process_stop_unconfirmed'
+  - }
+
+      at async TestContext.<anonymous> (file:///workspace/production-line/projects/werk/tests/worker/consumption-runtime.test.mjs:161:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: Error: Final accounting write failed.
+        at WorkerConsumption.<anonymous> (file:///workspace/production-line/projects/werk/tests/worker/consumption-runtime.test.mjs:159:52)
+        at Object.apply (node:internal/test_runner/mock/mock:767:20)
+        at withConsumption (file:///workspace/production-line/projects/werk/src/worker/dist/worker/application/consumption-model.js:54:21)
+        at async waitForActual (node:assert:646:5)
+        at async strict.rejects (node:assert:769:25)
+        at async TestContext.<anonymous> (file:///workspace/production-line/projects/werk/tests/worker/consumption-runtime.test.mjs:161:3)
+        at async Test.run (node:internal/test_runner/test:1389:7)
+        at async Test.processPendingSubtests (node:internal/test_runner/test:960:7),
+    expected: { code: 'process_stop_unconfirmed' },
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests/worker/delegation-child.test.mjs:274:70
+✖ unknown child outcome survives usage persistence failure and parent abort (26.688319ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+  + Comparison {}
+  - Comparison {
+  -   code: 'process_stop_unconfirmed'
+  - }
+
+      at async TestContext.<anonymous> (file:///workspace/production-line/projects/werk/tests/worker/delegation-child.test.mjs:282:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: Error: Usage persistence failed.
+        at WorkerRunJournal.<anonymous> (file:///workspace/production-line/projects/werk/tests/worker/delegation-child.test.mjs:279:80)
+        at Object.apply (node:internal/test_runner/mock/mock:767:20)
+        at file:///workspace/production-line/projects/werk/src/worker/dist/worker/infrastructure/delegation-child.js:80:42
+        at observe (file:///workspace/production-line/projects/werk/src/worker/dist/worker/application/consumption-model.js:38:20)
+        at observe (file:///workspace/production-line/projects/werk/src/worker/dist/worker/application/model-contract.js:73:24)
+        at observe (file:///workspace/production-line/projects/werk/src/worker/dist/worker/application/model-contract.js:73:24)
+        at Object.execute (file:///workspace/production-line/projects/werk/tests/worker/delegation-child.test.mjs:277:37)
+        at file:///workspace/production-line/projects/werk/src/worker/dist/worker/application/model-contract.js:88:89
+        at observeModelInvocation (file:///workspace/production-line/projects/werk/src/worker/dist/worker/application/model-contract.js:79:26)
+        at executeModel (file:///workspace/production-line/projects/werk/src/worker/dist/worker/application/model-contract.js:88:10),
+    expected: { code: 'process_stop_unconfirmed' },
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests/worker/delegation-child.test.mjs:274:70
+✖ unknown child outcome survives run_finish persistence failure and parent abort (29.194456ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+  + Comparison {}
+  - Comparison {
+  -   code: 'process_stop_unconfirmed'
+  - }
+
+      at async TestContext.<anonymous> (file:///workspace/production-line/projects/werk/tests/worker/delegation-child.test.mjs:282:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: Error: Run persistence failed.
+        at WorkerRunJournal.<anonymous> (file:///workspace/production-line/projects/werk/tests/worker/delegation-child.test.mjs:280:85)
+        at Object.apply (node:internal/test_runner/mock/mock:767:20)
+        at Object.run (file:///workspace/production-line/projects/werk/src/worker/dist/worker/infrastructure/delegation-child.js:85:26)
+        at async waitForActual (node:assert:646:5)
+        at async strict.rejects (node:assert:769:25)
+        at async TestContext.<anonymous> (file:///workspace/production-line/projects/werk/tests/worker/delegation-child.test.mjs:282:3)
+        at async Test.run (node:internal/test_runner/test:1389:7)
+        at async Test.processPendingSubtests (node:internal/test_runner/test:960:7),
+    expected: { code: 'process_stop_unconfirmed' },
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests/worker/delegation-child.test.mjs:274:70
+✖ unknown child outcome survives consumption_finish persistence failure and parent abort (23.436728ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+  + Comparison {}
+  - Comparison {
+  -   code: 'process_stop_unconfirmed'
+  - }
+
+      at async TestContext.<anonymous> (file:///workspace/production-line/projects/werk/tests/worker/delegation-child.test.mjs:282:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: Error: Consumption persistence failed.
+        at WorkerConsumption.<anonymous> (file:///workspace/production-line/projects/werk/tests/worker/delegation-child.test.mjs:281:94)
+        at Object.apply (node:internal/test_runner/mock/mock:767:20)
+        at withConsumption (file:///workspace/production-line/projects/werk/src/worker/dist/worker/application/consumption-model.js:54:21)
+        at async Object.run (file:///workspace/production-line/projects/werk/src/worker/dist/worker/infrastructure/delegation-child.js:71:16)
+        at async waitForActual (node:assert:646:5)
+        at async strict.rejects (node:assert:769:25)
+        at async TestContext.<anonymous> (file:///workspace/production-line/projects/werk/tests/worker/delegation-child.test.mjs:282:3)
+        at async Test.run (node:internal/test_runner/test:1389:7)
+        at async Test.processPendingSubtests (node:internal/test_runner/test:960:7),
+    expected: { code: 'process_stop_unconfirmed' },
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests/worker/feature-request-migration.test.mjs:77:1
+✖ retained shared claims restore the parent before task recovery even after the active binding changes (2.492786ms)
+  Error: Identity recovery must not synchronize Git or dispatch work.
+      at Object.unreachable (file:///workspace/production-line/projects/werk/tests/worker/feature-request-migration.test.mjs:82:37)
+      at SharedFeatureIntake.save (file:///workspace/production-line/projects/werk/src/worker/dist/worker/application/shared-feature-intake.js:62:148)
+      at SharedFeatureIntake.init (file:///workspace/production-line/projects/werk/src/worker/dist/worker/application/shared-feature-intake.js:54:67)
+      at async TestContext.<anonymous> (file:///workspace/production-line/projects/werk/tests/worker/feature-request-migration.test.mjs:87:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests/worker/feature-request-migration.test.mjs:127:1
+✖ an unsubmitted shared reservation cannot replace an existing or legacy interaction parent on restart (1.126341ms)
+  Error: Recovery cannot claim or dispatch work.
+      at Object.unreachable (file:///workspace/production-line/projects/werk/tests/worker/feature-request-migration.test.mjs:131:37)
+      at SharedFeatureIntake.save (file:///workspace/production-line/projects/werk/src/worker/dist/worker/application/shared-feature-intake.js:62:148)
+      at SharedFeatureIntake.init (file:///workspace/production-line/projects/werk/src/worker/dist/worker/application/shared-feature-intake.js:54:67)
+      at async TestContext.<anonymous> (file:///workspace/production-line/projects/werk/tests/worker/feature-request-migration.test.mjs:136:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests/worker/legacy-execution-recovery.test.mjs:41:1
+✖ legacy approved-file proposal unknown outcome cannot silently queue a retry before reconciliation (98.539584ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /Reconcile/. Input:
+
+  'DomainError: Only stopped or failed tasks can be retried. Answer pending questions through the interaction controls.'
+
+      at async TestContext.<anonymous> (file:///workspace/production-line/projects/werk/tests/worker/legacy-execution-recovery.test.mjs:46:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: DomainError: Only stopped or failed tasks can be retried. Answer pending questions through the interaction controls.
+        at Module.action (file:///workspace/production-line/projects/werk/src/worker/dist/worker/application/local-task-actions.js:55:15)
+        at Object.action (file:///workspace/production-line/projects/werk/src/worker/dist/worker/application/local-task-runtime.js:69:60)
+        at LocalTaskboard.action (file:///workspace/production-line/projects/werk/src/worker/dist/worker/application/local-tasks.js:48:25)
+        at TestContext.<anonymous> (file:///workspace/production-line/projects/werk/tests/worker/legacy-execution-recovery.test.mjs:46:32)
+        at async Test.run (node:internal/test_runner/test:1389:7)
+        at async Test.processPendingSubtests (node:internal/test_runner/test:960:7),
+    expected: /Reconcile/,
+    operator: 'rejects',
+    diff: 'simple'
+  }
+
+test at tests/worker/unified-feature-tracking.test.mjs:177:1
+✖ shared request provenance follows the retained task binding without exposing mutable private state (2.305513ms)
+  AssertionError [ERR_ASSERTION]: Reading retained provenance must not access the repository or mutate intake
+      at Object.unexpected (file:///workspace/production-line/projects/werk/tests/worker/unified-feature-tracking.test.mjs:196:37)
+      at SharedFeatureIntake.save (file:///workspace/production-line/projects/werk/src/worker/dist/worker/application/shared-feature-intake.js:62:148)
+      at SharedFeatureIntake.init (file:///workspace/production-line/projects/werk/src/worker/dist/worker/application/shared-feature-intake.js:54:67)
+      at async TestContext.<anonymous> (file:///workspace/production-line/projects/werk/tests/worker/unified-feature-tracking.test.mjs:198:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: undefined,
+    operator: 'fail',
+    diff: 'simple'
+  }

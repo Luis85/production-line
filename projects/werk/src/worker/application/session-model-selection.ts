@@ -14,9 +14,13 @@ export function restoreSessionSelections(records: SessionRecord[], requests: Pic
   for (const record of records) {
     const request = requests.forSession(record.id);
     const accepted = request?.provider.id === record.provider
-      ? validateModelSelection({ provider: record.provider, model: request.provider.model, effort: request.provider.effort ?? 'default' }) : undefined;
+      ? validateModelSelection({ provider: record.provider, model: request.provider.model, effort: request.provider.effort ?? 'default', authenticationMode: request.provider.authenticationMode }) : undefined;
     if (record.selection) {
       const selected = validateModelSelection(record.selection);
+      if (record.kind === 'orchestrator' && accepted && selected.provider === accepted.provider && selected.model === accepted.model && selected.effort === accepted.effort && selected.authenticationMode !== accepted.authenticationMode) {
+        // Remote execution owns its provider profile; the transcript must not infer billing from local UI defaults.
+        record.selection = accepted; changed = true; continue;
+      }
       if (selected.provider !== record.provider || accepted && gateDigest(selected) !== gateDigest(accepted))
         throw new DomainError('conflict', 'Saved session selection differs from its accepted request. Restore the original session.');
     } else if (accepted) {

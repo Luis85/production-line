@@ -15,16 +15,17 @@ export class WorkerResourceJournal implements ResourceEventStore {
     try {
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS resource_alerts (code TEXT PRIMARY KEY, payload TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS resource_events (sequence INTEGER PRIMARY KEY AUTOINCREMENT, payload TEXT NOT NULL);`);
+        CREATE TABLE IF NOT EXISTS resource_events (sequence INTEGER PRIMARY KEY AUTOINCREMENT, payload TEXT NOT NULL);
+        UPDATE resource_alerts SET code = 'long_running:' || json_extract(payload, '$.sessionId') WHERE code = 'long_running' AND json_extract(payload, '$.sessionId') IS NOT NULL;`);
     } catch (error) { this.close(); throw error; }
   }
   private database() { if (!this.db) throw Error('Resource journal is not open.'); return this.db; }
   active(): ResourceAlert[] { return this.database().prepare('SELECT payload FROM resource_alerts ORDER BY code').all().map(row => JSON.parse(String(row.payload))); }
   transition(alert: ResourceAlert, type: ResourceEvent['type'], reason: ResourceEvent['reason'], at: string) {
-    const db = this.database(); db.exec('BEGIN IMMEDIATE');
+    const db = this.database(), key = alert.code === 'long_running' && alert.sessionId ? alert.code + ':' + alert.sessionId : alert.code; db.exec('BEGIN IMMEDIATE');
     try {
-      if (type === 'opened') db.prepare('INSERT INTO resource_alerts(code,payload) VALUES (?,?)').run(alert.code, JSON.stringify(alert));
-      else db.prepare('DELETE FROM resource_alerts WHERE code=?').run(alert.code);
+      if (type === 'opened') db.prepare('INSERT INTO resource_alerts(code,payload) VALUES (?,?)').run(key, JSON.stringify(alert));
+      else db.prepare('DELETE FROM resource_alerts WHERE code=?').run(key);
       const event: Omit<ResourceEvent, 'sequence'> = { schemaVersion: 1, id: randomUUID(), alertId: alert.id, code: alert.code, type, at, reason, observed: alert.observed, threshold: alert.threshold, ...(alert.sessionId ? { sessionId: alert.sessionId } : {}) };
       db.prepare('INSERT INTO resource_events(payload) VALUES (?)').run(JSON.stringify(event));
       db.exec('DELETE FROM resource_events WHERE sequence NOT IN (SELECT sequence FROM resource_events ORDER BY sequence DESC LIMIT 1000)');

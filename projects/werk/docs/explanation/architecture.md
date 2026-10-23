@@ -125,8 +125,9 @@ manual submissions are an explicit alternative.
 
 `src/worker` owns polling, the execution adapter boundary, local journals,
 configuration, snapshots and an authenticated Vue workspace with Taskboard, Metrics,
-History and Settings. Local chat, file tasks and parent assignments
-share one execution slot. Basic status, health and metrics remain public read-only
+History, Settings and request-scoped Review. Requests, reviews and assignments
+share configured machine capacity; project limits can be stricter, and unscoped
+operations remain exclusive. Basic status, health and metrics remain public read-only
 endpoints. Assigned repositories provide retained per-task worktrees. The native
 Linux Codex assignment adapter executes in one of these worktrees and manages
 provider cancellation and descendant cleanup. Its exact file allowlist and
@@ -137,9 +138,11 @@ and derive the review patch from the actual candidate. Existing tasks retain the
 proposal contract. See [feature implementation](../how-to/implement-feature.md). Shared Git
 intake claims ready work remotely, freezes policy/source, and publishes the
 validated result plus a review note. Its outbox and recovery semantics are
-specified in [shared intake](../reference/shared-feature-intake.md). Concurrent
-live execution, lease-fenced remote PR publication and automatic merge tracking
-remain outside these implemented paths.
+specified in [shared intake](../reference/shared-feature-intake.md). Canonical local
+delivery supports multiple project intakes, bounded concurrent work and explicit
+[candidate publication](../how-to/publish-worker-candidates.md) under an approved
+project policy. Lease-fenced orchestrator PR publication and automatic merge
+tracking remain outside these implemented paths.
 
 `src/shared` owns versioned contracts and validators. It imports neither server
 nor worker. The build copies shared code into each independent CLI distribution.
@@ -185,7 +188,7 @@ flowchart TB
 | `orchestrator/intake/importer.ts` | CLI composition of local Git reads and the HTTP task gateway |
 | `orchestrator/intake/iteration.ts` | Committed-feature collection and import/revision policy through `IterationSource`/`IterationTaskGateway` ports |
 | `worker/cli.ts` | Parses runtime/status commands, loads configuration and supplies process cancellation |
-| `worker/runner.ts`, `runner-runtime.ts`, `runner-assignments.ts` | State-lock/lifecycle entry, concrete service composition, and assignment polling/lease dispatch through typed ports; share one execution slot and claim identity |
+| `worker/runner.ts`, `runner-runtime.ts`, `runner-assignments.ts` | State-lock/lifecycle entry, concrete service composition, and assignment polling/lease dispatch through typed ports; shared execution permits preserve capacity and claim identity |
 | `worker/application/*` | Attempt execution, sessions, approved-file tasks, frozen gates and shared feature lifecycle through injected ports; no infrastructure imports, filesystem I/O or SQLite ownership |
 | `worker/infrastructure/*` | HTTP operation mapping, pinned-context verification, mock/Codex adapters, review artifacts and persisted registration identity |
 | `worker/infrastructure/journal/{snapshots,files,retention}.ts` | Measurement capture, immutable journal, serialized upload and durable local file operations |

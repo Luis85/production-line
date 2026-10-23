@@ -4,7 +4,7 @@ import UButton from '@nuxt/ui/components/Button.vue';
 import UIcon from '@nuxt/ui/components/Icon.vue';
 import { useRepositoryDiscovery } from '../repository-discovery';
 const props = defineProps<{ reconsider?: boolean }>();
-const { candidate, visible, queued, busy, error, notice, choose: saveChoice } = useRepositoryDiscovery(props.reconsider);
+const { candidate, visible, queued, nativeReadiness, busy, error, notice, choose: saveChoice } = useRepositoryDiscovery(props.reconsider);
 const confirmation = ref<HTMLElement | null>(null);
 async function choose(action: 'accept' | 'decline') {
   await saveChoice(action);
@@ -19,7 +19,8 @@ async function choose(action: 'accept' | 'decline') {
     <p class="discovery-path"><code>{{ candidate.path }}</code></p>
     <p class="discovery-meta">{{ candidate.currentBranch ? 'Branch: ' + candidate.currentBranch : 'Detached checkout' }} · {{ candidate.remote ? 'Remote: ' + candidate.remote : 'No remote configured' }}</p>
     <p class="discovery-permission">{{ candidate.watch ? 'Using it enables watching and safe fast-forward pulls. File tasks use separate Git worktrees.' : !candidate.currentBranch ? 'File tasks can use this detached checkout in separate Git worktrees. Watching stays off until you select a branch and enable it in Settings.' : 'Use it for file tasks in separate Git worktrees. Watching stays off until you configure a remote and enable it in Settings.' }}</p>
-    <div class="discovery-actions"><UButton type="button" :loading="busy" :disabled="busy || queued" @click="choose('accept')">Use repository</UButton><UButton v-if="candidate.decision === 'pending'" type="button" color="neutral" variant="outline" :disabled="busy" @click="choose('decline')">Don’t use</UButton></div>
+    <div class="discovery-actions"><UButton type="button" :loading="busy" :disabled="busy || queued || !!nativeReadiness" @click="choose('accept')">Use repository</UButton><UButton v-if="candidate.decision === 'pending'" type="button" color="neutral" variant="outline" :disabled="busy" @click="choose('decline')">Don’t use</UButton></div>
+    <p v-if="nativeReadiness" role="status" aria-live="polite" class="discovery-hint">Using this repository waits until native work is ready. You can still decline it.</p>
     <p v-if="queued" class="discovery-hint">Finish or stop queued and running tasks before adding this repository.</p>
     <p v-else-if="candidate.decision === 'pending'" class="discovery-hint">Your choice is saved. You can change it later in Settings → Repositories.</p>
     <p v-if="error" class="error-text" role="alert">{{ error }}</p>

@@ -3,7 +3,7 @@ import { object, text } from '../../shared/validation.js';
 import type { FeatureInput, FeatureIndex, FeatureQueuePort, FeatureRecord } from './feature-requests.js';
 export interface FeatureDocumentPort {
   read(name: string): Promise<{ name: string; markdown: string; revision: string }>;
-  validate(markdown: string): { input: FeatureInput; id: unknown; status: unknown; managed: boolean; gates?: { requestId: string; revision: number; inputRevision: number; policyDigest: string } };
+  validate(markdown: string): { input: FeatureInput; id: unknown; status: unknown; schema?: string; managed: boolean; gates?: { requestId: string; revision: number; inputRevision: number; policyDigest: string } };
   ready(markdown: string): string;
   write(name: string, markdown: string, revision?: string): Promise<{ name: string; markdown: string; revision: string }>;
   remove(name: string, revision: string): Promise<void>;
@@ -34,8 +34,8 @@ function stoppedRequest(record: FeatureRecord, queue: FeatureQueuePort) {
 }
 export async function manageFeature(input: unknown, context: FeatureManagementContext): Promise<FeatureActionResult> {
   const body = object(input, 'Feature command', ['action', 'name', 'markdown', 'revision']);
-  const action = String(body.action), name = text(body.name, 'name', 200), { documents, index, queue } = context;
-  if (!['get', 'validate', 'create', 'edit', 'submit', 'cancel', 'retry', 'archive', 'restore', 'delete', 'result'].includes(action)) throw new DomainError('invalid_input', 'Unknown feature action.');
+  const action = body.action, name = text(body.name, 'name', 200), { documents, index, queue } = context;
+  if (typeof action !== 'string' || !['get', 'validate', 'create', 'edit', 'submit', 'cancel', 'retry', 'archive', 'restore', 'delete', 'result'].includes(action)) throw new DomainError('invalid_input', 'Unknown feature action.');
   let atName = index.records.find(item => item.name === name);
   if (action === 'create') {
     if (atName) throw new DomainError('conflict', 'Filename belongs to a retained request. Choose a new filename.');
@@ -64,7 +64,13 @@ export async function manageFeature(input: unknown, context: FeatureManagementCo
   if (body.revision !== file.revision) throw new DomainError('conflict', 'Supply the current revision from feature get with --if-match.');
   if (atName?.source === 'orchestrator') throw new DomainError('conflict', 'This request is orchestrator-owned. Manage its assignment at the orchestrator.');
   if (action === 'edit' || action === 'submit') {
-    if (atName) throw new DomainError('conflict', 'Accepted input is frozen. Create a new draft for different work.');
+    if (atName) {
+      const markdown = action === 'edit' ? text(body.markdown, 'markdown', 65536) : documents.ready(file.markdown);
+      const parsed = documents.validate(markdown);
+      if (parsed.schema !== 'worker.request/v1') throw new DomainError('conflict', 'Accepted legacy input is frozen. Use the versioned worker.request/v1 contract for same-request revisions.');
+      if (parsed.id !== atName.id) throw new DomainError('conflict', 'Keep the registered request ID when revising its content.');
+      return documents.write(name, markdown, file.revision);
+    }
     const markdown = action === 'edit' ? draft(body.markdown, documents) : documents.ready(draft(file.markdown, documents));
     if (index.records.some(record => record.id === documents.validate(markdown).id)) throw new DomainError('conflict', 'Feature ID is already retained. Use a new ID or omit it.');
     return documents.write(name, markdown, file.revision);
@@ -113,6 +119,6 @@ export async function manageFeature(input: unknown, context: FeatureManagementCo
 function draft(value: unknown, documents: FeatureDocumentPort) {
   text(value, 'markdown', 65536);
   const markdown = value as string, parsed = documents.validate(markdown);
-  if (parsed.status !== 'draft' || parsed.managed) throw new DomainError('invalid_input', 'Create or edit status: draft requests without source/werk metadata. Use submit to queue them.');
+  if (parsed.status !== 'draft' || parsed.managed) throw new DomainError('invalid_input', 'Create or edit intent: draft requests (legacy: status: draft) without source/werk metadata. Use submit to queue them.');
   return markdown;
 }

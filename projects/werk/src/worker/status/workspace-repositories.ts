@@ -1,3 +1,4 @@
+import { assertNativeWorkReady, nativeWorkStatus } from './workspace-native-work.js';
 import type { CandidateInspectionLimits } from '../application/execution-policy.js';
 import { stopSessionProcesses } from './workspace-processes.js';
 import type { WorkspaceContext } from './workspace-context.js';
@@ -16,7 +17,7 @@ function worktreeFailure(error: unknown) {
 }
 
 export function repositoryStatus(workspace: WorkspaceContext){
-  return { schemaVersion: 1, pollMs: workspace.settings.value.repositories.pollMs, items: workspace.repositories.view(), discovery: workspace.repositoryDiscovery.view() };
+  return { schemaVersion: 1, nativeWork: nativeWorkStatus(workspace), pollMs: workspace.settings.value.repositories.pollMs, items: workspace.repositories.view(), discovery: workspace.repositoryDiscovery.view() };
 }
 
 export async function repositoryCommand(workspace: WorkspaceContext, input: unknown){
@@ -30,6 +31,7 @@ export async function repositoryCommand(workspace: WorkspaceContext, input: unkn
   if (body.action === "status" && body.id === undefined) return repositoryStatus(workspace);
   if (body.action !== "sync" || (body.id !== undefined && typeof body.id !== "string"))
     throw new DomainError("invalid_input", "Use status or sync with an optional repository id.");
+  assertNativeWorkReady(workspace);
   if (!workspace.acceptingTasks || workspace.repositoriesUpdating || workspace.configurationUpdating || workspace.executionProfiles?.pending())
     throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
   if (body.id !== undefined) workspace.repositories.resolve(body.id as string);
@@ -38,6 +40,7 @@ export async function repositoryCommand(workspace: WorkspaceContext, input: unkn
 }
 
 export function assertRepositoryChangeAllowed(workspace: WorkspaceContext){
+  assertNativeWorkReady(workspace);
   if (!workspace.acceptingTasks || workspace.configurationUpdating || workspace.executionProfiles?.pending())
     throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
   if (workspace.repositoriesUpdating || workspace.repositoryPreparations || workspace.sessions.busy || workspace.board.active || workspace.get().activeTasks.length || workspace.get().queuedTasks?.length)
@@ -74,6 +77,7 @@ async function chooseDiscoveredRepository(workspace: WorkspaceContext, action: "
 }
 
 export async function prepareTaskWorkspace(workspace: WorkspaceContext, selector: string, key: string, signal: AbortSignal, commit?: string, verify = false, inspection: Partial<CandidateInspectionLimits> = workspace.settings.value.execution){
+  assertNativeWorkReady(workspace);
   if (!workspace.acceptingTasks || workspace.repositoriesUpdating || workspace.configurationUpdating || workspace.executionProfiles?.pending())
     throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
   signal = AbortSignal.any([signal, workspace.repositoryStop.signal]);
@@ -95,6 +99,7 @@ export async function prepareTaskWorkspace(workspace: WorkspaceContext, selector
 }
 
 export async function removeTaskWorkspace(workspace: WorkspaceContext, selector: string, key: string, signal: AbortSignal, expected: { path: string; baseCommit: string; discardChanges: boolean }){
+  assertNativeWorkReady(workspace);
   if (!workspace.acceptingTasks || workspace.repositoriesUpdating || workspace.configurationUpdating)
     throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
   signal = AbortSignal.any([signal, workspace.repositoryStop.signal]);
@@ -114,6 +119,7 @@ export async function removeTaskWorkspace(workspace: WorkspaceContext, selector:
 
 /** Owned task worktrees of assigned repositories, with the file task that still uses each. */
 export async function worktrees(workspace: WorkspaceContext){
+  assertNativeWorkReady(workspace);
   const repositories = await workspace.repositories.worktrees(AbortSignal.any([AbortSignal.timeout(120000), workspace.repositoryStop.signal]));
   const users = new Map(workspace.board.view().tasks.filter(task => task.worktree).map(task => [task.worktree!, task.id]));
   return {
@@ -127,6 +133,7 @@ export async function worktrees(workspace: WorkspaceContext){
    * operator confirms discarding changes; a dry run reports without removing.
    */
 export async function pruneWorktrees(workspace: WorkspaceContext, input: unknown){
+  assertNativeWorkReady(workspace);
   const body = object(input, "Worktree prune", ["action", "id", "repositoryId", "dryRun", "discardChanges"]);
   if (body.action !== "prune") throw new DomainError("invalid_input", "Worktree action: prune");
   if (body.id !== undefined && (typeof body.id !== "string" || !/^[A-Za-z0-9_-]{1,64}$/.test(body.id))) throw new DomainError("invalid_input", "Use a worktree name from worktrees list.");
@@ -136,7 +143,7 @@ export async function pruneWorktrees(workspace: WorkspaceContext, input: unknown
   if (!workspace.acceptingTasks || workspace.repositoriesUpdating || workspace.configurationUpdating || workspace.executionProfiles?.pending())
     throw new DomainError("unavailable", "Worker configuration is changing or the worker is stopping.");
   // Running work and admissions may be creating or using a worktree that no task records yet.
-  if (!dryRun && (workspace.repositoryPreparations || workspace.sessions.busy || workspace.board.active || workspace.sharedRuntime.intake.busy || workspace.get().activeTasks.length || workspace.get().queuedTasks?.length))
+  if (!dryRun && (workspace.repositoryPreparations || workspace.sessions.busy || workspace.board.active || workspace.featureProjects.busy || workspace.get().activeTasks.length || workspace.get().queuedTasks?.length))
     throw new DomainError("conflict", "Finish or cancel queued and running tasks before pruning task worktrees; a dry run is available now.");
   // Reserve synchronously before listing: all admission and configuration paths use this gate.
   if (!dryRun) workspace.configurationUpdating = true;

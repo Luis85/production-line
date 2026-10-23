@@ -1,3 +1,5 @@
+import { validateFeatureIntakeMeasurements } from '../../application/feature-intake-measurement.js';
+import { validateFeaturePreparation } from '../../application/feature-preparation.js';
 import { sharedFeatureInputHash, assertSharedFeatureSelection } from '../../application/shared-feature-selection.js';
 import { validateFeatureReviewEligibility } from '../features/review-eligibility.js';
 import { validateReadyReviewInput, readyReviewSessionId } from '../../application/ready-review-contracts.js';
@@ -13,7 +15,7 @@ import { join } from 'node:path';
 import { atomicWrite, readBoundedFile } from './files.js';
 import { defaultSharedIntakeConfig, validateSharedIntakeConfig, bindingKey, type SharedFeatureState } from '../../application/shared-feature-state.js';
 import { sharedHash, sharedFeaturePublicationDigest } from '../../application/shared-feature-notes.js';
-import { validateFeatureWorkflow, validateFeatureCheck, featureWorkflowPolicy, featureTaskDirectory } from '../../application/feature-workflow.js';
+import { validateFeatureWorkflow, validateFeatureCheck, featureWorkflowPolicy, featureTaskDirectory, featureInputHash } from '../../application/feature-workflow.js';
 import { identifier } from '../../../shared/validation.js';
 import { gateDigest, canonicalJson } from '../../application/request-gates.js';
 import { validateFeatureReadiness, assertFeatureWorkflowDefinitionPrompts } from '../features/workflow.js';
@@ -27,7 +29,7 @@ export class SharedFeatureJournal {
     try {
       const state = JSON.parse(await readBoundedFile(this.path, 16777216)) as SharedFeatureState;
       if (state.schemaVersion !== 1 || !/^[a-zA-Z0-9_-]{1,100}$/.test(state.workerId) || !Number.isSafeInteger(state.revision) || state.revision < 0 || !Array.isArray(state.records) || state.records.length > 100 || new Set(state.records.map(r => bindingKey(r.binding) + r.id)).size !== state.records.length) throw Error('Invalid shared intake journal.');
-      validateSharedIntakeConfig(state.config);
+      validateSharedIntakeConfig(state.config); validateFeatureIntakeMeasurements(state.measurements);
       for (const record of state.records) {
         validateSharedIntakeConfig(record.binding);
         const snapshot = record.workflow;
@@ -41,9 +43,10 @@ export class SharedFeatureJournal {
         const readiness = review && !review.implementationReady
           ? validateFeatureReviewEligibility(markdown, snapshot, record.accepted.provider)
           : validateFeatureReadiness(markdown, snapshot.readyCheck, record.accepted.provider, snapshot.template, { configuration: snapshot.configuration, workflowPath: snapshot.files.configuration.path, allowLegacyProgressMetadata: true });
+        validateFeaturePreparation(record);
         assertSharedFeatureSelection(record);
         if (review) validateSharedReadyReview(record);
-        if (!readiness.valid || !readiness.input || record.id !== readiness.input.id || canonicalJson(record.accepted) !== canonicalJson(readiness.input) || record.owner !== state.workerId || record.taskId !== 'shared-feature-' + sharedHash(record.id + bindingKey(record.binding)).slice(0, 32)) throw Error('Invalid accepted shared feature.');
+        if (!readiness.valid || !readiness.input || record.id !== readiness.input.id || canonicalJson({ ...record.accepted, providerExplicit: undefined }) !== canonicalJson({ ...readiness.input, providerExplicit: undefined }) || record.owner !== state.workerId || record.taskId !== 'shared-feature-' + sharedHash(record.id + bindingKey(record.binding)).slice(0, 32)) throw Error('Invalid accepted shared feature.');
         if (record.inputHash !== sharedFeatureInputHash(record) || typeof record.claimed !== 'boolean' || typeof record.submitted !== 'boolean' || record.submitted && !record.claimed || !/^[a-f0-9]{64}$/.test(record.remoteRevision)) throw Error('Invalid shared feature reservation.');
         if (record.sourcePath !== snapshot.configuration.requestsDirectory + '/' + record.name || !/^[^/\\]+\.md$/.test(record.name) || record.name.startsWith('_')) throw Error('Invalid shared feature source path.');
         if (record.publishedSource !== undefined && (typeof record.publishedSource !== 'string' || sharedHash(record.publishedSource) !== record.publishedState)) throw Error('Invalid acknowledged shared source.');
@@ -105,7 +108,7 @@ function validateSharedReadyReview(record: import('../../application/shared-feat
   validateReadyReviewInput(review.input);
   if (!Number.isSafeInteger(review.generation) || review.generation < 1 || typeof review.answer !== 'string' || review.answer.length > 8000 || !['queued', 'running', 'waiting_input', 'passed', 'failed'].includes(review.status)
       || !Array.isArray(review.sessionIds) || review.sessionIds.length > 16 || !review.sessionIds.includes(readyReviewSessionId(review.input)) || review.sessionIds.some(id => typeof id !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(id))) throw Error('Invalid Ready Check checkpoint.');
-  if (canonicalJson(review.input) !== canonicalJson(sharedReviewInput(record, review.answer, review.generation, review.previousResult)) || review.reviewedHash !== gateDigest(record.accepted)) throw Error('Ready Check input differs from the accepted request revision.');
+  if (canonicalJson(review.input) !== canonicalJson(sharedReviewInput(record, review.answer, review.generation, review.previousResult)) || review.reviewedHash !== featureInputHash(record.accepted)) throw Error('Ready Check input differs from the accepted request revision.');
   if (review.previousResult) parseReadyReviewResult({ schemaVersion: 1, ...review.previousResult });
   if (review.result) parseReadyReviewResult({ schemaVersion: 1, ...review.result });
   if (review.implementationReady && (review.status !== 'passed' || !review.result?.passed) || record.submitted && !review.implementationReady) throw Error('Ready Check has not authorized implementation admission.');

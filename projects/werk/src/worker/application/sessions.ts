@@ -1,3 +1,4 @@
+import { deliveryOwnsRun } from './execution-recovery.js';
 import { restoreSessionSelections, ensureSessionSelection, draftSessionSelection, freezeSessionSelection } from './session-model-selection.js';
 import { modelSelection, validateModelSelection, type ModelSelection } from './model-selection.js';
 import { restoreFeatureRequestReferences } from './feature-request-migration.js';
@@ -85,14 +86,14 @@ export class WorkerSessions {
     this.model = dependencies.model;
     this.storage = dependencies.storage;
     this.settings = settings;
-    this.executor = new SerialExecutor(() => settings.value.board.paused || !!dependencies.consumptionBlocked?.());
+    this.executor = new SerialExecutor(() => settings.value.board.paused || !!dependencies.consumptionBlocked?.(), () => settings.value.board.maxParallel, () => [...this.requests.unresolvedExecutions(), ...this.runs.uncertainExecutions().map(run => ({ sessionId: run.parentSessionId ?? run.sessionId, projectId: null, projectLimit: 1 }))]);
   }
   async init() {
     if (this.initializeEvidence) await this.initializeEvidence();
     else {
       await this.requests.init();
       await this.interactions.init();
-      await this.runs.init((id) => this.interactions.resultForRun(id));
+      await this.runs.init((id) => this.interactions.resultForRun(id), run => deliveryOwnsRun(run, this.requests.forSession(run.parentSessionId ?? run.sessionId)));
     }
     await this.definitions.init();
     const saved = await this.storage.read();
@@ -204,7 +205,7 @@ export class WorkerSessions {
     if (
       record.kind !== "chat" &&
       (["queued", "running"].includes(record.taskState ?? "") ||
-        this.executor.current === record.id)
+        this.executor.has(record.id))
     )
       throw new DomainError(
         "conflict",

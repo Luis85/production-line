@@ -11,7 +11,7 @@ import { SerialExecutor } from "../../src/worker/dist/worker/application/serial-
 import { WorkerRequestJournal } from "../../src/worker/dist/worker/infrastructure/journal/requests.js";
 import { defaultGatePolicy } from "../../src/worker/dist/worker/application/request-gates.js";
 import { WorkerRunJournal } from "../../src/worker/dist/worker/infrastructure/journal/local-runs.js";
-import { usage, input, valid, wait, fixture } from './request-review-fixtures.mjs';
+import { requestReviewUsage as usage, reviewerInput as input, valid, waitForRequestReview as wait, reviewerFixture as fixture } from './request-review-fixtures.mjs';
 
 test("review persists exact dispatch before invoking a frozen provider and never mutates accepted input", async () => {
   const f = fixture();

@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, rm, stat, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -11,6 +12,8 @@ import { configuration } from '../../src/worker/dist/worker/config.js';
 import { runWorker } from '../../src/worker/dist/worker/runner.js';
 import { Store } from '../../src/orchestrator/dist/orchestrator/persistence/store.js';
 import { cleanup } from './fixture-cleanup.mjs';
+// Profile-management scenarios begin after native setup; cold startup is tested separately.
+prepareNativeProcessFixture();
 const base = 'a'.repeat(64);
 /** @type {import('../../src/shared/domain.ts').Profile[]} */
 const initial = [{ id: 'codex-original', provider: 'codex', mode: 'mock', maxParallel: 1 }];
@@ -60,19 +63,59 @@ test('identity recovery allows only the explicitly durable pending hash after ac
   assert.equal((await loadOrRegisterIdentity(path,identity.url,restarted.active.profiles,{configHash:desired,maxParallel:1,order:'fifo',maxAttempts:1},gateway,new AbortController().signal)).configHash,desired);
 });
 
-async function boot(path, config, gateway, now) {
-  const stop = new AbortController(); let endpoint, finished;
+async function boot(t, path, config, gateway, now) {
+  t.signal.throwIfAborted();
+  const stop = new AbortController(), pending = new Set(); let endpoint, finished;
+  const interrupted = () => {
+    t.diagnostic('Profile worker cancelled; unfinished requests: ' + ([...pending].map(request=>request.label).join(', ') || 'none'));
+    stop.abort(t.signal.reason);
+  };
+  t.signal.addEventListener('abort', interrupted, {once:true});
   const ready=new Promise(resolve=>{finished=resolve;});
   const run=runWorker({...config,stateDir:path,enrollmentToken:'enroll',statusHost:'127.0.0.1',statusPort:0},stop.signal,{...(gateway?{gateway}:{}),...(now?{now}:{}),ready:async address=>{endpoint='http://127.0.0.1:'+address.port;finished();}});
+  const shutdown = async () => { stop.abort(); await run; };
+  cleanup(t, shutdown);
+  const detached = () => t.signal.removeEventListener('abort', interrupted);
+  void run.then(detached, detached);
   await Promise.race([ready,run.then(()=>{throw Error('Worker stopped before ready');})]);
   const token=(await readFile(join(path,'webview-token'),'utf8')).trim();
-  const api=async(route,body)=>{const response=await fetch(endpoint+route,{method:body===undefined?'GET':'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});return {status:response.status,value:await response.json()};};
-  return {api,endpoint,stop:async()=>{stop.abort();await run;}};
+  const api = async (route, body) => {
+    const method = body === undefined ? 'GET' : 'POST', request = {label:method + ' ' + route};
+    pending.add(request);
+    try {
+      const response = await fetch(endpoint + route, {
+        method, signal:AbortSignal.any([t.signal, stop.signal, AbortSignal.timeout(10000)]),
+        headers:{Authorization:'Bearer ' + token,'Content-Type':'application/json'},
+        ...(body === undefined ? {} : {body:JSON.stringify(body)})
+      });
+      return {status:response.status,value:await response.json()};
+    } catch (cause) {
+      throw new Error('Profile fixture request failed: ' + request.label, {cause});
+    } finally { pending.delete(request); }
+  };
+  // The HTTP ready callback must return before the runner can begin its native startup phase.
+  await until(async () => {
+    const repositories = await api('/api/repositories');
+    assert.equal(repositories.status, 200);
+    return repositories.value.nativeWork.state === 'ready';
+  });
+  return {api,endpoint,completed:run,stop:shutdown};
 }
 
+test('profile HTTP fixture cancellation closes its worker before fixture cleanup', {timeout:10000}, async t => {
+  const path = await directory(t), config = await configuration({'poll-ms':'100','mock-ms':'1',profiles:'codex'});
+  const cancel = new AbortController();
+  const lifetime = {signal:AbortSignal.any([t.signal, cancel.signal]), diagnostic:message=>t.diagnostic(message), after:callback=>cleanup(t, callback)};
+  const worker = await boot(lifetime, path, config);
+  assert.equal((await worker.api('/status')).status, 200);
+  cancel.abort(new Error('Cancelled fixture lifetime'));
+  await worker.completed;
+  await assert.rejects(fetch(worker.endpoint + '/status', {signal:AbortSignal.any([t.signal, AbortSignal.timeout(1000)])}));
+});
+
 test('standalone HTTP editor authenticates, requires pause, rejects simultaneous stale edits, and recovers a staged edit after restart', {timeout:20000},async t=>{
-  const path=await directory(t),config=await configuration({'poll-ms':'100','mock-ms':'1',profiles:'codex'});let worker=await boot(path,config);cleanup(t,()=>worker.stop());
-  assert.equal((await fetch(worker.endpoint+'/api/execution-profiles')).status,401);
+  const path=await directory(t),config=await configuration({'poll-ms':'100','mock-ms':'1',profiles:'codex'});let worker=await boot(t,path,config);
+  assert.equal((await fetch(worker.endpoint+'/api/execution-profiles',{signal:AbortSignal.any([t.signal,AbortSignal.timeout(10000)])})).status,401);
   const first=(await worker.api('/api/execution-profiles')).value;
   assert.equal((await worker.api('/api/execution-profiles',{expectedConfigurationHash:first.configurationHash,profiles:replacement})).status,409);
   assert.equal((await worker.api('/api/settings',{board:{paused:true}})).status,200);
@@ -83,7 +126,7 @@ test('standalone HTTP editor authenticates, requires pause, rejects simultaneous
   await worker.stop();
   // Simulate a crash after durable stage and before standalone commit.
   const saved=manager(path,config.profiles,config.policy.configHash);await saved.init();await saved.stage({expectedConfigurationHash:saved.active.configurationHash,profiles:[{...replacement[0],id:'after-crash'}]});
-  worker=await boot(path,config);
+  worker=await boot(t,path,config);
   const recovered=(await worker.api('/api/execution-profiles')).value;assert.equal(recovered.state,'ready');assert.equal(recovered.profiles[0].id,'after-crash');
 });
 
@@ -102,11 +145,14 @@ test('registered edits recover old incomplete evidence, survive a lost acknowled
     async heartbeat(task){return store.heartbeat(current(),task.id,task.lease,task.attempt);},async publishSnapshot(snapshot){return store.snapshot(current(),snapshot);},async complete(task){return store.finish(current(),task.id,task.lease,task.attempt);},async abandon(task){return store.abandon(current(),task.id,task.lease,task.attempt);},
     async updateProfiles(input){updateCalls++;const result=store.updateProfiles(current(),input);if(rejectAcknowledgement)throw Error('Lost response fixture');return result;}
   };}};
-  let worker=await boot(path,config,gateway,()=>now);cleanup(t,()=>worker.stop());await until(()=>registration);await until(async()=> (await worker.api('/status')).value.state==='idle');
+  let worker=await boot(t,path,config,gateway,()=>now);await until(()=>registration);await until(async()=> (await worker.api('/status')).value.state==='idle');
   await worker.api('/api/settings',{board:{paused:true}});
   const old=(await worker.api('/api/execution-profiles')).value;
+  t.diagnostic('Profile recovery phase: create local repository fixture');
   const repository=join(path,'local-repository');await mkdir(repository);await writeFile(join(repository,'hello.txt'),'before\n');
+  t.diagnostic('Profile recovery phase: save provider configuration');
   assert.equal((await worker.api('/api/settings',{provider:{id:'openai-api',apiKey:'fixture-key',model:'fixture-model'}})).status,200);
+  t.diagnostic('Profile recovery phase: create and cancel local task');
   const local=await worker.api('/api/taskboard',{title:'Cancelled local task',instruction:'Edit hello',repository,paths:['hello.txt'],provider:'openai-api'});assert.equal(local.status,202);
   const localId=local.value.tasks[0].id;assert.equal((await worker.api('/api/taskboard/action',{id:localId,action:'cancel'})).status,200);
   // Model a terminal-write failure after its lease expires: no active execution remains, but a before snapshot still needs closure.
@@ -118,6 +164,7 @@ test('registered edits recover old incomplete evidence, survive a lost acknowled
   now+=2000;store.reapExpired();
   // Block automatic retry of the recovered old task to keep this fixture focused on new-profile routing.
   store.db.prepare("UPDATE tasks SET status='blocked' WHERE id=?").run(task.id);
+  t.diagnostic('Profile recovery phase: stage profile change and recover old evidence');
   // A paused worker still polls existing leases. Its bounded admission guard may
   // overlap this save; retry only a rejected, unchanged, completely idle edit.
   await until(async()=>{
@@ -141,7 +188,8 @@ test('registered edits recover old incomplete evidence, survive a lost acknowled
   const retry=await worker.api('/api/taskboard/action',{id:localId,action:'retry'});assert.equal(retry.status,503);
   assert.equal((await worker.api('/api/taskboard')).value.tasks.find(task=>task.id===localId).status,'cancelled');
   const cancelled=await worker.api('/api/taskboard/action',{id:localId,action:'cancel'});assert.equal(cancelled.status,409);assert.match(cancelled.value.error,/no longer active/);
-  await worker.stop();rejectAcknowledgement=false;worker=await boot(path,config,gateway,()=>now);
+  t.diagnostic('Profile recovery phase: restart after lost acknowledgement');
+  await worker.stop();rejectAcknowledgement=false;worker=await boot(t,path,config,gateway,()=>now);
   await until(async()=> (await worker.api('/api/execution-profiles')).value.state==='ready');
   const identity=JSON.parse(await readFile(join(path,'identity.json'),'utf8'));assert.equal(identity.id,registration.id);assert.equal(identity.configHash,current().config.configHash);
   const next=store.submit({project:'alpha',title:'Edited profile task',criteria:['Done'],wikilinks:[],provider:'claude',priority:1},'new-profile-task');
@@ -151,6 +199,7 @@ test('registered edits recover old incomplete evidence, survive a lost acknowled
     if(resumed.status===409){assert.match(resumed.value.error,/Finish the execution profile change/);return false;}
     assert.equal(resumed.status,200);return true;
   });
+  t.diagnostic('Profile recovery phase: execute task with recovered profile');
   try { await until(()=>store.get(next.id).status==='simulated'); }
   catch(cause){
     const task=store.get(next.id),status=(await worker.api('/status')).value;

@@ -1,3 +1,5 @@
+import type { FeatureIntakeMeasurement, FeatureIntakeMeasurementUpdate } from './feature-intake-measurement.js';
+import type { FeaturePreparation } from './feature-preparation.js';
 import type { ModelSelection } from './model-selection.js';
 import type { ReadyReviewInput, ReadyReviewResult, ReadyReviewAttempt, ReadyReviewExecutionView } from './ready-review-contracts.js';
 import type { FeatureWorkflowSnapshot, SharedFeatureInput } from './feature-workflow.js';
@@ -61,7 +63,7 @@ export interface SharedReadyReviewCheckpoint {
   implementationReady?: true;
   sessionIds: string[];
 }
-export interface SharedFeatureRecord extends SharedFeatureView {
+export interface SharedFeatureRecord extends SharedFeatureView, Omit<FeaturePreparation, 'selection'> {
   readyReviewState?: SharedReadyReviewCheckpoint;
   binding: SharedIntakeConfig;
   sourcePath: string;
@@ -84,6 +86,7 @@ export interface SharedFeatureRecord extends SharedFeatureView {
   progress?: string;
 }
 export interface SharedFeatureState {
+  measurements?: FeatureIntakeMeasurement[];
   schemaVersion: 1;
   workerId: string;
   revision: number;
@@ -112,6 +115,8 @@ export interface SharedAdmissionHold {
   resumesAt?: string;
 }
 export interface SharedIntakePorts {
+  observeMetric?(record: SharedFeatureRecord, update?: Partial<FeatureIntakeMeasurementUpdate>): void;
+  prepare?(input: SharedFeatureInput, binding: SharedIntakeConfig, baseline: string): Promise<FeaturePreparation>;
   resolveSelection?(input: SharedFeatureInput): ModelSelection;
   readyReview?: { schedule(input: ReadyReviewInput): Promise<ReadyReviewAttempt>; inspect(input: ReadyReviewInput): ReadyReviewExecutionView | undefined };
   readyReviewEligible?(markdown: string, snapshot: FeatureWorkflowSnapshot, provider?: string): { valid: boolean; input?: SharedFeatureInput; inputHash?: string; errors: { code: string; message: string }[] };
@@ -121,7 +126,7 @@ export interface SharedIntakePorts {
   repository(binding: SharedIntakeConfig, workflow?: FeatureWorkflowSnapshot): SharedRepositoryPort;
   loadWorkflow(repository: SharedRepositoryPort, commit: string, path: string, signal: AbortSignal): Promise<FeatureWorkflowSnapshot>;
   ready(markdown: string, snapshot: FeatureWorkflowSnapshot, provider?: string): { valid: boolean; input?: SharedFeatureInput; inputHash?: string; errors: { code: string; message: string }[] };
-  source(blob: SharedBlob): { id?: string; title: string; status: string; shared?: SharedFeatureView };
+  source(blob: SharedBlob): { id?: string; title: string; status: string; dependsOn?: string[]; shared?: SharedFeatureView };
   renderSource(record: SharedFeatureRecord): string;
   submit(record: SharedFeatureRecord): Promise<void>;
   continue?(record: SharedFeatureRecord, command: InteractionCommand): Promise<unknown>;

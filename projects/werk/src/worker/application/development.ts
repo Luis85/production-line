@@ -1,3 +1,6 @@
+import { validateDeliveryCheckPacks, type DeliveryCheckPack } from './delivery-check-packs.js';
+import { validateDevelopmentBaseline, type DevelopmentBaselineEvidence } from './development-baseline.js';
+import { verificationInputs } from './delivery-policy.js';
 import { callTimeout } from './tool-limits.js';
 import { classifyDevelopmentEvidence } from './development-verification.js';
 import { createHash } from 'node:crypto';
@@ -12,13 +15,13 @@ import { sharedFeaturePublicationIssue, sharedFeaturePublicationLimits, type Sha
 /** Frozen authority for a new repository implementation. Never inferred for saved proposal tasks. */
 export interface DevelopmentCheck { id: string; name: string; executable: string; args: string[]; fingerprint: string; timeoutMs?: number; }
 /** `sharedPublication` is frozen for requests admitted through shared intake: the publisher's patch and changed-file bounds. */
-export interface DevelopmentScope { schemaVersion: 1; mode: 'worktree'; baseCommit: string; approvedPaths: string[]; checks: DevelopmentCheck[]; sharedPublication?: SharedFeaturePublicationLimits; }
+export interface DevelopmentScope { schemaVersion: 1; mode: 'worktree'; baseCommit: string; approvedPaths: string[]; checks: DevelopmentCheck[]; checkPacks?: DeliveryCheckPack[]; verificationInputs?: string[]; sharedPublication?: SharedFeaturePublicationLimits; }
 export interface DevelopmentCheckEvidence {
   presetId: string; presetFingerprint: string; candidateDigest: string;
   status: 'passed' | 'failed' | 'interrupted'; exitCode: number | null;
   stdout: string; stderr: string; startedAt: string; finishedAt: string; truncated?: boolean;
 }
-export interface DevelopmentEvidence { schemaVersion: 1; candidateDigest: string | null; changedPaths: string[]; checks: DevelopmentCheckEvidence[]; updatedAt: string; }
+export interface DevelopmentEvidence { baseline?: DevelopmentBaselineEvidence; schemaVersion: 1; candidateDigest: string | null; changedPaths: string[]; checks: DevelopmentCheckEvidence[]; updatedAt: string; }
 export interface DevelopmentCompletion { turnId: string; runId: string; candidateDigest: string; patchSha256: string; evidenceDigest: string; verified: boolean; }
 /** An approved file and its current hash (null when absent); `changed` marks candidate changes. */
 export interface DevelopmentListedFile { path: string; hash: string | null; changed?: true }
@@ -28,8 +31,9 @@ export interface SharedPublicationStatus extends SharedFeaturePublicationLimits 
  * `changedPaths` is always complete. `files` is a byte-bounded listing with hashes; changed paths beyond its budget are
  * listed without hashes, then counted, and `omittedFiles` counts unchanged files below approved folders left out.
  */
-export interface DevelopmentCandidate { patch: string; digest: string; changedPaths: string[]; files?: DevelopmentListedFile[]; changedPathsWithoutHashes?: string[]; omittedChangedPaths?: number; omittedFiles?: number; sharedPublication?: SharedPublicationStatus; }
+export interface DevelopmentCandidate { patch: string; digest: string; /** Exact Git tree of inspected raw source bytes; required for new local delivery. */ treeDigest?: string; changedPaths: string[]; files?: DevelopmentListedFile[]; changedPathsWithoutHashes?: string[]; omittedChangedPaths?: number; omittedFiles?: number; sharedPublication?: SharedPublicationStatus; }
 export interface DevelopmentRuntime {
+  observeBaseline?(signal: AbortSignal): Promise<DevelopmentBaselineEvidence>;
   /** Validate the retained workspace and durably invalidate earlier checks before a native provider may edit. */
   prepareNative?(signal: AbortSignal): Promise<void>;
   apply(input: { path: string; content: string | null; expectedHash?: string | null }, signal: AbortSignal): Promise<unknown>;
@@ -50,16 +54,20 @@ export interface DevelopmentFactoryOptions extends DevelopmentLimits {
 export type DevelopmentFactory = (options: DevelopmentFactoryOptions) => DevelopmentRuntime;
 export type DevelopmentScopeView = Omit<DevelopmentScope, 'checks'> & { checks: Array<Pick<DevelopmentCheck, 'id' | 'name' | 'fingerprint'>> };
 export function developmentScopeView(scope: DevelopmentScope): DevelopmentScopeView {
-  return { schemaVersion: 1, mode: 'worktree', baseCommit: scope.baseCommit, approvedPaths: [...scope.approvedPaths], checks: scope.checks.map(({ id, name, fingerprint }) => ({ id, name, fingerprint })), ...(scope.sharedPublication ? { sharedPublication: { ...scope.sharedPublication } } : {}) };
+  return { schemaVersion: 1, mode: 'worktree', baseCommit: scope.baseCommit, approvedPaths: [...scope.approvedPaths], checks: scope.checks.map(({ id, name, fingerprint }) => ({ id, name, fingerprint })), ...(scope.checkPacks ? { checkPacks: structuredClone(scope.checkPacks) } : {}), ...(scope.verificationInputs ? { verificationInputs: [...scope.verificationInputs] } : {}), ...(scope.sharedPublication ? { sharedPublication: { ...scope.sharedPublication } } : {}) };
 }
 /** Names participate so edits to the operator's frozen verification plan require a new request. */
 export function developmentCheckFingerprint(check: Pick<ToolCommandPreset, 'id' | 'name' | 'executable' | 'args' | 'timeoutMs'>): string {
   return gateDigest({ id: check.id, name: check.name, executable: check.executable, args: check.args, ...(check.timeoutMs === undefined ? {} : { timeoutMs: check.timeoutMs }) });
 }
-export function freezeDevelopmentScope(baseCommit: string | undefined, approvedPaths: readonly string[], policy: ToolPolicy, options: { sharedPublication?: boolean } = {}): DevelopmentScope | undefined {
-  const checks = policy.builtins.commands.filter(item => item.enabled && item.verification).map(item => ({ id: item.id, name: item.name, executable: item.executable, args: [...item.args], fingerprint: developmentCheckFingerprint(item), ...(item.timeoutMs === undefined ? {} : { timeoutMs: item.timeoutMs }) })).sort((a, b) => a.id.localeCompare(b.id));
+export function freezeDevelopmentScope(baseCommit: string | undefined, approvedPaths: readonly string[], policy: ToolPolicy, options: { sharedPublication?: boolean; verificationInputs?: string[]; checkPacks?: DeliveryCheckPack[] } = {}): DevelopmentScope | undefined {
+  const checkPacks = options.checkPacks === undefined ? undefined : validateDeliveryCheckPacks(options.checkPacks);
+  const requested = new Set(checkPacks?.flatMap(pack => pack.checks) ?? []);
+  for (const id of requested) if (!policy.builtins.commands.some(item => item.id === id && item.enabled))
+    throw new DomainError('invalid_input', 'Check pack requires enabled command preset ' + id + '. Configure tool access in Settings, then retry this Feature Request.');
+  const checks = policy.builtins.commands.filter(item => item.enabled && (item.verification || requested.has(item.id))).map(item => ({ id: item.id, name: item.name, executable: item.executable, args: [...item.args], fingerprint: developmentCheckFingerprint(item), ...(item.timeoutMs === undefined ? {} : { timeoutMs: item.timeoutMs }) })).sort((a, b) => a.id.localeCompare(b.id));
   if (!baseCommit || !policy.builtins.files || !checks.length) return;
-  const scope: DevelopmentScope = { schemaVersion: 1, mode: 'worktree', baseCommit, approvedPaths: [...approvedPaths], checks, ...(options.sharedPublication ? { sharedPublication: { ...sharedFeaturePublicationLimits } } : {}) };
+  const scope: DevelopmentScope = { schemaVersion: 1, mode: 'worktree', baseCommit, approvedPaths: [...approvedPaths], checks, ...(checkPacks === undefined ? {} : { checkPacks }), ...(options.verificationInputs ? { verificationInputs: verificationInputs(options.verificationInputs) } : {}), ...(options.sharedPublication ? { sharedPublication: { ...sharedFeaturePublicationLimits } } : {}) };
   validateDevelopmentState(scope);
   return scope;
 }
@@ -68,7 +76,8 @@ export function assertFolderApprovals(paths: readonly string[], policy: ToolPoli
   if (!implementation && paths.some(approvedFolder)) throw new DomainError('invalid_input', 'Folder approvals (paths ending in /) require an implementation request: an assigned Git repository, repository file access and at least one required verification check. Approve exact files for a proposal.');
 }
 export function assertDevelopmentPolicy(scope: DevelopmentScope, policy: ToolPolicy): void {
-  const current = freezeDevelopmentScope(scope.baseCommit, scope.approvedPaths, policy);
+  let current: DevelopmentScope | undefined;
+  try { current = freezeDevelopmentScope(scope.baseCommit, scope.approvedPaths, policy, { checkPacks: scope.checkPacks }); } catch { /* Changed or revoked pack grants fail the same frozen-authority check. */ }
   if (!current || gateDigest(current.checks) !== gateDigest(scope.checks))
     throw new DomainError('conflict', 'Repository file access or the required verification commands changed. Create a new request with the current verification plan; retained changes are preserved.');
 }
@@ -101,10 +110,15 @@ export function validateDevelopmentState(scope: unknown, evidence?: unknown): as
   const invalid = () => new DomainError('conflict', 'Saved implementation authority or verification evidence is invalid. Retained files require inspection.');
   if (!object(scope) || scope.schemaVersion !== 1 || scope.mode !== 'worktree' || typeof scope.baseCommit !== 'string' || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(scope.baseCommit) || !Array.isArray(scope.checks) || !scope.checks.length || scope.checks.length > 32) throw invalid();
   try { validateApprovedPaths(scope.approvedPaths, 'Approved paths', { folders: true }); for (const check of scope.checks) if (object(check)) callTimeout(check.timeoutMs, 'Required check'); } catch { throw invalid(); }
+  if (scope.verificationInputs !== undefined) { try { verificationInputs(scope.verificationInputs); } catch { throw invalid(); } }
+  if (scope.checkPacks !== undefined) {
+    try { for (const pack of validateDeliveryCheckPacks(scope.checkPacks)) if (pack.checks.some(id => !(scope.checks as DevelopmentCheck[]).some(check => check.id === id))) throw invalid(); } catch { throw invalid(); }
+  }
   if (scope.sharedPublication !== undefined && !validSharedPublication(scope.sharedPublication)) throw invalid();
   if (scope.checks.some(check => !object(check) || typeof check.id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(check.id) || typeof check.name !== 'string' || !check.name.trim() || check.name.length > 120 || typeof check.executable !== 'string' || !check.executable.trim() || check.executable.length > 4096 || !Array.isArray(check.args) || check.args.length > 64 || check.args.some(arg => typeof arg !== 'string' || arg.length > 4000 || arg.includes('\0')) || !hash(check.fingerprint) || developmentCheckFingerprint(check as unknown as DevelopmentCheck) !== check.fingerprint) || new Set(scope.checks.map(check => check.id)).size !== scope.checks.length) throw invalid();
   if (evidence === undefined) return;
   if (!object(evidence) || evidence.schemaVersion !== 1 || evidence.candidateDigest !== null && !hash(evidence.candidateDigest) || !Array.isArray(evidence.changedPaths) || evidence.changedPaths.some(path => typeof path !== 'string' || !approvedPathMatch(scope.approvedPaths as string[], path)) || new Set(evidence.changedPaths).size !== evidence.changedPaths.length || !date(evidence.updatedAt) || !Array.isArray(evidence.checks) || evidence.checks.length > 32) throw invalid();
+  if (evidence.baseline !== undefined) validateDevelopmentBaseline(scope as unknown as DevelopmentScope, evidence.baseline);
   const requiredChecks = scope.checks;
   if (new Set(evidence.checks.map(check => object(check) ? check.presetId : null)).size !== evidence.checks.length) throw invalid();
   if (evidence.checks.some(check => !object(check) || !requiredChecks.some(required => required.id === check.presetId && required.fingerprint === check.presetFingerprint) || !hash(check.candidateDigest) || !['passed', 'failed', 'interrupted'].includes(check.status as string) || check.exitCode !== null && !Number.isSafeInteger(check.exitCode) || check.status === 'passed' && check.exitCode !== 0 || typeof check.stdout !== 'string' || check.stdout.length > 32768 || typeof check.stderr !== 'string' || check.stderr.length > 32768 || !date(check.startedAt) || !date(check.finishedAt) || check.truncated !== undefined && typeof check.truncated !== 'boolean')) throw invalid();

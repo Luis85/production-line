@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "kind": "local-delivery-browser-evidence",
+  "scope": "Linux Chromium with deterministic Storybook fixtures; no model execution, Git change or real human review occurred.",
+  "browser": "Chromium 154.0.8037.57 on Debian GNU/Linux13",
+  "storyInventory": {
+    "version": "0.14.0",
+    "baseCommitAtCapture": "fe792f4f4d785d4e3968840a5aaeb7006e49b3af",
+    "sourceDigest": "20cce8a446c7875951a41f68424023f2469fc14234f3706203351730849aa25a"
+  },
+  "viewports": [
+    {
+      "name": "desktop",
+      "width": 1440,
+      "height": 1000
+    },
+    {
+      "name": "mobile",
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "browser-latency.json",
+      "sha256": "e9fbb2d80690a85ee15f5bcdb3b0a428cde7f29be83ea384aedc37fd7f2f976b"
+    },
+    {
+      "path": "browser-targeted-results.json",
+      "sha256": "4938e9046a12eed45d7b460011eb69db01f36a9837aeea1c81bcb978df551ab8"
+    },
+    {
+      "path": "recovery-desktop.png",
+      "sha256": "e2c34f88cd18cd1c961ed69a72f5db7f18d432e9b30ae64f9e38a12c801a1a0b"
+    },
+    {
+      "path": "recovery-mobile.png",
+      "sha256": "2e247577664b65b0647cd9d52a69a5fcba9f8cbd08396cf73dfb48fa2eb65cf2"
+    }
+  ],
+  "workingTreeDirty": true,
+  "recordedAt": "2026-10-20T14:14:50.475Z"
+}

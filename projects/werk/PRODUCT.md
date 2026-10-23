@@ -19,7 +19,8 @@ The worker uses Vue with Nuxt UI and four primary pages: Taskboard
 (`/taskboard`), Metrics (`/dashboard`), History (`/history`) and Settings
 (`/settings`). Taskboard opens after unlock. It keeps current work, Needs you
 and Up next beside a task-scoped interaction panel; completed work and drafts
-remain available without duplicating task identities across sources.
+remain available without duplicating task identities across sources. A request-scoped
+Review route brings its input, activity, changes, checks and decisions together.
 
 New request starts with the operator's instructions. Task options disclose the
 provider, optional name and reusable agent definition. Follow up continues the
@@ -48,22 +49,27 @@ Workspace access and model-provider authentication are separate steps.
 ## Existing Implementation Evidence
 
 The repository implements Werk as separate Factory, orchestrator and worker
-applications. Simulation is the default. Native Linux Codex execution is opt-in
-and produces local patches requiring human review. Current operating details
+applications. Orchestrated assignments default to simulation; their native Linux
+Codex adapter is opt-in. Standalone workers use explicitly configured Claude,
+Codex or Cursor CLI connections, or provider APIs, to implement approved work in
+owned Git worktrees and run required checks. Human review remains separate from
+model completion and merging. Adapter/platform limits and qualification evidence
 are maintained in [the documentation hub](docs/index.md).
 
 ## Worker Ownership
 
 The worker is installed on a machine and works independently. It can use local
-Claude Code / Codex subscription logins or provider APIs. An orchestrator is
-optional and can be configured later. Each worker executes exactly one task at a
-time across Chat, explicit local file tasks and remote orchestrator assignments.
-Local admission counts queued/running chat and file work, including preparation
-reservations. Accepted remote assignments use a separate buffer; ready notes not
-yet admitted are not occupied places. These counts never add execution slots.
-Stale observations do not establish availability. Separate Feature Requests need
-separate worker instances for parallel execution, each with its own state and
-webview port. Within one attempt, an explicitly granted parent model can use
+Claude Code, Codex or Cursor account logins through supported official CLIs, or
+provider APIs. An orchestrator is optional and can be configured later. Requests,
+reviews and assignments share a machine ceiling of 1–8 simultaneous operations;
+project limits can be stricter. Unscoped legacy and orchestrator assignments remain
+exclusive. Unknown outcomes reserve capacity until reconciled.
+Local admission counts queued/running work and preparation reservations. Accepted
+remote assignments use a separate buffer; ready notes not yet admitted are not
+occupied places. Admission counts do not create execution capacity, and stale
+observations do not establish availability. Separate worker instances retain
+their own state and webview port. Within one attempt, an explicitly granted parent
+model can use
 bounded child sessions. Those children keep the same request and grants, share
 its tool-call/time budget, and count toward the worker allowance.
 
@@ -172,8 +178,9 @@ An omitted or unsupported model uses that connection's configured model.
 
 The taskboard keeps the selected task visible beside its conversation. Needs you
 prioritizes checkpoint questions, decisions, request rework, review and failures;
-Up next shows waiting work. Only the observed shared executor owner appears as
-Running now. Completed model turns, human acceptance and applied patches remain
+Up next shows waiting work. Running now shows observed active executor owners;
+reserved places with unresolved outcomes do not establish live processes.
+Completed model turns, human acceptance and applied patches remain
 separate facts. Stopped work is labelled Stopped; mock execution is labelled
 Simulated and never presented as an implementation.
 
@@ -226,25 +233,30 @@ accepted/merged work must remain distinct.
 A worker can be initialized inside a project and started as a portable Node app
 or a standalone Docker service. Setup provides a configurable feature folder and
 an editable frontmatter-plus-Markdown request template. Drafts remain inactive;
-ready files enter the existing serial queue after stable-save detection. Durable
-IDs, immutable accepted input and admission replay prevent duplicate execution.
-Lifecycle frontmatter, a queue summary and readable result/patch files support
-operators who do not open the webview. These intake files are distinct from the
-automatic per-task Markdown progress records, which exist even without a watched
-feature folder. Orchestrator assignments are mirrored into
-the same folder while retaining orchestrator lease/routing authority.
+canonical local notes use `worker.request/v1` with a stable ID and explicit
+`intent: draft` or `submit`. Stable local saves trigger admission; shared Git
+requests retain their commit-and-push handoff. Committed policy snapshots, local
+approval, readiness, scope and capacity checks govern implementation.
 
-The template and custom request metadata remain editable. One worker state owns
-one folder; setup, native/Docker switching, recovery and copied-app operation
-are documented in [project worker setup](docs/how-to/project-worker.md).
+The original Feature Request remains the authority for user intent. Its generated
+region projects progress and links questions and review evidence; per-task records
+remain supporting projections. Material local requirement changes reassess the same
+request while preserving history. Accepted shared scope stays frozen, and terminal
+canonical work requires an explicit reopen command. Orchestrator mirrors retain
+their original lease and routing authority.
 
+One worker can register multiple project intakes with separate identities, policy
+and ownership. Setup, native/Docker switching, recovery and copied-app operation
+are documented in [project worker setup](docs/how-to/project-worker.md) and
+[project delivery policy](docs/reference/delivery-policy.md).
 
 ## Local execution evidence and analysis
 
 A project worker preserves durable per-invocation run evidence for local chat,
 approved-file tasks and feature requests. Before invoking a provider, it records
 state, worker-process resources and cumulative known consumption after acquiring
-the shared execution slot. A matching terminal observation records the same
+a permit from shared execution capacity. A matching terminal observation records
+the same
 fields, plus per-run reported usage and measured duration. Queued cancellation
 and crash recovery stay explicit; they do not invent execution measurements.
 
@@ -284,8 +296,9 @@ in Settings → Repositories. Detection does not search parent folders or contac
 remotes.
 
 Settings → Execution profiles edits profile IDs and providers within the worker’s
-configured execution mode. Profiles share one execution slot. Changes require
-paused intake and no queued or active work; registered workers retain their
+configured execution mode. Their orchestrated assignments retain exclusive
+execution; project delivery profiles separately select implementation providers.
+Changes to advertised execution profiles require paused intake and no queued or active work; registered workers retain their
 identity and history while synchronizing the change with their orchestrator.
 A saved pending change blocks new admission until acknowledged. Execution profiles
 remain separate from provider connections, model settings and agent definitions.

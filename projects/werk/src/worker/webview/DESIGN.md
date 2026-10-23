@@ -5,8 +5,10 @@
 Operate mode. One independently runnable worker, four primary pages: Taskboard
 (default at `/taskboard`), Metrics (`/dashboard`), History and Settings (`/settings`).
 An attention-first taskboard keeps task instructions and responses on the right.
-Vue with Nuxt UI remains the implementation foundation. One worker
-executes exactly one task at a time; additional workers provide parallelism.
+Vue with Nuxt UI remains the implementation foundation. Request-scoped Review is
+the delivery workspace reached from these pages. The worker shares a configured
+machine execution ceiling across projects; stricter project limits and exclusive
+unscoped operations govern which work can run concurrently.
 
 The legacy `/chat` route redirects to `/taskboard` while preserving its query.
 Metrics presents observations; Settings owns configuration. `/monitoring-status`
@@ -17,15 +19,16 @@ Settings sections. History remains the evidence and management surface.
 
 Extend Werk's dark slate and mint operational identity. Use readable system
 typography, 44px controls, private credentials and honest simulation labels.
-The surface describes one local worker and its shared execution slot. It does
-not imply a fleet or several simultaneously running models.
+The surface describes one local worker and its configured execution capacity.
+It shows observed concurrent work without implying a fleet or treating unresolved
+capacity reservations as running models.
 
 ## STORY
 
 A horizontal WorkerShell keeps identity, Taskboard / Metrics / History / Settings
 navigation, update state, Tour and Lock visible. After unlock, Taskboard answers
 three questions: what needs the operator, what is running, and what is waiting.
-A Running now strip follows the current shared executor owner. Below it, a wider
+A Running now strip follows observed active executor owners. Below it, a wider
 Needs you area prioritizes checkpoint questions, decisions, request rework,
 review and failed or interrupted attempts. Up next shows waiting work alongside
 it. Completed and Drafts use disclosures beneath the active work.
@@ -35,9 +38,9 @@ project-request projections. Preserve original task/session/request identifiers
 and the source labels Local request, Assigned and Project request. Chat and file
 execution remain distinct backend modes within Local request. Project
 companion files do not transfer authority over remote assignments to the local
-worker. Stale running records that disagree with the shared execution slot need
-refresh, not a second running card. Simulations remain labelled Simulated; model
-completion is separate from review, acceptance, patch application or merge.
+worker. Stale running records that disagree with the executor's active owners
+need refresh, not duplicate running cards. Simulations remain labelled Simulated;
+model completion is separate from review, acceptance, patch application or merge.
 
 Selecting a task pins its identity above the right-hand interaction panel.
 New request adds work; Follow up continues that selected task. This panel is for
@@ -110,19 +113,22 @@ Keep three controls distinct:
 - Pause updates pauses this browser's automatic reads and changes no worker work.
 
 A follow-up may be drafted while its task runs; sending waits until that task
-finishes. New requests may queue behind it. Capacity shows the single execution slot,
-local admission occupancy including preparation reservations, and the separate
-remote lease buffer. Unadmitted ready notes do not count as occupied places.
-Fresh pause and consumption blockers explain why work waits; stale observations
+finishes. New requests may queue behind it. Capacity shows the configured 1–8
+machine slots, project limits, local admission occupancy including preparation
+reservations, and the separate remote lease buffer. Unscoped operations remain
+exclusive. Unresolved outcomes reserve slots without claiming live execution;
+unadmitted ready notes do not count as occupied places. Fresh pause, preparation,
+permission and consumption blockers explain why work waits; stale observations
 never claim the worker is ready. No queue estimate implies an execution ETA.
-Standalone is a healthy worker state. Scale parallel work with separate native
-or Docker workers, never a per-worker concurrency control.
+Standalone is a healthy worker state. Queue capacity settings own the machine
+ceiling; committed project policy can impose stricter concurrency limits.
 
 ## SETUP AND DEFINITIONS
 
 Settings owns Providers & accounts, Queue & duration, Consumption, Tools & MCP,
 Repositories, Shared request intake, Execution profiles, Agent definitions,
-Project integration and Orchestrator. Editors save separately and keep drafts
+Project delivery, Project integration and Orchestrator. Editors save separately
+and keep drafts
 while navigating in the current tab. Queue/duration/consumption policy saves
 compare the saved baseline; conflicts preserve the draft for reconciliation.
 Metrics keeps operational diagnostics and links to the relevant editor. CLI
@@ -176,8 +182,10 @@ Keep route labels and capability limits aligned with the actual workspace.
 Record dated review evidence separately: this design direction does not claim a
 build has passed browser review or live-provider verification. Preserve keyboard
 focus, narrow-screen navigation, stale-data feedback, private access and unsent
-work. Local tasks produce review artifacts from approved inputs; they do not
-apply patches or run project tests automatically.
+work. Implementation requests edit an owned worktree and run their configured
+required project checks; legacy proposal requests retain their accepted contract.
+Review artifacts identify the candidate and evidence. Neither passing checks nor
+human acceptance silently merges changes into the developer's checkout.
 
 ## Shared Vue foundation
 
@@ -204,5 +212,6 @@ Execution profiles have a focused Settings editor with labelled ID/provider
 fields, add/remove controls and a visible execution-mode boundary. Keep drafts
 while live observations refresh, report stale saves before overwriting changes,
 and distinguish saved pending synchronization from active profiles. Explain
-pause/drain requirements next to the save controls and keep one-slot semantics
-explicit. Provider sign-in and model settings remain in Provider connections.
+pause/drain requirements next to the save controls and distinguish advertised
+orchestrator profiles from project delivery profiles and machine capacity.
+Provider sign-in and model settings remain in Provider connections.

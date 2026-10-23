@@ -244,3 +244,44 @@ test('review model information uses retained acceptance and never reconstructs i
   remote.taskId = 'another-task';
   assert.equal(buildFeatureReviewView({ task: local, shared: remote }).selection, null, 'inconsistent identities hide selection with other mismatched evidence');
 });
+
+/** @param {import('../../src/worker/application/delivery-contracts').DeliveryStatus} status
+ * @returns {import('../../src/worker/application/delivery-contracts').DeliveryRun} */
+function delivery(status = 'interrupted') {
+  return { schemaVersion: 1, id: 'delivery-current', inputRevision: 1, inputHash: 'input-1', policyDigest: 'policy-1',
+    profile: { schemaVersion: 1, id: 'local', version: 1, root: { id: 'wait', type: 'action', action: 'wait', reason: 'Await explicit recovery.' } }, profileDigest: 'profile-1',
+    status, phase: 'implementing', control: null, holds: [], repairAttempts: 0, maxRepairAttempts: 2, startedAt: at, finishedAt: null, steps: [],
+    decision: { profileId: 'local', profileVersion: 1, selectedNode: 'wait', selectedAction: 'wait', reason: 'Await explicit recovery.', waitingFor: 'A guarded delivery command.', conditions: [] }, allowedControls: ['resume'] };
+}
+
+/** @type {import('../../src/worker/application/delivery-contracts').DeliveryStatus[]} */
+const incompleteDeliveryStatuses = ['interrupted', 'outcome_unknown', 'reconciling', 'paused', 'failed', 'running', 'queued'];
+for (const status of incompleteDeliveryStatuses) test('a ' + status + ' delivery cannot inherit completion from a retained interaction, patch or gate', () => {
+  const value = complete(); value.delivery = delivery(status); value.lifecycle = 'in_progress';
+  value.attestation = { actor: 'operator', inputHash: value.inputHash, outputDigest: value.execution.outputDigest, note: 'Earlier invocation accepted', at };
+  const view = buildFeatureReviewView({ request: value, task: task() });
+  for (const id of ['execution', 'verification', 'handoff']) assert.notEqual(stage(view, id).state, 'complete');
+  assert.equal(view.evidence.hasPatch, true, 'retained patch stays inspectable');
+  assert.equal(view.evidence.attested, false, 'earlier invocation acceptance cannot accept the current delivery');
+  assert.equal(view.evidence.deliveryReview, null);
+  assert.equal(view.evidence.done.passed, true, 'retained gate does not determine current milestones');
+  assert.notEqual(view.nextStep.action?.kind, 'review_patch');
+});
+
+test('only a current completed delivery review package establishes its candidate checks and handoff', () => {
+  const value = complete(); value.delivery = delivery('completed'); value.lifecycle = 'in_review';
+  const candidate = { requestId: value.id, runId: value.delivery.id, inputRevision: 1, inputHash: value.inputHash, policyDigest: value.policyDigest, baseline: 'a'.repeat(40), branch: 'werk/current', candidateCommit: 'b'.repeat(40), tree: 'c'.repeat(40), candidateDigest: 'd'.repeat(64), patchDigest: 'e'.repeat(64), checkDefinitionDigest: 'f'.repeat(64), createdAt: at };
+  value.delivery.review = { schemaVersion: 1, candidate, criteria: [{ id: 'test', description: 'Required test', mandatory: true, evaluator: 'check' }], results: [{ criterionId: 'test', status: 'passed', evidenceRefs: ['check:test'] }], checks: [], markdown: '# Review', publication: 'local_only' };
+  let view = buildFeatureReviewView({ request: value, task: task() });
+  assert.equal(stage(view, 'execution').state, 'complete'); assert.equal(stage(view, 'verification').state, 'complete'); assert.equal(stage(view, 'handoff').state, 'complete');
+  assert.equal(view.nextStep.action.kind, 'attest'); assert.match(stage(view, 'handoff').detail, /local review package.*remote publication and merge are separate/);
+  for (const patch of [{ runId: 'older-run' }, { inputRevision: 0 }, { inputHash: 'old-input' }, { policyDigest: 'old-policy' }, { requestId: 'other-request' }]) {
+    value.delivery.review.candidate = { ...candidate, ...patch }; view = buildFeatureReviewView({ request: value, task: task() });
+    assert.equal(stage(view, 'verification').state, 'unknown'); assert.equal(stage(view, 'handoff').state, 'pending'); assert.equal(view.nextStep.action.kind, 'inspect_history');
+  }
+  value.delivery.review.candidate = candidate; value.delivery.review.results[0].status = 'failed';
+  assert.equal(stage(buildFeatureReviewView({ request: value }), 'verification').state, 'blocked');
+  assert.equal(stage(buildFeatureReviewView({ request: value }), 'handoff').state, 'blocked');
+  value.delivery.inputRevision = 0; view = buildFeatureReviewView({ request: value, task: task() });
+  assert.equal(stage(view, 'execution').state, 'unknown'); assert.equal(stage(view, 'handoff').state, 'pending');
+});

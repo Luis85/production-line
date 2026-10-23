@@ -1,0 +1,18 @@
+<script setup lang="ts">
+import { computed, watch } from 'vue';
+import type { DeliveryPolicyView } from '../delivery-project-view';
+import type { DeliveryExecutionProfile } from '../../application/delivery-execution-policy';
+import { resolveValidatedDeliveryExecutionProfile } from '../../application/delivery-execution-routing';
+import { request } from '../store';
+import { useWorkerSnapshot } from '../useWorkerSnapshot';
+const props = defineProps<{ id: string; projectId?: string; disabled?: boolean; qualityProfile?: string; mode?: 'chat' | 'patch'; priority?: number }>();
+const selected = defineModel<string>({ default: '' });
+const emit = defineEmits<{ configured: [boolean]; resolved: [DeliveryExecutionProfile | null] }>();
+const { data, error } = useWorkerSnapshot(() => request<DeliveryPolicyView>('/api/requests', 'POST', { action: 'delivery_policy', ...(props.projectId ? { projectId: props.projectId } : {}) }), [() => props.projectId]);
+const policy = computed(() => data.value?.configuration.execution);
+const resolution = computed(() => { try { return policy.value ? resolveValidatedDeliveryExecutionProfile(policy.value, selected.value || undefined, { qualityProfile: props.qualityProfile ?? data.value?.configuration.defaultProfile, mode: props.mode, priority: props.priority }) : null; } catch { return null; } });
+const options = computed(() => policy.value?.profiles.filter(profile => profile.id === policy.value!.defaultProfile || policy.value!.allowedOverrides.includes(profile.id)) ?? []);
+watch([policy, resolution], () => { emit('configured', !!policy.value); emit('resolved', resolution.value?.profile ?? null); }, { immediate: true });
+</script>
+<template><div class="project-execution"><template v-if="policy"><label :for="id + '-execution-profile'">Project execution profile</label><select :id="id + '-execution-profile'" v-model="selected" :disabled="disabled"><option value="">Automatic · routing rules and project default</option><option v-for="profile in options" :key="profile.id" :value="profile.id">{{ profile.id }} · {{ profile.provider }}</option><option v-if="selected && !options.some(profile => profile.id === selected)" :value="selected" disabled>{{ selected }} · no longer authorized</option></select><p v-if="resolution">Will select <strong>{{ resolution.profile.id }}</strong> via {{ resolution.source === 'rule' ? 'rule ' + resolution.ruleId : resolution.source }} · {{ resolution.profile.model || 'provider default model' }} · {{ resolution.profile.effort || 'default effort' }} · {{ resolution.profile.authenticationMode }}.</p><p v-else class="error-text">Choose a currently authorized profile before submitting.</p><p v-if="resolution?.profile.boundary === 'provider_native'">Uses provider-native permissions and hooks. Configure tool permissions in that provider’s CLI.</p><p v-if="data && !data.approved">This policy needs local approval before dispatch. <RouterLink to="/settings#delivery-policy">Inspect project policy</RouterLink>.</p><p>Profiles determine provider, model, effort and agent together. The worker freezes the selected profile when admitting the request.</p></template><p v-else-if="error" class="caption">Project profile preview unavailable: {{ error }} The worker validates the committed policy when submitting.</p></div></template>
+<style scoped>label { display:block;font-size:.875rem;font-weight:600;margin:var(--space-3) 0 var(--space-2); }select { width:100%;min-height:44px;border:1px solid var(--ui-border);border-radius:6px;background:var(--ui-bg);color:var(--ui-text);padding-inline:var(--space-3); }p { font-size:.8125rem;line-height:1.6;color:var(--ui-text-muted); }a { color:var(--ui-primary); }</style>

@@ -15,6 +15,7 @@ import RepositoryPanel from '../components/RepositoryPanel.vue';
 import SharedIntakePanel from '../components/SharedIntakePanel.vue';
 import ProjectIntegrationsPanel from '../components/ProjectIntegrationsPanel.vue';
 import RequestPolicyPanel from '../components/RequestPolicyPanel.vue';
+import DeliveryPolicyPanel from '../components/DeliveryPolicyPanel.vue';
 import { settingsSections, settingsSectionId } from '../settings-navigation';
 const route = useRoute(), router = useRouter();
 // Stable wrapper identities let KeepAlive preserve each editor and stop inactive polling.
@@ -25,6 +26,7 @@ const panels = {
   'tool-access': ToolAccessPanel,
   repositories: RepositoryPanel,
   'shared-intake': SharedIntakePanel,
+  'delivery-policy': DeliveryPolicyPanel,
   'execution-profiles': ExecutionProfilesPanel,
   'agent-definitions': DefinitionPanel,
   integrations: ProjectIntegrationsPanel,

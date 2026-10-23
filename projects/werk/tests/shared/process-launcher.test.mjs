@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -6,6 +7,8 @@ import { tmpdir } from 'node:os';
 import { createInterface } from 'node:readline';
 import { setTimeout as delay } from 'node:timers/promises';
 import { launchProcess, ProcessRunError, runProcess, terminateProcess } from '../../src/worker/dist/shared/process/launcher.js';
+
+prepareNativeProcessFixture();
 
 const node = process.execPath;
 const env = { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot };

@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import { toolPropertyDescription } from './model-fixtures.mjs';
 import { workerStatus } from '../helpers/worker-status.mjs';
 import { cleanup } from './fixture-cleanup.mjs';
@@ -11,6 +12,8 @@ import { defaultToolPolicy, publicToolPolicy, updateToolPolicy, validateToolPoli
 import { WorkerSettings } from '../../src/worker/dist/worker/infrastructure/settings.js';
 import { workspaceModelFactory } from './application-fixtures.mjs';
 import { modelCapabilities } from '../../src/worker/dist/worker/application/model-contract.js';
+
+prepareNativeProcessFixture();
 
 const signal = () => new AbortController().signal;
 const decoded = result => { assert.equal(result.isError, undefined, JSON.stringify(result)); return JSON.parse(result.content[0].text); };

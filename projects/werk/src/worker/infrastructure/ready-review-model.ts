@@ -1,3 +1,4 @@
+import { requireAuthenticationSelection } from './provider-authentication.js';
 import { join } from 'node:path';
 import type { ConsumptionRuntime } from '../application/consumption.js';
 import { consumptionModel } from '../application/consumption-model.js';
@@ -13,7 +14,9 @@ import { modelFor } from './providers.js';
 export function readyReviewModels(directory: string, settings: WorkerSettingsPort, consumption: ConsumptionRuntime, runs: RunJournal, observations: ProcessObservation): ReadyReviewOptions['model'] {
   const store = new FileModelSessionStore(directory);
   return (profile, binding) => {
-    const model = modelFor({ ...settings.provider(binding.providerId), model: profile.model, effort: profile.effort ?? 'default', instruction: profile.instruction },
+    const connection = settings.provider(binding.providerId);
+    requireAuthenticationSelection(connection, profile.authenticationMode);
+    const model = modelFor({ ...connection, model: profile.model, effort: profile.effort ?? 'default', instruction: profile.instruction },
       join(directory, 'sessions', binding.logicalSessionId), undefined, { session: { binding, store } });
     if (!model) return undefined;
     const observed: StructuredModel = {

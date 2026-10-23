@@ -27,7 +27,7 @@ test('project init installs a self-contained worker, configurable template and D
   const compose = parse(await readFile(join(cwd, '.werk/compose.worker.yaml'), 'utf8')); assert.match(compose.services.worker.image, /node:24/); assert.equal(compose.services.worker.working_dir, '/project'); assert.equal(compose.services.worker.volumes[0].source, '..'); assert.match(compose.services.worker.ports[0], /4207/);
   assert.match(await readFile(join(cwd, '.werk/.gitignore'), 'utf8'), /worker\//);
   assert.match(await readFile(join(initial.featuresDirectory, '.gitignore'), 'utf8'), /^_questions\/$/m);
-  const output = await exec(process.execPath, [entry, 'feature', 'template'], { cwd }); assert.equal(front(output.stdout).status, 'draft');
+  const output = await exec(process.execPath, [entry, 'feature', 'template'], { cwd }); assert.equal(front(output.stdout).intent, 'draft');
   await assert.rejects(cli(installer, cwd, 'init'), /worker app already exists/);
   await assert.rejects(cli(entry, cwd, 'init', '--features-dir', '../outside'), /inside the project/);
   await assert.rejects(cli(entry, cwd, 'init', '--port', '4210'), /Existing project port differs/);
@@ -38,11 +38,11 @@ test('installed native worker consumes files, exports review patches and keeps t
   await ownWorkspace(t, cwd, async () => { if (running) await cli(entry, cwd, 'stop'); });
   await cli(installer, cwd, 'init');
   const configPath = join(cwd, '.werk/worker.json'), config = JSON.parse(await readFile(configPath, 'utf8')); config.features.pollMs = 250; await writeFile(configPath, JSON.stringify(config), { mode: 0o600 });
-  const provider = join(cwd, 'provider-fixture'); await writeFile(provider, `#!${process.execPath}\nlet input='';for await(const p of process.stdin)input+=p;const text=input.includes('Implement the requested changes')?JSON.stringify({summary:'Review fixture patch',files:[{path:'approved.txt',content:'changed\\n'}]}):'Feature protocol fixture completed.';console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text}}));\n`, { mode: 0o700 });
+  const provider = join(cwd, 'provider-fixture'); await writeFile(provider, `#!${process.execPath}\nif(process.argv.slice(2).join(' ')==='login status'){console.log('Logged in using ChatGPT');process.exit(0);}let input='';for await(const p of process.stdin)input+=p;const text=input.includes('Implement the requested changes')?JSON.stringify({summary:'Review fixture patch',files:[{path:'approved.txt',content:'changed\\n'}]}):'Feature protocol fixture completed.';console.log(JSON.stringify({type:'item.completed',item:{type:'agent_message',text}}));\n`, { mode: 0o700 });
   let started = await cli(entry, cwd, 'start', '--port', '0'); running = true;
   const token = (await readFile(join(cwd, '.werk/worker/webview-token'), 'utf8')).trim();
   const api = async (path, body) => { const r = await fetch(started.url + path, { method: body ? 'POST' : 'GET', headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) }); const value = await r.json(); assert.ok(r.ok, value.error); return value; };
-  await api('/api/settings', { provider: { id: 'codex-cli', executable: provider } });
+  await api('/api/settings', { provider: { id: 'codex-cli', executable: provider, authenticationMode: 'cli-account' } });
   let features = join(cwd, 'features'); await writeFile(join(features, 'chat.md'), '---\nschemaVersion: 1\ntitle: Native file intake\nstatus: ready\n---\nDescribe the next step.\n');
   await writeFile(join(cwd, 'approved.txt'), 'original\n'); await writeFile(join(features, 'patch.md'), '---\nschemaVersion: 1\ntitle: Approved patch\nstatus: ready\nmode: patch\npaths: [approved.txt]\n---\nChange the approved file.\n');
   await eventually(async () => { const view = await api('/api/features'); return view.records.length === 2 && view.records.every(r => ['completed', 'review'].includes(r.status) && r.result) && (await readFile(join(features, 'chat.md'), 'utf8')).includes('status: completed') && (await readFile(join(features, 'patch.md'), 'utf8')).includes('status: review'); });

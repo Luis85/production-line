@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -8,6 +9,8 @@ import { basename, join, sep } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { RepositoryManager, prepareRepositoryWorktree } from '../../src/worker/dist/worker/infrastructure/repositories.js';
 import { repositoryGit } from '../../src/worker/dist/worker/infrastructure/repositories-git.js';
+
+prepareNativeProcessFixture();
 
 const signal = () => new AbortController().signal;
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'user.name=Werk Fixture', '-c', 'user.email=fixture@example.invalid', ...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
@@ -75,7 +78,7 @@ test('dirty, ahead, divergent and wrong-branch base checkouts are never overwrit
 test('task worktrees remain isolated and retain immutable bases and edits across synchronization and restart', async t => {
   const f = await fixtures(t), manager = f.manager(), repo = f.repositories[0];
   const first = await manager.prepareWorktree(repo.id, 'first task', signal());
-  assert.equal(first.reused, false); assert.equal(git(first.path, 'rev-parse', '--abbrev-ref', 'HEAD'), 'HEAD');
+  assert.equal(first.reused, false); assert.equal(git(first.path, 'rev-parse', '--abbrev-ref', 'HEAD'), first.branch); assert.match(first.branch, /^werk\/workspaces\//);
   assert.equal((await lstat(join(first.path, '.git'))).isFile(), true);
   await writeFile(join(first.path, 'file.txt'), 'work in progress\n');
   const freshCommit = await f.publish(0, 'latest base\n'); await manager.sync();

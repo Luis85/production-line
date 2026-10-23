@@ -1,9 +1,12 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { dirname } from 'node:path';
 import { runProcess } from '../../src/worker/dist/shared/process/launcher.js';
 import { runApprovedToolProcess } from '../../src/worker/dist/worker/infrastructure/tool-process.js';
 import { windowsContainment } from '../../src/worker/dist/shared/process/windows-containment.js';
+
+prepareNativeProcessFixture();
 
 const windows = process.platform === 'win32';
 const skip = windows ? false : 'Windows PowerShell job supervisor exists only on Windows';

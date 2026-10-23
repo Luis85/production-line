@@ -17,7 +17,7 @@ This organization follows [Diátaxis](https://diataxis.fr/).
 
 ## Tutorials — learn by running one task
 
-- [Local proposal request](tutorials/worker-feature-lifecycle.md): try the separate local folder intake and inspect its execution metrics without shared Git publication.
+- [Local delivery request](tutorials/worker-feature-lifecycle.md): submit Markdown, inspect isolated implementation and accept an exact tested candidate without shared Git publication.
 - [Local worker run metrics](reference/worker-run-metrics.md): paired snapshots, usage coverage, durable history and paginated export.
 
 - [Prepare a Linux VM deployment](tutorials/linux-vm-first-task.md): Ubuntu cloud-init, verified artifacts and SSH access.
@@ -40,6 +40,8 @@ This organization follows [Diátaxis](https://diataxis.fr/).
 - [Author feature requests with your team](how-to/team-feature-authoring.md): portable skill, editable template, shared checks, optional model Ready Checks, definition prompts and Obsidian queue; no worker connection required.
 - [Integrate with Claude and Codex](how-to/project-agent-integrations.md): reviewed project skills and guarded synchronization.
 - [Monitor long-running workers](how-to/monitor-long-running-worker.md): duration budgets, resource warnings and durable alert history.
+- [Configure delivery readiness](how-to/configure-delivery-readiness.md): committed references, explicit interpretations and exact-candidate criterion decisions.
+- [Publish a worker candidate](how-to/publish-worker-candidates.md): separate push and remote PR actions, policy approval and durable reconciliation.
 - [Define readiness, completion and rework](how-to/rework-worker-requests.md): deterministic rules, human findings and bounded model review.
 - [Request gates and state machine](reference/request-gates.md): frozen policy, command guards and durable evidence.
 - [Answer questions and resume requests](how-to/answer-and-resume-worker.md): guarded answers, cancellation, checkpoints and event replay.
@@ -68,6 +70,8 @@ This organization follows [Diátaxis](https://diataxis.fr/).
 
 ## Reference — look up a contract
 
+- [Project delivery policy](reference/delivery-policy.md): quality and execution profiles, routing, check packs, concurrency, behavior libraries and retention.
+
 - [Shared Git feature intake](reference/shared-feature-intake.md): checked-in workflow, optional model Ready Checks, definition prompts, ownership, publication, recovery and authenticated API.
 
 - [Shared Vue webview architecture](reference/webview-architecture.md): reusable Nuxt UI layouts/components, state boundaries and independent builds.
@@ -93,6 +97,8 @@ This organization follows [Diátaxis](https://diataxis.fr/).
 - [Factory mutation idempotency](reference/factory-idempotency.md)
 
 ## Explanation — understand the system
+
+- [Local delivery worker](explanation/local-delivery-worker.md): canonical Markdown, committed quality profiles, durable execution, recovery and human acceptance.
 
 - [Twelve-factor principles and stateful boundaries](explanation/twelve-factor.md)
 

@@ -109,5 +109,6 @@ export interface InteractionStore {
   prepare(sessionId: string, turnId: string, request: ModelRequest, runId: string): void;
   start(sessionId: string, turnId: string): void;
   complete(sessionId: string, turnId: string, result: ModelResult, usage: ProviderUsage): void;
+  restoreCheckpoint(sessionId: string, turnId: string, dispatchDigest: string): void;
   fail(sessionId: string, turnId: string, status: 'failed' | 'cancelled' | 'interrupted', code: string): void;
 }

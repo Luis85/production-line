@@ -1,8 +1,10 @@
+import { nativeWorkStatus } from './workspace-native-work.js';
 import type { ConsumptionStatus } from '../application/consumption.js';
 import type { SharedAdmissionHold } from '../application/shared-feature-state.js';
 
 interface AdmissionWorkspace {
   acceptingTasks: boolean;
+  nativeWorkState?: 'preparing' | 'starting' | 'ready';
   configurationUpdating: boolean;
   repositoriesUpdating: boolean;
   executionProfiles?: { pending(): boolean };
@@ -15,6 +17,8 @@ interface AdmissionWorkspace {
 /** Read the board's authoritative occupancy: queued work, preparation and continuation reservations. */
 export function sharedFeatureAdmissionHold(workspace: AdmissionWorkspace): SharedAdmissionHold | undefined {
   if (!workspace.acceptingTasks) return { code: 'stopping', message: 'The worker is stopping. This ready request will be checked again when the worker restarts.' };
+  const native = nativeWorkStatus(workspace);
+  if (native.message) return { code: 'configuration', message: native.message };
   if (workspace.configurationUpdating || workspace.repositoriesUpdating || workspace.executionProfiles?.pending()) return { code: 'configuration', message: 'Worker configuration is changing. This ready request will be checked again automatically after the update.' };
   if (workspace.settings.value.board.paused) return { code: 'paused', message: 'The worker queue is paused. Resume the queue; this ready request will then be checked again automatically.' };
   const consumption = workspace.consumption.status();

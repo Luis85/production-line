@@ -2,21 +2,24 @@
 import UButton from '@nuxt/ui/components/Button.vue';
 import UIcon from '@nuxt/ui/components/Icon.vue';
 import type { WorkerCapacityView } from '../worker-capacity';
-defineProps<{ view: WorkerCapacityView; remaining?: number; showRemote?: boolean; consumptionBlocked?: boolean; refreshing?: boolean; refreshDisabled?: boolean }>();
+defineProps<{ view: WorkerCapacityView; remaining?: number; showRemote?: boolean; consumptionBlocked?: boolean; refreshing?: boolean; refreshDisabled?: boolean; projects?: Array<{ projectId: string; limit: number; inUse: number }> }>();
 defineEmits<{ refresh: [] }>();
 </script>
 <template>
   <section class="worker-capacity" :class="'capacity-' + view.state" aria-labelledby="worker-capacity-title">
     <header><h2 id="worker-capacity-title"><UIcon :name="view.stale || view.state === 'unknown' ? 'i-lucide-circle-help' : view.state === 'blocked' || view.state === 'paused' ? 'i-lucide-pause-circle' : 'i-lucide-activity'" />{{ view.title }}</h2><div class="capacity-actions"><RouterLink to="/settings#queue">Queue settings</RouterLink><UButton v-if="view.stale || view.state === 'unknown'" size="sm" color="neutral" variant="ghost" icon="i-lucide-refresh-cw" :loading="refreshing" :disabled="refreshDisabled" @click="$emit('refresh')">Refresh activity</UButton></div></header>
+    <p v-if="view.nativeWorkMessage" role="status" aria-live="polite" aria-atomic="true" class="capacity-description">{{ view.nativeWorkMessage }}</p>
     <dl class="capacity-facts">
       <div><dt>Execution</dt><dd>{{ view.executionLabel }}</dd></div>
       <div><dt>Local requests</dt><dd>{{ view.localLabel }}<span v-if="remaining !== undefined"> · {{ remaining }} {{ remaining === 1 ? 'place' : 'places' }} free</span></dd></div>
       <div v-if="showRemote"><dt>Assigned work</dt><dd>{{ view.remoteLabel }}</dd></div>
     </dl>
-    <p v-if="view.startBlocked || view.stale || view.state === 'unknown' || view.admissionAvailable === false" class="capacity-description">{{ view.description }} <RouterLink v-if="consumptionBlocked" to="/settings#consumption-limits">Consumption limits</RouterLink></p>
+    <ul v-if="projects?.length" class="capacity-projects" aria-label="Occupied project capacity"><li v-for="project in projects" :key="project.projectId">{{ project.projectId }} · {{ project.inUse }} / {{ project.limit }} occupied</li></ul>
+    <p v-if="view.unresolvedCount || view.startBlocked || view.stale || view.state === 'unknown' || view.admissionAvailable === false" class="capacity-description">{{ view.description }} <RouterLink v-if="consumptionBlocked" to="/settings#consumption-limits">Consumption limits</RouterLink></p>
   </section>
 </template>
 <style scoped>
+.capacity-projects { display: flex; gap: var(--space-3) var(--space-6); flex-wrap: wrap; list-style: none; padding: 0; margin: var(--space-3) 0 0; color: var(--ui-text-muted); font-size: .8125rem; }
 .worker-capacity { margin-bottom: var(--space-4); padding-block: var(--space-3); border-block: 1px solid var(--ui-border); min-width: 0; }
 header { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
 h2 { display: flex; align-items: center; gap: var(--space-2); margin: 0; color: var(--ui-text-highlighted); font-size: .9375rem; line-height: 1.5; font-weight: 650; }

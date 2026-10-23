@@ -1,3 +1,5 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
+import { workspaceContext } from './runtime-fixtures.mjs';
 import { workerStatus } from '../helpers/worker-status.mjs';
 import { testErrorCode } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
@@ -15,6 +17,8 @@ import { gateDigest } from '../../src/worker/dist/worker/application/request-gat
 import { defaultSharedIntakeConfig } from '../../src/worker/dist/worker/application/shared-feature-state.js';
 import { defaultFeatureWorkflow, defaultFeatureCheck, featureWorkflowPolicy, featureContentHash } from '../../src/worker/dist/worker/application/feature-workflow.js';
 import { publicTaskConversation } from '../../src/worker/dist/worker/application/public-task-transcript.js';
+
+prepareNativeProcessFixture();
 
 /** @param {import('../../src/worker/application/local-tasks.js').LocalTaskboard} board */
 function localRuntime(board) {
@@ -113,9 +117,11 @@ test('configured intake stores generated records under _tasks without rewriting 
   await writeFile(join(f.features, 'shared-source.md'), source);
   const created = await f.workspace.task(command('local-projection'));
   assert.equal(created.featureTracking.directory, join(f.features, '_tasks'));
-  await f.workspace.features.tick(true); await f.workspace.features.tick(true); await f.workspace.featureTracking.sync();
+  await workspaceContext(f.workspace).features.tick(true); await workspaceContext(f.workspace).features.tick(true); await f.workspace.featureTracking.sync();
   assert.equal(await readFile(join(f.features, 'shared-source.md'), 'utf8'), source);
-  assert.equal(f.workspace.features.view().records.length, 0, 'generated lifecycle notes never enter the intake queue');
+  assert.deepEqual(workspaceContext(f.workspace).features.view().records.map(record => record.name), ['interaction-local-projection.md'], 'Only the canonical interaction source enters intake; generated lifecycle notes do not.');
+  assert.equal(workspaceContext(f.workspace).features.view().records[0].feature.key, created.session.feature.key);
+  assert.match(await readFile(join(f.features, 'interaction-local-projection.md'), 'utf8'), /schema: worker.request\/v1/);
   assert.equal(f.workspace.sessions.view().records.filter(row => row.id !== 'default').length, 1);
   assert.equal((await readdir(join(f.features, '_tasks'))).filter(name => name.endsWith('.md')).length, 1);
 });
@@ -190,12 +196,18 @@ test('shared request provenance follows the retained task binding without exposi
         files: { configuration: file('.werk/feature-workflow.json', JSON.stringify(configuration)), readyCheck: file(configuration.readyCheck, JSON.stringify(readyCheck)), doneCheck: file(configuration.doneCheck, JSON.stringify(doneCheck)), template: file(configuration.template, template), base: file(configuration.base, 'views: []') } },
     }],
   };
-  const unexpected = () => { assert.fail('Reading retained provenance must not access the repository or mutate intake'); };
-  const intake = new SharedFeatureIntake({ load: async () => stored, save: unexpected, repository: unexpected, loadWorkflow: unexpected, ready: unexpected, source: unexpected, renderSource: renderSharedSource, submit: unexpected, inspect: unexpected, canAdmit: unexpected });
-  await intake.init();
+  const unexpected = () => { assert.fail('Reading retained provenance must not access the repository or dispatch work'); };
+  let saves = 0;
+  const intake = new SharedFeatureIntake({ load: async () => structuredClone(stored), async save(state) {
+    saves++; const { measurements, ...workflow } = state;
+    assert.deepEqual(workflow, stored, 'Only unknown historical telemetry is migrated locally.');
+    assert.ok(measurements); assert.equal(measurements.length, 1); assert.equal(measurements[0].submittedAt, null); assert.equal(measurements[0].complete, false);
+  }, repository: unexpected, loadWorkflow: unexpected, ready: unexpected, source: unexpected, renderSource: renderSharedSource, submit: unexpected, inspect: unexpected, canAdmit: unexpected });
+  await intake.init(); assert.equal(saves, 1);
   const source = intake.sourceForTask('shared-one'); assert.deepEqual(source, { repositoryId: 'original-repository', path: 'features/original.md' });
   source.path = 'mutated.md'; assert.equal(intake.sourceForTask('shared-one').path, 'features/original.md');
-  assert.equal(intake.sourceForTask('missing'), undefined);
+  assert.equal(intake.sourceForTask('missing'), undefined); assert.equal(saves, 1, 'Provenance lookup does not mutate or persist intake.');
+  await intake.close();
 });
 
 

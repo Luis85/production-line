@@ -9,12 +9,13 @@ import { tmpdir } from 'node:os';
 import { manageFeature } from '../../src/worker/dist/worker/application/feature-management.js';
 import { FeatureRequests } from '../../src/worker/dist/worker/application/feature-requests.js';
 import { MarkdownFeatureFolder } from '../../src/worker/dist/worker/infrastructure/features/folder.js';
-import { parseFeature, featureInput, featureTemplate } from '../../src/worker/dist/worker/infrastructure/features/document.js';
+import { parseFeature, featureInput } from '../../src/worker/dist/worker/infrastructure/features/document.js';
 import { WorkerSettings } from '../../src/worker/dist/worker/infrastructure/settings.js';
 import { WorkerSessions } from './application-fixtures.mjs';
 import { LocalTaskboard } from './application-fixtures.mjs';
 import { configuration } from '../../src/worker/dist/worker/config.js';
 const source = (extra = '', body = '# Goal\n\nExplain the feature.\n') => '---\nschemaVersion: 1\ntitle: Feature request\nstatus: ready\n' + extra + '---\n' + body;
+const featureTemplate = source().replace('status: ready', 'status: draft');
 async function fixture(t, queue) {
   const project = await realpath(await mkdtemp(join(tmpdir(), 'werk-features-'))), directory = join(project, 'features'), state = join(project, '.state');
   await mkdir(state); const tasks = new Map(), submissions = [];
@@ -31,7 +32,7 @@ test('feature configuration is opt-in and resolves relative to the project', asy
   assert.equal(configured.features.directory, join(project, 'requests')); assert.equal(configured.features.provider, 'anthropic-api');
   await assert.rejects(configuration({}, { features: { directory: 'features', pollMs: 1 } }));
 });
-test('template stays a draft; stable Markdown intake preserves body, comments and custom metadata', async t => {
+test('legacy template stays a draft; stable Markdown intake preserves body, comments and custom metadata', async t => {
   const f = await fixture(t); assert.equal(parseFeature(featureTemplate).data.status, 'draft');
   assert.equal(featureInput(parseFeature(featureTemplate), 'openai-api').provider, 'openai-api');
   assert.throws(() => parseFeature(source('id: remote-reserved\n')), /reserved/);
@@ -58,7 +59,9 @@ test('capacity/configuration waits retain immutable input and recover a lost adm
   const queue = { async submit(record) { calls++; if (!ready) throw Error('Configure provider first.'); if (!accepted.has(record.taskId)) { accepted.set(record.taskId, { status: 'queued' }); throw Error('Acknowledgement interrupted.'); } }, inspect: record => accepted.get(record.taskId) };
   const f = await fixture(t, queue); await f.put('a.md', source()); await scan(f.service); assert.equal((await f.read('a.md')).data.status, 'waiting');
   await f.put('a.md', (await f.read('a.md')).raw.replace('Explain the feature.', 'Different input.')); ready = true; await scan(f.service);
-  assert.equal(accepted.size, 1); assert.ok(calls >= 3); assert.equal(f.service.view().records[0].submitted, true); assert.equal((await f.read('a.md')).data.werk.inputChanged, true);
+  assert.equal(accepted.size, 0); assert.equal(f.service.view().records[0].sourceIssue.code, 'changed_input');
+  await f.put('a.md', (await f.read('a.md')).raw.replace('Different input.', 'Explain the feature.')); await scan(f.service);
+  assert.equal(accepted.size, 1); assert.ok(calls >= 3); assert.equal(f.service.view().records[0].submitted, true); assert.equal((await f.read('a.md')).data.werk.inputChanged, undefined);
   const index = JSON.parse(await readFile(join(f.state, 'feature-index.json'), 'utf8')); assert.match(index.records[0].input.message, /Explain the feature/);
 });
 test('a failed private reservation write blocks admission until it is durably retried', async t => {
@@ -236,7 +239,13 @@ test('canonical feature gates project findings separately and edited companions 
   await assert.rejects(manageFeature({action:'retry',name:'gated.md',revision:acknowledgedFile.revision},management),/acknowledgement persistence failure/);
   await assert.rejects(manageFeature({action:'retry',name:'gated.md',revision:acknowledgedFile.revision},management),/stale request gate evidence/);
   assert.equal(controls,1); assert.equal((await f.folder.documents.read('gated.md')).revision,acknowledgedFile.revision);
-  request.phase='done'; request.revision=6; f.tasks.set(record.taskId,{status:'completed',text:'Actual output retained separately.',request}); await f.service.tick(true); parsed=await f.read('gated.md'); assert.equal(parsed.body,body); assert.equal(parsed.data.status,'completed'); assert.equal(parsed.data.werk.gates.phase,'done'); assert.equal(parsed.data.werk.executionStatus,'completed'); assert.ok(parsed.data.werk.result); assert.equal(f.submissions.length,1);
+  request.phase='done'; request.revision=6; request.inputRevision=2; f.tasks.set(record.taskId,{status:'completed',text:'Actual output retained separately.',request}); await f.service.tick(true);
+  parsed=await f.read('gated.md'); assert.equal(parsed.data.werk.result,undefined); assert.equal(f.service.view().error,null);
+  const execution={turnId:'turn-fixture',runId:'run-gate-output',inputRevision:request.inputRevision,status:'completed',outcome:'completed',result:null,outputDigest:'c'.repeat(64),facts:{}};
+  f.tasks.set(record.taskId,{status:'completed',text:'Actual output retained separately.',request:{...request,execution:{...execution,inputRevision:request.inputRevision-1}}}); await f.service.tick(true);
+  assert.equal((await f.read('gated.md')).data.werk.result,undefined);
+  f.tasks.set(record.taskId,{status:'completed',text:'Actual output retained separately.',request:{...request,execution}}); await f.service.tick(true);
+  parsed=await f.read('gated.md'); assert.equal(parsed.body,body); assert.equal(parsed.data.status,'completed'); assert.equal(parsed.data.werk.gates.phase,'done'); assert.equal(parsed.data.werk.executionStatus,'completed'); assert.match(await readFile(join(f.directory,parsed.data.werk.result),'utf8'),/Actual output retained separately/); assert.equal(f.submissions.length,1);
 });
 
 test('local folder requests submit a stable definitionRef unchanged and reject mixed or malformed references', async t => {

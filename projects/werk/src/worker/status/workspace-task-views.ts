@@ -1,3 +1,4 @@
+import { assertNativeWorkReady } from './workspace-native-work.js';
 import { stopSessionProcesses } from './workspace-processes.js';
 import type { WorkspaceContext } from './workspace-context.js';
 import { publicTaskConversation } from '../application/public-task-transcript.js';
@@ -46,7 +47,9 @@ export function taskboardDetail(workspace: WorkspaceContext, id: string){
 }
 
 export async function taskboardAction(workspace: WorkspaceContext, input: unknown){
-  if ((input as Record<string, unknown> | null)?.action === 'retry') {
+  const action = (input as Record<string, unknown> | null)?.action;
+  if (action === 'retry' || action === 'delete' && (input as { removeWorktree?: unknown }).removeWorktree === true) assertNativeWorkReady(workspace);
+  if (action === 'retry') {
     const id = String((input as Record<string, unknown>).id);
     const task = workspace.board.view().tasks.find(item => item.id === id);
     if (task && isSharedFeatureSession(workspace, task.sessionId))
@@ -79,7 +82,7 @@ export async function startChat(workspace: WorkspaceContext, message: unknown){
   const id = workspace.sessions.current.id;
   if (isSharedFeatureSession(workspace, id))
     throw new DomainError('conflict', 'Use this Feature Request’s current Task checkpoint to answer or resume. Create a new Feature Request for new scope.');
-  if (!workspace.sessions.detail(id).chat.messages.length) assertDirectFeatureCreation(workspace);
+  if (!workspace.sessions.detail(id).chat.messages.length) assertDirectFeatureCreation(workspace, { id });
   assertTaskCanContinue(workspace, id);
   await withFeatureTracking(workspace, () => workspace.sessions.start(message, id));
   return chatSnapshot(workspace, id);

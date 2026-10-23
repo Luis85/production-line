@@ -1,11 +1,13 @@
 import { computed, ref, watch } from 'vue';
 import { state, workspaceAction } from './store';
+import { nativeWorkReadiness } from './native-work-readiness';
 
 /** One consent view; the worker persists the choice across browsers and restarts. */
 export function useRepositoryDiscovery(reconsider = false) {
   const busy = ref(false), error = ref(''), notice = ref(''), acknowledged = ref(''), acknowledgedAction = ref('');
   const candidate = computed(() => state.unlocked ? state.environment?.repositories.discovery ?? null : null);
   const visible = computed(() => !!candidate.value && (candidate.value.decision === 'pending' && candidate.value.id !== acknowledged.value || reconsider && candidate.value.decision === 'declined' && !(candidate.value.id === acknowledged.value && acknowledgedAction.value === 'accept')));
+  const nativeReadiness = computed(() => nativeWorkReadiness(state.environment?.repositories?.nativeWork));
   const queued = computed(() => !!state.sessions?.execution.currentSessionId || !!state.sessions?.execution.queued || !!state.status?.activeTasks.length || !!state.status?.queuedTasks?.length);
   let revision = 0;
   watch(() => state.unlocked, unlocked => {
@@ -14,7 +16,7 @@ export function useRepositoryDiscovery(reconsider = false) {
   watch(() => candidate.value?.id, () => { error.value = ''; notice.value = ''; });
   async function choose(action: 'accept' | 'decline') {
     const found = candidate.value;
-    if (!visible.value || !found || busy.value || action === 'accept' && queued.value) return;
+    if (!visible.value || !found || busy.value || action === 'accept' && (queued.value || nativeReadiness.value)) return;
     busy.value = true; error.value = ''; notice.value = '';
     const attempt = ++revision, epoch = state.draftEpoch;
     try {
@@ -28,5 +30,5 @@ export function useRepositoryDiscovery(reconsider = false) {
       } else error.value = state.actionError || 'Your choice could not be saved. Refresh and try again.';
     } finally { if (attempt === revision) busy.value = false; }
   }
-  return { candidate, visible, queued, busy, error, notice, choose };
+  return { candidate, visible, queued, nativeReadiness, busy, error, notice, choose };
 }

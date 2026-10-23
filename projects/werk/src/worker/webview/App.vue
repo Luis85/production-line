@@ -85,7 +85,7 @@ async function connect() {
 useBoundedPolling(
   refresh,
   computed(() => state.paused),
-  3000,
+  1000,
 );
 onMounted(() => {
   void checkAccess();
@@ -222,7 +222,7 @@ watch(
               ? 'Connection lost'
               : (state.status?.state ?? 'Connecting')
           "
-          :detail="state.paused ? 'Updates paused' : 'Updates every 3s'"
+          :detail="state.paused ? 'Updates paused' : 'Checks for updates every second'"
       /></template>
       <template #actions
         ><UButton

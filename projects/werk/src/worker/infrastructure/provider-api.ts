@@ -21,10 +21,10 @@ async function readResponse(response: Response, signal: AbortSignal) {
   let bytes: Uint8Array;
   try { bytes = await readResponseBody(response.body, 1048576, { cancel: 'always' }); }
   catch (error) {
-    if (signal.aborted) throw new ProviderModelError('cancelled');
+    if (signal.aborted) throw new ProviderModelError('outcome_unknown');
     if (error instanceof ProviderModelError) throw error;
     if (error instanceof ResponseBodyLimitError) throw new ProviderModelError('protocol');
-    throw new ProviderModelError('unavailable');
+    throw new ProviderModelError('outcome_unknown');
   }
   try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)); }
   catch { throw response.ok ? new ProviderModelError('protocol') : classifyProviderStatus(response.status); }
@@ -52,16 +52,17 @@ export async function apiReply(connection: ProviderConnection, request: ModelReq
       : { model: request.provider.model, ...(effort ? { output_config: { effort } } : {}), system: request.protocolInstructions, max_tokens: 8192, messages: history, ...(definitions ? { tools: definitions } : {}) };
     if (Buffer.byteLength(JSON.stringify(body)) > 4194304) throw new ProviderModelError('protocol');
     control?.beforeCall();
+    if (signal.aborted) throw new ProviderModelError('cancelled');
     let response: Response;
     try {
       response = await transport(openai ? 'https://api.openai.com/v1/responses' : 'https://api.anthropic.com/v1/messages', {
         method: 'POST', signal, redirect: 'error', headers: { 'content-type': 'application/json', ...(openai ? { authorization: `Bearer ${connection.apiKey}` } : { 'x-api-key': connection.apiKey, 'anthropic-version': '2023-06-01' }) }, body: JSON.stringify(body)
       });
     } catch (error) {
-      if (signal.aborted) throw new ProviderModelError('cancelled');
+      if (signal.aborted) throw new ProviderModelError('outcome_unknown');
       if (error instanceof ProviderModelError) throw error;
       if (error instanceof ResponseBodyLimitError) throw new ProviderModelError('protocol');
-      throw new ProviderModelError('unavailable');
+      throw new ProviderModelError('outcome_unknown');
     }
     const value = await readResponse(response, signal);
     usage = addUsage(usage, providerUsage(openai ? 'openai' : 'anthropic', value)); onUsage?.(usage);

@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { before } from 'node:test';
 import assert from 'node:assert/strict';
 import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -7,6 +7,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
+import { prepareProcessRuntime } from '../../src/worker/dist/shared/process/launcher.js';
 import { claudeArguments, modelFor } from '../../src/worker/dist/worker/infrastructure/providers.js';
 import { providerCommand, providerEnvironment } from '../../src/worker/dist/worker/infrastructure/codex-adapter.js';
 import { ProviderStatusChecks } from '../../src/worker/dist/worker/infrastructure/provider-status.js';
@@ -14,6 +15,11 @@ import { ProviderAccountChecks } from '../../src/worker/dist/worker/infrastructu
 
 const windows = { skip: process.platform !== 'win32' && 'Windows process and environment behavior' };
 const posix = { skip: process.platform === 'win32' && 'POSIX shebang fixture' };
+// Setup is separate from each native test deadline, with time to drain cancelled initialization.
+// Allow 45 s for native initialization and 5 s for cancellation cleanup.
+before(async t => {
+  if (process.platform === 'win32') await prepareProcessRuntime(process.cwd(), t.signal);
+}, { timeout: 50000 });
 const connection = (id, extra = {}) => ({ id, executable: '', model: '', apiKey: '', ...extra });
 const alive = pid => { try { process.kill(pid, 0); return true; } catch { return false; } };
 const executeFile = promisify(execFile);
@@ -62,14 +68,19 @@ test('Windows cancellation terminates the provider and its descendants', { ...wi
   const f = await treeFixture(t);
   const script = `const {spawn}=require('node:child_process');const c=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:'ignore'});require('node:fs').appendFileSync(${JSON.stringify(f.pidFile)},String(c.pid)+'\\n');setInterval(()=>{},1000);`;
   const execution = providerCommand(process.execPath, ['-e', script], f.directory, f.controller.signal, undefined, true, 'claude');
-  // Observe startup failures immediately while waiting for the child fixture.
-  const settled = execution.then(output => ({ output }), error => ({ error }));
-  await waitFor(async () => (await f.pids()).length > 0);
-  f.controller.abort();
-  const outcome = await bounded(settled);
-  assert.equal(outcome.error?.name, 'ProviderModelError');
-  assert.equal(outcome.error?.code, 'cancelled');
-  await waitFor(async () => (await f.pids()).every(pid => !alive(pid)));
+  let observed;
+  const settled = execution.then(output => observed = { output }, error => observed = { error });
+  try {
+    await waitFor(async () => {
+      if (observed) throw observed.error ?? Error('Provider fixture exited before starting its descendant');
+      return (await f.pids()).length > 0;
+    });
+    f.controller.abort();
+    const outcome = await bounded(settled);
+    assert.equal(outcome.error?.name, 'ProviderModelError');
+    assert.equal(outcome.error?.code, 'cancelled');
+    await waitFor(() => f.pids().then(pids => pids.every(pid => !alive(pid))));
+  } finally { f.controller.abort(); await settled; }
 });
 
 for (const inheritPipes of [false, true]) {
@@ -103,21 +114,22 @@ test('Windows preserves empty, quoted and Unicode arguments and raw stdin withou
 });
 
 test('Windows status and account checks stay bounded when exited providers leave descendants holding output pipes', { ...windows, timeout: 45000 }, async t => {
-  const accounts = new ProviderAccountChecks(); t.after(() => accounts.close());
+  const accounts = new ProviderAccountChecks(), checks = new ProviderStatusChecks();
+  t.after(() => { accounts.close(); checks.close(); });
   const f = await treeFixture(t), scriptFile = join(f.directory, 'status.js');
   await writeFile(scriptFile, `const {spawn}=require('node:child_process');const c=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{stdio:['ignore','inherit','inherit']});c.unref();require('node:fs').appendFileSync(${JSON.stringify(f.pidFile)},String(c.pid)+'\\n');require('node:fs').appendFileSync(${JSON.stringify(f.pidFile + '.args')},JSON.stringify(process.argv.slice(2))+'\\n');process.stdout.write(process.argv.includes('--version')?'2.1.257\\n':JSON.stringify({loggedIn:true,email:'member@example.com',orgName:'Fixture team',subscriptionType:'pro',authMethod:'claude.ai',accessToken:'private-fixture-token'}));`);
   const executable = join(f.directory, 'status-fixture.exe'), source = join(f.directory, 'status-fixture.cs');
   await writeFile(source, `using System;using System.Diagnostics;public class Fixture {public static int Main(string[] args) {var start=new ProcessStartInfo {FileName=${JSON.stringify(process.execPath)},Arguments=${JSON.stringify('"' + scriptFile + '" ')}+String.Join(" ",args),UseShellExecute=false};using(var child=Process.Start(start)){child.WaitForExit();return child.ExitCode;}}}`);
   const powershell = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
   await executeFile(powershell, ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', '$ErrorActionPreference="Stop"; Add-Type -Path $env:WERK_TEST_SOURCE -OutputAssembly $env:WERK_TEST_EXE -OutputType ConsoleApplication'], { env: { ...process.env, WERK_TEST_SOURCE: source, WERK_TEST_EXE: executable }, timeout: 20000, windowsHide: true });
-  const result = await bounded(new ProviderStatusChecks().check(connection('claude-cli', { executable })));
+  const result = await bounded(checks.check(connection('claude-cli', { executable })));
   assert.equal(result.authentication, 'authenticated');
   const account = await bounded(accounts.check(connection('claude-cli', { executable })));
   assert.equal(account.signedIn, true); assert.equal(account.email, 'member@example.com');
   assert.equal(account.organization, 'Fixture team'); assert.equal(account.subscription, 'pro');
   assert.doesNotMatch(JSON.stringify(account), /private-fixture-token/);
   const calls = (await readFile(f.pidFile + '.args', 'utf8')).trim().split('\n').map(value => JSON.parse(value));
-  assert.deepEqual(calls, [['--version'], ['auth', 'status'], ['auth', 'status', '--json']]);
+  assert.deepEqual(calls, [['--version'], ['auth', 'status'], ['auth', 'status']]);
   const pids = await f.pids(); assert.equal(pids.length, 3, 'version, auth, and structured account probes all ran');
   await waitFor(() => pids.every(pid => !alive(pid)));
 });

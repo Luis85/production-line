@@ -1,3 +1,5 @@
+import type { ExecutionRecovery, UnknownExecutionReason } from './execution-recovery.js';
+import type { ProviderAuthenticationMode } from './provider-capabilities.js';
 import { DomainError } from '../../shared/errors.js';
 
 /** Worker-session evidence excludes prompt text, credentials, provider subprocess accounting and inferred prices. */
@@ -8,7 +10,7 @@ export interface ProviderUsage {
 }
 export const unknownUsage = (reason = 'The provider did not report usage for this attempt.'): ProviderUsage => ({ inputTokens: null, outputTokens: null, cacheReadTokens: null, cacheWriteTokens: null, providerReportedCostUsd: null, costBasis: 'unavailable', source: 'unavailable', reason });
 export type RunOutcome = 'queued' | 'running' | 'completed' | 'review' | 'failed' | 'cancelled' | 'interrupted' | 'waiting_input' | 'escalated';
-export interface RunMetadata { parentRunId?: string; parentSessionId?: string; delegationId?: string; purpose?: 'execution' | 'gate_review' | 'rework'; requestId?: string; sessionId: string; taskId: string; kind: 'chat' | 'local' | 'orchestrator'; title: string; provider: string; model: string; }
+export interface RunMetadata { authenticationMode?: ProviderAuthenticationMode; parentRunId?: string; parentSessionId?: string; delegationId?: string; purpose?: 'execution' | 'gate_review' | 'rework'; requestId?: string; sessionId: string; taskId: string; kind: 'chat' | 'local' | 'orchestrator'; title: string; provider: string; model: string; }
 export interface ConsumptionTotals {
   runs: number; reportedRuns: number;
   inputTokens: number | null; outputTokens: number | null; cacheReadTokens: number | null; cacheWriteTokens: number | null; providerReportedCostUsd: number | null;
@@ -18,6 +20,7 @@ export interface RunResources { scope: 'worker_process'; processInstanceId: stri
 export interface RunSnapshot { measurement: 'execution_boundary' | 'recovery' | 'cancellation'; capturedAt: string; state: RunOutcome; resources: RunResources; consumption: ConsumptionTotals; }
 export interface WorkerRun extends RunMetadata {
   schemaVersion: 1; id: string; sequence: number; attempt: number; outcome: RunOutcome;
+  executionRecovery?: ExecutionRecovery;
   acceptedAt: string; before: RunSnapshot | null; after: RunSnapshot | null; startedAt: string | null;
   durationMs: number | null; queueDurationMs: number | null; usage: ProviderUsage;
   resourceDelta: { scope: 'worker_process_between_snapshots'; cpuUserMicros: number | null; cpuSystemMicros: number | null };
@@ -35,6 +38,7 @@ export interface RunAnalysis {
 export interface RunEvidence {
   begin(metadata: RunMetadata): Promise<WorkerRun>;
   start(id: string): Promise<void>;
+  reserveUnknown(id: string, reason: UnknownExecutionReason): void;
   observeUsage?(id: string, usage: ProviderUsage): void;
   finish(id: string, outcome: Exclude<RunOutcome, 'queued' | 'running'>, usage?: ProviderUsage): Promise<WorkerRun>;
 }
@@ -46,6 +50,6 @@ export function validateRunLineage(metadata: RunMetadata, parent?: WorkerRun): v
     || parent.outcome !== 'running' || parent.after !== null || !parent.startedAt
     || typeof metadata.sessionId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(metadata.sessionId) || metadata.sessionId === parent.sessionId
     || typeof metadata.delegationId !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(metadata.delegationId)
-    || ['taskId', 'requestId', 'kind', 'provider', 'model'].some(key => metadata[key as keyof RunMetadata] !== parent[key as keyof RunMetadata])
+    || ['taskId', 'requestId', 'kind', 'provider', 'model', 'authenticationMode'].some(key => metadata[key as keyof RunMetadata] !== parent[key as keyof RunMetadata])
     || (metadata.purpose ?? 'execution') !== (parent.purpose ?? 'execution')) throw new DomainError('conflict', 'Delegated execution must belong to its active parent Feature Request.');
 }

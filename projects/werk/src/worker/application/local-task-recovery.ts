@@ -1,3 +1,4 @@
+import { recordTaskResult } from './local-task-completion.js';
 import { localTaskSelection, validateTaskSelection } from './local-task-selection.js';
 import { validateFeatureDefinitionPrompts } from './feature-workflow.js';
 import { interactionFeatureRequest } from './feature-request-reference.js';
@@ -132,6 +133,15 @@ async function recoverRetainedTask(host: RecoveryHost, task: LocalTask) {
         return;
       }
     }
+    if (task.requestId) {
+      const request = host.sessions.requests.get(task.requestId), run = request.delivery;
+      const checkpoint = run?.steps.findLast(step => ['implementing', 'repairing'].includes(step.phase) && step.turnId === task.currentTurnId && step.status === 'completed' && step.result);
+      if (checkpoint && run && !request.execution?.result && !['completed', 'cancelled', 'failed', 'waiting'].includes(run.status)) {
+        task.status = 'running'; task.finishedAt = null;
+        task.error = run.status === 'outcome_unknown' ? 'An operation outcome needs reconciliation before continuing.' : null;
+        return;
+      }
+    }
     const view = host.sessions.interactions.view(task.sessionId);
     const latest = view.latestTurn
       ? host.sessions.interactions.turn(task.sessionId, view.latestTurn.id)
@@ -158,8 +168,8 @@ async function recoverRetainedTask(host: RecoveryHost, task: LocalTask) {
       );
       if (turn.result?.type === "needs_input") {
         if (task.requestId && turn.runId)
-          host.sessions.requests.recordResult(
-            task.requestId,
+          recordTaskResult(
+            host.sessions.requests, task.requestId,
             turn.id,
             turn.runId,
             turn.result,
@@ -178,8 +188,8 @@ async function recoverRetainedTask(host: RecoveryHost, task: LocalTask) {
       if (turn.result?.type === "completed") {
         const valid = task.implementation ? host.restoredDevelopment(task, turn) : host.validatedPatch(task, turn.result.text);
         if (task.requestId && turn.runId)
-          host.sessions.requests.recordResult(
-            task.requestId,
+          recordTaskResult(
+            host.sessions.requests, task.requestId,
             turn.id,
             turn.runId,
             turn.result,

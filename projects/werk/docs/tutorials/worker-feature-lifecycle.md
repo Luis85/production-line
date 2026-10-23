@@ -1,142 +1,178 @@
-# Try a local proposal request and inspect its evidence
+# Deliver a local Feature Request for human review
 
-This tutorial installs a standalone worker in a project, submits a Markdown
-feature request, inspects its execution evidence and compares later runs. The
-same workflow is available to a human or an AI agent through the JSON CLI. You
-do not need a Factory, orchestrator, npm install or source build.
+This tutorial installs a worker in a Git project, submits a canonical Markdown
+Feature Request, runs a real project check and inspects the resulting local Git
+candidate before human acceptance. The daemon owns execution; Markdown and the
+webview control the same request. A Factory or orchestrator is optional.
 
-This tutorial uses the separate local folder intake and a proposal-only patch.
-For the recommended team workflow with committed requests, Markdown answers and
-published feature branches, follow [shared Git intake](../how-to/shared-feature-intake.md).
-Do not connect shared intake while following this local example: its binding
-suspends the local folder queue.
+The selected pilot is native Windows with Claude Code. The
+[acceptance ledger](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reports/2026-10-20-local-delivery-acceptance.md) records which
+platform/provider checks have actually run; source fixtures do not qualify a real
+Claude account. The commands below use an installed runtime that contains the
+local-delivery iteration. An older download may expose only the legacy proposal
+workflow; check its version and matching documentation first.
 
-You need Node.js 24 and a verified Werk runtime archive. For real execution, you
-also need a configured provider: a signed-in Codex/Claude CLI on the worker's
-machine, or a supported API account. Installing Werk does not sign in to a model
-provider. The examples use Codex CLI on Linux/macOS. Native Windows workers can
-use Claude Code CLI or an API provider. For Claude, substitute `claude-cli` for
-`codex-cli` in provider selections below, sign in with `claude auth login` and
-configure the absolute path to `claude.exe`. See
-[provider setup and Windows Claude requirements](../how-to/use-worker-webview.md#connect-claude-codex-or-cursor)
-for PowerShell, .NET and process-containment prerequisites. The separate native
-Codex adapter for orchestrator tasks remains Linux-only.
+You need Node 24, Git with an existing initial commit, a verified Werk runtime and
+a supported provider connection. Use a disposable repository for your first
+attempt. Installing Werk does not install or sign in to a model provider. For a
+shared commit-and-push team queue, use [shared intake](../how-to/shared-feature-intake.md)
+instead of enabling two intake owners for the same request.
 
-## 1. Download and verify the package
+## 1. Download and install the worker
 
-Download a versioned runtime `.tar.gz` or `.zip` and `SHA256SUMS` from
-[Werk Releases](https://github.com/Luis85/production-line/releases). Verify the
-archive checksum and extract it into its own directory. Choose the runtime asset,
-not GitHub's source-code archive. The [release reference](../reference/releases.md)
-describes verification and the installer. If using the installer for this journey,
-pass `--no-start` so it downloads without starting a Factory fleet.
-
-The commands below refer to `/path/to/werk-release`. Check the installed worker's
-`schema`: the version you downloaded must include the `run list`, `run get`,
-`run analyze` and `run export` commands to follow the metrics portion. A release
-without those commands can execute feature requests but cannot supply this local
-run ledger retroactively.
-
-## 2. Install the worker in your project
-
-Open a terminal in the destination project and run:
+Download a versioned runtime archive and `SHA256SUMS` from
+[Werk Releases](https://github.com/Luis85/production-line/releases), verify them,
+and extract into a separate directory. See the [release reference](../reference/releases.md).
+Run from your project, replacing the release path:
 
 ```sh
-node /path/to/werk-release/bin/apps/worker/cli.mjs init --features-dir requests/features --provider codex-cli --port 4100
+node /path/to/werk-release/bin/apps/worker/cli.mjs init --intake local --features-dir requests/features --provider claude-cli --port 4100
 node bin/apps/worker/cli.mjs feature folder get
 node bin/apps/worker/cli.mjs schema
 node bin/apps/worker/cli.mjs start
 node bin/apps/worker/cli.mjs status
 ```
 
-Setup copies the complete worker app, creates private `.werk` state and the
-configured request folder, and installs a draft template. It preserves existing
-configuration. The worker runs independently of the extracted release directory.
-Use `run` instead of `start` to keep it in the foreground; Ctrl+C stops it.
+Setup preserves existing configuration and installs the complete worker app,
+private state, environment files and request templates. Use `run` instead of
+`start` for foreground operation. In the browser, unlock the printed local URL
+with `WERK_WORKER_TOKEN` from the private project `.env`; do not put it in a URL,
+request note or commit. The local CLI resolves its token itself.
 
-The status response reports the webview address. The local CLI resolves the
-worker's private access token itself; you do not need browser login or to copy a
-token into a command. For browser access, use the local token-file path printed
-by startup. [Project setup](../how-to/project-worker.md) also covers Docker,
-multiple projects and safely changing the feature folder later.
+## 2. Authorize the project and connect Claude
 
-If the project directory is a Git checkout, inspect its detected repository before
-submitting file work:
+Inspect the detected repository and explicitly authorize it:
 
 ```sh
 node bin/apps/worker/cli.mjs repository status
-```
-
-Review `discovery.path`, branch and remote. To authorize this checkout, use the
-returned `discovery.id` in the explicit acceptance command:
-
-```sh
 node bin/apps/worker/cli.mjs repository accept --discovery-id ID_FROM_DISCOVERY
 ```
 
-An existing explicit assignment already authorizes use. Acceptance persists and
-starts watching only when a branch and remote exist. You can decline instead;
-Chat remains available, but this checkout's file requests cannot run until authorized.
-The [repository consent contract](../reference/configuration.md#detected-installation-repository)
-explains reconsidering a choice and stale IDs. A non-Git project has no detected
-repository and can continue with bounded file snapshots.
+Copy the exact current discovery ID. If native execution is still preparing,
+wait until `repository status` reports `nativeWork.state: "ready"` before accepting
+it. An existing explicit assignment already authorizes the repository. Local
+candidate delivery does not require a remote;
+repository synchronization and shared publication have their own configuration.
+The selected committed baseline excludes unrelated staged or unstaged source.
 
-## 3. Connect the model provider
+Sign in using Claude's official CLI as the OS account that runs Werk. In
+**Settings → Providers & accounts**, select Claude Code, its absolute executable
+path and the explicit account authentication mode. Alternatively, select API-key
+mode and supply the key privately. Never rely on implicit billing fallback.
 
-Sign in to Codex CLI as the account running the worker. Save a private JSON file
-named `provider.json`, substituting the installed CLI's absolute path:
+A portable settings command accepts a private JSON file such as this Windows
+example; substitute the actual path:
 
 ```json
-{"provider":{"id":"codex-cli","executable":"/absolute/path/to/codex"}}
+{"provider":{"id":"claude-cli","authenticationMode":"cli-account","executable":"C:\\path\\to\\claude.exe"}}
 ```
-
-Apply and check it:
 
 ```sh
 node bin/apps/worker/cli.mjs settings set --file provider.json
-node bin/apps/worker/cli.mjs provider check --id codex-cli
-node bin/apps/worker/cli.mjs settings get
+node bin/apps/worker/cli.mjs provider check --id claude-cli
 ```
 
-The check reports installation/login status without making a model request.
-Successful login does not prove available quota or model access. Settings output
-redacts saved credentials. For API providers, supply the provider ID, model and
-API key in a private input file or stdin; do not commit that input file.
+A successful read-only check establishes reported installation/login state, not
+quota or task success. Follow the [provider and native Windows prerequisites](../how-to/use-worker-webview.md#connect-claude-codex-or-cursor)
+for process containment and runtime limitations. Keep `provider.json` private,
+especially when it contains an API key.
 
-## 4. Create a feature request
+## 3. Prepare a verifiable change
 
-For a small coding example, create `greeting.txt` in your project with the text
-`Hello`. In a Git checkout, add this file to a commit before submitting the
-request: task worktrees capture committed input and exclude uncommitted changes.
-For a new repository, this also supplies the required first commit.
+Create `greeting.txt` containing `Hello` followed by a newline. Create
+`test/greeting.test.mjs` with this deterministic check:
+
+```js
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import test from 'node:test';
+
+test('the greeting is updated', () => {
+  assert.equal(readFileSync('greeting.txt', 'utf8'), 'Hello Werk\n');
+});
+```
+
+Commit only the tutorial input and check:
 
 ```sh
-git add -- greeting.txt
-git commit -m "Add greeting for the worker tutorial"
+git add -- greeting.txt test/greeting.test.mjs
+git commit -m "Add a greeting change acceptance check"
 ```
 
-Skip these Git commands for a non-Git project; the worker snapshots its approved
-file directly. Save the following as `request-draft.md` outside the watched folder:
+The check deliberately fails before implementation. In **Settings → Tools & MCP**,
+authorize repository file access and add an enabled **Required feature check**
+using the machine's absolute Node executable and arguments
+`["--test", "test/greeting.test.mjs"]`. `node -p process.execPath` prints that
+executable path. Save the permissions before submitting work. See
+[implementation setup](../how-to/implement-feature.md) for fixed command presets.
+
+Review the generated `.werk/delivery-policy.json`. Its feature profile requires
+semantic readiness, bounds repairs and protects existing verification inputs.
+Commit the policy to the baseline before submitting the request:
+
+```sh
+git add -- .werk/delivery-policy.json
+git commit -m "Configure the worker delivery policy"
+```
+
+In **Settings → Project delivery**, select this repository, inspect the committed
+configuration and approve its exact digest. Saving a draft does not commit or
+approve it. The [headless policy commands](../reference/delivery-policy.md#configure-without-opening-the-webview)
+provide the same inspection and guarded approval from the CLI.
+
+Check that the selected baseline includes both the tutorial files and policy.
+An uncommitted policy, missing local approval or unavailable semantic assessment
+holds implementation with an actionable reason. A new request can still be saved
+as a draft. Request text cannot remove these requirements or grant tools. See
+[readiness setup](../how-to/configure-delivery-readiness.md) for the required
+assessment and how to answer its findings.
+
+## 4. Create and submit the Feature Request
+
+Save this as `request-draft.md` outside the watched folder:
 
 ```markdown
 ---
-schemaVersion: 1
+schema: worker.request/v1
+id: FR-GREETING
 title: Improve the greeting
-status: draft
+intent: draft
+quality_profile: feature
+priority: normal
+depends_on: []
 mode: patch
-provider: codex-cli
+provider: claude-cli
 paths:
   - greeting.txt
 ---
-# Goal
-Change the greeting to Hello Werk.
+# Improve the greeting
+
+## Outcome
+Show the product name in the greeting.
+
+## Scope
+Change greeting.txt to Hello Werk followed by a newline.
 
 ## Acceptance criteria
-- greeting.txt contains Hello Werk followed by a newline.
-- No other project file changes.
+- The greeting contains Hello Werk followed by a newline.
+- No other implementation file changes.
+
+## Boundaries
+Preserve the existing test and unrelated project files.
+
+## References
+The committed test/greeting.test.mjs checks the actual file bytes.
+
+## Answers
+
+<!-- worker:begin -->
+## Worker
+
+Status: Draft
+<!-- worker:end -->
 ```
 
-Create and validate it through the worker:
+Import and validate the draft:
 
 ```sh
 node bin/apps/worker/cli.mjs feature create --name greeting.md --markdown request-draft.md
@@ -144,44 +180,58 @@ node bin/apps/worker/cli.mjs feature validate --name greeting.md
 node bin/apps/worker/cli.mjs feature get --name greeting.md
 ```
 
-A draft does not execute. The response includes a `revision`; copy it into the
-submission command below. Revisions prevent an agent or editor from overwriting
-someone else's newer request. Use this local draft or `feature template` for this
-example. The installed `requests/features/_templates/feature-request.md` belongs
-to shared Git intake; its `templateId` deliberately prevents local admission.
-
-## 5. Submit and follow execution
+Drafts do not invoke a model. Copy the returned file `revision` when submitting:
 
 ```sh
 node bin/apps/worker/cli.mjs feature submit --name greeting.md --if-match REVISION
 node bin/apps/worker/cli.mjs feature wait --name greeting.md --timeout-ms 60000
-node bin/apps/worker/cli.mjs feature result --name greeting.md
 ```
 
-The watcher waits for a stable save, captures the accepted input once and updates
-the Markdown frontmatter as the request moves through the queue and execution.
-Only one model request executes at a time. `queue pause` holds new execution;
-`queue resume` releases it. A second request can wait behind the current one.
+You can instead edit the canonical file's `intent` to `submit` and save it.
+Repeated saves keep the same identity. Local mode waits for a stable save;
+shared mode requires the committed/pushed handoff. A file revision guards an edit;
+the numeric requirement revision and delivery run ID identify accepted work.
 
-The terminal status for this successful proposal-only request is `review`.
-Because this tutorial grants no implementation tools or required checks, Werk
-saves a patch and result without applying or testing the proposal or publishing a
-feature branch. Inspect the saved evidence, run `git apply --check` and apply the patch when
-appropriate, then verify the actual project behavior yourself.
+## 5. Follow execution and accept the candidate
 
-A question returns `waiting_input`, or `escalated` for an operator decision.
-The invocation has ended and another task can use the slot. Read its owning
-session with `interaction get`, then follow the
-[answer and resume guide](../how-to/answer-and-resume-worker.md). A guarded answer
-starts a new invocation using the saved request context. Do not edit the accepted
-Markdown body to answer.
+Open the request on Taskboard and inspect its lifecycle, execution phase, next
+action and activity. The worker prepares an isolated workspace from the explicit
+baseline, implements the approved file change and executes the required check.
+Failed checks feed the bounded repair allowance; exhaustion retains work and
+reports the blocker. A completed model response cannot manufacture a passing check.
 
-`feature wait` returning a terminal state is not proof of success: inspect that
-state. A timeout leaves work running and returns a machine-readable
-`wait_timeout` error. Inspect it again or cancel explicitly. Failed/cancelled
-requests can be retried using their current revision; a retry has new execution
-evidence and does not replace the previous attempt. See the
-[feature-request contract](../reference/feature-requests.md).
+If the worker asks a question, answer its ID in the request's user-owned Answers
+section or the supported request interface. The worker reassesses the changed
+revision. Do not edit generated status or create another request to answer it.
+See [answer and resume](../how-to/answer-and-resume-worker.md).
+
+Use **Pause after this step** to wait at a bounded boundary. **Interrupt now** and
+**Cancel request** show their pending result until execution cessation is known.
+The project queue pause affects new starts. Closing the browser does not stop the
+daemon. Uncertain operations must be reconciled before retry.
+
+A verified candidate reaches **Ready for human review**. Open its Markdown review
+note, by default in `feature-reviews`, and inspect the request revision, baseline,
+branch, commit, diff, required-check evidence and manual criteria. For the recorded
+candidate identifiers, inspect:
+
+```sh
+git diff BASELINE_COMMIT CANDIDATE_COMMIT
+git show CANDIDATE_COMMIT:greeting.txt
+```
+
+Record every required human outcome with a supporting note, then accept that
+exact candidate in request review. The [equivalent Markdown decision](../reference/feature-requests.md#candidate-decisions-and-execution-controls)
+uses the current package's criterion IDs, requirement revision, full candidate
+commit and a unique command ID. Missing manual results or stale evidence reject
+acceptance. Use request changes for feedback; an accepted/cancelled request needs
+explicit reopening before more work.
+
+Only human acceptance completes the Feature Request. The local note and commit
+remain distinct from a pushed branch, remote pull request or merge. The developer's
+checkout is preserved; integrate the reviewed candidate through your normal Git
+workflow. `feature wait` observing a stopped execution is not itself a success or
+acceptance assertion. A wait timeout leaves work running.
 
 ## 6. Inspect the before/after pair
 
@@ -192,7 +242,8 @@ node bin/apps/worker/cli.mjs run list --task-id TASK_ID
 node bin/apps/worker/cli.mjs run get --id RUN_ID
 ```
 
-The paired snapshots show execution state, worker-process resources and cumulative
+Each provider invocation has its own before/after pair; one delivery can contain
+several invocations and verification steps. The paired snapshots show execution state, worker-process resources and cumulative
 known consumption before and after the run. Per-run provider usage is also
 separate in the record. The before snapshot is saved before the provider starts.
 A failed or cancelled execution also has evidence; recovery after a process crash
@@ -246,6 +297,7 @@ worker does not process newly saved requests until it starts again.
 An AI agent can follow these same commands. Start with `schema`, parse JSON
 results and stderr errors, preserve returned identifiers/revisions/cursors,
 check terminal outcomes, and use explicit cancel/retry commands. Avoid guessing
-private file layouts or mutating server-owned frontmatter. The
+private file layouts or editing generated status instead of using the documented
+user-owned command fields. The
 [portable CLI reference](../reference/portable-apps.md) lists the complete command
 catalog and exit-code contract.

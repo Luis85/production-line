@@ -1,3 +1,4 @@
+import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
 import { featureGitIo } from './runtime-fixtures.mjs';
 import { testErrorCode, testErrorMessage } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
@@ -10,6 +11,8 @@ import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { GitFeatureRepository } from '../../src/worker/dist/worker/infrastructure/features/git-repository.js';
 import { prepareRepositoryWorktree } from '../../src/worker/dist/worker/infrastructure/repositories.js';
+
+prepareNativeProcessFixture();
 
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.autocrlf=false', '-c', 'user.name=Werk Fixture', '-c', 'user.email=fixture@example.invalid', ...args], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
 const hash = text => createHash('sha256').update(text).digest('hex');
@@ -241,6 +244,9 @@ test('deep publication and later task worktrees support committed receipt paths 
       // The Windows job supervisor carries the original command as data. Observe it without substituting execution.
       const launch = JSON.parse(Buffer.from(options.env.WERK_PROVIDER_LAUNCH, 'base64').toString('utf8'));
       invoked = launch.executable; commandArgs = launch.arguments;
+    } else if ([repository, taskRepository].includes(options?.cwd) && Array.isArray(args) && args[0] === 'werk-supervisor-v1' && args[1] === 'argv') {
+      // The cached native supervisor carries the same command in its argv envelope.
+      invoked = args[2]; commandArgs = args.slice(3);
     }
     const command = Array.isArray(commandArgs) ? commandArgs.indexOf('worktree') : -1;
     if ((invoked === 'git' || basename(invoked).toLowerCase() === 'git.exe') && [repository, taskRepository].includes(options?.cwd) && command >= 0 && commandArgs[command + 1] === 'add') {
