@@ -7,9 +7,13 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ## [Unreleased]
 
+### Fixed
+
+- macOS CI partitions the complete test inventory into four disjoint groups and retains immediate TAP failure details plus exact suite manifests, preserving existing assertions, per-test limits and execution concurrency.
+
 ## [0.15.0] - 2026-10-23
 
-Qualification: the live Windows/Claude Code pilot, full provider/account matrix and worker-managed live GitHub publication remain pending. Portable contract fixtures and installation checks do not establish those live outcomes. The expanded mutation scope remains advisory and has no completed full-scope score.
+Qualification: the live Windows/Claude Code pilot, full provider/account matrix and worker-managed live GitHub publication remain pending. Portable contract fixtures and installation checks do not establish those live outcomes. The tagged release subsequently completed the full 24-target v5 mutation measurement at 91.03%: 3,493 killed, 40 timeout detections, 328 surviving and 20 uncovered mutants. The 348 surviving/uncovered findings remain advisory; the changed scope is not directly comparable with v4. [Tagged measurement](https://github.com/Luis85/production-line/actions/runs/40021539389/artifacts/12531955702).
 
 ### Added
 

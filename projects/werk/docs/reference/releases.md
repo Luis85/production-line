@@ -178,8 +178,10 @@ Release tags and manually dispatched release workflows run Stryker in an indepen
 build/test commands. Publication does not depend on the job: survivors, score changes,
 tool failures and report-upload failures produce warnings instead of stopping a release.
 
-The first baseline covers selected shared policies, response bounds and asynchronous
-control flow; it is not a score for the whole repository. Read the job summary and
+The current scope covers 24 selected shared and worker delivery modules; it is not
+a score for the whole repository. The tagged v0.15.0 run completed at 91.03%; its
+[measurement and retained findings](../how-to/mutation-testing.md#current-measurement-status)
+remain distinct from the individually reviewed comparison baseline. Read the job summary and
 download the `werk-mutation-report` Actions artifact for JSON, HTML and execution logs.
 Artifacts are retained for 30 days. An interrupted or unavailable measurement is
 reported as incomplete, never as a passing score. The runner has a twelve-minute

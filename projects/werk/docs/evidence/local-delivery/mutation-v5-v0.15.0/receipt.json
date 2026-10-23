@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "release": "v0.15.0",
+  "commit": "9b2db009d23b5e677a3650227ba8f990ca813d27",
+  "workflowRun": 40021539389,
+  "workflowUrl": "https://github.com/Luis85/production-line/actions/runs/40021539389",
+  "artifact": {
+    "id": 12531955702,
+    "name": "werk-mutation-report",
+    "url": "https://github.com/Luis85/production-line/actions/runs/40021539389/artifacts/12531955702",
+    "archiveBytes": 403556,
+    "archiveSha256": "7c6669908be3e64854a48276780d1cd4e7dd6328990379df86e8e3cfd855aba2"
+  },
+  "retainedFiles": {
+    "summary.json": {
+      "bytes": 141366,
+      "sha256": "267c80526d0f1d949c56188513b42a91689ef8ef4d42fed8110a76da0718e6ee"
+    },
+    "mutation.json": {
+      "bytes": 1959012,
+      "sha256": "53f72b81ed66bef78ffe729bf1d615c545a5f024fa3d48bd3a06a1bd06708670"
+    },
+    "run.log": {
+      "bytes": 200275,
+      "sha256": "92f9b71417378c89f10113638e05d158c1e2c4b727057abf7ccc6264f24682d2"
+    }
+  },
+  "verification": {
+    "reportDigestMatchesSummary": true,
+    "rawCountsMatchSummary": true,
+    "rawTargetSourcesMatchTaggedCommit": true,
+    "taggedInputHashCounts": {
+      "sources": 24,
+      "compiledSources": 379,
+      "tests": 28,
+      "configuration": 7
+    }
+  },
+  "baselinePromotion": false,
+  "individualSurvivorReview": "pending",
+  "omittedArtifactFiles": [
+    "index.html",
+    "summary.md"
+  ]
+}
