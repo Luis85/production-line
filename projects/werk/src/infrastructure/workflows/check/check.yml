@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
     # Full POSIX checks retain bounded test deadlines and upload time.
     timeout-minutes: 25
@@ -51,6 +51,57 @@ jobs:
           retention-days: 7
       - run: npm run audit:dependencies
       - name: Check generated workflow drift
+        working-directory: /
+        run: node bin/forge.js workflows sync --check
+  macos:
+    name: macOS tests (${{ matrix.shard }}/4)
+    runs-on: macos-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: ${{ env.FORGE_PROJECT_PATH }}/package-lock.json
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - run: npm ci --ignore-scripts
+      # Keep quality, build and a complete whole-file partition inside the existing
+      # POSIX deadline. TAP retains failures before a later timeout stops the suite.
+      - name: Run macOS quality, build and test partition
+        timeout-minutes: 20
+        run: |
+          set -o pipefail
+          {
+            if [ "${{ matrix.shard }}" = "1" ]; then
+              npm run check:fast || exit $?
+            fi
+            npm run build || exit $?
+            node scripts/quality/test-shard.mjs --shard "${{ matrix.shard }}/4" --manifest "$RUNNER_TEMP/werk-test-shard.json"
+          } 2>&1 | tee "$RUNNER_TEMP/werk-check.log"
+      - name: Retain macOS output and exact test manifest
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: werk-check-output-macos-${{ matrix.shard }}
+          path: |
+            ${{ runner.temp }}/werk-check.log
+            ${{ runner.temp }}/werk-test-shard.json
+          if-no-files-found: warn
+          retention-days: 7
+      - run: npm run audit:dependencies
+        if: matrix.shard == 1
+      - name: Check generated workflow drift
+        if: matrix.shard == 1
         working-directory: /
         run: node bin/forge.js workflows sync --check
   windows:
