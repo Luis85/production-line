@@ -40,7 +40,8 @@ function compilerEnvironment(directory: string): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { SystemRoot: systemRoot, WINDIR: systemRoot, PATH: win32.join(systemRoot, 'System32'), TEMP: directory, TMP: directory, WERK_SUPERVISOR_CACHE: directory };
   for (const key of ['ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432', 'CommonProgramFiles', 'CommonProgramFiles(x86)', 'CommonProgramW6432', 'PROCESSOR_ARCHITECTURE', 'PROCESSOR_ARCHITEW6432', 'NUMBER_OF_PROCESSORS', 'OS'])
     if (process.env[key]) env[key] = process.env[key];
-  env.PSModulePath = win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'Modules');
+  // The inner compiler needs the same host module context as its containing PowerShell bootstrap.
+  env.PSModulePath = process.env.PSModulePath || win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'Modules');
   return env;
 }
 

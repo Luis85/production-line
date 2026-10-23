@@ -42,6 +42,7 @@ Qualification: the live Windows/Claude Code pilot, full provider/account matrix 
 - Publication refreshes retain history, expanded details and keyboard focus while guarding actions until current policy arrives. Project-policy approval controls remain aligned on narrow screens.
 - Policy validation rejects routing rules with missing quality profiles, saved definition restoration validates the complete catalog before exposing it, and saved sessions and MCP settings reject malformed values.
 - Native startup keeps HTTP and durable request intake usable while repository/model work waits for owned preparation; shutdown drains that preparation.
+- Windows supervisor compilation retains the host PowerShell module context needed for native setup, while preserving the private compiler environment, exact provider environment and existing preparation deadline.
 
 ## [0.14.0] - 2026-10-19
 

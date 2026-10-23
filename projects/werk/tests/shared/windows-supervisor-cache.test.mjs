@@ -63,6 +63,26 @@ test('supervisor preparation reuses one private artifact, preserves target argum
   assert.equal(calls.length, 1, 'closed cache must not reopen');
 });
 
+for (const modulePath of ['C:\\Host modules;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\Modules', undefined, '']) {
+  test(`compiler module context ${modulePath ? 'preserves the host path' : modulePath === '' ? 'falls back for an empty host path' : 'falls back when the host path is absent'} without entering target environments`, {timeout:10000}, async t => {
+    const previous = process.env.PSModulePath, secret = process.env.WERK_CACHE_TEST_SECRET;
+    t.after(() => {
+      if (previous === undefined) delete process.env.PSModulePath; else process.env.PSModulePath = previous;
+      if (secret === undefined) delete process.env.WERK_CACHE_TEST_SECRET; else process.env.WERK_CACHE_TEST_SECRET = secret;
+    });
+    if (modulePath === undefined) delete process.env.PSModulePath; else process.env.PSModulePath = modulePath;
+    process.env.WERK_CACHE_TEST_SECRET = 'ambient credential';
+    const f = await fixture(t), compiled = [];
+    await f.cache.prepare(async plan => { compiled.push(plan); await compileImage(plan); }, f.workspace, t.signal);
+    assert.equal(compiled.length, 1);
+    assert.equal(compiled[0].env.PSModulePath, modulePath || win32.join(process.env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'Modules'));
+    assert.equal(compiled[0].env.WERK_CACHE_TEST_SECRET, undefined);
+    const requested = {CHOSEN:'yes', PSModulePath:'C:\\Caller modules'};
+    assert.deepEqual(f.cache.plan(target, [], requested, f.workspace)?.env, requested);
+    assert.deepEqual(f.cache.plan(target, [], {CHOSEN:'next'}, f.workspace)?.env, {CHOSEN:'next'});
+  });
+}
+
 test('independent cache owners never adopt an earlier executable', {timeout:10000}, async t => {
   const f = await fixture(t), other = new WindowsSupervisorCache(f.temporary);
   f.beforeClose.push(() => other.close());
