@@ -33,6 +33,7 @@ export async function replaceFeatureFile(path: string, expected: string, replace
     return true;
   } finally {
     if (probeCreated) await unlink(probe).catch(error => { if (error.code !== 'ENOENT') throw error; });
-    await unlink(staged).catch(error => { if (error.code !== 'ENOENT') throw error; });
+    // Published already: a staged link that cannot be removed lingers beside the note, which is safe.
+    await unlink(staged).catch(() => {});
   }
 }

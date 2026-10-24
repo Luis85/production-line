@@ -1,7 +1,7 @@
-import { execFile } from 'node:child_process';
 import { constants, readFileSync, readlinkSync } from 'node:fs';
 import { lstat, open, readFile } from 'node:fs/promises';
 import { hostname } from 'node:os';
+import { runProcess } from './launcher.js';
 
 export type ProcessOwnerState = 'dead' | 'alive' | 'unknown';
 /** Linux: `linux:<boot_id>:<starttime ticks>`, compared exactly. Elsewhere: creation time in epoch milliseconds. */
@@ -26,16 +26,14 @@ function ownStart(): ProcessStart | null {
 /** Spread into every lock or record whose owner may later be proven dead: PID, host and start identity. */
 export const ownerRecord = { pid: process.pid, host: processHost, start: ownStart() };
 
-const output = (file: string, args: string[], env?: NodeJS.ProcessEnv) => new Promise<string>((resolve, reject) => {
-  execFile(file, args, { encoding: 'utf8', windowsHide: true, timeout: 10000, ...(env ? { env } : {}) }, (error, stdout) => error ? reject(error) : resolve(stdout));
-});
+const output = async (file: string, args: string[], env: NodeJS.ProcessEnv) => (await runProcess(file, args, { env, observation: 'ignore', timeoutMs: 10000, maxOutputBytes: 65536 })).stdout.toString('utf8');
 /** The current start identity of `pid`; undefined when the platform does not disclose it. */
 async function processStart(pid: number): Promise<ProcessStart | undefined> {
   try {
     if (process.platform === 'linux') return linuxStart(await readFile(`/proc/${pid}/stat`, 'utf8'), bootId(await readFile('/proc/sys/kernel/random/boot_id', 'utf8')));
     // CIM reports creation time to unelevated callers; Get-Process StartTime does not for other users' processes.
     const text = process.platform === 'win32'
-      ? await output('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `(Get-CimInstance Win32_Process -Filter "ProcessId=${pid}").CreationDate.ToUniversalTime().ToString('o')`])
+      ? await output('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `(Get-CimInstance Win32_Process -Filter "ProcessId=${pid}").CreationDate.ToUniversalTime().ToString('o')`], process.env)
       : await output('ps', ['-o', 'lstart=', '-p', String(pid)], { ...process.env, LC_ALL: 'C' });
     const time = Date.parse(text.trim());
     return Number.isFinite(time) ? time : undefined;
