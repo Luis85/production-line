@@ -1,7 +1,7 @@
 filters:
   and:
     - file.ext == "md"
-    - file.inFolder("projects/werk/docs/backlog")
+    - file.inFolder("projects/werk/docs")
 views:
   - type: product-backlog
     name: Backlog
@@ -38,6 +38,73 @@ views:
     iterationProperty: note.iteration
     iterationGoalProperty: note.goal
     releaseProperty: note.release
+  - type: table
+    name: Entities
+    filters:
+      and:
+        - file.inFolder("projects/werk/docs/entities")
+    groupBy:
+      property: type
+      direction: ASC
+    order:
+      - type
+      - file.name
+      - extends
+      - parent
+      - emits
+      - subscribes
+      - color
+      - tags
+      - aliases
+      - category
+      - description
+      - status
+      - relations
+    columnSize:
+      note.type: 125
+      file.name: 249
+      note.extends: 115
+      note.parent: 196
+      note.emits: 324
+      note.subscribes: 466
+      note.color: 140
+      note.tags: 186
+      note.aliases: 184
+      note.category: 162
+      note.description: 121
+      note.status: 121
+      note.relations: 189
+  - type: table
+    name: Events
+    filters:
+      and:
+        - file.inFolder("projects/werk/docs/events")
+    order:
+      - type
+      - file.name
+      - description
+  - type: table
+    name: Relations
+    filters:
+      and:
+        - file.inFolder("projects/werk/docs/relations")
+    order:
+      - file.name
+      - description
+      - relation_type
+      - status
+      - color
+      - from_node
+      - to_node
+      - category
+      - aliases
+      - tags
+    columnSize:
+      file.name: 139
+      note.description: 161
+      note.relation_type: 153
+      note.status: 135
+      note.color: 140
   - type: table
     name: Data Quality
     groupBy:
