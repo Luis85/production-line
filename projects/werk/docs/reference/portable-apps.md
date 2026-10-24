@@ -164,11 +164,13 @@ the release guides `docs/reference/configuration.md` and
 `docs/reference/system-definition.md`. `status` distinguishes running, stopping, stopped, stale and unreachable;
 unreachable exits 1. A running process is not necessarily connected to its upstream.
 `stale` means the process recorded in the state (`pid`) on this host no longer exists, or
-its PID now belongs to a process started later; `files` lists the leftover `portable.json`,
-application lock and, for a project worker, the feature folder `_worker.lock` naming
-that PID. `start`, `run`, `stop` and `update apply`/`rollback` remove exactly those
-files, re-reading each first, log a `stale_state_recovered` line and continue as
-stopped. `unreachable` means the owner may still run, its PID is unknown, or it was
+its PID now belongs to a process with a different recorded start identity; `files` lists
+the leftover `portable.json`, application lock and, for a project worker, the feature
+folder `_worker.lock`, each proven dead by its own record. `start`, `run`, `stop` and
+`update apply`/`rollback` remove exactly those files, re-checking each first, log a
+`stale_state_recovered` line and continue as stopped. State written by 0.15.0 or
+earlier records no host or start identity and stays `unreachable`; follow the printed
+files and check once. `unreachable` means the owner may still run, its PID is unknown, or it was
 recorded elsewhere, such as in a Docker container sharing the state; its
 `files` and `action` name the paths and a check such as `Get-Process -Id PID`
 (Windows) or `ps -p PID` (POSIX).

@@ -7,7 +7,7 @@ import { privateDirectory, readPrivate, createPrivate, inputError } from '../con
 import { controlRequest, createControl } from '../control.mjs';
 import { configuredProjectRoot } from './project.mjs';
 import { runComponent } from '../component.mjs';
-import { ownerStatus, recordHost, recoverStale } from './stale-state.mjs';
+import { ownerStatus, recordOwner, recoverStale } from './stale-state.mjs';
 
 const metadataPath = state => join(state, 'portable.json');
 async function record(kind, state) {
@@ -133,7 +133,7 @@ export async function run(kind, state, root, options, internal, launch = null) {
     const runId = randomBytes(32).toString('hex'), controlToken = randomBytes(32).toString('hex');
     const snapshot = () => ({ state: closing ? 'stopping' : 'running', runId, project: options.project ?? null, mode: 'mixed', url: info.url, workers: kind === 'worker' ? 1 : 0 });
     control = await createControl({ runId, controlToken, snapshot, stop: onSignal });
-    identity = { schemaVersion: 1, kind, runId, controlToken, pid: process.pid, host: await recordHost(kind), controlPort: control.address().port, children: [], url: info.url, ...(launch ? { launch } : {}) };
+    identity = { schemaVersion: 1, kind, runId, controlToken, ...await recordOwner(kind), controlPort: control.address().port, children: [], url: info.url, ...(launch ? { launch } : {}) };
     await createPrivate(metadataPath(state), identity);
     const data = { ...snapshot(), kind, stateDirectory: state, credentialsFile: info.credentialsFile };
     ready = true;

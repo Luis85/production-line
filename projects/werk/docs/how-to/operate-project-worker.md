@@ -48,7 +48,9 @@ behind. `status` then reports `stale` with the dead `pid` and the leftover `file
 `update apply --stop` remove exactly these files and continue as if the worker had
 stopped. The worker treats a PID as gone only with proof: the files were written on
 this machine, not in a Docker container that shares the project, and no such process
-exists or the PID now belongs to a process that started after the lock was written.
+exists or the process now using that PID has a different start identity than the one
+recorded with the lock. State written by 0.15.0 or earlier records no host or start
+identity and is not recovered automatically: follow the printed files and check once.
 
 If `status` reports `unreachable` instead, the recorded process may still run.
 Run the check that `action` names, for example `Get-Process -Id PID` in PowerShell

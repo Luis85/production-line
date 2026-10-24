@@ -2,7 +2,7 @@ import { settleCleanup, withCleanup, type CleanupStep } from '../shared/lifecycl
 import type { RepositoryConfiguration } from './application/repositories.js';
 import { unlink } from "node:fs/promises";
 import { createLock } from "../shared/process/lock.js";
-import { processHost } from "../shared/process/owner.js";
+import { ownerRecord } from "../shared/process/owner.js";
 import { join } from "node:path";
 import { type Profile, type Adapter, type WorkerPolicy } from "../shared/contracts.js";
 import { ensureDirectory } from "./infrastructure/journal/files.js";
@@ -85,7 +85,7 @@ export async function runWorker(
   return withCleanup(
     async () => {
       // Record the owner at once: crash recovery removes only a lock naming a provably dead PID.
-      await handle.writeFile(JSON.stringify({ pid: process.pid, host: processHost, startedAt: new Date().toISOString() }));
+      await handle.writeFile(JSON.stringify({ ...ownerRecord, startedAt: new Date().toISOString() }));
       await handle.sync();
       return runLockedWorker(config, stop, dependencies, handle, cleanup);
     },

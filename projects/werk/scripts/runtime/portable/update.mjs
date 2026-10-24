@@ -11,6 +11,7 @@ import { createPrivate, inputError, privateDirectory, readPrivate } from '../con
 import { exists, restoreSnapshot, snapshotState } from '../maintenance/snapshot.mjs';
 import { latest, newer, published, versionParts } from '../update/remote.mjs';
 import { status, stop } from './lifecycle.mjs';
+import { recordOwner } from './stale-state.mjs';
 import { inventory, replaceInPlace, verifyTree } from './update-in-place.mjs';
 
 /**
@@ -171,7 +172,7 @@ async function quiesce(kind, state, options, projectDir, log, app) {
     if (!await exists(state)) return { launch, canonical: null, release: async () => {} };
     const canonical = await realpath(state), lock = join(canonical, LOCKS[kind]);
     // Holding the application lock keeps start/run away while state is copied and the folder is swapped.
-    try { await createPrivate(lock, { maintenance: 'update', pid: process.pid }); }
+    try { await createPrivate(lock, { maintenance: 'update', ...await recordOwner(kind) }); }
     catch (error) {
       if (error.code === 'EEXIST') throw Object.assign(inputError('The app started again or another owner holds its lock. Nothing was replaced. Inspect status before restarting.'), { recoveryUnsafe: true });
       throw error;

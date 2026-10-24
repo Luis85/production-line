@@ -7,8 +7,9 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createPrivate, privateDirectory } from '../../scripts/runtime/config.mjs';
 import { start, status, stop } from '../../scripts/runtime/portable/lifecycle.mjs';
+import { recoverStale } from '../../scripts/runtime/portable/stale-state.mjs';
 import { ownWorkspace, removeWorkspace } from '../helpers/workspace-processes.mjs';
-import { processHost } from '../../src/worker/dist/shared/process/owner.js';
+import { ownerRecord, processHost } from '../../src/worker/dist/shared/process/owner.js';
 
 async function exitedPid() {
   const child = spawn(process.execPath, ['-e', ''], { stdio: 'ignore', windowsHide: true });
@@ -25,15 +26,16 @@ async function unusedPort() {
 }
 /** A project worker whose state, lock and feature folder lock were left by `pid` on `host`. */
 async function fixture(t, pid, host = processHost) {
+  const start = pid === process.pid ? ownerRecord.start : null;
   const root = await realpath(await mkdtemp(join(tmpdir(), 'werk-stale-'))), project = join(root, 'project'), state = join(project, '.werk/worker');
   t.after(() => removeWorkspace(root));
   await privateDirectory(state); await mkdir(join(project, 'requests'));
   await createPrivate(join(project, '.werk/worker-project.json'), { schemaVersion: 1, port: 4100 });
   await createPrivate(join(project, '.werk/worker.json'), { schemaVersion: 1, features: { directory: 'requests' } });
   const files = { record: join(state, 'portable.json'), lock: join(state, 'worker.lock'), feature: join(project, 'requests/_worker.lock') };
-  await createPrivate(files.record, { schemaVersion: 1, kind: 'worker', runId: 'a'.repeat(64), controlToken: 'b'.repeat(64), pid, host, controlPort: await unusedPort(), children: [], url: 'http://127.0.0.1:4100' });
-  await createPrivate(files.lock, { pid, host, startedAt: new Date().toISOString() });
-  await writeFile(files.feature, JSON.stringify({ pid, host, owner: 'owner' }) + '\n', { mode: 0o600 });
+  await createPrivate(files.record, { schemaVersion: 1, kind: 'worker', runId: 'a'.repeat(64), controlToken: 'b'.repeat(64), pid, host, start, controlPort: await unusedPort(), children: [], url: 'http://127.0.0.1:4100' });
+  await createPrivate(files.lock, { pid, host, start, startedAt: new Date().toISOString() });
+  await writeFile(files.feature, JSON.stringify({ pid, host, start, owner: 'owner' }) + '\n', { mode: 0o600 });
   return { root, project, state, files, options: { 'project-dir': project } };
 }
 const missing = path => assert.rejects(readFile(path), { code: 'ENOENT' });
@@ -57,7 +59,7 @@ test('a dead owner is reported as stale and start removes exactly its files befo
 test('a lock without control metadata naming a dead PID is recovered by stop; a lock of another owner is kept', { timeout: 60000 }, async t => {
   const dead = await exitedPid(), f = await fixture(t, dead);
   await removeWorkspace(f.files.record);
-  await writeFile(f.files.feature, JSON.stringify({ pid: process.pid, host: processHost, owner: 'owner' }) + '\n', { mode: 0o600 });
+  await writeFile(f.files.feature, JSON.stringify({ ...ownerRecord, owner: 'owner' }) + '\n', { mode: 0o600 });
   const stale = await status('worker', f.state, f.options);
   assert.equal(stale.state, 'stale'); assert.deepEqual(stale.files, [f.files.lock]);
   t.mock.method(console, 'error', () => {});
@@ -85,7 +87,24 @@ test('a PID recorded in a container or on another host never proves the owner de
   const dead = await exitedPid(), f = await fixture(t, dead, 'container-1 pid:[4026532000]');
   const foreign = await status('worker', f.state, f.options);
   assert.equal(foreign.state, 'unreachable'); assert.equal(foreign.pid, dead);
-  assert.ok(foreign.action.endsWith(`PID ${dead} was recorded on container-1 pid:[4026532000], not this host: confirm it is not running there (for a container: docker compose ps).`));
+  assert.ok(foreign.action.endsWith(`PID ${dead} was recorded on container-1 pid:[4026532000], not on this host (${processHost}). If this machine was renamed or the worker runs in Docker (docker compose ps), verify that process has exited before removing the listed files.`));
   await assert.rejects(stop('worker', f.state, f.options), error => error instanceof Error && error.message === foreign.action);
   for (const path of Object.values(f.files)) assert.ok(await readFile(path));
+});
+
+test('each listed file is proven dead on its own, and recovery keeps a file a live owner wrote meanwhile', { timeout: 60000 }, async t => {
+  const dead = await exitedPid(), f = await fixture(t, dead);
+  // A lock left by another dead process (for example a crashed update apply) is stale in its own right.
+  await writeFile(f.files.lock, JSON.stringify({ maintenance: 'update', pid: await exitedPid(), host: processHost }));
+  const stale = await status('worker', f.state, f.options);
+  assert.equal(stale.state, 'stale'); assert.deepEqual(stale.files, [f.files.record, f.files.lock, f.files.feature]);
+  // A live owner replaces the lock between status and recovery: it is kept and nothing is logged for it.
+  await writeFile(f.files.lock, JSON.stringify(ownerRecord));
+  const logged = t.mock.method(console, 'error', () => {});
+  await assert.rejects(recoverStale(stale), { message: `${f.files.lock} changed during recovery. Inspect status before retrying.` });
+  assert.equal(await readFile(f.files.lock, 'utf8'), JSON.stringify(ownerRecord)); assert.ok(await readFile(f.files.feature));
+  assert.equal(logged.mock.callCount(), 0);
+  assert.equal((await status('worker', f.state, f.options)).state, 'unreachable');
+  // Nothing left to remove logs nothing.
+  assert.deepEqual(await recoverStale({ ...stale, files: [join(f.root, 'absent.lock')] }), []); assert.equal(logged.mock.callCount(), 0);
 });

@@ -21,6 +21,7 @@ export async function featureFolder(action, options) {
   const project = await realpath(resolve(options['project-dir'] ?? process.cwd())), settings = join(project, '.werk'), configPath = join(settings, 'worker.json'), state = join(settings, 'worker');
   const { realDirectory } = await import(new URL('../../../src/worker/dist/worker/infrastructure/features/folder.js', import.meta.url));
   const { atomicWrite, readBoundedFile, syncDirectory } = await import(new URL('../../../src/worker/dist/worker/infrastructure/journal/files.js', import.meta.url));
+  const { ownerRecord } = await import(new URL('../../../src/worker/dist/shared/process/owner.js', import.meta.url));
   if (!await exists(join(settings, 'worker-project.json'))) throw inputError('No project worker found. Run worker init in this project first.');
   await realDirectory(settings); await realDirectory(state);
   const marker = await readPrivate(join(settings, 'worker-project.json'));
@@ -56,7 +57,7 @@ export async function featureFolder(action, options) {
   try {
     if (authoring) releaseAuthoring = await lockFeatureAuthoringMove(project);
     await planFeatureAuthoringMove(project, source.relative, target.relative, authoring?.checkpoint ?? null, !fromExists);
-    await lock.writeFile(JSON.stringify({ operation: 'feature-folder-change', pid: process.pid })); await lock.sync();
+    await lock.writeFile(JSON.stringify({ operation: 'feature-folder-change', ...ownerRecord })); await lock.sync();
     if (await readBoundedFile(configPath, 65536) !== raw) throw inputError('Configuration changed. Inspect feature folder get and retry.');
     if (!pending || pending.authoring === undefined) await atomicWrite(pendingPath, JSON.stringify({ ...(pending ?? { schemaVersion: 1, from: source.relative, to: target.relative, before: digest(raw), after: digest(next) }), authoring: authoring?.checkpoint ?? null }) + '\n');
     // The checkpoint blocks project startup until the move and configuration agree.

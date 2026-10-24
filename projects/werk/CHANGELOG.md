@@ -9,7 +9,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Fixed
 
-- After a crash or reboot, `status` reports `stale` when the recorded worker or app process is provably gone, and `start`, `stop` and `update apply` remove exactly its leftover `portable.json` and lock files instead of refusing with `unreachable` or `Feature folder is locked`.
+- After a crash or reboot, `status` reports `stale` when the recorded worker or app process is provably gone, and `start`, `stop` and `update apply` remove exactly its leftover `portable.json` and lock files instead of refusing with `unreachable` or `Feature folder is locked`. State written by 0.15.0 or earlier is not recovered automatically; follow the printed files and check once.
 - `update apply` and `install.mjs` scale the archive extraction timeout with the number of release entries (300 s minimum, 200 ms per entry) and, on a timeout, tell you to extract the archive yourself and use `update apply --from`.
 - macOS CI partitions the complete test inventory into four disjoint groups and retains immediate TAP failure details plus exact suite manifests, preserving existing assertions, per-test limits and execution concurrency.
 
