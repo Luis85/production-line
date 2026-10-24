@@ -16,6 +16,16 @@ subscribes:
   - "[[Pull Request Updated]]"
   - "[[New Increment Created]]"
   - "[[Increment Updated]]"
+order: 50625
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
 ---
 
 ## Properties

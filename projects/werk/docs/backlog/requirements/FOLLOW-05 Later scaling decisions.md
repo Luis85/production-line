@@ -9,6 +9,14 @@ tags:
   - follow-on
 started: 2026-10-12
 parent: "[[Cross-Cutting Concerns]]"
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
 ---
 
 # Later scaling decisions

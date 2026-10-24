@@ -2,6 +2,9 @@ filters:
   and:
     - file.ext == "md"
     - file.inFolder("projects/werk/docs")
+properties:
+  file.name:
+    displayName: file name
 views:
   - type: product-backlog
     name: Backlog
@@ -83,6 +86,10 @@ views:
       - type
       - file.name
       - description
+    columnSize:
+      note.type: 125
+      file.name: 227
+      note.description: 121
   - type: table
     name: Relations
     filters:
@@ -105,6 +112,43 @@ views:
       note.relation_type: 153
       note.status: 135
       note.color: 140
+  - type: table
+    name: Processes
+    filters:
+      and:
+        - file.inFolder("projects/werk/docs/processes")
+    order:
+      - order
+      - file.name
+      - inputs
+      - outputs
+      - emits
+      - rules
+      - next_step
+      - prev_step
+      - actors
+      - interfaces
+    sort:
+      - property: order
+        direction: ASC
+    columnSize:
+      file.name: 143
+      note.inputs: 339
+      note.outputs: 311
+      note.emits: 478
+      note.rules: 150
+      note.next_step: 147
+      note.prev_step: 151
+  - type: table
+    name: Rules
+    filters:
+      and:
+        - file.inFolder("projects/werk/docs/rules")
+    order:
+      - file.name
+      - validates
+    columnSize:
+      file.name: 229
   - type: table
     name: Data Quality
     groupBy:

@@ -9,6 +9,13 @@ tags:
   - journey
 finished: 2026-10-12
 parent: "[[Cross-Cutting Concerns]]"
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
 ---
 
 ## Scope and evidence

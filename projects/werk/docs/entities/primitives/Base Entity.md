@@ -8,6 +8,16 @@ color:
 relations:
 tags:
 aliases:
+order: 50921.875
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
 ---
 # Base Entity
 

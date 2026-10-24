@@ -11,6 +11,14 @@ priority: P0
 dependsOn:
   - "[[P0-02 Versioned live execution and evidence contracts]]"
 parent: "[[The Worker]]"
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+assignee: ""
+iteration: ""
 ---
 
 # P0-03 Worker workspace and provider process runner

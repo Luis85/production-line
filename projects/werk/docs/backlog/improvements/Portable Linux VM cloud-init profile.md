@@ -8,6 +8,14 @@ tags:
   - runtime
   - journey
 parent: "[[Cross-Cutting Concerns]]"
+started: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
 ---
 
 ## Scope and evidence

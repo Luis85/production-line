@@ -11,4 +11,14 @@ category:
 relations:
 aliases:
 tags:
+order: 51000
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
 ---

@@ -12,6 +12,14 @@ dependsOn:
   - "[[P0-02 Versioned live execution and evidence contracts]]"
   - "[[P0-03 Worker workspace and provider process runner]]"
 parent: "[[The Worker]]"
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+assignee: ""
+iteration: ""
 ---
 
 # P0-04 Durable publication intent and lease-fenced Git-host adapter

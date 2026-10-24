@@ -11,6 +11,14 @@ priority: P0
 dependsOn:
   - "[[P0-01 Project binding and pinned requirement context]]"
 parent: "[[The Worker]]"
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+assignee: ""
+iteration: ""
 ---
 
 # P0-02 Versioned live execution and evidence contracts

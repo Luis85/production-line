@@ -8,6 +8,15 @@ tags:
   - planned
   - follow-on
 parent: "[[The Worker]]"
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
 ---
 
 # Optional Docker Agent transport

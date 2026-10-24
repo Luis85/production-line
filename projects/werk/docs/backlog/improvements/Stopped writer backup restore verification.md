@@ -5,6 +5,14 @@ order: 43992.1875
 status: Done
 finished: 2026-10-12
 parent: "[[The Worker]]"
+started: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
 ---
 
 ## Acceptance and verification

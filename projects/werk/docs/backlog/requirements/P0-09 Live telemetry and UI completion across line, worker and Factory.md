@@ -15,6 +15,13 @@ dependsOn:
   - "[[P0-08 Second native provider adapter, mixed profiles and shared quota policy]]"
 started: 2026-10-12
 parent: "[[Cross-Cutting Concerns]]"
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+assignee: ""
+iteration: ""
 ---
 
 # P0-09 Live telemetry and UI completion across line, worker and Factory

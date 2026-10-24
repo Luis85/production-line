@@ -10,6 +10,13 @@ tags:
 priority: P0
 started: 2026-10-12
 parent: "[[The Worker]]"
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+assignee: ""
+iteration: ""
 ---
 
 # P0-01 Project binding and pinned requirement context

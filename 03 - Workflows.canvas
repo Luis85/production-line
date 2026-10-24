@@ -1,14 +1,84 @@
 {
 	"nodes":[
-		{"id":"9d0a1410786212db","type":"group","x":-1200,"y":-280,"width":4260,"height":600,"label":"Direct Feature Request to a Worker through the Webview"},
+		{"id":"9d0a1410786212db","type":"group","x":-1200,"y":-280,"width":6540,"height":600,"label":"Direct Feature Request to a Worker through the Webview"},
 		{"id":"53440456eb6540b1","type":"file","file":"projects/werk/docs/entities/Queue.md","x":984,"y":-190,"width":400,"height":400},
-		{"id":"b0d1ed24d70bd0e9","type":"file","file":"projects/werk/docs/entities/Worktree.md","x":1510,"y":-190,"width":400,"height":400},
-		{"id":"570f22b8a3f85e2b","type":"file","file":"projects/werk/docs/entities/Increment.md","x":2036,"y":-190,"width":400,"height":400},
-		{"id":"67c1ffd917800ccf","type":"file","file":"projects/werk/docs/entities/Pull Request.md","x":2560,"y":-190,"width":400,"height":400},
 		{"id":"c64c0ac1c85a6613","type":"file","file":"projects/werk/docs/entities/System User.md","x":-1120,"y":-190,"width":400,"height":400},
 		{"id":"712395f22ffc7a86","type":"file","file":"projects/werk/docs/entities/Feature Request.md","x":-594,"y":-190,"width":400,"height":400},
 		{"id":"220bb354d9e6e638","type":"file","file":"projects/werk/docs/entities/Webview Intake Form.md","x":-68,"y":-190,"width":400,"height":400},
-		{"id":"66d37d4861c403d9","type":"file","file":"projects/werk/docs/entities/Worker.md","x":458,"y":-190,"width":400,"height":400}
+		{"id":"66d37d4861c403d9","type":"file","file":"projects/werk/docs/entities/Worker.md","x":458,"y":-190,"width":400,"height":400},
+		{"id":"b0d1ed24d70bd0e9","type":"file","file":"projects/werk/docs/entities/Worktree.md","x":1800,"y":-190,"width":400,"height":400},
+		{
+			"id":"8527fee824c2b17d",
+			"type":"text",
+			"text":"Production",
+			"styleAttributes":{"shape":"predefined-process","textAlign":"center"},
+			"x":2280,
+			"y":-20,
+			"width":260,
+			"height":60
+		},
+		{"id":"570f22b8a3f85e2b","type":"file","file":"projects/werk/docs/entities/Increment.md","x":2640,"y":-190,"width":400,"height":400},
+		{
+			"id":"0a588a9f89463509",
+			"type":"text",
+			"text":"Post-Production",
+			"styleAttributes":{"shape":"predefined-process","textAlign":"center"},
+			"x":3114,
+			"y":-20,
+			"width":260,
+			"height":60
+		},
+		{"id":"67c1ffd917800ccf","type":"file","file":"projects/werk/docs/entities/Pull Request.md","x":3474,"y":-190,"width":400,"height":400},
+		{
+			"id":"79d219cea375c221",
+			"type":"text",
+			"text":"Publish",
+			"styleAttributes":{"textAlign":"center","shape":"predefined-process"},
+			"x":5000,
+			"y":-20,
+			"width":260,
+			"height":60
+		},
+		{
+			"id":"6dce7c45add8c69a",
+			"type":"text",
+			"text":"Review",
+			"styleAttributes":{"textAlign":"center","shape":"predefined-process"},
+			"x":3960,
+			"y":-20,
+			"width":260,
+			"height":60
+		},
+		{
+			"id":"5ae33adabc6f395d",
+			"type":"text",
+			"text":"Build",
+			"styleAttributes":{"textAlign":"center","shape":"predefined-process"},
+			"x":4654,
+			"y":-20,
+			"width":260,
+			"height":60
+		},
+		{
+			"id":"766e102f0b8f56f5",
+			"type":"text",
+			"text":"Merge",
+			"styleAttributes":{"textAlign":"center","shape":"predefined-process"},
+			"x":4307,
+			"y":-20,
+			"width":260,
+			"height":60
+		},
+		{
+			"id":"6b7885dd0554a98b",
+			"type":"text",
+			"text":"Pre-Production",
+			"styleAttributes":{"shape":"predefined-process","textAlign":"center"},
+			"x":1460,
+			"y":-20,
+			"width":260,
+			"height":60
+		}
 	],
 	"edges":[
 		{
@@ -53,7 +123,7 @@
 			"toFloating":false,
 			"fromNode":"53440456eb6540b1",
 			"fromSide":"right",
-			"toNode":"b0d1ed24d70bd0e9",
+			"toNode":"6b7885dd0554a98b",
 			"toSide":"left"
 		},
 		{
@@ -62,16 +132,79 @@
 			"toFloating":false,
 			"fromNode":"b0d1ed24d70bd0e9",
 			"fromSide":"right",
-			"toNode":"570f22b8a3f85e2b",
+			"toNode":"8527fee824c2b17d",
 			"toSide":"left"
 		},
 		{
-			"id":"cd69815c55c2e2cd",
+			"id":"339868c37ec29fde",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromNode":"0a588a9f89463509",
+			"fromSide":"right",
+			"toNode":"67c1ffd917800ccf",
+			"toSide":"left"
+		},
+		{
+			"id":"58112193ab82518a",
 			"styleAttributes":{},
 			"toFloating":false,
 			"fromNode":"570f22b8a3f85e2b",
 			"fromSide":"right",
-			"toNode":"67c1ffd917800ccf",
+			"toNode":"0a588a9f89463509",
+			"toSide":"left"
+		},
+		{
+			"id":"70bf672cf1817205",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromNode":"6b7885dd0554a98b",
+			"fromSide":"right",
+			"toNode":"b0d1ed24d70bd0e9",
+			"toSide":"left"
+		},
+		{
+			"id":"884119d0e2c21299",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromNode":"8527fee824c2b17d",
+			"fromSide":"right",
+			"toNode":"570f22b8a3f85e2b",
+			"toSide":"left"
+		},
+		{
+			"id":"105ec35c47410d2a",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromNode":"67c1ffd917800ccf",
+			"fromSide":"right",
+			"toNode":"6dce7c45add8c69a",
+			"toSide":"left"
+		},
+		{
+			"id":"ba637cb288d1cd82",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromNode":"6dce7c45add8c69a",
+			"fromSide":"right",
+			"toNode":"766e102f0b8f56f5",
+			"toSide":"left"
+		},
+		{
+			"id":"2c42d5eaa0ba2539",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromNode":"766e102f0b8f56f5",
+			"fromSide":"right",
+			"toNode":"5ae33adabc6f395d",
+			"toSide":"left"
+		},
+		{
+			"id":"e35ab842a05d9c2b",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromNode":"5ae33adabc6f395d",
+			"fromSide":"right",
+			"toNode":"79d219cea375c221",
 			"toSide":"left"
 		}
 	],

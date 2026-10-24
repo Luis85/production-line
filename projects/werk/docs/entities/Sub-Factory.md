@@ -12,4 +12,14 @@ subscribes:
   - "[[New Feature Request]]"
   - "[[New Pull Request]]"
 emits:
+order: 65000
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
 ---

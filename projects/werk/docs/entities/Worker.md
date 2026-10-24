@@ -17,4 +17,14 @@ emits:
 subscribes:
   - "[[New Feature Request]]"
   - "[[Feature Request Updated]]"
+order: 61000
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
 ---

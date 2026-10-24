@@ -8,4 +8,11 @@ tags:
   - production-hardening
 finished: 2026-10-12
 parent: "[[Factories and Production Lines]]"
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
 ---

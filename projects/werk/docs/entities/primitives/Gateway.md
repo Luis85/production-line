@@ -11,4 +11,14 @@ category:
 description:
 status:
 relations:
+order: 67000
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
 ---

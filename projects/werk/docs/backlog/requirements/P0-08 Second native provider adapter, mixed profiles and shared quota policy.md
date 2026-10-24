@@ -12,6 +12,14 @@ dependsOn:
   - "[[P0-03 Worker workspace and provider process runner]]"
   - "[[P0-07 Durable Git event ingestion, feedback attempts and verified merge]]"
 parent: "[[The Worker]]"
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+assignee: ""
+iteration: ""
 ---
 
 # P0-08 Second native provider adapter, mixed profiles and shared quota policy

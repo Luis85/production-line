@@ -11,4 +11,14 @@ parent: "[[System]]"
 relations:
 aliases:
 tags:
+order: 56000
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
 ---

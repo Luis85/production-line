@@ -13,4 +13,14 @@ subscribes:
   - "[[New Pull Request]]"
   - "[[Feature Request Updated]]"
   - "[[Pull Request Updated]]"
+order: 50500
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
 ---

@@ -17,4 +17,14 @@ subscribes:
   - "[[Increment Updated]]"
   - "[[New Increment Created]]"
 emits:
+order: 78000
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
 ---

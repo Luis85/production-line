@@ -11,6 +11,14 @@ priority: P0
 dependsOn:
   - "[[P0-06 Head-bound quality gates and human review request]]"
 parent: "[[The Worker]]"
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+assignee: ""
+iteration: ""
 ---
 
 # P0-07 Durable Git event ingestion, feedback attempts and verified merge

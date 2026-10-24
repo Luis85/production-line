@@ -12,6 +12,14 @@ dependsOn:
   - "[[P0-03 Worker workspace and provider process runner]]"
   - "[[P0-04 Durable publication intent and lease-fenced Git-host adapter]]"
 parent: "[[The Worker]]"
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+assignee: ""
+iteration: ""
 ---
 
 # P0-05 First real Claude or Codex adapter integrated end to end

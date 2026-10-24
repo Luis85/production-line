@@ -9,6 +9,14 @@ tags:
   - follow-on
 priority: P1
 parent: "[[The Worker]]"
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+assignee: ""
+iteration: ""
 ---
 
 # P1 planning fidelity

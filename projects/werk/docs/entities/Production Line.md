@@ -11,4 +11,14 @@ tags:
 subscribes:
   - "[[New Feature Request]]"
   - "[[New Pull Request]]"
+order: 59000
+started: ""
+finished: ""
+horizon: ""
+start: ""
+due: ""
+risk: ""
+priority: ""
+assignee: ""
+iteration: ""
 ---
