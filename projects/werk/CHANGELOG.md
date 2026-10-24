@@ -19,6 +19,10 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 - A failed `start` now stops the worker or app process it launched (graceful stop, then its own process tree after 10 s) and removes the state it left, instead of leaving it running without serving its port; the startup deadline grows from 25 s to 120 s and `--startup-timeout-ms` or `WERK_STARTUP_TIMEOUT_MS` (5000–900000) raises it on a busy host.
 - `update apply --stop` and `update rollback --stop` validate `WERK_STARTUP_TIMEOUT_MS` before stopping the running app, so an invalid value fails with nothing stopped or replaced.
 
+### Security
+
+- Updated undici to 8.12.3 (GHSA-4qv8-2p9j-2685, GHSA-f72v-6w45-q472, GHSA-xjj6-f33q-929c), the fast-uri dependency and the Fallow quality gate to 3.35.0 (GHSA-h4fr-cmh5-qr62, GHSA-jfwm-3p3c-6hx5).
+
 ## [0.15.0] - 2026-10-23
 
 Qualification: the live Windows/Claude Code pilot, full provider/account matrix and worker-managed live GitHub publication remain pending. Portable contract fixtures and installation checks do not establish those live outcomes. The tagged release subsequently completed the full 24-target v5 mutation measurement at 91.03%: 3,493 killed, 40 timeout detections, 328 surviving and 20 uncovered mutants. The 348 surviving/uncovered findings remain advisory; the changed scope is not directly comparable with v4. [Tagged measurement](https://github.com/Luis85/production-line/actions/runs/40021539389/artifacts/12531955702).
