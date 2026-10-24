@@ -112,7 +112,9 @@ worktrees this worker created, their state and the file task still using each.
 clean ones no file task uses; add `--discard-changes true` to also remove changed
 or interrupted ones. Worktrees with commits, locks, symbolic links or junctions
 are always kept for manual review. The same private endpoint is
-available with `api --path /api/repositories`. Local file tasks select the assignment ID
+available with `api --path /api/repositories`. In Git Bash, prefix any `api --path`
+command with `MSYS_NO_PATHCONV=1` (or use PowerShell or cmd), because MSYS converts
+arguments that start with `/` into Windows paths. Local file tasks select the assignment ID
 in their existing `repository` field. Assigning repositories does not change
 mock execution or give provider Chat arbitrary filesystem tools. See the
 [configuration contract](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/configuration.md#assigned-git-repositories).

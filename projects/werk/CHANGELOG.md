@@ -15,6 +15,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 - macOS CI partitions the complete test inventory into four disjoint groups and retains immediate TAP failure details plus exact suite manifests, preserving existing assertions, per-test limits and execution concurrency.
 - Worker-owned rewrites of Feature Request notes (status changes, the generated-block migration on first start after an upgrade) no longer leave a copy in `_conflicts`; a copy is kept only when an editor saved into the note while the worker was publishing.
 - `init --intake local` adds `/feature-reviews/` to the checkout's Git local exclude file, so the default review folder no longer appears as an untracked folder in an operator-only project.
+- `api --path` in Git Bash now explains that MSYS converted the path and to rerun with `MSYS_NO_PATHCONV=1`, and the delivery-policy and portable-app docs note the workaround.
 
 ## [0.15.0] - 2026-10-23
 

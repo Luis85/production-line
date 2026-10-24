@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { candidateInspectionBounds } from '../../src/worker/dist/worker/application/execution-policy.js';
 const execute = promisify(execFile);
 const cli = new URL('../../scripts/runtime/portable/cli.mjs', import.meta.url).href;
@@ -37,4 +39,14 @@ test('other app help keeps worker-only configuration out of its contract', async
     assert.equal(value.requestGates, undefined);
     assert.equal(value.commands.health.method, 'GET');
   }
+});
+test('api --path explains a Git Bash converted path and keeps the generic message otherwise', async () => {
+  const state = join(tmpdir(), 'werk-cli-msys-state');
+  const run = path => execute(process.execPath, ['--input-type=module', '-e',
+    `const {main}=await import(${JSON.stringify(cli)});await main('worker',['api','--state-dir',${JSON.stringify(state)},'--path',${JSON.stringify(path)}]);`], { timeout: 10000 }).then(() => assert.fail('expected rejection'), error => JSON.parse(error.stderr));
+  for (const converted of ['C:/Program Files/Git/api/requests', String.raw`C:\Program Files\Git\api\requests`]) {
+    const value = await run(converted);
+    assert.match(value.error, /Git Bash converted/); assert.match(value.error, /MSYS_NO_PATHCONV=1/); assert.equal(value.exitCode, 2);
+  }
+  assert.match((await run('api/requests')).error, /Use a local API path and supported method/);
 });

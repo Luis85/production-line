@@ -124,6 +124,7 @@ export async function main(kind, argv = process.argv.slice(2)) {
     if (command?.body && !command.inputBodyOptional && !o.file) throw inputError('--file required (use - for stdin).');
     const method = command?.method ?? o.method ?? 'GET';
     let path = command?.path ?? o.path;
+    if (typeof path === 'string' && /^[A-Za-z]:[\\/]/.test(path)) throw inputError('Git Bash converted the --path value into a Windows path. Rerun with MSYS_NO_PATHCONV=1 (or from PowerShell or cmd).');
     if (!path || !/^\/(?!\/)/.test(path) || !['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) throw inputError('Use a local API path and supported method.');
     if (path.includes(':id')) path = path.replace(':id', encodeURIComponent(o.id));
     const yamlProfile = kind === 'worker' && isYamlProfile(cmd, o.file);
