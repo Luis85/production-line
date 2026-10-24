@@ -58,13 +58,18 @@ async function absent(path) {
   throw Error(`Destination already exists: ${path}. Existing files were preserved. Start that installation with node werk.mjs up, or choose another --directory.`);
 }
 
+/**
+ * @param {any} config
+ * @param {any} options
+ * @param {{ fetcher?: typeof fetch, log?: (message: string) => void, exec?: (file: string, args: string[], options: object) => any }} [seams] `exec` runs tar (tests inject failures).
+ */
 export async function install(config, options, { fetcher = fetch, log = console.log, exec = execFileSync } = {}) {
   if (process.versions.node.split('.')[0] !== '24') throw Error('Werk requires Node.js 24.x. Install Node 24 and retry.');
   if (!config || !/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/.test(config.version) || !/^[\w.-]+\/[\w.-]+$/.test(config.repository) || !/^[a-f0-9]{64}$/.test(config.sha256)) throw Error('Use install.mjs from a published GitHub release, not the source template.');
   const name = `werk-${config.version}`, archive = `${name}.tar.gz`;
   const parent = resolve(options.directory), destination = join(parent, name);
   await absent(destination);
-  try { execFileSync('tar', ['--version'], { stdio: 'ignore', timeout: 10000, windowsHide: true }); }
+  try { exec('tar', ['--version'], { stdio: 'ignore', timeout: 10000, windowsHide: true }); }
   catch { throw Error('tar is required on PATH (included in current Windows, macOS and most Linux systems).'); }
   await mkdir(parent, { recursive: true });
   const staging = await mkdtemp(join(parent, '.werk-install-'));
