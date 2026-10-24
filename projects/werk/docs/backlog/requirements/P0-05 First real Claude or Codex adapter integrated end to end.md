@@ -1,7 +1,7 @@
 ---
 pbl-id: 5
 type: PBI
-order: 5000
+order: 43484.375
 status: Open
 tags:
   - implementation-plan
@@ -11,6 +11,7 @@ priority: P0
 dependsOn:
   - "[[P0-03 Worker workspace and provider process runner]]"
   - "[[P0-04 Durable publication intent and lease-fenced Git-host adapter]]"
+parent: "[[The Worker]]"
 ---
 
 # P0-05 First real Claude or Codex adapter integrated end to end

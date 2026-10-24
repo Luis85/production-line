@@ -1,12 +1,13 @@
 ---
 pbl-id: 38
 type: PBI
-order: 38000
+order: 41500
 status: Done
 finished: 2026-10-12
 tags:
   - runtime
   - journey
+parent: "[[Factories and Production Lines]]"
 ---
 
 ## Scope and evidence

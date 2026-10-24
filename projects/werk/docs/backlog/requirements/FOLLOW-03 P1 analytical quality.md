@@ -1,13 +1,14 @@
 ---
 pbl-id: 12
 type: PBI
-order: 12000
+order: 43499.511719
 status: Open
 tags:
   - implementation-plan
   - planned
   - follow-on
 priority: P1
+parent: "[[The Worker]]"
 ---
 
 # P1 analytical quality

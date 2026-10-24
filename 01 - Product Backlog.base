@@ -38,3 +38,15 @@ views:
     iterationProperty: note.iteration
     iterationGoalProperty: note.goal
     releaseProperty: note.release
+  - type: table
+    name: Data Quality
+    groupBy:
+      property: type
+      direction: ASC
+    order:
+      - type
+      - file.name
+      - status
+      - tags
+    columnSize:
+      file.name: 579

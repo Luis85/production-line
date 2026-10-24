@@ -1,7 +1,7 @@
 ---
 pbl-id: 4
 type: PBI
-order: 4000
+order: 43468.75
 status: Open
 tags:
   - implementation-plan
@@ -11,6 +11,7 @@ priority: P0
 dependsOn:
   - "[[P0-02 Versioned live execution and evidence contracts]]"
   - "[[P0-03 Worker workspace and provider process runner]]"
+parent: "[[The Worker]]"
 ---
 
 # P0-04 Durable publication intent and lease-fenced Git-host adapter

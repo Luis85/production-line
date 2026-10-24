@@ -1,9 +1,10 @@
 ---
 pbl-id: 26
 type: Improvement
-order: 26000
+order: 43992.1875
 status: Done
 finished: 2026-10-12
+parent: "[[The Worker]]"
 ---
 
 ## Acceptance and verification

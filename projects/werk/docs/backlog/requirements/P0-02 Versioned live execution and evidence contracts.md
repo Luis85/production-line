@@ -1,7 +1,7 @@
 ---
 pbl-id: 2
 type: PBI
-order: 2000
+order: 43375
 status: Open
 tags:
   - implementation-plan
@@ -10,6 +10,7 @@ tags:
 priority: P0
 dependsOn:
   - "[[P0-01 Project binding and pinned requirement context]]"
+parent: "[[The Worker]]"
 ---
 
 # P0-02 Versioned live execution and evidence contracts

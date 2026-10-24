@@ -1,7 +1,7 @@
 ---
 pbl-id: 3
 type: PBI
-order: 3000
+order: 43437.5
 status: Open
 tags:
   - implementation-plan
@@ -10,6 +10,7 @@ tags:
 priority: P0
 dependsOn:
   - "[[P0-02 Versioned live execution and evidence contracts]]"
+parent: "[[The Worker]]"
 ---
 
 # P0-03 Worker workspace and provider process runner
