@@ -21,6 +21,13 @@ Start any subset in any order. `start` returns JSON when the app and authenticat
 control endpoint are ready; `run` stays in the foreground for CI, systemd, launchd,
 Windows services or containers. Use `--port 0` for an available port and read `url`
 from the result. Workers open Taskboard first; Factory and orchestrators open Dashboard.
+`start` waits up to 120 s for the app to report ready. On a busy host raise the deadline
+with `--startup-timeout-ms` (5000–900000) or the process environment variable
+`WERK_STARTUP_TIMEOUT_MS`; the option wins over the variable. A start that fails (deadline,
+startup error or lost IPC channel) asks the launched process to stop, waits up to 10 s,
+then ends that process and its children by PID (`taskkill /PID <pid> /T /F` on Windows, its
+process group on POSIX) and removes the `portable.json` and lock it left; the error names
+the log, or the PID when the process could not be stopped.
 Startup returns the private credential **file path**, never its contents. Open the
 returned URL and unlock the webview using that file locally. The CLI reads local
 credentials itself. Workers may enroll later through `settings set`; Factory can
@@ -66,7 +73,9 @@ under `DIR` (see [keep the project root tidy](https://github.com/Luis85/producti
 `--intake shared|local` (default `shared`) chooses the request source. `local` is for an operator-only
 worker: it writes `<features-dir>/_templates/local-request.md` (no `templateId`, `status: draft`,
 `mode: patch`, your provider, commented `paths` and `definitionRef`), records `features.intake: "local"` in
-`.werk/worker.json`, and reports `intake: { mode: "local", connectionRequired: false, template, commands, next }`
+`.werk/worker.json`, appends `/feature-reviews/` to the checkout's `.git/info/exclude` when the project is a Git
+checkout root and the folder has no tracked files, and reports
+`intake: { mode: "local", connectionRequired: false, template, commands, excluded, warnings, next }`
 instead of `shared_git`. Such a worker's detected checkout is accepted with `watch: false` unless
 `repository accept --watch true` says otherwise, and `shared status` and `feature list` add
 `intake: "local"` and a `hint` until a shared repository binding is saved. That binding
@@ -110,7 +119,9 @@ worktrees this worker created, their state and the file task still using each.
 clean ones no file task uses; add `--discard-changes true` to also remove changed
 or interrupted ones. Worktrees with commits, locks, symbolic links or junctions
 are always kept for manual review. The same private endpoint is
-available with `api --path /api/repositories`. Local file tasks select the assignment ID
+available with `api --path /api/repositories`. In Git Bash, prefix any `api --path`
+command with `MSYS_NO_PATHCONV=1` (or use PowerShell or cmd), because MSYS converts
+arguments that start with `/` into Windows paths. Local file tasks select the assignment ID
 in their existing `repository` field. Assigning repositories does not change
 mock execution or give provider Chat arbitrary filesystem tools. See the
 [configuration contract](https://github.com/Luis85/production-line/blob/main/projects/werk/docs/reference/configuration.md#assigned-git-repositories).
@@ -161,8 +172,19 @@ conditions. Resource snapshots measure the worker Node process, not provider
 subprocess totals or subscription balances. Fleet `workers.execution.timeoutMs`
 is a separate deployment policy with its own bounds; see
 the release guides `docs/reference/configuration.md` and
-`docs/reference/system-definition.md`. `status` distinguishes running, stopping, stopped and unreachable;
+`docs/reference/system-definition.md`. `status` distinguishes running, stopping, stopped, stale and unreachable;
 unreachable exits 1. A running process is not necessarily connected to its upstream.
+`stale` means the process recorded in the state (`pid`) on this host no longer exists, or
+its PID now belongs to a process with a different recorded start identity; `files` lists
+the leftover `portable.json`, application lock and, for a project worker, the feature
+folder `_worker.lock`, each proven dead by its own record. `start`, `run`, `stop` and
+`update apply`/`rollback` remove exactly those files, re-checking each first, log a
+`stale_state_recovered` line and continue as stopped. State written by 0.15.0 or
+earlier records no host or start identity and stays `unreachable`; follow the printed
+files and check once. `unreachable` means the owner may still run, its PID is unknown, or it was
+recorded elsewhere, such as in a Docker container sharing the state; its
+`files` and `action` name the paths and a check such as `Get-Process -Id PID`
+(Windows) or `ps -p PID` (POSIX).
 Use `health` and `monitoring` to inspect application readiness and current conditions.
 
 ```sh
@@ -175,9 +197,10 @@ node bin/apps/worker/cli.mjs stop --state-dir .werk/worker-a
 `stop` authenticates the specific instance and drains/cancels work through the
 application's shutdown path. It never kills a stored PID. Repeating stop on a stopped
 app succeeds. A second start of an already running instance is rejected, so changed
-launch options cannot be silently ignored. After a crash, inspect the private log
-and verify that the owning process has exited before removing stale lifecycle
-metadata and its lock. Never remove locks from a running app.
+launch options cannot be silently ignored. After a crash or reboot, files of a
+provably gone process are recovered automatically (`stale`). When status stays
+`unreachable`, inspect the private log and verify that the listed PID has exited
+before removing the listed files. Never remove locks from a running app.
 
 State defaults to `.werk/<app>` under the invoking project, outside the copied app.
 Use a separate state directory and port for each instance. Keep state private and
@@ -207,7 +230,8 @@ extracts it and verifies the complete release inventory, exactly like `install.m
 The release must declare update protocol 1 and state format 1, and must be newer:
 an older `--version` is refused (use `rollback`). Without network access, extract a
 release you verified yourself and pass `--from /path/werk-X.Y.Z`; its own release
-manifest is verified.
+manifest is verified. The same route works when extraction is too slow on your
+machine: extract the archive yourself, then apply with `--from`.
 
 Before anything changes, `apply` copies the release's `bin/apps/<app>` into a
 staging folder beside the app, verifies every staged file against the release
@@ -229,7 +253,9 @@ manifest and runs the staged CLI once. Then it:
    stays pinned during restart. Instances started by
    0.8 or earlier recorded none: they restart with the state directory, project
    defaults and previous port. A foreground `run` is left for its terminal or
-   service manager. `--no-restart` skips the restart.
+   service manager. `--no-restart` skips the restart. The restart does not replay
+   `--startup-timeout-ms`; set `WERK_STARTUP_TIMEOUT_MS` in the environment of
+   `update apply` to give it a longer startup deadline.
 
 If another process holds the app folder open and must keep running, so the folder
 cannot be renamed (the `Could not move` error described below), pass

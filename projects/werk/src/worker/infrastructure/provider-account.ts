@@ -2,7 +2,7 @@ import { processRuntimePreparing } from '../../shared/process/launcher.js';
 import { providerAuthenticationEnvironment } from './provider-authentication.js';
 import { constants } from 'node:fs';
 import { access } from 'node:fs/promises';
-import { providerProbeKey, runProviderProbe } from './provider-process.js';
+import { providerProbeKey, providerProbeTimeoutMs, runProviderProbe } from './provider-process.js';
 import type { ProviderConnection, ProviderId } from '../application/provider-contract.js';
 import type { ProviderAccountStatus } from '../application/provider-account.js';
 
@@ -68,7 +68,7 @@ export class ProviderAccountChecks {
     try { await access(connection.executable, constants.X_OK); } catch { return this.unavailable(connection.id, 'The saved CLI executable cannot be run by the worker account.'); }
     try {
       const args = connection.id === 'codex-cli' ? ['login', 'status'] : connection.id === 'cursor-cli' ? ['status'] : ['auth', 'status'];
-      const result = await runProviderProbe(connection.executable, connection.id === 'codex-cli' ? 'codex' : connection.id === 'cursor-cli' ? 'cursor' : 'claude', args, { signal: this.controller.signal, timeoutMs: 5000, maxOutputBytes: 16384 }, providerAuthenticationEnvironment(connection));
+      const result = await runProviderProbe(connection.executable, connection.id === 'codex-cli' ? 'codex' : connection.id === 'cursor-cli' ? 'cursor' : 'claude', args, { signal: this.controller.signal, timeoutMs: providerProbeTimeoutMs, maxOutputBytes: 16384 }, providerAuthenticationEnvironment(connection));
       return parseProviderAccount(connection.id, result.exitCode, result.stdout.toString('utf8'), result.stderr.toString('utf8'));
     } catch { return this.unavailable(connection.id, processRuntimePreparing() ? 'The Windows command runtime is preparing. Retry shortly; no account identity was confirmed.' : 'The account check failed, timed out or returned too much output. Retry after checking the CLI installation.'); }
   }

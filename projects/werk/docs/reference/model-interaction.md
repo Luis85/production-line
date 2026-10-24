@@ -295,7 +295,7 @@ dispatches wait for setup within their existing invocation deadline. A shorter
 invocation, command or probe deadline still wins. Read-only files, web requests
 and HTTP MCP tools do not require native setup; stdio MCP, command, candidate and
 other process-capable tools do. Diagnostic and pilot commands announce setup
-before running their unchanged five-second provider checks.
+before running their provider checks (15-second probe deadlines, with one retry of the login probe).
 
 ## Private interaction API and CLI
 

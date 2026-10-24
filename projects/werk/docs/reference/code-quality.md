@@ -1,6 +1,6 @@
 # Code quality and architecture checks
 
-Werk uses pinned Oxlint 1.88.0 and Fallow 3.33.1 alongside TypeScript and its
+Werk uses pinned Oxlint 1.88.0 and Fallow 3.35.0 alongside TypeScript and its
 existing architecture tests. They run in normal development and CI. The tools
 inspect maintained source; downloaded runtime archives do not need them.
 Mutation testing is a separate, advisory release experiment described in

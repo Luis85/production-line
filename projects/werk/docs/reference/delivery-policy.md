@@ -14,6 +14,8 @@ The installed CLI uses the same authenticated application commands and reads the
 node bin/apps/worker/cli.mjs api --path /api/requests --method POST --file policy-command.json
 ```
 
+In Git Bash, prefix the command with `MSYS_NO_PATHCONV=1` (or use PowerShell or cmd). MSYS converts arguments that start with `/` into Windows paths, which makes `api --path /api/requests` fail with "Use a local API path and supported method".
+
 Begin with `{ "action": "delivery_projects" }` to find the assigned repository ID. Then inspect the complete committed policy with `{ "action": "delivery_policy", "projectId": "your-repository-id" }`. Review the returned configuration, `configurationDigest` and `approvalRevision` before approving it:
 
 ```json

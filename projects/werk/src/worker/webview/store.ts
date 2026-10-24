@@ -98,9 +98,12 @@ export async function createFeatureRequest(command: FeatureRequestCommand, onPro
   }
   return access === accessGeneration && state.unlocked ? accepted : undefined;
 }
-export async function request<T = any>(path: string, method = 'GET', body?: unknown): Promise<T> {
+const REQUEST_TIMEOUT_MS = 10000;
+/** A provider check probes a cold CLI (15 s per probe, one login retry), so it outlasts ordinary requests. */
+export const PROVIDER_CHECK_TIMEOUT_MS = 60000;
+export async function request<T = any>(path: string, method = 'GET', body?: unknown, timeoutMs = REQUEST_TIMEOUT_MS): Promise<T> {
   const access = accessGeneration;
-  return requestJson<T>(path, jsonRequestInit({ method, body, credentials: 'same-origin', timeoutMs: 10000, headers: { 'X-Werk-Request': 'webview' } }), {
+  return requestJson<T>(path, jsonRequestInit({ method, body, credentials: 'same-origin', timeoutMs, headers: { 'X-Werk-Request': 'webview' } }), {
     onResponse: response => { if (response.status === 401 && path !== '/api/access' && access === accessGeneration) { relock(); state.accessMessage = 'Your access expired or the worker restarted. Unlock to return to your task. Your unsent draft is kept in this tab.'; } },
     invalidJson: status => status >= 400 ? `Request failed (${status})` : 'The worker returned unreadable JSON.',
   });

@@ -1,4 +1,37 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { lstat, mkdir, open, readFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 import { inputError } from '../config.mjs';
+
+const runFile = promisify(execFile), reviewFolder = 'feature-reviews', reviewEntry = '/feature-reviews/';
+const gitOutput = (project, args) => runFile('git', ['-c', 'core.quotePath=false', ...args], { cwd: project, timeout: 30000, maxBuffer: 1048576, windowsHide: true, encoding: 'utf8' }).then(result => result.stdout);
+/**
+ * Plans keeping the default review folder out of an operator-only checkout without changing the committed policy default.
+ * Runs before anything is installed, so a non-regular exclude file fails init before Git reads it for other checks.
+ * Only a project at the root of a Git checkout is touched (the entry is anchored there); anything else is skipped silently.
+ * A skip caused by tracked review files adds a warning.
+ * @returns {Promise<{ path?: string, warnings: string[] }>}
+ */
+export async function planReviewExclude(project) {
+  const lines = await gitOutput(project, ['rev-parse', '--show-prefix', '--git-path', 'info/exclude']).then(output => output.split(/\r?\n/), () => undefined);
+  if (!lines || lines[0] !== '' || !lines[1]) return { warnings: [] };
+  const path = resolve(project, lines[1]);
+  const info = await lstat(path).catch(error => { if (error.code !== 'ENOENT') throw error; });
+  if (info && (!info.isFile() || info.isSymbolicLink())) throw inputError('The Git local exclude file must be a regular file, not a link or folder: ' + path);
+  if ((await gitOutput(project, ['ls-files', '--', reviewFolder])).trim()) return { warnings: [`${reviewFolder}/ has tracked files, so ${reviewEntry} was not added to ${lines[1]}. Exclude it yourself if review notes should stay local.`] };
+  return { path, warnings: [] };
+}
+/** Appends the planned entry once. `excluded` is empty when the plan skipped the checkout. */
+export async function excludeReviewFolder({ path, warnings }) {
+  if (!path) return { excluded: [], warnings };
+  const previous = await readFile(path, 'utf8').catch(error => { if (error.code !== 'ENOENT') throw error; return ''; });
+  if (!previous.split(/\r?\n/).map(line => line.trimEnd()).includes(reviewEntry)) {
+    await mkdir(dirname(path), { recursive: true });
+    const file = await open(path, 'a', 0o600); try { await file.writeFile((previous && !previous.endsWith('\n') ? '\n' : '') + reviewEntry + '\n'); } finally { await file.close(); }
+  }
+  return { excluded: [reviewEntry], warnings };
+}
 
 export const localTemplateName = '_templates/local-request.md';
 /** Reads --intake; absent means "keep what the project has, otherwise shared". */
@@ -57,13 +90,13 @@ provider: ${JSON.stringify(provider)}
 # Choose a unique request ID and review the approved paths before submission.
 # Local requests have no templateId; shared Git requests use their separate team template.`);
 }
-/** `relative` is the project-relative POSIX path used in the copy-paste commands. */
-export function localIntakeResult(template, relative) {
+/** `relative` is the project-relative POSIX path used in the copy-paste commands; `excluded` and `warnings` come from excludeReviewFolder. */
+export function localIntakeResult(template, relative, { excluded, warnings }) {
   const cli = 'node bin/apps/worker/cli.mjs', request = 'request.md', draft = 'request-draft.md';
   return {
-    mode: 'local', connectionRequired: false, template,
+    mode: 'local', connectionRequired: false, template, excluded, warnings,
     source: 'Requests are Markdown files in the feature folder; shared Git intake is intentionally off and repository watching defaults to off.',
     commands: { copy: `Copy ${relative} to ${draft} outside the feature folder, choose a unique id, review paths, and edit the title and body.`, create: `${cli} feature create --name ${request} --markdown ${draft}`, validate: `${cli} feature validate --name ${request}`, submit: `${cli} feature submit --name ${request} --if-match REVISION` },
-    next: `Start the worker. Copy ${relative} to a new .md note in the feature folder, choose a unique request id, review the approved paths (a folder entry ends with /), and finish its content. Set intent: submit when it is ready. Drafts never run; duplicate IDs block both notes. For CLI intake, keep ${draft} outside the feature folder with intent: draft, then run feature create, feature validate and feature submit (--if-match is the revision from feature validate or feature get). Accept the detected checkout with repository accept --discovery-id ID; it is not watched unless you pass --watch true.`,
+    next: `Start the worker. Copy ${relative} to a new .md note in the feature folder, choose a unique request id, review the approved paths (a folder entry ends with /), and finish its content. Set intent: submit when it is ready. Drafts never run; duplicate IDs block both notes. For CLI intake, keep ${draft} outside the feature folder with intent: draft, then run feature create, feature validate and feature submit (--if-match is the revision from feature validate or feature get). Accept the detected checkout with repository accept --discovery-id ID; it is not watched unless you pass --watch true.` + (excluded.length ? ` Added ${excluded.join(', ')} to the Git local exclude file (.git/info/exclude) so local review notes stay untracked.` : '') + warnings.map(warning => ' ' + warning).join(''),
   };
 }

@@ -9,7 +9,7 @@ import USelect from '@nuxt/ui/components/Select.vue';
 import ModelSelectionFields from './ModelSelectionFields.vue';
 import ProviderAccountPanel from './ProviderAccountPanel.vue';
 import ProviderCapabilitiesPanel from './ProviderCapabilitiesPanel.vue';
-import { state, workspaceAction, request, date } from '../store';
+import { state, workspaceAction, request, date, PROVIDER_CHECK_TIMEOUT_MS } from '../store';
 defineProps<{ providerOnly?: boolean; connectionOnly?: boolean }>();
 let connectionGeneration = 0;
 const check = ref<{ message: string; authentication: string; checkedAt: string; version?: string | null; capabilities?: ProviderCapabilities } | null>(null), checking = ref(false), copied = ref(false);
@@ -62,7 +62,7 @@ watch(() => JSON.stringify(state.settings?.connection), (value, previous) => {
 async function checkConnection() {
   if (editingLocked.value || dirty.value) return;
   const selectedProvider = provider.value, generation = connectionGeneration; checking.value = true;
-  try { const result = await request('/api/providers/check', 'POST', { id: selectedProvider }); if (selectedProvider === provider.value && generation === connectionGeneration) check.value = result; }
+  try { const result = await request('/api/providers/check', 'POST', { id: selectedProvider }, PROVIDER_CHECK_TIMEOUT_MS); if (selectedProvider === provider.value && generation === connectionGeneration) check.value = result; }
   catch (error) { if (selectedProvider === provider.value && generation === connectionGeneration) check.value = { authentication: 'unknown', message: (error as Error).message, checkedAt: new Date().toISOString() }; }
   finally { checking.value = false; }
 }

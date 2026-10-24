@@ -43,7 +43,7 @@ test('signed-out, malformed and excessive CLI output never becomes authenticated
 
 test('hanging status command times out and does not leak provider output', { skip: process.platform === 'win32' }, async t => {
   const hung = await executable(t, `console.log('private-account'); setInterval(() => {}, 1000);`);
-  const started = Date.now(); const status = await new ProviderStatusChecks().check(provider('codex-cli', { executable: hung }));
+  const started = Date.now(); const status = await new ProviderStatusChecks({ timeoutMs: 500 }).check(provider('codex-cli', { executable: hung }));
   assert.equal(status.authentication, 'unknown'); assert.ok(Date.now() - started < 10_000); assert.doesNotMatch(JSON.stringify(status), /private-account/);
 });
 
@@ -79,4 +79,49 @@ test('status shutdown cancels an active probe and refuses later CLI launches', {
   assert.equal((await pending).authentication, 'unknown');
   await assert.rejects(readFile(directory), { code: 'ENOENT' });
   assert.match((await checks.check(provider('codex-cli', { executable: cli }))).message, /stopping/);
+});
+
+// A fake probe replaces the CLI so cold-start behavior is checked without a real executable or real deadlines.
+const fakeClaude = (authStatus, version = () => ({ exitCode: 0, stdout: Buffer.from('2.1.257'), stderr: Buffer.alloc(0) })) => {
+  const calls = [];
+  const probe = async (executable, kind, args, options) => {
+    calls.push({ args: args.join(' '), timeoutMs: options.timeoutMs });
+    if (args[0] === '--version') return version();
+    return authStatus(calls.filter(call => call.args === 'auth status').length);
+  };
+  return { calls, probe };
+};
+const signedIn = { exitCode: 0, stdout: Buffer.from(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai' })), stderr: Buffer.alloc(0) };
+const claudeConnection = () => provider('claude-cli', { executable: process.execPath });
+
+test('Claude status check retries a failed auth probe once so a cold CLI start still authenticates', async () => {
+  const { calls, probe } = fakeClaude(attempt => { if (attempt === 1) throw Error('timed out'); return signedIn; });
+  const status = await new ProviderStatusChecks({ probe }).check(claudeConnection());
+  assert.equal(status.authentication, 'authenticated'); assert.equal(status.available, true);
+  assert.deepEqual(calls.map(call => call.args), ['--version', 'auth status', 'auth status']);
+  assert.ok(calls.every(call => call.timeoutMs === 15000), 'every probe gets the 15 s cold-start deadline');
+});
+
+test('Claude status check retries the auth probe only once and never retries --version', async () => {
+  const failing = fakeClaude(() => { throw Error('timed out'); });
+  assert.equal((await new ProviderStatusChecks({ probe: failing.probe }).check(claudeConnection())).authentication, 'unknown');
+  assert.deepEqual(failing.calls.map(call => call.args), ['--version', 'auth status', 'auth status']);
+  const noVersion = fakeClaude(() => signedIn, () => { throw Error('timed out'); });
+  assert.equal((await new ProviderStatusChecks({ probe: noVersion.probe }).check(claudeConnection())).authentication, 'unknown');
+  assert.deepEqual(noVersion.calls.map(call => call.args), ['--version']);
+});
+
+test('Claude status check does not retry once the worker is stopping', async () => {
+  let checks; const { calls, probe } = fakeClaude(() => { void checks.close(); throw Error('cancelled'); });
+  checks = new ProviderStatusChecks({ probe });
+  assert.equal((await checks.check(claudeConnection())).authentication, 'unknown');
+  assert.deepEqual(calls.map(call => call.args), ['--version', 'auth status']);
+});
+
+test('concurrent Claude checks still share one probe sequence while a retry is in flight', async () => {
+  const { calls, probe } = fakeClaude(attempt => { if (attempt === 1) throw Error('timed out'); return signedIn; });
+  const checks = new ProviderStatusChecks({ probe }), connection = claudeConnection();
+  const results = await Promise.all([checks.check(connection), checks.check(connection)]);
+  assert.deepEqual(results.map(result => result.authentication), ['authenticated', 'authenticated']);
+  assert.equal(calls.filter(call => call.args === 'auth status').length, 2);
 });

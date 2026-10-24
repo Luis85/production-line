@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import fs, { mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises';
 import { join, dirname, relative, sep } from 'node:path';
 import { spawn } from 'node:child_process';
+import { createPrivate } from '../../scripts/runtime/config.mjs';
 import { verifyBackup } from '../../scripts/runtime/maintenance/snapshot.mjs';
+import { processHost } from '../../src/worker/dist/shared/process/owner.js';
 import { applyUpdate, checkUpdate, rollbackUpdate } from '../../scripts/runtime/portable/update.mjs';
 import { appVersion, extracted, filesystemFault, githubRelease, installed, invoke, leftovers, project, workspace } from '../helpers/portable-update.mjs';
 
@@ -131,6 +133,22 @@ test('invalid update history is rejected before stopping or replacing a running 
   assert.equal(await appVersion(app), installed);
   assert.equal((await invoke(cwd, ['status', '--state-dir', state])).data.runId, started.data.runId);
   assert.deepEqual(await leftovers(app), []);
+});
+
+test('an invalid WERK_STARTUP_TIMEOUT_MS is rejected before --stop stops anything', { timeout: 120000 }, async t => {
+  const { app, cwd, directory, cleanup } = await workspace(t, 'update invalid startup timeout');
+  const state = join(cwd, 'custom-state'), env = { ...process.env, WERK_STARTUP_TIMEOUT_MS: '1000' };
+  cleanup(() => invoke(cwd, ['stop', '--state-dir', state]).catch(() => {}));
+  const started = await invoke(cwd, ['start', '--state-dir', state, '--port', '0']);
+  assert.equal(started.code, 0, started.stderr);
+  const releaseRoot = await extracted(directory, '99.0.0');
+  for (const args of [['update', 'apply', '--from', releaseRoot, '--state-dir', state, '--stop'], ['update', 'rollback', '--state-dir', state, '--stop']]) {
+    const refused = await invoke(cwd, args, env);
+    assert.equal(refused.code, 2, refused.stderr); assert.match(refused.stderr, /WERK_STARTUP_TIMEOUT_MS: integer 5000/);
+    assert.equal((await invoke(cwd, ['status', '--state-dir', state])).data.runId, started.data.runId, 'the worker kept running');
+    assert.equal(await appVersion(app), installed);
+  }
+  assert.deepEqual(await leftovers(app).catch(() => []), []);
 });
 
 test('failed history commit restores the old app and restarts the selected environment-defined state with its lock intact', { timeout: 180000 }, async t => {
@@ -267,4 +285,19 @@ test('update preserves effective launch settings supplied only by the original s
   assert.equal(result.restart.restarted, true, result.restart.error);
   assert.equal(result.restart.stateDirectory, await realpath(state));
   await inspectLaunch('60000');
+});
+
+test('a crashed worker is not running: update apply recovers its stale files and does not restart it', { timeout: 180000 }, async t => {
+  const { app, cwd, directory } = await workspace(t, 'update stale');
+  const state = join(cwd, '.werk', 'worker'), child = spawn(process.execPath, ['-e', ''], { stdio: 'ignore', windowsHide: true });
+  await new Promise(resolve => child.once('close', resolve));
+  await mkdir(state, { recursive: true });
+  // No control endpoint answers for this run on port 9, as after a reboot.
+  await createPrivate(join(state, 'portable.json'), { schemaVersion: 1, kind: 'worker', runId: 'a'.repeat(64), controlToken: 'b'.repeat(64), pid: child.pid, host: processHost, controlPort: 9, children: [], url: 'http://127.0.0.1:4100' });
+  await createPrivate(join(state, 'worker.lock'), { pid: child.pid, host: processHost, startedAt: new Date().toISOString() });
+  const logged = t.mock.method(console, 'error', () => {});
+  const result = await applyUpdate('worker', app, state, { from: await extracted(directory, '99.0.0') });
+  assert.equal(result.updated, true); assert.deepEqual(result.restart, { restarted: false, reason: 'not_running' });
+  assert.deepEqual(await readdir(state), []);
+  assert.deepEqual(JSON.parse(logged.mock.calls[0].arguments[0]).removed, [join(state, 'portable.json'), join(state, 'worker.lock')]);
 });

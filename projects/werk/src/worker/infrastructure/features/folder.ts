@@ -14,6 +14,8 @@ import { resolve, join, parse, relative, isAbsolute, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { stringify } from 'yaml';
 import { atomicWrite, readBoundedFile } from '../journal/files.js';
+import { createLock } from '../../../shared/process/lock.js';
+import { ownerRecord } from '../../../shared/process/owner.js';
 import { submissionIntent, markdownCommands, managedBody } from './markdown-contract.js';
 import { replaceFeatureFile } from './recoverable-write.js';
 import { parseFeature, featureInput, renderFeature, featureId, requestName, digest, deliveryFeatureTemplate } from './document.js';
@@ -84,9 +86,9 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
   async open(owner: string) {
     await realDirectory(this.directory, true);
     const path = join(this.directory, '_worker.lock');
-    this.lock = await open(path, 'wx', 0o600).catch(() => { throw Error('Feature folder is locked. Stop its other worker; after a crash verify the process is stopped before removing _worker.lock.'); });
+    this.lock = await createLock(path, 'Feature folder is locked. Stop its other worker; after a crash verify the process is stopped before removing _worker.lock.');
     try {
-      await this.lock.writeFile(JSON.stringify({ pid: process.pid, owner }) + '\n'); await this.lock.sync();
+      await this.lock.writeFile(JSON.stringify({ ...ownerRecord, owner }) + '\n'); await this.lock.sync();
       const marker = join(this.directory, '_worker-owner.json');
       try { if (JSON.parse(await readBoundedFile(marker, 1024)).owner !== owner) throw Error('This feature folder belongs to another worker state. Move its existing state with the folder or choose a separate feature folder.'); }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; await atomicWrite(marker, JSON.stringify({ owner }) + '\n'); }
@@ -136,7 +138,7 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
     // Optimistic editor protection; a changed observation is retried on the next scan.
     if (await readBoundedFile(path, 65536) !== current) return false;
     await realDirectory(join(this.directory, '_conflicts'), true);
-    const replaced = await replaceFeatureFile(path, current, next, join(this.directory, '_conflicts'));
+    const replaced = await replaceFeatureFile(path, current, next, join(this.directory, '_conflicts'), { keepDisplaced: false });
     if (replaced && managedBody(parseFeature(next).body)) record.managedHash = digest(managedBody(parseFeature(next).body)!);
     return replaced;
   }

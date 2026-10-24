@@ -99,8 +99,8 @@ Claude Code CLI runs on Linux, macOS and native Windows; the worker discovers
 `claude.exe` on PATH. Codex CLI still requires Linux or macOS. API connections and
 the webview run everywhere. Use **Check sign-in** after saving a CLI connection.
 For Codex and Claude, the worker runs only `codex login status` or
-`claude auth status`, plus a bounded Claude version
-probe. Each subprocess has a five-second deadline. Known Claude versions older
+`claude auth status`, plus a bounded Claude version probe. Each subprocess has a
+15-second deadline, and a failed login probe is retried once. Known Claude versions older
 than 2.1.257 require an upgrade for durable sessions; an unknown version is not
 confirmed compatible. The result distinguishes signed-in, signed-out, unavailable and unknown;
 it never exposes raw account diagnostics. No model prompt or paid API call is

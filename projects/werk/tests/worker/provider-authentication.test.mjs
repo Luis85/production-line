@@ -86,6 +86,22 @@ test('Claude account billing rejects a Console/API login before inference; diagn
   assert.equal(JSON.parse(args[args.indexOf('--settings') + 1]).forceLoginMethod, 'claudeai');
 });
 
+// A fake probe replaces the CLI so the gate's cold-start handling is checked without a real executable or deadlines.
+const signedInClaude = { exitCode: 0, stdout: Buffer.from(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai' })), stderr: Buffer.alloc(0) };
+const accountConnection = { id: /** @type {const} */ ('claude-cli'), executable: process.execPath, model: '', apiKey: '', authenticationMode: /** @type {const} */ ('cli-account') };
+test('execution gate gives the auth probe the cold-start deadline and retries it once, so a slow first start still passes', async t => {
+  const calls = [], probe = async (_executable, _kind, _args, options) => { calls.push(options.timeoutMs); if (calls.length === 1) throw Error('timed out'); return signedInClaude; };
+  await requireProviderAuthentication(accountConnection, t.signal, probe);
+  assert.deepEqual(calls, [15000, 15000]);
+  const failing = []; await assert.rejects(requireProviderAuthentication(accountConnection, t.signal, async () => { failing.push(1); throw Error('timed out'); }), { code: 'authentication' });
+  assert.equal(failing.length, 2, 'one retry, never more');
+});
+test('execution gate does not retry the auth probe once the run is cancelled', async () => {
+  const controller = new AbortController(), calls = [];
+  await assert.rejects(requireProviderAuthentication(accountConnection, controller.signal, async () => { calls.push(1); controller.abort(); throw Error('cancelled'); }), { code: 'cancelled' });
+  assert.equal(calls.length, 1);
+});
+
 test('accepted billing survives restart; changing it holds continuation while keeping transcripts inspectable', async t => {
   const resources = [];
   const root = await directory(t, resources), settings = new WorkerSettings(root); await settings.init();

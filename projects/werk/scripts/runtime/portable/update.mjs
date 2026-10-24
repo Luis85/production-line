@@ -10,7 +10,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { createPrivate, inputError, privateDirectory, readPrivate } from '../config.mjs';
 import { exists, restoreSnapshot, snapshotState } from '../maintenance/snapshot.mjs';
 import { latest, newer, published, versionParts } from '../update/remote.mjs';
-import { status, stop } from './lifecycle.mjs';
+import { startupBudgetMs, startupTimeout, status, stop } from './lifecycle.mjs';
+import { recordOwner } from './stale-state.mjs';
 import { inventory, replaceInPlace, verifyTree } from './update-in-place.mjs';
 
 /**
@@ -144,9 +145,13 @@ function launchEnvironment(launch) {
   if (typeof duration !== 'string' || !/^\d+$/.test(duration) || !Number.isSafeInteger(Number(duration)) || Number(duration) < 1000 || Number(duration) > 86400000) throw inputError('Invalid saved execution duration. Repair the launch metadata before updating.');
   return { WERK_WORKER_MAX_RUNTIME_MS: String(Number(duration)) };
 }
+/** The restart reads WERK_STARTUP_TIMEOUT_MS only after the app was stopped and replaced; a bad value must fail before anything changes. */
+const validateRestartEnvironment = options => { if (options.stop) startupTimeout({}, process.env); };
 async function relaunch(app, launch) {
   try {
-    const { stdout } = await execute(process.execPath, [join(app, 'cli.mjs'), 'start', ...launch.args], { cwd: launch.cwd, env: { ...process.env, ...launchEnvironment(launch) }, timeout: 60000, maxBuffer: 1024 * 1024, windowsHide: true });
+    // The restart is a fresh start: WERK_STARTUP_TIMEOUT_MS from this environment sets its deadline.
+    const env = { ...process.env, ...launchEnvironment(launch) }, timeout = startupBudgetMs(startupTimeout({}, env));
+    const { stdout } = await execute(process.execPath, [join(app, 'cli.mjs'), 'start', ...launch.args], { cwd: launch.cwd, env, timeout, maxBuffer: 1024 * 1024, windowsHide: true });
     return { restarted: true, ...JSON.parse(stdout) };
   } catch (error) {
     let message = error.message;
@@ -156,20 +161,22 @@ async function relaunch(app, launch) {
 }
 /** Stop (when allowed) and lock the selected instance's state; returns what is needed to restart it. */
 async function quiesce(kind, state, options, projectDir, log, app) {
-  const live = await status(kind, state);
+  const live = await status(kind, state, { 'project-dir': projectDir });
   if (live.state === 'unreachable') throw inputError(live.action);
   let launch = null;
-  if (live.state !== 'stopped') {
+  // A crashed app is not running: its provably stale files are removed and it is not restarted.
+  if (live.state === 'stale') await stop(kind, state, { 'project-dir': projectDir });
+  else if (live.state !== 'stopped') {
     if (!options.stop) throw inputError('The app is running. Stop it first, or pass --stop to stop it gracefully and restart it afterwards.');
     launch = await launchRecord(kind, state, live, projectDir);
     log('Stopping the running app gracefully.');
-    await stop(kind, state);
+    await stop(kind, state, { 'project-dir': projectDir });
   }
   try {
     if (!await exists(state)) return { launch, canonical: null, release: async () => {} };
     const canonical = await realpath(state), lock = join(canonical, LOCKS[kind]);
     // Holding the application lock keeps start/run away while state is copied and the folder is swapped.
-    try { await createPrivate(lock, { maintenance: 'update', pid: process.pid }); }
+    try { await createPrivate(lock, { maintenance: 'update', ...await recordOwner(kind) }); }
     catch (error) {
       if (error.code === 'EEXIST') throw Object.assign(inputError('The app started again or another owner holds its lock. Nothing was replaced. Inspect status before restarting.'), { recoveryUnsafe: true });
       throw error;
@@ -280,9 +287,10 @@ export async function applyUpdate(kind, root, state, options = {}, { fetcher = f
     if (found.version !== current && (options.version !== undefined || options.from)) throw inputError(`${found.version} is older than the installed ${current}. Use update rollback to return to a retained folder.`);
     return { ok: true, updated: false, application: kind, version: current, target: found.version };
   }
-  const before = await status(kind, state);
+  validateRestartEnvironment(options);
+  const before = await status(kind, state, { 'project-dir': projectDir });
   if (before.state === 'unreachable') throw inputError(before.action);
-  if (before.state !== 'stopped' && !options.stop) throw inputError('The app is running. Stop it first, or pass --stop to stop it gracefully and restart it afterwards.');
+  if (!['stopped', 'stale'].includes(before.state) && !options.stop) throw inputError('The app is running. Stop it first, or pass --stop to stop it gracefully and restart it afterwards.');
   const unlock = await lockApp(paths);
   let scratch, staging, owned;
   try {
@@ -325,6 +333,7 @@ export async function applyUpdate(kind, root, state, options = {}, { fetcher = f
 export async function rollbackUpdate(kind, root, state, options = {}, { log = () => {}, projectDir } = {}) {
   const paths = await locate(root), current = await appVersion(paths.app, kind);
   await outsideApp(paths.app);
+  validateRestartEnvironment(options);
   const unlock = await lockApp(paths);
   let owned;
   try {

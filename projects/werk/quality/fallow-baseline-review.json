@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "toolVersion": "3.33.1",
-  "reviewedAt": "2026-10-20",
+  "toolVersion": "3.35.0",
+  "reviewedAt": "2026-10-24",
   "configSha256": "0bac7ec8d31b572f48cc61057c353ea00d5c9990219bb1c2df27e756049ee4b6",
-  "baselineSha256": "94b00ff11d8eda9c38d27b58f6999c014c515095f436b6f15c7f9d755488539c",
-  "scope": "Maintained application, CLI, build, runtime, documentation and test entrypoints. Final source-tree scan after architecture and typed-fixture refactors; service boundaries run separately without a baseline. Local-delivery review removed only the now-used ordinaryDirectory export identified by fallow prune; no new debt was added. Expanded-delivery review pruned the stale request-review.ts parser export after module extraction and retained only the proven SharedFeatureIntake.start interface-dispatch finding; other new registry findings were resolved through explicit typed composition and removal of test-only facades. Durable permit review replaced the now-resolved SerialExecutor.run finding with the exact RequestJournal.unresolvedExecutions interface dispatch used to retain capacity across ambiguous outcomes and restarts. Auxiliary execution recovery review retains exactly two WorkerRunJournal interface dispatches for unresolved execution enumeration and inspected stop confirmation; their actual application/transport callers and persistence regressions are documented individually.",
+  "baselineSha256": "dac8612f97b6004fb31a436728331aee46fab6f51e1e414a05e96f81ff6664d2",
+  "scope": "Maintained application, CLI, build, runtime, documentation and test entrypoints. Final source-tree scan after architecture and typed-fixture refactors; service boundaries run separately without a baseline. Local-delivery review removed only the now-used ordinaryDirectory export identified by fallow prune; no new debt was added. Expanded-delivery review pruned the stale request-review.ts parser export after module extraction and retained only the proven SharedFeatureIntake.start interface-dispatch finding; other new registry findings were resolved through explicit typed composition and removal of test-only facades. Durable permit review replaced the now-resolved SerialExecutor.run finding with the exact RequestJournal.unresolvedExecutions interface dispatch used to retain capacity across ambiguous outcomes and restarts. Auxiliary execution recovery review retains exactly two WorkerRunJournal interface dispatches for unresolved execution enumeration and inspected stop confirmation; their actual application/transport callers and persistence regressions are documented individually. The 3.35.0 upgrade (security advisories GHSA-h4fr-cmh5-qr62, GHSA-jfwm-3p3c-6hx5) only stopped reporting the reportWithRetry duplicate export; that entry was pruned and no new debt was added.",
   "counts": {
     "unused_files": 0,
     "unused_exports": 71,
@@ -32,7 +32,7 @@
     "unused_load_data_keys": 0,
     "unresolved_imports": 0,
     "unlisted_dependencies": 0,
-    "duplicate_exports": 8,
+    "duplicate_exports": 7,
     "type_only_dependencies": 0,
     "test_only_dependencies": 0,
     "dev_dependencies_in_production": 5,
@@ -1040,12 +1040,6 @@
     {
       "category": "duplicate_exports",
       "identity": "duplicate-export:parse:scripts/runtime/cli.mjs|scripts/system/cli.mjs",
-      "classification": "distinct-module-namespace",
-      "rationale": "Same name in separate CLI/service modules or a compatibility re-export. Call sites select an explicit module; these are not duplicate runtime implementations to consolidate by name alone."
-    },
-    {
-      "category": "duplicate_exports",
-      "identity": "duplicate-export:reportWithRetry:src/worker/application/reporting.ts|src/worker/runner.ts",
       "classification": "distinct-module-namespace",
       "rationale": "Same name in separate CLI/service modules or a compatibility re-export. Call sites select an explicit module; these are not duplicate runtime implementations to consolidate by name alone."
     },

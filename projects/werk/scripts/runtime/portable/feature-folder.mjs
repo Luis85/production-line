@@ -21,6 +21,7 @@ export async function featureFolder(action, options) {
   const project = await realpath(resolve(options['project-dir'] ?? process.cwd())), settings = join(project, '.werk'), configPath = join(settings, 'worker.json'), state = join(settings, 'worker');
   const { realDirectory } = await import(new URL('../../../src/worker/dist/worker/infrastructure/features/folder.js', import.meta.url));
   const { atomicWrite, readBoundedFile, syncDirectory } = await import(new URL('../../../src/worker/dist/worker/infrastructure/journal/files.js', import.meta.url));
+  const { ownerRecord } = await import(new URL('../../../src/worker/dist/shared/process/owner.js', import.meta.url));
   if (!await exists(join(settings, 'worker-project.json'))) throw inputError('No project worker found. Run worker init in this project first.');
   await realDirectory(settings); await realDirectory(state);
   const marker = await readPrivate(join(settings, 'worker-project.json'));
@@ -46,7 +47,7 @@ export async function featureFolder(action, options) {
   const locked = !!await exists(join(state, 'worker.lock')) || names.includes('_worker.lock') || !!await exists(join(state, 'portable.json'));
   const plan = { projectDirectory: project, previousPath: source.relative, path: target.relative, directory: target.path, changed: source.path !== target.path, entries: names.length, requiresStoppedWorker: true, blocked: locked, configuration: configPath, authoring: authoring ? { configuration: '.werk/feature-workflow.json', base: authoring.next.base, template: authoring.next.template } : null, nativeCommand: 'node bin/apps/worker/cli.mjs start', dockerCommand: 'docker compose -f .werk/compose.worker.yaml up -d' };
   if (action === 'plan') return plan;
-  if (locked) throw inputError('Stop the worker before changing its feature folder: worker stop, or docker compose -f .werk/compose.worker.yaml down. After a crash, verify it is stopped before clearing stale locks.');
+  if (locked) throw inputError('Stop the worker before changing its feature folder: worker stop, or docker compose -f .werk/compose.worker.yaml down. After a crash, worker start removes the locks of a process that is no longer running, and you can then stop the worker again if you only wanted to change the folder.');
   if (!plan.changed && !pending) return { ...plan, changed: false };
   const next = JSON.stringify({ ...config, features: { ...config.features, directory: target.relative } }, null, 2) + '\n';
   if (pending && ![pending.before, pending.after].includes(digest(raw))) throw inputError('Configuration changed during an interrupted move. Restore the original configuration before recovering.');
@@ -56,7 +57,7 @@ export async function featureFolder(action, options) {
   try {
     if (authoring) releaseAuthoring = await lockFeatureAuthoringMove(project);
     await planFeatureAuthoringMove(project, source.relative, target.relative, authoring?.checkpoint ?? null, !fromExists);
-    await lock.writeFile(JSON.stringify({ operation: 'feature-folder-change', pid: process.pid })); await lock.sync();
+    await lock.writeFile(JSON.stringify({ operation: 'feature-folder-change', ...ownerRecord })); await lock.sync();
     if (await readBoundedFile(configPath, 65536) !== raw) throw inputError('Configuration changed. Inspect feature folder get and retry.');
     if (!pending || pending.authoring === undefined) await atomicWrite(pendingPath, JSON.stringify({ ...(pending ?? { schemaVersion: 1, from: source.relative, to: target.relative, before: digest(raw), after: digest(next) }), authoring: authoring?.checkpoint ?? null }) + '\n');
     // The checkpoint blocks project startup until the move and configuration agree.

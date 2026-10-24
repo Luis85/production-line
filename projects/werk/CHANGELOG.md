@@ -9,7 +9,19 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Fixed
 
+- Provider checks wait up to 15 s per probe, and the status check and the execution gate retry a failed login probe once, so the first `provider check` or task after a cold Claude Code CLI start no longer reports `authentication: unknown` or holds with `authentication_required`.
+- After a crash or reboot, `status` reports `stale` when the recorded worker or app process is provably gone, and `start`, `stop` and `update apply` remove exactly its leftover `portable.json` and lock files instead of refusing with `unreachable` or `Feature folder is locked`. State written by 0.15.0 or earlier is not recovered automatically; follow the printed files and check once.
+- `update apply` and `install.mjs` scale the archive extraction timeout with the number of release entries (300 s minimum, 200 ms per entry) and, on a timeout, tell you to extract the archive yourself and use `update apply --from`.
 - macOS CI partitions the complete test inventory into four disjoint groups and retains immediate TAP failure details plus exact suite manifests, preserving existing assertions, per-test limits and execution concurrency.
+- Worker-owned rewrites of Feature Request notes (status changes, the generated-block migration on first start after an upgrade) no longer leave a copy in `_conflicts`; a copy is kept only when an editor saved into the note while the worker was publishing.
+- `init --intake local` adds `/feature-reviews/` to the checkout's Git local exclude file, so the default review folder no longer appears as an untracked folder in an operator-only project.
+- `api --path` in Git Bash now explains that MSYS converted the path and to rerun with `MSYS_NO_PATHCONV=1`, and the delivery-policy and portable-app docs note the workaround.
+- A failed `start` now stops the worker or app process it launched (graceful stop, then its own process tree after 10 s) and removes the state it left, instead of leaving it running without serving its port; the startup deadline grows from 25 s to 120 s and `--startup-timeout-ms` or `WERK_STARTUP_TIMEOUT_MS` (5000–900000) raises it on a busy host.
+- `update apply --stop` and `update rollback --stop` validate `WERK_STARTUP_TIMEOUT_MS` before stopping the running app, so an invalid value fails with nothing stopped or replaced.
+
+### Security
+
+- Updated undici to 8.12.3 (GHSA-4qv8-2p9j-2685, GHSA-f72v-6w45-q472, GHSA-xjj6-f33q-929c), the fast-uri dependency and the Fallow quality gate to 3.35.0 (GHSA-h4fr-cmh5-qr62, GHSA-jfwm-3p3c-6hx5).
 
 ## [0.15.0] - 2026-10-23
 

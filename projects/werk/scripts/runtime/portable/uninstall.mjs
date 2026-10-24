@@ -94,16 +94,17 @@ export async function uninstallWorker(root, options, state, flags) {
   const self = within(join(project, 'bin/apps/worker'), await realpath(root));
   // A file named as the state folder is reported as kept by --dry-run and footprint; --confirm stops before changing anything.
   if (flags.confirm && await info(state) && !(await follow(state).catch(() => null))?.isDirectory()) throw inputError(`The selected state directory ${state} is not a folder, so uninstall cannot tell what the worker wrote. Pass the worker's state folder with --state-dir or WERK_WORKER_STATE_DIR (by default .werk/worker), then run uninstall --confirm again; uninstall --dry-run reports the path as kept.`);
-  const live = await status('worker', state);
+  const live = await status('worker', state, options);
   if (flags.confirm && live.state === 'unreachable') throw inputError(live.action);
-  const running = live.state !== 'stopped';
+  // A stale worker crashed: --confirm removes its provably stale locks without --stop.
+  const running = !['stopped', 'stale'].includes(live.state);
   if (flags.confirm && running && !flags.stop) throw inputError('The worker is running. ' + STOP_HINT);
-  if (flags.confirm && running) await stop('worker', state);
+  if (flags.confirm && live.state !== 'stopped') await stop('worker', state, options);
   const { entries, layout, tracked } = await inventory(root, project, state);
   if (tracked.repository === null) throw inputError('Git cannot read this checkout, so tracked files cannot be protected. Repair Git access and retry.');
   if (flags.confirm && entries.some(entry => entry.group === 'state' && entry.path.endsWith('/_worker.lock') && entry.exists)) throw inputError('A worker holds the feature folder lock (_worker.lock), for example in Docker. ' + STOP_HINT + ' After a crash, verify no worker runs before deleting the lock.');
   const decided = entries.map(entry => decide({ ...entry, trackedSet: tracked }, flags)).filter(Boolean);
-  const header = { schemaVersion: 1, projectDirectory: project, stateDirectory: state, worker: { state: running && flags.confirm ? 'stopped' : live.state, ...(running ? { stopRequired: true } : {}) } };
+  const header = { schemaVersion: 1, projectDirectory: project, stateDirectory: state, worker: { state: flags.confirm ? 'stopped' : live.state, ...(running ? { stopRequired: true } : {}) } };
   if (flags['dry-run']) {
     const worktrees = await worktreePlan(root, project, state, layout, flags), plan = await predict(project, protectWorktrees(decided, worktrees));
     const removing = plan.filter(item => item.action !== 'keep').sort(byPhase);

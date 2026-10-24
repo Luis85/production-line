@@ -12,7 +12,7 @@ if (!['claude-cli', 'codex-cli', 'cursor-cli'].includes(values.provider) || !val
 } else {
   const checks = new ProviderStatusChecks();
   try {
-    if (process.platform === 'win32') console.error('Preparing the trusted Windows command runtime with a bounded setup deadline; provider checks keep their separate five-second deadlines.');
+    if (process.platform === 'win32') console.error('Preparing the trusted Windows command runtime with a bounded setup deadline; provider checks keep their separate 15-second probe deadlines, with one retry of the login probe.');
     await prepareProcessRuntime(process.cwd(), new AbortController().signal);
     const status = await checks.check({ id: /** @type {'claude-cli'|'codex-cli'|'cursor-cli'} */ (values.provider), executable: values.executable, model: '', apiKey: '', authenticationMode: 'cli-account' });
     console.log(JSON.stringify({ schemaVersion: 1, platform: process.platform, architecture: process.arch, node: process.versions.node,
