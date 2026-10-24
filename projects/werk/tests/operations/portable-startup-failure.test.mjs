@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
-import { STARTUP_GRACE_MS, start, status, startupTimeout } from '../../scripts/runtime/portable/lifecycle.mjs';
+import { STARTUP_GRACE_MS, start, startupBudgetMs, status, startupTimeout } from '../../scripts/runtime/portable/lifecycle.mjs';
 import { ownWorkspace } from '../helpers/workspace-processes.mjs';
 
 const config = pathToFileURL(join(import.meta.dirname, '../../scripts/runtime/config.mjs')).href;
@@ -74,4 +74,10 @@ test('the startup deadline defaults to 120 s; the option wins over WERK_STARTUP_
   for (const value of ['4999', '900001', '6e4', '60000.5', '-6000', ''])
     assert.throws(() => startupTimeout({ 'startup-timeout-ms': value }, {}), { message: '--startup-timeout-ms: integer 5000–900000', exitCode: 2 });
   assert.throws(() => startupTimeout({}, { WERK_STARTUP_TIMEOUT_MS: '1000' }), { message: 'WERK_STARTUP_TIMEOUT_MS: integer 5000–900000', exitCode: 2 });
+});
+
+test('the startup budget covers the deadline, the IPC grace period, the tree kill and its exit wait, plus a CLI load margin', () => {
+  const budget = startupBudgetMs(120000);
+  assert.ok(budget >= 120000 + STARTUP_GRACE_MS + 2 * 10000 + 10000, `budget ${budget} ms`);
+  assert.equal(startupBudgetMs(5000) - 5000, budget - 120000, 'a fixed overhead on top of the deadline');
 });

@@ -2,7 +2,7 @@ import { prepareProcessRuntime } from '../../shared/process/launcher.js';
 import type { ProviderAuthenticationMode } from '../application/provider-capabilities.js';
 import type { ProviderConnection } from '../application/provider-contract.js';
 import { ProviderModelError } from '../application/model-result.js';
-import { runProviderProbe, type ProviderToolEnvironment } from './provider-process.js';
+import { providerProbeTimeoutMs, runProviderProbe, type ProviderToolEnvironment } from './provider-process.js';
 
 /** Typed invocation settings carry private keys only to the provider's environment, never argv or evidence. */
 export function providerAuthenticationEnvironment(connection: ProviderConnection): ProviderToolEnvironment {
@@ -21,7 +21,7 @@ export function requireAuthenticationSelection(connection: ProviderConnection, a
   if ((accepted ?? apiMode) !== (connection.authenticationMode ?? apiMode)) throw new ProviderModelError('authentication');
 }
 /** Prepare native execution, then confirm account billing without inference or credential-store access. */
-export async function requireProviderAuthentication(connection: ProviderConnection, signal: AbortSignal): Promise<void> {
+export async function requireProviderAuthentication(connection: ProviderConnection, signal: AbortSignal, probe: typeof runProviderProbe = runProviderProbe): Promise<void> {
   const environment = providerAuthenticationEnvironment(connection);
   if (connection.id.endsWith('-cli')) {
     try { await prepareProcessRuntime(process.cwd(), signal); }
@@ -31,8 +31,10 @@ export async function requireProviderAuthentication(connection: ProviderConnecti
   const claude = connection.id === 'claude-cli';
   if (!claude && connection.id !== 'codex-cli') return;
   try {
-    const result = await runProviderProbe(connection.executable, claude ? 'claude' : 'codex', claude ? ['auth', 'status'] : ['login', 'status'],
-      { signal, timeoutMs: 5000, maxOutputBytes: 16384 }, environment);
+    const run = () => probe(connection.executable, claude ? 'claude' : 'codex', claude ? ['auth', 'status'] : ['login', 'status'],
+      { signal, timeoutMs: providerProbeTimeoutMs, maxOutputBytes: 16384 }, environment);
+    // A cold CLI start can miss the first deadline; one retry unless the run is cancelled.
+    const result = await run().catch(error => { if (signal.aborted) throw error; return run(); });
     if (result.exitCode === 0) {
       if (claude) {
         const value = JSON.parse(result.stdout.toString('utf8'));

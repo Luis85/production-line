@@ -15,14 +15,14 @@ import type { ProviderUsage } from '../application/run-evidence.js';
 import type { ToolRuntime } from '../application/tool-runtime.js';
 import { withCliToolBridge, type CliToolBridge } from './cli-tool-bridge.js';
 import { openProviderSession } from './native-session.js';
-import { providerCommand, runProviderProbe } from './provider-process.js';
+import { providerCommand, providerProbeTimeoutMs, runProviderProbe } from './provider-process.js';
 import { providerUsage, claudeSessionUsage } from './provider-usage.js';
 import { ensureDirectory } from './journal/files.js';
 
 /** Native prompt refresh requires 2.1.257; resumed cost became cumulative in 2.1.277. */
 async function costScope(executable: string, signal: AbortSignal): Promise<'invocation' | 'session'> {
   try {
-    const result = await runProviderProbe(executable, 'claude', ['--version'], { signal, timeoutMs: 5000, maxOutputBytes: 4096 });
+    const result = await runProviderProbe(executable, 'claude', ['--version'], { signal, timeoutMs: providerProbeTimeoutMs, maxOutputBytes: 4096 });
     const version = claudeVersion(result.stdout.toString('utf8'), result.exitCode);
     if (version.compatibility === 'minimum_met' && version.costScope) return version.costScope;
   } catch { /* Unsupported or unreadable versions cannot prove native prompt-refresh support. */ }

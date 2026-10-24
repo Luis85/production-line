@@ -64,6 +64,9 @@ export async function providerCommand(executable: string, args: string[], cwd: s
     return result.stdout;
 }
 
+/** A cold Claude Code start takes ~4.4 s on a slow host, so read-only CLI probes get a generous deadline. */
+export const providerProbeTimeoutMs = 15000;
+
 /** One read-only CLI probe owns a private cwd and a contained process, including cleanup on cancellation. */
 export async function runProviderProbe(executable: string, provider: 'codex' | 'claude' | 'cursor', args: string[], options: {
     signal: AbortSignal; timeoutMs: number; maxOutputBytes: number;

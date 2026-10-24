@@ -29,7 +29,7 @@ export async function replaceFeatureFile(path: string, expected: string, replace
     try { await createLink(staged, path); }
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false; await createLink(saved, path).catch(() => {}); throw error; }
     // Nothing an editor wrote is lost when the displaced copy is unchanged; a late save into it stays recoverable.
-    if (options.keepDisplaced === false && await readBoundedFile(saved, 65536).catch(() => null) === expected) await unlink(saved).catch(error => { if (error.code !== 'ENOENT') throw error; });
+    if (options.keepDisplaced === false && await readBoundedFile(saved, 65536).catch(() => null) === expected) await unlink(saved).catch(() => { /* Published already: a displaced copy that cannot be removed is kept, which is safe. */ });
     return true;
   } finally {
     if (probeCreated) await unlink(probe).catch(error => { if (error.code !== 'ENOENT') throw error; });

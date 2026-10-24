@@ -3,12 +3,10 @@ import { providerCapabilities, type ProviderCapabilities, type ProviderAuthentic
 import { providerAuthenticationEnvironment } from './provider-authentication.js';
 import { parseProviderAccount } from './provider-account.js';
 import { claudeVersion, minimumClaudeVersion } from './provider-version.js';
-import { providerProbeKey, runProviderProbe } from './provider-process.js';
+import { providerProbeKey, providerProbeTimeoutMs, runProviderProbe } from './provider-process.js';
 import { constants } from 'node:fs';
 import { access } from 'node:fs/promises';
 import { providerReady, type ProviderConnection, type ProviderId } from '../application/provider-contract.js';
-/** A cold Claude Code start takes ~4.4 s on a slow host, so probes get a generous deadline. */
-const statusProbeTimeoutMs = 15000;
 export interface ProviderStatus {
   id: ProviderId; configured: boolean; available: boolean;
   authentication: 'authenticated' | 'signed-out' | 'unknown' | 'unavailable' | 'not-verified';
@@ -37,7 +35,7 @@ export class ProviderStatusChecks {
     // Claude's machine-readable stdout must remain separate from startup diagnostics.
     // Codex reports login status on stderr; both streams always count toward the limit.
     try {
-      const result = await (this.options.probe ?? runProviderProbe)(connection.executable, connection.id === 'codex-cli' ? 'codex' : connection.id === 'cursor-cli' ? 'cursor' : 'claude', args, { signal: this.controller.signal, timeoutMs: this.options.timeoutMs ?? statusProbeTimeoutMs, maxOutputBytes: 65536 }, providerAuthenticationEnvironment(connection));
+      const result = await (this.options.probe ?? runProviderProbe)(connection.executable, connection.id === 'codex-cli' ? 'codex' : connection.id === 'cursor-cli' ? 'cursor' : 'claude', args, { signal: this.controller.signal, timeoutMs: this.options.timeoutMs ?? providerProbeTimeoutMs, maxOutputBytes: 65536 }, providerAuthenticationEnvironment(connection));
       return { code: result.exitCode, output: Buffer.concat([result.stdout, result.stderr]).toString('utf8') };
     } catch { throw Error('Provider status unavailable'); }
   }

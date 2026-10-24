@@ -11,10 +11,14 @@ import { ownerStatus, recordOwner, recoverStale } from './stale-state.mjs';
 
 const metadataPath = state => join(state, 'portable.json');
 /** How long `start` waits for its detached `_run` child to report ready. */
-export const STARTUP_TIMEOUT_MS = 120000;
+const STARTUP_TIMEOUT_MS = 120000;
 /** How long a failed start waits for the child to honour the IPC stop before it ends the child's process tree. */
 export const STARTUP_GRACE_MS = 10000;
 const KILL_WAIT_MS = 10000;
+/** Loading the CLI and recovering the failed child's state, beyond the start's own waits. */
+const CLI_LOAD_MARGIN_MS = 10000;
+/** The longest a `start` with this deadline can take, failure cleanup included: deadline, IPC grace, then the tree kill and its exit wait. */
+export const startupBudgetMs = timeoutMs => timeoutMs + STARTUP_GRACE_MS + 2 * KILL_WAIT_MS + CLI_LOAD_MARGIN_MS;
 /** The startup deadline: `--startup-timeout-ms` wins over WERK_STARTUP_TIMEOUT_MS, then the default. */
 export function startupTimeout(options = {}, environment = process.env) {
   const [name, value] = options['startup-timeout-ms'] !== undefined ? ['--startup-timeout-ms', options['startup-timeout-ms']] : ['WERK_STARTUP_TIMEOUT_MS', environment.WERK_STARTUP_TIMEOUT_MS];
