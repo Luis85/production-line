@@ -287,8 +287,22 @@ installs the offline authoring kit, and it also:
 - records `features.intake: "local"` in `.werk/worker.json`. A repeated `init` keeps
   it. `init` refuses an explicit conflicting intake choice without changing
   existing configuration; it names the file and the migration steps;
-- reports `intake: { mode: "local", template, commands, next }` instead of the shared
-  connection steps.
+- when the project is the root of a Git checkout, appends `/feature-reviews/` (the
+  default review folder) to the checkout's local exclude file (`git rev-parse --git-path
+  info/exclude`, shared by linked worktrees) once, so local review notes stay untracked.
+  It skips silently outside Git or below the checkout root, and skips with a warning
+  when `feature-reviews/` already has tracked files. A non-regular exclude file fails
+  `init`;
+- reports `intake: { mode: "local", template, commands, excluded, warnings, next }` instead of
+  the shared connection steps. `excluded` lists the entries now excluded and is empty
+  when exclusion was skipped.
+
+A committed delivery policy that sets another `reviewDirectory` is not covered, because
+`init` does not read it. Exclude that folder the same way, from the project directory:
+
+```bash
+echo "/<folder>/" >> "$(git rev-parse --git-path info/exclude)"
+```
 
 Before submitting implementation work, start the worker and complete setup:
 

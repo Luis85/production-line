@@ -66,7 +66,9 @@ under `DIR` (see [keep the project root tidy](https://github.com/Luis85/producti
 `--intake shared|local` (default `shared`) chooses the request source. `local` is for an operator-only
 worker: it writes `<features-dir>/_templates/local-request.md` (no `templateId`, `status: draft`,
 `mode: patch`, your provider, commented `paths` and `definitionRef`), records `features.intake: "local"` in
-`.werk/worker.json`, and reports `intake: { mode: "local", connectionRequired: false, template, commands, next }`
+`.werk/worker.json`, appends `/feature-reviews/` to the checkout's `.git/info/exclude` when the project is a Git
+checkout root and the folder has no tracked files, and reports
+`intake: { mode: "local", connectionRequired: false, template, commands, excluded, warnings, next }`
 instead of `shared_git`. Such a worker's detected checkout is accepted with `watch: false` unless
 `repository accept --watch true` says otherwise, and `shared status` and `feature list` add
 `intake: "local"` and a `hint` until a shared repository binding is saved. That binding

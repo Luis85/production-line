@@ -14,6 +14,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 - `update apply` and `install.mjs` scale the archive extraction timeout with the number of release entries (300 s minimum, 200 ms per entry) and, on a timeout, tell you to extract the archive yourself and use `update apply --from`.
 - macOS CI partitions the complete test inventory into four disjoint groups and retains immediate TAP failure details plus exact suite manifests, preserving existing assertions, per-test limits and execution concurrency.
 - Worker-owned rewrites of Feature Request notes (status changes, the generated-block migration on first start after an upgrade) no longer leave a copy in `_conflicts`; a copy is kept only when an editor saved into the note while the worker was publishing.
+- `init --intake local` adds `/feature-reviews/` to the checkout's Git local exclude file, so the default review folder no longer appears as an untracked folder in an operator-only project.
 
 ## [0.15.0] - 2026-10-23
 

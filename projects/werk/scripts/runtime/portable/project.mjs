@@ -5,7 +5,7 @@ import { seedWorkerPackage } from './npm-package.mjs';
 import { seedEnvironment } from './environment.mjs';
 import { setupFeatureAuthoring, planFeatureAuthoring } from './feature-authoring.mjs';
 import { inputError, readPrivate, createPrivate } from '../config.mjs';
-import { intakeOption, localRequestTemplate, localTemplateName, localIntakeResult } from './local-intake.mjs';
+import { intakeOption, localRequestTemplate, localTemplateName, localIntakeResult, excludeReviewFolder } from './local-intake.mjs';
 
 const nodeImage = 'node:24.19.0-bookworm@sha256:4196d66a565c6f195728d9952f161f4adfe2ad753052a08b7ec7f1c5a6bda42b';
 const exists = path => lstat(path).catch(error => { if (error.code !== 'ENOENT') throw error; });
@@ -96,7 +96,7 @@ export async function initializeWorker(root, options) {
   if (!existingConfig) await createPrivate(config, { schemaVersion: 1, features: { directory: inside.split(sep).join('/'), provider: options.provider ?? 'codex-cli', pollMs: 1000, ...(intake === 'local' ? { intake } : {}) } });
   await seed(join(project, '.werk/worker-project.json'), JSON.stringify({ schemaVersion: 1, port }, null, 2) + '\n');
   const authoring = await setupFeatureAuthoring(app, project, { featuresDirectory: inside.split(sep).join('/'), ...(workflowDirectory === undefined ? {} : { workflowDirectory }), provider: normalized.features.provider });
-  const localTemplate = join(featureDirectory, localTemplateName), local = intake === 'local' ? localIntakeResult(localTemplate, relative(project, localTemplate).split(sep).join('/')) : undefined;
+  const localTemplate = join(featureDirectory, localTemplateName), local = intake === 'local' ? localIntakeResult(localTemplate, relative(project, localTemplate).split(sep).join('/'), await excludeReviewFolder(project)) : undefined;
   if (intake === 'local') await seed(localTemplate, localRequestTemplate(normalized.features.provider));
   await ignore(join(project, '.werk/.gitignore'), ['worker/', 'provider-home/', 'agent-integrations.json', 'agent-integrations.pending.json', 'agent-integrations.lock']);
   await ignore(join(featureDirectory, '.gitignore'), ['_worker.lock', '_worker-owner.json', '_worker-status.md', '_results/', '_questions/', '_tasks/', '_gates/', '_conflicts/']);

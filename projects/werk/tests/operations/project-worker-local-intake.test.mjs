@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { parse } from 'yaml';
 import { FeatureRequests } from '../../src/worker/dist/worker/application/feature-requests.js';
@@ -97,4 +97,48 @@ test('the help schema lists init --intake shared|local with the same choices ini
   assert.match(setup.command, /^init .*\[--intake shared\|local\]/);
   assert.match(setup.intake, /--intake shared \(default\).*--intake local writes <features-dir>\/_templates\/local-request\.md/);
   await assert.rejects(init(cwd, '--intake', 'both'), error => /--intake/.test(failure(error)));
+});
+
+const excludeLines = async cwd => (await read(join(cwd, '.git/info/exclude')).catch(() => '')).split(/\r?\n/);
+
+test('local init in a git checkout excludes the default review folder once and reports it', async t => {
+  const cwd = await temporary(t, 'werk-local-exclude-'); await git(cwd, 'init', '-q');
+  const first = await init(cwd, '--intake', 'local'); assert.deepEqual(first.intake.excluded, ['/feature-reviews/']); assert.deepEqual(first.intake.warnings, []); assert.match(first.intake.next, /\/feature-reviews\/.*\.git\/info\/exclude/);
+  const again = await run(cwd, join(cwd, 'bin/apps/worker/cli.mjs'), 'init', '--no-npm'); assert.deepEqual(again.intake.excluded, ['/feature-reviews/']);
+  assert.equal((await excludeLines(cwd)).filter(line => line === '/feature-reviews/').length, 1);
+});
+
+test('local init keeps existing exclude entries and adds the line after a missing trailing newline', async t => {
+  const cwd = await temporary(t, 'werk-local-exclude-keep-'); await git(cwd, 'init', '-q'); await writeFile(join(cwd, '.git/info/exclude'), '# mine\n/scratch/');
+  await init(cwd, '--intake', 'local'); assert.equal(await read(join(cwd, '.git/info/exclude')), '# mine\n/scratch/\n/feature-reviews/\n');
+});
+
+test('local init in a linked worktree writes the shared exclude file of the main repository', async t => {
+  const main = await temporary(t, 'werk-local-exclude-main-'), linked = join(await temporary(t, 'werk-local-exclude-link-'), 'wt');
+  await git(main, 'init', '-q'); await writeFile(join(main, 'README.md'), '# x\n'); await git(main, 'add', 'README.md'); await git(main, 'commit', '-q', '-m', 'init'); await git(main, 'worktree', 'add', '-q', linked);
+  const result = await init(linked, '--intake', 'local'); assert.deepEqual(result.intake.excluded, ['/feature-reviews/']);
+  assert.ok((await excludeLines(main)).includes('/feature-reviews/'));
+});
+
+test('local init leaves a review folder with tracked files alone and says so', async t => {
+  const cwd = await temporary(t, 'werk-local-exclude-tracked-'); await git(cwd, 'init', '-q'); await mkdir(join(cwd, 'feature-reviews')); await writeFile(join(cwd, 'feature-reviews/note.md'), '# kept\n'); await git(cwd, 'add', 'feature-reviews/note.md');
+  const result = await init(cwd, '--intake', 'local'); assert.deepEqual(result.intake.excluded, []); assert.match(result.intake.warnings.join('\n'), /feature-reviews.*tracked/);
+  assert.equal((await excludeLines(cwd)).includes('/feature-reviews/'), false);
+});
+
+test('local init in a project below the repository root does not touch the repository exclude file', async t => {
+  const root = await temporary(t, 'werk-local-exclude-sub-'), cwd = join(root, 'app'); await git(root, 'init', '-q'); await mkdir(cwd);
+  const result = await init(cwd, '--intake', 'local'); assert.deepEqual(result.intake.excluded, []); assert.equal((await excludeLines(root)).includes('/feature-reviews/'), false);
+});
+
+test('local init refuses an exclude path that is not a regular file', async t => {
+  const cwd = await temporary(t, 'werk-local-exclude-dir-'); await git(cwd, 'init', '-q'); await rm(join(cwd, '.git/info/exclude'), { force: true }); await mkdir(join(cwd, '.git/info/exclude'), { recursive: true });
+  await assert.rejects(init(cwd, '--intake', 'local'), error => /regular file/.test(failure(error)));
+});
+
+test('shared init in a git checkout and local init outside git leave exclusion alone', async t => {
+  const repo = await temporary(t, 'werk-shared-exclude-'); await git(repo, 'init', '-q'); const shared = await init(repo);
+  assert.equal(shared.intake.excluded, undefined); assert.equal((await excludeLines(repo)).includes('/feature-reviews/'), false);
+  const plain = await temporary(t, 'werk-local-nogit-'), result = await init(plain, '--intake', 'local');
+  assert.deepEqual(result.intake.excluded, []); assert.deepEqual(result.intake.warnings, []); assert.equal(await exists(join(plain, '.git')), false);
 });
