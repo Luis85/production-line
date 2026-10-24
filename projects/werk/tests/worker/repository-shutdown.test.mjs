@@ -116,7 +116,7 @@ async function fixture(t, features = false) {
         assert.equal(outcome, undefined, "Worker exited before the slow Git operation: " + logs);
         return exists(marker);
       }, "The worker never entered the slow Git operation.");
-      assert.equal(Number(await readFile(join(state, "worker.lock"), "utf8")), child.pid);
+      assert.equal(JSON.parse(await readFile(join(state, "worker.lock"), "utf8")).pid, child.pid);
       return JSON.parse(await readFile(marker, "utf8"));
     },
     async stop() {

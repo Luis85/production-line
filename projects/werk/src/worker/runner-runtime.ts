@@ -228,8 +228,6 @@ export async function runLockedWorker(
   const execute = async () => {
     // Preparation owns a bounded waiter; short probes keep their deadlines without cancelling setup.
     processPreparation = (dependencies.prepareProcessRuntime ?? prepareProcessRuntime)(process.cwd(), stopping).catch(() => {});
-    await handle.writeFile(String(process.pid));
-    await handle.sync();
     await handle.close();
     await executionProfiles.init();
     if (executionProfiles.pending && !(await readRegisteredIdentity(config.stateDir))) await executionProfiles.commit();

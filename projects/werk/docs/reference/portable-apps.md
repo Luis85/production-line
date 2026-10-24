@@ -161,8 +161,17 @@ conditions. Resource snapshots measure the worker Node process, not provider
 subprocess totals or subscription balances. Fleet `workers.execution.timeoutMs`
 is a separate deployment policy with its own bounds; see
 the release guides `docs/reference/configuration.md` and
-`docs/reference/system-definition.md`. `status` distinguishes running, stopping, stopped and unreachable;
+`docs/reference/system-definition.md`. `status` distinguishes running, stopping, stopped, stale and unreachable;
 unreachable exits 1. A running process is not necessarily connected to its upstream.
+`stale` means the process recorded in the state (`pid`) on this host no longer exists, or
+its PID now belongs to a process started later; `files` lists the leftover `portable.json`,
+application lock and, for a project worker, the feature folder `_worker.lock` naming
+that PID. `start`, `run`, `stop` and `update apply`/`rollback` remove exactly those
+files, re-reading each first, log a `stale_state_recovered` line and continue as
+stopped. `unreachable` means the owner may still run, its PID is unknown, or it was
+recorded elsewhere, such as in a Docker container sharing the state; its
+`files` and `action` name the paths and a check such as `Get-Process -Id PID`
+(Windows) or `ps -p PID` (POSIX).
 Use `health` and `monitoring` to inspect application readiness and current conditions.
 
 ```sh
@@ -175,9 +184,10 @@ node bin/apps/worker/cli.mjs stop --state-dir .werk/worker-a
 `stop` authenticates the specific instance and drains/cancels work through the
 application's shutdown path. It never kills a stored PID. Repeating stop on a stopped
 app succeeds. A second start of an already running instance is rejected, so changed
-launch options cannot be silently ignored. After a crash, inspect the private log
-and verify that the owning process has exited before removing stale lifecycle
-metadata and its lock. Never remove locks from a running app.
+launch options cannot be silently ignored. After a crash or reboot, files of a
+provably gone process are recovered automatically (`stale`). When status stays
+`unreachable`, inspect the private log and verify that the listed PID has exited
+before removing the listed files. Never remove locks from a running app.
 
 State defaults to `.werk/<app>` under the invoking project, outside the copied app.
 Use a separate state directory and port for each instance. Keep state private and

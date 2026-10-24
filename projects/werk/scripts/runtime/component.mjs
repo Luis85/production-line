@@ -29,7 +29,8 @@ export async function runComponent(kind, argv, lifecycle = {}) {
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw inputError('port: integer 0–65535');
   await privateDirectory(state);
   const runId = randomUUID(), lock = join(state, 'runtime.lock');
-  try { await createPrivate(lock, { runId, pid: process.pid, kind }); }
+  const { processHost } = await import(new URL(`../../src/${kind}/dist/shared/process/owner.js`, import.meta.url));
+  try { await createPrivate(lock, { runId, pid: process.pid, host: processHost, kind }); }
   catch (error) { if (error.code === 'EEXIST') throw inputError('This state directory is locked. Stop its component first; after a crash verify the old process has exited before removing runtime.lock.'); throw error; }
   let service, closing;
   const stop = () => closing ??= (async () => { try { await service?.close(); } finally { const owner = await readPrivate(lock); if (owner.runId === runId) await unlink(lock); } })();

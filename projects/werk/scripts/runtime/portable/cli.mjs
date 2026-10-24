@@ -103,7 +103,7 @@ export async function main(kind, argv = process.argv.slice(2)) {
       validateOptions(o, ['state-dir', 'host', 'port', 'project-dir', ...(kind === 'worker' ? ['config', 'url', 'features-dir', 'poll-ms', 'mock-ms'] : kind === 'orchestrator' ? ['project'] : [])]);
       if (o.port !== undefined) integer(o.port, 'port', 0, 65535);
       if (cmd === '_run' && !process.send) throw inputError('Internal launch requires an IPC parent. Use run or start.');
-      if (cmd === 'start') console.log(JSON.stringify(await start(kind, state, root, argv.slice(1))));
+      if (cmd === 'start') console.log(JSON.stringify(await start(kind, state, root, argv.slice(1), o)));
       // Preserve resolved non-secret launch options, including defaults supplied by the caller's environment.
       // Credentials remain in private application state or the environment; they are never launch arguments.
       else await run(kind, state, root, o, cmd === '_run', { mode: cmd === '_run' ? 'start' : 'run', cwd: process.cwd(),
@@ -113,7 +113,7 @@ export async function main(kind, argv = process.argv.slice(2)) {
     }
     if (cmd === 'status' || cmd === 'stop') {
       validateOptions(o, ['state-dir', 'project-dir']);
-      const value = await (cmd === 'status' ? status : stop)(kind, state);
+      const value = await (cmd === 'status' ? status : stop)(kind, state, o);
       console.log(JSON.stringify(value)); if (value.state === 'unreachable') process.exitCode = 1; return;
     }
     const command = catalog[cmd];

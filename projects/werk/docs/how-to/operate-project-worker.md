@@ -39,6 +39,23 @@ that ships with Windows 10 and 11.
    [remove retained worktrees](#task-worktrees) you no longer need. Stop the worker
    with `stop`; it drains running work and keeps its state.
 
+## Recover after a crash or reboot
+
+A worker that crashed, or ran when the machine restarted, leaves its lock files
+behind. `status` then reports `stale` with the dead `pid` and the leftover `files`:
+`.werk/worker/portable.json`, `.werk/worker/worker.lock` and the feature folder's
+`_worker.lock`. You don't need to delete them. `start`, `stop` and
+`update apply --stop` remove exactly these files and continue as if the worker had
+stopped. The worker treats a PID as gone only with proof: the files were written on
+this machine, not in a Docker container that shares the project, and no such process
+exists or the PID now belongs to a process that started after the lock was written.
+
+If `status` reports `unreachable` instead, the recorded process may still run.
+Run the check that `action` names, for example `Get-Process -Id PID` in PowerShell
+or `ps -p PID` on macOS and Linux, or `docker compose ps` when the PID was recorded
+in a container. Stop that process first; remove the listed files only after it has
+exited.
+
 ## Write JSON input files on Windows PowerShell 5.1
 
 Worker commands read JSON from `--file PATH`, up to 64 KiB. In Windows PowerShell

@@ -7,6 +7,7 @@ import { privateDirectory, readPrivate, createPrivate, inputError } from '../con
 import { controlRequest, createControl } from '../control.mjs';
 import { configuredProjectRoot } from './project.mjs';
 import { runComponent } from '../component.mjs';
+import { ownerStatus, recordHost, recoverStale } from './stale-state.mjs';
 
 const metadataPath = state => join(state, 'portable.json');
 async function record(kind, state) {
@@ -16,28 +17,34 @@ async function record(kind, state) {
 }
 /** A missing state file. A state path that is a file makes POSIX report ENOTDIR for its entries: nothing runs from it either. */
 export const stateAbsent = error => error?.code === 'ENOENT' || error?.code === 'ENOTDIR';
-export async function status(kind, state) {
+/** `options` locate the project worker's feature folder, whose lock a stale status also lists. */
+export async function status(kind, state, options = {}) {
   let value;
   try { value = await record(kind, state); }
   catch (error) {
     if (!stateAbsent(error)) throw error;
     for (const name of ['worker.lock', 'runtime.lock']) {
-      if (await lstat(join(state, name)).catch(error => { if (!stateAbsent(error)) throw error; })) return { state: 'unreachable', kind, stateDirectory: state, action: 'Startup may be in progress. After a crash, verify the old process has exited before removing its lock.' };
+      if (await lstat(join(state, name)).catch(error => { if (!stateAbsent(error)) throw error; })) return ownerStatus(kind, state, options, join(state, name), 'Startup may be in progress. After a crash, verify the old process has exited before removing its lock.');
     }
     return { state: 'stopped', kind, stateDirectory: state };
   }
   try { return { ...await controlRequest(value), kind, stateDirectory: state, credentialsFile: join(state, kind === 'worker' ? 'webview-token' : 'component.json') }; }
-  catch { return { state: 'unreachable', kind, stateDirectory: state, action: 'Control identity could not be verified. No PID was signalled. Inspect private state and verify the old process has exited before removing portable.json and its application lock.' }; }
+  catch { return ownerStatus(kind, state, options, metadataPath(state), 'Control identity could not be verified. No PID was signalled. Inspect private state and verify the old process has exited before removing portable.json and its application lock.'); }
 }
-export async function stop(kind, state) {
-  const before = await status(kind, state);
+/** Status after removing files a provably dead owner left: start, run and stop then proceed as if stopped. */
+async function settled(kind, state, options) {
+  const value = await status(kind, state, options);
+  return value.state === 'stale' ? { state: 'stopped', kind, stateDirectory: state, recovered: await recoverStale(value) } : value;
+}
+export async function stop(kind, state, options = {}) {
+  const before = await settled(kind, state, options);
   if (before.state === 'stopped') return before;
   if (before.state === 'unreachable') throw inputError(before.action);
   const identity = await record(kind, state);
   await controlRequest(identity, 'stop');
   const deadline = Date.now() + 30000;
   while (Date.now() < deadline) {
-    const next = await status(kind, state);
+    const next = await settled(kind, state, options);
     if (next.state === 'stopped') return next;
     // A new instance is never stopped by a command for the previous run.
     const current = await record(kind, state).catch(error => { if (error.code !== 'ENOENT') throw error; });
@@ -46,8 +53,8 @@ export async function stop(kind, state) {
   }
   throw Error('Shutdown is still in progress. Inspect status and logs before retrying.');
 }
-export async function start(kind, state, root, args) {
-  const before = await status(kind, state);
+export async function start(kind, state, root, args, options = {}) {
+  const before = await settled(kind, state, options);
   if (before.state === 'running') throw inputError('Already running. Use status, or stop before changing launch options.');
   if (before.state !== 'stopped') throw inputError(before.action ?? 'Application is stopping.');
   await privateDirectory(state);
@@ -98,7 +105,7 @@ export async function stateDirectory(kind, root, value) {
   return canonicalState;
 }
 export async function run(kind, state, root, options, internal, launch = null) {
-  const before = await status(kind, state);
+  const before = await settled(kind, state, options);
   if (before.state !== 'stopped') throw inputError(before.action ?? 'Application already running.');
   const abort = new AbortController();
   let control, closeService, worker, closing, identity, ready = false;
@@ -126,7 +133,7 @@ export async function run(kind, state, root, options, internal, launch = null) {
     const runId = randomBytes(32).toString('hex'), controlToken = randomBytes(32).toString('hex');
     const snapshot = () => ({ state: closing ? 'stopping' : 'running', runId, project: options.project ?? null, mode: 'mixed', url: info.url, workers: kind === 'worker' ? 1 : 0 });
     control = await createControl({ runId, controlToken, snapshot, stop: onSignal });
-    identity = { schemaVersion: 1, kind, runId, controlToken, pid: process.pid, controlPort: control.address().port, children: [], url: info.url, ...(launch ? { launch } : {}) };
+    identity = { schemaVersion: 1, kind, runId, controlToken, pid: process.pid, host: await recordHost(kind), controlPort: control.address().port, children: [], url: info.url, ...(launch ? { launch } : {}) };
     await createPrivate(metadataPath(state), identity);
     const data = { ...snapshot(), kind, stateDirectory: state, credentialsFile: info.credentialsFile };
     ready = true;

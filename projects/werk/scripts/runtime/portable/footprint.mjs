@@ -220,7 +220,7 @@ export async function footprint(root, options, state) {
   const groups = Object.fromEntries(GROUPS.map(group => [group, []]));
   for (const { group, absolute, inside, stateDirectory: _state, holdsProjectFiles: _files, ...entry } of entries) groups[group].push({ ...entry, ...(inside ? {} : { outsideProject: true }) });
   groups.worktrees = worktrees.items.map(({ root: _root, ...item }) => item);
-  const live = await status('worker', state);
+  const live = await status('worker', state, options);
   return { schemaVersion: 1, projectDirectory: project, stateDirectory: state, worker: { state: live.state }, git: tracked.repository === null ? 'unreadable' : tracked.repository ? 'repository' : 'none', worktreeDirectory: worktrees.worktreeDirectory, groups, worktreeErrors: worktrees.errors, warnings: layout.warnings,
     next: 'Preview removal with uninstall --dry-run. Git-tracked files are never removed.' };
 }

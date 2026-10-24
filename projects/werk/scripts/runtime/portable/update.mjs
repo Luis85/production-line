@@ -156,10 +156,12 @@ async function relaunch(app, launch) {
 }
 /** Stop (when allowed) and lock the selected instance's state; returns what is needed to restart it. */
 async function quiesce(kind, state, options, projectDir, log, app) {
-  const live = await status(kind, state);
+  const live = await status(kind, state, { 'project-dir': projectDir });
   if (live.state === 'unreachable') throw inputError(live.action);
   let launch = null;
-  if (live.state !== 'stopped') {
+  // A crashed app is not running: its provably stale files are removed and it is not restarted.
+  if (live.state === 'stale') await stop(kind, state, { 'project-dir': projectDir });
+  else if (live.state !== 'stopped') {
     if (!options.stop) throw inputError('The app is running. Stop it first, or pass --stop to stop it gracefully and restart it afterwards.');
     launch = await launchRecord(kind, state, live, projectDir);
     log('Stopping the running app gracefully.');
@@ -280,9 +282,9 @@ export async function applyUpdate(kind, root, state, options = {}, { fetcher = f
     if (found.version !== current && (options.version !== undefined || options.from)) throw inputError(`${found.version} is older than the installed ${current}. Use update rollback to return to a retained folder.`);
     return { ok: true, updated: false, application: kind, version: current, target: found.version };
   }
-  const before = await status(kind, state);
+  const before = await status(kind, state, { 'project-dir': projectDir });
   if (before.state === 'unreachable') throw inputError(before.action);
-  if (before.state !== 'stopped' && !options.stop) throw inputError('The app is running. Stop it first, or pass --stop to stop it gracefully and restart it afterwards.');
+  if (!['stopped', 'stale'].includes(before.state) && !options.stop) throw inputError('The app is running. Stop it first, or pass --stop to stop it gracefully and restart it afterwards.');
   const unlock = await lockApp(paths);
   let scratch, staging, owned;
   try {

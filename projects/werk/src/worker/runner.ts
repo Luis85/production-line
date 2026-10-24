@@ -1,6 +1,8 @@
 import { settleCleanup, withCleanup, type CleanupStep } from '../shared/lifecycle.js';
 import type { RepositoryConfiguration } from './application/repositories.js';
-import { open, unlink } from "node:fs/promises";
+import { unlink } from "node:fs/promises";
+import { createLock } from "../shared/process/lock.js";
+import { processHost } from "../shared/process/owner.js";
 import { join } from "node:path";
 import { type Profile, type Adapter, type WorkerPolicy } from "../shared/contracts.js";
 import { ensureDirectory } from "./infrastructure/journal/files.js";
@@ -75,17 +77,18 @@ export async function runWorker(
   config = { ...config, profiles: structuredClone(config.profiles), policy: { ...config.policy } };
   await ensureDirectory(config.stateDir);
   const lock = join(config.stateDir, "worker.lock");
-  const handle = await open(lock, "wx", 0o600).catch(() => {
-    throw Error(
-      "State directory is locked. After a crash, verify the old process is stopped before deleting worker.lock.",
-    );
-  });
+  const handle = await createLock(lock, "State directory is locked. After a crash, verify the old process is stopped before deleting worker.lock.");
   const cleanup: CleanupStep[] = [
     () => handle.close(),
     () => unlink(lock),
   ];
   return withCleanup(
-    () => runLockedWorker(config, stop, dependencies, handle, cleanup),
+    async () => {
+      // Record the owner at once: crash recovery removes only a lock naming a provably dead PID.
+      await handle.writeFile(JSON.stringify({ pid: process.pid, host: processHost, startedAt: new Date().toISOString() }));
+      await handle.sync();
+      return runLockedWorker(config, stop, dependencies, handle, cleanup);
+    },
     () => settleCleanup(...cleanup),
   );
 }
