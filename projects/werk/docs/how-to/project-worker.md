@@ -298,10 +298,17 @@ installs the offline authoring kit, and it also:
   when exclusion was skipped.
 
 A committed delivery policy that sets another `reviewDirectory` is not covered, because
-`init` does not read it. Exclude that folder the same way, from the project directory:
+`init` does not read it. Exclude that folder the same way. Run one of these once, from the
+repository root. In Git Bash or any POSIX shell:
 
 ```bash
 echo "/<folder>/" >> "$(git rev-parse --git-path info/exclude)"
+```
+
+In Windows PowerShell (`>>` there appends UTF-16, which Git cannot read, so use `Add-Content`):
+
+```powershell
+Add-Content -Encoding ascii -Path (git rev-parse --git-path info/exclude) -Value '/<folder>/'
 ```
 
 Before submitting implementation work, start the worker and complete setup:
