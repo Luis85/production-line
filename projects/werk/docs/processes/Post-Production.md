@@ -1,11 +1,11 @@
 ---
+type: Process
+actors:
+  - "[[Worker]]"
+interfaces:
+  - "[[Webview Kanban Board]]"
+  - "[[Command Line]]"
 order: 4
-prev_step: "[[Production]]"
-next_step: "[[Review]]"
-emits:
-  - "[[New Pull Request]]"
-  - "[[Increment Updated]]"
-  - "[[Process Updated]]"
 inputs:
   - "[[Feature Request]]"
   - "[[Increment]]"
@@ -13,20 +13,20 @@ outputs:
   - "[[Feature Request]]"
   - "[[Pull Request]]"
   - "[[Increment]]"
-actors:
-  - "[[Worker]]"
-interfaces:
-  - "[[Webview Kanban Board]]"
-  - "[[Command Line]]"
-owner: "[[Worker]]"
+emits:
+  - "[[New Pull Request]]"
+  - "[[Increment Updated]]"
+  - "[[Process Updated]]"
 supplier:
   - "[[Git Repository]]"
   - "[[Worker Queue]]"
 customers:
   - "[[Worker]]"
-type: Process
-parent: "[[Direct Feature Request to a Worker through the Webview]]"
+prev_step: "[[Production]]"
+next_step: "[[Review]]"
 status: Open
+owner: "[[Worker]]"
+parent: "[[Direct Feature Request to a Worker through the Webview]]"
 started: ""
 finished: ""
 horizon: ""

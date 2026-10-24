@@ -1,29 +1,29 @@
 ---
-order: 2
-prev_step: "[[Intake]]"
-next_step: "[[Production]]"
-emits:
-  - "[[Feature Request Updated]]"
-  - "[[Process Updated]]"
-inputs:
-  - "[[Feature Request]]"
-outputs: "[[Feature Request]]"
-rules:
-  - "[[Definition of Ready]]"
+type: Process
 actors:
   - "[[Worker]]"
 interfaces:
   - "[[Webview Kanban Board]]"
   - "[[Command Line]]"
-owner: "[[Worker]]"
+order: 2
+inputs:
+  - "[[Feature Request]]"
+outputs: "[[Feature Request]]"
+emits:
+  - "[[Feature Request Updated]]"
+  - "[[Process Updated]]"
 supplier:
   - "[[Worker Queue]]"
   - "[[Git Repository]]"
 customers:
   - "[[Worker]]"
-type: Process
-parent: "[[Direct Feature Request to a Worker through the Webview]]"
+rules:
+  - "[[Definition of Ready]]"
+prev_step: "[[Intake]]"
+next_step: "[[Production]]"
 status: Open
+owner: "[[Worker]]"
+parent: "[[Direct Feature Request to a Worker through the Webview]]"
 started: ""
 finished: ""
 horizon: ""

@@ -1,23 +1,22 @@
 ---
-order: 8
-prev_step: "[[Build]]"
-emits:
-  - "[[Feature Request Updated]]"
-  - "[[Increment Updated]]"
-  - "[[Process Updated]]"
-inputs:
-  - "[[Feature Request]]"
-  - "[[Increment]]"
-outputs:
-  - "[[Feature Request]]"
-  - "[[Increment]]"
+type: Process
 actors:
   - "[[System User]]"
   - "[[Worker]]"
 interfaces:
   - "[[Webview Kanban Board]]"
   - "[[Command Line]]"
-owner: "[[System]]"
+order: 8
+inputs:
+  - "[[Feature Request]]"
+  - "[[Increment]]"
+outputs:
+  - "[[Feature Request]]"
+  - "[[Increment]]"
+emits:
+  - "[[Feature Request Updated]]"
+  - "[[Increment Updated]]"
+  - "[[Process Updated]]"
 supplier:
   - "[[System User]]"
   - "[[Git Repository]]"
@@ -26,9 +25,10 @@ customers:
   - "[[System User]]"
   - "[[projects/werk/docs/entities/systems/Factory|Factory]]"
   - "[[projects/werk/docs/entities/systems/Orchestrator|Orchestrator]]"
-type: Process
-parent: "[[Direct Feature Request to a Worker through the Webview]]"
+prev_step: "[[Build]]"
 status: Open
+owner: "[[System]]"
+parent: "[[Direct Feature Request to a Worker through the Webview]]"
 started: ""
 finished: ""
 horizon: ""

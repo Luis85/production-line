@@ -1,6 +1,6 @@
 ---
 type: User Interface
-extends: "[[projects/werk/docs/entities/primitives/Feature|Feature]]"
+extends: "[[View]]"
 parent: "[[User Interface]]"
 emits:
 subscribes:

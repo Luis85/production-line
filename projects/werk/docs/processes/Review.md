@@ -1,12 +1,12 @@
 ---
+type: Process
+actors:
+  - "[[System User]]"
+  - "[[Worker]]"
+interfaces:
+  - "[[Webview Kanban Board]]"
+  - "[[Command Line]]"
 order: 5
-prev_step: "[[Post-Production]]"
-next_step: "[[Merge]]"
-emits:
-  - "[[Feature Request Updated]]"
-  - "[[Pull Request Updated]]"
-  - "[[Increment Updated]]"
-  - "[[Process Updated]]"
 inputs:
   - "[[Feature Request]]"
   - "[[Pull Request]]"
@@ -15,13 +15,11 @@ outputs:
   - "[[Feature Request]]"
   - "[[Pull Request]]"
   - "[[Increment]]"
-actors:
-  - "[[System User]]"
-  - "[[Worker]]"
-interfaces:
-  - "[[Webview Kanban Board]]"
-  - "[[Command Line]]"
-owner: "[[Worker]]"
+emits:
+  - "[[Feature Request Updated]]"
+  - "[[Pull Request Updated]]"
+  - "[[Increment Updated]]"
+  - "[[Process Updated]]"
 supplier:
   - "[[Git Repository]]"
   - "[[Worker Queue]]"
@@ -31,9 +29,11 @@ customers:
   - "[[System User]]"
   - "[[projects/werk/docs/entities/systems/Orchestrator|Orchestrator]]"
   - "[[projects/werk/docs/entities/systems/Factory|Factory]]"
-type: Process
-parent: "[[Direct Feature Request to a Worker through the Webview]]"
+prev_step: "[[Post-Production]]"
+next_step: "[[Merge]]"
 status: Open
+owner: "[[Worker]]"
+parent: "[[Direct Feature Request to a Worker through the Webview]]"
 started: ""
 finished: ""
 horizon: ""

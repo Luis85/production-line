@@ -1,27 +1,27 @@
 ---
 type: Process
-order: 0
-supplier:
-  - "[[System User]]"
-inputs:
-  - "[[Feature Request]]"
-outputs:
-  - "[[Increment]]"
-customers:
-  - "[[System User]]"
-owner: "[[System]]"
-emits:
-rules:
-next_step:
-prev_step:
 actors:
   - "[[System User]]"
   - "[[System]]"
 interfaces:
   - "[[Webview Intake Form]]"
   - "[[Webview Kanban Board]]"
-parent: "[[Processes]]"
+order: 0
+inputs:
+  - "[[Feature Request]]"
+outputs:
+  - "[[Increment]]"
+emits:
+supplier:
+  - "[[System User]]"
+customers:
+  - "[[System User]]"
+rules:
+prev_step:
+next_step:
 status: Open
+owner: "[[System]]"
+parent: "[[Processes]]"
 started: ""
 finished: ""
 horizon: ""
@@ -32,3 +32,6 @@ priority: ""
 assignee: ""
 iteration: ""
 ---
+## Prerequisites
+
+- The user has a running worker instance
