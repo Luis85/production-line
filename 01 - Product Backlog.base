@@ -86,10 +86,12 @@ views:
       - type
       - file.name
       - description
+      - parent
     columnSize:
-      note.type: 125
+      note.type: 88
       file.name: 227
-      note.description: 121
+      note.description: 176
+      note.parent: 196
   - type: table
     name: Relations
     filters:
@@ -117,34 +119,48 @@ views:
     filters:
       and:
         - file.inFolder("projects/werk/docs/processes")
+        - type == "Process"
     order:
       - order
       - file.name
+      - supplier
       - inputs
       - outputs
+      - customers
+      - owner
       - emits
       - rules
       - next_step
       - prev_step
       - actors
       - interfaces
+      - type
+      - parent
+      - status
     sort:
       - property: order
         direction: ASC
     columnSize:
-      file.name: 143
+      note.supplier: 335
       note.inputs: 339
+      file.name: 357
       note.outputs: 311
+      note.customers: 353
+      note.owner: 89
       note.emits: 478
       note.rules: 150
       note.next_step: 147
       note.prev_step: 151
+      note.type: 72
+      note.parent: 91
   - type: table
     name: Rules
     filters:
       and:
         - file.inFolder("projects/werk/docs/rules")
+        - type == "Rule"
     order:
+      - type
       - file.name
       - validates
     columnSize:

@@ -1,7 +1,7 @@
 ---
 type: Node
 extends: "[[Base Entity]]"
-parent: "[[System]]"
+parent: "[[Primitives]]"
 emits:
 subscribes:
 description:
@@ -11,7 +11,7 @@ category:
 relations:
 aliases:
 tags:
-order: 66000
+order: 50193.786621
 started: ""
 finished: ""
 horizon: ""

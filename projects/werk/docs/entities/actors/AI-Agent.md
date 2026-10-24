@@ -1,17 +1,17 @@
 ---
-type: Node
-extends: "[[Base Entity]]"
+type: Actor
+extends: "[[Actor]]"
 parent: "[[System]]"
 emits:
 subscribes:
 color:
+tags:
+aliases:
+category:
 description:
 status:
-category:
 relations:
-aliases:
-tags:
-order: 50781.25
+order: 50867.1875
 started: ""
 finished: ""
 horizon: ""

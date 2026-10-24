@@ -5,14 +5,14 @@ description:
 status:
 color:
 category:
-parent: "[[System]]"
+parent: "[[Primitives]]"
 relations:
 aliases:
 tags:
 subscribes:
   - "[[New Feature Request]]"
   - "[[New Pull Request]]"
-order: 74500
+order: 50390.625
 started: ""
 finished: ""
 horizon: ""

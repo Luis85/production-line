@@ -1,14 +1,17 @@
 ---
-type: Component
-extends: "[[Component]]"
+type: System
+extends: "[[Base Entity]]"
+parent: "[[System]]"
+emits:
+subscribes:
+color:
 description:
 status:
-color:
-category: Value Objects
-parent: "[[Project]]"
+category:
+relations:
 aliases:
 tags:
-order: 70000
+order: -186.75
 started: ""
 finished: ""
 horizon: ""

@@ -1,19 +1,18 @@
 ---
 type: System
-extends: "[[Base Entity]]"
+extends: "[[projects/werk/docs/entities/systems/Factory|Factory]]"
 description:
 status:
 color:
 category:
-parent: "[[System]]"
+parent: "[[projects/werk/docs/entities/systems/Factory|Factory]]"
 aliases:
 tags:
 subscribes:
   - "[[New Feature Request]]"
   - "[[New Pull Request]]"
-  - "[[Feature Request Updated]]"
-  - "[[Pull Request Updated]]"
-order: 50500
+emits:
+order: 58500
 started: ""
 finished: ""
 horizon: ""

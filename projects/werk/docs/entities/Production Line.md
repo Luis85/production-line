@@ -5,7 +5,7 @@ description:
 status:
 color:
 category:
-parent: "[[projects/werk/docs/entities/Factory|Factory]]"
+parent: "[[projects/werk/docs/entities/systems/Factory|Factory]]"
 aliases:
 tags:
 subscribes:

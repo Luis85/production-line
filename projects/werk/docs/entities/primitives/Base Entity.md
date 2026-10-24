@@ -1,6 +1,6 @@
 ---
 type: Node
-parent: "[[System]]"
+parent: "[[Primitives]]"
 description:
 status:
 category:
@@ -8,7 +8,7 @@ color:
 relations:
 tags:
 aliases:
-order: 50921.875
+order: 50146.484375
 started: ""
 finished: ""
 horizon: ""

@@ -1,10 +1,10 @@
 ---
 type: Relation
 extends: "[[Base Entity]]"
-parent: "[[System]]"
+parent: "[[Primitives]]"
 from_node:
 to_node:
-order: 74000
+order: 50195.3125
 status: ""
 started: ""
 finished: ""

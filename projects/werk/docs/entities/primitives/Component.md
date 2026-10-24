@@ -7,11 +7,11 @@ subscribes:
 status:
 color: blue
 category:
-parent: "[[System]]"
+parent: "[[Primitives]]"
 relations:
 aliases:
 tags:
-order: 51500
+order: 50183.105469
 started: ""
 finished: ""
 horizon: ""

@@ -1,103 +1,34 @@
 {
 	"nodes":[
-		{"id":"9d0a1410786212db","type":"group","x":-1200,"y":-280,"width":6540,"height":600,"label":"Direct Feature Request to a Worker through the Webview"},
-		{"id":"53440456eb6540b1","type":"file","file":"projects/werk/docs/entities/Queue.md","x":984,"y":-190,"width":400,"height":400},
-		{"id":"c64c0ac1c85a6613","type":"file","file":"projects/werk/docs/entities/System User.md","x":-1120,"y":-190,"width":400,"height":400},
-		{"id":"712395f22ffc7a86","type":"file","file":"projects/werk/docs/entities/Feature Request.md","x":-594,"y":-190,"width":400,"height":400},
-		{"id":"220bb354d9e6e638","type":"file","file":"projects/werk/docs/entities/Webview Intake Form.md","x":-68,"y":-190,"width":400,"height":400},
-		{"id":"66d37d4861c403d9","type":"file","file":"projects/werk/docs/entities/Worker.md","x":458,"y":-190,"width":400,"height":400},
-		{"id":"b0d1ed24d70bd0e9","type":"file","file":"projects/werk/docs/entities/Worktree.md","x":1800,"y":-190,"width":400,"height":400},
-		{
-			"id":"8527fee824c2b17d",
-			"type":"text",
-			"text":"Production",
-			"styleAttributes":{"shape":"predefined-process","textAlign":"center"},
-			"x":2280,
-			"y":-20,
-			"width":260,
-			"height":60
-		},
-		{"id":"570f22b8a3f85e2b","type":"file","file":"projects/werk/docs/entities/Increment.md","x":2640,"y":-190,"width":400,"height":400},
-		{
-			"id":"0a588a9f89463509",
-			"type":"text",
-			"text":"Post-Production",
-			"styleAttributes":{"shape":"predefined-process","textAlign":"center"},
-			"x":3114,
-			"y":-20,
-			"width":260,
-			"height":60
-		},
-		{"id":"67c1ffd917800ccf","type":"file","file":"projects/werk/docs/entities/Pull Request.md","x":3474,"y":-190,"width":400,"height":400},
-		{
-			"id":"79d219cea375c221",
-			"type":"text",
-			"text":"Publish",
-			"styleAttributes":{"textAlign":"center","shape":"predefined-process"},
-			"x":5000,
-			"y":-20,
-			"width":260,
-			"height":60
-		},
-		{
-			"id":"6dce7c45add8c69a",
-			"type":"text",
-			"text":"Review",
-			"styleAttributes":{"textAlign":"center","shape":"predefined-process"},
-			"x":3960,
-			"y":-20,
-			"width":260,
-			"height":60
-		},
-		{
-			"id":"5ae33adabc6f395d",
-			"type":"text",
-			"text":"Build",
-			"styleAttributes":{"textAlign":"center","shape":"predefined-process"},
-			"x":4654,
-			"y":-20,
-			"width":260,
-			"height":60
-		},
-		{
-			"id":"766e102f0b8f56f5",
-			"type":"text",
-			"text":"Merge",
-			"styleAttributes":{"textAlign":"center","shape":"predefined-process"},
-			"x":4307,
-			"y":-20,
-			"width":260,
-			"height":60
-		},
-		{
-			"id":"6b7885dd0554a98b",
-			"type":"text",
-			"text":"Pre-Production",
-			"styleAttributes":{"shape":"predefined-process","textAlign":"center"},
-			"x":1460,
-			"y":-20,
-			"width":260,
-			"height":60
-		}
+		{"id":"9d0a1410786212db","type":"group","x":-1840,"y":880,"width":6720,"height":1280,"label":"Direct Feature Request to a Worker through the Webview"},
+		{"id":"7cb965b4cb416fa5","type":"file","file":"projects/werk/docs/processes/Production.md","x":1545,"y":1020,"width":400,"height":400},
+		{"id":"21be4ca5931b71bd","type":"file","file":"projects/werk/docs/processes/Post-Production.md","x":2098,"y":1020,"width":400,"height":400},
+		{"id":"6bd86c2ba169a42f","type":"file","file":"projects/werk/docs/processes/Build.md","x":3757,"y":1020,"width":400,"height":400},
+		{"id":"cda952dbcba0d682","type":"file","file":"projects/werk/docs/processes/Publish.md","x":4307,"y":1020,"width":400,"height":400},
+		{"id":"b8ac9693312f7ad7","type":"file","file":"projects/werk/docs/processes/Merge.md","x":3204,"y":1020,"width":400,"height":400},
+		{"id":"66d37d4861c403d9","type":"file","file":"projects/werk/docs/entities/systems/Worker.md","x":439,"y":1020,"width":400,"height":400},
+		{"id":"220bb354d9e6e638","type":"file","file":"projects/werk/docs/entities/Webview Intake Form.md","x":-667,"y":1020,"width":400,"height":400},
+		{"id":"e08d5ba1c383672e","type":"file","file":"projects/werk/docs/processes/Intake.md","x":-114,"y":1020,"width":400,"height":400},
+		{"id":"bf9f10d0593a0f9b","type":"file","file":"projects/werk/docs/processes/Review.md","x":2651,"y":1020,"width":400,"height":400},
+		{"id":"c64c0ac1c85a6613","type":"file","file":"projects/werk/docs/entities/actors/System User.md","x":-1220,"y":1020,"width":400,"height":400},
+		{"id":"bbf408add8114911","type":"file","file":"projects/werk/docs/processes/Direct Feature Request to a Worker through the Webview.md","x":-1740,"y":1020,"width":400,"height":400},
+		{"id":"4a4aa358222ee683","type":"file","file":"projects/werk/docs/processes/Pre-Production.md","x":992,"y":1020,"width":400,"height":400},
+		{"id":"712395f22ffc7a86","type":"file","file":"projects/werk/docs/entities/data/Feature Request.md","x":-667,"y":1600,"width":400,"height":400},
+		{"id":"53440456eb6540b1","type":"file","file":"projects/werk/docs/entities/components/Queue.md","x":439,"y":1600,"width":400,"height":400},
+		{"id":"b0d1ed24d70bd0e9","type":"file","file":"projects/werk/docs/entities/components/Worktree.md","x":992,"y":1600,"width":400,"height":400},
+		{"id":"570f22b8a3f85e2b","type":"file","file":"projects/werk/docs/entities/data/Increment.md","x":1545,"y":1600,"width":400,"height":400},
+		{"id":"67c1ffd917800ccf","type":"file","file":"projects/werk/docs/entities/data/Pull Request.md","x":2098,"y":1600,"width":400,"height":400}
 	],
 	"edges":[
-		{
-			"id":"ebb3b1187fd1f67c",
-			"styleAttributes":{},
-			"toFloating":false,
-			"fromNode":"712395f22ffc7a86",
-			"fromSide":"right",
-			"toNode":"220bb354d9e6e638",
-			"toSide":"left"
-		},
 		{
 			"id":"902ec7bcdcf14e6b",
 			"styleAttributes":{},
 			"toFloating":false,
-			"fromNode":"c64c0ac1c85a6613",
-			"fromSide":"right",
+			"fromFloating":false,
+			"fromNode":"220bb354d9e6e638",
+			"fromSide":"bottom",
 			"toNode":"712395f22ffc7a86",
-			"toSide":"left"
+			"toSide":"top"
 		},
 		{
 			"id":"51e4f9e834d80422",
@@ -105,106 +36,135 @@
 			"toFloating":false,
 			"fromNode":"220bb354d9e6e638",
 			"fromSide":"right",
-			"toNode":"66d37d4861c403d9",
+			"toNode":"e08d5ba1c383672e",
 			"toSide":"left"
 		},
 		{
 			"id":"ddf7dd9a2045e4bb",
 			"styleAttributes":{},
 			"toFloating":false,
+			"fromFloating":false,
 			"fromNode":"66d37d4861c403d9",
-			"fromSide":"right",
+			"fromSide":"bottom",
 			"toNode":"53440456eb6540b1",
-			"toSide":"left"
+			"toSide":"top"
 		},
 		{
 			"id":"fc38c705cbd890b2",
 			"styleAttributes":{},
 			"toFloating":false,
-			"fromNode":"53440456eb6540b1",
+			"fromFloating":false,
+			"fromNode":"66d37d4861c403d9",
 			"fromSide":"right",
-			"toNode":"6b7885dd0554a98b",
+			"toNode":"4a4aa358222ee683",
 			"toSide":"left"
 		},
 		{
-			"id":"37c90d0aa02b0099",
+			"id":"02aecc0738439161",
 			"styleAttributes":{},
 			"toFloating":false,
-			"fromNode":"b0d1ed24d70bd0e9",
+			"fromNode":"e08d5ba1c383672e",
 			"fromSide":"right",
-			"toNode":"8527fee824c2b17d",
+			"toNode":"66d37d4861c403d9",
 			"toSide":"left"
 		},
 		{
-			"id":"339868c37ec29fde",
+			"id":"816f01ed2537c16c",
 			"styleAttributes":{},
 			"toFloating":false,
-			"fromNode":"0a588a9f89463509",
-			"fromSide":"right",
-			"toNode":"67c1ffd917800ccf",
-			"toSide":"left"
-		},
-		{
-			"id":"58112193ab82518a",
-			"styleAttributes":{},
-			"toFloating":false,
-			"fromNode":"570f22b8a3f85e2b",
-			"fromSide":"right",
-			"toNode":"0a588a9f89463509",
-			"toSide":"left"
-		},
-		{
-			"id":"70bf672cf1817205",
-			"styleAttributes":{},
-			"toFloating":false,
-			"fromNode":"6b7885dd0554a98b",
-			"fromSide":"right",
+			"fromNode":"4a4aa358222ee683",
+			"fromSide":"bottom",
 			"toNode":"b0d1ed24d70bd0e9",
+			"toSide":"top"
+		},
+		{
+			"id":"d195eaf838106d17",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromNode":"4a4aa358222ee683",
+			"fromSide":"right",
+			"toNode":"7cb965b4cb416fa5",
 			"toSide":"left"
 		},
 		{
-			"id":"884119d0e2c21299",
+			"id":"129dc116561e778d",
 			"styleAttributes":{},
 			"toFloating":false,
-			"fromNode":"8527fee824c2b17d",
-			"fromSide":"right",
+			"fromNode":"7cb965b4cb416fa5",
+			"fromSide":"bottom",
 			"toNode":"570f22b8a3f85e2b",
+			"toSide":"top"
+		},
+		{
+			"id":"5d26eccab306f4f9",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromNode":"21be4ca5931b71bd",
+			"fromSide":"bottom",
+			"toNode":"67c1ffd917800ccf",
+			"toSide":"top"
+		},
+		{
+			"id":"d0ea5a63176fe5d7",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromNode":"7cb965b4cb416fa5",
+			"fromSide":"right",
+			"toNode":"21be4ca5931b71bd",
 			"toSide":"left"
 		},
 		{
-			"id":"105ec35c47410d2a",
+			"id":"e6896bdc5af633da",
 			"styleAttributes":{},
 			"toFloating":false,
-			"fromNode":"67c1ffd917800ccf",
+			"fromNode":"21be4ca5931b71bd",
 			"fromSide":"right",
-			"toNode":"6dce7c45add8c69a",
+			"toNode":"bf9f10d0593a0f9b",
 			"toSide":"left"
 		},
 		{
-			"id":"ba637cb288d1cd82",
+			"id":"92f25950bdeb69a9",
 			"styleAttributes":{},
 			"toFloating":false,
-			"fromNode":"6dce7c45add8c69a",
+			"fromNode":"bf9f10d0593a0f9b",
 			"fromSide":"right",
-			"toNode":"766e102f0b8f56f5",
+			"toNode":"b8ac9693312f7ad7",
 			"toSide":"left"
 		},
 		{
-			"id":"2c42d5eaa0ba2539",
+			"id":"842e3dda32a31a30",
 			"styleAttributes":{},
 			"toFloating":false,
-			"fromNode":"766e102f0b8f56f5",
+			"fromNode":"b8ac9693312f7ad7",
 			"fromSide":"right",
-			"toNode":"5ae33adabc6f395d",
+			"toNode":"6bd86c2ba169a42f",
 			"toSide":"left"
 		},
 		{
-			"id":"e35ab842a05d9c2b",
+			"id":"9dd08499dcd75fb7",
 			"styleAttributes":{},
 			"toFloating":false,
-			"fromNode":"5ae33adabc6f395d",
+			"fromNode":"6bd86c2ba169a42f",
 			"fromSide":"right",
-			"toNode":"79d219cea375c221",
+			"toNode":"cda952dbcba0d682",
+			"toSide":"left"
+		},
+		{
+			"id":"165fdd6f9c4690cd",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromNode":"c64c0ac1c85a6613",
+			"fromSide":"right",
+			"toNode":"220bb354d9e6e638",
+			"toSide":"left"
+		},
+		{
+			"id":"a0a98fef31dd824f",
+			"styleAttributes":{},
+			"toFloating":false,
+			"fromNode":"bbf408add8114911",
+			"fromSide":"right",
+			"toNode":"c64c0ac1c85a6613",
 			"toSide":"left"
 		}
 	],

@@ -5,7 +5,7 @@ description:
 status:
 color:
 category:
-parent: "[[projects/werk/docs/entities/Orchestrator|Orchestrator]]"
+parent: "[[projects/werk/docs/entities/systems/Orchestrator|Orchestrator]]"
 aliases:
 tags:
 emits:
@@ -17,7 +17,7 @@ emits:
 subscribes:
   - "[[New Feature Request]]"
   - "[[Feature Request Updated]]"
-order: 61000
+order: 42125
 started: ""
 finished: ""
 horizon: ""

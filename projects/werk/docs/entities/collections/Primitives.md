@@ -1,6 +1,6 @@
 ---
-type: Actor
-extends: "[[Actor]]"
+type: Collection
+extends: "[[Collection]]"
 parent: "[[System]]"
 emits:
 subscribes:
@@ -11,7 +11,6 @@ category:
 description:
 status:
 relations:
-order: 50843.75
 started: ""
 finished: ""
 horizon: ""
@@ -21,4 +20,5 @@ risk: ""
 priority: ""
 assignee: ""
 iteration: ""
+order: -62.25
 ---

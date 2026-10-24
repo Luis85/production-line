@@ -16,7 +16,7 @@ subscribes:
   - "[[Pull Request Updated]]"
   - "[[New Increment Created]]"
   - "[[Increment Updated]]"
-order: 50625
+order: -1999
 started: ""
 finished: ""
 horizon: ""
