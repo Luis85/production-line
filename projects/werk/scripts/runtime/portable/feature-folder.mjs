@@ -47,7 +47,7 @@ export async function featureFolder(action, options) {
   const locked = !!await exists(join(state, 'worker.lock')) || names.includes('_worker.lock') || !!await exists(join(state, 'portable.json'));
   const plan = { projectDirectory: project, previousPath: source.relative, path: target.relative, directory: target.path, changed: source.path !== target.path, entries: names.length, requiresStoppedWorker: true, blocked: locked, configuration: configPath, authoring: authoring ? { configuration: '.werk/feature-workflow.json', base: authoring.next.base, template: authoring.next.template } : null, nativeCommand: 'node bin/apps/worker/cli.mjs start', dockerCommand: 'docker compose -f .werk/compose.worker.yaml up -d' };
   if (action === 'plan') return plan;
-  if (locked) throw inputError('Stop the worker before changing its feature folder: worker stop, or docker compose -f .werk/compose.worker.yaml down. After a crash, worker start removes the locks of a process that is no longer running.');
+  if (locked) throw inputError('Stop the worker before changing its feature folder: worker stop, or docker compose -f .werk/compose.worker.yaml down. After a crash, worker start removes the locks of a process that is no longer running, and you can then stop the worker again if you only wanted to change the folder.');
   if (!plan.changed && !pending) return { ...plan, changed: false };
   const next = JSON.stringify({ ...config, features: { ...config.features, directory: target.relative } }, null, 2) + '\n';
   if (pending && ![pending.before, pending.after].includes(digest(raw))) throw inputError('Configuration changed during an interrupted move. Restore the original configuration before recovering.');

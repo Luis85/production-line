@@ -308,7 +308,7 @@ echo "/<folder>/" >> "$(git rev-parse --git-path info/exclude)"
 In Windows PowerShell (`>>` there appends UTF-16, which Git cannot read, so use `Add-Content`):
 
 ```powershell
-Add-Content -Encoding ascii -Path (git rev-parse --git-path info/exclude) -Value '/<folder>/'
+Add-Content -Encoding ascii -LiteralPath (git rev-parse --git-path info/exclude) -Value '/<folder>/'
 ```
 
 Before submitting implementation work, start the worker and complete setup:

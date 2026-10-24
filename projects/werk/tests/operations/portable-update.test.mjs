@@ -135,6 +135,22 @@ test('invalid update history is rejected before stopping or replacing a running 
   assert.deepEqual(await leftovers(app), []);
 });
 
+test('an invalid WERK_STARTUP_TIMEOUT_MS is rejected before --stop stops anything', { timeout: 120000 }, async t => {
+  const { app, cwd, directory, cleanup } = await workspace(t, 'update invalid startup timeout');
+  const state = join(cwd, 'custom-state'), env = { ...process.env, WERK_STARTUP_TIMEOUT_MS: '1000' };
+  cleanup(() => invoke(cwd, ['stop', '--state-dir', state]).catch(() => {}));
+  const started = await invoke(cwd, ['start', '--state-dir', state, '--port', '0']);
+  assert.equal(started.code, 0, started.stderr);
+  const releaseRoot = await extracted(directory, '99.0.0');
+  for (const args of [['update', 'apply', '--from', releaseRoot, '--state-dir', state, '--stop'], ['update', 'rollback', '--state-dir', state, '--stop']]) {
+    const refused = await invoke(cwd, args, env);
+    assert.equal(refused.code, 2, refused.stderr); assert.match(refused.stderr, /WERK_STARTUP_TIMEOUT_MS: integer 5000/);
+    assert.equal((await invoke(cwd, ['status', '--state-dir', state])).data.runId, started.data.runId, 'the worker kept running');
+    assert.equal(await appVersion(app), installed);
+  }
+  assert.deepEqual(await leftovers(app).catch(() => []), []);
+});
+
 test('failed history commit restores the old app and restarts the selected environment-defined state with its lock intact', { timeout: 180000 }, async t => {
   const { app, cwd, directory, cleanup } = await workspace(t, 'update history failure');
   const state = join(cwd, 'custom-state'), history = join(dirname(app), '.worker-update/history.json');

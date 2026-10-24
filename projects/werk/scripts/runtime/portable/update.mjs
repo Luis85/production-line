@@ -145,6 +145,8 @@ function launchEnvironment(launch) {
   if (typeof duration !== 'string' || !/^\d+$/.test(duration) || !Number.isSafeInteger(Number(duration)) || Number(duration) < 1000 || Number(duration) > 86400000) throw inputError('Invalid saved execution duration. Repair the launch metadata before updating.');
   return { WERK_WORKER_MAX_RUNTIME_MS: String(Number(duration)) };
 }
+/** The restart reads WERK_STARTUP_TIMEOUT_MS only after the app was stopped and replaced; a bad value must fail before anything changes. */
+const validateRestartEnvironment = options => { if (options.stop) startupTimeout({}, process.env); };
 async function relaunch(app, launch) {
   try {
     // The restart is a fresh start: WERK_STARTUP_TIMEOUT_MS from this environment sets its deadline.
@@ -285,6 +287,7 @@ export async function applyUpdate(kind, root, state, options = {}, { fetcher = f
     if (found.version !== current && (options.version !== undefined || options.from)) throw inputError(`${found.version} is older than the installed ${current}. Use update rollback to return to a retained folder.`);
     return { ok: true, updated: false, application: kind, version: current, target: found.version };
   }
+  validateRestartEnvironment(options);
   const before = await status(kind, state, { 'project-dir': projectDir });
   if (before.state === 'unreachable') throw inputError(before.action);
   if (!['stopped', 'stale'].includes(before.state) && !options.stop) throw inputError('The app is running. Stop it first, or pass --stop to stop it gracefully and restart it afterwards.');
@@ -330,6 +333,7 @@ export async function applyUpdate(kind, root, state, options = {}, { fetcher = f
 export async function rollbackUpdate(kind, root, state, options = {}, { log = () => {}, projectDir } = {}) {
   const paths = await locate(root), current = await appVersion(paths.app, kind);
   await outsideApp(paths.app);
+  validateRestartEnvironment(options);
   const unlock = await lockApp(paths);
   let owned;
   try {
