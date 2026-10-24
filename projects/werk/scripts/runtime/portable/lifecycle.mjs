@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { open, unlink, lstat, realpath } from 'node:fs/promises';
 import { join, resolve, relative, isAbsolute, sep, dirname, basename } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -10,6 +10,43 @@ import { runComponent } from '../component.mjs';
 import { ownerStatus, recordOwner, recoverStale } from './stale-state.mjs';
 
 const metadataPath = state => join(state, 'portable.json');
+/** How long `start` waits for its detached `_run` child to report ready. */
+export const STARTUP_TIMEOUT_MS = 120000;
+/** How long a failed start waits for the child to honour the IPC stop before it ends the child's process tree. */
+export const STARTUP_GRACE_MS = 10000;
+const KILL_WAIT_MS = 10000;
+/** The startup deadline: `--startup-timeout-ms` wins over WERK_STARTUP_TIMEOUT_MS, then the default. */
+export function startupTimeout(options = {}, environment = process.env) {
+  const [name, value] = options['startup-timeout-ms'] !== undefined ? ['--startup-timeout-ms', options['startup-timeout-ms']] : ['WERK_STARTUP_TIMEOUT_MS', environment.WERK_STARTUP_TIMEOUT_MS];
+  if (value === undefined) return STARTUP_TIMEOUT_MS;
+  if (typeof value !== 'string' || !/^\d+$/.test(value) || Number(value) < 5000 || Number(value) > 900000) throw inputError(`${name}: integer 5000–900000`);
+  return Number(value);
+}
+const exitWithin = (child, ms) => new Promise(resolve => {
+  if (child.exitCode !== null || child.signalCode !== null) { resolve(true); return; }
+  const done = value => { clearTimeout(timer); child.removeListener('exit', exited); resolve(value); };
+  const exited = () => done(true), timer = setTimeout(() => done(false), ms);
+  child.once('exit', exited);
+});
+/** Ends only the child's own process tree, never processes selected by image name. */
+function killTree(child) {
+  if (process.platform === 'win32') return new Promise(resolve => execFile('taskkill', ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, timeout: KILL_WAIT_MS }, () => resolve()));
+  // A detached child leads its own process group, which includes its providers.
+  try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); }
+}
+/** Stops a child that failed to start: IPC stop, a bounded grace period, then its process tree. Resolves whether it exited. */
+async function stopLaunched(kind, state, options, child) {
+  // A signal that cannot be delivered shows as a child that did not exit.
+  child.on('error', () => {});
+  if (child.connected) child.send({ action: 'stop' }, () => {});
+  let stopped = !child.pid || await exitWithin(child, STARTUP_GRACE_MS);
+  if (!stopped) { await killTree(child); stopped = await exitWithin(child, KILL_WAIT_MS); }
+  if (child.connected) child.disconnect();
+  child.unref();
+  // A killed child leaves the portable.json and lock it wrote; stale recovery removes them once its PID is proven gone.
+  if (stopped) await settled(kind, state, options).catch(() => {});
+  return stopped;
+}
 async function record(kind, state) {
   const value = await readPrivate(metadataPath(state));
   if (value.kind !== kind) throw inputError('State belongs to another application. Choose a separate --state-dir.');
@@ -54,7 +91,7 @@ export async function stop(kind, state, options = {}) {
   throw Error('Shutdown is still in progress. Inspect status and logs before retrying.');
 }
 export async function start(kind, state, root, args, options = {}) {
-  const before = await settled(kind, state, options);
+  const timeout = startupTimeout(options), before = await settled(kind, state, options);
   if (before.state === 'running') throw inputError('Already running. Use status, or stop before changing launch options.');
   if (before.state !== 'stopped') throw inputError(before.action ?? 'Application is stopping.');
   await privateDirectory(state);
@@ -65,20 +102,25 @@ export async function start(kind, state, root, args, options = {}) {
   const log = await open(logPath, 'a', 0o600);
   let child;
   try {
-    child = spawn(process.execPath, [join(root, 'cli.mjs'), '_run', ...args], { cwd: process.cwd(), env: process.env, detached: true, stdio: ['ignore', log.fd, log.fd, 'ipc'], windowsHide: true });
+    // The deadline belongs to this launcher; `_run` does not accept it.
+    const launch = args.filter((value, index) => value !== '--startup-timeout-ms' && args[index - 1] !== '--startup-timeout-ms');
+    child = spawn(process.execPath, [join(root, 'cli.mjs'), '_run', ...launch], { cwd: process.cwd(), env: process.env, detached: true, stdio: ['ignore', log.fd, log.fd, 'ipc'], windowsHide: true });
     return await new Promise((resolve, reject) => {
       let settled = false;
-      const finish = (error, value) => {
+      // `failure` builds the error from the outcome of stopping the child.
+      const outcome = stopped => stopped ? `the ${kind} process was stopped` : `the ${kind} process (PID ${child.pid}) could not be stopped; end that PID before retrying`;
+      const finish = (failure, value) => {
         if (settled) return; settled = true;
-        clearTimeout(timer); child.removeListener('exit', exited); child.removeListener('error', failed);
-        if (error) { child.send?.({ action: 'stop' }, () => {}); reject(error); }
+        clearTimeout(timer); child.removeListener('exit', exited); child.removeListener('error', failed); child.removeListener('disconnect', dropped);
+        if (failure) stopLaunched(kind, state, options, child).then(stopped => reject(failure(stopped)), reject);
         else { child.disconnect(); child.unref(); resolve(value); }
       };
-      const exited = () => finish(Error(`Startup failed. Inspect ${logPath}.`));
-      const failed = () => finish(Error(`Could not launch Node. Inspect ${logPath}.`));
-      const timer = setTimeout(() => finish(Error(`Startup deadline exceeded. Shutdown requested; inspect ${logPath}.`)), 25000);
-      child.once('error', failed); child.once('exit', exited);
-      child.once('message', value => value?.ok ? finish(null, value.data) : finish(inputError(value?.error ?? 'Startup failed.')));
+      const exited = () => finish(() => Error(`Startup failed. Inspect ${logPath}.`));
+      const failed = () => finish(() => Error(`Could not launch Node. Inspect ${logPath}.`));
+      const dropped = () => finish(stopped => Error(`Startup failed; ${outcome(stopped)}. Inspect ${logPath}.`));
+      const timer = setTimeout(() => finish(stopped => Error(`Startup deadline (${timeout / 1000} s) exceeded; ${outcome(stopped)}. Inspect ${logPath}. On a busy host retry with --startup-timeout-ms 300000.`)), timeout);
+      child.once('error', failed); child.once('exit', exited); child.once('disconnect', dropped);
+      child.once('message', value => value?.ok ? finish(null, value.data) : finish(stopped => inputError(stopped ? value?.error ?? 'Startup failed.' : `${value?.error ?? 'Startup failed.'} Afterwards ${outcome(false)}. Inspect ${logPath}.`)));
     });
   } finally { await log.close(); }
 }

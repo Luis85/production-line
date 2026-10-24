@@ -10,7 +10,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { createPrivate, inputError, privateDirectory, readPrivate } from '../config.mjs';
 import { exists, restoreSnapshot, snapshotState } from '../maintenance/snapshot.mjs';
 import { latest, newer, published, versionParts } from '../update/remote.mjs';
-import { status, stop } from './lifecycle.mjs';
+import { STARTUP_GRACE_MS, startupTimeout, status, stop } from './lifecycle.mjs';
 import { recordOwner } from './stale-state.mjs';
 import { inventory, replaceInPlace, verifyTree } from './update-in-place.mjs';
 
@@ -26,6 +26,8 @@ import { inventory, replaceInPlace, verifyTree } from './update-in-place.mjs';
 const execute = promisify(execFile);
 const LOCKS = { worker: 'worker.lock', factory: 'runtime.lock', orchestrator: 'runtime.lock' };
 const HISTORY_LIMIT = 50;
+// Beyond the restarted start's own deadline and grace period: loading the CLI, terminating a failed child and recovering its state.
+const RELAUNCH_MARGIN_MS = 30000;
 export { updateCommands, updateHelp } from './update-commands.mjs';
 
 const stamp = () => new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
@@ -147,7 +149,9 @@ function launchEnvironment(launch) {
 }
 async function relaunch(app, launch) {
   try {
-    const { stdout } = await execute(process.execPath, [join(app, 'cli.mjs'), 'start', ...launch.args], { cwd: launch.cwd, env: { ...process.env, ...launchEnvironment(launch) }, timeout: 60000, maxBuffer: 1024 * 1024, windowsHide: true });
+    // The restart is a fresh start: WERK_STARTUP_TIMEOUT_MS from this environment sets its deadline.
+    const env = { ...process.env, ...launchEnvironment(launch) }, timeout = startupTimeout({}, env) + STARTUP_GRACE_MS + RELAUNCH_MARGIN_MS;
+    const { stdout } = await execute(process.execPath, [join(app, 'cli.mjs'), 'start', ...launch.args], { cwd: launch.cwd, env, timeout, maxBuffer: 1024 * 1024, windowsHide: true });
     return { restarted: true, ...JSON.parse(stdout) };
   } catch (error) {
     let message = error.message;

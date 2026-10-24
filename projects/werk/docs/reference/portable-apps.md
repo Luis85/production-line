@@ -21,6 +21,13 @@ Start any subset in any order. `start` returns JSON when the app and authenticat
 control endpoint are ready; `run` stays in the foreground for CI, systemd, launchd,
 Windows services or containers. Use `--port 0` for an available port and read `url`
 from the result. Workers open Taskboard first; Factory and orchestrators open Dashboard.
+`start` waits up to 120 s for the app to report ready. On a busy host raise the deadline
+with `--startup-timeout-ms` (5000–900000) or the process environment variable
+`WERK_STARTUP_TIMEOUT_MS`; the option wins over the variable. A start that fails (deadline,
+startup error or lost IPC channel) asks the launched process to stop, waits up to 10 s,
+then ends that process and its children by PID (`taskkill /PID <pid> /T /F` on Windows, its
+process group on POSIX) and removes the `portable.json` and lock it left; the error names
+the log, or the PID when the process could not be stopped.
 Startup returns the private credential **file path**, never its contents. Open the
 returned URL and unlock the webview using that file locally. The CLI reads local
 credentials itself. Workers may enroll later through `settings set`; Factory can
@@ -246,7 +253,9 @@ manifest and runs the staged CLI once. Then it:
    stays pinned during restart. Instances started by
    0.8 or earlier recorded none: they restart with the state directory, project
    defaults and previous port. A foreground `run` is left for its terminal or
-   service manager. `--no-restart` skips the restart.
+   service manager. `--no-restart` skips the restart. The restart does not replay
+   `--startup-timeout-ms`; set `WERK_STARTUP_TIMEOUT_MS` in the environment of
+   `update apply` to give it a longer startup deadline.
 
 If another process holds the app folder open and must keep running, so the folder
 cannot be renamed (the `Could not move` error described below), pass
