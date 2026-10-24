@@ -3,7 +3,10 @@ import { inputError } from "../config.mjs";
 // Git fetch, claim and publication can outlast the default 30 s API wait on slow remotes. Saving settings can validate
 // repository checkouts and worktree folders, which exceeded 10 s on a large vault, so it waits as long.
 const GIT_REQUEST_TIMEOUT_MS = 120000;
+// A provider check probes a cold CLI (15 s per probe, one login retry), so it outlasts the default API wait.
+const PROVIDER_CHECK_TIMEOUT_MS = 60000;
 export function workerCommands(catalog) {
+  catalog["provider check"] = { ...catalog["provider check"], timeoutMs: PROVIDER_CHECK_TIMEOUT_MS };
   catalog["settings set"] = { ...catalog["settings set"], timeoutMs: GIT_REQUEST_TIMEOUT_MS };
   catalog["feature setup"] = { local: true, required: [], options: ["project-dir", "features-dir", "workflow-dir", "provider", "if-match"], mutating: true, description: "Install a standalone feature authoring kit without starting or installing a worker; preserve existing project files. The authoring script is refreshed only while it matches the content recorded in .werk/authoring/manifest.json; --if-match REVISION replaces an unrecorded script with that revision." };
   for (const action of ["create", "validate", "ready"]) catalog["feature author " + action] = {

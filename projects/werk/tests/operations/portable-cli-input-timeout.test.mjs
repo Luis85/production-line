@@ -82,6 +82,12 @@ test('Git-backed worker commands wait longer than ordinary API calls', () => {
   assert.equal(DEFAULT_REQUEST_TIMEOUT_MS, 30000);
 });
 
+test('provider check waits longer than the cold-start worst case of its probes', () => {
+  const catalog = commands('worker');
+  assert.ok(catalog['provider check'].timeoutMs > 45000);
+  assert.ok(catalog['shared setup'].timeoutMs > 45000, 'shared setup runs the provider check under the same wait');
+});
+
 test('settings set waits as long as Git operations because repository and worktree validation can be slow', () => {
   const catalog = commands('worker');
   assert.equal(catalog['settings set'].timeoutMs, catalog['shared sync'].timeoutMs);
