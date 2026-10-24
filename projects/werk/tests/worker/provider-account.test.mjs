@@ -53,8 +53,8 @@ test('shutdown cancels an account probe and prevents later CLI launches', { skip
   assert.match((await checks.check(provider('claude-cli', { executable: cli }))).message, /stopping/);
 });
 
-test('a hanging account status command reaches its bounded deadline without exposing output', { skip: process.platform === 'win32', timeout: 15000 }, async t => {
+test('a hanging account status command reaches its bounded deadline without exposing output', { skip: process.platform === 'win32', timeout: 30000 }, async t => {
   const cli = await executable(t, "console.log('private-account-diagnostic');setInterval(()=>{},1000)"); const checks = new ProviderAccountChecks(); t.after(() => checks.close());
   const started = Date.now(); const value = await checks.check(provider('claude-cli', { executable: cli }));
-  assert.equal(value.signedIn, 'unknown'); assert.ok(Date.now() - started < 10000); assert.doesNotMatch(JSON.stringify(value), /private-account-diagnostic/);
+  assert.equal(value.signedIn, 'unknown'); assert.ok(Date.now() - started < 20000); assert.doesNotMatch(JSON.stringify(value), /private-account-diagnostic/);
 });

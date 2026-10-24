@@ -7,24 +7,30 @@ import { inputError } from '../config.mjs';
 const runFile = promisify(execFile), reviewFolder = 'feature-reviews', reviewEntry = '/feature-reviews/';
 const gitOutput = (project, args) => runFile('git', ['-c', 'core.quotePath=false', ...args], { cwd: project, timeout: 30000, maxBuffer: 1048576, windowsHide: true, encoding: 'utf8' }).then(result => result.stdout);
 /**
- * Keeps the default review folder out of an operator-only checkout without changing the committed policy default.
+ * Plans keeping the default review folder out of an operator-only checkout without changing the committed policy default.
+ * Runs before anything is installed, so a non-regular exclude file fails init before Git reads it for other checks.
  * Only a project at the root of a Git checkout is touched (the entry is anchored there); anything else is skipped silently.
- * `excluded` is empty when skipped; a skip caused by tracked review files adds a warning.
- * @returns {Promise<{ excluded: string[], warnings: string[] }>}
+ * A skip caused by tracked review files adds a warning.
+ * @returns {Promise<{ path?: string, warnings: string[] }>}
  */
-export async function excludeReviewFolder(project) {
+export async function planReviewExclude(project) {
   const lines = await gitOutput(project, ['rev-parse', '--show-prefix', '--git-path', 'info/exclude']).then(output => output.split(/\r?\n/), () => undefined);
-  if (!lines || lines[0] !== '' || !lines[1]) return { excluded: [], warnings: [] };
+  if (!lines || lines[0] !== '' || !lines[1]) return { warnings: [] };
   const path = resolve(project, lines[1]);
-  if ((await gitOutput(project, ['ls-files', '--', reviewFolder])).trim()) return { excluded: [], warnings: [`${reviewFolder}/ has tracked files, so ${reviewEntry} was not added to ${lines[1]}. Exclude it yourself if review notes should stay local.`] };
   const info = await lstat(path).catch(error => { if (error.code !== 'ENOENT') throw error; });
   if (info && (!info.isFile() || info.isSymbolicLink())) throw inputError('The Git local exclude file must be a regular file, not a link or folder: ' + path);
-  const previous = info ? await readFile(path, 'utf8') : '';
+  if ((await gitOutput(project, ['ls-files', '--', reviewFolder])).trim()) return { warnings: [`${reviewFolder}/ has tracked files, so ${reviewEntry} was not added to ${lines[1]}. Exclude it yourself if review notes should stay local.`] };
+  return { path, warnings: [] };
+}
+/** Appends the planned entry once. `excluded` is empty when the plan skipped the checkout. */
+export async function excludeReviewFolder({ path, warnings }) {
+  if (!path) return { excluded: [], warnings };
+  const previous = await readFile(path, 'utf8').catch(error => { if (error.code !== 'ENOENT') throw error; return ''; });
   if (!previous.split(/\r?\n/).map(line => line.trimEnd()).includes(reviewEntry)) {
     await mkdir(dirname(path), { recursive: true });
     const file = await open(path, 'a', 0o600); try { await file.writeFile((previous && !previous.endsWith('\n') ? '\n' : '') + reviewEntry + '\n'); } finally { await file.close(); }
   }
-  return { excluded: [reviewEntry], warnings: [] };
+  return { excluded: [reviewEntry], warnings };
 }
 
 export const localTemplateName = '_templates/local-request.md';

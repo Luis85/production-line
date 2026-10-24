@@ -5,7 +5,7 @@ import { seedWorkerPackage } from './npm-package.mjs';
 import { seedEnvironment } from './environment.mjs';
 import { setupFeatureAuthoring, planFeatureAuthoring } from './feature-authoring.mjs';
 import { inputError, readPrivate, createPrivate } from '../config.mjs';
-import { intakeOption, localRequestTemplate, localTemplateName, localIntakeResult, excludeReviewFolder } from './local-intake.mjs';
+import { intakeOption, localRequestTemplate, localTemplateName, localIntakeResult, planReviewExclude, excludeReviewFolder } from './local-intake.mjs';
 
 const nodeImage = 'node:24.19.0-bookworm@sha256:4196d66a565c6f195728d9952f161f4adfe2ad753052a08b7ec7f1c5a6bda42b';
 const exists = path => lstat(path).catch(error => { if (error.code !== 'ENOENT') throw error; });
@@ -88,6 +88,7 @@ export async function initializeWorker(root, options) {
   for (const file of ['worker-project.json', 'worker.json', 'compose.worker.yaml', '.gitignore']) await plainFile(join(project, '.werk', file));
   if (!prior) await rejectLinks(root);
   for (const directory of [join(project, '.werk'), state, featureDirectory, join(featureDirectory, '_templates'), join(project, '.werk/provider-home'), join(project, 'bin/apps')]) await realDirectory(directory).catch(error => { if (error.code !== 'ENOENT') throw error; });
+  const reviewExclude = intake === 'local' ? await planReviewExclude(project) : undefined;
   const environment = await seedEnvironment('worker', project, { defaults: options.port === undefined ? {} : { port: String(port) }, fallbacks: { config: '.werk/worker.json', port: String(port) } });
   await realDirectory(join(project, '.werk'), true); await realDirectory(state, true);
   await realDirectory(featureDirectory, true); await realDirectory(join(featureDirectory, '_templates'), true);
@@ -96,7 +97,7 @@ export async function initializeWorker(root, options) {
   if (!existingConfig) await createPrivate(config, { schemaVersion: 1, features: { directory: inside.split(sep).join('/'), provider: options.provider ?? 'codex-cli', pollMs: 1000, ...(intake === 'local' ? { intake } : {}) } });
   await seed(join(project, '.werk/worker-project.json'), JSON.stringify({ schemaVersion: 1, port }, null, 2) + '\n');
   const authoring = await setupFeatureAuthoring(app, project, { featuresDirectory: inside.split(sep).join('/'), ...(workflowDirectory === undefined ? {} : { workflowDirectory }), provider: normalized.features.provider });
-  const localTemplate = join(featureDirectory, localTemplateName), local = intake === 'local' ? localIntakeResult(localTemplate, relative(project, localTemplate).split(sep).join('/'), await excludeReviewFolder(project)) : undefined;
+  const localTemplate = join(featureDirectory, localTemplateName), local = intake === 'local' ? localIntakeResult(localTemplate, relative(project, localTemplate).split(sep).join('/'), await excludeReviewFolder(reviewExclude)) : undefined;
   if (intake === 'local') await seed(localTemplate, localRequestTemplate(normalized.features.provider));
   await ignore(join(project, '.werk/.gitignore'), ['worker/', 'provider-home/', 'agent-integrations.json', 'agent-integrations.pending.json', 'agent-integrations.lock']);
   await ignore(join(featureDirectory, '.gitignore'), ['_worker.lock', '_worker-owner.json', '_worker-status.md', '_results/', '_questions/', '_tasks/', '_gates/', '_conflicts/']);
