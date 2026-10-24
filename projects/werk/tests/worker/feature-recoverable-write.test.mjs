@@ -56,3 +56,37 @@ test('a colliding preflight path is never removed as if the worker owned it', as
   assert.equal(await readFile(collision, 'utf8'), 'Concurrent unrelated file');
   assert.deepEqual(await readdir(f.recovery), []);
 });
+
+test('keepDisplaced false drops the unchanged displaced copy after publication, the default retains it', async t => {
+  const f = await fixture(t);
+  assert.equal(await replaceFeatureFile(f.path, 'Accepted source', 'Worker projection', f.recovery, { keepDisplaced: false }), true);
+  assert.equal(await readFile(f.path, 'utf8'), 'Worker projection'); assert.deepEqual(await readdir(f.recovery), []);
+  assert.equal(await replaceFeatureFile(f.path, 'Worker projection', 'Second projection', f.recovery), true);
+  const saved = await readdir(f.recovery); assert.equal(saved.length, 1); assert.equal(await readFile(join(f.recovery, saved[0]), 'utf8'), 'Worker projection');
+});
+
+test('keepDisplaced false keeps a displaced copy an editor changed before publication finished', async t => {
+  const f = await fixture(t);
+  const replaced = await replaceFeatureFile(f.path, 'Accepted source', 'Worker projection', f.recovery, {
+    keepDisplaced: false,
+    async link(source, destination) {
+      await link(source, destination);
+      if (destination === f.path) { const [name] = await readdir(f.recovery); await writeFile(join(f.recovery, name), 'Late author save into the old inode'); }
+    },
+  });
+  assert.equal(replaced, true); assert.equal(await readFile(f.path, 'utf8'), 'Worker projection');
+  const saved = await readdir(f.recovery); assert.equal(saved.length, 1); assert.equal(await readFile(join(f.recovery, saved[0]), 'utf8'), 'Late author save into the old inode');
+});
+
+test('keepDisplaced false still retains the source when publication loses to an editor', async t => {
+  const f = await fixture(t);
+  const replaced = await replaceFeatureFile(f.path, 'Accepted source', 'Worker projection', f.recovery, {
+    keepDisplaced: false,
+    async link(source, destination) {
+      if (destination === f.path) { await writeFile(f.path, 'Late author save', { flag: 'wx' }); throw Object.assign(Error('The editor published first'), { code: 'EEXIST' }); }
+      await link(source, destination);
+    },
+  });
+  assert.equal(replaced, false); assert.equal(await readFile(f.path, 'utf8'), 'Late author save');
+  const saved = await readdir(f.recovery); assert.equal(saved.length, 1); assert.equal(await readFile(join(f.recovery, saved[0]), 'utf8'), 'Accepted source');
+});

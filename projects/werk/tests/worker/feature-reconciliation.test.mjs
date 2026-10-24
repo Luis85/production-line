@@ -55,6 +55,13 @@ test('guarded note replacement keeps displaced user content recoverable and reje
   assert.match(await readFile(path, 'utf8'), /Edited outcome/);
 });
 
+test('consecutive worker-owned rewrites of an untouched legacy note leave no recovery copies', async t => {
+  const f = await fixture(t), path = join(f.directory, 'request.md'); const legacy = '---\nschemaVersion: 1\ntitle: Legacy\nstatus: ready\n---\nAn explicitly ready request.';
+  await f.write(legacy); await f.scan(); const id = f.submissions[0].taskId;
+  assert.match(await readFile(path, 'utf8'), /semanticRevision: 1/, 'The generated block migration rewrote the legacy note.');
+  for (const status of ['running', 'cancelled', 'queued', 'running']) { f.records.set(id, { status }); await f.scan(); }
+  assert.deepEqual(await readdir(join(f.directory, '_conflicts')).catch(() => []), [], 'Worker-owned changes never produce a conflict copy.');
+});
 
 test('browser intake persists one canonical source and keeps its original polling identity through replay', async t => {
   const f = await fixture(t), markdown = note().replace('FR-0042', 'ui-request');

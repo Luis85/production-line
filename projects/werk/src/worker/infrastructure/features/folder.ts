@@ -138,7 +138,7 @@ export class MarkdownFeatureFolder implements FeatureFolderPort {
     // Optimistic editor protection; a changed observation is retried on the next scan.
     if (await readBoundedFile(path, 65536) !== current) return false;
     await realDirectory(join(this.directory, '_conflicts'), true);
-    const replaced = await replaceFeatureFile(path, current, next, join(this.directory, '_conflicts'));
+    const replaced = await replaceFeatureFile(path, current, next, join(this.directory, '_conflicts'), { keepDisplaced: false });
     if (replaced && managedBody(parseFeature(next).body)) record.managedHash = digest(managedBody(parseFeature(next).body)!);
     return replaced;
   }
