@@ -9,6 +9,7 @@ Versioned entries use the release date in Europe/Berlin. This log starts with
 
 ### Fixed
 
+- `update apply` and `install.mjs` scale the archive extraction timeout with the number of release entries (300 s minimum, 200 ms per entry) and, on a timeout, tell you to extract the archive yourself and use `update apply --from`.
 - macOS CI partitions the complete test inventory into four disjoint groups and retains immediate TAP failure details plus exact suite manifests, preserving existing assertions, per-test limits and execution concurrency.
 
 ## [0.15.0] - 2026-10-23

@@ -5,7 +5,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { install, parse, restartCommand } from '../../scripts/release/install.mjs';
+import { extractionTimeoutMs, install, parse, restartCommand } from '../../scripts/release/install.mjs';
 import { createArchives } from '../../scripts/release/archives.mjs';
 
 async function fixture(t) {
@@ -68,6 +68,28 @@ test('an archive rooted at another version fails before publishing the installat
   const wrong = { ...config, version: '0.2.0' };
   await assert.rejects(install(wrong, { directory }, { ...transport, fetcher: () => transport.fetcher('https://github.com/example/werk/releases/download/v0.1.0/werk-0.1.0.tar.gz') }), /Unsafe release archive paths/);
   assert.deepEqual(await readdir(directory), []);
+});
+
+test('extraction timeout has a 300 s floor and grows 200 ms per archive entry', () => {
+  assert.equal(extractionTimeoutMs(0), 300_000);
+  assert.equal(extractionTimeoutMs(1500), 300_000);
+  assert.equal(extractionTimeoutMs(2982), 596_400);
+  assert.equal(extractionTimeoutMs(11000), 2_200_000);
+});
+
+test('a timed-out tar call names the operation, bound and the manual --from route, and leaves no files', async t => {
+  const { directory, config, transport } = await fixture(t);
+  const timeouts = [];
+  const slow = operation => (command, args, options) => {
+    if (args[0] !== operation) return execFileSync(command, args, options);
+    timeouts.push(options.timeout);
+    throw Object.assign(Error(`spawnSync ${command} ETIMEDOUT`), { code: 'ETIMEDOUT' });
+  };
+  await assert.rejects(install(config, { directory }, { ...transport, exec: slow('-tzf') }), /Listing the release archive exceeded 120 s\. Extract werk-0\.1\.0\.tar\.gz yourself and run update apply --from <extracted folder>/);
+  await assert.rejects(install(config, { directory }, { ...transport, exec: slow('-xzf') }), /Extracting the release archive \(\d+ entries\) exceeded 300 s\. Extract werk-0\.1\.0\.tar\.gz yourself and run update apply --from <extracted folder> \(add --stop\/--in-place as needed\)\./);
+  assert.deepEqual(timeouts, [120_000, 300_000]);
+  assert.deepEqual(await readdir(directory), []);
+  await assert.rejects(install(config, { directory }, { ...transport, exec: (command, args, options) => { if (args[0] === '-xzf') throw Object.assign(Error('boom'), { code: 'EIO' }); return execFileSync(command, args, options); } }), /boom/);
 });
 
 // GNU tar interprets a colon in an absolute archive filename as remote syntax.

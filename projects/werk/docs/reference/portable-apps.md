@@ -207,7 +207,8 @@ extracts it and verifies the complete release inventory, exactly like `install.m
 The release must declare update protocol 1 and state format 1, and must be newer:
 an older `--version` is refused (use `rollback`). Without network access, extract a
 release you verified yourself and pass `--from /path/werk-X.Y.Z`; its own release
-manifest is verified.
+manifest is verified. The same route works when extraction is too slow on your
+machine: extract the archive yourself, then apply with `--from`.
 
 Before anything changes, `apply` copies the release's `bin/apps/<app>` into a
 staging folder beside the app, verifies every staged file against the release

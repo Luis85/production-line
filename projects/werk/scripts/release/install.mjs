@@ -9,6 +9,17 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const release = /* RELEASE_CONFIG */ null;
 const limit = 256 * 1024 * 1024;
+const listingTimeoutMs = 120_000, extractionFloorMs = 300_000, extractionMsPerEntry = 200;
+// Extraction time grows with the entry count (about 134-178 s for 2,982 entries on Windows).
+export const extractionTimeoutMs = entries => Math.max(extractionFloorMs, entries * extractionMsPerEntry);
+
+function tar(exec, action, archive, args, options) {
+  try { return exec('tar', args, options); }
+  catch (error) {
+    if (error?.code !== 'ETIMEDOUT') throw error;
+    throw Error(`${action} exceeded ${Math.ceil(options.timeout / 1000)} s. Extract ${archive} yourself and run update apply --from <extracted folder> (add --stop/--in-place as needed).`, { cause: error });
+  }
+}
 
 export function parse(args) {
   const options = { directory: process.cwd(), start: true, noOpen: false };
@@ -47,7 +58,7 @@ async function absent(path) {
   throw Error(`Destination already exists: ${path}. Existing files were preserved. Start that installation with node werk.mjs up, or choose another --directory.`);
 }
 
-export async function install(config, options, { fetcher = fetch, log = console.log } = {}) {
+export async function install(config, options, { fetcher = fetch, log = console.log, exec = execFileSync } = {}) {
   if (process.versions.node.split('.')[0] !== '24') throw Error('Werk requires Node.js 24.x. Install Node 24 and retry.');
   if (!config || !/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/.test(config.version) || !/^[\w.-]+\/[\w.-]+$/.test(config.repository) || !/^[a-f0-9]{64}$/.test(config.sha256)) throw Error('Use install.mjs from a published GitHub release, not the source template.');
   const name = `werk-${config.version}`, archive = `${name}.tar.gz`;
@@ -66,10 +77,10 @@ export async function install(config, options, { fetcher = fetch, log = console.
     // Use a relative archive name from its directory: GNU tar treats a Windows
     // drive colon in an absolute filename as remote-host syntax.
     // Reject paths outside the expected root before invoking the system extractor.
-    const listing = execFileSync('tar', ['-tzf', archive], { cwd: staging, encoding: 'utf8', maxBuffer: 2 * 1024 * 1024, timeout: 30000, windowsHide: true });
+    const listing = tar(exec, 'Listing the release archive', archive, ['-tzf', archive], { cwd: staging, encoding: 'utf8', maxBuffer: 2 * 1024 * 1024, timeout: listingTimeoutMs, windowsHide: true });
     const paths = listing.trimEnd().split(/\r?\n/);
     if (paths.length > 11000 || paths.some(path => /[:\\\x00-\x1f\x7f]/.test(path) || !path.startsWith(`${name}/`) || path.replace(/\/$/, '').split('/').some(part => !part || part === '.' || part === '..'))) throw Error('Unsafe release archive paths');
-    execFileSync('tar', ['-xzf', archive], { cwd: staging, stdio: 'pipe', timeout: 60000, windowsHide: true });
+    tar(exec, `Extracting the release archive (${paths.length} entries)`, archive, ['-xzf', archive], { cwd: staging, stdio: 'pipe', timeout: extractionTimeoutMs(paths.length), windowsHide: true });
     const extracted = join(staging, name);
     const manifest = JSON.parse(await readFile(join(extracted, 'release-manifest.json'), 'utf8'));
     if (manifest.version !== config.version) throw Error('Release manifest version mismatch');
