@@ -81,7 +81,7 @@ const arrayCategories = [
 
 /** Analysis output is a contract: malformed or partial reports cannot become a passing gate. */
 export function assertFallowReport(report, kind) {
-  if (!Object.hasOwn(schemas, kind) || !report || report.kind !== kind || report.schema_version !== schemas[kind] || report.version !== '3.33.1' ||
+  if (!Object.hasOwn(schemas, kind) || !report || report.kind !== kind || report.schema_version !== schemas[kind] || report.version !== '3.35.0' ||
       !Number.isSafeInteger(report.total_issues) || report.total_issues < 0 || !report.summary || typeof report.summary !== 'object' ||
       Array.isArray(report.summary) || report.summary.total_issues !== report.total_issues || report.workspace_diagnostics !== undefined && !Array.isArray(report.workspace_diagnostics))
     throw Error('Fallow returned an unsupported or incomplete report.');

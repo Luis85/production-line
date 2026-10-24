@@ -209,7 +209,6 @@
     "duplicate-export:featureWorkflowPath:src/worker/application/feature-workflow.ts|src/worker/infrastructure/feature-authoring.ts",
     "duplicate-export:main:scripts/runtime/cli.mjs|scripts/system/cli.mjs",
     "duplicate-export:parse:scripts/runtime/cli.mjs|scripts/system/cli.mjs",
-    "duplicate-export:reportWithRetry:src/worker/application/reporting.ts|src/worker/runner.ts",
     "duplicate-export:validateDefinition:scripts/system/definition.mjs|src/guide/webview/composer.ts",
     "duplicate-export:workspaceModelFactory:src/worker/infrastructure/workspace-services.ts|tests/worker/application-fixtures.mjs"
   ],
