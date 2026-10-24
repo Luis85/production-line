@@ -7,6 +7,8 @@ import { providerProbeKey, runProviderProbe } from './provider-process.js';
 import { constants } from 'node:fs';
 import { access } from 'node:fs/promises';
 import { providerReady, type ProviderConnection, type ProviderId } from '../application/provider-contract.js';
+/** A cold Claude Code start takes ~4.4 s on a slow host, so probes get a generous deadline. */
+const statusProbeTimeoutMs = 15000;
 export interface ProviderStatus {
   id: ProviderId; configured: boolean; available: boolean;
   authentication: 'authenticated' | 'signed-out' | 'unknown' | 'unavailable' | 'not-verified';
@@ -14,16 +16,10 @@ export interface ProviderStatus {
   authenticationMode?: ProviderAuthenticationMode; capabilities?: ProviderCapabilities;
   minimumVersion?: string; version?: string; compatibility?: 'minimum_met' | 'unsupported' | 'unknown';
 }
-async function statusCommand(connection: ProviderConnection, signal: AbortSignal, args = connection.id === 'codex-cli' ? ['login', 'status'] : connection.id === 'cursor-cli' ? ['status'] : ['auth', 'status']): Promise<{ code: number | null; output: string }> {
-  // Claude's machine-readable stdout must remain separate from startup diagnostics.
-  // Codex reports login status on stderr; both streams always count toward the limit.
-  try {
-    const result = await runProviderProbe(connection.executable, connection.id === 'codex-cli' ? 'codex' : connection.id === 'cursor-cli' ? 'cursor' : 'claude', args, { signal, timeoutMs: 5000, maxOutputBytes: 65536 }, providerAuthenticationEnvironment(connection));
-    return { code: result.exitCode, output: Buffer.concat([result.stdout, result.stderr]).toString('utf8') };
-  } catch { throw Error('Provider status unavailable'); }
-}
 /** A bounded per-provider single-flight cache prevents repeated clicks from spawning unbounded processes. */
 export class ProviderStatusChecks {
+  private readonly options: { probe?: typeof runProviderProbe; timeoutMs?: number };
+  constructor(options: { probe?: typeof runProviderProbe; timeoutMs?: number } = {}) { this.options = options; }
   private controller = new AbortController();
   private pending = new Map<ProviderId, { key: string; operation: Promise<ProviderStatus> }>();
   private cached = new Map<ProviderId, { key: string; until: number; value: ProviderStatus }>();
@@ -37,6 +33,14 @@ export class ProviderStatusChecks {
     const operation = this.inspect({ ...connection }).then(value => { if (!this.controller.signal.aborted) this.cached.set(connection.id, { key, until: Date.now() + 5000, value }); return value; }).finally(() => this.pending.delete(connection.id));
     this.pending.set(connection.id, { key, operation }); return operation;
   }
+  private async statusCommand(connection: ProviderConnection, args = connection.id === 'codex-cli' ? ['login', 'status'] : connection.id === 'cursor-cli' ? ['status'] : ['auth', 'status']): Promise<{ code: number | null; output: string }> {
+    // Claude's machine-readable stdout must remain separate from startup diagnostics.
+    // Codex reports login status on stderr; both streams always count toward the limit.
+    try {
+      const result = await (this.options.probe ?? runProviderProbe)(connection.executable, connection.id === 'codex-cli' ? 'codex' : connection.id === 'cursor-cli' ? 'cursor' : 'claude', args, { signal: this.controller.signal, timeoutMs: this.options.timeoutMs ?? statusProbeTimeoutMs, maxOutputBytes: 65536 }, providerAuthenticationEnvironment(connection));
+      return { code: result.exitCode, output: Buffer.concat([result.stdout, result.stderr]).toString('utf8') };
+    } catch { throw Error('Provider status unavailable'); }
+  }
   private async inspect(connection: ProviderConnection): Promise<ProviderStatus> {
     const base = { id: connection.id, authenticationMode: connection.authenticationMode ?? 'legacy' as const, capabilities: providerCapabilities(connection.id), configured: providerReady(connection), available: false, checkedAt: new Date().toISOString() };
     if (connection.authenticationMode === 'legacy') return { ...base, authentication: 'unknown', message: 'Choose provider account/subscription or API-key billing in Settings before running work. Existing credentials were not changed.' };
@@ -48,18 +52,19 @@ export class ProviderStatusChecks {
     let available: Omit<ProviderStatus, 'authentication' | 'message'> = { ...base, available: true };
     try {
       if (connection.id === 'claude-cli') {
-        const version = await statusCommand(connection, this.controller.signal, ['--version']);
+        const version = await this.statusCommand(connection, ['--version']);
         const parsed = claudeVersion(version.output, version.code);
         available = { ...available, minimumVersion: minimumClaudeVersion, ...(parsed.version ? { version: parsed.version } : {}), compatibility: parsed.compatibility };
         if (parsed.compatibility !== 'minimum_met') return { ...available, available: false, authentication: 'unknown', message: 'Claude Code ' + minimumClaudeVersion + ' or later is required. Update the CLI and check again so this worker can verify isolated feature-request sessions. No model request was made.' };
       }
       if (connection.id === 'cursor-cli' || connection.id === 'codex-cli') {
-        const version = await statusCommand(connection, this.controller.signal, ['--version']);
+        const version = await this.statusCommand(connection, ['--version']);
         const parsed = version.code === 0 ? /\b(\d{4}\.\d{2}\.\d{2}(?:-[a-zA-Z0-9]+)?|\d+\.\d+\.\d+)\b/.exec(version.output)?.[1] : undefined;
         if (parsed) available = { ...available, version: parsed };
       }
       if (connection.authenticationMode === 'api-key') return { ...available, available: base.configured, authentication: 'not-verified', message: base.configured ? 'Explicit API-key mode is configured. Access and metered billing will be checked by the next task; account fallback is disabled.' : 'Save an API key for the selected API-key mode. Account fallback is disabled.' };
-      const result = await statusCommand(connection, this.controller.signal);
+      // A cold CLI start can miss the first deadline; one retry unless the worker is stopping.
+      const result = await this.statusCommand(connection).catch(error => { if (this.controller.signal.aborted) throw error; return this.statusCommand(connection); });
       if (connection.id === 'cursor-cli') {
         const account = parseProviderAccount('cursor-cli', result.code, result.output);
         return { ...available, authentication: account.signedIn === true ? 'authenticated' : account.signedIn === false ? 'signed-out' : 'unknown',
