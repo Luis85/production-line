@@ -1,0 +1,40 @@
+filters:
+  and:
+    - file.ext == "md"
+    - file.inFolder("projects/werk/docs/backlog")
+views:
+  - type: product-backlog
+    name: Backlog
+    homeFolder: projects/werk/docs/backlog
+    stateProperty: note.status
+    stateValues: Open, Active, Blocked, Done
+    doneValues: Done
+    startedStates: Active
+    startedDateProperty: note.started
+    finishedDateProperty: note.finished
+    dependsOnProperty: note.dependsOn
+    priorityProperty: note.priority
+    priorityValues: P0, P1
+    typeFolder.epic: projects/werk/docs/backlog/requirements
+    typeFolder.feature: projects/werk/docs/backlog/requirements
+    typeFolder.pbi: projects/werk/docs/backlog/requirements
+    typeFolder.task: projects/werk/docs/backlog/tasks
+    typeFolder.bug: projects/werk/docs/backlog/bugs
+    typeFolder.deliverable: projects/werk/docs/backlog/deliverables
+    typeFolder.idea: projects/werk/docs/backlog/ideas
+    typeFolder.improvement: projects/werk/docs/backlog/improvements
+    typeFolder.milestone: projects/werk/docs/backlog/milestones
+    typeFolder.test suite: projects/werk/docs/backlog/tests/suites
+    typeFolder.iteration: projects/werk/docs/backlog/iterations
+    typeFolder.test case: projects/werk/docs/backlog/tests/cases
+    typeFolder.absence: projects/werk/docs/backlog/absences
+    openIn: split
+    hierarchyOnly: true
+    horizonProperty: note.horizon
+    startProperty: note.start
+    targetProperty: note.due
+    riskProperty: note.risk
+    assigneeProperty: note.assignee
+    iterationProperty: note.iteration
+    iterationGoalProperty: note.goal
+    releaseProperty: note.release
