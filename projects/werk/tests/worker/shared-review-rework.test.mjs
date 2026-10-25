@@ -19,6 +19,8 @@ import { readyPublication } from './remote-delivery-fixtures.mjs';
 import { source, sourcePath } from './shared-feature-fixture.mjs';
 
 prepareNativeProcessFixture();
+// Windows real Git process startup and durable restart recovery need a larger outer test budget.
+const realGitTestTimeoutMs = process.platform === 'win32' ? 60000 : 20000;
 const git = (cwd, ...args) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-C', cwd, ...args], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
 const template = source.replace('status: ready', 'status: draft');
 
@@ -93,7 +95,7 @@ async function setup(t) {
   };
 }
 
-test('shared review feedback confirms the same canonical source before rework and preserves accepted scope and developer work', { timeout: 20000 }, async t => {
+test('shared review feedback confirms the same canonical source before rework and preserves accepted scope and developer work', { timeout: realGitTestTimeoutMs }, async t => {
   const h = await setup(t), command = h.command(), before = h.request();
   await h.intake.reviewFeedback(h.row.taskId, command);
   const remote = h.source(), saved = (await h.state()).records[0], request = h.request();
@@ -107,7 +109,7 @@ test('shared review feedback confirms the same canonical source before rework an
   await h.intake.reviewFeedback(h.row.taskId, command); assert.equal(h.dispatches, 1);
 });
 
-test('a lost shared source acknowledgement survives restart and never dispatches before Git confirmation', { timeout: 20000 }, async t => {
+test('a lost shared source acknowledgement survives restart and never dispatches before Git confirmation', { timeout: realGitTestTimeoutMs }, async t => {
   const h = await setup(t), command = h.command(); h.controls.loseSourceAck = true;
   await assert.rejects(h.intake.reviewFeedback(h.row.taskId, command), /acknowledgement/);
   assert.equal(h.dispatches, 0); assert.equal(h.request().inputRevision, command.inputRevision);
@@ -119,7 +121,7 @@ test('a lost shared source acknowledgement survives restart and never dispatches
   await h.intake.reviewFeedback(h.row.taskId, command); assert.equal(h.dispatches, 1);
 });
 
-test('a lost shared rework dispatch acknowledgement recovers its saved worker generation without invoking again', { timeout: 20000 }, async t => {
+test('a lost shared rework dispatch acknowledgement recovers its saved worker generation without invoking again', { timeout: realGitTestTimeoutMs }, async t => {
   const h = await setup(t), command = h.command(); h.controls.loseDispatchAck = true;
   await assert.rejects(h.intake.reviewFeedback(h.row.taskId, command), /dispatch acknowledgement/);
   assert.equal(h.dispatches, 1); assert.equal((await h.state()).records[0].reviewReworks[0].status, 'pending_dispatch');
@@ -128,7 +130,7 @@ test('a lost shared rework dispatch acknowledgement recovers its saved worker ge
   assert.equal(h.submits, 1);
 });
 
-test('concurrent shared author edits are preserved and block review dispatch instead of being overwritten', { timeout: 20000 }, async t => {
+test('concurrent shared author edits are preserved and block review dispatch instead of being overwritten', { timeout: realGitTestTimeoutMs }, async t => {
   const h = await setup(t), command = h.command();
   const author = join(h.directory, 'author'); git(h.directory, 'clone', '-b', 'main', h.remote, author); git(author, 'config', 'user.name', 'Teammate'); git(author, 'config', 'user.email', 'teammate@example.invalid');
   const edited = h.source() + '\nA teammate added context.\n'; await writeFile(join(author, sourcePath), edited); git(author, 'add', '.'); git(author, 'commit', '-m', 'Concurrent author edit'); git(author, 'push', 'origin', 'main');
