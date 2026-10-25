@@ -8,11 +8,7 @@ export interface ReleasePolicy {
   build: { executable: string; args: string[]; timeoutMs: number; artifacts: string[] };
 }
 function invalid(message: string): never { throw new DomainError('invalid_input', message); }
-export function releaseTag(value: unknown, prefix = ''): string {
-  if (typeof value !== 'string' || value.length > 100 || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value) || value.includes('..') || value.endsWith('.') || value.endsWith('.lock') || !value.startsWith(prefix))
-    invalid('Release tags must be bounded simple Git tag names with the configured prefix.');
-  return value;
-}
+export { releaseTag } from './release-tag.js';
 export function validateReleasePolicy(input: unknown): ReleasePolicy {
   const value = object(input, 'Release policy', ['repository', 'base', 'mergeMethod', 'build', 'tagPrefix', 'prerelease']);
   if (typeof value.repository !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(value.repository) || value.repository.endsWith('.git')) invalid('Release repository must be a GitHub owner/repository.');

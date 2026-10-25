@@ -1,3 +1,4 @@
+import { DomainError } from '../../shared/errors.js';
 import type { DeliveryCandidate } from './delivery-review-contracts.js';
 import type { ReleasePolicy } from './release-policy.js';
 
@@ -5,18 +6,24 @@ export interface ReleaseArtifact { name: string; bytes: number; sha256: string; 
 export interface ReleaseMergeReceipt { pullRequest: number; headCommit: string; mergeCommit: string; url: string; mergedAt: string; }
 export interface ReleaseBuildReceipt { operationId: string; commit: string; artifacts: ReleaseArtifact[]; manifestDigest: string; builtAt: string; }
 export interface ReleasePublishedReceipt { tag: string; url: string; commit: string; assets: ReleaseArtifact[]; publishedAt: string; }
+export interface ReleaseRetagEvidence { kind: 'preflight_tag_conflict'; tag: string; refObject: string; objectType: 'commit' | 'tag'; release: 'absent' | 'foreign'; }
+/** Positive preflight observation; runtime decides whether this invocation has attempted publication. */
+export class ReleaseTagConflict extends DomainError {
+  readonly evidence: ReleaseRetagEvidence;
+  constructor(evidence: ReleaseRetagEvidence) { super('conflict', 'The release tag already identifies another Git object. It was not changed.'); this.evidence = evidence; }
+}
 export interface ReleaseOperation {
   operationId: string; action: 'merge' | 'build' | 'publish';
   status: 'pending' | 'unknown' | 'confirmed' | 'not_observed' | 'failed';
   candidate: DeliveryCandidate; target: ReleasePolicy; repositoryId: string; configurationDigest: string;
   pullRequest: { number: number; url: string; branch: string };
   mergeCommit?: string; build?: ReleaseBuildReceipt; tag?: string;
-  createdAt: string; updatedAt: string; detail: string;
+  createdAt: string; updatedAt: string; detail: string; retagEvidence?: ReleaseRetagEvidence;
   merge?: ReleaseMergeReceipt; built?: ReleaseBuildReceipt; published?: ReleasePublishedReceipt;
 }
 export interface DeliveryRelease { operations: ReleaseOperation[]; merge?: ReleaseMergeReceipt; build?: ReleaseBuildReceipt; published?: ReleasePublishedReceipt; }
 export interface ReleaseResult {
-  status: 'unknown' | 'confirmed' | 'not_observed' | 'failed'; detail: string;
+  status: 'unknown' | 'confirmed' | 'not_observed' | 'failed'; detail: string; retagEvidence?: ReleaseRetagEvidence;
   merge?: ReleaseMergeReceipt; built?: ReleaseBuildReceipt; published?: ReleasePublishedReceipt;
 }
 export interface ReleaseUpdate { action: 'release_result'; deliveryRunId: string; operationId: string; result: ReleaseResult; }

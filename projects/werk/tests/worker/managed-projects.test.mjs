@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { DomainError } from '../../src/worker/dist/shared/errors.js';
 import { ManagedProjects } from '../../src/worker/dist/worker/application/managed-projects.js';
 import { managedProjectStorage } from '../../src/worker/dist/worker/infrastructure/managed-project-storage.js';
 import { managedProjectGit } from '../../src/worker/dist/worker/infrastructure/managed-project-git.js';
@@ -87,6 +88,7 @@ test('real Git clone, restart reconciliation and worktree paths stay beneath wor
   await mkdir(source); await mkdir(state);
   const git = (...args) => execFileSync('git', args, { cwd: source, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   git('init', '-b', 'main'); git('config', 'user.email', 'fixture@example.invalid'); git('config', 'user.name', 'Fixture');
+  await writeFile(join(source, '.gitattributes'), '* text eol=lf\n');
   await writeFile(join(source, 'hello.txt'), 'baseline\n'); git('add', '.'); git('commit', '-m', 'baseline');
   const repository = pathToFileURL(source).toString(), adapter = managedProjectGit(state), storage = managedProjectStorage(state);
   const manager = new ManagedProjects({ ...storage, ...adapter, async attach(project) { assert.equal(project.head, git('rev-parse', 'HEAD')); } });
@@ -115,4 +117,16 @@ test('corrupt registration state blocks setup instead of inventing a fresh proje
   const h = await harness(t); await writeFile(join(h.directory, 'managed-projects.json'), '{"schemaVersion":1,"projects":[{}]}');
   await assert.rejects(h.manager.command(command, signal()), /state is invalid/);
   assert.equal(h.clones, 0);
+});
+
+test('known setup conflicts keep their actionable explanation and reconcile without another clone', async t => {
+  const h = await harness(t), attach = h.ports.attach;
+  h.ports.attach = async () => { throw new DomainError('conflict', 'This repository already has local intake. Adopt it with intake: local.'); };
+  const failed = await h.manager.command(command, signal());
+  assert.equal(failed.status, 'needs_attention');
+  assert.equal(failed.detail, 'This repository already has local intake. Adopt it with intake: local.');
+  assert.equal((await h.storage.load()).projects[0].detail, failed.detail);
+  h.ports.attach = attach;
+  const recovered = await h.manager.command({ action: 'reconcile', operationId: 'fixed-setup', id: command.id }, signal());
+  assert.equal(recovered.status, 'ready'); assert.equal(h.clones, 1);
 });

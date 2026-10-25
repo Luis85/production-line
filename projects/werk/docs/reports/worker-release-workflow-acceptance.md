@@ -66,3 +66,14 @@ Focused checks included 32 release-engine regressions, 49 managed-project/templa
 ![Mobile release publication controls](../evidence/worker-e2e-release/worker-end-to-end-delivery--publish-verified-build-390.png)
 
 The extracted native and Docker archives each completed the existing simulated runtime smoke, persisted evidence and restart checks. The Docker wrapper smoke ran without host Node on its wrapper PATH. These validate packaging and startup compatibility; they do not qualify a Windows Claude account or a worker-managed live release.
+
+
+## Improvement and polish qualification
+
+The follow-up pass on the same PR clarified project approval/activation holds, restricted setup retry to eligible incomplete clones, added in-place template-read recovery, validated release tags before submission and preserved unsaved build settings when toggling release configuration. Browser confirmation covered desktop, tablet and mobile: [36 checks passed](../evidence/worker-e2e-release/polish-qualification.json) with no page/console errors or horizontal overflow, including interrupted runs whose historical evidence must not complete downstream stages.
+
+Backend regressions cover completed builds with missing assets as known failures, safe new-tag selection only after persisted preflight evidence proves publication never started, native executable discovery, and host directory aliases without permitting links inside private prompt storage. Git fixtures were also verified with `core.autocrlf=true`. These are automated contracts; the native/live acceptance rows remain pending.
+
+![Project policy hold and recovery action](../evidence/worker-e2e-release/worker-workflow-recovery--held-project-setup-1440.png)
+
+![Retrying a template read on mobile](../evidence/worker-e2e-release/worker-workflow-recovery--retry-template-read-390.png)

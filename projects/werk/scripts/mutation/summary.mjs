@@ -32,6 +32,8 @@ export function summarizeReport(report, metadata, baseline, execution) {
   if (counts.RuntimeError || counts.Pending) warnings.push(`${counts.RuntimeError} runtime errors and ${counts.Pending} pending mutants require investigation.`);
   const incomplete = warnings.length > 0;
   const mutationScore = incomplete ? null : score(counts);
+  const validMutants = counts.Killed + counts.Timeout + counts.Survived + counts.NoCoverage;
+  const assertionScore = incomplete || !validMutants ? null : Math.round(counts.Killed / validMutants * 10000) / 100;
   if (mutationScore === null && !incomplete) warnings.push('No valid mutants were measured.');
   if (counts.Survived || counts.NoCoverage) warnings.push(`${counts.Survived} surviving and ${counts.NoCoverage} uncovered mutants in this limited scope.`);
   let baselineDelta = null;
@@ -44,7 +46,7 @@ export function summarizeReport(report, metadata, baseline, execution) {
     if (baselineDelta < 0) warnings.push(`Mutation score decreased ${Math.abs(baselineDelta)} percentage points from the recorded baseline.`);
   }
   if (mutationScore !== null && mutationScore < 70) warnings.push('Scoped mutation score is below the advisory 70% threshold.');
-  return { schemaVersion: 1, ...metadata, status: incomplete || mutationScore === null ? 'incomplete' : 'completed', advisory: true, score: mutationScore, baselineDelta, totalMutants: Object.values(counts).reduce((sum, value) => sum + value, 0), counts, files, findings, execution, warnings };
+  return { schemaVersion: 1, ...metadata, status: incomplete || mutationScore === null ? 'incomplete' : 'completed', advisory: true, score: mutationScore, assertionScore, validMutants, timeoutDetected: counts.Timeout, baselineDelta, totalMutants: Object.values(counts).reduce((sum, value) => sum + value, 0), counts, files, findings, execution, warnings };
 }
 
 export function formatSummary(summary) {
@@ -52,6 +54,7 @@ export function formatSummary(summary) {
   return [
     '## Scoped mutation testing (advisory)', '',
     `Status: **${summary.status}**. Score: **${value}**. This covers ${summary.scope.targets.length} selected modules, not the whole system.`, '',
+    `Assertion-killed score: **${summary.assertionScore === null || summary.assertionScore === undefined ? 'unavailable' : summary.assertionScore + '%'}**; ${summary.timeoutDetected ?? summary.counts?.Timeout ?? 0} mutants were detected by timeout rather than an assertion.`, '',
     `Run: \`${summary.commit ?? 'unknown'}\`; scope: \`${summary.scope.id}\`; Stryker ${summary.strykerVersion}; Node ${summary.nodeVersion}.`, '',
     '| Module | Score | Killed | Survived | Uncovered | Timed out | Errors | Ignored |',
     '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',

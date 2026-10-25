@@ -5,6 +5,7 @@ import { DomainError } from '../../shared/errors.js';
 import { gitEnvironment } from '../../shared/git/environment.js';
 import { ProcessRunError, runProcess, type RunOptions, type RunResult } from '../../shared/process/launcher.js';
 import { releaseTag, validateReleasePolicy } from '../application/release-policy.js';
+import { ReleaseTagConflict } from '../application/release-contracts.js';
 import type { ReleaseOperation, ReleasePort, ReleasePublishedReceipt } from '../application/release-contracts.js';
 import { findExecutable } from './providers.js';
 
@@ -59,7 +60,16 @@ export function createReleaseGitHub(options: {
     const value = await api(root + '/git/ref/tags/' + encodeURIComponent(tag), signal, 'GET', undefined, true);
     if (value === null) return null;
     const ref = record(value), object = record(ref.object);
-    if (ref.ref !== 'refs/tags/' + tag || object.type !== 'commit' || object.sha !== operation.mergeCommit) conflict('The release tag already identifies another commit or tag object. It was not changed.');
+    if (ref.ref !== 'refs/tags/' + tag || !['commit', 'tag'].includes(String(object.type)) || !sha(object.sha)) conflict('GitHub did not establish the exact release tag object.');
+    if (object.type !== 'commit' || object.sha !== operation.mergeCommit) {
+      const value = await api(root + '/releases/tags/' + encodeURIComponent(tag), signal, 'GET', undefined, true);
+      if (value !== null) {
+        const existing = record(value);
+        if (!Number.isSafeInteger(existing.id) || Number(existing.id) < 1 || existing.tag_name !== tag || !releaseURLMatches(existing.html_url, operation.target.repository, tag) || existing.body !== null && typeof existing.body !== 'string') conflict('The conflicting release destination could not be established.');
+        if (typeof existing.body === 'string' && existing.body.includes(marker(operation))) conflict('This release already has worker-owned publication evidence at the conflicting tag. Restore its retained destination before continuing.');
+      }
+      throw new ReleaseTagConflict({ kind: 'preflight_tag_conflict', tag, refObject: object.sha, objectType: object.type as 'commit' | 'tag', release: value === null ? 'absent' : 'foreign' });
+    }
     return tag;
   }
   async function observedRelease(operation: ReleaseOperation, signal: AbortSignal) {

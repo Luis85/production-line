@@ -2,7 +2,7 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import ts from 'typescript';
 import { parse as parseVue } from '@vue/compiler-sfc';
-import { scope } from '../mutation/scope.mjs';
+import { mutationTargets } from '../mutation/scope.mjs';
 
 const sourceRoots = ['src', 'scripts', 'tests', 'storybook', '.storybook'];
 const sourceEntries = ['werk.mjs', 'stryker.config.mjs'];
@@ -57,7 +57,7 @@ export function generatedImportSource(root, importer, specifier) {
   const mutation = /^\.mutation-build\/(.+)\.js$/.exec(target);
   if (mutation) {
     const source = `src/${mutation[1]}.ts`;
-    if (!scope.targets.includes(source)) throw Error('Mutation suite imports must name a configured mutation target.');
+    if (!mutationTargets.includes(source)) throw Error('Mutation suite imports must name a configured mutation target.');
     return source;
   }
   throw Error('Generated import does not match an application or mutation build output inside this project.');

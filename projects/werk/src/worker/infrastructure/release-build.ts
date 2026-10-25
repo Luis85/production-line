@@ -46,14 +46,19 @@ async function captureArtifact(source: string, destination: string) {
   } finally { await input.close(); await output.close(); }
 }
 async function safeArtifact(directory: string, path: string) {
-  let current = directory;
-  for (const part of path.split('/')) {
-    current = join(current, part); const info = await lstat(current);
-    if (info.isSymbolicLink()) conflict('Release artifact paths must not contain symbolic links.');
+  try {
+    let current = directory;
+    for (const part of path.split('/')) {
+      current = join(current, part); const info = await lstat(current);
+      if (info.isSymbolicLink()) conflict('Release artifact paths must not contain symbolic links.');
+    }
+    const actual = await realpath(current), root = await realpath(directory);
+    if (!actual.startsWith(root + sep)) conflict('Release artifact escaped the isolated build workspace.');
+    return actual;
+  } catch (error) {
+    if (['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) conflict('A required release artifact is missing or its parent path is not a directory. Inspect the configured output paths and retained build files before retrying.');
+    throw error;
   }
-  const actual = await realpath(current), root = await realpath(directory);
-  if (!actual.startsWith(root + sep)) conflict('Release artifact escaped the isolated build workspace.');
-  return actual;
 }
 /** Each build owns a fresh detached worktree and an immutable, separate artifact package. */
 export function createReleaseBuild(options: { repository: string; stateDirectory: string; remote?: string; authorize?: (mutation: boolean) => void | Promise<void> }): Pick<ReleasePort, 'inspectBuild' | 'build'> {

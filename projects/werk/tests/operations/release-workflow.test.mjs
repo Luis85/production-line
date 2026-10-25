@@ -306,3 +306,13 @@ test('release README is generated from qualified captures and published with the
   assert.match(publication, /release\/README-SHA256SUMS/);
   assert.ok(!steps.some(step => /git (?:commit|push)/.test(step.run ?? '')));
 });
+
+
+test('bounded workflow mutation analysis runs for pull requests and releases independently of publication', () => {
+  const job = workflow.jobs['mutation-workflow'];
+  assert.ok(job); assert.equal(job.if, undefined); assert.equal(job['continue-on-error'], true); assert.ok(job['timeout-minutes'] <= 20); assert.equal(job.needs, undefined);
+  assert.equal(job.steps.find(step => step.id === 'mutation').run, 'npm run mutation:release -- --scope workflow');
+  const artifact = job.steps.find(step => step.id === 'evidence');
+  assert.equal(artifact.if, 'always()'); assert.equal(artifact.with.name, 'werk-mutation-workflow-report'); assert.match(artifact.with.path, /reports\/mutation\/workflow\/$/);
+  for (const [name, value] of Object.entries(workflow.jobs)) if (name !== 'mutation-workflow') assert.equal([value.needs].flat().includes('mutation-workflow'), false);
+});

@@ -1,5 +1,5 @@
 /** Deliberately bounded release signal, not a whole-system mutation score. */
-export const scope = {
+export const authorityScope = {
   id: 'worker-delivery-authority-v5',
   targets: [
     'src/shared/serialized-operations.ts',
@@ -36,6 +36,51 @@ export const scope = {
     'tests/worker/delivery-policy-routing.test.mjs',
     'tests/worker/delivery-check-packs.test.mjs'],
   reusedFixtures: ['tests/worker/shared-feature-fixture.mjs', 'tests/worker/shared-ready-review-fixture.mjs'],
-  supportFiles: ['tests/helpers/typed-boundaries.mjs'],
+  supportFiles: ['tests/helpers/typed-boundaries.mjs', 'scripts/mutation/suites/workflow-fixture.mjs'],
   timeoutMs: 12 * 60 * 1000,
 };
+
+
+/** Workflow authority is measured independently so its denominator and budget stay explicit. */
+export const workflowScope = {
+  id: 'worker-workflow-v1',
+  reportDirectory: 'reports/mutation/workflow',
+  targets: [
+    'src/worker/application/release-runtime.ts',
+    'src/worker/application/release-view.ts',
+    'src/worker/application/remote-delivery-runtime.ts',
+    'src/worker/application/remote-delivery-history.ts',
+    'src/worker/application/remote-delivery-rework.ts',
+    'src/worker/application/shared-review-rework.ts',
+    'src/worker/application/shared-release-projection.ts',
+    'src/worker/infrastructure/journal/requests/publication.ts',
+    'src/worker/infrastructure/journal/requests/release.ts',
+  ],
+  suitePrefix: 'workflow-',
+  testFiles: ['scripts/mutation/suites/workflow-*.test.mjs', '.mutation-build/tests/*.test.mjs'],
+  reusedTests: ['tests/worker/remote-delivery-runtime.test.mjs', 'tests/worker/remote-delivery-journal.test.mjs',
+    'tests/worker/release-runtime.test.mjs', 'tests/worker/release-journal.test.mjs'],
+  reusedFixtures: ['tests/worker/remote-delivery-fixtures.mjs', 'tests/worker/release-fixtures.mjs',
+    'tests/worker/request-gate-fixtures.mjs', 'tests/worker/fixture-cleanup.mjs'],
+  supportFiles: ['scripts/mutation/suites/workflow-fixture.mjs'],
+  timeoutMs: 12 * 60 * 1000,
+};
+const mutationScopes = { authority: authorityScope, workflow: workflowScope };
+export const mutationTargets = [...new Set(Object.values(mutationScopes).flatMap(value => value.targets))];
+export function selectMutationScope(name = 'authority') {
+  if (!Object.hasOwn(mutationScopes, name)) throw Error('Mutation scope must be authority or workflow.');
+  return mutationScopes[name];
+}
+export function mutationOptions(args) {
+  let name = 'authority', advisory = false, selected = false;
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index];
+    if (arg === '--advisory' && !advisory) advisory = true;
+    else if (arg === '--scope' && !selected && args[index + 1]) { name = args[++index]; selected = true; }
+    else throw Error('Usage: npm run mutation -- [--advisory] [--scope authority|workflow]');
+  }
+  selectMutationScope(name);
+  return { name, advisory };
+}
+// Stryker and its isolated compiler inherit this selection from the owning runner.
+export const scope = selectMutationScope(process.env.WERK_MUTATION_SCOPE);

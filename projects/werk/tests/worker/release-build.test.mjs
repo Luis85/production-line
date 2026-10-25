@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { runReleaseOperation } from '../../src/worker/dist/worker/application/release-runtime.js';
 import { createReleaseBuild, releaseArtifactDirectory } from '../../src/worker/dist/worker/infrastructure/release-build.js';
 import { releaseOperation } from './release-fixtures.mjs';
 import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.mjs';
@@ -69,4 +70,17 @@ test('corrupt recovery inventories cannot replace configured artifact names', as
   const receiptPath = join(releaseArtifactDirectory(f.stateDirectory, f.operation), '..', 'receipt.json');
   const receipt = JSON.parse(await readFile(receiptPath, 'utf8')); receipt.artifacts[0].name = '../foreign.zip'; await writeFile(receiptPath, JSON.stringify(receipt));
   await assert.rejects(f.adapter.inspectBuild(f.operation, signal()), /inventory changed/);
+});
+
+test('a completed build with missing output or a non-directory artifact parent reports a known failure', async t => {
+  for (const script of ['console.log("build completed without configured artifact");', "import {writeFileSync} from 'node:fs'; writeFileSync('out', 'ordinary file instead of output folder');"]) {
+    const f = await fixture(t, script);
+    const outcome = await runReleaseOperation({ operation: f.operation, mode: 'execute', authority: { authorize() {} }, signal: signal(), port: {
+      ...f.adapter, pullRequest: async () => ({ ...f.operation.pullRequest, base: f.operation.target.base, headCommit: f.operation.candidate.candidateCommit, closed: true, merged: true, mergeCommit: f.operation.mergeCommit, mergedAt: f.operation.createdAt }),
+      merge: async () => { throw Error('Unexpected merge'); }, inspectRelease: async () => null, publish: async () => { throw Error('Unexpected publication'); },
+    } });
+    assert.equal(outcome.status, 'failed'); assert.match(outcome.detail, /required release artifact is missing/);
+    assert.equal(await f.adapter.inspectBuild(f.operation, signal()), null);
+    assert.equal(git(f.repository, 'rev-parse', 'HEAD'), f.before.head);
+  }
 });

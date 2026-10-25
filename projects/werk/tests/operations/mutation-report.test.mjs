@@ -83,3 +83,11 @@ test('matching absent or malformed configuration provenance is not a comparable 
     assert.ok(summary.warnings.some(value => /lacks provenance/.test(value)));
   }
 });
+
+
+test('mutation summaries expose assertion kills separately from timeout detections without changing the denominator', () => {
+  const summary = summarizeReport(report('Killed', 'Timeout', 'Survived', 'NoCoverage', 'CompileError'), metadata, baseline, execution);
+  assert.equal(summary.score, 50); assert.equal(summary.assertionScore, 25); assert.equal(summary.validMutants, 4); assert.equal(summary.timeoutDetected, 1);
+  assert.match(formatSummary(summary), /Assertion-killed score: \*\*25%\*\*/); assert.match(formatSummary(summary), /1 mutants were detected by timeout/);
+  const invalid = summarizeReport(report('RuntimeError'), metadata, baseline, execution); assert.equal(invalid.assertionScore, null);
+});

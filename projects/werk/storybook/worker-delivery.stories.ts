@@ -53,8 +53,8 @@ export const ConfirmStoppedProcess: Story = {
     await userEvent.click(await query.findByText('Retained Git checkpoints · 1'));
     await query.findByText('werk/checkpoints/FR-42-stopped');
     if (!canvasElement.textContent?.includes('A checkpoint does not establish passed checks or human acceptance.')) throw Error('A retained checkpoint must not be presented as verified.');
-    const stages = [...canvasElement.querySelectorAll('.review-stages .stage-state')].slice(1);
-    if (stages.length !== 3 || stages.some(stage => stage.textContent === 'Complete')) throw Error('Historical results must not mark the interrupted delivery stages complete.');
+    const stages = ['produce', 'verify', 'review', 'merge', 'build', 'publish'].map(id => canvasElement.querySelector(`[data-workflow-stage="${id}"]`));
+    if (stages.some(stage => !stage || stage.classList.contains('workflow-complete'))) throw Error('Historical results must not mark the interrupted delivery stages complete.');
     await query.findByText('Retained task candidate evidence');
     await query.findByText('Retained model output. This reply is not a confirmed result for the current delivery run.');
     if (query.queryByRole('button', { name: /Check readiness and queue work|Evaluate readiness rules|Evaluate completion rules|Ask model for an instruction proposal/ })) throw Error('Delivery recovery must only expose exact delivery continuation controls.');

@@ -86,3 +86,32 @@ test('one persisted request completes merge, build and publish through the appli
   }
   assert.deepEqual(calls, ['merge', 'build', 'publish']); assert.equal(request.lifecycle, 'done'); assert.equal(request.delivery.release.published.assets[0].sha256, 'b'.repeat(64));
 });
+
+test('positive no-publication tag conflict evidence survives restart and permits a separate new release version', async t => {
+  const { journal, directory } = await fixture(t); let request = acceptRelease(journal, readyRelease(journal));
+  request = journal.command(releaseCommand(request, 'merge_candidate', 'merge')).request;
+  request = result(journal, request, 'merge', { status: 'confirmed', detail: 'Merged.', merge: mergeReceipt(request) });
+  request = journal.command(releaseCommand(request, 'build_release', 'build')).request;
+  request = result(journal, request, 'build', { status: 'confirmed', detail: 'Built.', built: buildReceipt(request.delivery.release.operations.at(-1)) });
+  request = journal.command({ ...releaseCommand(request, 'publish_release', 'collision'), releaseTag: 'v1.0.0' }).request;
+  const retagEvidence = { kind: 'preflight_tag_conflict', tag: 'v1.0.0', refObject: 'c'.repeat(40), objectType: 'commit', release: 'foreign' };
+  assert.throws(() => result(journal, request, 'collision', { status: 'failed', detail: 'Invalid same-commit conflict.', retagEvidence: { ...retagEvidence, refObject: request.delivery.release.merge.mergeCommit } }), /Retag evidence/);
+  request = result(journal, request, 'collision', { status: 'failed', detail: 'Foreign tag observed before publication.', retagEvidence });
+  journal.close(); const recovered = new WorkerRequestJournal(directory); await recovered.init(); cleanup(t, () => recovered.close()); request = recovered.get(request.id);
+  assert.deepEqual(request.delivery.release.operations.at(-1).retagEvidence, retagEvidence);
+  request = recovered.command({ ...releaseCommand(request, 'publish_release', 'new-version'), releaseTag: 'v1.0.1' }).request;
+  assert.equal(request.delivery.release.operations.at(-1).tag, 'v1.0.1'); assert.equal(request.delivery.release.operations.at(-1).status, 'pending');
+});
+test('a publication with possible side effects keeps its tag pinned despite a later preflight conflict', async t => {
+  const { journal } = await fixture(t); let request = acceptRelease(journal, readyRelease(journal));
+  request = journal.command(releaseCommand(request, 'merge_candidate', 'merge')).request;
+  request = result(journal, request, 'merge', { status: 'confirmed', detail: 'Merged.', merge: mergeReceipt(request) });
+  request = journal.command(releaseCommand(request, 'build_release', 'build')).request;
+  request = result(journal, request, 'build', { status: 'confirmed', detail: 'Built.', built: buildReceipt(request.delivery.release.operations.at(-1)) });
+  request = journal.command({ ...releaseCommand(request, 'publish_release', 'partial-draft'), releaseTag: 'v1.0.0' }).request;
+  request = result(journal, request, 'partial-draft', { status: 'not_observed', detail: 'Draft may be retained.' });
+  assert.throws(() => journal.command({ ...releaseCommand(request, 'publish_release', 'wrong-version'), releaseTag: 'v1.0.1' }), /same release tag/);
+  request = journal.command({ ...releaseCommand(request, 'publish_release', 'later-conflict'), releaseTag: 'v1.0.0' }).request;
+  request = result(journal, request, 'later-conflict', { status: 'failed', detail: 'Foreign tag preflight.', retagEvidence: { kind: 'preflight_tag_conflict', tag: 'v1.0.0', refObject: 'c'.repeat(40), objectType: 'commit', release: 'foreign' } });
+  assert.throws(() => journal.command({ ...releaseCommand(request, 'publish_release', 'still-pinned'), releaseTag: 'v1.0.1' }), /same release tag/);
+});

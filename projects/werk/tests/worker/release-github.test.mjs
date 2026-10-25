@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
+import { ReleaseTagConflict } from '../../src/worker/dist/worker/application/release-contracts.js';
 import { createReleaseGitHub } from '../../src/worker/dist/worker/infrastructure/release-github.js';
 import { ProcessRunError } from '../../src/worker/dist/shared/process/launcher.js';
 import { cleanup } from './fixture-cleanup.mjs';
@@ -188,4 +189,17 @@ test('a head change or approval revocation after draft readiness prevents merge'
   revoked.state.afterReady = () => revoked.revoke();
   await assert.rejects(revoked.adapter.merge(revoked.op, abort()), /revoked/);
   assert.equal(revoked.calls.some(item => item.args[4] === 'PUT'), false);
+});
+
+test('tag collision preflight proves a foreign or absent release without changing either destination', async t => {
+  const h = await fixture(t); h.state.tag = { ref: 'refs/tags/' + h.op.tag, object: { type: 'commit', sha: 'f'.repeat(40) } };
+  for (const release of [null, ...['An unrelated existing release.', null].map(body => ({ id: 23, tag_name: h.op.tag, html_url: 'https://github.com/example/project/releases/tag/' + h.op.tag, body }))]) {
+    h.state.release = release; const before = h.calls.length;
+    await assert.rejects(h.adapter.inspectRelease(h.op, abort()), error => error instanceof ReleaseTagConflict && error.evidence.tag === h.op.tag && error.evidence.refObject === 'f'.repeat(40) && error.evidence.release === (release ? 'foreign' : 'absent'));
+    assert.equal(h.calls.slice(before).every(call => call.args[4] === 'GET'), true);
+  }
+});
+test('an owned draft at a changed tag cannot provide proof that retagging is safe', async t => {
+  const h = await fixture(t); await h.adapter.publish(h.op, abort()); h.state.release.draft = true; h.state.tag.object.sha = 'f'.repeat(40);
+  await assert.rejects(h.adapter.inspectRelease(h.op, abort()), error => error instanceof Error && !(error instanceof ReleaseTagConflict) && /worker-owned publication evidence/.test(error.message));
 });

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runDeliverySteps } from '../../src/worker/dist/worker/application/delivery-task-steps.js';
@@ -62,4 +62,14 @@ test('legacy approved-file execution without a delivery run remains runnable and
   }));
   const result = await runDeliverySteps(host, task, model, accepted.dispatch, undefined, new AbortController().signal);
   assert.equal(calls, 1); assert.equal(result.valid.patch, 'diff');
+});
+
+
+test('start prompt ledger accepts host parent aliases while rejecting a linked state root', { skip: process.platform === 'win32' }, async t => {
+  const directory = await fixture(t), parent = join(directory, 'parent'), alias = join(directory, 'host-alias');
+  await mkdir(parent); await mkdir(join(parent, 'state')); await symlink(parent, alias);
+  const signal = new AbortController().signal, accepted = input();
+  const receipt = await retainStartPrompt(join(alias, 'state'), accepted, signal);
+  assert.equal(JSON.parse(await readFile(join(parent, 'state', receipt.path), 'utf8')).prompt, accepted.dispatch.renderedPrompt);
+  await assert.rejects(retainStartPrompt(alias, accepted, signal), /symlink/);
 });

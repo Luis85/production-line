@@ -32,7 +32,7 @@ export function requestReleaseCommand(store: RequestStore, request: WorkerReques
   if (action === 'build' && state.build) conflict('The merged commit already has a successful retained build.');
   if (action === 'publish' && !state.build) conflict('Publication requires the successful exact merged-commit build.');
   const tag = action === 'publish' ? releaseTag(input.releaseTag, subject.target.tagPrefix) : undefined;
-  if (tag && state.operations.some(item => item.action === 'publish' && item.tag !== tag)) conflict('Keep the same release tag when retrying this retained build publication.');
+  if (tag && state.operations.some(item => item.action === 'publish' && item.tag !== tag && (item.status !== 'failed' || !item.retagEvidence))) conflict('Keep the same release tag when retrying this retained build publication.');
   const at = iso();
   const operation: ReleaseOperation = { operationId: input.operationId, action, status: 'pending', candidate: clone(candidate), target: clone(subject.target), repositoryId: subject.repositoryId,
     configurationDigest: subject.snapshot.configurationDigest, pullRequest: clone(subject.pullRequest), createdAt: at, updatedAt: at, detail: 'The release operation intent is retained before execution.',
@@ -47,10 +47,14 @@ export function requestReleaseResult(store: RequestStore, request: WorkerRequest
   const run = request.delivery, state = run?.release, operation = state?.operations.find(item => item.operationId === update.operationId), result = update.result;
   if (!run || run.id !== update.deliveryRunId || !state || !operation) conflict('The saved release operation no longer matches this result.');
   if (!['pending', 'unknown'].includes(operation.status)) {
-    if (gateDigest({ status: operation.status, detail: operation.detail, ...(operation.merge ? { merge: operation.merge } : {}), ...(operation.built ? { built: operation.built } : {}), ...(operation.published ? { published: operation.published } : {}) }) === gateDigest(result)) return request;
+    if (gateDigest({ status: operation.status, detail: operation.detail, ...(operation.merge ? { merge: operation.merge } : {}), ...(operation.built ? { built: operation.built } : {}), ...(operation.published ? { published: operation.published } : {}), ...(operation.retagEvidence ? { retagEvidence: operation.retagEvidence } : {}) }) === gateDigest(result)) return request;
     conflict('A settled release operation result is immutable.');
   }
   if (!['unknown', 'confirmed', 'not_observed', 'failed'].includes(result.status) || typeof result.detail !== 'string' || !result.detail.trim() || result.detail.length > 4000) invalid('Release results need a bounded state and explanation.');
+  if (result.retagEvidence !== undefined) {
+    const evidence = result.retagEvidence;
+    if (operation.action !== 'publish' || result.status !== 'failed' || evidence.kind !== 'preflight_tag_conflict' || evidence.tag !== operation.tag || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/.test(evidence.refObject) || !['commit', 'tag'].includes(evidence.objectType) || !['absent', 'foreign'].includes(evidence.release) || evidence.objectType === 'commit' && evidence.refObject === operation.mergeCommit) invalid('Retag evidence requires an exact conflicting Git object and no owned release observed before publication.');
+  }
   if (result.status === 'confirmed') {
     if (operation.action === 'merge') {
       const merge = result.merge;

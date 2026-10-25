@@ -48,7 +48,7 @@ test('shared v1 release policy without named execution profiles freezes delivery
   policy.release = { repository: 'example/sample', base: 'main', mergeMethod: 'squash', tagPrefix: 'v', prerelease: true,
     build: { executable: process.execPath, args: ['scripts/release.mjs'], timeoutMs: 10000, artifacts: ['out/build.txt'] } };
   policy.startPromptDirectory = 'prompt-ledger';
-  const files = { '.werk/feature-workflow.json': JSON.stringify(configuration), '.werk/delivery-policy.json': JSON.stringify(policy),
+  const files = { '.gitattributes': '* text eol=lf\n', '.werk/feature-workflow.json': JSON.stringify(configuration), '.werk/delivery-policy.json': JSON.stringify(policy),
     [configuration.template]: authoringTemplateFor('claude-cli'), [configuration.base]: 'views: []\n',
     [configuration.readyCheck]: JSON.stringify(defaultFeatureCheck('ready')), [configuration.doneCheck]: JSON.stringify(defaultFeatureCheck('done')),
     'src/value.mjs': 'export const value = 1;\n', 'tests/value.mjs': "import assert from 'node:assert/strict'; import { value } from '../src/value.mjs'; assert.equal(value, 2);\n" };

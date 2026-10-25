@@ -4,9 +4,9 @@ export function workflowCommands(catalog, action) {
     description: 'Inspect managed project clones/adoptions, committed templates, intake approval and prerequisites.' };
   for (const name of ['register', 'adopt', 'reconcile', 'retry']) catalog['projects ' + name] = {
     ...action('/api/managed-projects', name, [], true), timeoutMs: 180000, mutating: true,
-    input: name === 'register' ? 'JSON {operationId,id,name?,repository,branch?,featuresDirectory?}; repository is a credential-free Git URL.'
-      : name === 'adopt' ? 'JSON {operationId,id,name?,path,branch?,featuresDirectory?}; path is an explicitly selected existing checkout.'
-      : 'JSON {operationId,id}; reconcile only inspects saved work, retry explicitly starts a new clone attempt.',
+    input: name === 'register' ? 'JSON {operationId,id,name?,repository,branch?,featuresDirectory?,intake?}; repository is a credential-free Git URL; intake is shared (default) or local.'
+      : name === 'adopt' ? 'JSON {operationId,id,name?,path,branch?,featuresDirectory?,intake?}; path is an explicitly selected existing checkout; intake is shared (default) or local.'
+      : 'JSON {operationId,id}; reconcile inspects saved work and restores approved intake, retry explicitly starts a new clone attempt.',
     description: 'Manage a registered project using a stable operationId. Policy approval is required before its intake is enabled.',
   };
   catalog['feature templates'] = { ...action('/api/features', 'templates', [], false, ['project-id'], { 'project-id': 'projectId' }), mutating: false,

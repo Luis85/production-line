@@ -16,7 +16,7 @@ export interface ManagedProject extends ManagedProjectDefinition {
 export interface ManagedProjectState { schemaVersion: 1; projects: ManagedProject[]; }
 export interface ManagedProjectsView {
   schemaVersion: 1; home: string;
-  projects: (Omit<ManagedProject, 'operations'> & { intakeEnabled: boolean; workflow: { configured: boolean; templates: { id: string; path: string; label: string }[] } })[];
+  projects: (Omit<ManagedProject, 'operations'> & { intakeEnabled: boolean; policyApproved?: boolean; intakeBlockedReason?: string | null; workflow: { configured: boolean; templates: { id: string; path: string; label: string }[] } })[];
   diagnostics: { id: 'git' | 'claude' | 'github'; available: boolean; detail: string }[];
 }
 export interface ManagedProjectPorts {
@@ -115,11 +115,11 @@ export class ManagedProjects {
       } else {
         project.head = observation.head; project.status = 'ready';
         await this.ports.attach(project); project.attached = true;
-        project.detail = 'Repository and intake are registered. Commit and approve project delivery policy before implementation.';
+        project.detail = 'Repository registration is confirmed. Review the committed workflow and approve its exact delivery policy, then recheck project setup to enable intake.';
       }
-    } catch {
+    } catch (error) {
       project.status = 'needs_attention';
-      project.detail = 'Project setup could not be confirmed. Check Git availability, host authentication and the configured branch; reconcile before retrying. Existing checkouts and incomplete clone folders are preserved.';
+      project.detail = error instanceof DomainError ? error.message.slice(0, 1800) : 'Project setup could not be confirmed. Check Git availability, host authentication and the configured branch; reconcile before retrying. Existing checkouts and incomplete clone folders are preserved.';
     }
     project.updatedAt = new Date().toISOString(); await this.ports.save(state);
     return structuredClone(project);

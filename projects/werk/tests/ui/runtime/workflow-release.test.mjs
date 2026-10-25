@@ -4,7 +4,7 @@ import { frontend } from '../helpers/frontend-loader.mjs';
 import { publication } from '../../worker/remote-delivery-fixtures.mjs';
 import { defaultGatePolicy } from '../../../src/worker/dist/worker/application/request-gates.js';
 const { publicationLink } = await frontend('src/worker/webview/delivery-publication-view.ts');
-const { releaseCommand, releaseLink } = await frontend('src/worker/webview/delivery-release-view.ts');
+const { releaseCommand, releaseLink, releaseTagIssue } = await frontend('src/worker/webview/delivery-release-view.ts');
 const { workflowTimeline, workflowReleaseNextStep } = await frontend('src/worker/webview/workflow-timeline.ts');
 const { managedProjectCommand, emptyManagedProjectDraft } = await frontend('src/worker/webview/managed-project-view.ts');
 const { readFeaturePriority } = await frontend('src/worker/webview/feature-priority.ts');
@@ -127,4 +127,12 @@ test('release-pending lifecycle retains its completed current candidate and huma
   assert.equal(workflowTimeline(request)[4].state, 'complete');
   assert.equal(workflowReleaseNextStep(request)?.title, 'Merge the reviewed candidate');
   assert.equal(releaseCommand(request, view, 'merge_candidate')?.action, 'merge_candidate');
+});
+
+test('release version feedback rejects invalid tags before offering publication', () => {
+  const request = requestFixture(), view = viewFixture(request); view.canPublish = true;
+  assert.match(releaseTagIssue('1.0.0', 'v'), /Start the release tag/);
+  assert.match(releaseTagIssue('v1..0', 'v'), /Avoid repeated dots/);
+  assert.equal(releaseTagIssue('v1.0.0', 'v'), '');
+  assert.equal(releaseCommand(request, view, 'publish_release', { tag: 'v1..0' }), null);
 });

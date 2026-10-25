@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runReleaseOperation } from '../../src/worker/dist/worker/application/release-runtime.js';
+import { ReleaseTagConflict } from '../../src/worker/dist/worker/application/release-contracts.js';
 import { DomainError } from '../../src/worker/dist/shared/errors.js';
 import { releaseOperation, buildReceipt } from './release-fixtures.mjs';
 
@@ -47,4 +48,16 @@ test('build failure remains distinct from implementation and transport failure s
   assert.equal((await f.run('execute')).status, 'failed');
   f.port.inspectBuild = async () => { throw Error('Network private detail'); };
   const unknown = await f.run('reconcile'); assert.equal(unknown.status, 'unknown'); assert.doesNotMatch(unknown.detail, /private detail/);
+});
+
+test('only a new publication failing its initial tag preflight can retain safe retag evidence', async () => {
+  const f = fixture('publish'); f.operation.tag = 'v1.0.0'; f.operation.build = buildReceipt(f.operation);
+  const error = new ReleaseTagConflict({ kind: 'preflight_tag_conflict', tag: 'v1.0.0', refObject: 'c'.repeat(40), objectType: 'commit', release: 'foreign' });
+  f.port.inspectRelease = async () => { throw error; };
+  const preflight = await f.run('execute'); assert.equal(preflight.status, 'failed'); assert.deepEqual(preflight.retagEvidence, error.evidence); assert.equal(f.calls.includes('publish'), false);
+  const reconciled = await f.run('reconcile'); assert.equal(reconciled.status, 'failed'); assert.equal(reconciled.retagEvidence, undefined);
+  let inspections = 0;
+  f.port.inspectRelease = async () => { if (++inspections === 1) return null; throw error; };
+  f.port.publish = async () => { f.calls.push('publish'); throw error; };
+  const attempted = await f.run('execute'); assert.equal(attempted.status, 'failed'); assert.equal(attempted.retagEvidence, undefined); assert.equal(f.calls.includes('publish'), true);
 });

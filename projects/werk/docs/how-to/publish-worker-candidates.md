@@ -41,7 +41,7 @@ Later verified candidates of the same Feature Request can update its owned remot
 
 The local candidate keeps its own immutable branch; its remote destination is the branch recorded in the prior publication receipt. The worker updates the same PR description with current evidence and verifies its number, repository/base, head and publication marker. New candidate content invalidates earlier checks and acceptance. Closed or merged prior PRs block rework publication rather than silently creating a replacement PR.
 
-For local canonical Markdown requests, **Request changes** writes guarded feedback into the same source and the watcher revises/executes that Feature Request. Tasks without a canonical file retain their journal identity. Shared accepted requests keep their committed scope: use the published Task continuation, or a successor Feature Request for changed scope, as directed by the visible hold. The webview does not silently edit accepted shared source.
+For local canonical Markdown requests, **Request changes** writes guarded feedback into the same source and the watcher revises/executes that Feature Request. Tasks without a canonical file retain their journal identity. For shared accepted requests, **Request changes** persists candidate-bound feedback, confirms it on the shared branch and then dispatches rework with the original scope, paths, provider and policy. Restart recovery resumes that saved command. A missing or changed shared source blocks dispatch until reconciled. Changed scope requires a successor Feature Request; feedback never grants additional execution authority.
 
 
 ## Publish through the Feature Request

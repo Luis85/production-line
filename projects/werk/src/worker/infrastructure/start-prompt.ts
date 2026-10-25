@@ -1,11 +1,11 @@
 import { constants } from 'node:fs';
-import { lstat, open, readFile } from 'node:fs/promises';
+import { lstat, open, readFile, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DomainError } from '../../shared/errors.js';
 import { gateDigest } from '../application/request-gates.js';
 import { featureWorkflowPath } from '../application/feature-workflow.js';
 import { startPromptDocument, type StartPromptInput, type StartPromptReceipt } from '../application/start-prompt.js';
-import { syncDirectory } from './journal/files.js';
+import { ensureDirectory, syncDirectory } from './journal/files.js';
 import { ordinaryDirectory } from './features/git-io.js';
 
 function validateStartPromptDirectory(value: string): string {
@@ -22,7 +22,11 @@ export async function retainStartPrompt(stateDirectory: string, input: StartProm
   const document = startPromptDocument(input), content = JSON.stringify(document, null, 2) + '\n';
   if (Buffer.byteLength(content) > 4194304) throw new DomainError('invalid_input', 'Start prompt ledger exceeds its four MiB private bound.');
   const relative = validateStartPromptDirectory(input.directory ?? 'start-prompts') + '/' + gateDigest(input.requestId).slice(0, 24);
-  const directory = await ordinaryDirectory(join(stateDirectory, relative), true);
+  // Canonicalize host aliases (for example macOS /var) after checking the state
+  // root itself; links within the ledger remain forbidden by ordinaryDirectory.
+  await ensureDirectory(stateDirectory);
+  const stateRoot = await realpath(stateDirectory);
+  const directory = await ordinaryDirectory(join(stateRoot, relative), true);
   const name = gateDigest(input.runId).slice(0, 24) + '-' + input.inputRevision + '.json', path = join(directory, name);
   const inspect = async () => {
     const info = await lstat(path);

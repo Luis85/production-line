@@ -1,6 +1,6 @@
 # Review mutation testing results
 
-Mutation testing changes production expressions in an isolated sandbox and checks whether tests notice. Werk uses pinned StrykerJS 10.0.0, its TAP adapter and Node 24. Mutation testing remains advisory during releases and does not run in ordinary development checks.
+Mutation testing changes production expressions in an isolated sandbox and checks whether tests notice. Werk uses pinned StrykerJS 10.0.0, its TAP adapter and Node 24. Mutation testing remains advisory. A bounded workflow scope runs on pull requests and releases; the broader authority scope runs on releases. Ordinary local development checks do not invoke Stryker.
 
 ## Current measurement status
 
@@ -20,13 +20,29 @@ From `projects/werk` in a source checkout:
 npm ci
 npm run mutation:contracts
 npm run mutation
+npm run mutation -- --scope workflow
 ```
 
 `mutation:contracts` runs observable contract tests without mutation. It reuses serialized-operation, SQLite consumption, Ready Check, criterion-decision, concurrency, execution-policy and check-pack tests, plus focused private approval, behavior, dependency and execution-recovery suites. `mutation` returns failure for tool errors or incomplete evidence. A low score or surviving mutant does not fail qualification.
 
-The usual `npm test`, `npm run check`, builds and pull-request checks do not invoke Stryker. Downloaded runtime archives remain prebuilt and do not contain a requirement to install mutation tools.
+The usual `npm test`, `npm run check` and builds do not invoke Stryker. Pull requests have a separate advisory workflow-mutation job; its result does not replace the normal checks. Downloaded runtime archives remain prebuilt and do not contain a requirement to install mutation tools.
 
 `npm run mutation:release` reports incomplete runs and tool errors as warnings. The release workflow runs it as an independent advisory job: publishing does not depend on that job. Setup, install, execution, report-upload and job failures remain visible in workflow summaries and annotations. The job has its own overall deadline.
+
+
+## Workflow mutation scope
+
+`npm run mutation -- --scope workflow` measures `worker-workflow-v1` independently of the historical authority scope. It covers nine modules: release runtime and human-acceptance view, remote publication runtime/history/rework, shared feedback continuation, shared release phase/projection, and the durable publication and release journals. Its fixed twelve-minute budget and selected contracts make current workflow failures visible without rerunning the entire authority denominator on every pull request.
+
+The workflow contracts independently construct accepted and rejected states. They fence stale candidate/input/policy/output identity, unknown execution and unresolved holds, same-request PR ownership, bounded feedback history, source confirmation before dispatch, replay after restart, and completion only after a published-release receipt. The measured run also reuses ordinary release/publication runtime and SQLite-journal scenarios. Fixtures perform no live provider inference or GitHub mutations.
+
+The default `npm run mutation` still selects `worker-delivery-authority-v5`; `--scope authority` selects it explicitly. Unknown scopes and duplicate/malformed options fail rather than silently reducing coverage. Each sandbox receives the same scope as its owning runner. Generated-import checks accept only targets in the registered named scopes, and test provenance includes the selected suites and their reusable helper files.
+
+Workflow reports are under `reports/mutation/workflow/`; authority reports retain their existing `reports/mutation/` paths. Starting one scope removes only that scope's report files, preserving other measurements. Both jobs upload their own artifacts even on incomplete runs. The `werk-mutation-workflow-report` artifact runs for PRs as well as releases; `werk-mutation-report` retains the broader release-only measurement. Publication waits for neither advisory job.
+
+Summaries now disclose an **assertion-killed score** (`Killed / valid mutants`) alongside Stryker's timeout-assisted score (`(Killed + Timeout) / valid mutants`). The denominator includes every surviving and uncovered mutant. Runtime errors, pending results, provenance mismatches and incomplete runs stay explicitly unavailable; compile errors remain separately counted and excluded by Stryker’s denominator; no survivor exclusions or adjusted scores are introduced. The historical baseline is not automatically replaced when measuring the new scope. Compare only measurements with compatible scope and configuration provenance.
+
+The [workflow measurement and remaining-findings review](../evidence/local-delivery/mutation-workflow-v1-2026-10-25/README.md) retain both actual runs: assertion refinement raised kills from 1,168 to 1,475 of the same 1,880 mutants (62.13% to 78.46%), with no timeouts or exclusions. All 345 survivors and 60 uncovered mutants remain visible; no workflow baseline is promoted. A scoped measurement is evidence about those selected authority boundaries, not a whole-repository score or native Windows/Claude qualification.
 
 ## Scope and limits
 

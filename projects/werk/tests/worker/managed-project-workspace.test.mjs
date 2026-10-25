@@ -30,21 +30,29 @@ async function fixture(t) {
   const digest = deliveryPolicySnapshot(policy, git('rev-parse', 'HEAD')).configurationDigest;
   /** @type {{repositoryId:string,configurationDigest:string}[]} */ let approvals = [];
   let updates = 0, configured = 0;
+  /** @type {import('../../src/worker/application/provider-contract.ts').ProviderConnection[]} */ let providers = [];
   /** @type {import('../../src/worker/application/repositories.ts').RepositoryConfiguration} */ let repositories = { pollMs: 30000, items: [] };
     let binding = { enabled: false, repositoryId: '', remote: 'origin', branch: 'main', workflowPath: '.werk/feature-workflow.json', pollMs: 1000 }, revision = 0;
   const runtime = { get repository() { return repositories.items[0]?.path ?? source; }, sharedRuntime: {
     intake: { get binding() { return binding; }, view() { return { config: binding, revision }; }, async configure(value, expected) { assert.equal(expected, revision); binding = value; revision++; } },
-    async selectedBaseline() { return git('rev-parse', 'HEAD'); },
+    async selectedBaseline() {
+      const checkout = repositories.items[0]?.path ?? source;
+      execFileSync('git', ['fetch', '--no-write-fetch-head', 'origin', 'main'], { cwd: checkout, stdio: ['ignore', 'pipe', 'pipe'] });
+      return git('rev-parse', 'HEAD');
+    },
   } };
   const workspace = /** @type {import('../../src/worker/status/workspace-context.ts').WorkspaceContext} */ (/** @type {unknown} */ ({
     config: { stateDir: state }, repositoryStop: new AbortController(), acceptingTasks: true, configurationUpdating: false, repositoriesUpdating: false,
     repositoryPreparations: 0, sessions: { busy: false }, board: { active: 0 }, get: () => ({ activeTasks: [], queuedTasks: [] }),
-    settings: { get value() { return { repositories, providers: [] }; }, async update(input) { repositories = structuredClone(input.repositories); updates++; } },
+    settings: { get value() { return { repositories, providers }; }, async update(input) { repositories = structuredClone(input.repositories); updates++; } },
     deliveryApprovals: { view: () => ({ approvals }) }, repositoryDiscovery: { async assignmentsChanged() {} },
     repositories: { async configure() { configured++; } }, featureProjects: { busy: false, assertAssignments() {}, async configure() {}, resolve: () => runtime, repository: project => project.repository, id: () => 'sample' },
   }));
   return { workspace, repository: pathToFileURL(source).toString(), digest, get updates() { return updates; }, get configured() { return configured; },
-    approve() { approvals = [{ repositoryId: 'sample', configurationDigest: digest }]; }, items: () => repositories.items };
+    approve(configurationDigest = digest) { approvals = [{ repositoryId: 'sample', configurationDigest }]; }, revoke() { approvals = []; },
+    claudeExecutable(path) { providers = [{ id: 'claude-cli', executable: path, model: '', apiKey: '', authenticationMode: 'cli-account' }]; },
+    async changePolicy() { policy.version++; await writeFile(join(source, '.werk', 'delivery-policy.json'), JSON.stringify(policy)); git('add', '.werk/delivery-policy.json'); git('commit', '-m', 'Updated project policy'); return deliveryPolicySnapshot(policy, git('rev-parse', 'HEAD')).configurationDigest; },
+    items: () => repositories.items };
 }
 
 test('managed composition registers a repository but requires committed policy approval before enabling intake', async t => {
@@ -72,6 +80,8 @@ test('repository admission guards reject overlap and preserve existing assignmen
   await h.workspace.settings.update({ repositories: { pollMs: 30000, items: [{ id: 'sample', path: '/another-checkout', remote: 'origin', watch: false }] } });
   const result = await managedProjectCommand(h.workspace, { action: 'register', operationId: 'existing-id', id: 'sample', repository: h.repository });
   assert.equal(result.projects[0].status, 'needs_attention'); assert.equal(result.projects[0].attached, false);
+  assert.match(result.projects[0].detail, /already belongs to another checkout/);
+  assert.equal(result.projects[0].intakeBlockedReason, result.projects[0].detail);
   assert.equal(h.items()[0].path, '/another-checkout'); assert.equal(h.workspace.repositoriesUpdating, false);
 });
 
@@ -86,4 +96,31 @@ test('new managed projects default to shared Git intake and enable the canonical
   assert.equal(h.items()[0].features, undefined);
   const binding = h.workspace.featureProjects.resolve('sample').sharedRuntime.intake.binding;
   assert.equal(binding.enabled, true); assert.equal(binding.repositoryId, 'sample'); assert.equal(binding.branch, 'main');
+});
+
+test('managed setup distinguishes pending activation, revoked approval and restored shared policy', async t => {
+  const h = await fixture(t);
+  await managedProjectCommand(h.workspace, { action: 'register', operationId: 'observe-register', id: 'sample', repository: h.repository });
+  h.approve();
+  const pending = (await managedProjectsView(h.workspace)).projects[0];
+  assert.equal(pending.policyApproved, true); assert.equal(pending.intakeEnabled, false); assert.match(pending.intakeBlockedReason, /Recheck project setup/);
+  await managedProjectCommand(h.workspace, { action: 'reconcile', operationId: 'observe-enable', id: 'sample' });
+  assert.equal((await managedProjectsView(h.workspace)).projects[0].intakeBlockedReason, null);
+  h.revoke();
+  const revoked = (await managedProjectsView(h.workspace)).projects[0];
+  assert.equal(revoked.intakeEnabled, true); assert.equal(revoked.policyApproved, false); assert.match(revoked.intakeBlockedReason, /not approved/);
+  h.approve();
+  assert.equal((await managedProjectsView(h.workspace)).projects[0].policyApproved, true);
+  const changedDigest = await h.changePolicy();
+  const changed = (await managedProjectsView(h.workspace)).projects[0];
+  assert.equal(changed.policyApproved, false); assert.match(changed.intakeBlockedReason, /not approved/);
+  h.approve(changedDigest);
+  const restored = (await managedProjectsView(h.workspace)).projects[0];
+  assert.equal(restored.policyApproved, true); assert.equal(restored.intakeBlockedReason, null);
+});
+
+test('prerequisite diagnostics refuse a configured directory as a Claude executable', async t => {
+  const h = await fixture(t); h.claudeExecutable(h.workspace.config.stateDir);
+  const view = await managedProjectsView(h.workspace);
+  assert.equal(view.diagnostics.find(item => item.id === 'claude').available, false);
 });

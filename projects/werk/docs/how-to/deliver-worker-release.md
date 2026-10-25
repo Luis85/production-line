@@ -76,7 +76,9 @@ The worker prepares an isolated worktree, records its dispatch/start prompt, inv
 
 After passing verification, inspect the review package: accepted scope, current changes, criteria, check evidence, limitations and candidate identity. Use the authorized candidate push and PR creation actions, or configure approved `remoteDelivery.automatic: true` to perform them after passing checks. The recorded GitHub link confirms remote creation; a Markdown review note alone does not.
 
-Request changes when needed. Local canonical requests retain feedback in the same Markdown source. Shared accepted requests keep their pinned scope; follow the published Task continuation or create a successor request when the visible hold requires it. Rework must pass fresh checks and update the same owned PR. If its remote head changed outside the worker's expected head, inspect the conflict before continuing; the worker does not overwrite that change.
+Use **Request changes** on the current candidate and describe the required correction. The worker records feedback against that exact candidate. Local canonical requests retain it in the same Markdown source. For shared requests, the worker confirms the feedback on the shared branch before dispatching rework; accepted scope, paths, provider and policy stay pinned. Watch the saved feedback progress after a restart instead of submitting a duplicate request. A missing or changed shared source remains held until reconciled. Changed scope or a legacy note that cannot retain canonical feedback requires an explicitly authored successor request.
+
+Rework runs fresh checks and updates the same owned PR using its retained previous head. Earlier human acceptance no longer applies. If the remote head changed outside the worker's expected head, inspect the conflict before continuing; the worker does not overwrite that change.
 
 Record required human acceptance for the exact current candidate. Then use the merge action. Repository branch protection and hosting-service reviews still apply. Wait for a confirmed merge receipt containing the actual integrated commit. A closed PR or local acceptance does not replace it.
 
@@ -85,6 +87,8 @@ Record required human acceptance for the exact current candidate. Then use the m
 Run the build action after merge is confirmed. The worker builds the exact recorded merged commit in an owned workspace and retains its artifact inventory and checksums. A post-merge build failure is a release blocker with the successful merge preserved.
 
 Choose a release tag permitted by the project's configured prefix and run the explicit publish action. Inspect the recorded repository, source/tag, release URL and expected assets. Completion requires a visible published release and matching asset evidence. A draft release or partially uploaded assets remains incomplete.
+
+If the first tag lookup finds an unrelated existing version before publication starts, the saved result explicitly permits choosing a different tag with a new command ID. After any attempt may have created a tag, draft or upload, keep that tag while reconciling and retrying; an earlier uncertain publication cannot be bypassed by choosing another version.
 
 Use the authenticated CLI for the same actions when needed: inspect `request schema`, fetch the current request, then submit a guarded command with the exact request revision, delivery run, input revision, candidate commit/digest and a unique operation ID. The [command table](../reference/worker-release-workflow.md#guarded-release-commands) names the merge, build, publish and reconcile actions. Preserve the command's payload when retrying a lost acknowledgement.
 

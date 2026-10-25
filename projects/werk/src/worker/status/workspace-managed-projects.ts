@@ -1,6 +1,6 @@
-import { access } from 'node:fs/promises';
+import { access, stat } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { resolve } from 'node:path';
+import { extname, resolve } from 'node:path';
 import { DomainError } from '../../shared/errors.js';
 import { ManagedProjects, type ManagedProject, type ManagedProjectsView } from '../application/managed-projects.js';
 import { featureWorkflowConfigPath, validateFeatureWorkflow } from '../application/feature-workflow.js';
@@ -16,7 +16,10 @@ import { assertRepositoryChangeAllowed } from './workspace-repositories.js';
 import type { WorkspaceContext } from './workspace-context.js';
 
 const signalFor = (workspace: WorkspaceContext) => AbortSignal.any([workspace.repositoryStop.signal, AbortSignal.timeout(150000)]);
-async function executable(path: string) { try { await access(path, constants.X_OK); return !!path; } catch { return false; } }
+async function executable(path: string) {
+  if (!path || process.platform === 'win32' && extname(path).toLowerCase() !== '.exe') return false;
+  try { if (!(await stat(path)).isFile()) return false; await access(path, constants.X_OK); return true; } catch { return false; }
+}
 async function diagnostics(workspace: WorkspaceContext): Promise<ManagedProjectsView['diagnostics']> {
   const claude = workspace.settings.value.providers.find(item => item.id === 'claude-cli')?.executable;
   return Promise.all(([
@@ -46,15 +49,31 @@ export async function managedProjectsView(workspace: WorkspaceContext): Promise<
     const { operations: _operations, ...item } = project;
     const assignment = workspace.settings.value.repositories.items.find(value => value.id === project.id && resolve(value.path) === resolve(project.path));
     const binding = assignment ? workspace.featureProjects.resolve(project.id).sharedRuntime.intake.binding : undefined;
-    return { ...item, intakeEnabled: project.intake === 'shared' ? !!binding?.enabled && binding.repositoryId === project.id : assignment?.features?.directory === project.featuresDirectory, workflow: await workflow(project, signal) };
+    const intakeEnabled = project.intake === 'shared' ? !!binding?.enabled && binding.repositoryId === project.id : assignment?.features?.directory === project.featuresDirectory;
+    let policyApproved = false, policyPresent = false, baseline = project.head, intakeBlockedReason: string | null = null;
+    try { const observation = await intakePolicy(workspace, project, signal); policyApproved = observation.approved; policyPresent = observation.present; baseline = observation.baseline; }
+    catch { signal.throwIfAborted(); intakeBlockedReason = 'The committed delivery policy could not be checked. Restore repository access, then recheck project setup.'; }
+    const configuredWorkflow = await workflow({ ...project, head: baseline }, signal);
+    intakeBlockedReason = project.status !== 'ready' ? project.detail : intakeBlockedReason ?? (
+      !assignment ? 'Restore this project repository assignment, then recheck setup.'
+      : !policyPresent ? 'Commit .werk/delivery-policy.json, then approve its exact configuration in Project delivery.'
+      : !policyApproved ? 'The current committed delivery policy is not approved. Review its exact configuration in Project delivery.'
+      : project.intake === 'shared' && !configuredWorkflow.configured ? 'Commit the project Feature Request workflow and templates, then recheck setup.'
+      : !intakeEnabled ? 'The delivery policy is approved. Recheck project setup to enable intake.' : null);
+    return { ...item, intakeEnabled, policyApproved, intakeBlockedReason, workflow: configuredWorkflow };
   }));
   return { schemaVersion: 1, home: git.home, projects, diagnostics: await diagnostics(workspace) };
 }
-async function intakeApproved(workspace: WorkspaceContext, project: ManagedProject, signal: AbortSignal) {
-  const listing = await repositoryGit(project.path, ['ls-tree', '-z', 'HEAD', '--', deliveryPolicyPath], signal, 30000, 65536);
-  if (!/^100(?:644|755) blob /.test(listing)) return false;
-  const policy = await readDeliveryPolicy(project.path, signal);
-  return workspace.deliveryApprovals.view().approvals.some(item => item.repositoryId === project.id && item.configurationDigest === policy.configurationDigest);
+async function intakePolicy(workspace: WorkspaceContext, project: ManagedProject, signal: AbortSignal) {
+  const assignment = workspace.settings.value.repositories.items.find(item => item.id === project.id && resolve(item.path) === resolve(project.path));
+  const runtime = assignment ? workspace.featureProjects.resolve(project.id).sharedRuntime : undefined;
+  const binding = runtime?.intake.binding;
+  const baseline = binding?.enabled && binding.repositoryId === project.id ? await runtime!.selectedBaseline(signal)
+    : (await repositoryGit(project.path, ['rev-parse', '--verify', 'HEAD^{commit}'], signal, 30000, 65536)).trim();
+  const listing = await repositoryGit(project.path, ['ls-tree', '-z', baseline, '--', deliveryPolicyPath], signal, 30000, 65536);
+  if (!/^100(?:644|755) blob /.test(listing)) return { approved: false, present: false, baseline };
+  const policy = await readDeliveryPolicy(project.path, signal, undefined, baseline);
+  return { approved: workspace.deliveryApprovals.view().approvals.some(item => item.repositoryId === project.id && item.configurationDigest === policy.configurationDigest), present: true, baseline };
 }
 async function attach(workspace: WorkspaceContext, project: ManagedProject, signal: AbortSignal) {
   const current = workspace.settings.value.repositories;
@@ -64,7 +83,7 @@ async function attach(workspace: WorkspaceContext, project: ManagedProject, sign
   if (current.items.some(item => item.id !== project.id && resolve(item.path) === resolve(project.path)))
     throw new DomainError('conflict', 'The selected checkout already has another repository identity. Keep that assignment instead of importing its requests twice.');
   if (existing?.features && project.intake === 'shared') throw new DomainError('conflict', 'This repository already has local intake. Preserve its requests by adopting it with intake: local.');
-  const approved = await intakeApproved(workspace, project, signal);
+  const { approved } = await intakePolicy(workspace, project, signal);
   const enableIntake = project.intake === 'local' && (!!existing?.features || approved);
   const assignment = { id: project.id, path: project.path, remote: 'origin', branch: project.branch, watch: existing?.watch ?? false,
     ...(enableIntake ? { features: { directory: project.featuresDirectory, pollMs: existing?.features?.pollMs ?? 1000 } } : {}) };

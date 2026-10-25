@@ -1,0 +1,563 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Compact workflow mutation measurement and refinement evidence; no baseline promotion.",
+  "sameMutantUniverse": true,
+  "comparison": {
+    "totalMutants": 1880,
+    "initialKilledStillKilled": 1168,
+    "previouslySurvivedNowKilled": 225,
+    "previouslyUncoveredNowKilled": 82,
+    "additionalKills": 307,
+    "sourceDigestUnchanged": true
+  },
+  "measurements": {
+    "initial": {
+      "schemaVersion": 1,
+      "createdAt": "2026-10-25T14:56:13.744Z",
+      "packageVersion": "0.15.0",
+      "commit": "db71900f9dae8642e0a7ad65a6abf1769221df69",
+      "workingTreeDirty": true,
+      "nodeVersion": "v24.19.0",
+      "platform": "linux-x64",
+      "strykerVersion": "10.0.0",
+      "scope": {
+        "id": "worker-workflow-v1",
+        "reportDirectory": "reports/mutation/workflow",
+        "targets": [
+          "src/worker/application/release-runtime.ts",
+          "src/worker/application/release-view.ts",
+          "src/worker/application/remote-delivery-runtime.ts",
+          "src/worker/application/remote-delivery-history.ts",
+          "src/worker/application/remote-delivery-rework.ts",
+          "src/worker/application/shared-review-rework.ts",
+          "src/worker/application/shared-release-projection.ts",
+          "src/worker/infrastructure/journal/requests/publication.ts",
+          "src/worker/infrastructure/journal/requests/release.ts"
+        ],
+        "suitePrefix": "workflow-",
+        "testFiles": [
+          "scripts/mutation/suites/workflow-*.test.mjs",
+          ".mutation-build/tests/*.test.mjs"
+        ],
+        "reusedTests": [
+          "tests/worker/remote-delivery-runtime.test.mjs",
+          "tests/worker/remote-delivery-journal.test.mjs",
+          "tests/worker/release-runtime.test.mjs",
+          "tests/worker/release-journal.test.mjs"
+        ],
+        "reusedFixtures": [
+          "tests/worker/remote-delivery-fixtures.mjs",
+          "tests/worker/release-fixtures.mjs",
+          "tests/worker/request-gate-fixtures.mjs",
+          "tests/worker/fixture-cleanup.mjs"
+        ],
+        "supportFiles": [
+          "scripts/mutation/suites/workflow-fixture.mjs"
+        ],
+        "timeoutMs": 720000
+      },
+      "sources": {
+        "digest": "82be0ef3b570acc10c9cc5ad90da1902bbd4be6c6c6f017338a660b5858872b9",
+        "files": {
+          "src/worker/application/release-runtime.ts": "069cf90b78690421bccbd9b679cd77322e82c7fecc953986bf445989bd70da5b",
+          "src/worker/application/release-view.ts": "aaba8aecf056ba6e06b54cd0948397e4999d01e13040672e7346e0bf43f6bda0",
+          "src/worker/application/remote-delivery-history.ts": "8d0638d5a387b9632e7a42d0497c39b504788db75cb63acaeed56a378944a2a6",
+          "src/worker/application/remote-delivery-rework.ts": "f987e17fe99a1b39108af85a1357dc4ea770a9eb8421f9eacbedd671940a7d81",
+          "src/worker/application/remote-delivery-runtime.ts": "062df1b93f91ed46c4b65cf1c90a5b9f20ef21233e51a705f22940b35958ed7f",
+          "src/worker/application/shared-release-projection.ts": "c3ffead7d1807d7251ec227d3572d1bea5d2d9ef6c3cb30c13f1f3831d7b40e6",
+          "src/worker/application/shared-review-rework.ts": "46618cf8b3138a1dddd6da7a60d7f2fe5bf1d851fa209899df6a9f01f457e1df",
+          "src/worker/infrastructure/journal/requests/publication.ts": "a9c2a55435e3c2f6b573407a3df02d38e762f8ceed5f24cfc3e2a6b8b98f13bf",
+          "src/worker/infrastructure/journal/requests/release.ts": "af7d1a511052dc5581df2b34bea2161dabd054a0dff973016bedba5dd618e8b8"
+        }
+      },
+      "tests": {
+        "digest": "d647d404891eb792c9539172455d5399fdede22573a18fb6b8465ec5ea5ae270",
+        "files": {
+          "scripts/mutation/suites/workflow-authority.test.mjs": "dee77856a89f865717a868ec25c3e4ee1983bfb43abf7bcfd3748429ea967d92",
+          "scripts/mutation/suites/workflow-feedback.test.mjs": "f914ef837494cdfca403ea5a0642f478dde1597db7f3b415d36b750a97ad2014",
+          "scripts/mutation/suites/workflow-fixture.mjs": "b85d8fecc688e3fd7f4bca90f5c26971a997dbf3f2a6bb5813c26126248b9297",
+          "tests/worker/fixture-cleanup.mjs": "4b871abb05c22a4eff31535e5ae3bacce958150b254ec744b380deac559a5716",
+          "tests/worker/release-fixtures.mjs": "d25ef42e2c4b06866fa4fc76150bd1078c8a4005f6f719ad6cb127caf1e826c6",
+          "tests/worker/release-journal.test.mjs": "1ad24d142fcdedfee4fa0056d1e92aaa82b2907c29e365158805778830684bdc",
+          "tests/worker/release-runtime.test.mjs": "f5af30e73216b3cb2177d6ff77f0c312bbee5c64066dff4ed1b264970391d380",
+          "tests/worker/remote-delivery-fixtures.mjs": "d4a28bb4469bf91565236a830227e0e4be0e9f8b5050be3509929ac57b9bf7a9",
+          "tests/worker/remote-delivery-journal.test.mjs": "cf9976bdebdefc68f4eeba9f4495606a48bf14247b109d8b5f59d08df41ad8fc",
+          "tests/worker/remote-delivery-runtime.test.mjs": "cca3586c1b929445ecd89fbe97c97e586d3dcfdbb8006af6f289db8fda5f14ba",
+          "tests/worker/request-gate-fixtures.mjs": "ebb076409757223311276b494cfb48c044e30aebb8aa74d23ace577b84a07fc6"
+        }
+      },
+      "configuration": {
+        "digest": "c5dedca3d51ef81e313ccfd14142d9eda4f48349f6b9360a5adb2dccc2fa91dd",
+        "files": {
+          "scripts/mutation/build.mjs": "29d35d41024809201e98de400ea95cca084066293a6b52647a6a1ebe6b58a42d",
+          "scripts/mutation/process.mjs": "5123ebeca70418b21bb4b4e5dc16f71a4f22181459360a018391a0e625355cc9",
+          "scripts/mutation/provenance.mjs": "0153c0bb0f25510f10d67c0f9f55c4373cb45d56716a1cb224a7560e65356d22",
+          "scripts/mutation/reports.mjs": "0c6c8ab822d6885b8e46a60bf01a1d1b75d127546da038c2344dd64adbcad6de",
+          "scripts/mutation/run.mjs": "ede45a37d60064f3ab00897a906f1da3da09b6aac645b94a145186a899332ba9",
+          "scripts/mutation/scope.mjs": "aa32f36a4a0a0b06dc218f3d4b0e27fd7ca0a470c640cafbc9b6d127b3b247f1",
+          "scripts/mutation/summary.mjs": "6cf351d7d34311704a204ea705c0a094962037b944debf1d81dcc45ce41e20e1",
+          "stryker.config.mjs": "41c59718d74c14eee957cdeb1d74203b447d51275b013a1445fcee5e367fff57"
+        }
+      },
+      "reportDigest": "95d8518febed8bd87e4cc7e2e416753a9e773496357a129143dbf97bbe283276",
+      "status": "completed",
+      "score": 62.13,
+      "assertionScore": 62.13,
+      "validMutants": 1880,
+      "timeoutDetected": 0,
+      "totalMutants": 1880,
+      "counts": {
+        "Killed": 1168,
+        "Survived": 539,
+        "NoCoverage": 173,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "files": [
+        {
+          "path": "src/worker/application/release-runtime.ts",
+          "total": 175,
+          "counts": {
+            "Killed": 111,
+            "Survived": 54,
+            "NoCoverage": 10,
+            "Timeout": 0,
+            "CompileError": 0,
+            "RuntimeError": 0,
+            "Ignored": 0,
+            "Pending": 0
+          },
+          "score": 63.43
+        },
+        {
+          "path": "src/worker/application/release-view.ts",
+          "total": 292,
+          "counts": {
+            "Killed": 177,
+            "Survived": 102,
+            "NoCoverage": 13,
+            "Timeout": 0,
+            "CompileError": 0,
+            "RuntimeError": 0,
+            "Ignored": 0,
+            "Pending": 0
+          },
+          "score": 60.62
+        },
+        {
+          "path": "src/worker/application/remote-delivery-runtime.ts",
+          "total": 194,
+          "counts": {
+            "Killed": 73,
+            "Survived": 39,
+            "NoCoverage": 82,
+            "Timeout": 0,
+            "CompileError": 0,
+            "RuntimeError": 0,
+            "Ignored": 0,
+            "Pending": 0
+          },
+          "score": 37.63
+        },
+        {
+          "path": "src/worker/application/remote-delivery-history.ts",
+          "total": 34,
+          "counts": {
+            "Killed": 30,
+            "Survived": 4,
+            "NoCoverage": 0,
+            "Timeout": 0,
+            "CompileError": 0,
+            "RuntimeError": 0,
+            "Ignored": 0,
+            "Pending": 0
+          },
+          "score": 88.24
+        },
+        {
+          "path": "src/worker/application/remote-delivery-rework.ts",
+          "total": 49,
+          "counts": {
+            "Killed": 40,
+            "Survived": 9,
+            "NoCoverage": 0,
+            "Timeout": 0,
+            "CompileError": 0,
+            "RuntimeError": 0,
+            "Ignored": 0,
+            "Pending": 0
+          },
+          "score": 81.63
+        },
+        {
+          "path": "src/worker/application/shared-review-rework.ts",
+          "total": 209,
+          "counts": {
+            "Killed": 177,
+            "Survived": 30,
+            "NoCoverage": 2,
+            "Timeout": 0,
+            "CompileError": 0,
+            "RuntimeError": 0,
+            "Ignored": 0,
+            "Pending": 0
+          },
+          "score": 84.69
+        },
+        {
+          "path": "src/worker/application/shared-release-projection.ts",
+          "total": 101,
+          "counts": {
+            "Killed": 96,
+            "Survived": 5,
+            "NoCoverage": 0,
+            "Timeout": 0,
+            "CompileError": 0,
+            "RuntimeError": 0,
+            "Ignored": 0,
+            "Pending": 0
+          },
+          "score": 95.05
+        },
+        {
+          "path": "src/worker/infrastructure/journal/requests/publication.ts",
+          "total": 337,
+          "counts": {
+            "Killed": 179,
+            "Survived": 112,
+            "NoCoverage": 46,
+            "Timeout": 0,
+            "CompileError": 0,
+            "RuntimeError": 0,
+            "Ignored": 0,
+            "Pending": 0
+          },
+          "score": 53.12
+        },
+        {
+          "path": "src/worker/infrastructure/journal/requests/release.ts",
+          "total": 489,
+          "counts": {
+            "Killed": 285,
+            "Survived": 184,
+            "NoCoverage": 20,
+            "Timeout": 0,
+            "CompileError": 0,
+            "RuntimeError": 0,
+            "Ignored": 0,
+            "Pending": 0
+          },
+          "score": 58.28
+        }
+      ],
+      "execution": {
+        "exitCode": 0,
+        "signal": null,
+        "timedOut": false,
+        "durationMs": 158063
+      },
+      "warnings": [
+        "539 surviving and 173 uncovered mutants in this limited scope.",
+        "No recorded baseline is available for comparison.",
+        "Scoped mutation score is below the advisory 70% threshold."
+      ],
+      "compiledSources": {
+        "digest": "a2019e5422a6b7ba9494a6bb45bebf4e9b21827c400b4b3f9f5a5dcaeeba09ef",
+        "fileCount": 407
+      },
+      "artifacts": {
+        "summary.json": {
+          "bytes": 224177,
+          "sha256": "a2ba863920297a6dee2d8f8c7210619980ad043c2ec17f63efc64dd76e83cf9e"
+        },
+        "mutation.json": {
+          "bytes": 792380,
+          "sha256": "95d8518febed8bd87e4cc7e2e416753a9e773496357a129143dbf97bbe283276"
+        },
+        "run.log": {
+          "bytes": 393259,
+          "sha256": "c570c4d6d0c1ed2fa165ec919956f7ca3d9ccffe3e5f497c0fdd872c3ac6c960"
+        }
+      },
+      "rawArtifactRetention": "Local ignored reports and CI artifact; raw source-bearing reports are not committed in this compact evidence directory."
+    },
+    "final": {
+      "schemaVersion": 1,
+      "createdAt": "2026-10-25T15:04:30.188Z",
+      "packageVersion": "0.15.0",
+      "commit": "db71900f9dae8642e0a7ad65a6abf1769221df69",
+      "workingTreeDirty": true,
+      "nodeVersion": "v24.19.0",
+      "platform": "linux-x64",
+      "strykerVersion": "10.0.0",
+      "scope": {
+        "id": "worker-workflow-v1",
+        "reportDirectory": "reports/mutation/workflow",
+        "targets": [
+          "src/worker/application/release-runtime.ts",
+          "src/worker/application/release-view.ts",
+          "src/worker/application/remote-delivery-runtime.ts",
+          "src/worker/application/remote-delivery-history.ts",
+          "src/worker/application/remote-delivery-rework.ts",
+          "src/worker/application/shared-review-rework.ts",
+          "src/worker/application/shared-release-projection.ts",
+          "src/worker/infrastructure/journal/requests/publication.ts",
+          "src/worker/infrastructure/journal/requests/release.ts"
+        ],
+        "suitePrefix": "workflow-",
+        "testFiles": [
+          "scripts/mutation/suites/workflow-*.test.mjs",
+          ".mutation-build/tests/*.test.mjs"
+        ],
+        "reusedTests": [
+          "tests/worker/remote-delivery-runtime.test.mjs",
+          "tests/worker/remote-delivery-journal.test.mjs",
+          "tests/worker/release-runtime.test.mjs",
+          "tests/worker/release-journal.test.mjs"
+        ],
+        "reusedFixtures": [
+          "tests/worker/remote-delivery-fixtures.mjs",
+          "tests/worker/release-fixtures.mjs",
+          "tests/worker/request-gate-fixtures.mjs",
+          "tests/worker/fixture-cleanup.mjs"
+        ],
+        "supportFiles": [
+          "scripts/mutation/suites/workflow-fixture.mjs"
+        ],
+        "timeoutMs": 720000
+      },
+      "sources": {
+        "digest": "82be0ef3b570acc10c9cc5ad90da1902bbd4be6c6c6f017338a660b5858872b9",
+        "files": {
+          "src/worker/application/release-runtime.ts": "069cf90b78690421bccbd9b679cd77322e82c7fecc953986bf445989bd70da5b",
+          "src/worker/application/release-view.ts": "aaba8aecf056ba6e06b54cd0948397e4999d01e13040672e7346e0bf43f6bda0",
+          "src/worker/application/remote-delivery-history.ts": "8d0638d5a387b9632e7a42d0497c39b504788db75cb63acaeed56a378944a2a6",
+          "src/worker/application/remote-delivery-rework.ts": "f987e17fe99a1b39108af85a1357dc4ea770a9eb8421f9eacbedd671940a7d81",
+          "src/worker/application/remote-delivery-runtime.ts": "062df1b93f91ed46c4b65cf1c90a5b9f20ef21233e51a705f22940b35958ed7f",
+          "src/worker/application/shared-release-projection.ts": "c3ffead7d1807d7251ec227d3572d1bea5d2d9ef6c3cb30c13f1f3831d7b40e6",
+          "src/worker/application/shared-review-rework.ts": "46618cf8b3138a1dddd6da7a60d7f2fe5bf1d851fa209899df6a9f01f457e1df",
+          "src/worker/infrastructure/journal/requests/publication.ts": "a9c2a55435e3c2f6b573407a3df02d38e762f8ceed5f24cfc3e2a6b8b98f13bf",
+          "src/worker/infrastructure/journal/requests/release.ts": "af7d1a511052dc5581df2b34bea2161dabd054a0dff973016bedba5dd618e8b8"
+        }
+      },
+      "tests": {
+        "digest": "f61a26896a3e3218b7d40b9df849f12a2bc78cecf3405b27c351285568723caf",
+        "files": {
+          "scripts/mutation/suites/workflow-authority.test.mjs": "dee77856a89f865717a868ec25c3e4ee1983bfb43abf7bcfd3748429ea967d92",
+          "scripts/mutation/suites/workflow-feedback.test.mjs": "0c06336d5a58a73cabdcf4c9bc2807fc9a6c64ebf8565519f3f8ee6d247e568d",
+          "scripts/mutation/suites/workflow-fixture.mjs": "d2f04d088c150370091c505f7334e06cc46129a02d90a65fda561a3f46c9d621",
+          "scripts/mutation/suites/workflow-publication-recovery.test.mjs": "29eb054464800ca7dc33bb5ab0874b3867ec3b1fe10815cfd8d8d71e5d280ada",
+          "scripts/mutation/suites/workflow-release-authority.test.mjs": "26bf4663b3eff5a9fe042800b1a979946c84ff4bf5f09903a780312e42c39e63",
+          "scripts/mutation/suites/workflow-release-receipts.test.mjs": "6d7ca4ad2844f9d212766d2b16aa075f7557552dad7077d163a5a6cce16e2513",
+          "tests/worker/fixture-cleanup.mjs": "4b871abb05c22a4eff31535e5ae3bacce958150b254ec744b380deac559a5716",
+          "tests/worker/release-fixtures.mjs": "d25ef42e2c4b06866fa4fc76150bd1078c8a4005f6f719ad6cb127caf1e826c6",
+          "tests/worker/release-journal.test.mjs": "1ad24d142fcdedfee4fa0056d1e92aaa82b2907c29e365158805778830684bdc",
+          "tests/worker/release-runtime.test.mjs": "f5af30e73216b3cb2177d6ff77f0c312bbee5c64066dff4ed1b264970391d380",
+          "tests/worker/remote-delivery-fixtures.mjs": "d4a28bb4469bf91565236a830227e0e4be0e9f8b5050be3509929ac57b9bf7a9",
+          "tests/worker/remote-delivery-journal.test.mjs": "cf9976bdebdefc68f4eeba9f4495606a48bf14247b109d8b5f59d08df41ad8fc",
+          "tests/worker/remote-delivery-runtime.test.mjs": "cca3586c1b929445ecd89fbe97c97e586d3dcfdbb8006af6f289db8fda5f14ba",
+          "tests/worker/request-gate-fixtures.mjs": "ebb076409757223311276b494cfb48c044e30aebb8aa74d23ace577b84a07fc6"
+        }
+      },
+      "configuration": {
+        "digest": "0d97c493034af80b5dc3861d63b79e62648fcea719661534bfc3925e676b57fd",
+        "files": {
+          "scripts/mutation/build.mjs": "29d35d41024809201e98de400ea95cca084066293a6b52647a6a1ebe6b58a42d",
+          "scripts/mutation/process.mjs": "5123ebeca70418b21bb4b4e5dc16f71a4f22181459360a018391a0e625355cc9",
+          "scripts/mutation/provenance.mjs": "0153c0bb0f25510f10d67c0f9f55c4373cb45d56716a1cb224a7560e65356d22",
+          "scripts/mutation/reports.mjs": "0c6c8ab822d6885b8e46a60bf01a1d1b75d127546da038c2344dd64adbcad6de",
+          "scripts/mutation/run.mjs": "ede45a37d60064f3ab00897a906f1da3da09b6aac645b94a145186a899332ba9",
+          "scripts/mutation/scope.mjs": "7613142888461a487ff04508a4f5d7fc75cc60931e99b3a6667e6c2d6e961046",
+          "scripts/mutation/summary.mjs": "6cf351d7d34311704a204ea705c0a094962037b944debf1d81dcc45ce41e20e1",
+          "stryker.config.mjs": "41c59718d74c14eee957cdeb1d74203b447d51275b013a1445fcee5e367fff57"
+        }
+      },
+      "reportDigest": "f6ef99a909dfc80a7d7e854fc12a707ea19d7ff1e08f242f508b0f8fb0688275",
+      "status": "completed",
+      "score": 78.46,
+      "assertionScore": 78.46,
+      "validMutants": 1880,
+      "timeoutDetected": 0,
+      "totalMutants": 1880,
+      "counts": {
+        "Killed": 1475,
+        "Survived": 345,
+        "NoCoverage": 60,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "files": [
+        {
+          "path": "src/worker/application/release-runtime.ts",
+          "total": 175,
+          "counts": {
+            "Killed": 139,
+            "Survived": 29,
+            "NoCoverage": 7,
+            "Timeout": 0,
+            "CompileError": 0,
+            "RuntimeError": 0,
+            "Ignored": 0,
+            "Pending": 0
+          },
+          "score": 79.43
+        },
+        {
+          "path": "src/worker/application/release-view.ts",
+          "total": 292,
+          "counts": {
+            "Killed": 267,
+            "Survived": 22,
+            "NoCoverage": 3,
+            "Timeout": 0,
+            "CompileError": 0,
+            "RuntimeError": 0,
+            "Ignored": 0,
+            "Pending": 0
+          },
+          "score": 91.44
+        },
+        {
+          "path": "src/worker/application/remote-delivery-runtime.ts",
+          "total": 194,
+          "counts": {
+            "Killed": 142,
+            "Survived": 34,
+            "NoCoverage": 18,
+            "Timeout": 0,
+            "CompileError": 0,
+            "RuntimeError": 0,
+            "Ignored": 0,
+            "Pending": 0
+          },
+          "score": 73.2
+        },
+        {
+          "path": "src/worker/application/remote-delivery-history.ts",
+          "total": 34,
+          "counts": {
+            "Killed": 30,
+            "Survived": 4,
+            "NoCoverage": 0,
+            "Timeout": 0,
+            "CompileError": 0,
+            "RuntimeError": 0,
+            "Ignored": 0,
+            "Pending": 0
+          },
+          "score": 88.24
+        },
+        {
+          "path": "src/worker/application/remote-delivery-rework.ts",
+          "total": 49,
+          "counts": {
+            "Killed": 40,
+            "Survived": 9,
+            "NoCoverage": 0,
+            "Timeout": 0,
+            "CompileError": 0,
+            "RuntimeError": 0,
+            "Ignored": 0,
+            "Pending": 0
+          },
+          "score": 81.63
+        },
+        {
+          "path": "src/worker/application/shared-review-rework.ts",
+          "total": 209,
+          "counts": {
+            "Killed": 180,
+            "Survived": 27,
+            "NoCoverage": 2,
+            "Timeout": 0,
+            "CompileError": 0,
+            "RuntimeError": 0,
+            "Ignored": 0,
+            "Pending": 0
+          },
+          "score": 86.12
+        },
+        {
+          "path": "src/worker/application/shared-release-projection.ts",
+          "total": 101,
+          "counts": {
+            "Killed": 96,
+            "Survived": 5,
+            "NoCoverage": 0,
+            "Timeout": 0,
+            "CompileError": 0,
+            "RuntimeError": 0,
+            "Ignored": 0,
+            "Pending": 0
+          },
+          "score": 95.05
+        },
+        {
+          "path": "src/worker/infrastructure/journal/requests/publication.ts",
+          "total": 337,
+          "counts": {
+            "Killed": 236,
+            "Survived": 86,
+            "NoCoverage": 15,
+            "Timeout": 0,
+            "CompileError": 0,
+            "RuntimeError": 0,
+            "Ignored": 0,
+            "Pending": 0
+          },
+          "score": 70.03
+        },
+        {
+          "path": "src/worker/infrastructure/journal/requests/release.ts",
+          "total": 489,
+          "counts": {
+            "Killed": 345,
+            "Survived": 129,
+            "NoCoverage": 15,
+            "Timeout": 0,
+            "CompileError": 0,
+            "RuntimeError": 0,
+            "Ignored": 0,
+            "Pending": 0
+          },
+          "score": 70.55
+        }
+      ],
+      "execution": {
+        "exitCode": 0,
+        "signal": null,
+        "timedOut": false,
+        "durationMs": 151447
+      },
+      "warnings": [
+        "345 surviving and 60 uncovered mutants in this limited scope.",
+        "No recorded baseline is available for comparison."
+      ],
+      "compiledSources": {
+        "digest": "a2019e5422a6b7ba9494a6bb45bebf4e9b21827c400b4b3f9f5a5dcaeeba09ef",
+        "fileCount": 407
+      },
+      "artifacts": {
+        "summary.json": {
+          "bytes": 150674,
+          "sha256": "6dc3b3ca2c4abd15ef271787f448dd75a17a4b6e25b280400133ebcf98e9d06d"
+        },
+        "mutation.json": {
+          "bytes": 887487,
+          "sha256": "f6ef99a909dfc80a7d7e854fc12a707ea19d7ff1e08f242f508b0f8fb0688275"
+        },
+        "run.log": {
+          "bytes": 234282,
+          "sha256": "70c3356a1498a8461c9b18f3b3f4c14e78e03f4f3d86b03db2551edb80dcb3a6"
+        }
+      },
+      "rawArtifactRetention": "Local ignored reports and CI artifact; raw source-bearing reports are not committed in this compact evidence directory."
+    }
+  }
+}

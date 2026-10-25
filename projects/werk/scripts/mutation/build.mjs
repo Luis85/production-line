@@ -24,6 +24,6 @@ if (new Set(reused.map(path => basename(path))).size !== reused.length) throw Er
 for (const path of reused) {
   const original = await readFile(join(root, path), 'utf8');
   const rewritten = original.replaceAll('../../src/worker/dist/', '../');
-  if (rewritten === original) throw Error('Reused test import changed; review mutation mapping: ' + path);
+  if (rewritten === original && scope.reusedTests.includes(path)) throw Error('Reused test import changed; review mutation mapping: ' + path);
   await writeFile(join(output, 'tests', basename(path)), rewritten);
 }
