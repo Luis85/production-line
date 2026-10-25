@@ -13,6 +13,7 @@ import UInput from "@nuxt/ui/components/Input.vue";
 import UBadge from "@nuxt/ui/components/Badge.vue";
 import UAlert from "@nuxt/ui/components/Alert.vue";
 import UIcon from "@nuxt/ui/components/Icon.vue";
+import { assignmentModeLabel } from './worker-mode-view';
 import { state, refresh, refreshFromUser, unlock, lock, date, checkAccess } from "./store";
 const router = useRouter(),
   tourOpen = ref(false);
@@ -63,6 +64,7 @@ const links = [
   { path: "/history", label: "History", icon: "i-lucide-history" },
   { path: "/settings", label: "Settings", icon: "i-lucide-settings-2" },
 ];
+const assignmentLabel = computed(() => assignmentModeLabel(state.environment?.orchestratorUrl, state.status?.mode));
 const connected = computed(
   () =>
     !!state.status &&
@@ -202,15 +204,10 @@ watch(
       >
       <template #mode
         ><UBadge
+          v-if="assignmentLabel"
           :color="state.status?.mode === 'cli' ? 'primary' : 'warning'"
           variant="subtle"
-          >{{
-            state.status?.mode === "cli"
-              ? "Assignments: live Codex"
-              : state.status
-                ? "Assignments: simulation"
-                : "Mode unavailable"
-          }}</UBadge
+          >{{ assignmentLabel }}</UBadge
         >
       </template
       >

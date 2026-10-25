@@ -1,3 +1,4 @@
+import type { StartPromptInput, StartPromptReceipt } from './start-prompt.js';
 import type { DeliveryCandidateAssessment } from './delivery-provider-contracts.js';
 import type { deliveryRequestDetails } from './delivery-review-context.js';
 import type { DevelopmentBaselineEvidence } from './development-baseline.js';
@@ -91,6 +92,7 @@ export interface DeliveryCheckpointInput {
 }
 /** Local delivery records commits and notes only; it has no remote publication operation. */
 export interface LocalDeliveryPort {
+  startPrompt?(input: StartPromptInput, signal: AbortSignal): Promise<StartPromptReceipt>;
   checkpoint(input: DeliveryCheckpointInput, signal: AbortSignal): Promise<DeliveryCandidate>;
   package(input: DeliveryReviewInput, signal: AbortSignal): Promise<DeliveryReviewPackage>;
   verify(candidate: DeliveryCandidate, signal: AbortSignal): Promise<void>;

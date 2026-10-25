@@ -10,9 +10,9 @@ export async function digestMutationFiles(root, paths) {
   return { digest: sha256(JSON.stringify(files)), files };
 }
 /** Rediscover the suite glob on every measurement so added tests cannot escape provenance. */
-export async function discoverMutationTests(root) {
+export async function discoverMutationTests(root, prefix = '') {
   const names = await readdir(join(root, 'scripts/mutation/suites'));
-  return names.filter(name => name.endsWith('.test.mjs')).sort().map(name => `scripts/mutation/suites/${name}`);
+  return names.filter(name => name.endsWith('.test.mjs') && name.startsWith(prefix)).sort().map(name => `scripts/mutation/suites/${name}`);
 }
 
 /** Complete input membership shared with the isolated compiler, including unmutated dependencies. */

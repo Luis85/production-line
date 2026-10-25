@@ -1,3 +1,5 @@
+import { sharedFeaturePolicy } from '../../application/shared-feature-policy.js';
+import { validateSharedReviewReworks } from '../../application/shared-review-rework.js';
 import { validateFeatureIntakeMeasurements } from '../../application/feature-intake-measurement.js';
 import { validateFeaturePreparation } from '../../application/feature-preparation.js';
 import { sharedFeatureInputHash, assertSharedFeatureSelection } from '../../application/shared-feature-selection.js';
@@ -31,7 +33,7 @@ export class SharedFeatureJournal {
       if (state.schemaVersion !== 1 || !/^[a-zA-Z0-9_-]{1,100}$/.test(state.workerId) || !Number.isSafeInteger(state.revision) || state.revision < 0 || !Array.isArray(state.records) || state.records.length > 100 || new Set(state.records.map(r => bindingKey(r.binding) + r.id)).size !== state.records.length) throw Error('Invalid shared intake journal.');
       validateSharedIntakeConfig(state.config); validateFeatureIntakeMeasurements(state.measurements);
       for (const record of state.records) {
-        validateSharedIntakeConfig(record.binding);
+        validateSharedIntakeConfig(record.binding); validateSharedReviewReworks(record);
         const snapshot = record.workflow;
         validateFeatureWorkflow(snapshot.configuration);
         assertFeatureWorkflowDefinitionPrompts(snapshot);
@@ -42,8 +44,8 @@ export class SharedFeatureJournal {
         const markdown = review ? readyReviewCandidate(record.sourceMarkdown, review.answer) : record.sourceMarkdown;
         const readiness = review && !review.implementationReady
           ? validateFeatureReviewEligibility(markdown, snapshot, record.accepted.provider)
-          : validateFeatureReadiness(markdown, snapshot.readyCheck, record.accepted.provider, snapshot.template, { configuration: snapshot.configuration, workflowPath: snapshot.files.configuration.path, allowLegacyProgressMetadata: true });
-        validateFeaturePreparation(record);
+          : validateFeatureReadiness(markdown, snapshot.readyCheck, record.accepted.provider, snapshot.template, { configuration: snapshot.configuration, templates: snapshot.templates, workflowPath: snapshot.files.configuration.path, allowLegacyProgressMetadata: true });
+        validateFeaturePreparation(record); sharedFeaturePolicy(record);
         assertSharedFeatureSelection(record);
         if (review) validateSharedReadyReview(record);
         if (!readiness.valid || !readiness.input || record.id !== readiness.input.id || canonicalJson({ ...record.accepted, providerExplicit: undefined }) !== canonicalJson({ ...readiness.input, providerExplicit: undefined }) || record.owner !== state.workerId || record.taskId !== 'shared-feature-' + sharedHash(record.id + bindingKey(record.binding)).slice(0, 32)) throw Error('Invalid accepted shared feature.');

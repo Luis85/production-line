@@ -1,4 +1,5 @@
 import { scope } from './scripts/mutation/scope.mjs';
+const reportDirectory = scope.reportDirectory ?? 'reports/mutation';
 
 export default {
   $schema: './node_modules/@stryker-mutator/core/schema/stryker-schema.json',
@@ -15,7 +16,7 @@ export default {
   dryRunTimeoutMinutes: 1,
   thresholds: { high: 85, low: 70, break: 0 },
   reporters: ['progress-append-only', 'clear-text', 'json', 'html'],
-  jsonReporter: { fileName: 'reports/mutation/mutation.json' },
-  htmlReporter: { fileName: 'reports/mutation/index.html' },
+  jsonReporter: { fileName: reportDirectory + '/mutation.json' },
+  htmlReporter: { fileName: reportDirectory + '/index.html' },
   cleanTempDir: true,
 };

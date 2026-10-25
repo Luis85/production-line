@@ -1,3 +1,4 @@
+import { assertLocalMergeBaseline } from './workspace-local-merge-baseline.js';
 import { assertNativeWorkReady } from './workspace-native-work.js';
 import { FeatureIntakeBlocked } from '../application/feature-intake-measurement.js';
 import { DomainError } from '../../shared/errors.js';
@@ -12,6 +13,7 @@ import type { WorkspaceContext } from './workspace-context.js';
 
 /** Resolve named profiles from approved committed policy, once; mutable defaults cannot alter a reserved request. */
 export async function prepareFeatureExecution(workspace: WorkspaceContext, input: FeatureInput, repository: string, repositoryId: string, baseline?: string): Promise<FeaturePreparation> {
+  if (baseline && input.mode === 'patch') await assertLocalMergeBaseline(workspace, repository, repositoryId, baseline);
   const legacy = () => ({ selection: modelSelection(workspace.settings.provider(input.provider), input, workspace.definitions.select({ ...input })) });
   if (input.mode !== 'patch' || !baseline && input.requestSchema !== 'worker.request/v1' && !input.executionProfile) {
     if (input.executionProfile) throw new DomainError('invalid_input', 'Named project execution profiles require a repository implementation request.');
@@ -22,8 +24,9 @@ export async function prepareFeatureExecution(workspace: WorkspaceContext, input
   const policy = await readDeliveryPolicy(repository, signal, input.qualityProfile, baseline);
   const execution = policy.configuration.execution;
   if (!execution && input.executionProfile) throw new DomainError('conflict', 'Configure and approve project execution profiles before selecting execution_profile.');
-  // Existing shared workflows retain their gate contract unless they opt into project delivery.
-  if (!execution && input.requestSchema !== 'worker.request/v1') return legacy();
+  // A committed publication/release policy is an explicit delivery opt-in even for shared v1 templates.
+  const deliveryConfigured = policy.configuration.localMerge === true || !!policy.configuration.remoteDelivery || !!policy.configuration.release || !!policy.configuration.startPromptDirectory;
+  if (!execution && input.requestSchema !== 'worker.request/v1' && !deliveryConfigured) return legacy();
   try { assertDeliveryPolicyApproved(workspace.deliveryApprovals.view(), repositoryId, policy); }
   catch (error) { throw new FeatureIntakeBlocked(error, 'policy_approval', 'permissions'); }
   if (!execution) return { ...legacy(), deliveryPolicy: policy };

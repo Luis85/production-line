@@ -1,6 +1,6 @@
 import { DomainError } from '../../shared/errors.js';
 import { canonicalJson, gateDigest } from './request-gates.js';
-import { featureContentHash, featureWorkflowPath } from './feature-workflow.js';
+import { featureContentHash, featureWorkflowPath, featureWorkflowSources } from './feature-workflow.js';
 import type { FeatureAuthoringBinding, FeatureAuthoringCommand, FeatureAuthoringPorts, FeatureAuthoringResult } from './feature-authoring-contracts.js';
 
 const revision = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
@@ -45,7 +45,7 @@ export class SharedFeatureAuthoring {
     bindingMatches(binding, input.expectedBinding);
     const reader = this.ports.repository(binding), commit = await reader.head(signal);
     const workflow = await this.ports.loadWorkflow(reader, commit, binding.workflowPath, signal);
-    const workflowFiles = Object.values(workflow.files).map(file => ({ ...file })).sort((a, b) => a.path.localeCompare(b.path));
+    const workflowFiles = featureWorkflowSources(workflow);
     const workflowDigest = gateDigest(workflowFiles);
     if (input.action === 'prepare' && input.expectedWorkflowDigest && input.expectedWorkflowDigest !== workflowDigest) conflict('The shared template or checks changed. Prepare the request again before publishing.');
     const repository = this.ports.repository(binding, workflow);
@@ -58,7 +58,8 @@ export class SharedFeatureAuthoring {
     const markdown = input.status ? this.ports.documents.status(authored, input.status) : authored;
     const document = this.ports.documents.inspect(markdown);
     const readiness = this.ports.documents.ready(markdown, workflow);
-    const result: FeatureAuthoringResult = { featureId: document.id, name, path, markdown, revision: previous === null ? null : featureContentHash(previous), status: document.status, readiness, workflowDigest, binding };
+    const templates = workflow.templates?.map(({ id, label, path, default: defaultTemplate }) => ({ id, label, path, default: defaultTemplate })) ?? (document.templateId ? [{ id: document.templateId, label: 'Default Feature Request', path: workflow.configuration.template, default: true }] : undefined);
+    const result: FeatureAuthoringResult = { ...(document.templateId ? { templateId: document.templateId } : {}), ...(templates ? { templates } : {}), featureId: document.id, name, path, markdown, revision: previous === null ? null : featureContentHash(previous), status: document.status, readiness, workflowDigest, binding };
     if (input.action === 'prepare') return result;
     const readinessError = document.status === 'ready' && !readiness.valid ? 'The feature request is not ready: ' + readiness.errors.map(error => error.message).join(' ') : undefined;
     // Recheck the selected target after reads; callers also serialize configuration changes with publication.

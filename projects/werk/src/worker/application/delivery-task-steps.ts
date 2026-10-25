@@ -38,8 +38,12 @@ export async function runDeliverySteps(host: Host, task: LocalTask, model: Conve
         const request = host.sessions.requests.get(task.requestId);
         host.sessions.requests.deliveryUpdate(task.requestId, { action: 'plan', deliveryRunId: step.runId, plan: createDeliveryPlan(task, request, dispatch), effectiveLimits: deliveryEffectiveLimits(dispatch, request.delivery!) });
       }
+      const request = phase === 'preparing' && task.requestId ? host.sessions.requests.get(task.requestId) : undefined;
+      const context = request?.input.context as { deliveryPolicy?: unknown } | undefined;
+      const accepted = context?.deliveryPolicy ? validateDeliveryPolicySnapshot(context.deliveryPolicy) : undefined;
+      const prompt = request?.delivery && task.baseCommit && host.delivery ? await host.delivery(task.repository).startPrompt?.({ requestId: request.id, inputRevision: request.inputRevision, inputHash: request.inputHash, runId: request.delivery!.id, baseline: task.baseCommit, policyDigest: request.policyDigest, dispatch, directory: accepted?.configuration.startPromptDirectory }, signal) : undefined;
       const baseline = phase === 'preparing' && development?.observeBaseline ? development.evidence().baseline ?? await development.observeBaseline(signal) : undefined;
-      finish(host, task, step, 'completed', { detail: phase === 'planning' ? 'Accepted request, approved paths and required checks are pinned.' : baseline?.status === 'unavailable' ? 'The assigned worktree is ready. Baseline observation was unavailable; candidate checks remain mandatory.' : baseline ? 'The assigned worktree is ready and baseline checks were observed in a separate checkout.' : 'The assigned worktree and accepted execution authority were verified.' });
+      finish(host, task, step, 'completed', { detail: prompt ? 'The accepted start prompt is retained privately at ' + prompt.path + ' (SHA-256 ' + prompt.digest + '). The worktree is ready; candidate checks remain mandatory.' : phase === 'planning' ? 'Accepted request, approved paths and required checks are pinned.' : baseline?.status === 'unavailable' ? 'The assigned worktree is ready. Baseline observation was unavailable; candidate checks remain mandatory.' : baseline ? 'The assigned worktree is ready and baseline checks were observed in a separate checkout.' : 'The assigned worktree and accepted execution authority were verified.' });
     }
     result = await invoke('implementing', task.runId!, dispatch);
   }
@@ -154,7 +158,9 @@ async function packageDelivery(host: Host, task: LocalTask, development: Develop
     const captured = await development.capture(signal);
     if (captured.digest !== task.developmentCompletion?.candidateDigest) throw Error('The candidate changed after verification.');
     const candidate = await port.checkpoint({ requestId: request.id, inputRevision: request.inputRevision, inputHash: request.inputHash, runId: run.id, title: task.title, scope: task.implementation, candidate: captured, policyDigest: request.policyDigest }, signal);
-    const review = await port.package({ candidate, scope: task.implementation, evidence: task.developmentEvidence, criteria: request.input.criteria ?? [], requestDetails: deliveryRequestDetails(request, task.feature, run.plan), assessments: run.assessments, summary, title: task.title, reviewDirectory: accepted?.configuration.reviewDirectory, criterionDecisions: run.criterionDecisions, exceptionPolicy: accepted?.profile.exceptions, environment: { platform: process.platform, architecture: process.arch, nodeVersion: process.version } }, signal);
+    // Shared review publication owns project notes. A local merge target must stay clean until explicit approval.
+    const reviewDirectory = task.feature?.source === 'shared_git' || accepted?.configuration.localMerge === true ? undefined : accepted?.configuration.reviewDirectory;
+    const review = await port.package({ candidate, scope: task.implementation, evidence: task.developmentEvidence, criteria: request.input.criteria ?? [], requestDetails: deliveryRequestDetails(request, task.feature, run.plan), assessments: run.assessments, summary, title: task.title, reviewDirectory, criterionDecisions: run.criterionDecisions, exceptionPolicy: accepted?.profile.exceptions, environment: { platform: process.platform, architecture: process.arch, nodeVersion: process.version } }, signal);
     host.sessions.requests.deliveryUpdate(request.id, { action: 'review', deliveryRunId: run.id, review });
   }
   finish(host, task, step, 'completed', { detail: host.delivery ? 'Immutable local candidate and review evidence were prepared.' : 'Verified changes were retained for human review.' });

@@ -26,7 +26,7 @@ export function deliveryEventMeasurement(request: WorkerRequest, observations?: 
   if (request.phase === 'waiting_input') blockers.set('waiting_input', 'requirements');
   if (request.phase === 'escalated') blockers.set('escalated', 'operator');
   if (request.delivery?.status === 'paused') blockers.set('paused', 'operator');
-  if (['done', 'cancelled'].includes(request.phase)) blockers.clear();
+  if (['done', 'cancelled'].includes(deliveryLifecycle(request))) blockers.clear();
   return { projectId: typeof context.repositoryId === 'string' ? context.repositoryId : null,
     profileId: record(policy.profile) && typeof policy.profile.id === 'string' ? policy.profile.id : null,
     lifecycle: deliveryLifecycle(request), ...(request.delivery ? { deliveryStatus: request.delivery.status } : {}),

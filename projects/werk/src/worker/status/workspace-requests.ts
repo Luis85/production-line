@@ -1,3 +1,8 @@
+import { localMergeCommands } from '../application/local-merge-contracts.js';
+import { requestLocalMergeView, mergeLocalRequest } from './workspace-local-merge.js';
+import { continueReviewRework } from './workspace-review-rework.js';
+import { releaseCommands } from '../application/release-contracts.js';
+import { requestReleaseView, releaseRequest } from './workspace-release.js';
 import { assertNativeWorkReady } from './workspace-native-work.js';
 import { executionRecoveryCommand } from './workspace-execution-recovery.js';
 import { deliveryPolicyActions, deliveryPolicyCommand } from './workspace-delivery-policy.js';
@@ -31,7 +36,9 @@ export function capabilities(workspace: WorkspaceContext){
       rework: ["operator", "llm"],
       events: "polling",
       scope: "this_worker_accepted_requests",
-      mergeAuthority: false,
+      mergeAuthority: "approved_project_policy_and_exact_human_acceptance",
+      localMerge: { supported: true, target: "assigned_main_checkout", authority: "exact_human_acceptance_and_checkout_approval" },
+      release: { supported: true, target: "github_releases", completion: "confirmed_assets_for_merged_commit" },
     },
     events: { transport: "polling", streaming: false },
     // Retain the v1 wrapper profile; session-aware callers inspect the additive v2 profiles.
@@ -73,7 +80,7 @@ export function capabilities(workspace: WorkspaceContext){
   };
 }
 
-export async function requestCommand(workspace: WorkspaceContext, input: unknown){
+export async function requestCommand(workspace: WorkspaceContext, input: unknown, options: { canonicalSource?: boolean } = {}){
   const selectedAction = input && typeof input === 'object' && !Array.isArray(input) ? (input as { action?: unknown }).action : undefined;
   if (deliveryPolicyActions.some(action => action === selectedAction)) return deliveryPolicyCommand(workspace, input);
   if (selectedAction === 'metrics') return deliveryMetrics(workspace, input);
@@ -97,7 +104,7 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
     "inputHash",
     "outputDigest",
     "deliveryRunId", "inputRevision", "candidateCommit", "candidateDigest", "humanOutcomes",
-    "assessmentId", "proposalId", "decision", "criterionDecision", "reviewDurationMinutes", "publicationOperationId",
+    "assessmentId", "proposalId", "decision", "criterionDecision", "reviewDurationMinutes", "publicationOperationId", "releaseOperationId", "releaseTag", "localMergeOperationId", "mainCheckout", "mainBranch", "mainHead",
   ]);
   const action = String(initial.action);
   const reads: Record<string, string[]> = {
@@ -107,6 +114,8 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
     schema: ["action"],
     policy: ["action"],
     publication: ["action", "requestId"],
+    release: ["action", "requestId"],
+    local_merge: ["action", "requestId"],
     set_policy: ["action", "policy", "expectedRevision", "operationId"],
     execute: ["action", "requestId", "expectedRevision", "operationId"],
   };
@@ -132,6 +141,8 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
         "explicit_operator_decision_not_proof_of_human_identity",
     };
   if (action === "policy") return gates.policy();
+  if (action === "local_merge") return requestLocalMergeView(workspace, identifier(initial.requestId, "requestId"));
+  if (action === "release") return requestReleaseView(workspace, identifier(initial.requestId, "requestId"));
   if (action === "publication") return publicationView(workspace, identifier(initial.requestId, "requestId"));
   if (action === "list")
     return gates.list({
@@ -149,7 +160,11 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
     );
   if (action !== "set_policy") {
     const replay = gates.replayCommand(initial as unknown as RequestCommand);
-    if (replay) return { ...replay, dispatch: requestDispatchStatus(replay.request, action) };
+    if (replay) {
+      if (action === 'request_changes' && !options.canonicalSource) await continueReviewRework(workspace, initial as unknown as RequestCommand);
+      const request = gates.get(replay.request.id);
+      return { ...replay, request, dispatch: requestDispatchStatus(request, action) };
+    }
   }
   if (!workspace.acceptingTasks)
     throw new DomainError("unavailable", "Worker is stopping.");
@@ -163,6 +178,8 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
     });
   const requestId = identifier(initial.requestId, "requestId");
   const before = gates.get(requestId);
+  if (localMergeCommands.includes(action as typeof localMergeCommands[number])) return mergeLocalRequest(workspace, initial as unknown as RequestCommand);
+  if (releaseCommands.includes(action as typeof releaseCommands[number]) || action === 'confirm_release_stopped') return releaseRequest(workspace, initial as unknown as RequestCommand);
   if (remotePublicationCommands.includes(action as typeof remotePublicationCommands[number])) return publishRequest(workspace, initial as unknown as RequestCommand);
   if (isSharedFeatureSession(workspace, before.owner.sessionId) && ['propose', 'accept_candidate', 'rework', 'execute'].includes(action))
     throw new DomainError('conflict', 'This Feature Request retains its published scope and checks. Use its Task answer or resume control to continue; publish a new Feature Request for a scope change.');
@@ -204,6 +221,7 @@ export async function requestCommand(workspace: WorkspaceContext, input: unknown
       }
     }
   }
+  if (action === 'request_changes' && !options.canonicalSource) await continueReviewRework(workspace, initial as unknown as RequestCommand);
   workspace.reviews.tick();
   const request = gates.get(requestId);
   return { ...result, request, dispatch: requestDispatchStatus(request, action) };

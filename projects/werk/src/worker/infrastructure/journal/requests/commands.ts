@@ -1,3 +1,7 @@
+import { localMergeCommands, localMergePending } from '../../../application/local-merge-contracts.js';
+import { requestLocalMergeCommand } from './local-merge.js';
+import { releaseCommands, releasePending } from '../../../application/release-contracts.js';
+import { requestReleaseCommand } from './release.js';
 import { requestClarificationAnswers } from './clarifications.js';
 import { validateDeliveryPolicySnapshot } from '../../../application/delivery-policy.js';
 import { humanReviewOutcomes, humanReviewObservations } from '../../../application/delivery-human-review.js';
@@ -36,6 +40,13 @@ export function requestCommand(store: RequestStore, input: RequestCommand, stopp
   const fields: Record<string, string[]> = {
     readiness_decision: ['inputRevision', 'inputHash', 'assessmentId', 'proposalId', 'decision', 'note'],
     criterion_decision: ['deliveryRunId', 'inputRevision', 'candidateCommit', 'candidateDigest', 'criterionDecision'],
+    merge_local_candidate: ['deliveryRunId', 'inputRevision', 'candidateCommit', 'candidateDigest', 'mainCheckout', 'mainBranch', 'mainHead'],
+    reconcile_local_merge: ['deliveryRunId', 'inputRevision', 'candidateCommit', 'candidateDigest', 'localMergeOperationId'],
+    merge_candidate: ['deliveryRunId', 'inputRevision', 'candidateCommit', 'candidateDigest'],
+    build_release: ['deliveryRunId', 'inputRevision', 'candidateCommit', 'candidateDigest'],
+    publish_release: ['deliveryRunId', 'inputRevision', 'candidateCommit', 'candidateDigest', 'releaseTag'],
+    reconcile_release: ['deliveryRunId', 'inputRevision', 'candidateCommit', 'candidateDigest', 'releaseOperationId'],
+    confirm_release_stopped: ['deliveryRunId', 'inputRevision', 'candidateCommit', 'candidateDigest', 'releaseOperationId', 'note'],
     execute: [],
     evaluate: ["stage"],
     assign: ["assignee"],
@@ -99,6 +110,10 @@ export function requestCommand(store: RequestStore, input: RequestCommand, stopp
     if (request.revision !== input.expectedRevision)
       conflict("The request changed. Refresh before continuing.");
     if (remotePublicationPending(request.delivery) && !['cancel', 'reconcile_publication'].includes(input.action)) conflict('Reconcile the saved remote publication before changing or continuing this request.');
+    if (localMergePending(request.delivery?.localMerge) && input.action !== 'reconcile_local_merge') conflict('Reconcile the saved main checkout merge before changing this request.');
+    if (request.delivery?.localMerge?.merged && !localMergeCommands.includes(input.action as typeof localMergeCommands[number])) conflict('This increment is merged into its main checkout. Create a successor request for further work.');
+    if (releasePending(request.delivery?.release) && !['reconcile_release', 'confirm_release_stopped'].includes(input.action)) conflict('Reconcile the saved release operation before changing or continuing this request.');
+    if (request.delivery?.release?.merge && !releaseCommands.includes(input.action as typeof releaseCommands[number])) conflict('This request is already merged. Continue its release or create a successor request for new work.');
     const deliveryControl = deliveryCommandActions.includes(input.action as typeof deliveryCommandActions[number]) || input.action === 'cancel' && !!request.delivery;
     if (
       !deliveryControl && request.execution &&
@@ -114,7 +129,11 @@ export function requestCommand(store: RequestStore, input: RequestCommand, stopp
           (request.execution?.result?.type === "completed"
             ? "done"
             : "ready"));
-    if (remotePublicationCommands.includes(input.action as typeof remotePublicationCommands[number])) {
+    if (localMergeCommands.includes(input.action as typeof localMergeCommands[number])) {
+      requestLocalMergeCommand(store, request, normalized);
+    } else if (releaseCommands.includes(input.action as typeof releaseCommands[number])) {
+      requestReleaseCommand(store, request, normalized);
+    } else if (remotePublicationCommands.includes(input.action as typeof remotePublicationCommands[number])) {
       requestPublicationCommand(store, request, normalized);
     } else if (input.action === 'readiness_decision') {
       requestReadinessDecision(store, request, normalized); requestEvaluateInside(store, request, 'ready');

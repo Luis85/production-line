@@ -41,6 +41,13 @@ priority: ""
 assignee: ""
 iteration: ""
 ---
-Once the [[Definition of Ready]] are met, the worker dispatches the [[Start Prompt]] to the [[AI-Agent]].
-The worker updates the [[Feature Request]].
-The agent informs the worker once done. 
+
+# Production
+
+The worker dispatches the retained start prompt to its selected AI agent in the prepared candidate workspace. Claude Code CLI is the primary native Windows acceptance provider; other configured adapters retain their own documented platform/capability limits.
+
+Progress, questions, invocation identities, usage coverage and bounded process observations remain associated with the same Feature Request and delivery run. The worker mediates approved tools and enforces configured time, capacity and repair limits.
+
+## Exit and recovery
+
+A model completion message advances the candidate to independent Post-Production verification; it does not establish passing checks. Questions wait for a guarded answer. Known failure can enter a bounded retry or repair; unknown process outcome requires explicit inspection/reconciliation before another invocation. Cancel and interrupt preserve inspectable partial work and report observed outcomes truthfully.

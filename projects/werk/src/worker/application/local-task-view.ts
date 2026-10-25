@@ -61,13 +61,13 @@ function publicFields(task: LocalTask): LocalTaskView {
   };
 }
 
-export function projectLocalTaskSummary(task: LocalTask, interaction: InteractionView, request?: { phase: RequestPhase; revision: number }): LocalTaskSummaryView {
+export function projectLocalTaskSummary(task: LocalTask, interaction: InteractionView, request?: { phase: RequestPhase; revision: number; lifecycle?: import('./delivery-contracts.js').DeliveryLifecycle }): LocalTaskSummaryView {
   return structuredClone({
     ...publicFields(task),
     files: task.files.map(file => ({ path: file.path, sha256: createHash('sha256').update(file.content).digest('hex') })),
     hasPatch: !!task.patch,
     interaction,
-    ...(request ? { requestPhase: request.phase, requestRevision: request.revision } : {}),
+    ...(request ? { requestPhase: request.phase, requestRevision: request.revision, ...(request.lifecycle ? { requestLifecycle: request.lifecycle } : {}) } : {}),
   });
 }
 

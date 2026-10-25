@@ -1,3 +1,5 @@
+import { localMergeMarkdown, localMergeProjection, validLocalMergeProjection } from '../../application/local-merge-markdown.js';
+import { releaseMarkdown } from '../../application/release-markdown.js';
 import { remotePublicationMarkdown } from '../../application/remote-publication-markdown.js';
 import { join } from "node:path";
 import { stringify } from "yaml";
@@ -51,6 +53,7 @@ export function validateFeatureGates(record: FeatureRecord) {
     projection.gaps !== base + "gaps.md"
   )
     throw Error("Invalid feature request gate projection.");
+  if (projection.localMerge && !validLocalMergeProjection(projection.localMerge)) throw Error('Invalid main checkout integration projection.');
   const run = projection.delivery;
   if (run && (!gateIdentifier(run.runId) || [run.status, run.phase, run.reason].some(value => typeof value !== 'string' || value.length > 4000) || run.waitingFor !== null && typeof run.waitingFor !== 'string' || !Array.isArray(run.controls) || run.controls.some(value => typeof value !== 'string') || run.checkpoint && (typeof run.checkpoint.branch !== 'string' || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(run.checkpoint.candidateCommit)))) throw Error('Invalid delivery checkpoint projection.');
 }
@@ -130,6 +133,7 @@ export async function exportFeatureGates(
     revision: request.revision,
     inputRevision: request.inputRevision,
     phase: request.phase,
+    ...(request.lifecycle ? { lifecycle: request.lifecycle } : {}),
     policyId: request.policy.id,
     policyVersion: request.policy.version,
     policyDigest: request.policyDigest,
@@ -142,6 +146,12 @@ export async function exportFeatureGates(
   if (request.delivery) {
     const run = request.delivery, checkpoint = run.checkpoints?.at(-1);
     projection.delivery = { runId: run.id, status: run.status, phase: run.phase, reason: run.decision.reason, waitingFor: run.decision.waitingFor, controls: [...run.allowedControls], ...(checkpoint ? { checkpoint: { branch: checkpoint.branch, candidateCommit: checkpoint.candidateCommit } } : {}) };
+  }
+  if (request.delivery?.localMerge) projection.localMerge = localMergeProjection(request.delivery.localMerge);
+  if (request.delivery?.release) {
+    const { merge, build, published, operations } = request.delivery.release;
+    projection.release = { ...(merge ? { merge: structuredClone(merge) } : {}), ...(build ? { build: structuredClone(build) } : {}), ...(published ? { published: structuredClone(published) } : {}),
+      operations: operations.map(({ operationId, action, status, detail }) => ({ operationId, action, status, detail })) };
   }
   if (request.delivery?.publications?.length) projection.publications = structuredClone(request.delivery.publications);
   validateFeatureGates({ ...record, gates: projection });
@@ -166,6 +176,8 @@ export async function exportFeatureGates(
     `\nRequest phase: ${request.phase}\nModel execution outcome: ${request.execution?.outcome ?? "not recorded"}\nRework owner: ${request.assignee}\n\n## Ready gate\n\n` +
     evaluationText(ready) +
     (projection.delivery ? `\n## Delivery run\n\nRun ID: ${projection.delivery.runId}\nStatus: ${projection.delivery.status}\nPhase: ${projection.delivery.phase}\nReason: ${projection.delivery.reason}\nWaiting for: ${projection.delivery.waitingFor ?? 'No external event'}\nAvailable controls: ${projection.delivery.controls.join(', ') || 'None'}\n` + (projection.delivery.checkpoint ? `\nInspectable checkpoint (not a verification pass): ${projection.delivery.checkpoint.candidateCommit} on ${projection.delivery.checkpoint.branch}\n` : '') : '') +
+    (projection.localMerge ? "\n" + localMergeMarkdown(projection.localMerge) + "\n" : "") +
+    (projection.release ? "\n" + releaseMarkdown(projection.release) + "\n" : "") +
     (projection.publications?.length ? "\n" + remotePublicationMarkdown(projection.publications) + "\n" : "") +
     "\n## Done gate\n\n" +
     evaluationText(done) +

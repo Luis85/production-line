@@ -4,9 +4,13 @@ import { defaultGatePolicy, evaluateGate, gateDigest, validateGatePolicy, type G
 import type { FeatureInput } from './feature-requests.js';
 
 export const featureWorkflowConfigPath = '.werk/feature-workflow.json';
+export interface FeatureTemplateDefinition { id: string; label: string; path: string; }
+export interface FeatureTemplateSnapshot extends FeatureTemplateDefinition { sha256: string; content: string; default: boolean; }
 export interface FeatureWorkflowConfiguration {
   schemaVersion: 1; id: string; requestsDirectory: string; reviewDirectory: string;
   template: string; base: string; readyCheck: string; doneCheck: string;
+  /** Additional committed request templates; the existing template remains the default. */
+  templates?: FeatureTemplateDefinition[];
   /** Optional team instructions appended to model dispatch; JSON gates remain authoritative. */
   readyPrompt?: string; donePrompt?: string;
   /** Optional reviewer instructions before implementation readiness; omission disables this review. */
@@ -33,7 +37,7 @@ export interface FeatureReadyReview {
 export interface FeatureWorkflowSnapshot {
   schemaVersion: 1; commit: string; configuration: FeatureWorkflowConfiguration;
   readyCheck: FeatureCheck; doneCheck: FeatureCheck; policy: GatePolicy; policyDigest: string;
-  template: string;
+  template: string; templates?: FeatureTemplateSnapshot[];
   definitionPrompts?: FeatureDefinitionPrompts;
   readyReview?: FeatureReadyReview;
   files: { configuration: FeatureSourceFile; readyCheck: FeatureSourceFile; doneCheck: FeatureSourceFile; template: FeatureSourceFile; base: FeatureSourceFile; readyPrompt?: FeatureSourceFile; donePrompt?: FeatureSourceFile; readyReviewPrompt?: FeatureSourceFile };
@@ -64,23 +68,34 @@ export function featureTaskDirectory(config: FeatureWorkflowConfiguration): stri
   return config.tasksDirectory ?? config.reviewDirectory + '/_tasks';
 }
 export function validateFeatureWorkflow(value: unknown): FeatureWorkflowConfiguration {
-  const raw = exact(value, ['schemaVersion', 'id', 'requestsDirectory', 'reviewDirectory', 'tasksDirectory', 'template', 'base', 'readyCheck', 'doneCheck', 'readyPrompt', 'donePrompt', 'readyReviewPrompt'], 'feature workflow');
+  const raw = exact(value, ['schemaVersion', 'id', 'requestsDirectory', 'reviewDirectory', 'tasksDirectory', 'template', 'base', 'readyCheck', 'doneCheck', 'readyPrompt', 'donePrompt', 'readyReviewPrompt', 'templates'], 'feature workflow');
   if (raw.schemaVersion !== 1 || typeof raw.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(raw.id)) invalid('Feature workflow requires schemaVersion 1 and a stable lowercase ID.');
   const result = { schemaVersion: 1, id: raw.id } as FeatureWorkflowConfiguration;
   for (const key of ['requestsDirectory', 'reviewDirectory', 'template', 'base', 'readyCheck', 'doneCheck'] as const) result[key] = featureWorkflowPath(raw[key], key);
   for (const key of ['readyPrompt', 'donePrompt', 'readyReviewPrompt'] as const) if (raw[key] !== undefined) result[key] = featurePromptPath(raw[key], key);
   if (raw.tasksDirectory !== undefined) result.tasksDirectory = featureWorkflowPath(raw.tasksDirectory, 'tasksDirectory');
+  if (raw.templates !== undefined) {
+    if (!Array.isArray(raw.templates) || raw.templates.length > 16) invalid('Configure at most 16 additional request templates.');
+    result.templates = raw.templates.map(value => {
+      const item = exact(value, ['id', 'label', 'path'], 'request template');
+      if (typeof item.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(item.id) || typeof item.label !== 'string' || !item.label.trim() || item.label.length > 120 || /[\x00-\x1f\x7f]/.test(item.label)) invalid('Templates require a stable ID and bounded display label.');
+      const path = featureWorkflowPath(item.path, 'Template path');
+      if (!path.endsWith('.md')) invalid('Request templates require Markdown paths.');
+      return { id: item.id, label: item.label.trim(), path };
+    });
+    if (new Set(result.templates.map(item => item.id)).size !== result.templates.length) invalid('Request template IDs must be unique.');
+  }
   const tasks = featureTaskDirectory(result);
   if (inside(tasks, result.requestsDirectory) || inside(result.requestsDirectory, tasks) || inside(result.reviewDirectory, tasks) || inside(tasks, result.reviewDirectory + '/_operations')) invalid('Task notes must be separate from requests, review roots and publication receipts. A review subfolder is allowed.');
   if (inside(result.requestsDirectory, result.reviewDirectory) || inside(result.reviewDirectory, result.requestsDirectory)) invalid('Request and review directories must be separate, non-overlapping folders.');
   if ([result.requestsDirectory, result.reviewDirectory, tasks].some(path => path.toLowerCase().split('/').includes('.werk'))) invalid('Request and review directories must be outside private .werk storage.');
   if (!result.template.endsWith('.md') || !result.base.endsWith('.base') || !result.readyCheck.endsWith('.json') || !result.doneCheck.endsWith('.json')) invalid('Workflow template, Base and checks require .md, .base and .json extensions.');
   const prompts = [result.readyPrompt, result.donePrompt, result.readyReviewPrompt].filter((path): path is string => path !== undefined);
-  const files = [result.template, result.base, result.readyCheck, result.doneCheck, ...prompts];
+  const files = [result.template, result.base, result.readyCheck, result.doneCheck, ...prompts, ...(result.templates?.map(item => item.path) ?? [])];
   if ([result.requestsDirectory, result.reviewDirectory, tasks, ...files].some(path => ['.agents', '.claude', '.codex', '.werk/authoring', '.werk/worker', '.werk/provider-home', 'bin/apps'].some(reserved => inside(path, reserved) || inside(reserved, path)))) invalid('Workflow paths cannot overlap private runtime, installed applications or agent integration files.');
   if (new Set(files.map(path => path.toLowerCase())).size !== files.length || files.some(path => [result.requestsDirectory, result.reviewDirectory, tasks].some(directory => path.toLowerCase() === directory.toLowerCase()))) invalid('Workflow files must use distinct paths outside folder roots.');
   if (files.some(path => inside(path, result.reviewDirectory) || inside(path, tasks))) invalid('Workflow configuration files cannot be generated review notes.');
-  if (inside(result.template, result.requestsDirectory) && result.template.slice(result.requestsDirectory.length + 1).split('/').length === 1 && !result.template.slice(result.requestsDirectory.length + 1).startsWith('_')) invalid('Place the template in a subfolder or use an underscore-prefixed name to keep it out of intake.');
+  for (const template of [result.template, ...(result.templates?.map(item => item.path) ?? [])]) if (inside(template, result.requestsDirectory) && template.slice(result.requestsDirectory.length + 1).split('/').length === 1 && !template.slice(result.requestsDirectory.length + 1).startsWith('_')) invalid('Place templates in a subfolder or use underscore-prefixed names to keep them out of intake.');
   if (prompts.some(path => path.endsWith('.md') && inside(path, result.requestsDirectory) && path.slice(result.requestsDirectory.length + 1).split('/').length === 1 && !path.slice(result.requestsDirectory.length + 1).startsWith('_'))) invalid('Place Markdown definition prompts in a subfolder or use an underscore-prefixed name to keep them out of intake.');
   return result;
 }
@@ -162,3 +177,9 @@ export function evaluateFeatureDone(policy: GatePolicy, facts: GateFactSnapshot)
 }
 export const featureContentHash = (content: string) => createHash('sha256').update(content).digest('hex');
 export const featureInputHash = (input: SharedFeatureInput) => { const { providerExplicit: _explicit, ...semantic } = input; return gateDigest(semantic); };
+
+/** Every committed template participates in publication drift checks and protected workflow scope. */
+export function featureWorkflowSources(snapshot: FeatureWorkflowSnapshot): FeatureSourceFile[] {
+  const files = [...Object.values(snapshot.files), ...(snapshot.templates?.map(({ path, sha256 }) => ({ path, sha256 })) ?? [])];
+  return [...new Map(files.map(file => [file.path, { path: file.path, sha256: file.sha256 }])).values()].sort((a, b) => a.path.localeCompare(b.path));
+}

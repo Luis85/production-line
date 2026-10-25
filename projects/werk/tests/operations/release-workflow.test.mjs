@@ -90,6 +90,10 @@ test('stable publication uploads the complete draft before selecting latest', { 
   assert.match(notes, /https:\/\/github.com\/example\/werk\/releases\/latest\/download\/install.mjs/);
   assert.match(notes, /\$LASTEXITCODE -eq 0/);
   assert.match(notes, /werk-storybook-0\.1\.0\.zip/);
+  assert.ok(notes.includes('node ./werk-0.1.0/worker.mjs'));
+  assert.ok(notes.includes('node .\\werk-0.1.0\\worker.mjs'));
+  assert.match(notes, /dedicated worker home/);
+  assert.match(notes, /optional Factory demo.*simulated/);
   assert.match(notes, /handbook\/index\.html/);
   assert.match(notes, /storymap\/index\.html/);
 });
@@ -305,4 +309,26 @@ test('release README is generated from qualified captures and published with the
   assert.match(publication, /release\/werk-readme-\$RELEASE_VERSION\.zip/);
   assert.match(publication, /release\/README-SHA256SUMS/);
   assert.ok(!steps.some(step => /git (?:commit|push)/.test(step.run ?? '')));
+});
+
+
+test('bounded workflow mutation analysis runs for pull requests and releases independently of publication', () => {
+  const job = workflow.jobs['mutation-workflow'];
+  assert.ok(job); assert.equal(job.if, undefined); assert.equal(job['continue-on-error'], true); assert.ok(job['timeout-minutes'] <= 20); assert.equal(job.needs, undefined);
+  assert.equal(job.steps.find(step => step.id === 'mutation').run, 'npm run mutation:release -- --scope workflow');
+  const artifact = job.steps.find(step => step.id === 'evidence');
+  assert.equal(artifact.if, 'always()'); assert.equal(artifact.with.name, 'werk-mutation-workflow-report'); assert.match(artifact.with.path, /reports\/mutation\/workflow\/$/);
+  for (const [name, value] of Object.entries(workflow.jobs)) if (name !== 'mutation-workflow') assert.equal([value.needs].flat().includes('mutation-workflow'), false);
+});
+
+
+test('release publication waits for the exact downloaded candidate browser journey and retains labelled fixture evidence', () => {
+  const job = workflow.jobs['worker-home'];
+  assert.equal(job.needs, 'build'); assert.equal(job['runs-on'], 'ubuntu-latest');
+  assert.equal(job['continue-on-error'], undefined); assert.ok(workflow.jobs.publish.needs.includes('worker-home'));
+  assert.equal(job.steps.find(step => step.with?.name === 'werk-release-candidate').with.path, '${{ env.FORGE_PROJECT_PATH }}/release');
+  const run = job.steps.find(step => step.run === 'npm run acceptance:worker-home');
+  assert.equal(run.env.WERK_WORKER_HOME_ARCHIVES, 'release'); assert.match(job.name, /protocol fixture/);
+  const artifact = job.steps.find(step => step.with?.name === 'werk-worker-home-browser-evidence');
+  assert.equal(artifact.if, 'always()'); assert.equal(artifact.with.path, run.env.WERK_BROWSER_EVIDENCE + '/');
 });

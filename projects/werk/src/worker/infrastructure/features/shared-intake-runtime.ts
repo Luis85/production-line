@@ -6,7 +6,7 @@ import { SharedFeatureAuthoring } from '../../application/feature-authoring.js';
 import type { FeatureAuthoringBinding } from '../../application/feature-authoring-contracts.js';
 import { featureAuthoringDocuments } from './authoring-document.js';
 import { SharedFeatureIntake } from '../../application/shared-feature-intake.js';
-import { defaultFeatureWorkflow, featureTaskDirectory } from '../../application/feature-workflow.js';
+import { defaultFeatureWorkflow, featureTaskDirectory, featureWorkflowSources } from '../../application/feature-workflow.js';
 import type { SharedIntakePorts } from '../../application/shared-feature-state.js';
 import type { FeatureWorkflowSnapshot } from '../../application/feature-workflow.js';
 import { sharedHash } from '../../application/shared-feature-notes.js';
@@ -26,16 +26,16 @@ export class SharedIntakeRuntime {
   private stateDirectory: string;
   private resolve: (id: string) => { path: string };
   private allowed: (path: string) => Promise<void>;
-  constructor(options: { stateDirectory: string; resolve: (id: string) => { path: string }; allowed: (path: string) => Promise<void>; submit: SharedIntakePorts['submit']; inspect: SharedIntakePorts['inspect']; canAdmit: SharedIntakePorts['canAdmit']; admissionHold?: SharedIntakePorts['admissionHold']; admissionIssue?: SharedIntakePorts['admissionIssue']; continue?: SharedIntakePorts['continue']; readyReview?: ReadyReviewPort; defaultProvider?: () => string; resolveSelection?: SharedIntakePorts['resolveSelection']; prepare?: SharedIntakePorts['prepare'] }) {
+  constructor(options: { stateDirectory: string; resolve: (id: string) => { path: string }; allowed: (path: string) => Promise<void>; submit: SharedIntakePorts['submit']; inspect: SharedIntakePorts['inspect']; canAdmit: SharedIntakePorts['canAdmit']; admissionHold?: SharedIntakePorts['admissionHold']; admissionIssue?: SharedIntakePorts['admissionIssue']; continue?: SharedIntakePorts['continue']; reviewRework?: SharedIntakePorts['reviewRework']; sourceHold?: SharedIntakePorts['sourceHold']; readyReview?: ReadyReviewPort; defaultProvider?: () => string; resolveSelection?: SharedIntakePorts['resolveSelection']; prepare?: SharedIntakePorts['prepare'] }) {
     this.stateDirectory = options.stateDirectory; this.resolve = options.resolve; this.allowed = options.allowed;
     const journal = new SharedFeatureJournal(options.stateDirectory);
     this.intake = new SharedFeatureIntake({
       load: () => journal.load(), save: state => journal.save(state), repository: (binding, workflow) => this.repository(binding, workflow),
       loadWorkflow: (repository, commit, configPath, signal) => loadFeatureWorkflowSnapshot({ commit, configPath, readBlob: (sha, path) => repository.readBlob(sha, path, signal) }),
-      ready: (markdown, snapshot, provider) => validateFeatureReadiness(markdown, snapshot.readyCheck, provider ?? options.defaultProvider?.(), snapshot.template, { configuration: snapshot.configuration, workflowPath: snapshot.files.configuration.path }),
+      ready: (markdown, snapshot, provider) => validateFeatureReadiness(markdown, snapshot.readyCheck, provider ?? options.defaultProvider?.(), snapshot.template, { configuration: snapshot.configuration, templates: snapshot.templates, workflowPath: snapshot.files.configuration.path }),
       resolveSelection: options.resolveSelection, prepare: options.prepare,
       readyReview: options.readyReview, readyReviewEligible: (markdown, snapshot, provider) => validateFeatureReviewEligibility(markdown, snapshot, provider ?? options.defaultProvider?.()), readyReviewResponse: readReadyReviewResponse,
-      source: sharedSource, renderSource: renderSharedSource, submit: options.submit, inspect: options.inspect, canAdmit: options.canAdmit, admissionHold: options.admissionHold, admissionIssue: options.admissionIssue, continue: options.continue,
+      source: sharedSource, renderSource: renderSharedSource, submit: options.submit, inspect: options.inspect, canAdmit: options.canAdmit, admissionHold: options.admissionHold, admissionIssue: options.admissionIssue, continue: options.continue, reviewRework: options.reviewRework, sourceHold: options.sourceHold,
     });
     this.authoring = new SharedFeatureAuthoring({
       binding: () => { const binding = this.intake.binding; return binding ? { repositoryId: binding.repositoryId, remote: binding.remote, branch: binding.branch, workflowPath: binding.workflowPath } : null; },
@@ -46,7 +46,7 @@ export class SharedIntakeRuntime {
   }
   private repository(binding: FeatureAuthoringBinding, snapshot?: FeatureWorkflowSnapshot) {
     const assignment = this.resolve(binding.repositoryId), workflow = snapshot?.configuration ?? defaultFeatureWorkflow();
-    const protectedPaths = snapshot ? Object.values(snapshot.files).map(file => file.path).sort() : [];
+    const protectedPaths = snapshot ? featureWorkflowSources(snapshot).map(file => file.path) : [];
     const key = sharedHash(JSON.stringify([assignment.path, binding.remote, binding.branch, workflow.requestsDirectory, workflow.reviewDirectory, featureTaskDirectory(workflow), protectedPaths]));
     let repository = this.adapters.get(key);
     if (!repository) {

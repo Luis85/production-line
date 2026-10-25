@@ -1,0 +1,262 @@
+{
+  "date": "2026-10-25",
+  "boundary": "Synthetic Storybook data; no provider or remote mutation.",
+  "checks": [
+    {
+      "story": "worker-local-delivery--unknown-outcome",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-local-delivery--confirm-stopped-process",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--merge-reviewed-candidate",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--publish-verified-build",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--unknown-build-recovery",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--published-release",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--register-managed-project",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--select-project-template",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--configure-project-release",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-workflow-recovery--held-project-setup",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-workflow-recovery--registration-in-progress",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-workflow-recovery--retry-template-read",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-local-delivery--unknown-outcome",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-local-delivery--confirm-stopped-process",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--merge-reviewed-candidate",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--publish-verified-build",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--unknown-build-recovery",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--published-release",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--register-managed-project",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--select-project-template",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--configure-project-release",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-workflow-recovery--held-project-setup",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-workflow-recovery--registration-in-progress",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-workflow-recovery--retry-template-read",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-local-delivery--unknown-outcome",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-local-delivery--confirm-stopped-process",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--merge-reviewed-candidate",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--publish-verified-build",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--unknown-build-recovery",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--published-release",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--register-managed-project",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--select-project-template",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-end-to-end-delivery--configure-project-release",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-workflow-recovery--held-project-setup",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-workflow-recovery--registration-in-progress",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    },
+    {
+      "story": "worker-workflow-recovery--retry-template-read",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false
+    }
+  ],
+  "screenshots": [
+    "worker-workflow-recovery--held-project-setup-1440.png",
+    "worker-workflow-recovery--retry-template-read-390.png"
+  ]
+}

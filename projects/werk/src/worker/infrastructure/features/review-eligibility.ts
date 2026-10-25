@@ -2,9 +2,9 @@ import { DomainError } from '../../../shared/errors.js';
 import { validateApprovedPaths } from '../../application/approved-paths.js';
 import { featureInputHash, featureWorkflowPath, type FeatureWorkflowSnapshot, type SharedFeatureInput } from '../../application/feature-workflow.js';
 import { parseFeature, featureInput, featureRequestContext } from './document.js';
-import { featureMarkdownSections, validateFeatureTemplate, validateFeatureWorkflowApprovedPaths } from './workflow.js';
+import { featureMarkdownSections, validateFeatureTemplate, validateFeatureWorkflowApprovedPaths, featureTemplateContent } from './workflow.js';
 
-type ReviewWorkflow = Pick<FeatureWorkflowSnapshot, 'configuration' | 'template'> & { files?: Pick<FeatureWorkflowSnapshot['files'], 'configuration'> };
+type ReviewWorkflow = Pick<FeatureWorkflowSnapshot, 'configuration' | 'template'> & Pick<FeatureWorkflowSnapshot, 'templates'> & { files?: Pick<FeatureWorkflowSnapshot['files'], 'configuration'> };
 export interface FeatureReviewEligibility {
   valid: boolean; input?: SharedFeatureInput; inputHash?: string; errors: { code: string; message: string }[];
 }
@@ -17,7 +17,7 @@ export function validateFeatureReviewEligibility(markdown: string, snapshot: Rev
     const parsed = parseFeature(markdown), data = parsed.data;
     if (typeof data.id !== 'string' || !['draft', 'ready'].includes(String(data.status)) || data.mode !== 'patch') invalid('Ready Check requires a stable feature ID, draft or ready status and patch mode.');
     if (['source', 'werk', 'werkOwner', 'werkTask', 'werkPullRequest', 'werkTracking'].some(key => Object.hasOwn(data, key))) invalid('New review requests cannot contain worker-owned lifecycle metadata.');
-    const template = validateFeatureTemplate(snapshot.template);
+    const template = validateFeatureTemplate(featureTemplateContent(snapshot, typeof data.templateId === 'string' ? data.templateId : undefined));
     if (data.templateId !== template.templateId) invalid('Feature request templateId does not match the configured template.');
     const base = featureInput(parsed, provider, { reviewOnly: true }), paths = base.paths ?? [];
     if (paths.length) validateApprovedPaths(paths, 'Approved paths', { folders: true });

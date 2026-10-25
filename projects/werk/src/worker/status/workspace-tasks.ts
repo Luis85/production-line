@@ -36,8 +36,11 @@ export async function task(workspace: WorkspaceContext, input: unknown, referenc
         "agent",
         "useInstructionsOnly",
         "files",
-        "background",
+        "background", "projectId", "priority", "templateId",
       ]);
+      if (body.templateId !== undefined) throw new DomainError('conflict', 'Choose a project with a canonical feature intake before selecting a template.');
+      if (body.priority !== undefined && (!Number.isSafeInteger(body.priority) || Number(body.priority) < 1 || Number(body.priority) > 3)) throw new DomainError('invalid_input', 'Choose priority 1 (high), 2 (medium) or 3 (low).');
+      if (body.projectId !== undefined) workspace.featureProjects.resolve(identifier(body.projectId, 'projectId'));
       if (body.background !== undefined && (typeof body.background !== "boolean" || body.action !== "create" || body.background && body.files === undefined))
         throw new DomainError("invalid_input", "background is a true/false option when creating a task with approved files.");
       if (
@@ -51,7 +54,7 @@ export async function task(workspace: WorkspaceContext, input: unknown, referenc
         );
       if (
         body.action !== "create" &&
-        (body.provider !== undefined || body.model !== undefined || body.effort !== undefined || body.files !== undefined || body.definitionId !== undefined ||
+        (body.priority !== undefined || body.projectId !== undefined || body.provider !== undefined || body.model !== undefined || body.effort !== undefined || body.files !== undefined || body.definitionId !== undefined ||
           body.definitionRef !== undefined ||
           body.agent !== undefined ||
           body.useInstructionsOnly !== undefined)
@@ -145,6 +148,7 @@ export async function task(workspace: WorkspaceContext, input: unknown, referenc
               ...(body.model === undefined ? {} : { model: body.model }),
               ...(body.effort === undefined ? {} : { effort: body.effort }),
               message,
+              ...(body.priority === undefined ? {} : { priority: body.priority }),
               ...(approved ? { files: approved } : {}),
               ...(definition ? { definition } : {}),
             }),
@@ -156,7 +160,7 @@ export async function task(workspace: WorkspaceContext, input: unknown, referenc
           patch: (command, submission) => withRepositoryAdmission(workspace, () => workspace.board.create(command, submission)),
           chat: () => withRepositoryAdmission(workspace, () => workspace.sessions.ensureTask(id, 'chat', title, provider.id, submissionHash, definition, feature, acceptedSelection)),
         }, {
-          input: { title, message, provider: provider.id, model: body.model as string | undefined, effort: body.effort as typeof acceptedSelection.effort | undefined, mode: approved ? 'patch' : 'chat', priority: 1,
+          input: { title, message, provider: provider.id, model: body.model as string | undefined, effort: body.effort as typeof acceptedSelection.effort | undefined, mode: approved ? 'patch' : 'chat', priority: body.priority === undefined ? 1 : 3 - Number(body.priority),
             ...(approved ? { paths: approved.paths } : {}), ...selection, agent: body.agent as string | undefined, useInstructionsOnly: body.useInstructionsOnly as boolean | undefined },
           reference: feature, taskId: id, submissionHash, repository: approved?.repository,
           background: body.background === true,

@@ -1,3 +1,5 @@
+import type { LocalMergeProjection } from './local-merge-markdown.js';
+import type { ReleaseProjection } from './release-markdown.js';
 import type { FeatureIntakeMeasurement, FeatureIntakeMeasurementUpdate } from './feature-intake-measurement.js';
 import type { FeaturePreparation } from './feature-preparation.js';
 import type { ModelSelection } from './model-selection.js';
@@ -5,7 +7,7 @@ import type { ReadyReviewInput, ReadyReviewResult, ReadyReviewAttempt, ReadyRevi
 import type { FeatureWorkflowSnapshot, SharedFeatureInput } from './feature-workflow.js';
 import type { InteractionCommand, InteractionView } from './interactions.js';
 import type { TaskNoteIdentity } from './task-notes.js';
-import type { WorkerRequest } from './request-gates.js';
+import type { GatePolicy, RequestCommand, WorkerRequest } from './request-gates.js';
 import type { SharedFeatureView, SharedIntakeConfig } from './shared-intake-contract.js';
 import { DomainError } from '../../shared/errors.js';
 import type { DevelopmentEvidence, DevelopmentScopeView } from './development.js';
@@ -63,8 +65,16 @@ export interface SharedReadyReviewCheckpoint {
   implementationReady?: true;
   sessionIds: string[];
 }
+export interface SharedReviewReworkReceipt {
+  command: RequestCommand;
+  digest: string;
+  status: 'pending_source' | 'pending_dispatch' | 'dispatched';
+}
 export interface SharedFeatureRecord extends SharedFeatureView, Omit<FeaturePreparation, 'selection'> {
+  executionPolicy?: GatePolicy;
   readyReviewState?: SharedReadyReviewCheckpoint;
+  reviewReworks?: SharedReviewReworkReceipt[];
+  release?: ReleaseProjection; localMerge?: LocalMergeProjection;
   binding: SharedIntakeConfig;
   sourcePath: string;
   sourceMarkdown: string;
@@ -129,6 +139,8 @@ export interface SharedIntakePorts {
   source(blob: SharedBlob): { id?: string; title: string; status: string; dependsOn?: string[]; shared?: SharedFeatureView };
   renderSource(record: SharedFeatureRecord): string;
   submit(record: SharedFeatureRecord): Promise<void>;
+  reviewRework?(record: SharedFeatureRecord, command: RequestCommand): Promise<void>;
+  sourceHold?(record: SharedFeatureRecord, reason: string | null): Promise<void>;
   continue?(record: SharedFeatureRecord, command: InteractionCommand): Promise<unknown>;
   inspect(taskId: string): SharedExecution | undefined;
   canAdmit(): boolean;
@@ -138,6 +150,6 @@ export interface SharedIntakePorts {
   admissionIssue?(input: SharedFeatureInput): string | undefined;
 }
 export function bindingKey(config: SharedIntakeConfig) { return JSON.stringify([config.repositoryId, config.remote, config.branch, config.workflowPath]); }
-export const sharedTerminal = (status: string) => ['ready_for_review', 'failed', 'cancelled'].includes(status);
+export const sharedTerminal = (status: string) => ['ready_for_review', 'done', 'failed', 'cancelled'].includes(status);
 
 export const sharedTaskActive = (record: SharedFeatureRecord) => !!record.task && !record.task.closed && record.task.response?.status !== 'processed';

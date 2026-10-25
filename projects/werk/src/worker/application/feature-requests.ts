@@ -16,6 +16,9 @@ import { featureInputHash, acceptedFeatureHash, featureTaskIdentity, type Featur
 import type { RequestCommand } from './request-gates.js';
 
 export interface FeatureGateProjection {
+  lifecycle?: import('./delivery-contracts.js').DeliveryLifecycle;
+  release?: import('./release-markdown.js').ReleaseProjection;
+  localMerge?: import('./local-merge-markdown.js').LocalMergeProjection;
   publications?: import('./remote-delivery-contracts.js').RemotePublication[];
   delivery?: { runId: string; status: string; phase: string; reason: string; waitingFor: string | null; controls: string[]; checkpoint?: { branch: string; candidateCommit: string } };
   requestId: string; revision: number; inputRevision: number; phase: RequestPhase;
@@ -245,7 +248,7 @@ export class FeatureRequests {
     // Preserve established execution labels; the independently persisted gate projection
     // owns readiness, rework and completion authority without relabeling a known attempt.
     const held = phase && ['readiness', 'needs_rework', 'waiting_input', 'escalated', 'review'].includes(phase);
-    this.change(record, held ? phase === 'readiness' ? 'needs_rework' : phase : current.status, current.error);
+    this.change(record, phase === 'done' && current.request?.lifecycle === 'in_progress' ? 'review' : held ? phase === 'readiness' ? 'needs_rework' : phase : current.status, current.error);
     if (record.sourceIssue && !['done', 'cancelled'].includes(phase ?? '') && !['running', 'cancelled', 'completed'].includes(current.status)) this.change(record, 'waiting_input', record.sourceIssue.reason);
     const questions = current.request?.findings.filter(finding => finding.kind === 'question').map(finding => ({ id: finding.id, message: finding.message, blocking: finding.blocking, active: finding.status === 'open', ...(finding.ruleId ? { criterionId: finding.ruleId } : {}) })) ?? [];
     if (current.interaction?.pending) questions.push({ id: current.interaction.pending.id, message: current.interaction.pending.message, blocking: true, active: true });

@@ -2,7 +2,8 @@ import { prepareNativeProcessFixture } from '../helpers/native-process-fixture.m
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { GitFeatureRepository } from '../../src/worker/dist/worker/infrastructure/features/git-repository.js';
 import { execFileSync } from 'node:child_process';
 import { fixture, provider } from './request-gate-fixtures.mjs';
 import { defaultDeliveryProjectPolicy } from '../../src/worker/dist/worker/application/delivery-policy.js';
@@ -84,4 +85,34 @@ test('policy control rejects coerced action values without mutating an existing 
     assert.deepEqual(f.approvals.view(), before);
     authorizeTaskDelivery(f.workspace, f.task);
   }
+});
+
+test('shared policy approval follows the fresh remote baseline while preserving the registered checkout and pinned grants', async t => {
+  const f = await setup(t), root = dirname(f.repository), remote = join(root, 'policy-remote.git'), checkout = join(root, 'observer');
+  await f.command('approve_delivery_policy', 1);
+  git(root, 'init', '--bare', '--initial-branch=main', remote); git(f.repository, 'remote', 'add', 'origin', remote); git(f.repository, 'push', 'origin', 'main'); git(root, 'clone', '--', remote, checkout);
+  const initialHead = git(checkout, 'rev-parse', 'HEAD');
+  f.workspace.settings.value.repositories.items[0].path = checkout;
+  f.workspace.config.projectDir = checkout;
+  const reader = new GitFeatureRepository({ repository: checkout, remote: 'origin', branch: 'main', requestsDirectory: 'features', reviewDirectory: 'feature-reviews', stateDirectory: join(root, 'policy-reader'), workerId: 'policy-worker' });
+  t.after(() => reader.close());
+  const project = { repository: checkout, sharedRuntime: { intake: { binding: { enabled: true, repositoryId: 'project' } }, selectedBaseline: signal => reader.head(signal) } };
+  Object.defineProperty(f.workspace, 'featureProjects', { value: { forRepository(path) { assert.equal(path, checkout); return project; } } });
+  f.configuration.coordination.maxActiveRequests = 3;
+  await writeFile(join(f.repository, '.werk/delivery-policy.json'), JSON.stringify(f.configuration));
+  git(f.repository, 'add', '.werk/delivery-policy.json'); git(f.repository, 'commit', '-m', 'Remote shared policy update'); git(f.repository, 'push', 'origin', 'main');
+  const remoteHead = git(f.repository, 'rev-parse', 'HEAD');
+  const view = await deliveryPolicyCommand(f.workspace, { action: 'delivery_policy', projectId: 'project' });
+  assert.ok('baseline' in view && 'configurationDigest' in view && 'approvalRevision' in view && 'configuration' in view);
+  assert.equal(view.baseline, remoteHead); assert.equal(view.configuration.coordination.maxActiveRequests, 3); assert.notEqual(view.configurationDigest, f.snapshot.configurationDigest);
+  await deliveryPolicyCommand(f.workspace, { action: 'approve_delivery_policy', repositoryId: 'project', configurationDigest: view.configurationDigest, expectedApprovalRevision: view.approvalRevision });
+  assert.equal(f.approvals.view().approvals.length, 2); authorizeTaskDelivery(f.workspace, f.task);
+  assert.equal(git(checkout, 'rev-parse', 'HEAD'), initialHead); assert.equal(git(checkout, 'status', '--porcelain'), '');
+  f.configuration.coordination.maxActiveRequests = 4;
+  await writeFile(join(f.repository, '.werk/delivery-policy.json'), JSON.stringify(f.configuration));
+  git(f.repository, 'add', '.werk/delivery-policy.json'); git(f.repository, 'commit', '-m', 'Another remote policy update'); git(f.repository, 'push', 'origin', 'main');
+  await assert.rejects(deliveryPolicyCommand(f.workspace, { action: 'approve_delivery_policy', repositoryId: 'project', configurationDigest: view.configurationDigest, expectedApprovalRevision: 3 }), /changed/);
+  assert.equal(f.approvals.view().revision, 3);
+  await f.command('revoke_delivery_policy', 3); assert.throws(() => authorizeTaskDelivery(f.workspace, f.task), /approval/);
+  assert.equal(git(checkout, 'rev-parse', 'HEAD'), initialHead);
 });

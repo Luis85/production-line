@@ -12,7 +12,7 @@ import type { ToolRuntime } from '../application/tool-runtime.js';
 import { providerTransport } from './provider-transport.js';
 import { providerUsage } from './provider-usage.js';
 import type { ProviderUsage } from '../application/run-evidence.js';
-import { access, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, isAbsolute, join } from 'node:path';
@@ -24,11 +24,13 @@ import { ensureDirectory } from './journal/files.js';
 import { providerReady, type ProviderConnection } from '../application/provider-contract.js';
 export { providerIds, providerLabels, providerReady } from '../application/provider-contract.js';
 export type { ProviderId, ProviderConnection } from '../application/provider-contract.js';
-export async function findExecutable(name: string) {
-  for (const directory of (process.env.PATH ?? '').split(delimiter).filter(Boolean)) {
-    const path = join(directory, process.platform === 'win32' ? name + '.exe' : name);
+export async function findExecutable(name: string, search: { path?: string; platform?: NodeJS.Platform } = {}) {
+  const platform = search.platform ?? process.platform;
+  for (const entry of (search.path ?? process.env.PATH ?? '').split(platform === 'win32' ? ';' : delimiter).filter(Boolean)) {
+    const directory = entry.startsWith('\"') && entry.endsWith('\"') ? entry.slice(1, -1) : entry;
+    const path = join(directory, platform === 'win32' ? name + '.exe' : name);
     if (!isAbsolute(path)) continue;
-    try { await access(path, constants.X_OK); return path; } catch { /* Next PATH directory. */ }
+    try { if (!(await stat(path)).isFile()) continue; await access(path, constants.X_OK); return path; } catch { /* Next PATH directory. */ }
   }
   return '';
 }

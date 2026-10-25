@@ -1,7 +1,7 @@
 import { testListeningAddress } from '../helpers/typed-boundaries.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, writeFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { once } from 'node:events';
@@ -87,7 +87,7 @@ test('history and private environment use worker-scoped auth, preserve snapshots
   server=await statusServer(()=>current,'127.0.0.1',0,undefined,workspace);
   const base=`http://127.0.0.1:${testListeningAddress(server).port}`,headers={Authorization:`Bearer ${token}`};
   assert.equal((await fetch(base+'/api/history')).status,401);assert.equal((await fetch(base+'/api/environment',{headers:{Authorization:'Bearer wrong'}})).status,401);
-  const environment=await(await fetch(base+'/api/environment',{headers})).json();assert.equal(environment.stateDirectory,directory);assert.doesNotMatch(JSON.stringify(environment),/secret|hidden|webview-token/);assert.equal(environment.chat.configured,false);
+  const environment=await(await fetch(base+'/api/environment',{headers})).json();assert.equal(environment.stateDirectory,await realpath(directory));assert.doesNotMatch(JSON.stringify(environment),/secret|hidden|webview-token/);assert.equal(environment.chat.configured,false);
   const history=await(await fetch(base+'/api/history',{headers})).json();assert.equal(history.rows.length,1);assert.equal(history.rows[0].outcome,'simulated');assert.equal(history.rows[0].title,'Improve worker navigation');assert.equal(history.rows[0].completePair,true);assert.equal((await restarted.history()).rows[0].taskId,'task-one');assert.equal((await restarted.history()).rows[0].title,'Improve worker navigation');
   const post={method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({message:'Hello'})};
   assert.equal((await fetch(base+'/api/chat',{...post,headers:{...post.headers,Origin:'https://evil.invalid'}})).status,403);

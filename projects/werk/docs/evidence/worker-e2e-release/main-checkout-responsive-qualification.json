@@ -1,0 +1,301 @@
+{
+  "schemaVersion": 1,
+  "kind": "storybook-responsive-qualification",
+  "provenance": {
+    "sourceReport": "werk-main-checkout-evidence/report.json",
+    "sourceReportSha256": "1e2f09cc9395ede1447e3fc4c890c155a7657915899a9a4f09980a4bac7d7feb",
+    "sourceCommit": null,
+    "sourceIdentityNote": "Source reports do not record an exact commit; these captures belong to the implementation worktree qualification, not a release-source attestation.",
+    "data": "Explicit synthetic Storybook project, provider, request and Git state. No live provider, Git mutation, build or release is performed by these stories.",
+    "normalization": "Full DOM text and temporary absolute screenshot paths omitted; observation fields retained. PNG bytes are unmodified."
+  },
+  "summary": {
+    "cases": 33,
+    "ready": 33,
+    "errors": 0,
+    "overflow": 0,
+    "widths": [
+      390,
+      768,
+      1440
+    ]
+  },
+  "retainedScreenshots": [
+    {
+      "file": "worker-main-checkout-workflow--approve-main-checkout-merge-390.png",
+      "sourceReport": "werk-main-checkout-evidence/report.json",
+      "bytes": 103963,
+      "sha256": "b0f2f574fd3f0e718ef37cff7eee82bc14bab50219eebaf449b8abc3cdff987d",
+      "width": 390,
+      "height": 1613,
+      "modified": false
+    }
+  ],
+  "cases": [
+    {
+      "story": "worker-local-delivery--confirm-stopped-process",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-local-delivery--confirm-stopped-process-1440.png"
+    },
+    {
+      "story": "worker-end-to-end-delivery--published-release",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-end-to-end-delivery--published-release-1440.png"
+    },
+    {
+      "story": "worker-end-to-end-delivery--configure-project-release",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-end-to-end-delivery--configure-project-release-1440.png"
+    },
+    {
+      "story": "worker-end-to-end-delivery--plain-git-markdown-handoff",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-end-to-end-delivery--plain-git-markdown-handoff-1440.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--approve-main-checkout-merge",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--approve-main-checkout-merge-1440.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--reconcile-main-checkout-merge",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--reconcile-main-checkout-merge-1440.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--prepare-project-workflow",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--prepare-project-workflow-1440.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--notify-request-progress",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--notify-request-progress-1440.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--first-worker-home",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--first-worker-home-1440.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--reload-uncertain-setup",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--reload-uncertain-setup-1440.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--resume-retained-setup",
+      "width": 1440,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--resume-retained-setup-1440.png"
+    },
+    {
+      "story": "worker-local-delivery--confirm-stopped-process",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-local-delivery--confirm-stopped-process-768.png"
+    },
+    {
+      "story": "worker-end-to-end-delivery--published-release",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-end-to-end-delivery--published-release-768.png"
+    },
+    {
+      "story": "worker-end-to-end-delivery--configure-project-release",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-end-to-end-delivery--configure-project-release-768.png"
+    },
+    {
+      "story": "worker-end-to-end-delivery--plain-git-markdown-handoff",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-end-to-end-delivery--plain-git-markdown-handoff-768.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--approve-main-checkout-merge",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--approve-main-checkout-merge-768.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--reconcile-main-checkout-merge",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--reconcile-main-checkout-merge-768.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--prepare-project-workflow",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--prepare-project-workflow-768.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--notify-request-progress",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--notify-request-progress-768.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--first-worker-home",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--first-worker-home-768.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--reload-uncertain-setup",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--reload-uncertain-setup-768.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--resume-retained-setup",
+      "width": 768,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--resume-retained-setup-768.png"
+    },
+    {
+      "story": "worker-local-delivery--confirm-stopped-process",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-local-delivery--confirm-stopped-process-390.png"
+    },
+    {
+      "story": "worker-end-to-end-delivery--published-release",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-end-to-end-delivery--published-release-390.png"
+    },
+    {
+      "story": "worker-end-to-end-delivery--configure-project-release",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-end-to-end-delivery--configure-project-release-390.png"
+    },
+    {
+      "story": "worker-end-to-end-delivery--plain-git-markdown-handoff",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-end-to-end-delivery--plain-git-markdown-handoff-390.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--approve-main-checkout-merge",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--approve-main-checkout-merge-390.png",
+      "retainedScreenshot": "worker-main-checkout-workflow--approve-main-checkout-merge-390.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--reconcile-main-checkout-merge",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--reconcile-main-checkout-merge-390.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--prepare-project-workflow",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--prepare-project-workflow-390.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--notify-request-progress",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--notify-request-progress-390.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--first-worker-home",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--first-worker-home-390.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--reload-uncertain-setup",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--reload-uncertain-setup-390.png"
+    },
+    {
+      "story": "worker-main-checkout-workflow--resume-retained-setup",
+      "width": 390,
+      "ready": true,
+      "errors": [],
+      "overflow": false,
+      "capture": "worker-main-checkout-workflow--resume-retained-setup-390.png"
+    }
+  ]
+}

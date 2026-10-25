@@ -1,4 +1,6 @@
+import { closeLocalMerges } from './workspace-local-merge.js';
 import type { SerialExecutor } from '../application/serial-executor.js';
+import { closeReleases } from './workspace-release.js';
 import { closePublications } from './workspace-publication.js';
 import { initProcesses, closeProcesses } from './workspace-processes.js';
 import type { WorkspaceContext } from './workspace-context.js';
@@ -50,7 +52,7 @@ export function close(workspace: WorkspaceContext, options: { deferEvidence?: bo
   workspace.repositoryStop.abort();
   // Abort Git preparation before awaiting intake; preserve evidence until remote assignments drain.
   workspace.draining ??= settleCleanup(
-    [() => closeProcesses(workspace), () => workspace.featureProjects.stopIntake(), () => workspace.featureProjects.closeShared(), () => closePublications(workspace), () => workspace.providerAccounts.close(), () => workspace.providerStatuses.close(),
+    [() => closeProcesses(workspace), () => workspace.featureProjects.stopIntake(), () => workspace.featureProjects.closeShared(), () => closePublications(workspace), () => closeReleases(workspace), () => closeLocalMerges(workspace), () => workspace.providerAccounts.close(), () => workspace.providerStatuses.close(),
      () => workspace.repositories.close(), () => workspace.board.close(), () => workspace.reviews.close(), () => workspace.readyReviews.close(), () => workspace.taskRequests],
     () => workspace.sessions.close({ retainEvidence: true }),
   );

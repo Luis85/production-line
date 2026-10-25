@@ -1,3 +1,5 @@
+import { localMergeRetentionReason } from '../../../application/delivery-completion.js';
+import { releasePending } from '../../../application/release-contracts.js';
 import { deliveryEventMeasurement } from '../../../application/delivery-event-measurement.js';
 import type { DeliveryMetricObservation } from '../../../application/delivery-metrics-contracts.js';
 import { deliveryLifecycle, refreshDelivery } from '../../../application/delivery-behavior.js';
@@ -60,6 +62,8 @@ export class RequestStore {
           changed = true;
         }
         if (request.delivery) {
+          for (const operation of request.delivery.localMerge?.operations ?? []) if (operation.status === 'pending') { operation.status = 'unknown'; operation.updatedAt = iso(); operation.detail = 'Worker restarted before the main checkout merge was confirmed. Reconcile its exact saved target.'; changed = true; }
+          for (const operation of request.delivery.release?.operations ?? []) if (operation.status === 'pending') { operation.status = 'unknown'; operation.updatedAt = iso(); operation.detail = 'Worker restarted before this release outcome was recorded. Reconcile before retrying.'; changed = true; }
           for (const publication of request.delivery.publications ?? []) if (publication.status === 'pending') { publication.status = 'unknown'; publication.updatedAt = iso(); publication.detail = 'Worker restarted before the remote publication outcome was recorded. Reconcile it before retrying.'; observations.push({ kind: 'recovery', operationId: publication.operationId, outcome: 'unknown', duplicateActions: null }); changed = true; }
           for (const step of request.delivery.steps) if (step.status === 'running') { step.status = 'outcome_unknown'; step.detail = 'Worker restarted before the operation outcome was recorded.'; observations.push({ kind: 'recovery', operationId: request.delivery.control?.operationId ?? request.delivery.id + ':' + step.id, outcome: 'unknown', duplicateActions: null }); changed = true; }
           if (request.delivery.steps.some(step => step.status === 'outcome_unknown')) { request.delivery.status = 'outcome_unknown'; changed = true; }
@@ -207,6 +211,11 @@ export class RequestStore {
       const rows = this.database()
         .prepare("SELECT id FROM worker_requests WHERE session_id=?")
         .all(sessionId);
+      for (const row of rows) {
+        const request = this.get(String(row.id)), release = request.delivery?.release;
+        const retention = localMergeRetentionReason(request); if (retention) conflict(retention);
+        if (releasePending(release) || release?.merge && !release.published) conflict('Finish or reconcile the retained release before deleting its request history.');
+      }
       for (const row of rows)
         for (const table of [
           "request_generations",

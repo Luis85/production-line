@@ -40,7 +40,7 @@ lifecycle remains future work. See [execution modes](../explanation/modes.md)
 for platform and authority boundaries.
 
 For the portfolio hierarchy and two independent lines, start with
-[Factory setup](projects/werk/docs/how-to/factory.md). This guide covers execution inside an individual
+[Factory setup](factory.md). This guide covers execution inside an individual
 line; Factory does not own or reassign its tasks.
 
 ## Quick start: one orchestrator and three workers

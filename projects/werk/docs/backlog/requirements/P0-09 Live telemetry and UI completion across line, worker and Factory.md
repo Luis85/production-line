@@ -51,3 +51,9 @@ Apply the Definition of Ready and Definition of Done in the source implementatio
 ## 2026-10-12 user-scope update
 
 Factory hierarchy/capabilities, line-specific orchestrator, worker details, separate design guide, readiness and sanitized structured monitoring are now implemented and verified in mock mode. These changes do not satisfy the live provider/cost/quality acceptance gate. See the [current review](../../reports/journey-review.md).
+
+## Standalone workflow reconciliation — 2026-10-25
+
+The [worker intake-to-release feature](Worker%20intake%20to%20published%20release.md) reuses and extends the current standalone worker's execution, verification, publication and evidence machinery. Its primary workflow opens the initial PR after verification and retains the owned PR through rework. That does not change this imported item's original leased line/orchestrator deliverable or establish its live qualification.
+
+Track standalone fixture and native/live evidence in the [acceptance ledger](../../reports/worker-release-workflow-acceptance.md); retain this item's state until its own demonstrable exit is verified.

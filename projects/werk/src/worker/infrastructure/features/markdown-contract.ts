@@ -1,3 +1,7 @@
+import { localMergeCommands } from '../../application/local-merge-contracts.js';
+import { remoteDeliveryBranch } from '../../application/remote-delivery-policy.js';
+import { releaseCommands } from '../../application/release-contracts.js';
+import { releaseTag } from '../../application/release-policy.js';
 import { remotePublicationCommands } from '../../application/remote-delivery-contracts.js';
 import type { FeatureMarkdownCommand } from '../../application/feature-markdown.js';
 import type { FeatureDocument } from './document.js';
@@ -71,6 +75,39 @@ export function markdownCommands(parsed: FeatureDocument): FeatureMarkdownComman
       runId: id(publication.run_id, 'run_id'), requestRevision: Number(publication.request_revision), candidateCommit: publication.candidate_commit };
     if (publication.action === 'reconcile_publication') command.publicationOperationId = id(publication.operation_id, 'operation_id');
     else if (publication.operation_id !== undefined) throw Error('operation_id is only used to identify the saved publication being reconciled.');
+    result.push(command);
+  }
+  if (data.release !== undefined) {
+    const release = fields(data.release, ['command_id', 'action', 'run_id', 'request_revision', 'candidate_commit', 'operation_id', 'tag', 'note']);
+    if (!releaseCommands.includes(release.action as typeof releaseCommands[number])) throw Error('Unknown release action.');
+    if (!Number.isSafeInteger(release.request_revision) || Number(release.request_revision) < 1) throw Error('Release request_revision must be positive.');
+    if (typeof release.candidate_commit !== 'string' || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(release.candidate_commit)) throw Error('Release candidate_commit must identify the complete Git commit.');
+    const command: FeatureMarkdownCommand = { commandId: id(release.command_id, 'command_id'), action: release.action as FeatureMarkdownCommand['action'],
+      runId: id(release.run_id, 'run_id'), requestRevision: Number(release.request_revision), candidateCommit: release.candidate_commit };
+    if (release.action === 'publish_release') command.releaseTag = releaseTag(release.tag);
+    else if (release.tag !== undefined) throw Error('tag is only used for publish_release.');
+    if (release.action === 'reconcile_release' || release.action === 'confirm_release_stopped') command.releaseOperationId = id(release.operation_id, 'operation_id');
+    else if (release.operation_id !== undefined) throw Error('operation_id identifies the release operation being reconciled or inspected.');
+    if (release.note !== undefined) { if (typeof release.note !== 'string' || !release.note.trim() || release.note.length > 4000) throw Error('Release note must be bounded text.'); command.feedback = release.note.trim(); }
+    if (release.action === 'confirm_release_stopped' && !command.feedback) throw Error('Confirm the stopped build with an inspection note.');
+    result.push(command);
+  }
+  if (data.local_merge !== undefined) {
+    const merge = fields(data.local_merge, ['command_id', 'action', 'run_id', 'request_revision', 'candidate_commit', 'main_checkout', 'main_branch', 'main_head', 'operation_id']);
+    if (!localMergeCommands.includes(merge.action as typeof localMergeCommands[number])) throw Error('Unknown local_merge action.');
+    if (!Number.isSafeInteger(merge.request_revision) || Number(merge.request_revision) < 1) throw Error('Local merge request_revision must be a positive revision number.');
+    if (typeof merge.candidate_commit !== 'string' || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(merge.candidate_commit)) throw Error('Local merge candidate_commit must identify the complete Git commit.');
+    const command: FeatureMarkdownCommand = { commandId: id(merge.command_id, 'command_id'), action: merge.action as FeatureMarkdownCommand['action'],
+      runId: id(merge.run_id, 'run_id'), requestRevision: Number(merge.request_revision), candidateCommit: merge.candidate_commit };
+    if (merge.action === 'merge_local_candidate') {
+      if (merge.operation_id !== undefined) throw Error('Local merge operation_id is only used for reconciliation.');
+      if (typeof merge.main_checkout !== 'string' || !/^(?:\/|[A-Za-z]:[\\/]|\\\\)/.test(merge.main_checkout) || merge.main_checkout.length > 4096 || /[\x00-\x1f\x7f]/.test(merge.main_checkout)) throw Error('main_checkout must identify the exact absolute main checkout path.');
+      if (typeof merge.main_head !== 'string' || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(merge.main_head)) throw Error('main_head must identify the complete expected Git commit.');
+      command.mainCheckout = merge.main_checkout; command.mainBranch = remoteDeliveryBranch(merge.main_branch); command.mainHead = merge.main_head;
+    } else {
+      if (['main_checkout', 'main_branch', 'main_head'].some(key => merge[key] !== undefined)) throw Error('Local merge reconciliation uses the saved destination; omit new main checkout fields.');
+      command.localMergeOperationId = id(merge.operation_id, 'operation_id');
+    }
     result.push(command);
   }
   if (data.review !== undefined) {

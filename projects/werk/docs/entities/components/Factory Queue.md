@@ -1,7 +1,7 @@
 ---
 type: Queue
 extends: "[[Queue]]"
-parent: "[[projects/werk/docs/entities/systems/Factory|Factory]]"
+parent: "[Factory](../systems/Factory.md)"
 emits:
 subscribes:
 color:

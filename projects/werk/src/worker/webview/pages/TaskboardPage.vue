@@ -11,6 +11,8 @@ import { buildWorkerCapacityView } from '../worker-capacity';
 import RepositoryDiscovery from '../components/RepositoryDiscovery.vue';
 import OverviewTaskCard from '../components/OverviewTaskCard.vue';
 import { buildTaskOverview, type TaskOverviewInput, type TaskOverviewItem } from '../task-overview';
+import { taskActivityChanges, type TaskNotification } from '../task-notifications';
+import { supportsLocalRequestSetup, hasRequestActivity } from '../worker-mode-view';
 import { readRequestSummaries } from '../request-summary-reader';
 import type { RequestSummary } from '../../application/request-gates';
 import type { RunPage, WorkerRun } from '../../application/run-evidence';
@@ -22,6 +24,8 @@ const search = ref(''), projectId = ref(''), view = ref<'board' | 'list'>('board
 const interactionBusy = ref(false), opening = ref(false), queueBusy = ref(false), stopping = ref(false), actionError = ref('');
 const features = ref<TaskOverviewInput['features']>(null), activeRuns = ref<WorkerRun[]>([]), evidenceError = ref('');
 const requests = ref<RequestSummary[]>([]);
+const notifications = ref<TaskNotification[]>([]);
+let observedItems: TaskOverviewItem[] | null = null;
 let active = true, evidenceRevision = 0, evidencePending = false;
 const allTasks = computed(() => buildTaskOverview({ sessions: state.sessions, board: state.board, history: state.history, features: features.value, requests: requests.value, sharedRequests: state.environment?.sharedIntake?.requests, runs: activeRuns.value }));
 const overview = computed(() => buildTaskOverview({ sessions: state.sessions, board: state.board, history: state.history, features: features.value, requests: requests.value, sharedRequests: state.environment?.sharedIntake?.requests, runs: activeRuns.value }, { search: search.value, projectId: projectId.value }));
@@ -134,13 +138,18 @@ async function newTask() {
   if (matchMedia('(max-width: 1000px)').matches) document.getElementById('task-interaction-title')?.scrollIntoView({ block: 'start' });
 }
 function backToBoard() { const heading = document.getElementById('taskboard-heading'); heading?.focus({ preventScroll: true }); heading?.scrollIntoView({ block: 'start' }); }
+watch(() => allTasks.value.items, items => {
+  if (!state.unlocked) { observedItems = null; notifications.value = []; return; }
+  if (observedItems) notifications.value = [...new Map([...taskActivityChanges(observedItems, items), ...notifications.value].map(item => [item.id, item])).values()].slice(0, 8);
+  observedItems = items;
+});
 watch(() => state.refreshRevision, () => { void readEvidence(); });
 watch(() => [route.fullPath, state.unlocked], () => { void openDeepLink(); });
 watch(() => state.sessions?.selected, id => {
   if (id && active && route.path === '/taskboard' && route.query.session && route.query.session !== id && !opening.value) void router.replace({ path: '/taskboard', query: { session: id } });
 });
 watch(() => state.unlocked, value => {
-  if (!value) { evidenceRevision++; features.value = null; activeRuns.value = []; evidenceError.value = ''; actionError.value = ''; search.value = ''; }
+  if (!value) { observedItems = null; notifications.value = []; evidenceRevision++; features.value = null; activeRuns.value = []; evidenceError.value = ''; actionError.value = ''; search.value = ''; }
 }, { flush: 'sync' });
 onActivated(() => { active = true; void readEvidence(); void openDeepLink(); });
 onDeactivated(() => { active = false; evidenceRevision++; });
@@ -162,6 +171,7 @@ onDeactivated(() => { active = false; evidenceRevision++; });
         <div v-if="selectedSession" class="mobile-task-links"><button type="button" :disabled="selectionBusy" @click="openSession(selectedSession.id)">Continue selected task<UIcon name="i-lucide-arrow-down" /></button><span>{{ selectedSession.title }}</span></div>
       </header>
 
+      <section v-if="state.unlocked && supportsLocalRequestSetup(state.environment, state.status?.state) && !hasRequestActivity(allTasks.items, state.sessions?.records)" class="task-notifications" aria-labelledby="first-request-title"><h2 id="first-request-title">Prepare your first Feature Request</h2><ol><li><RouterLink to="/settings#provider-connections">Set up a provider</RouterLink><span>Confirm its CLI account on this worker.</span></li><li><RouterLink to="/settings#repositories">Add a project</RouterLink><span>Review its workflow files, then commit its setup.</span></li><li><RouterLink to="/settings#delivery-policy">Approve the project delivery policy</RouterLink><span>Then recheck project setup.</span></li></ol><p>Choose New request when intake is enabled. Progress, Git evidence and review decisions stay with the same request. GitHub is optional.</p></section>
       <RepositoryDiscovery />
       <WorkerCapacityPanel :view="capacity" :projects="state.sessions?.capacity?.execution.projects" :remaining="state.sessions?.capacity?.local.remaining" :show-remote="showRemoteCapacity" :consumption-blocked="state.sessions?.capacity?.starts.consumption?.blocked" :refreshing="state.refreshingManually" :refresh-disabled="!state.unlocked" @refresh="refreshFromUser" />
       <ExecutionRecoveryPanel />
@@ -179,6 +189,7 @@ onDeactivated(() => { active = false; evidenceRevision++; });
       <p v-if="actionError" class="board-error" role="alert">{{ actionError }}</p>
       <p v-if="evidenceError" class="board-warning" role="status">{{ evidenceError }}</p>
 
+      <section v-if="notifications.length" class="task-notifications" aria-labelledby="task-notifications-title"><header><h2 id="task-notifications-title">Worker updates</h2><UButton color="neutral" variant="ghost" @click="notifications = []">Dismiss updates</UButton></header><ul aria-live="polite" aria-relevant="additions"><li v-for="item in notifications" :key="item.id"><RouterLink :to="item.href">{{ item.title }}</RouterLink><span>{{ item.message }}</span></li></ul><p>Recorded request changes since this taskboard was opened. Open a request for its full activity and Git evidence.</p></section>
       <div class="taskboard-groups" :class="{ 'list-view': view === 'list' }">
         <section v-for="group in groups" :key="group.id" class="overview-group" :aria-labelledby="'group-' + group.id">
           <header class="overview-group-heading"><h2 :id="'group-' + group.id"><UIcon :name="group.icon" />{{ group.title }}<span class="group-count">{{ group.items.length }}</span></h2></header>
@@ -196,6 +207,7 @@ onDeactivated(() => { active = false; evidenceRevision++; });
   </div>
 </template>
 <style scoped>
+.task-notifications { margin-bottom:var(--space-6);padding:var(--space-4);border:1px solid var(--ui-border);border-radius:8px;min-width:0; }.task-notifications header { display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);flex-wrap:wrap; }.task-notifications h2 { font-size:.875rem; }.task-notifications ul { list-style:none;padding:0; }.task-notifications ol { list-style:decimal;padding-left:var(--space-4);font-size:.8125rem; }.task-notifications ol li { display:list-item;margin-block:var(--space-3); }.task-notifications ol a,.task-notifications ol span { display:flex; }.task-notifications li { display:flex;gap:var(--space-3);flex-wrap:wrap;align-items:baseline;font-size:.8125rem;overflow-wrap:anywhere; }.task-notifications a { color:var(--ui-primary);display:inline-flex;align-items:center;min-height:44px; }.task-notifications span,.task-notifications p { font-size:.75rem;color:var(--ui-text-muted);line-height:1.65; }
 .project-filter { max-width: 190px; min-height: 44px; padding-inline: var(--space-3); background: var(--ui-bg); color: var(--ui-text); border: 1px solid var(--ui-border); border-radius: 6px; font-size: .8125rem; }.additional-running { margin-bottom: var(--space-6); }.additional-running h2 { font-size: 1rem; margin-bottom: var(--space-4); }
 .taskboard-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 30%); min-height: calc(100dvh - 148px); align-items: stretch; }
 .taskboard-workspace > :deep(.task-interaction) { padding: 30px 28px; border-left: 1px solid #30434d; background: #17262f; }

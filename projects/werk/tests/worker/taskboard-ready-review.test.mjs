@@ -7,6 +7,7 @@ import { frontend } from '../ui/helpers/frontend-loader.mjs';
 
 const { buildTaskOverview } = await frontend('src/worker/webview/task-overview.ts');
 const { readRequestSummaries } = await frontend('src/worker/webview/request-summary-reader.ts');
+const { taskActivityChanges } = await frontend('src/worker/webview/task-notifications.ts');
 const source = await readFile(new URL('../../src/worker/webview/pages/TaskboardPage.vue', import.meta.url), 'utf8');
 const script = source.split('<script setup lang="ts">')[1].split('</script>')[0];
 const parsed = ts.createSourceFile('page.ts', script, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
@@ -25,7 +26,7 @@ function fixture(t, sharedRequests = []) {
     return { total: runs.length, rows: runs };
   };
   const bindings = { computed, ref, watch, nextTick, onActivated() {}, onDeactivated() {}, useRoute: () => ({ path: '/taskboard', query: {} }), useRouter: () => ({}), state, request: read,
-    buildTaskOverview, readRequestSummaries, buildWorkerCapacityView: () => ({ state: 'busy', stale: false }), getCapacityFreshness: () => 'fresh' };
+    buildTaskOverview, readRequestSummaries, taskActivityChanges, buildWorkerCapacityView: () => ({ state: 'busy', stale: false }), getCapacityFreshness: () => 'fresh' };
   const scope = effectScope(); t.after(() => scope.stop());
   const result = scope.run(() => new Function(...Object.keys(bindings), javascript + '\nreturn { readEvidence, activeRun, activeRuns, currentExecutionId, currentSession, runProvider, runModel, runElapsed, usage, canStop, running, extraRunning, activePurpose };')(...Object.values(bindings)));
   return { ...result, state, run, runs, calls };

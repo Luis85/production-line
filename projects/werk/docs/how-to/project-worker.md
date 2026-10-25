@@ -1,5 +1,10 @@
 # Install a worker in a project
 
+For a standalone worker with its own dedicated home, start with the
+[archive-to-main-checkout tutorial](../tutorials/worker-home-to-main.md). It starts
+the shipped `worker.mjs` directly and completes project setup through the webview.
+This guide retains the direct-in-project installation path.
+
 Use the prebuilt worker from a verified Werk runtime release. The project does not
 need npm dependencies or a Git checkout. Native operation requires Node 24; Docker
 operation requires Docker Engine/Desktop with Compose. Use one runtime at a time

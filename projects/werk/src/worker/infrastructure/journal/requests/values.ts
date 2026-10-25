@@ -1,3 +1,4 @@
+import { deliveryCompletion } from '../../../application/delivery-completion.js';
 import { validateAuthenticationMode } from '../../../application/provider-capabilities.js';
 import type { ProviderId } from '../../../application/provider-contract.js';
 import { validateModelEffort } from '../../../application/model-effort.js';
@@ -178,6 +179,7 @@ export function summary(request: WorkerRequest): RequestSummary {
     policyDigest,
     phase,
     lifecycle: request.lifecycle,
+    ...(deliveryCompletion(request) ? { completion: deliveryCompletion(request) } : {}),
     ...(request.delivery ? { delivery: { id: request.delivery.id, status: request.delivery.status, phase: request.delivery.phase, decision: clone(request.delivery.decision), allowedControls: [...request.delivery.allowedControls] } } : {}),
     title: request.input.title,
     kind: request.input.kind,

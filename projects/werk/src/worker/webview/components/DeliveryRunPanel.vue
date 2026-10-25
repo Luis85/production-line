@@ -5,6 +5,7 @@ import { deliveryControlNotice, deliveryLifecycleLabels, deliveryPhaseLabels, de
 import { date } from '../store';
 import MessageContent from './MessageContent.vue';
 import DeliveryPlanPanel from './DeliveryPlanPanel.vue';
+import WorkflowTimeline from './WorkflowTimeline.vue';
 import DeliveryProviderPanel from './DeliveryProviderPanel.vue';
 import DeliveryBehaviorInspector from './DeliveryBehaviorInspector.vue';
 import { acceptedDeliveryPolicy } from '../delivery-policy-view';
@@ -19,6 +20,7 @@ const stepStatus = { running: 'Running', completed: 'Completed', failed: 'Failed
 <template>
   <section v-if="run" id="review-progress" class="delivery-run" aria-labelledby="delivery-run-title">
     <header><h2 id="delivery-run-title">Delivery progress</h2><a href="#review-decision">Request controls</a></header>
+    <WorkflowTimeline :subject="request" />
     <dl class="delivery-state">
       <div v-if="request.lifecycle"><dt>Feature Request</dt><dd>{{ deliveryLifecycleLabels[request.lifecycle] }}</dd></div>
       <div><dt>Run status</dt><dd>{{ deliveryStatusLabels[run.status] }}</dd></div>

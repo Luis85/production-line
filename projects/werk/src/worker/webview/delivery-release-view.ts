@@ -1,0 +1,29 @@
+import { deliveryCandidateMatches } from './delivery-candidate-view';
+import { releaseTag } from '../application/release-tag';
+import type { WorkerRequest } from '../application/request-gates';
+import type { ReleaseOperation, ReleaseView } from '../application/release-contracts';
+import type { GateCommandFields } from './request-gate-controller';
+export type ReleaseCommand = 'merge_candidate' | 'build_release' | 'publish_release' | 'reconcile_release' | 'confirm_release_stopped';
+export function releaseTagIssue(tag: string, prefix: string): string {
+  if (!tag.trim()) return '';
+  if (prefix && !tag.trim().startsWith(prefix)) return 'Start the release tag with “' + prefix + '”.';
+  try { releaseTag(tag.trim(), prefix); return ''; } catch { return 'Use a tag of 1–100 letters, numbers, dots, underscores or hyphens. Avoid repeated dots and trailing dots or .lock.'; }
+}
+export const releaseStatusLabels = { pending: 'Operation pending', unknown: 'Outcome unknown · reconcile first', confirmed: 'Confirmed', not_observed: 'Not found', failed: 'Failed' };
+/** Every mutation carries the exact inspected candidate; the worker checks its current authority again. */
+export function releaseCommand(request: WorkerRequest, view: ReleaseView, action: ReleaseCommand, input: { receipt?: ReleaseOperation; tag?: string; note?: string } = {}): GateCommandFields | null {
+  if (!view.authorized || !deliveryCandidateMatches(request, view)) return null;
+  const recovery = action === 'reconcile_release' || action === 'confirm_release_stopped';
+  const receipt = input.receipt;
+  if (recovery && (!receipt || !['pending', 'unknown'].includes(receipt.status) || !view.state.operations.some(operation => operation.operationId === receipt.operationId))) return null;
+  if (action === 'reconcile_release' && !view.canReconcile || action === 'confirm_release_stopped' && (!view.canConfirmStopped || receipt?.action !== 'build' || !input.note?.trim()) || action === 'merge_candidate' && !view.canMerge || action === 'build_release' && !view.canBuild || action === 'publish_release' && (!view.canPublish || !input.tag?.trim() || !!releaseTagIssue(input.tag, view.target?.tagPrefix ?? ''))) return null;
+  const candidate = recovery ? receipt!.candidate : view.candidate!;
+  if (candidate.requestId !== request.id || candidate.runId !== request.delivery?.id) return null;
+  return { action, deliveryRunId: candidate.runId, inputRevision: candidate.inputRevision, candidateCommit: candidate.candidateCommit, candidateDigest: candidate.candidateDigest,
+    ...(recovery ? { releaseOperationId: receipt!.operationId } : {}), ...(action === 'publish_release' ? { releaseTag: input.tag!.trim() } : {}), ...(action === 'confirm_release_stopped' ? { note: input.note!.trim() } : {}) };
+}
+export function releaseLink(view: ReleaseView): string | null {
+  const published = view.state.published;
+  if (!published || !view.target || published.commit !== view.state.merge?.mergeCommit || published.commit !== view.state.build?.commit || !published.assets.length) return null;
+  try { const url = new URL(published.url); return url.protocol === 'https:' && url.hostname === 'github.com' && url.pathname === '/' + view.target.repository + '/releases/tag/' + encodeURIComponent(published.tag) && !url.username && !url.password ? url.href : null; } catch { return null; }
+}

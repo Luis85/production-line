@@ -1,0 +1,79 @@
+import type { Meta, StoryObj } from '@storybook/vue3-vite';
+import { h, nextTick } from 'vue';
+import { userEvent, within } from 'storybook/test';
+import DeliveryReleasePanel from '../src/worker/webview/components/DeliveryReleasePanel.vue';
+import WorkflowTimeline from '../src/worker/webview/components/WorkflowTimeline.vue';
+import ManagedProjectsPanel from '../src/worker/webview/components/ManagedProjectsPanel.vue';
+import FeatureTemplateSelection from '../src/worker/webview/components/FeatureTemplateSelection.vue';
+import DeliveryReleasePolicyFields from '../src/worker/webview/components/DeliveryReleasePolicyFields.vue';
+import { ref } from 'vue';
+import type { ReleasePolicy } from '../src/worker/application/release-policy';
+import type { RemoteDeliveryPolicy } from '../src/worker/application/remote-delivery-policy';
+import DeliveryPublicationPanel from '../src/worker/webview/components/DeliveryPublicationPanel.vue';
+import { installDeliveryFixture } from './worker-delivery-fixtures';
+import { installReleaseFixture, installManagedProjectsFixture } from './worker-release-fixtures';
+const meta = { title: 'Worker/End-to-end delivery', parameters: { layout: 'fullscreen' } } satisfies Meta;
+export default meta;
+type Story = StoryObj;
+let fixture: ReturnType<typeof installReleaseFixture>;
+const storymap = (summary: string, components = ['DeliveryReleasePanel', 'WorkflowTimeline']) => ({ app: 'Worker', summary, covers: components.map(name => 'src/worker/webview/components/' + name + '.vue'), route: '/review?session=file&fileId=file-review', ready: '[data-release-ready]' });
+function render(variant: Parameters<typeof installReleaseFixture>[0]) { return () => ({ setup() { fixture = installReleaseFixture(variant); return () => h('main', { style: 'max-width:1000px;margin:auto;padding:24px;min-width:0' }, [h('p', { class: 'page-note' }, 'Illustrative workflow evidence · no provider, Git operation, build or release is executed.'), h(WorkflowTimeline, { subject: fixture.request }), h(DeliveryReleasePanel, { subject: fixture.request, disabled: false, pending: () => false, onCommand: fixture.command })]); } }); }
+async function ready(canvas: HTMLElement) { await nextTick(); if (document.documentElement.scrollWidth > document.documentElement.clientWidth + 1) throw Error('Release view overflowed.'); canvas.setAttribute('data-release-ready', 'true'); }
+export const MergeReviewedCandidate: Story = { name: 'Merge the exact reviewed candidate', parameters: { storymap: storymap('Human acceptance and current-head merge confirmation are separate. The command retains the inspected candidate identity.') }, render: render('merge'), play: async ({ canvasElement }) => {
+  const q = within(canvasElement), merge = await q.findByRole('button', { name: 'Merge reviewed candidate' }) as HTMLButtonElement;
+  if (!merge.disabled) throw Error('Merge needs explicit current-candidate acknowledgement.');
+  await userEvent.click(q.getByRole('checkbox', { name: 'I reviewed this exact candidate and want to merge its pull request.' })); await userEvent.click(merge);
+  if (fixture.commands[0]?.action !== 'merge_candidate' || fixture.commands[0].candidateCommit !== fixture.review.candidate.candidateCommit || fixture.commands[0].deliveryRunId !== fixture.run.id) throw Error('Merge command lost its current candidate identity.');
+  await ready(canvasElement);
+} };
+export const PublishVerifiedBuild: Story = { name: 'Publish retained checksummed build assets', parameters: { storymap: storymap('The confirmed merge and build remain distinct from publication. A chosen version and explicit publication decision identify the release.') }, render: render('publish'), play: async ({ canvasElement }) => {
+  const q = within(canvasElement), publish = await q.findByRole('button', { name: 'Publish verified release' }) as HTMLButtonElement;
+  if (!publish.disabled) throw Error('Publication needs a version and explicit decision.');
+  await userEvent.type(q.getByLabelText('Release tag'), '1.0.0'); await q.findByText('Start the release tag with “v”.'); if (!publish.disabled) throw Error('Invalid version must block publication.'); await userEvent.clear(q.getByLabelText('Release tag')); await userEvent.type(q.getByLabelText('Release tag'), 'v1.0.0-example'); await userEvent.click(q.getByRole('checkbox', { name: 'Publish this build to example/web as a prerelease.' })); await userEvent.click(publish);
+  if (fixture.commands[0]?.action !== 'publish_release' || fixture.commands[0].releaseTag !== 'v1.0.0-example' || fixture.commands[0].candidateCommit !== fixture.review.candidate.candidateCommit) throw Error('Release command lost version or candidate.');
+  await userEvent.click(q.getByText('Verified build assets · 1')); await q.findByText('application.zip', { exact: true }); await ready(canvasElement);
+} };
+export const UnknownBuildRecovery: Story = { name: 'Reconcile an interrupted build before retrying', parameters: { storymap: storymap('Unknown build outcomes expose reconciliation and an operator-confirmed stop. Neither action silently rebuilds or publishes.') }, render: render('unknown'), play: async ({ canvasElement }) => {
+  const q = within(canvasElement); await userEvent.click(await q.findByRole('button', { name: 'Reconcile saved build' }));
+  if (fixture.commands[0]?.action !== 'reconcile_release' || fixture.commands[0].releaseOperationId !== 'example-build-unknown' || fixture.commands[0].action !== 'reconcile_release') throw Error('Reconciliation lost the original operation.');
+  await userEvent.click(q.getByText('Confirm build processes stopped')); const confirm = q.getByRole('button', { name: 'Record stopped-build confirmation' }) as HTMLButtonElement;
+  if (!confirm.disabled) throw Error('Stop confirmation needs an inspection note and acknowledgement.');
+  await userEvent.type(q.getByLabelText('Inspection note'), 'Inspected the Windows worker and stopped the previous build processes.'); await userEvent.click(q.getByRole('checkbox', { name: 'I inspected the machine and stopped this build’s remaining processes.' })); await userEvent.click(confirm);
+  if (fixture.commands[1]?.action !== 'confirm_release_stopped' || !fixture.commands[1].note) throw Error('Stop observation was not retained.'); await ready(canvasElement);
+} };
+export const PublishedRelease: Story = { name: 'Inspect the confirmed release and its provenance', parameters: { storymap: storymap('All eight workflow stages can complete only from matching persisted receipts. The confirmed release link refers to the configured repository.') }, render: render('published'), play: async ({ canvasElement }) => { const q = within(canvasElement), link = await q.findByRole('link', { name: 'Open confirmed GitHub Release' }); if (link.getAttribute('href') !== 'https://github.com/example/web/releases/tag/v1.0.0-example') throw Error('Incorrect release link.'); const stages = canvasElement.querySelectorAll('.workflow-timeline li'); if (stages.length !== 8 || !stages[7].classList.contains('workflow-complete')) throw Error('Published release milestone missing.'); await ready(canvasElement); } };
+export const RegisterManagedProject: Story = { name: 'Register a Windows worker project', parameters: { storymap: storymap('Worker-owned projects expose clone/adopt choices, prerequisites and setup blockers without treating detected executables as successful account authentication.', ['ManagedProjectsPanel']) }, render: () => ({ setup() { installManagedProjectsFixture(); return () => h('main', { style: 'max-width:1000px;margin:auto;padding:24px;min-width:0' }, [h('p', { class: 'page-note' }, 'Illustrative Windows registration · no repository is cloned.'), h(ManagedProjectsPanel)]); } }), play: async ({ canvasElement }) => { const q = within(canvasElement); await q.findByText('Customer portal'); await userEvent.click(q.getByText('Register a project', { exact: true })); await userEvent.type(q.getByLabelText('Project ID'), 'api'); await userEvent.type(q.getByLabelText('Git repository URL'), 'https://github.com/example/api.git'); const submit = q.getByRole('button', { name: 'Clone and register project' }) as HTMLButtonElement; if (submit.disabled) throw Error('Valid project registration stays disabled.'); await ready(canvasElement); } };
+
+export const SelectProjectTemplate: Story = { name: 'Choose a committed project template', parameters: { storymap: storymap('Template choices come from the selected project’s committed registry. The project default is explicit, and choosing another template retains its ID for preparation.', ['FeatureTemplateSelection']) }, render: () => ({ setup() { installManagedProjectsFixture(); const selected = ref(''), original = (window as unknown as { __WERK_STORY_FETCH__: typeof fetch }).__WERK_STORY_FETCH__; (window as unknown as { __WERK_STORY_FETCH__: typeof fetch }).__WERK_STORY_FETCH__ = async (input, init = {}) => { const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, location.href); if (url.pathname === '/api/features/templates') return Response.json({ projectId: 'web', configured: true, defaultTemplateId: 'feature', workflowDigest: 'illustrative-registry', templates: [{ id: 'feature', label: 'Feature', path: 'features/_templates/feature.md', default: true }, { id: 'bug', label: 'Bug report', path: 'features/_templates/bug.md', default: false }] }); return original(input, init); }; return () => h('main', { style: 'max-width:760px;margin:auto;padding:24px;min-width:0' }, [h('p', { class: 'page-note' }, 'Illustrative committed templates · no request is prepared.'), h(FeatureTemplateSelection, { id: 'example', projectId: 'web', modelValue: selected.value, disabled: false, 'onUpdate:modelValue': (value: string) => { selected.value = value; } })]); } }), play: async ({ canvasElement }) => { const q = within(canvasElement), selector = await q.findByLabelText('Feature Request template') as HTMLSelectElement; await q.findByText('features/_templates/feature.md · committed project template'); if (selector.value !== 'feature') throw Error('Project default template was not selected.'); await userEvent.selectOptions(selector, 'bug'); await q.findByText('features/_templates/bug.md · committed project template'); await ready(canvasElement); } };
+let githubDraft: { remoteDelivery?: RemoteDeliveryPolicy; release?: ReleasePolicy } = {};
+export const ConfigureProjectRelease: Story = {
+  name: 'Opt in to GitHub and retain an unsaved release draft',
+  parameters: { storymap: storymap('GitHub is an explicit opt-in. Disabling it removes remote and release authority together; re-enabling preserves the unsaved destination and build fields.', ['DeliveryReleasePolicyFields']) },
+  render: () => ({ setup() { const draft = ref<typeof githubDraft>({}); githubDraft = {}; return () => h('main', { style: 'max-width:760px;margin:auto;padding:24px;min-width:0' }, [h('p', { class: 'page-note' }, 'Illustrative policy draft · no configuration is saved or approved.'), h(DeliveryReleasePolicyFields, { remoteDelivery: draft.value.remoteDelivery, modelValue: draft.value.release, onChange: (value: typeof githubDraft) => { githubDraft = value; draft.value = value; } })]); } }),
+  play: async ({ canvasElement }) => {
+    const q = within(canvasElement); await userEvent.click(q.getByText('GitHub integration · optional'));
+    const enabled = q.getByRole('checkbox', { name: 'Enable GitHub integration' }) as HTMLInputElement;
+    if (enabled.checked || q.queryByLabelText('GitHub repository · owner/name') || githubDraft.remoteDelivery || githubDraft.release) throw Error('GitHub must start disabled.');
+    await userEvent.click(enabled); const repository = await q.findByLabelText('GitHub repository · owner/name') as HTMLInputElement;
+    if (repository.value) throw Error('A destination must be chosen explicitly.');
+    await userEvent.type(repository, 'example/web'); await userEvent.click(q.getByRole('checkbox', { name: 'Enable build and publish to GitHub Releases' }));
+    await userEvent.type(q.getByLabelText('Build artifacts · exact relative paths, one per line'), 'release/application.zip'); await userEvent.tab();
+    await userEvent.click(enabled); if (githubDraft.remoteDelivery || githubDraft.release) throw Error('Disabling GitHub must remove both policy sections atomically.');
+    await userEvent.click(enabled);
+    if ((q.getByLabelText('GitHub repository · owner/name') as HTMLInputElement).value !== 'example/web' || (q.getByLabelText('Build artifacts · exact relative paths, one per line') as HTMLTextAreaElement).value !== 'release/application.zip') throw Error('Re-enabling lost the unsaved GitHub or release draft.');
+    const releases = q.getByRole('checkbox', { name: 'Enable build and publish to GitHub Releases' }); await userEvent.click(releases); await userEvent.click(releases);
+    if ((q.getByLabelText('Build artifacts · exact relative paths, one per line') as HTMLTextAreaElement).value !== 'release/application.zip') throw Error('Toggling releases lost the build draft.');
+    await ready(canvasElement);
+  }
+};
+export const PlainGitMarkdownHandoff: Story = {
+  name: 'Review a plain Git Markdown pull request',
+  parameters: { storymap: storymap('Plain Git prepares a real retained Markdown review path and readable handoff. GitHub controls and release obligations are absent.', ['DeliveryPublicationPanel', 'DeliveryReleasePanel', 'WorkflowTimeline']) },
+  render: () => ({ setup() { const local = installDeliveryFixture('review'); return () => h('main', { style: 'max-width:1000px;margin:auto;padding:24px;min-width:0' }, [h('p', { class: 'page-note' }, 'Illustrative plain Git review · no provider or Git command runs.'), h(WorkflowTimeline, { subject: local.request }), h(DeliveryPublicationPanel, { subject: local.request, disabled: false, pending: () => false }), h(DeliveryReleasePanel, { subject: local.request, disabled: false, pending: () => false })]); } }),
+  play: async ({ canvasElement }) => {
+    const q = within(canvasElement); await q.findByRole('heading', { name: 'Markdown pull request' }); await q.findByText('feature-reviews/FR-42-review.md');
+    await userEvent.click(q.getByRole('link', { name: 'Open Markdown pull request' })); await q.findByText('Illustrative local review package. No commands ran in this story.');
+    if (canvasElement.querySelectorAll('[data-workflow-stage]').length !== 5 || q.queryByRole('heading', { name: 'Merge, build and publish' }) || q.queryByRole('button', { name: 'Create pull request' })) throw Error('Plain Git must not require GitHub delivery or releases.');
+    await ready(canvasElement);
+  }
+};

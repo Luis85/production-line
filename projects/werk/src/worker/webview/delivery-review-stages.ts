@@ -9,7 +9,7 @@ export function deliveryReviewStages(request: WorkerRequest) {
   const run = request.delivery!;
   const matches = run.inputRevision === request.inputRevision && run.inputHash === request.inputHash && run.policyDigest === request.policyDigest;
   const candidate = run.review?.candidate;
-  const review = matches && run.status === 'completed' && ['in_review', 'done'].includes(request.lifecycle ?? '') && candidate?.requestId === request.id &&
+  const review = matches && run.status === 'completed' && (['in_review', 'done'].includes(request.lifecycle ?? '') || request.lifecycle === 'in_progress' && (!!acceptedDeliveryPolicy(request.input.context)?.configuration.release || acceptedDeliveryPolicy(request.input.context)?.configuration.localMerge === true)) && candidate?.requestId === request.id &&
     candidate.runId === run.id && candidate.inputRevision === request.inputRevision && candidate.inputHash === request.inputHash && candidate.policyDigest === request.policyDigest ? run.review! : null;
   const execution: Stage = { state: 'unknown', detail: 'The delivery outcome is not confirmed for the current accepted input.' };
   const verification: Stage = { state: 'unknown', detail: 'No current candidate verification is confirmed. Retained checks remain historical evidence.' };

@@ -1,0 +1,142 @@
+{
+  "createdAt": "2026-10-25T17:00:37.783Z",
+  "commit": "16ae9add85ea02b1e639a1bbeb2b79e9f79d5cf8",
+  "workingTreeDirty": true,
+  "nodeVersion": "v24.19.0",
+  "platform": "linux-x64",
+  "strykerVersion": "10.0.0",
+  "scope": {
+    "id": "worker-workflow-v2",
+    "reportDirectory": "reports/mutation/workflow",
+    "targets": [
+      "src/worker/application/delivery-acceptance.ts",
+      "src/worker/application/delivery-policy.ts",
+      "src/worker/application/delivery-completion.ts",
+      "src/worker/application/local-merge-contracts.ts",
+      "src/worker/application/local-merge-view.ts",
+      "src/worker/application/local-merge-runtime.ts",
+      "src/worker/application/local-merge-baseline.ts",
+      "src/worker/infrastructure/journal/requests/local-merge.ts",
+      "src/worker/application/release-runtime.ts",
+      "src/worker/application/release-view.ts",
+      "src/worker/application/remote-delivery-runtime.ts",
+      "src/worker/application/remote-delivery-history.ts",
+      "src/worker/application/remote-delivery-rework.ts",
+      "src/worker/application/shared-review-rework.ts",
+      "src/worker/application/shared-feature-policy.ts",
+      "src/worker/application/shared-local-merge-projection.ts",
+      "src/worker/application/shared-release-projection.ts",
+      "src/worker/infrastructure/journal/requests/publication.ts",
+      "src/worker/infrastructure/journal/requests/release.ts"
+    ],
+    "suitePrefix": "workflow-",
+    "testFiles": [
+      "scripts/mutation/suites/workflow-*.test.mjs",
+      "scripts/mutation/suites/delivery-policy.test.mjs",
+      ".mutation-build/tests/*.test.mjs"
+    ],
+    "reusedTests": [
+      "tests/worker/remote-delivery-runtime.test.mjs",
+      "tests/worker/remote-delivery-journal.test.mjs",
+      "tests/worker/release-runtime.test.mjs",
+      "tests/worker/release-journal.test.mjs",
+      "tests/worker/local-merge-journal.test.mjs"
+    ],
+    "reusedFixtures": [
+      "tests/worker/remote-delivery-fixtures.mjs",
+      "tests/worker/release-fixtures.mjs",
+      "tests/worker/request-gate-fixtures.mjs",
+      "tests/worker/fixture-cleanup.mjs"
+    ],
+    "supportFiles": [
+      "scripts/mutation/suites/workflow-fixture.mjs",
+      "scripts/mutation/suites/workflow-local-fixture.mjs",
+      "scripts/mutation/suites/delivery-policy.test.mjs",
+      "tests/helpers/typed-boundaries.mjs"
+    ],
+    "timeoutMs": 720000
+  },
+  "status": "incomplete",
+  "score": null,
+  "counts": {
+    "Killed": 0,
+    "Survived": 0,
+    "NoCoverage": 0,
+    "Timeout": 0,
+    "CompileError": 0,
+    "RuntimeError": 0,
+    "Ignored": 0,
+    "Pending": 0
+  },
+  "execution": {
+    "exitCode": 143,
+    "signal": null,
+    "timedOut": false,
+    "error": "Mutation analysis was cancelled.",
+    "durationMs": 124665
+  },
+  "warnings": [
+    "Mutation analysis was cancelled.",
+    "Stryker did not complete successfully (exit 143).",
+    "No readable Stryker report was produced.",
+    "Measured source does not match recorded provenance for src/worker/application/delivery-acceptance.ts.",
+    "Missing mutant results for src/worker/application/delivery-acceptance.ts.",
+    "Measured source does not match recorded provenance for src/worker/application/delivery-policy.ts.",
+    "Missing mutant results for src/worker/application/delivery-policy.ts.",
+    "Measured source does not match recorded provenance for src/worker/application/delivery-completion.ts.",
+    "Missing mutant results for src/worker/application/delivery-completion.ts.",
+    "Measured source does not match recorded provenance for src/worker/application/local-merge-contracts.ts.",
+    "Missing mutant results for src/worker/application/local-merge-contracts.ts.",
+    "Measured source does not match recorded provenance for src/worker/application/local-merge-view.ts.",
+    "Missing mutant results for src/worker/application/local-merge-view.ts.",
+    "Measured source does not match recorded provenance for src/worker/application/local-merge-runtime.ts.",
+    "Missing mutant results for src/worker/application/local-merge-runtime.ts.",
+    "Measured source does not match recorded provenance for src/worker/application/local-merge-baseline.ts.",
+    "Missing mutant results for src/worker/application/local-merge-baseline.ts.",
+    "Measured source does not match recorded provenance for src/worker/infrastructure/journal/requests/local-merge.ts.",
+    "Missing mutant results for src/worker/infrastructure/journal/requests/local-merge.ts.",
+    "Measured source does not match recorded provenance for src/worker/application/release-runtime.ts.",
+    "Missing mutant results for src/worker/application/release-runtime.ts.",
+    "Measured source does not match recorded provenance for src/worker/application/release-view.ts.",
+    "Missing mutant results for src/worker/application/release-view.ts.",
+    "Measured source does not match recorded provenance for src/worker/application/remote-delivery-runtime.ts.",
+    "Missing mutant results for src/worker/application/remote-delivery-runtime.ts.",
+    "Measured source does not match recorded provenance for src/worker/application/remote-delivery-history.ts.",
+    "Missing mutant results for src/worker/application/remote-delivery-history.ts.",
+    "Measured source does not match recorded provenance for src/worker/application/remote-delivery-rework.ts.",
+    "Missing mutant results for src/worker/application/remote-delivery-rework.ts.",
+    "Measured source does not match recorded provenance for src/worker/application/shared-review-rework.ts.",
+    "Missing mutant results for src/worker/application/shared-review-rework.ts.",
+    "Measured source does not match recorded provenance for src/worker/application/shared-feature-policy.ts.",
+    "Missing mutant results for src/worker/application/shared-feature-policy.ts.",
+    "Measured source does not match recorded provenance for src/worker/application/shared-local-merge-projection.ts.",
+    "Missing mutant results for src/worker/application/shared-local-merge-projection.ts.",
+    "Measured source does not match recorded provenance for src/worker/application/shared-release-projection.ts.",
+    "Missing mutant results for src/worker/application/shared-release-projection.ts.",
+    "Measured source does not match recorded provenance for src/worker/infrastructure/journal/requests/publication.ts.",
+    "Missing mutant results for src/worker/infrastructure/journal/requests/publication.ts.",
+    "Measured source does not match recorded provenance for src/worker/infrastructure/journal/requests/release.ts.",
+    "Missing mutant results for src/worker/infrastructure/journal/requests/release.ts.",
+    "No recorded baseline is available for comparison."
+  ],
+  "reason": "Operator-coordinated cancellation: actual downloaded-worker acceptance found generated review artifacts in the main checkout; backend packaging placement required a fix before a valid final measurement. The dirty-checkout guard was preserved.",
+  "finalScoreAvailable": false,
+  "instrumentedMutantsFromLog": 2955,
+  "partialCountsAreNotFinalEvidence": true,
+  "inputDigests": {
+    "sources": "d8aed02477e958c8e6c09c6d48a17c898b2876b069c6fed0539ac0132315ffd4",
+    "compiledSources": "56137b58e7325a36ea5a67bddb115cff20eba648bcfe8648681b6f00e66ed7ee",
+    "tests": "a9d5d494390d0156ede6cc34a3af5c1b6dae81a6b6f69729ec668f11c97f3aed",
+    "configuration": "1b8647f52471c0c4349324318fbf2db28a15c1c06e5ec258aa5bfe2fc870134e"
+  },
+  "artifacts": {
+    "summary.json": {
+      "bytes": 65283,
+      "sha256": "2eca7ce9b7d36a0435c44973149c961725c2075dc45252ff3e436f3e5c6f1e5e"
+    },
+    "run.log": {
+      "bytes": 1793,
+      "sha256": "fc76cd6490941e7e47c8b6df2d827bf68e4de5dca7a4f3c5de38feef1d06ff0d"
+    }
+  }
+}

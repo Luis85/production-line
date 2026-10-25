@@ -480,7 +480,10 @@ not mean a Git-hosting pull request has been created or merged.
 **Open conversation** returns to the same request to answer or resume a checkpoint.
 Use a new Feature Request for unrelated work. Canonical local requirement changes
 reassess the same request; terminal work needs **Reopen request**. Shared-owned
-scope continues to require its upstream successor workflow. Request-text rework
+scope changes continue to require its upstream successor workflow. Candidate-bound
+**Request changes** can continue shared review within its accepted scope: the worker
+confirms feedback on the shared branch before starting rework on the same request
+and PR. Request-text rework
 proposes revised instructions and consumes model allowance; implementation repair
 is a separate bounded delivery step with fresh verification. Other-worker
 ownership or inconsistent request identity keeps decisions unavailable.

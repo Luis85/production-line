@@ -1,4 +1,5 @@
 import { validateDeliveryCheckPacks, validateDeliveryCheckPackReferences, selectedDeliveryCheckPacks, type DeliveryCheckPack } from './delivery-check-packs.js';
+import { validateReleasePolicy, type ReleasePolicy } from './release-policy.js';
 import { validateDeliveryRetention, type DeliveryRetentionPolicy } from './delivery-retention.js';
 import { validateDeliveryReadinessPolicy, type DeliveryReadinessPolicy } from './delivery-readiness.js';
 import { validateDeliveryCriterionExceptionPolicy, type DeliveryCriterionExceptionPolicy } from './delivery-criterion-decisions.js';
@@ -19,8 +20,9 @@ export interface DeliveryQualityProfile {
 }
 export interface DeliveryProjectPolicy {
   schemaVersion: 1; version: number; defaultProfile: string;
+  startPromptDirectory?: string; localMerge?: boolean;
   reviewDirectory: string; profiles: DeliveryQualityProfile[]; checkPacks?: DeliveryCheckPack[];
-  execution?: DeliveryExecutionPolicy; remoteDelivery?: RemoteDeliveryPolicy;
+  execution?: DeliveryExecutionPolicy; remoteDelivery?: RemoteDeliveryPolicy; release?: ReleasePolicy;
   coordination?: DeliveryCoordinationPolicy; behaviors?: DeliveryBehaviorLibrary; retention?: DeliveryRetentionPolicy;
 }
 export interface DeliveryPolicySnapshot {
@@ -47,7 +49,7 @@ export function defaultDeliveryProjectPolicy(): DeliveryProjectPolicy {
   ] };
 }
 export function validateDeliveryProjectPolicy(value: unknown): DeliveryProjectPolicy {
-  const raw = object(value, 'Delivery project policy', ['schemaVersion', 'version', 'defaultProfile', 'reviewDirectory', 'profiles', 'execution', 'remoteDelivery', 'coordination', 'behaviors', 'retention', 'checkPacks']);
+  const raw = object(value, 'Delivery project policy', ['schemaVersion', 'version', 'defaultProfile', 'reviewDirectory', 'profiles', 'execution', 'remoteDelivery', 'coordination', 'behaviors', 'retention', 'startPromptDirectory', 'checkPacks', 'release', 'localMerge']);
   if (raw.schemaVersion !== 1 || !Number.isSafeInteger(raw.version) || Number(raw.version) < 1 || !Array.isArray(raw.profiles) || raw.profiles.length < 2 || raw.profiles.length > 16) invalid('Delivery policy requires schemaVersion 1, a positive version and 2–16 named profiles.');
   const profiles = raw.profiles.map(item => {
     const profile = object(item, 'Quality profile', ['id', 'minimumCriteria', 'minimumMessageLength', 'maxRepairAttempts', 'verificationInputs', 'readiness', 'exceptions', 'checkPacks']);
@@ -64,17 +66,26 @@ export function validateDeliveryProjectPolicy(value: unknown): DeliveryProjectPo
   if (typeof raw.defaultProfile !== 'string' || !profiles.some(profile => profile.id === raw.defaultProfile)) invalid('The default quality profile must be configured.');
   const reviewDirectory = featureWorkflowPath(raw.reviewDirectory, 'Review directory');
   if (reviewDirectory.toLowerCase().split('/').includes('.werk')) invalid('Review notes must be outside private worker state.');
+  const startPromptDirectory = raw.startPromptDirectory === undefined ? undefined : featureWorkflowPath(raw.startPromptDirectory, 'Start prompt directory');
+  if (startPromptDirectory && ['sessions', 'releases', 'reviews', 'delivery-evidence', 'projects', 'p', 'managed-projects'].includes(startPromptDirectory.split('/')[0]!.toLowerCase())) invalid('Start prompt ledger must use its own private worker folder.');
   const checkPacks = raw.checkPacks === undefined ? undefined : validateDeliveryCheckPacks(raw.checkPacks);
   for (const profile of profiles) selectedDeliveryCheckPacks({ checkPacks }, profile);
   const execution = raw.execution === undefined ? undefined : validateDeliveryExecutionPolicy(raw.execution);
+  if (raw.localMerge !== undefined && typeof raw.localMerge !== 'boolean') invalid('Local main-checkout merge requires an explicit boolean choice.');
+  const remoteDelivery = raw.remoteDelivery === undefined ? undefined : validateRemoteDeliveryPolicy(raw.remoteDelivery);
+  const release = raw.release === undefined ? undefined : validateReleasePolicy(raw.release);
+  if (release && (!remoteDelivery || release.repository.toLowerCase() !== remoteDelivery.repository.toLowerCase() || release.base !== remoteDelivery.base || !remoteDelivery.push || !remoteDelivery.pullRequest)) invalid('Release requires PR publication to the same approved repository and base.');
   // Cross-section references belong to the complete project policy, shared by draft, approval and admission.
   const qualityProfiles = new Set(profiles.map(profile => profile.id));
   for (const rule of execution?.routing ?? []) for (const id of rule.qualityProfiles ?? [])
     if (!qualityProfiles.has(id)) invalid(`Execution routing rule ${rule.id} references unknown quality profile ${id}.`);
   return { schemaVersion: 1, version: Number(raw.version), defaultProfile: raw.defaultProfile, reviewDirectory, profiles,
+    ...(startPromptDirectory === undefined ? {} : { startPromptDirectory }),
     ...(checkPacks === undefined ? {} : { checkPacks }),
     ...(execution === undefined ? {} : { execution }),
-    ...(raw.remoteDelivery === undefined ? {} : { remoteDelivery: validateRemoteDeliveryPolicy(raw.remoteDelivery) }),
+    ...(remoteDelivery === undefined ? {} : { remoteDelivery }),
+    ...(release === undefined ? {} : { release }),
+    ...(raw.localMerge === undefined ? {} : { localMerge: raw.localMerge as boolean }),
     ...(raw.coordination === undefined ? {} : { coordination: validateDeliveryCoordinationPolicy(raw.coordination) }),
     ...(raw.retention === undefined ? {} : { retention: validateDeliveryRetention(raw.retention) }),
     ...(raw.behaviors === undefined ? {} : { behaviors: validateDeliveryBehaviorLibrary(raw.behaviors) }),

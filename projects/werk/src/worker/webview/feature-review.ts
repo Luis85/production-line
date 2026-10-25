@@ -6,6 +6,7 @@ import { sharedReadyReviewView } from './shared-ready-review-view';
 import { candidateEvidenceView } from './candidate-evidence';
 import { deliveryNextStep } from './delivery-view';
 import { deliveryReviewStages } from './delivery-review-stages';
+import { currentWorkflowAcceptance, workflowReleaseNextStep, workflowLocalMergeNextStep } from './workflow-timeline';
 
 export interface FeatureReviewInput {
   session?: SessionView['records'][number] | null;
@@ -78,7 +79,7 @@ export function buildFeatureReviewView(input: FeatureReviewInput) {
   const acceptanceRules = done?.rules.filter(rule => rule.result !== 'pass') ?? [];
   const acceptanceOnly = acceptanceRules.length > 0 && acceptanceRules.every(rule => rule.fact === 'operator.accepted') &&
     openFindings.filter(finding => finding.blocking).every(finding => finding.source === 'deterministic' && finding.evaluationId === done?.id && acceptanceRules.some(rule => rule.ruleId === finding.ruleId));
-  const attested = (!request?.delivery || !!deliveryView?.review && request.lifecycle === 'done') && !!request?.attestation && request.attestation.inputHash === request.inputHash && !!request.execution?.outputDigest && request.attestation.outputDigest === request.execution.outputDigest;
+  const attested = (!request?.delivery || currentWorkflowAcceptance(request)) && !!request?.attestation && request.attestation.inputHash === request.inputHash && !!request.execution?.outputDigest && request.attestation.outputDigest === request.execution.outputDigest;
   const activeReview = request?.reviews.some(review => ['queued', 'running'].includes(review.status)) ?? false;
   const status = interaction?.phase && interaction.phase !== 'idle' ? interaction.phase : task?.status ?? session?.status ?? request?.phase ?? shared?.status ?? 'unknown';
   const activeExecution = ['queued', 'running'].includes(status) || !!request?.execution && ['prepared', 'running'].includes(request.execution.status);
@@ -124,6 +125,7 @@ export function buildFeatureReviewView(input: FeatureReviewInput) {
   const deliveryStep = request?.delivery ? deliveryNextStep(request.delivery) ?? (deliveryView?.review
     ? next('operator', request.lifecycle === 'done' ? 'Inspect the accepted candidate' : 'Review the current delivery candidate', 'Inspect this run’s candidate, required checks and human criteria. Acceptance does not publish or merge changes.', request.lifecycle === 'done' ? 'inspect_history' : 'attest', request.lifecycle === 'done' ? 'Inspect delivery evidence' : 'Review acceptance requirement')
     : next('operator', 'Inspect the current delivery evidence', 'This run has no matching current review package. Earlier patches and completed interactions cannot establish its handoff.', 'inspect_history', 'Inspect delivery evidence')) : null;
+  const releaseStep = request?.delivery ? workflowLocalMergeNextStep(request) ?? workflowReleaseNextStep(request) : null;
   let nextStep: FeatureReviewNextStep;
   if (stale) nextStep = next('operator', 'Refresh the request evidence', conflict ? 'These snapshots identify different requests or executions. Refresh before making a decision.' : input.freshness?.error || 'Current request evidence is unavailable or may be stale. Retained results do not authorize an action.', 'refresh', 'Refresh evidence');
   else if (otherOwner) nextStep = next('owning_worker', 'Follow the owning worker', 'This worker can inspect the shared record. Continue through its Task note or the owning worker.', shared?.taskNote || shared?.reviewNote ? 'review_shared' : 'open_source', 'Read shared notes');
@@ -133,6 +135,7 @@ export function buildFeatureReviewView(input: FeatureReviewInput) {
   else if (continuationBlocked) nextStep = next('operator', 'Inspect the retained evidence', continuationBlocked + ' Use a new Feature Request if the accepted execution cannot be recovered.', 'inspect_history', 'Inspect execution evidence');
   else if (responsePending) nextStep = next('worker', response?.status === 'publication_pending' ? 'Confirm the saved response publication' : 'Wait for the worker to continue', response?.status === 'publication_pending' ? 'The answer is retained while Git publication is confirmed. Do not submit another answer.' : 'The answer is saved in the shared Task note. Continuation waits for capacity and limits.');
   else if (pending) nextStep = next('operator', pending.kind === 'escalation' ? 'Give the worker a decision' : 'Answer the worker’s question', pending.message, 'answer', 'Answer and continue');
+  else if (releaseStep) nextStep = releaseStep;
   else if (deliveryStep) nextStep = deliveryStep;
   else if (activeExecution || activeReview) nextStep = next('worker', activeReview ? 'Wait for the recorded review' : 'Wait for the current invocation', activeReview ? 'A model review or rework is queued or running. Its suggestions are not operator acceptance.' : 'The worker will record its outcome and checks. No completion time is estimated.');
   else if (unclaimed) nextStep = next(shared?.ready?.passed === false ? 'operator' : 'worker', shared?.ready?.passed === false ? 'Resolve readiness findings' : 'Wait for shared intake', shared?.error || shared?.ready?.issues.join(' ') || 'The committed request has not been claimed. Intake will recheck eligibility; local saves alone do not dispatch work.', 'open_source', 'Read the Feature Request');

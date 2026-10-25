@@ -1,3 +1,4 @@
+import { sharedFeaturePolicy } from './shared-feature-policy.js';
 import { sharedFeatureRequestReference } from './feature-request-reference.js';
 import { createHash } from 'node:crypto';
 import { posix } from 'node:path';
@@ -10,7 +11,9 @@ export const sharedHash = (text: string) => createHash('sha256').update(text).di
 export const sharedFeaturePublicationDigest = (record: Pick<SharedFeatureRecord, 'binding' | 'id' | 'sourceCommit'>, outputDigest: string) => sharedHash(JSON.stringify([bindingKey(record.binding), record.id, record.sourceCommit, outputDigest]));
 export function doneEvidence(record: SharedFeatureRecord, execution: SharedExecution): GateEvaluation | undefined {
   const request = execution.request, result = request?.execution;
-  if (!request || !['done', 'review'].includes(request.phase) || request.policyDigest !== record.workflow.policyDigest || !result || result.status !== 'completed' || result.result?.type !== 'completed' || result.inputRevision !== request.inputRevision || !result.outputDigest || execution.currentTurnId !== result.turnId || execution.runId !== result.runId || !execution.patch) return;
+  let policyDigest: string;
+  try { policyDigest = sharedFeaturePolicy(record).digest; } catch { return; }
+  if (!request || !['done', 'review'].includes(request.phase) || request.policyDigest !== policyDigest || !result || result.status !== 'completed' || result.result?.type !== 'completed' || result.inputRevision !== request.inputRevision || !result.outputDigest || execution.currentTurnId !== result.turnId || execution.runId !== result.runId || !execution.patch) return;
   if (execution.implementation) {
     const evidence = projectDevelopmentEvidence(execution.implementation, execution.developmentEvidence);
     if (execution.developmentVerified !== true || !evidence.verified || evidence.baseCommit !== record.sourceCommit || result.facts['output.verificationPassed'] !== true || result.facts['output.candidateDigest'] !== evidence.candidateDigest) return;
@@ -28,7 +31,7 @@ const cell = (value: unknown) => String(value ?? 'Unknown').replaceAll('|', '\\|
 export function renderSharedReview(record: SharedFeatureRecord, execution: SharedExecution, evaluation: GateEvaluation): string {
   const config = record.workflow.configuration;
   const relative = posix.relative(config.reviewDirectory, record.sourcePath).replace(/\.md$/, '');
-  const metadata = { schemaVersion: 1, type: 'PullRequest', featureId: record.id, featureRequestKey: sharedFeatureRequestReference(record).key, title: record.title, status: 'ready_for_review', owner: record.owner, feature: `[[${relative}]]`, featureBranch: record.featureBranch, featureCommit: record.featureCommit, sourceCommit: record.sourceCommit, workflowCommit: record.workflow.commit, policyDigest: record.workflow.policyDigest, outputDigest: record.outputDigest, createdAt: record.updatedAt, ...(record.workflow.files.readyPrompt ? { readyPrompt: record.workflow.files.readyPrompt } : {}), ...(record.workflow.files.donePrompt ? { donePrompt: record.workflow.files.donePrompt } : {}) };
+  const metadata = { schemaVersion: 1, type: 'PullRequest', featureId: record.id, featureRequestKey: sharedFeatureRequestReference(record).key, title: record.title, status: 'ready_for_review', owner: record.owner, feature: `[[${relative}]]`, featureBranch: record.featureBranch, featureCommit: record.featureCommit, sourceCommit: record.sourceCommit, workflowCommit: record.workflow.commit, policyDigest: sharedFeaturePolicy(record).digest, ...(record.deliveryPolicy ? { workflowPolicyDigest: record.workflow.policyDigest } : {}), outputDigest: record.outputDigest, createdAt: record.updatedAt, ...(record.workflow.files.readyPrompt ? { readyPrompt: record.workflow.files.readyPrompt } : {}), ...(record.workflow.files.donePrompt ? { donePrompt: record.workflow.files.donePrompt } : {}) };
   const guidance = definitionPromptGuidance(record);
   const development = execution.implementation ? renderDevelopmentEvidence(projectDevelopmentEvidence(execution.implementation, execution.developmentEvidence)) + '\n' : '';
   const rules = evaluation.rules.map(rule => `| ${cell(rule.ruleId)} | ${cell(rule.fact)} | ${cell(rule.expected)} | ${cell(rule.observed)} | ${rule.result} |`).join('\n');

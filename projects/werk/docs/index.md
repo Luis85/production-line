@@ -5,7 +5,10 @@ team, system operator or frontend contributor. The
 [public documentation](https://luis85.github.io/production-line/handbook/) presents
 these maintained guides alongside the release’s component API and live examples.
 
-Start a project worker with [CLI setup](how-to/project-worker.md), then
+Start from [a release archive in a dedicated worker home](tutorials/worker-home-to-main.md),
+create the Feature Request in its webview and follow it through review and an
+explicit merge into the displayed main checkout. Direct project installation is
+also available through [CLI setup](how-to/project-worker.md). For a team queue,
 [connect the shared Markdown queue](how-to/shared-feature-intake.md). Team members
 can author requests and answer Task notes without connecting to the worker.
 Configured local providers execute approved work; the Factory/orchestrator's
@@ -16,6 +19,8 @@ reference pages define exact contracts, and explanations cover design and limits
 This organization follows [Diátaxis](https://diataxis.fr/).
 
 ## Tutorials — learn by running one task
+
+- [Archive to main checkout](tutorials/worker-home-to-main.md): dedicated worker home, webview request/setup, observable implementation, increment review and explicit plain-Git merge permission.
 
 - [Local delivery request](tutorials/worker-feature-lifecycle.md): submit Markdown, inspect isolated implementation and accept an exact tested candidate without shared Git publication.
 - [Local worker run metrics](reference/worker-run-metrics.md): paired snapshots, usage coverage, durable history and paginated export.
@@ -31,6 +36,8 @@ This organization follows [Diátaxis](https://diataxis.fr/).
   Docker/Compose and Bash or PowerShell, without host Node/npm.
 
 ## How-to guides — accomplish a specific goal
+
+- [Optionally deliver through GitHub Releases](how-to/deliver-worker-release.md): default Git/Markdown handoff and an explicitly enabled GitHub PR/release extension.
 
 - [Assemble independent workers, orchestrators and Factories](how-to/assemble-independent-components.md)
 - [Install a project worker](how-to/project-worker.md): app, private environment, provider and team authoring kit.
@@ -69,6 +76,8 @@ This organization follows [Diátaxis](https://diataxis.fr/).
 - [Use Docker Agent harnesses and MCP](how-to/docker-agent.md)
 
 ## Reference — look up a contract
+
+- [Worker delivery and optional GitHub Releases](reference/worker-release-workflow.md): lifecycle contracts, exact identities, project release policy and durable recovery.
 
 - [Project delivery policy](reference/delivery-policy.md): quality and execution profiles, routing, check packs, concurrency, behavior libraries and retention.
 

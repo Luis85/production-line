@@ -4,7 +4,7 @@ import { inputGateFacts, evaluateGate, gateDigest } from '../../application/requ
 import {
   featureWorkflowConfigPath, validateFeatureWorkflow, validateFeatureCheck, featureWorkflowPolicy, validateFeatureReadyReview, validateFeatureDefinitionPrompts,
   defaultFeatureCheck, featureGateInput, featureContentHash, featureInputHash, featureWorkflowPath, featureTaskDirectory,
-  type FeatureCheck, type FeatureReadiness, type FeatureWorkflowSnapshot, type SharedFeatureInput, type FeatureWorkflowConfiguration,
+  type FeatureCheck, type FeatureReadiness, type FeatureTemplateSnapshot, type FeatureWorkflowSnapshot, type SharedFeatureInput, type FeatureWorkflowConfiguration,
 } from '../../application/feature-workflow.js';
 import { parseFeature, featureInput, featureRequestContext } from './document.js';
 
@@ -59,7 +59,7 @@ export function validateFeatureTemplate(markdown: string, allowLegacyProgressMet
   if (data.status !== 'draft' || data.mode !== 'patch' || data.source !== undefined || data.werk !== undefined) invalid('Shared feature templates require draft patch mode without worker-owned metadata.');
   if (typeof data.templateId !== 'string' || !/^[a-z0-9][a-z0-9-]{0,79}$/.test(data.templateId)) invalid('Feature templates require a stable templateId.');
   featureRequestSections(parsed.body);
-  const optional = ['schemaVersion', 'id', 'title', 'status', 'mode', 'paths', 'provider', 'model', 'effort', 'execution_profile', 'priority', 'definitionId', 'definitionRef', 'agent', 'useInstructionsOnly', 'templateId'];
+  const optional = ['schemaVersion', 'id', 'title', 'status', 'mode', 'paths', 'provider', 'model', 'effort', 'execution_profile', 'priority', 'priority_scale', 'definitionId', 'definitionRef', 'agent', 'useInstructionsOnly', 'templateId'];
   return { templateId: data.templateId, headings: [...featureMarkdownSections(parsed.body).keys()], fields: Object.keys(data).filter(key => !optional.includes(key)) };
 }
 function meaningful(value: unknown): boolean {
@@ -69,9 +69,9 @@ function meaningful(value: unknown): boolean {
   if (Array.isArray(value)) return value.length > 0 && value.every(meaningful);
   return false;
 }
-export interface FeatureReadinessScope { configuration: FeatureWorkflowConfiguration; workflowPath?: string; /** Private recovery only: old accepted metadata predates generated progress links. */ allowLegacyProgressMetadata?: boolean; }
+export interface FeatureReadinessScope { configuration: FeatureWorkflowConfiguration; templates?: FeatureTemplateSnapshot[]; workflowPath?: string; /** Private recovery only: old accepted metadata predates generated progress links. */ allowLegacyProgressMetadata?: boolean; }
 export function validateFeatureWorkflowApprovedPaths(paths: string[], configuration: FeatureWorkflowConfiguration, workflowPath = featureWorkflowConfigPath): void {
-  const config = validateFeatureWorkflow(configuration), protectedFiles = [config.template, config.base, config.readyCheck, config.doneCheck, config.readyPrompt, config.donePrompt, config.readyReviewPrompt, featureWorkflowPath(workflowPath)].filter((path): path is string => path !== undefined);
+  const config = validateFeatureWorkflow(configuration), protectedFiles = [...(config.templates?.map(item => item.path) ?? []), config.template, config.base, config.readyCheck, config.doneCheck, config.readyPrompt, config.donePrompt, config.readyReviewPrompt, featureWorkflowPath(workflowPath)].filter((path): path is string => path !== undefined);
   const inside = (path: string, root: string) => path === root || path.startsWith(root + '/');
   // A folder approval (ending in /) is refused when it contains, or lies within, protected workflow storage.
   const touches = (path: string, protectedPath: string) => path.endsWith('/') ? inside(protectedPath, path.slice(0, -1)) || inside(path.slice(0, -1), protectedPath) : inside(path, protectedPath);
@@ -95,7 +95,9 @@ export function validateFeatureReadiness(markdown: string, readyCheck: FeatureCh
     if (new Set(base.paths.map(path => path.toLowerCase())).size !== base.paths.length) invalid('Approved paths must be distinct, including on case-insensitive filesystems.');
     const sections = featureRequestSections(parsed.body);
     if (template !== undefined) {
-      const contract = validateFeatureTemplate(template, scope?.allowLegacyProgressMetadata), allSections = featureMarkdownSections(parsed.body);
+      const selected = scope?.templates?.find(item => item.id === parsed.data.templateId)?.content ?? template;
+      if (scope?.templates && !scope.templates.some(item => item.id === parsed.data.templateId)) invalid('Feature request templateId is not configured for this project.');
+      const contract = validateFeatureTemplate(selected, scope?.allowLegacyProgressMetadata), allSections = featureMarkdownSections(parsed.body);
       if (parsed.data.templateId !== contract.templateId) invalid('Feature request templateId does not match the configured template.');
       for (const heading of contract.headings) if (!allSections.has(heading) || !meaningful(allSections.get(heading)!.join('\n'))) invalid(`Fill in the template's ${heading} section.`);
       for (const field of contract.fields) if (!meaningful(parsed.data[field])) invalid(`Fill in the template's ${field} frontmatter field.`);
@@ -128,7 +130,7 @@ export async function loadFeatureWorkflowSnapshot(options: { commit: string; rea
   }
   function json(content: string, label: string): unknown { try { return JSON.parse(content); } catch { return invalid(`${label} must contain valid JSON.`); } }
   const configurationFile = await read(configPath, 16384), configuration = validateFeatureWorkflow(json(configurationFile.content, 'Feature workflow'));
-  if ([configuration.template, configuration.base, configuration.readyCheck, configuration.doneCheck, configuration.readyPrompt, configuration.donePrompt, configuration.readyReviewPrompt].some(path => path?.toLowerCase() === configPath.toLowerCase())) invalid('Workflow configuration cannot also be a template, Base, check or definition prompt file.');
+  if ([...(configuration.templates?.map(item => item.path) ?? []), configuration.template, configuration.base, configuration.readyCheck, configuration.doneCheck, configuration.readyPrompt, configuration.donePrompt, configuration.readyReviewPrompt].some(path => path?.toLowerCase() === configPath.toLowerCase())) invalid('Workflow configuration cannot also be a template, Base, check or definition prompt file.');
   const configLower = configPath.toLowerCase();
   if ([configuration.requestsDirectory, configuration.reviewDirectory, featureTaskDirectory(configuration)].some(directory => configLower === directory.toLowerCase() || configLower.startsWith(directory.toLowerCase() + '/'))) invalid('Workflow configuration must stay outside request, review and Task note folders.');
   const [readyFile, doneFile, templateFile, baseFile, readyPromptFile, donePromptFile, readyReviewFile] = await Promise.all([
@@ -138,7 +140,16 @@ export async function loadFeatureWorkflowSnapshot(options: { commit: string; rea
     configuration.readyReviewPrompt ? read(configuration.readyReviewPrompt, 65536) : undefined,
   ]);
   const readyCheck = validateFeatureCheck(json(readyFile.content, 'Ready check'), 'ready'), doneCheck = validateFeatureCheck(json(doneFile.content, 'Done check'), 'done');
-  validateFeatureTemplate(templateFile.content);
+  const defaultContract = validateFeatureTemplate(templateFile.content);
+  let templates: FeatureTemplateSnapshot[] | undefined;
+  if (configuration.templates !== undefined) {
+    templates = [{ id: defaultContract.templateId, label: 'Default Feature Request', ...templateFile.source, content: templateFile.content, default: true }];
+    for (const definition of configuration.templates) {
+      const file = await read(definition.path, 65536), contract = validateFeatureTemplate(file.content);
+      if (contract.templateId !== definition.id || templates.some(item => item.id === definition.id)) invalid('Every registered template must have its unique configured templateId.');
+      templates.push({ ...definition, ...file.source, content: file.content, default: false });
+    }
+  }
   if (!baseFile.content.trim()) invalid('The feature-request Base must not be empty.');
   const policy = featureWorkflowPolicy(readyCheck, doneCheck, configuration.id);
   const definitionPrompts = readyPromptFile || donePromptFile ? validateFeatureDefinitionPrompts({
@@ -148,6 +159,7 @@ export async function loadFeatureWorkflowSnapshot(options: { commit: string; rea
   }) : undefined;
   const readyReview = readyReviewFile ? validateFeatureReadyReview({ schemaVersion: 1, commit: options.commit, prompt: { ...readyReviewFile.source, content: readyReviewFile.content } }) : undefined;
   return { schemaVersion: 1, commit: options.commit, configuration, readyCheck, doneCheck, policy, policyDigest: gateDigest(policy), template: templateFile.content,
+    ...(templates ? { templates } : {}),
     ...(definitionPrompts ? { definitionPrompts } : {}),
     ...(readyReview ? { readyReview } : {}),
     files: { configuration: configurationFile.source, readyCheck: readyFile.source, doneCheck: doneFile.source, template: templateFile.source, base: baseFile.source,
@@ -158,6 +170,7 @@ export async function loadFeatureWorkflowSnapshot(options: { commit: string; rea
 
 /** Recovery binds frozen prompt bytes to the accepted workflow and its source descriptors. */
 export function assertFeatureWorkflowDefinitionPrompts(snapshot: FeatureWorkflowSnapshot): void {
+  assertFeatureWorkflowTemplates(snapshot);
   const reviewPath = snapshot.configuration.readyReviewPrompt, reviewSource = snapshot.files.readyReviewPrompt;
   if (reviewPath === undefined) {
     if (snapshot.readyReview !== undefined || reviewSource !== undefined) invalid('Unexpected frozen Ready Check prompt or source descriptor.');
@@ -177,5 +190,29 @@ export function assertFeatureWorkflowDefinitionPrompts(snapshot: FeatureWorkflow
     } else if (!prompt || prompt.path !== path || !source || Object.keys(source).length !== 2 || source.path !== path || source.sha256 !== prompt.sha256) {
       invalid('Frozen definition prompt content and source descriptor must match the configured path.');
     }
+  }
+}
+
+/** The note's selected contract is committed project data, never client-supplied template content. */
+export function featureTemplateContent(snapshot: Pick<FeatureWorkflowSnapshot, 'template' | 'templates'>, templateId?: string): string {
+  const defaultId = validateFeatureTemplate(snapshot.template, true).templateId;
+  if (templateId === undefined || templateId === defaultId) return snapshot.template;
+  const selected = snapshot.templates?.find(item => item.id === templateId);
+  if (!selected) invalid('Choose a configured project template ID.');
+  return selected.content;
+}
+function assertFeatureWorkflowTemplates(snapshot: FeatureWorkflowSnapshot): void {
+  const definitions = snapshot.configuration.templates;
+  if (definitions === undefined) {
+    if (snapshot.templates !== undefined) invalid('Unexpected frozen request templates.');
+    return;
+  }
+  const templates = snapshot.templates;
+  if (!Array.isArray(templates) || templates.length !== definitions.length + 1) invalid('Frozen request templates do not match configured templates.');
+  const defaultId = validateFeatureTemplate(snapshot.template, true).templateId;
+  const expected = [{ id: defaultId, label: 'Default Feature Request', path: snapshot.configuration.template }, ...definitions];
+  for (const [index, definition] of expected.entries()) {
+    const item = templates[index];
+    if (!item || item.id !== definition.id || item.label !== definition.label || item.path !== definition.path || item.default !== (index === 0) || featureContentHash(item.content) !== item.sha256 || validateFeatureTemplate(item.content, true).templateId !== item.id || index === 0 && item.content !== snapshot.template) invalid('Frozen template content, ID and source descriptor must match the configured registry.');
   }
 }

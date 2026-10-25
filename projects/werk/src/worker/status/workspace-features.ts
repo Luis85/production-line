@@ -1,3 +1,6 @@
+import { sharedFeaturePolicy } from '../application/shared-feature-policy.js';
+import { gateDigest } from '../application/request-gates.js';
+import { assertLocalMergeBaseline } from './workspace-local-merge-baseline.js';
 import { assertNativeWorkReady } from './workspace-native-work.js';
 import { validateSharedIntakeConfig } from '../application/shared-feature-state.js';
 import type { FeatureRequests } from '../application/feature-requests.js';
@@ -139,11 +142,14 @@ function featureAdmissionPorts(workspace: WorkspaceContext): FeatureAdmissionPor
 export async function submitSharedFeature(workspace: WorkspaceContext, record: SharedFeatureRecord){
   return withRepositoryAdmission(workspace, async () => {
     const assignment = workspace.repositories.resolve(record.binding.repositoryId);
+    if (record.accepted.mode === 'patch') await assertLocalMergeBaseline(workspace, assignment.path, record.binding.repositoryId, record.sourceCommit, record.taskId ?? undefined);
+    const effectivePolicy = sharedFeaturePolicy(record);
     const delivery = record.deliveryPolicy ? await featureDeliverySubmission(workspace, { id: record.id, input: record.accepted, deliveryPolicy: record.deliveryPolicy, deliveryExecution: record.deliveryExecution }, assignment.path, record.workflow.policy) : undefined;
+    if (delivery && gateDigest(delivery.policy) !== effectivePolicy.digest) throw new DomainError('conflict', 'Shared admission changed its frozen effective execution policy. Restore the accepted workflow and delivery profile.');
     await admitFeatureRequest(featureAdmissionPorts(workspace), {
       input: record.accepted, taskId: record.taskId!, submissionHash: record.inputHash, repository: assignment.path,
       reference: sharedFeatureRequestReference(record), selection: record.selection,
-      submission: { ...delivery, ...(record.selection ? { selection: record.selection } : {}), policy: delivery?.policy ?? record.workflow.policy, ...(record.workflow.definitionPrompts ? { definitionPrompts: record.workflow.definitionPrompts } : {}), criteria: record.accepted.criteria, repositoryId: record.binding.repositoryId, baseCommit: record.sourceCommit },
+      submission: { ...delivery, ...(record.selection ? { selection: record.selection } : {}), policy: effectivePolicy.policy, ...(record.workflow.definitionPrompts ? { definitionPrompts: record.workflow.definitionPrompts } : {}), criteria: record.accepted.criteria, repositoryId: record.binding.repositoryId, baseCommit: record.sourceCommit },
     });
     await workspace.featureTracking.sync();
   });

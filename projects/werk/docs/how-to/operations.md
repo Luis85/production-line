@@ -151,4 +151,4 @@ The local `dev:factory` launcher uses `.state/factory-fleet`, a separate lock,
 credentials and per-line state. It shuts down workers, then lines, then Factory.
 The Docker overlay uses its own Factory registry volume plus distinct line
 volumes. Factory logical hierarchy does not implement cross-server federation,
-HA or disaster recovery coordination. See [Factory setup](projects/werk/docs/how-to/factory.md).
+HA or disaster recovery coordination. See [Factory setup](factory.md).

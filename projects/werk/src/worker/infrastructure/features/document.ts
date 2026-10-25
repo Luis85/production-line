@@ -1,3 +1,5 @@
+import { localMergeMarkdown } from '../../application/local-merge-markdown.js';
+import { releaseMarkdown } from '../../application/release-markdown.js';
 import { remotePublicationMarkdown } from '../../application/remote-publication-markdown.js';
 import { parseModelEffort, validateModelEffort, validateModelName } from '../../application/model-effort.js';
 import { providerIds, type ProviderId } from '../../application/provider-contract.js';
@@ -54,8 +56,8 @@ export function featureInput(parsed: FeatureDocument, defaultProvider: string, o
   if (d.useInstructionsOnly !== undefined && typeof d.useInstructionsOnly !== 'boolean') throw Error('useInstructionsOnly must be true or false.');
   const priorities: Record<string, number> = { low: 0, normal: 1, high: 2, urgent: 3 };
   if (d.schema === requestSchema && d.priority !== undefined && typeof d.priority !== 'string') throw Error('priority must be low, normal, high or urgent.');
-  const priority = d.schema === requestSchema ? priorities[(d.priority ?? 'normal') as string] : d.priority ?? 1;
-  if (typeof priority !== 'number' || (d.schema !== requestSchema && ![1, 2].includes(priority))) throw Error('priority must be low, normal, high or urgent (legacy: 1 or 2).');
+  const priority = d.schema === requestSchema ? priorities[(d.priority ?? 'normal') as string] : d.priority_scale === 'three-level/v1' ? ({ 1: 2, 2: 1, 3: 0 } as Record<number, number>)[Number(d.priority ?? 3)] : d.priority ?? 1;
+  if (typeof priority !== 'number' || (d.schema !== requestSchema && (d.priority_scale === 'three-level/v1' ? ![0, 1, 2].includes(priority) : ![1, 2].includes(priority)))) throw Error('priority must be low, normal, high or urgent (legacy: 1 or 2).');
   if (d.execution_profile !== undefined && (typeof d.execution_profile !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(d.execution_profile))) throw Error('execution_profile must name an allowed project execution profile.');
   if (d.quality_profile !== undefined && (typeof d.quality_profile !== 'string' || !/^[a-z][a-z0-9_-]{0,79}$/.test(d.quality_profile))) throw Error('quality_profile must name a project quality profile.');
   if (d.depends_on !== undefined && (!Array.isArray(d.depends_on) || d.depends_on.length > 100 || d.depends_on.some(value => typeof value !== 'string' || !dependencyId.test(value) || value === d.id) || new Set(d.depends_on).size !== d.depends_on.length)) throw Error('depends_on must contain unique other request IDs or projectId:requestId references (at most 100).');
@@ -70,7 +72,7 @@ export function featureInput(parsed: FeatureDocument, defaultProvider: string, o
 }
 /** Additional template fields are author data; rendering never promotes them into policy. */
 export function featureRequestContext(data: Record<string, unknown>, base: FeatureInput) {
-  const standard = ['schema', 'intent', 'execution_profile', 'quality_profile', 'depends_on', 'readiness_decision', 'criterion_decision', 'review', 'control', 'publication', 'werk', 'schemaVersion', 'id', 'templateId', 'title', 'status', 'mode', 'paths', 'provider', 'model', 'effort', 'priority', 'definitionId', 'definitionRef', 'agent', 'useInstructionsOnly'];
+  const standard = ['schema', 'intent', 'execution_profile', 'quality_profile', 'depends_on', 'readiness_decision', 'criterion_decision', 'review', 'control', 'publication', 'release', 'local_merge', 'werk', 'schemaVersion', 'id', 'templateId', 'title', 'status', 'mode', 'paths', 'provider', 'model', 'effort', 'priority', 'priority_scale', 'definitionId', 'definitionRef', 'agent', 'useInstructionsOnly'];
   const metadata = Object.fromEntries(Object.entries(data).filter(([key]) => !standard.includes(key)));
   function finite(value: unknown): boolean { return typeof value === 'number' ? Number.isFinite(value) : Array.isArray(value) ? value.every(finite) : value && typeof value === 'object' ? Object.values(value).every(finite) : true; }
   if (!finite(metadata)) throw Error('Feature metadata must contain finite JSON values.');
@@ -83,11 +85,13 @@ export function renderFeature(parsed: FeatureDocument, id: string, status: strin
   if (parsed.data.schema === requestSchema) {
     const lines = [`${managedBegin}\n## Worker\n`, `Status: ${status}`, `Request revision: ${metadata.semanticRevision ?? 1}`, `Source: ${metadata.sourceIssue ? 'Action needed' : 'Available'}`];
     const gates = metadata.gates as FeatureGateProjection | undefined, run = gates?.delivery;
-    if (gates) lines.push(`Lifecycle: ${gates.phase}`, `Accepted request revision: ${gates.inputRevision}`, `[Questions and gate evidence](${encodeURI(gates.link)})`);
+    if (gates) lines.push(`Lifecycle: ${gates.lifecycle ?? gates.phase}`, `Accepted request revision: ${gates.inputRevision}`, `[Questions and gate evidence](${encodeURI(gates.link)})`);
     if (run) {
       lines.push(`Run ID: ${run.runId}`, `Execution: ${run.status} · ${run.phase}`, `Reason: ${run.reason.replaceAll('<!--', '&lt;!--')}`, `Waiting for: ${(run.waitingFor ?? 'No external event').replaceAll('<!--', '&lt;!--')}`, `Available controls: ${run.controls.join(', ') || 'None'}`);
       if (run.checkpoint) lines.push(`Inspectable checkpoint (not a verification pass): ${run.checkpoint.candidateCommit} on ${run.checkpoint.branch}`);
     }
+    if (gates?.localMerge) lines.push(localMergeMarkdown(gates.localMerge));
+    if (gates?.release) lines.push(releaseMarkdown(gates.release));
     if (gates?.publications?.length) lines.push(remotePublicationMarkdown(gates.publications));
     if (metadata.error) lines.push(`Attention: ${String(metadata.error).replaceAll('<!--', '&lt;!--')}`);
     if (Array.isArray(metadata.questions)) for (const question of metadata.questions as { id: string; message: string; blocking: boolean; criterionId?: string; active?: boolean }[]) lines.push(`### ${question.id}\n\n${question.message.replaceAll('<!--', '&lt;!--')}\n\n${question.active === false ? 'Earlier question, retained for context' : question.blocking ? 'Blocks execution' : 'Nonblocking'}${question.criterionId ? ' · Criterion: ' + question.criterionId : ''}. Answer in the Answers section using this ID.`);

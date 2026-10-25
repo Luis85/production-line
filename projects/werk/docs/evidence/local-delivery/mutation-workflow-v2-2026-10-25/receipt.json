@@ -1,0 +1,466 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-10-25T17:09:10.098Z",
+  "packageVersion": "0.15.0",
+  "commit": "16ae9add85ea02b1e639a1bbeb2b79e9f79d5cf8",
+  "workingTreeDirty": true,
+  "nodeVersion": "v24.19.0",
+  "platform": "linux-x64",
+  "strykerVersion": "10.0.0",
+  "scope": {
+    "id": "worker-workflow-v2",
+    "reportDirectory": "reports/mutation/workflow",
+    "targets": [
+      "src/worker/application/delivery-acceptance.ts",
+      "src/worker/application/delivery-policy.ts",
+      "src/worker/application/delivery-completion.ts",
+      "src/worker/application/local-merge-contracts.ts",
+      "src/worker/application/local-merge-view.ts",
+      "src/worker/application/local-merge-runtime.ts",
+      "src/worker/application/local-merge-baseline.ts",
+      "src/worker/infrastructure/journal/requests/local-merge.ts",
+      "src/worker/application/release-runtime.ts",
+      "src/worker/application/release-view.ts",
+      "src/worker/application/remote-delivery-runtime.ts",
+      "src/worker/application/remote-delivery-history.ts",
+      "src/worker/application/remote-delivery-rework.ts",
+      "src/worker/application/shared-review-rework.ts",
+      "src/worker/application/shared-feature-policy.ts",
+      "src/worker/application/shared-local-merge-projection.ts",
+      "src/worker/application/shared-release-projection.ts",
+      "src/worker/infrastructure/journal/requests/publication.ts",
+      "src/worker/infrastructure/journal/requests/release.ts"
+    ],
+    "suitePrefix": "workflow-",
+    "testFiles": [
+      "scripts/mutation/suites/workflow-*.test.mjs",
+      "scripts/mutation/suites/delivery-policy.test.mjs",
+      ".mutation-build/tests/*.test.mjs"
+    ],
+    "reusedTests": [
+      "tests/worker/remote-delivery-runtime.test.mjs",
+      "tests/worker/remote-delivery-journal.test.mjs",
+      "tests/worker/release-runtime.test.mjs",
+      "tests/worker/release-journal.test.mjs",
+      "tests/worker/local-merge-journal.test.mjs",
+      "tests/worker/local-merge-status.test.mjs"
+    ],
+    "reusedFixtures": [
+      "tests/worker/remote-delivery-fixtures.mjs",
+      "tests/worker/release-fixtures.mjs",
+      "tests/worker/request-gate-fixtures.mjs",
+      "tests/worker/fixture-cleanup.mjs"
+    ],
+    "supportFiles": [
+      "scripts/mutation/suites/workflow-fixture.mjs",
+      "scripts/mutation/suites/workflow-local-fixture.mjs",
+      "scripts/mutation/suites/delivery-policy.test.mjs",
+      "tests/helpers/typed-boundaries.mjs"
+    ],
+    "timeoutMs": 720000
+  },
+  "sources": {
+    "digest": "d8aed02477e958c8e6c09c6d48a17c898b2876b069c6fed0539ac0132315ffd4",
+    "files": {
+      "src/worker/application/delivery-acceptance.ts": "ed9aba4c4d31c38d65ef8092238c925590cdef0ec8572f0ccd63770af9c9399f",
+      "src/worker/application/delivery-completion.ts": "43eaf9ba6beffc815e79a8740d79a48bc27b01c814c6dbe225990d46c1a20c64",
+      "src/worker/application/delivery-policy.ts": "89bfae6a5938bbfba1cc0c2695cd8c4c2b1e077f5f615125fa8ba57fb8c8a659",
+      "src/worker/application/local-merge-baseline.ts": "34485e4e45fa22c69447bcd83ae3ea2c5907a2609ca91478a195fc7e2c117782",
+      "src/worker/application/local-merge-contracts.ts": "8ecf58871bbf3151009b379f915396e2b42f92896e5ede9c533061e33cba76dc",
+      "src/worker/application/local-merge-runtime.ts": "fb044c9b9986f55b3e204262de8e4420d81953d5dffb22b09c7dd5b2387142ec",
+      "src/worker/application/local-merge-view.ts": "698084f1e7a0794a42614d55abca29dbf9cdc66ade8b9189c9818ce525f86639",
+      "src/worker/application/release-runtime.ts": "069cf90b78690421bccbd9b679cd77322e82c7fecc953986bf445989bd70da5b",
+      "src/worker/application/release-view.ts": "82ce8d7f18d3429bba5539fdfff5379396134e918719ca7c71e4573b99220256",
+      "src/worker/application/remote-delivery-history.ts": "8d0638d5a387b9632e7a42d0497c39b504788db75cb63acaeed56a378944a2a6",
+      "src/worker/application/remote-delivery-rework.ts": "f987e17fe99a1b39108af85a1357dc4ea770a9eb8421f9eacbedd671940a7d81",
+      "src/worker/application/remote-delivery-runtime.ts": "062df1b93f91ed46c4b65cf1c90a5b9f20ef21233e51a705f22940b35958ed7f",
+      "src/worker/application/shared-feature-policy.ts": "47b2101ca56b6edd4747ca7065028aa718fe43e048db29581e835af43b57d42b",
+      "src/worker/application/shared-local-merge-projection.ts": "07ea9065ba7a83772e075ffcdfc06fec772d46e268411cfdae6deac5a2cdb6bf",
+      "src/worker/application/shared-release-projection.ts": "c3ffead7d1807d7251ec227d3572d1bea5d2d9ef6c3cb30c13f1f3831d7b40e6",
+      "src/worker/application/shared-review-rework.ts": "46618cf8b3138a1dddd6da7a60d7f2fe5bf1d851fa209899df6a9f01f457e1df",
+      "src/worker/infrastructure/journal/requests/local-merge.ts": "821286eaad046352c1a4c3daf256674770ec5c9cf9969f58eb33793714ac7895",
+      "src/worker/infrastructure/journal/requests/publication.ts": "a9c2a55435e3c2f6b573407a3df02d38e762f8ceed5f24cfc3e2a6b8b98f13bf",
+      "src/worker/infrastructure/journal/requests/release.ts": "af7d1a511052dc5581df2b34bea2161dabd054a0dff973016bedba5dd618e8b8"
+    }
+  },
+  "tests": {
+    "digest": "76a4878dba1580054f5c7f071f39c6cebb0149e4280a33f922c229d0b39fdc19",
+    "files": {
+      "scripts/mutation/suites/delivery-policy.test.mjs": "cac646ca76b2d55ad16a3a74e93d0084990d03b81bf22a420a29f117f7e25c6c",
+      "scripts/mutation/suites/workflow-authority.test.mjs": "dee77856a89f865717a868ec25c3e4ee1983bfb43abf7bcfd3748429ea967d92",
+      "scripts/mutation/suites/workflow-feedback.test.mjs": "0c06336d5a58a73cabdcf4c9bc2807fc9a6c64ebf8565519f3f8ee6d247e568d",
+      "scripts/mutation/suites/workflow-fixture.mjs": "d2f04d088c150370091c505f7334e06cc46129a02d90a65fda561a3f46c9d621",
+      "scripts/mutation/suites/workflow-local-authority.test.mjs": "994ad8c122d4c59b493aee1571cff56ef2fc2d1a69dec28b96896b5342e0db13",
+      "scripts/mutation/suites/workflow-local-fixture.mjs": "1f1a07fe4b26537eaf13cdaa5564e13f65f9558d85b51e71bb7cb4820c90db8c",
+      "scripts/mutation/suites/workflow-local-journal.test.mjs": "92479d33bc87501c71036562208cf165332c48587c273a6c5c02832c79b3aad8",
+      "scripts/mutation/suites/workflow-local-runtime.test.mjs": "614257d576309149481896522e5bb72ee7a3beae16cb4d763a078ad557158edc",
+      "scripts/mutation/suites/workflow-publication-recovery.test.mjs": "29eb054464800ca7dc33bb5ab0874b3867ec3b1fe10815cfd8d8d71e5d280ada",
+      "scripts/mutation/suites/workflow-release-authority.test.mjs": "26bf4663b3eff5a9fe042800b1a979946c84ff4bf5f09903a780312e42c39e63",
+      "scripts/mutation/suites/workflow-release-receipts.test.mjs": "6d7ca4ad2844f9d212766d2b16aa075f7557552dad7077d163a5a6cce16e2513",
+      "scripts/mutation/suites/workflow-shared-authority.test.mjs": "b3274b84f306aecc5ea2bbc5337854b8c35ddec0ae758e0ebfec55776333a7c0",
+      "tests/helpers/typed-boundaries.mjs": "c4f36a4f1b0b71a7a5cc3e91ea9a7606e49ed6b1f5564811a6b437faa8f075ec",
+      "tests/worker/fixture-cleanup.mjs": "4b871abb05c22a4eff31535e5ae3bacce958150b254ec744b380deac559a5716",
+      "tests/worker/local-merge-journal.test.mjs": "56871e625dd946c90e91cf0b132b77e20767f4653bddaf020c88acb072bce140",
+      "tests/worker/local-merge-status.test.mjs": "cb546c9dece535174421f54c61be0140585939896f041ef905b300ac1a5bee3d",
+      "tests/worker/release-fixtures.mjs": "d25ef42e2c4b06866fa4fc76150bd1078c8a4005f6f719ad6cb127caf1e826c6",
+      "tests/worker/release-journal.test.mjs": "1ad24d142fcdedfee4fa0056d1e92aaa82b2907c29e365158805778830684bdc",
+      "tests/worker/release-runtime.test.mjs": "f5af30e73216b3cb2177d6ff77f0c312bbee5c64066dff4ed1b264970391d380",
+      "tests/worker/remote-delivery-fixtures.mjs": "d4a28bb4469bf91565236a830227e0e4be0e9f8b5050be3509929ac57b9bf7a9",
+      "tests/worker/remote-delivery-journal.test.mjs": "cf9976bdebdefc68f4eeba9f4495606a48bf14247b109d8b5f59d08df41ad8fc",
+      "tests/worker/remote-delivery-runtime.test.mjs": "cca3586c1b929445ecd89fbe97c97e586d3dcfdbb8006af6f289db8fda5f14ba",
+      "tests/worker/request-gate-fixtures.mjs": "ebb076409757223311276b494cfb48c044e30aebb8aa74d23ace577b84a07fc6"
+    }
+  },
+  "configuration": {
+    "digest": "043364c3410abc98ab803690a29c6a011bbc82448c0c8efcff91334b8bc01ffe",
+    "files": {
+      "scripts/mutation/build.mjs": "29d35d41024809201e98de400ea95cca084066293a6b52647a6a1ebe6b58a42d",
+      "scripts/mutation/process.mjs": "5123ebeca70418b21bb4b4e5dc16f71a4f22181459360a018391a0e625355cc9",
+      "scripts/mutation/provenance.mjs": "0153c0bb0f25510f10d67c0f9f55c4373cb45d56716a1cb224a7560e65356d22",
+      "scripts/mutation/reports.mjs": "0c6c8ab822d6885b8e46a60bf01a1d1b75d127546da038c2344dd64adbcad6de",
+      "scripts/mutation/run.mjs": "531ad5b12635644b5a97e4304e8d35ada5dd6da19061f51dffc814ee85064236",
+      "scripts/mutation/scope.mjs": "443fddf5a7f7b7b803e1248d6b91ef338e72b93898e5b5df1e38b9232c148e59",
+      "scripts/mutation/summary.mjs": "6cf351d7d34311704a204ea705c0a094962037b944debf1d81dcc45ce41e20e1",
+      "stryker.config.mjs": "41c59718d74c14eee957cdeb1d74203b447d51275b013a1445fcee5e367fff57"
+    }
+  },
+  "reportDigest": "ddca972304d26840501433d019039e15a431edc8331eb2167e2c7c0c730f4fa4",
+  "status": "completed",
+  "score": 79.05,
+  "assertionScore": 79.05,
+  "validMutants": 2955,
+  "timeoutDetected": 0,
+  "totalMutants": 2955,
+  "counts": {
+    "Killed": 2336,
+    "Survived": 529,
+    "NoCoverage": 90,
+    "Timeout": 0,
+    "CompileError": 0,
+    "RuntimeError": 0,
+    "Ignored": 0,
+    "Pending": 0
+  },
+  "files": [
+    {
+      "path": "src/worker/application/delivery-acceptance.ts",
+      "total": 100,
+      "counts": {
+        "Killed": 95,
+        "Survived": 5,
+        "NoCoverage": 0,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 95
+    },
+    {
+      "path": "src/worker/application/delivery-policy.ts",
+      "total": 387,
+      "counts": {
+        "Killed": 291,
+        "Survived": 68,
+        "NoCoverage": 28,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 75.19
+    },
+    {
+      "path": "src/worker/application/delivery-completion.ts",
+      "total": 61,
+      "counts": {
+        "Killed": 52,
+        "Survived": 9,
+        "NoCoverage": 0,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 85.25
+    },
+    {
+      "path": "src/worker/application/local-merge-contracts.ts",
+      "total": 15,
+      "counts": {
+        "Killed": 15,
+        "Survived": 0,
+        "NoCoverage": 0,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 100
+    },
+    {
+      "path": "src/worker/application/local-merge-view.ts",
+      "total": 123,
+      "counts": {
+        "Killed": 103,
+        "Survived": 19,
+        "NoCoverage": 1,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 83.74
+    },
+    {
+      "path": "src/worker/application/local-merge-runtime.ts",
+      "total": 94,
+      "counts": {
+        "Killed": 78,
+        "Survived": 16,
+        "NoCoverage": 0,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 82.98
+    },
+    {
+      "path": "src/worker/application/local-merge-baseline.ts",
+      "total": 18,
+      "counts": {
+        "Killed": 15,
+        "Survived": 3,
+        "NoCoverage": 0,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 83.33
+    },
+    {
+      "path": "src/worker/infrastructure/journal/requests/local-merge.ts",
+      "total": 298,
+      "counts": {
+        "Killed": 233,
+        "Survived": 64,
+        "NoCoverage": 1,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 78.19
+    },
+    {
+      "path": "src/worker/application/release-runtime.ts",
+      "total": 175,
+      "counts": {
+        "Killed": 139,
+        "Survived": 29,
+        "NoCoverage": 7,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 79.43
+    },
+    {
+      "path": "src/worker/application/release-view.ts",
+      "total": 192,
+      "counts": {
+        "Killed": 173,
+        "Survived": 16,
+        "NoCoverage": 3,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 90.1
+    },
+    {
+      "path": "src/worker/application/remote-delivery-runtime.ts",
+      "total": 194,
+      "counts": {
+        "Killed": 142,
+        "Survived": 34,
+        "NoCoverage": 18,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 73.2
+    },
+    {
+      "path": "src/worker/application/remote-delivery-history.ts",
+      "total": 34,
+      "counts": {
+        "Killed": 30,
+        "Survived": 4,
+        "NoCoverage": 0,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 88.24
+    },
+    {
+      "path": "src/worker/application/remote-delivery-rework.ts",
+      "total": 49,
+      "counts": {
+        "Killed": 40,
+        "Survived": 9,
+        "NoCoverage": 0,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 81.63
+    },
+    {
+      "path": "src/worker/application/shared-review-rework.ts",
+      "total": 209,
+      "counts": {
+        "Killed": 180,
+        "Survived": 27,
+        "NoCoverage": 2,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 86.12
+    },
+    {
+      "path": "src/worker/application/shared-feature-policy.ts",
+      "total": 12,
+      "counts": {
+        "Killed": 11,
+        "Survived": 1,
+        "NoCoverage": 0,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 91.67
+    },
+    {
+      "path": "src/worker/application/shared-local-merge-projection.ts",
+      "total": 67,
+      "counts": {
+        "Killed": 62,
+        "Survived": 5,
+        "NoCoverage": 0,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 92.54
+    },
+    {
+      "path": "src/worker/application/shared-release-projection.ts",
+      "total": 101,
+      "counts": {
+        "Killed": 96,
+        "Survived": 5,
+        "NoCoverage": 0,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 95.05
+    },
+    {
+      "path": "src/worker/infrastructure/journal/requests/publication.ts",
+      "total": 337,
+      "counts": {
+        "Killed": 236,
+        "Survived": 86,
+        "NoCoverage": 15,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 70.03
+    },
+    {
+      "path": "src/worker/infrastructure/journal/requests/release.ts",
+      "total": 489,
+      "counts": {
+        "Killed": 345,
+        "Survived": 129,
+        "NoCoverage": 15,
+        "Timeout": 0,
+        "CompileError": 0,
+        "RuntimeError": 0,
+        "Ignored": 0,
+        "Pending": 0
+      },
+      "score": 70.55
+    }
+  ],
+  "execution": {
+    "exitCode": 0,
+    "signal": null,
+    "timedOut": false,
+    "durationMs": 269345
+  },
+  "warnings": [
+    "529 surviving and 90 uncovered mutants in this limited scope.",
+    "No recorded baseline is available for comparison."
+  ],
+  "compiledSources": {
+    "digest": "24f2166c4b0eea061a25525daa9aaeee8ad49f960adb8448e3578229d680be68",
+    "fileCount": 428
+  },
+  "artifacts": {
+    "summary.json": {
+      "bytes": 207303,
+      "sha256": "a8a0f1d6a071cd807a45008f9e49f0315a5a066ed7915a291c8af483840b8bcf"
+    },
+    "mutation.json": {
+      "bytes": 1435870,
+      "sha256": "ddca972304d26840501433d019039e15a431edc8331eb2167e2c7c0c730f4fa4"
+    },
+    "run.log": {
+      "bytes": 367421,
+      "sha256": "6bdd5e487987cac1aa13a02e621d3c466336753968128dd0ff183a10d4cbf3d8"
+    }
+  },
+  "verification": {
+    "rawReportDigestMatchesSummary": true,
+    "everyScoredSourceMatchesRecordedHash": true,
+    "survivedAndUncoveredFindings": 619,
+    "baselinePromoted": false
+  },
+  "rawArtifactRetention": "Ignored local report output and CI artifact; this compact directory retains hashes and every residual finding."
+}

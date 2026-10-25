@@ -1,3 +1,4 @@
+import { workflowCommands } from './workflow-commands.mjs';
 import { open } from "node:fs/promises";
 import { inputError } from "../config.mjs";
 // Git fetch, claim and publication can outlast the default 30 s API wait on slow remotes. Saving settings can validate
@@ -580,6 +581,7 @@ export function workerCommands(catalog) {
       item.destructive = item.action === "delete" || item.action === "prune";
     }
   }
+  workflowCommands(catalog, action);
   return catalog;
 }
 /** Accept an edited `tool-access get` view: view-only fields are always dropped and its revision becomes the guard. */

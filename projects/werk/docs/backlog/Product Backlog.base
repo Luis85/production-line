@@ -1,0 +1,29 @@
+filters:
+  and:
+    - file.inFolder("docs/backlog")
+    - file.ext == "md"
+views:
+  - type: product-backlog
+    name: Backlog
+    homeFolder: docs/backlog
+    stateProperty: note.status
+    stateValues: Open, Active, Blocked, Done
+    doneValues: Done
+    startedStates: Active
+    startedDateProperty: note.started
+    finishedDateProperty: note.finished
+    dependsOnProperty: note.dependsOn
+    priorityProperty: note.priority
+    priorityValues: P0, P1
+    typeFolder.epic: docs/backlog/requirements
+    typeFolder.feature: docs/backlog/requirements
+    typeFolder.pbi: docs/backlog/requirements
+    typeFolder.task: docs/backlog/tasks
+    typeFolder.improvement: docs/backlog/improvements
+    iterationProperty: note.iteration
+    releaseProperty: note.release
+    startProperty: note.start
+    targetProperty: note.due
+    horizonProperty: note.horizon
+    riskProperty: note.risk
+    assigneeProperty: note.assignee

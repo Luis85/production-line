@@ -1,11 +1,11 @@
 ---
 type: Feature
-extends: "[[projects/werk/docs/entities/primitives/Feature|Feature]]"
+extends: "[Feature](../primitives/Feature.md)"
 description:
 status:
 color:
 category:
-parent: "[[projects/werk/docs/entities/systems/Factory|Factory]]"
+parent: "[Factory](../systems/Factory.md)"
 aliases:
 tags:
 subscribes:

@@ -1,6 +1,9 @@
 # Werk runtime documentation
 
-Start with [project worker setup](how-to/project-worker.md), then
+Start with [archive to main checkout](tutorials/worker-home-to-main.md): extract a
+standalone worker into its own home, create a webview request, follow its Git and
+request activity, review the increment and explicitly allow its main-checkout merge.
+Direct [project worker setup](how-to/project-worker.md) is also available; then
 [connect the shared Markdown queue](how-to/shared-feature-intake.md). Teammates
 create ready requests and answer Tasks through committed and pushed files; the
 webview is optional. For other deployments, see
@@ -11,6 +14,8 @@ one complete flow, how-to guides solve operating tasks, reference describes exac
 contracts, and explanations describe the system and its limits.
 
 ## Tutorials
+
+- [Archive to main checkout](tutorials/worker-home-to-main.md): dedicated worker home, web-only setup, Feature Request, observable progress and explicit local-main merge.
 
 - [Local delivery request](tutorials/worker-feature-lifecycle.md): submit Markdown, inspect isolated implementation and accept an exact tested candidate without shared Git publication.
 - [Local worker run metrics](reference/worker-run-metrics.md): paired snapshots, usage coverage, durable history and paginated export.
@@ -23,6 +28,8 @@ contracts, and explanations describe the system and its limits.
 - [Run your first Docker task](tutorials/docker-first-task.md)
 
 ## How-to guides
+
+- [Optionally deliver through GitHub Releases](how-to/deliver-worker-release.md): explicit integration policy for hosting-service PRs, managed merge, build and publication.
 
 - [Assemble independent workers, orchestrators and Factories](how-to/assemble-independent-components.md)
 - [Install a project worker](how-to/project-worker.md): app, private environment, provider and team authoring kit.
@@ -54,6 +61,8 @@ contracts, and explanations describe the system and its limits.
 - [Operate with agents and scripts](how-to/operate-with-agents.md)
 
 ## Reference
+
+- [Worker delivery and optional GitHub Releases](reference/worker-release-workflow.md): lifecycle, identities, project policy and recovery.
 
 - [Project delivery policy](reference/delivery-policy.md): quality and execution profiles, routing, check packs, concurrency, behavior libraries and retention.
 

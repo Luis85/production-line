@@ -1,35 +1,52 @@
 # Werk
 
-Run a worker on your machine from a shared Markdown feature-request queue.
-Teammates draft requests with the committed project template and skill, then
-commit and push ready work. The worker publishes progress, actionable Task notes
-and PullRequest review notes with a feature branch. Configure a supported local
-Claude/Codex CLI or API provider, file/tool grants and required checks. Human
-review and merge remain separate; the webview is optional. Start with
-[project setup](docs/how-to/project-worker.md) and the
-[shared Markdown workflow](docs/how-to/shared-feature-intake.md).
+Start a standalone worker in your own worker home, then connect your model and
+project through its webview. The downloaded runtime is prebuilt: native Windows,
+macOS and Linux need Node.js 24, with no source checkout, npm install or project
+initialization step.
 
-The complete Factory/orchestrator system below uses **simulated assignments by
-default**. A simulated result does not produce code. Trusted operators can
-[enable native Linux Codex execution](docs/how-to/run-codex-task.md); supplied
-Docker and managed VM assignment profiles remain simulated. Standalone Docker
-workers can use configured API providers.
+## Start your worker
 
-Verify and extract the release, then open a terminal in this directory. With Node.js 24 installed, start the complete Factory system in one command:
+Create a dedicated worker-home folder and extract the verified archive there.
+Keep the archive's `werk-{{version}}` folder intact. Open a terminal in the outer
+worker-home folder and run:
 
 ```sh
-node werk.mjs up
+node ./werk-{{version}}/worker.mjs
 ```
 
-This creates or preserves private configuration, starts the Factory and both simulated production lines, and opens the Factory page when healthy. The console prints the credential file location. Ctrl+C shuts down the system; run the same command to restart. Use `--no-open` on a headless machine. No npm install or build is needed.
+PowerShell uses the same command, or
+`node .\werk-{{version}}\worker.mjs`. You can also open a terminal inside the
+extracted version folder and run `node worker.mjs`; that folder then becomes the
+worker home. To select the home explicitly from any working directory, use
+`node /path/to/extracted/worker.mjs --home /path/to/worker-home`.
 
-Subsequent native starts check stable GitHub releases, verify updates and back up existing state before activation. Run `node werk.mjs update check` to inspect releases or `node werk.mjs update disable` to opt out. `--no-update` skips one startup check. See [automatic updates](docs/reference/updates.md) for recovery and adopting state from 0.1.0.
+The launcher starts one standalone worker in the background and opens its local
+webview. It prints the URL and private credential-file path. Read that file
+locally and paste the token into the unlock form; the token is never put in the
+URL or launcher output. Private worker state lives in `.werk/worker` beneath the
+selected home. Starting again reopens the existing worker. Use `--no-open` on a
+headless machine, or `--port 0` to allocate an unused local port.
 
-For automatic download and startup from GitHub, installer options and release verification, see the [release reference](docs/reference/releases.md). Read the [changelog](CHANGELOG.md) for the changes in this version.
+In the webview, connect **Claude Code CLI** or another supported provider, review
+its tool access, and register your project. Then create a Feature Request, follow
+its Kanban progress and inspect the resulting increment before permitting merge.
+No model runs merely because the worker started. Git and provider credentials
+remain under your local account. Follow the [worker workflow guide](docs/how-to/deliver-worker-release.md)
+for project setup, independent checks, review and recovery.
 
-For a separate local intake example without shared Git publication, follow the
-[local proposal tutorial](docs/tutorials/worker-feature-lifecycle.md) and inspect
-its before/after consumption evidence.
+From the same worker home, inspect or stop the worker with:
+
+```sh
+node ./werk-{{version}}/worker.mjs status
+node ./werk-{{version}}/worker.mjs stop
+```
+
+For verified downloads and installer options, see the
+[release reference](docs/reference/releases.md). Read the [changelog](CHANGELOG.md)
+for this version's changes. Existing project-local installations remain supported
+through [project setup](docs/how-to/project-worker.md) and
+[shared Markdown intake](docs/how-to/shared-feature-intake.md).
 
 ## Portable apps for another project
 
@@ -68,6 +85,12 @@ for startup, enrollment, profile acknowledgment, credentials and registration.
 
 The managed YAML system below is another setup path for a fresh installation.
 Keep its state separate from independently installed components.
+
+## Optional Factory and production-line demonstration
+
+The separate `node werk.mjs up` command starts the complete Factory and two
+production lines. Its assignments are simulated by default; this is an optional
+demonstration, separate from the standalone worker above. Ctrl+C stops it.
 
 ## A complete system from one YAML file
 

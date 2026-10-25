@@ -1,11 +1,11 @@
 ---
 type: System
-extends: "[[projects/werk/docs/entities/systems/Factory|Factory]]"
+extends: "[Factory](Factory.md)"
 description:
 status:
 color:
 category:
-parent: "[[projects/werk/docs/entities/systems/Factory|Factory]]"
+parent: "[Factory](Factory.md)"
 aliases:
 tags:
 subscribes:

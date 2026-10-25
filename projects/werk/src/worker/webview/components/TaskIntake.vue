@@ -3,7 +3,7 @@ import { reactive, watch as watchPrivateDraft } from 'vue';
 import { state as workerState, type FeatureRequestCommand } from '../store';
 import type { ProviderId } from '../../application/provider-contract';
 import type { ModelEffort } from '../../application/model-effort';
-const emptyDraft = () => ({ message: '', provider: undefined as ProviderId | undefined, model: '', effort: '' as ModelEffort | '', selectionEdited: false, executionProfile: '', title: '', definitionId: 'none', agent: '', adapt: false, fileChanges: false, repository: '', paths: '', pending: null as FeatureRequestCommand | null, error: '' });
+const emptyDraft = () => ({ message: '', provider: undefined as ProviderId | undefined, model: '', effort: '' as ModelEffort | '', selectionEdited: false, executionProfile: '', priority: 3, templateId: '', title: '', definitionId: 'none', agent: '', adapt: false, fileChanges: false, repository: '', paths: '', pending: null as FeatureRequestCommand | null, error: '' });
 // Keep private drafts in tab memory; explicit locking clears them with the other editors.
 const intake = reactive(emptyDraft());
 watchPrivateDraft(() => workerState.draftEpoch, () => Object.assign(intake, emptyDraft()), { flush: 'sync' });
@@ -14,7 +14,7 @@ import UButton from '@nuxt/ui/components/Button.vue';
 import UInput from '@nuxt/ui/components/Input.vue';
 import USelect from '@nuxt/ui/components/Select.vue';
 import UTextarea from '@nuxt/ui/components/Textarea.vue';
-import { createFeatureRequest, getCapacityFreshness, state, type FeatureRequestPreparation } from '../store';
+import { createFeatureRequest, getCapacityFreshness, request, state, type FeatureRequestPreparation } from '../store';
 import { providerSupportsDefinition } from '../../application/provider-contract';
 import { validateApprovedPaths } from '../../application/approved-paths';
 import type { DeliveryExecutionProfile } from '../../application/delivery-execution-policy';
@@ -22,11 +22,25 @@ import ProjectExecutionSelection from './ProjectExecutionSelection.vue';
 import RunTask from './RunTask.vue';
 import SharedFeatureComposer from './SharedFeatureComposer.vue';
 import ModelSelectionFields from './ModelSelectionFields.vue';
+import FeatureTemplateSelection from './FeatureTemplateSelection.vue';
 import { buildWorkerCapacityView } from '../worker-capacity';
+import { featurePriorityOptions } from '../feature-priority';
+import { useWorkerSnapshot } from '../useWorkerSnapshot';
+import type { SharedIntakeView } from '../../application/shared-intake-contract';
 const sharedComposer = ref<InstanceType<typeof SharedFeatureComposer> | null>(null);
-const sharedBinding = computed(() => !!state.environment?.sharedIntake?.config.repositoryId);
+async function readProjectIntake() {
+  const value = await request<SharedIntakeView>('/api/shared-intake' + (intake.repository ? '?projectId=' + encodeURIComponent(intake.repository) : ''));
+  if (!value?.config || typeof value.config.repositoryId !== 'string') throw Error('The selected project intake could not be confirmed. Refresh before submitting.');
+  return value;
+}
+const selectedProject = useWorkerSnapshot(readProjectIntake, [() => intake.repository]);
+const sharedMode = ref(!!state.environment?.sharedIntake?.config.repositoryId);
+watch(() => selectedProject.data.value, value => { if (value) sharedMode.value = !!value.config.repositoryId; });
+const sharedBinding = computed(() => selectedProject.data.value ? !!selectedProject.data.value.config.repositoryId : sharedMode.value);
+const projectLoading = computed(() => !!intake.repository && !selectedProject.data.value);
 const emit = defineEmits<{ created: [sessionId: string, previousSessionId: string]; busy: [boolean] }>();
 const sending = ref(false), optionsOpen = ref(false), filesOpen = ref(false);
+const projectTemplates = ref(false);
 const projectProfiles = ref(false), projectProfile = ref<DeliveryExecutionProfile | null>(null);
 const preparation = ref<FeatureRequestPreparation | null>(null);
 const preparationNote = computed(() => preparation.value?.phase === 'waiting' ? 'Waiting for an earlier request to finish preparation…' : preparation.value?.phase === 'worktree' ? 'Preparing this request’s Git worktree…' : 'Saving approved files and the feature request…');
@@ -38,13 +52,15 @@ const connection = computed(() => state.settings?.providers.find(item => item.id
 const missingAgent = computed(() => intake.definitionId !== 'none' && !agent.value);
 const incompatible = computed(() => agent.value?.provider && !providerSupportsDefinition(intake.provider ?? '', agent.value.provider));
 const repositories = computed(() => state.settings?.repositories.items ?? []);
+const localTemplatesAllowed = computed(() => intake.repository ? !!repositories.value.find(item => item.id === intake.repository)?.features : !!state.environment?.features?.enabled);
+watch(() => intake.repository, () => { intake.templateId = ''; projectTemplates.value = false; });
 const approvedPaths = () => intake.paths.split('\n').map(path => path.trim()).filter(Boolean);
 const fileIssue = computed(() => {
   if (!intake.fileChanges) return '';
   if (repositories.value.length ? !repositories.value.some(item => item.id === intake.repository) : !intake.repository.trim()) return 'Choose a repository for the approved file changes.';
   try { validateApprovedPaths(approvedPaths(), 'Approved paths', { folders: true }); return ''; } catch (error) { return (error as Error).message; }
 });
-const canCreate = computed(() => state.unlocked && !state.workspaceBusy && !sending.value && (!!intake.pending || (projectProfiles.value ? !!projectProfile.value && !!state.settings?.providers.find(item => item.id === projectProfile.value?.provider)?.configured : connection.value?.configured) && capacity.value.admissionAvailable !== false && !!intake.message.trim() && (projectProfiles.value || !incompatible.value && !missingAgent.value) && !fileIssue.value && (projectProfiles.value || !agent.value?.requiresAdaptation || intake.adapt)));
+const canCreate = computed(() => state.unlocked && !state.workspaceBusy && !sending.value && !projectLoading.value && (!!intake.pending || (projectProfiles.value ? !!projectProfile.value && !!state.settings?.providers.find(item => item.id === projectProfile.value?.provider)?.configured : connection.value?.configured) && capacity.value.admissionAvailable !== false && !!intake.message.trim() && (projectProfiles.value || !incompatible.value && !missingAgent.value) && !fileIssue.value && (projectProfiles.value || !agent.value?.requiresAdaptation || intake.adapt)));
 const model = computed(() => intake.model.trim() || agent.value?.model || connection.value?.model || 'Provider default');
 const optionIssue = computed(() => missingAgent.value ? 'This definition or agent is no longer available. Choose another definition.' : incompatible.value ? 'Choose a ' + agent.value?.provider + ' connection for this agent’s model.' : agent.value?.requiresAdaptation && !intake.adapt ? 'Review this agent’s omitted features and accept instructions-only use before creating the task.' : '');
 const admissionNote = computed(() => sending.value && preparation.value ? 'Your request is being prepared. It has not joined the queue yet.' : intake.pending ? 'Retry checks the same request. It does not create a second request.' : capacity.value.admissionAvailable === false ? 'Local admission is full. Your instructions stay here while accepted work finishes.' : capacity.value.stale || capacity.value.state === 'unknown' ? 'Capacity needs refresh. The worker checks admission when you submit.' : capacity.value.startBlocked ? 'You can add this request to the queue. New model calls wait until the start conditions below are resolved.' : capacity.value.state === 'running' ? 'Joins the queue behind the active task.' : 'Joins this worker’s shared execution queue.');
@@ -67,8 +83,8 @@ async function create() {
   if (!canCreate.value) return;
   const epoch = state.draftEpoch, previousSessionId = state.sessions?.selected ?? '';
   if (!intake.pending) intake.pending = {
-    action: 'create', id: crypto.randomUUID(), title: intake.title.trim() || intake.message.trim().slice(0, 80),
-    message: intake.message, ...(intake.repository ? { projectId: intake.repository } : {}), ...(projectProfiles.value ? intake.executionProfile ? { executionProfile: intake.executionProfile } : {} : { provider: intake.provider! }),
+    action: 'create', id: crypto.randomUUID(), priority: Number(intake.priority), title: intake.title.trim() || intake.message.trim().slice(0, 80),
+    message: intake.message, ...(intake.fileChanges && localTemplatesAllowed.value && projectTemplates.value && intake.templateId ? { templateId: intake.templateId } : {}), ...(intake.repository ? { projectId: intake.repository } : {}), ...(projectProfiles.value ? intake.executionProfile ? { executionProfile: intake.executionProfile } : {} : { provider: intake.provider! }),
     ...(!projectProfiles.value && intake.model.trim() ? { model: intake.model.trim() } : {}), ...(!projectProfiles.value && intake.effort ? { effort: intake.effort } : {}),
     ...(!projectProfiles.value && definition.value ? { definitionId: definition.value.id, agent: intake.agent, useInstructionsOnly: intake.adapt } : {}),
     ...(intake.fileChanges ? { background: true as const, files: { repository: intake.repository.trim(), paths: approvedPaths() } } : {}),
@@ -82,7 +98,7 @@ async function create() {
     if (epoch !== state.draftEpoch) return;
     if (result) {
       if (intake.message === command.message) Object.assign(intake, { message: '', provider: defaultProvider.value, model: '', effort: '', selectionEdited: false, definitionId: 'none', agent: '', adapt: false });
-      intake.title = ''; intake.pending = null; intake.fileChanges = false; intake.paths = '';
+      intake.title = ''; intake.priority = 3; intake.templateId = ''; intake.pending = null; intake.fileChanges = false; intake.paths = '';
       emit('created', result.session.id, previousSessionId);
     } else intake.error = 'Creation could not be confirmed. Unlock if needed, then retry this same request.';
   } catch (error) {
@@ -98,13 +114,15 @@ function keydown(event: KeyboardEvent) {
 defineExpose({ focusInstructions });
 </script>
 <template>
-  <SharedFeatureComposer v-if="sharedBinding" ref="sharedComposer" @created="(id, previous) => emit('created', id, previous)" @busy="emit('busy', $event)" />
+  <SharedFeatureComposer v-if="sharedBinding" ref="sharedComposer" :initial-project-id="intake.repository || undefined" @project="intake.repository = $event" @created="(id, previous) => emit('created', id, previous)" @busy="emit('busy', $event)" />
   <section v-else class="task-intake" aria-labelledby="task-intake-title">
     <h3 id="task-intake-title">Create a feature request</h3>
     <p class="intake-intro">Describe the outcome. The worker saves a Markdown feature request and tracks its progress and results.</p>
     <form :aria-busy="sending" @submit.prevent="create">
       <fieldset :disabled="sending || state.workspaceBusy || !!intake.pending" class="contents">
         <div v-if="repositories.length" class="intake-field"><label for="new-task-project">Project</label><select id="new-task-project" v-model="intake.repository"><option value="">Worker installation project</option><option v-for="repository in repositories" :key="repository.id" :value="repository.id">{{ repository.id }}</option></select></div>
+        <p v-if="projectLoading" class="intake-help" role="status">Checking the selected project’s intake…</p><p v-if="selectedProject.error.value" class="error-text" role="alert">{{ selectedProject.error.value }} Refresh before submitting this project request.</p>
+        <div class="intake-field"><label for="new-task-priority">Priority</label><select id="new-task-priority" v-model="intake.priority"><option v-for="priority in featurePriorityOptions" :key="priority.value" :value="priority.value">{{ priority.label }}</option></select></div>
         <div class="intake-field intake-message">
           <label for="new-task-instructions">Request instructions</label>
           <UTextarea id="new-task-instructions" v-model="intake.message" :rows="6" :maxrows="12" autoresize :maxlength="8000" required placeholder="What would you like this worker to do?" class="w-full" aria-describedby="new-task-draft-note" @keydown="keydown" />
@@ -142,6 +160,7 @@ defineExpose({ focusInstructions });
         <details class="intake-definition repository-options" :open="filesOpen" @toggle="filesOpen = ($event.target as HTMLDetailsElement).open">
           <summary><span>Repository files · optional</span><span class="options-selection">{{ intake.fileChanges ? 'Approved file changes enabled' : 'No repository file changes' }}</span></summary>
           <RunTask v-model:enabled="intake.fileChanges" v-model:repository="intake.repository" v-model:paths="intake.paths" />
+          <FeatureTemplateSelection v-if="intake.fileChanges && localTemplatesAllowed" id="new-task" v-model="intake.templateId" :project-id="intake.repository || undefined" :disabled="sending || !!intake.pending" @configured="projectTemplates = $event" />
           <p v-if="fileIssue" class="intake-notice error-text" role="status">{{ fileIssue }}</p>
         </details>
         <p v-if="projectProfiles && projectProfile && !state.settings?.providers.find(item => item.id === projectProfile?.provider)?.configured" class="intake-notice" role="status">The selected project profile uses {{ projectProfile.provider }}, which needs a configured connection. <RouterLink to="/settings#provider-connections">Set up this provider</RouterLink> before creating a request.</p>

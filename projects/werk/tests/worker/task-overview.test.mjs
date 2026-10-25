@@ -281,3 +281,20 @@ test('project queue preserves low priority and orders urgent requests before hig
   assert.deepEqual(result.groups.queued.map(item => item.priority), [3, 2, 1, 0]);
   assert.equal(result.groups.draft[0].priority, 3);
 });
+
+test('accepted implementation with pending integration remains attention when request summaries are unavailable', () => {
+  const input = { sessions: sessions([session('release', { requestId: 'request-release', requestPhase: 'done', requestLifecycle: 'in_progress' })]) };
+  const item = buildTaskOverview(input).items[0];
+  assert.equal(item.group, 'attention'); assert.equal(item.statusLabel, 'Awaiting integration');
+  assert.equal(item.primaryAction.label, 'Inspect integration'); assert.match(item.summary, /remaining integration evidence/);
+  input.sessions.records[0].requestLifecycle = 'done';
+  assert.equal(buildTaskOverview(input).items[0].group, 'completed');
+});
+
+
+test('pending main checkout merge and GitHub release use their accepted completion requirement', () => {
+  const row = { id: 'request-integration', owner: { sessionId: 'integration', rootTurnId: 'turn' }, revision: 1, inputRevision: 1, inputHash: 'input', policyDigest: 'policy', phase: 'done', title: 'Integration', kind: 'patch', assignee: 'operator', updatedAt: later, lifecycle: 'in_progress', completion: 'local_merge', delivery: { id: 'delivery', status: 'completed', phase: 'packaging', allowedControls: [], decision: { profileId: 'feature', profileVersion: 1, selectedNode: 'review', selectedAction: 'review', reason: 'Candidate accepted.', waitingFor: null, conditions: [] } } };
+  const input = { sessions: sessions([session('integration', { requestId: row.id, requestPhase: 'done', requestLifecycle: 'in_progress' })]), requests: [row] };
+  let item = buildTaskOverview(input).items[0]; assert.equal(item.group, 'attention'); assert.equal(item.statusLabel, 'Awaiting main checkout merge'); assert.match(item.summary, /explicitly approve its merge/);
+  row.completion = 'release'; item = buildTaskOverview(input).items[0]; assert.equal(item.statusLabel, 'Awaiting release'); assert.match(item.summary, /publication evidence/);
+});

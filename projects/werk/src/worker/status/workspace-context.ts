@@ -1,3 +1,4 @@
+import { canonicalStateDirectory } from '../infrastructure/state-directory.js';
 import { assertNativeWorkReady } from './workspace-native-work.js';
 import { readyReviewProfile } from '../application/ready-review-selection.js';
 import { authorizeDeliveryPolicy, authorizeTaskDelivery } from './workspace-delivery-policy.js';
@@ -120,6 +121,7 @@ export class WorkspaceContext {
     journal: SnapshotJournal,
     get: () => Status,
   ) {
+    config = { ...config, stateDir: canonicalStateDirectory(config.stateDir) };
     this.taskIndex = new TaskIndex(config.stateDir);
     this.config = config;
     this.executionProfiles = config.executionProfiles;

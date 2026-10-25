@@ -1,6 +1,7 @@
 import { providerIds, type ProviderId } from '../application/provider-contract';
 import { parseModelEffort, providerEfforts, type ModelEffort } from '../application/model-effort';
 import { isMap, parseDocument } from 'yaml';
+import { readFeaturePriority } from './feature-priority';
 export const featureDetailFields = [
   { key: 'goal', label: 'Goal', hint: 'Describe the outcome you want.', rows: 4 },
   { key: 'context', label: 'Context', hint: 'Explain the problem, constraints and relevant project details.', rows: 4 },
@@ -46,7 +47,7 @@ export function readFeatureDetails(markdown: string) {
   if (provider !== undefined && !providerIds.includes(provider) || effort !== undefined && provider && !providerEfforts[provider]?.includes(effort)) throw Error('Correct the provider or effort in Advanced template editing.');
   if (effort !== undefined) { try { parseModelEffort(effort); } catch { throw Error('Correct the provider or effort in Advanced template editing.'); } }
   const selection = { provider, model: String(metadata.model ?? ''), effort: effort ?? '' as ModelEffort | '' };
-  return { fields, selection, executionProfile: String(metadata.execution_profile ?? ''), qualityProfile: String(metadata.quality_profile ?? ''), priority: typeof metadata.priority === 'number' ? metadata.priority : 2, dependsOn: Array.isArray(metadata.depends_on) ? metadata.depends_on.filter((id): id is string => typeof id === 'string').join('\n') : '', title: String(parsed.metadata.get('title') ?? ''), paths: Array.isArray(values) ? values.filter((path): path is string => typeof path === 'string').join('\n') : '' };
+  return { fields, selection, executionProfile: String(metadata.execution_profile ?? ''), qualityProfile: String(metadata.quality_profile ?? ''), priority: readFeaturePriority(metadata), dependsOn: Array.isArray(metadata.depends_on) ? metadata.depends_on.filter((id): id is string => typeof id === 'string').join('\n') : '', title: String(parsed.metadata.get('title') ?? ''), paths: Array.isArray(values) ? values.filter((path): path is string => typeof path === 'string').join('\n') : '' };
 }
 /** Edits only a named template field; the worker remains the readiness authority. */
 export function writeFeatureDetail(markdown: string, field: FeatureDetailField | FeatureModelField | 'paths' | 'title', value: string) {
@@ -54,7 +55,12 @@ export function writeFeatureDetail(markdown: string, field: FeatureDetailField |
   if (field === 'paths' || field === 'title' || field === 'provider' || field === 'model' || field === 'effort' || field === 'execution_profile' || field === 'quality_profile' || field === 'priority' || field === 'depends_on') {
     if (field === 'execution_profile') for (const key of ['provider', 'model', 'effort', 'definition', 'definition_ref', 'agent', 'use_instructions_only']) parsed.metadata.delete(key);
     if (['model', 'effort', 'execution_profile', 'quality_profile', 'depends_on'].includes(field) && !value.trim()) parsed.metadata.delete(field);
-    else parsed.metadata.set(field, field === 'priority' ? Number(value) : field === 'paths' || field === 'depends_on' ? value.split('\n').map(path => path.trim()).filter(Boolean) : value);
+    else if (field === 'priority') {
+      const priority = Number(value);
+      if (![0, 1, 2, 3].includes(priority)) throw Error('Choose a supported request priority.');
+      if (parsed.metadata.get('schema') === 'worker.request/v1') { parsed.metadata.set(field, ['urgent', 'high', 'normal', 'low'][priority]); parsed.metadata.delete('priority_scale'); }
+      else { if (priority === 0) throw Error('Urgent is retained only for legacy canonical requests. Choose High, Medium or Low.'); parsed.metadata.set(field, priority); parsed.metadata.set('priority_scale', 'three-level/v1'); }
+    } else parsed.metadata.set(field, field === 'paths' || field === 'depends_on' ? value.split('\n').map(path => path.trim()).filter(Boolean) : value);
     return '---\n' + parsed.metadata.toString({ lineWidth: 0 }) + '---\n' + parsed.lines.join('\n');
   }
   const section = parsed.sections.find(section => section.name === field)!;

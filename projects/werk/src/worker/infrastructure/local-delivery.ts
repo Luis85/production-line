@@ -1,3 +1,4 @@
+import { retainStartPrompt } from './start-prompt.js';
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
 import { lstat, open, readFile } from 'node:fs/promises';
@@ -96,6 +97,7 @@ export function createLocalDelivery(options: { repository: string; stateDirector
     try { await file.writeFile(content); await file.sync(); } finally { await file.close(); }
   }
   return {
+    startPrompt: (input, signal) => serialize(() => retainStartPrompt(options.stateDirectory, input, signal)),
     checkpoint: (input, signal) => serialize(() => checkpoint(input, signal)),
     verify,
     package: (input, signal) => serialize(async () => {

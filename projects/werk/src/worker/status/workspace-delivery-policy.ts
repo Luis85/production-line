@@ -27,7 +27,11 @@ export function authorizeDeliveryPolicy(workspace: WorkspaceContext, repositoryI
 async function deliveryPolicyView(workspace: WorkspaceContext, projectId?: unknown) {
   assertNativeWorkReady(workspace);
   const repository = selectedRepository(workspace, projectId);
-  const snapshot = await readDeliveryPolicy(repository?.path ?? resolve(workspace.config.projectDir ?? process.cwd()), signalFor(workspace));
+  const signal = signalFor(workspace);
+  const project = repository ? workspace.featureProjects?.forRepository(repository.path) : undefined;
+  const binding = project?.sharedRuntime.intake.binding;
+  const baseline = repository && binding?.enabled && binding.repositoryId === repository.id ? await project!.sharedRuntime.selectedBaseline(signal) : undefined;
+  const snapshot = await readDeliveryPolicy(repository?.path ?? resolve(workspace.config.projectDir ?? process.cwd()), signal, undefined, baseline);
   const state = workspace.deliveryApprovals.view(), approval = state.approvals.find(item => item.repositoryId === repository?.id && item.configurationDigest === snapshot.configurationDigest);
   return { ...snapshot, retention: snapshot.configuration.retention ?? defaultDeliveryRetention(), repositoryId: repository?.id ?? null, approvalRequired: deliveryPolicyRequiresApproval(snapshot.configuration),
     approved: repository ? deliveryPolicyApproved(state, repository.id, snapshot) : !deliveryPolicyRequiresApproval(snapshot.configuration),

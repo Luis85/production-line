@@ -22,8 +22,8 @@ supplier:
 customers:
   - "[[Worker]]"
   - "[[System User]]"
-  - "[[projects/werk/docs/entities/systems/Factory|Factory]]"
-  - "[[projects/werk/docs/entities/systems/Orchestrator|Orchestrator]]"
+  - "[Factory](../entities/systems/Factory.md)"
+  - "[Orchestrator](../entities/systems/Orchestrator.md)"
 prev_step: "[[Merge]]"
 next_step: "[[Publish]]"
 status: Open
@@ -39,3 +39,13 @@ priority: ""
 assignee: ""
 iteration: ""
 ---
+
+# Build
+
+After the explicit plain-Git main-checkout merge, the team uses its normal project build workflow and retains the resulting evidence. The default Markdown handoff does not claim that this later build happened and does not enable GitHub integration.
+
+## Optional managed release build
+
+When the project explicitly enables and approves the GitHub release extension, the worker builds the exact confirmed merged commit in an owned isolated workspace. It runs the pinned build executable/arguments within the approved timeout and retains source, operation identity and safe artifact paths, sizes and SHA-256 digests.
+
+Missing or unsafe files, nonzero exit and timeout fail the managed build. Its failure preserves the earlier merge receipt and remains a release blocker. An interrupted unknown process is reconciled or explicitly inspected/stopped before another build. Feature text cannot replace the approved build definition.
